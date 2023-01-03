@@ -1,0 +1,341 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#form {
+  background: rgba(0, 0, 0, 0.15);
+  padding: 0.25rem;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  height: 3rem;
+  box-sizing: border-box;
+  --webkit-backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+#input {
+  border: none;
+  padding: 0 1rem;
+  flex-grow: 1;
+  border-radius: 2rem;
+  margin: 0.25rem;
+}
+
+#input:focus {
+  outline: none;
+}
+
+#form>button {
+  background: #333;
+  border: none;
+  padding: 0 1rem;
+  margin: 0.25rem;
+  border-radius: 3px;
+  outline: none;
+  color: #fff;
+}
+
+#messages {
+  list-style-type: none;
+  padding: 0;
+  font-size: x-small;
+}
+
+#messages>li {
+  border: 0px solid transparent;
+  border-radius: 0px;
+  margin: -5px 0px;
+  background-color: rgba(52, 63, 72, 0.9);
+}
+
+canvas{
+  margin:0px 0px 40px 0px;
+}
+
+li>li {
+  margin: -5px 0px;
+}
+
+#messages>li:nth-child(odd) {
+  background-color: rgba(62, 73, 82, 0.9);
+  ;
+}
+
+.treeDiv {
+  position: relative;
+  padding: 0px 0px 0px 20px;
+  margin: 0px;
+}
+
+.myHeader {
+  background: darkgray;
+  position: relative;
+  top: 0px;
+  left: 0px;
+  right: 0px;
+  color: white;
+  padding: 5px;
+}
+
+.myButton {
+  background: IndianRed;
+  color: black;
+  margin: 5px;
+}
+
+.myButton:hover {
+  background: red;
+}
+
+.myButton:active {
+  background: yellow;
+}
+
+.ogbutton:active {
+  background-color: #000000;
+  border: 1px yellow solid;
+  color: black;
+}
+
+.myButtonSelected {
+  background: yellow;
+}
+
+
+.arrayLine {
+  border-left: 2px solid blue;
+  border-bottom: 2px solid blue;
+  margin: 2px;
+}
+
+.objectLine {
+  border-left: 10px solid green;
+  margin: 2px;
+}
+
+/* Remove default bullets */
+ul,
+#myUL {
+  list-style-type: none;
+}
+
+/* Remove margins and padding from the parent ul */
+#myUL {
+  margin: 0;
+  padding: 0;
+}
+
+/* Style the caret/arrow */
+.caret {
+  cursor: pointer;
+  -webkit-user-select:none;
+  user-select: none;
+  /* Prevent text selection */
+}
+
+/* Create the caret/arrow with a unicode, and style it */
+.caret::before {
+  content: "\25B6";
+  color: black;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+/* Rotate the caret/arrow icon when clicked on (using JavaScript) */
+.caret-down::before {
+  transform: rotate(90deg);
+}
+
+/* Hide the nested list */
+.nested {
+  display: none;
+}
+
+/* Show the nested list when the user clicks on the caret/arrow (with JavaScript) */
+.active {
+  display: block;
+}
+
+/*
+  .total {
+    height:95%;
+  }*/
+
+.datastructure {
+  display: flex;
+  flex-direction: row;
+  /* default value; can be omitted */
+  justify-content: space-between;
+  /* switched from default (flex-start, see below) */
+  height: 100%;
+  max-height: 100%;
+}
+
+.lefthalf {
+  width: 49%;
+  display: inline-block;
+}
+
+.righthalf {
+  width: 49%;
+  max-height: 100%;
+  display: inline-block;
+}
+
+.traceList{
+  /*min-width: 500px;*/
+  border-color: blue;
+  border-style: solid;
+  border-width: 2px;
+  border-radius: 5;
+}
+
+.myInfoArea, .scrollableInfoArea {
+  background: lightgray;
+  padding: 5px;
+  margin: 5px;
+  min-width: 380px;
+  width:98%
+}
+
+.scrollableInfoArea {
+  overflow: scroll;
+}
+
+.smallSettingArea{
+  margin:5px; 
+  min-width:180px; 
+  width:50%
+}
+
+.thinView{
+  margin:5px; 
+  min-width:140px; 
+  width:140px;
+}
+
+.indent {
+  margin-left: 15px;
+}
+
+html {
+  background-color: #000000;
+}
+
+
+.tabs {
+  float: none;
+  list-style: none;
+  position: relative;
+  text-align: left;
+  margin: 10px 15px 5px 15px;
+  background-color: rgba(52, 63, 72, 0.9);
+}
+
+.tabs>li {
+  float: left;
+  display: block;
+  border-top: solid #FCDF07 3px;
+  border-left: solid #FCDF07 3px;
+  border-right-style: solid #FCDF07 3px;
+  border-radius: 10px 10px 0px 0px;
+  color: #FCDF07;
+  padding: 15px;
+  background-color: rgba(52, 63, 72, 0.9);
+}
+
+.tabs input[type="radio"] {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+}
+
+.tabs [id^="tab"]:checked+label {
+  background-color: black;
+  font-weight: 500;
+}
+
+.tabs [id^="tab"]:checked~[id^="tab-content"] {
+  display: block;
+}
+
+.tab-content {
+  border-top: 3px #FCDF07 solid;
+  background-color: rgba(52, 63, 72, 1.0);
+  z-index: 2;
+  display: none;
+  overflow: hidden;
+  font-size: 17px;
+  line-height: 25px;
+  padding: 5px;
+  position: fixed;
+  top: 60px;
+  left: 0px;
+  right: 0px;
+  bottom: 0px;
+  background: "pink";
+}
+
+.connectedServer {
+  position: fixed;
+  top: 5px;
+  right: 5px;
+  width: 150px;
+  border: 1px #FCDF07 solid;
+  color: #FCDF07;
+  background-color: rgba(52, 63, 72, 0.9);
+}
+
+.connectedServerName {
+  display: block;
+}
+
+.traceArea {
+  margin: 5px;
+  overflow: hidden;
+  height: 70%;
+}
+
+#myChart {
+  width: 100%;
+  height: 100%;
+}
+
+.traceButtonArea {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  height: 27%;
+}
+
+
+.kvPair {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.kvKey {
+  color: black;
+  width: 50%;
+}
+
+.kvValue {
+  width: 50%;
+}
+
+.kvSelect {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  color: black;
+  background-color: darkgray;
+  width: 100%;
+  padding: 5px;
+}
