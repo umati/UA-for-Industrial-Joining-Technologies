@@ -4,6 +4,10 @@
 Joakim Gustafsson
 Email: joakim.h.gustafsson@atlascopco.com
 
+# Cooridnator/Maintanence
+Mohit Agarwal
+Email: mohit.agarwal@atlascopco.com
+
 # Overview:
 This application uses the open source NodeOPCUA Stack. The purpose of this application is to consume the data from any OPC UA server based on the OPC 40451-1 UA CS for Tightening Systems 1.00.
 
