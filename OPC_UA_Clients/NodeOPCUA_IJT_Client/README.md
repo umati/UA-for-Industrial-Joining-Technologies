@@ -4,7 +4,7 @@
 Joakim Gustafsson
 Email: joakim.h.gustafsson@atlascopco.com
 
-# Cooridnator/Maintanence
+# Coordinator/Maintanence
 Mohit Agarwal
 Email: mohit.agarwal@atlascopco.com
 
