@@ -29,6 +29,21 @@ export default class ModelToHTML {
             }, false);
         }
 
+        if (model.constructor.name == 'DefaultNode' &&
+            model.value &&
+            model.value.value != null) {
+            let result = '';
+            if (typeof model.value.value === 'string' || typeof model.value.value === 'number') {
+                result = `${model.displayName.text} = ${model.value.value}`
+            } else if (model.value.value.text && typeof model.value.value.text === 'string') {
+                result = `${model.displayName.text} = ${model.value.value.text}`
+            }
+            let combined = document.createElement('li');
+            combined.innerText = result;
+            //print associations and components
+            return combined;
+        }
+
         // Seting up the HTML containers for expanded or shrunken complex value
         let combined = document.createElement('li');
         let shortVersion = document.createElement('li');
@@ -62,12 +77,34 @@ export default class ModelToHTML {
             }
         }
 
+        var nameTag = document.createElement('li');
+        let name = model.displayName?.text;
+        if (!name) {
+            name=model.browseName?.name;
+        }
+        if (!name) {
+            name=model.name;
+        }
+        nameTag.innerText = name;
+        nameTag.classList.add('textHeader');
+        longVersion.appendChild(nameTag);
+
         // Loop over the model object and handle diffrent types of values 
         // such as arrays, nesting
         for (const [key, value] of Object.entries(model)) {
             //console.log(`${key}: ${value}`);
+            if (!value || key == 'parent') {
 
-            if (Array == value.constructor) {
+            } else if (key == 'relations') {
+                //console.log('Relation values: ' + value)
+                for (let [relationName, relationItems] of Object.entries(value)) {
+                    for (let [associationKey, associationValue] of Object.entries(relationItems)) {
+                        var associationItem = document.createElement('li');
+                        associationItem.innerText = relationName + ': ' + associationValue.browseName.name;
+                        longVersion.appendChild(associationItem);
+                    }
+                }
+            } else if (Array == value.constructor) {
                 // Handle an array of values (that may be complex values)
                 var outerList = document.createElement('li');
                 longVersion.appendChild(outerList);
@@ -101,6 +138,7 @@ export default class ModelToHTML {
                 }
             } else if ('object' == typeof value && key != 'debugValues' && value.type != 'linkedValue') {
                 // Here recursion is used to handle nested complex values
+                //console.log('Key: '+key);
                 let item = this.toHTML(value, brief, key);
                 //let item = value.toHTML(brief, key);
                 longVersion.appendChild(item);
@@ -131,7 +169,9 @@ export default class ModelToHTML {
         if ('object' == typeof model) {       // Handle a model
             let onScreen;
             onScreen = this.toHTML(model, true, 'Response');
-            onScreen.expandLong();
+            if (onScreen.expandLong) {
+                onScreen.expandLong();
+            }
             //var item = document.createElement('li');
             //item.textContent = `${msg.dataValue.serverTimestamp}`;
             //messages.appendChild(item);

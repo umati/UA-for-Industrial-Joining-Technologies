@@ -150,10 +150,15 @@ export default class AllTraces {
         if (!this.selectedTrace) {
             throw 'No trace selected.';
         }
+        this.selectedTrace.delete();
         this.allTraces = this.allTraces.filter((x) => { return x != this.selectedTrace })
-        this.chartManager.filterOut([this.selectedTrace]);
+        
         this.traceInterface.updateTracesInGUI(this.allTraces);
-        this.selectTrace(this.allTraces[this.allTraces.length - 1]);
+        if(this.allTraces.length>0) {
+            this.selectTrace(this.allTraces[this.allTraces.length - 1]);
+        } else {
+            this.chartManager.update();
+        }
     }
 
     ////////////////////////////// Selection support ////////////////////////////////

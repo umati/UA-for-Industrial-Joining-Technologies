@@ -4,7 +4,9 @@ import ModelToHTML from './ModelToHTML.mjs';
 
 export default class StructureHandler {
 
-    constructor(container, socket) {
+    constructor(container, socket, addressSpace) {
+        this.socket=socket;
+        this.addressSpace=addressSpace;
         
         let backGround=document.createElement('div');
         backGround.classList.add("datastructure");
@@ -20,9 +22,10 @@ export default class StructureHandler {
         nodeDiv.innerText='Nodes';
         leftHalf.appendChild(nodeDiv);
 
-        let treeArea=document.createElement('ul');
-        treeArea.innerText='Nodes';
-        leftHalf.appendChild(treeArea);
+        let leftArea=document.createElement('ul');
+        leftArea.innerText='Nodes';
+        leftHalf.appendChild(leftArea);
+        this.leftArea=leftArea;
 
         let rightHalf=document.createElement('div');
         rightHalf.classList.add("righthalf");
@@ -43,19 +46,48 @@ export default class StructureHandler {
         this.messages.setAttribute("id","messages");
         messageArea.appendChild(this.messages);
 
-        this.treeDisplayer= new TreeDisplayer(treeArea, socket);
+        this.treeDisplayer= null;
         this.modelToHTML= new ModelToHTML(this.messages);
     }
 
+    initiateNodeTree(){
+        this.treeDisplayer= new TreeDisplayer(this, ['Root', 'Objects', 'TighteningSystem', 'TighteningSystem_AtlasCopco', 'ResultManagement', 'Results']);
+        this.addressSpace.reset();
+        this.addressSpace.setGUIGenerator(this.treeDisplayer); 
+
+        this.addressSpace.createNode({
+            nodeId: 'ns=0;i=84',
+            browseName: { name: 'Root' },
+            displayName: { text: 'Root' },
+            referenceTypeId: 'ns=0;i=35',
+            typeDefinition: 'ns=0;i=61',
+            nodeClass: 'Object'
+        });
+        //this.socket.emit('browse', 'ns=0;i=85', true);
+        
+        this.socket.emit('browse', 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/AssetManagement/Assets/Controllers/TighteningController', true);
+        //this.socket.emit('browse', 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/ResultManagement/Results', true);
+    }
+
     generateTree(msg){
+        if (!this.leftArea) {
+            alert('too early call to generateTree');
+            this.treeDisplayer= new TreeDisplayer(this, ['Root', 'Objects', 'TighteningSystem', 'ResultManagement', 'Results']);
+        }
         this.treeDisplayer.generateTree(msg);
     }
 
+    getTighteningSystems(){
+        return this.addressSpace.getTighteningSystems();
+    }
+    
     displayModel(model){
         this.modelToHTML.display(model);
     }
 
-    messageDisplay(item) {     
+    messageDisplay(msg) {    
+        let item = document.createElement('li');
+        item.textContent = msg; 
         this.messages.appendChild(item);
         this.messages.scrollTo(0, this.messages.scrollHeight);
         item.scrollIntoView();

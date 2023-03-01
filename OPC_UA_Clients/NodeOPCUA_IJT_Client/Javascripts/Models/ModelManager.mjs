@@ -1,5 +1,6 @@
 import ResultValueDataType from './ResultValueDataType.mjs';
 import ProcessingTimesDataType from './ProcessingTimesDataType.mjs';
+import {DefaultNode, BrowseNameDataType, DisplayNameDataType} from './DefaultNode.mjs';
 import ErrorInformationDataType from './ErrorInformationDataType.mjs';
 import TighteningResultDataType from './TighteningResultDataType.mjs';
 import ResultDataType from './ResultDataModel.mjs';
@@ -31,12 +32,75 @@ export default class ModelManager {
                 let a = {};
                 a[parameterName] = content.text;
                 return new localizationModel(a, this);
+            } else if (content && content.key) {
+                let a = {};
+                if (!content.value) {
+                    content.value=''
+                }
+                a[content.key] = content.value;
+                return new localizationModel(a, this);
             }
             return obj;
         }
         return content;
     }
 
+    /* The purpose of this method is to create a javascript class from a parameter name
+    factory2(type, node) {
+        if ('object' == typeof content && Array != content.constructor) {
+            let obj;
+            if (content.dataType == "ExtensionObject") {
+                content = content.value;
+            }
+            // If the model itself provides a typecasting, then use it
+            if (castMapping) {
+                for (let name of Object.entries(castMapping)) {
+                    if (parameterName.toLowerCase() == name[0].toLowerCase()) {
+                        return eval('new ' + name[1] + '(node,this)');
+                    }
+                }
+            }
+            // Else, handle simple types
+            if (content && content.locale) {
+                let a = {};
+                a[parameterName] = content.text;
+                return new localizationModel(a, this);
+            } else if (content && content.key) {
+                let a = {};
+                if (!content.value) {
+                    content.value=''
+                }
+                a[content.key] = content.value;
+                return new localizationModel(a, this);
+            }
+            return obj;
+        }
+        return content;
+    }*/
+
+    // This method handles the top level interpretation of a message that should be 
+    // converted to a model. This is probably unnecessary and could likely
+    // be handled by the factory function with little modifications.
+    createModelFromMessage2(node) {
+        //console.log(node.nodeId);
+        //console.log(node.typeName);
+        switch (node.typeName){
+            case('TighteningSystemType'):
+            break;
+            case('ResultManagementType'):
+            break;
+            case('ResultType'):
+            return new ResultDataType(node.value.value, this)
+            break;
+            default:
+                return new DefaultNode(node, this);
+        }
+
+return;
+
+    }
+
+    
     // This method handles the top level interpretation of a message that should be 
     // converted to a model. This is probably unnecessary and could likely
     // be handled by the factory function with little modifications.

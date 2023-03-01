@@ -1,22 +1,33 @@
-const express = require('express');
-const fs = require('fs');
+
+//const express = require('express');
+import express from 'express'
+import fs from 'fs'
+import httpTemp from 'http'
+import {Server} from 'socket.io'
+import { URL } from 'url'; 
+
 const app = express();
-const http = require('http').Server(app);
-const io = require('socket.io')(http);
+const http = httpTemp.Server(app);
+const io = new Server(http);
 const port = process.env.PORT || 3000;
-const {
+let __filename = new URL('', import.meta.url).pathname;
+// Will contain trailing slash
+let __dirnameUndecoded = new URL('.', import.meta.url).pathname;
+let __dirname = decodeURI(__dirnameUndecoded).substring(1);
+
+console.log('Home directory (__dirname): '+__dirname);
+
+import  {
   AttributeIds,
   OPCUAClient,
   TimestampsToReturn,
-} = require("node-opcua");
-
-const objectStructure = require(__dirname + '/Resources/structure.js');
-const Monitor = require(__dirname + '/Javascripts/Client/Monitor.js');
-const setupClient = require(__dirname + '/Javascripts/Client/SetupOPCUACommunication.js');
-const setupSocketIO = require(__dirname + '/Javascripts/Client/SetupSocketIO.js');
+} from "node-opcua";
 
 
-app.use(express.static(__dirname+ '/Javascript/Webpage'));
+
+import NodeOPCUAInterface from './Javascripts/Client/NodeOPCUAInterface.mjs';
+
+app.use(express.static(__dirname+ './Javascript/Webpage'));
 
 // ----------------------------------------------------------------- Webserver --------------------------------------------------------
 // This is for exposing the htlm page
@@ -37,32 +48,38 @@ http.listen(port, () => {
 const endpointUrls = [
   {
     name: "Local",
-    address: "opc.tcp://localhost:40451"
+    address: "opc.tcp://localhost:40451",
+    tighteningsystemname: 'TighteningSystem',
   },
   {
     name: "Windows simulation",
     address: "opc.tcp://10.46.19.106:40451",
+    tighteningsystemname: 'TighteningSystem_AtlasCopco',
     autoConnect: "Yes"
   },
   {
     name: "ICB-A",
     address: "opc.tcp://10.46.16.68:40451",
+    tighteningsystemname: 'TighteningSystem_AtlasCopco'
   },
   {
     name: "PF80000",
-    address: "opc.tcp://10.46.16.174:40451"
+    address: "opc.tcp://10.46.16.174:40451",
+    tighteningsystemname: 'TighteningSystem_AtlasCopco'
   }];
 
 // This is the function used to display status messages comming from the server
 function displayM(msg) {
   //console.log(msg);
-  console.log('status message');
+  console.log('status message: '+msg);
   io.emit('status message', msg);
 }
 
 // Set up the ability to subscribe and read results from the OPC UA server
-const monitor = new Monitor(displayM, AttributeIds, io);
+//const monitor = new Monitor(displayM, AttributeIds, io);
 
 // ----------------------------------------------------------------- SocketIO --------------------------------------------------------
 // Set up SocketIO so we can communicate with the web page
-setupSocketIO(io, monitor, setupClient, objectStructure, endpointUrls, displayM, OPCUAClient);
+
+let nodeOPCUAInterface = new NodeOPCUAInterface(io, AttributeIds);
+nodeOPCUAInterface.setupSocketIO(endpointUrls, displayM, OPCUAClient);

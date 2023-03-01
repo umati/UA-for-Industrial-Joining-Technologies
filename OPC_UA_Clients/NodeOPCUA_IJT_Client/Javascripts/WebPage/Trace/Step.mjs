@@ -12,9 +12,6 @@ export default class Step {
             this.angle = null,
             this.hidden = false;
         this.values = step.stepResultId.link.stepResultValues;
-        this.valueDataset;
-        this.targetDataset;
-        this.limitsDataset;
         this.last = {};
         this.datasetMapping = {};
         this.startTimeOffset = step.startTimeOffset;
@@ -224,6 +221,17 @@ export default class Step {
     }
 
     ///////////////////////////////////////////////////////
+
+    delete() {          
+        for (const [key, value] of Object.entries(this.datasetMapping)) {
+        this.chartManager.filterOut([value.valueDataset]);
+        this.chartManager.filterOut([value.targetDataset]);
+        this.chartManager.filterOut([value.limitsDataset]);
+        this.chartManager.filterOut([this.highLightDataset]);
+        this.chartManager.filterOut([this.dataset]);
+        }
+    }
+
     select() {
         this.dataset.select();
     }

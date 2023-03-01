@@ -25,7 +25,10 @@
     import AllTraces from "./Javascripts/WebPage/Trace/AllTraces.mjs"
     import Servers from "./Javascripts/WebPage/Servers/Servers.mjs"
     import Structure from "./Javascripts/WebPage/Structure/StructureHandler.mjs"
+    import AddressSpace from "./Javascripts/WebPage/Structure/AddressSpace.mjs"
+    import AssetHandler from "./Javascripts/WebPage/Assets/AssetHandler.mjs"
 
+    
     // Set up essentials
     var socket = io();
     var tabGenerator = new TabGenerator(document.body);
@@ -33,22 +36,30 @@
 
     // Create tabs on the webpage 
     var serverArea = tabGenerator.generateTab('Servers');
-    var structureArea = tabGenerator.generateTab('Structure', true);
+    var structureArea = tabGenerator.generateTab('Structure', true);          // ********************  GENERATES 'browse'
     var traceArea = tabGenerator.generateTab('Trace');
+    var assetArea = tabGenerator.generateTab('Assets');
     //var methodArea = tabGenerator.generateTab('Methods')
     //var eventArea = tabGenerator.generateTab('Events');
     //var jointArea = tabGenerator.generateTab('Joints');
 
     // Initiate the different tab handlers
     var servers = new Servers(serverArea, socket);
-    var structure = new Structure(structureArea, socket);
+    var addressSpace = new AddressSpace(socket);
+    var structure = new Structure(structureArea, socket, addressSpace);
+    
     let trace = new AllTraces(traceArea, ['angle', 'torque']);
+    let assetHandler = new AssetHandler(assetArea, structure, socket);
 
     /*****************  Set up socket listeners to handle input from server *******************/
 
+
     // Listen to the data from the server regarding the tree of quueriable data and display it
-    socket.on('item points', function (msg) {
-      structure.generateTree(msg);
+    socket.on('browseresult', function (msg) {
+      //structure.generateTree(msg);
+      let node = addressSpace.addNodeByBrowse(msg);
+      assetHandler.receivedBrowse(msg);
+      
     });
 
     // Listen to result data and convert it into a javascript model then display it
@@ -57,14 +68,20 @@
         return;
       }
       //console.log(msg.stringValue);
-      let model = modelManager.createModelFromMessage(msg.path, msg.dataValue.value,{'result':'ResultDataType'});
+      let node = addressSpace.addNodeByRead(msg);
+      let model = modelManager.createModelFromMessage2(node);
+      //let model2 = modelManager.createModelFromMessage(msg.path, msg.dataValue.value, { 'result': 'ResultDataType' });
       //console.log(model);
       structure.displayModel(model);
+      //if (node.isComplete()) {
+      //  node.createGUINode();
+      //}
     });
+
 
     // Listen to status messages from the server
     socket.on('status message', function (msg) {
-        servers.messageDisplay(msg);
+      servers.messageDisplay(msg);
     });
 
     // Listen to the tree of possible connection points
@@ -72,9 +89,33 @@
       servers.connectionPoints(msg, socket);
     });
 
+    // Listen to the tree of possible connection points
+    socket.on('connection established', function (msg) {
+      servers.messageDisplay('Connection established');
+    });
+
+    // Listen to the tree of possible connection points
+    socket.on('session established', function (msg) {
+      servers.messageDisplay('Session established');
+      structure.initiateNodeTree();
+
+      //TODO: Here we should initiate the tree building
+    });
+
+    // Listen to the tree of possible connection points
+    socket.on('session closed', function (msg) {
+      servers.messageDisplay('Session closed');
+    });
+
     /* TODO
    Ensure graying out old traces
     */
+
+    window.onbeforeunload = function () {
+      socket.emit('terminate connection');
+      return;
+    };
+
 
   </script>
 </body>

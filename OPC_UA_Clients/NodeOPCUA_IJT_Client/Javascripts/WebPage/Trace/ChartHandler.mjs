@@ -1,4 +1,4 @@
-import Chart from '../../../node_modules/chart.js/auto/auto.js';
+import Chartjs from '../../../node_modules/chart.js/auto/auto.js';
 import Dataset from './Dataset.mjs';
 
 export default class ChartManager {
@@ -6,7 +6,7 @@ export default class ChartManager {
     constructor(ctx, traceManager) {
         this.context=ctx;
         this.traceManager=traceManager;
-        this.myChart = new Chart(ctx, {
+        this.myChart = new Chartjs(ctx, {
             type: 'line',
             data: {
                 datasets: []

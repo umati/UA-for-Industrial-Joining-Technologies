@@ -31,3 +31,8 @@ This client will be updated based on the newer versions of the companion standar
 1. Run the following command: node ./index.js
 2. The above command will start the socket.io server at http://localhost:3000/
 3. Open the above socket.io server link in any browser and start using the client.
+
+# OPC UA Server:
+1. Use the following OPC UA Server to utilize the OPC UA Client: https://github.com/umati/UA-for-Industrial-Joining-Technologies 
+2. Select Servers -> Local in the OPC UA Client to connect to the local OPC UA Server.
+
