@@ -1,3 +1,6 @@
+/**
+ * Supportclass to help encapsulate the chart package
+ */
 export default class Dataset {
 
     constructor(name) {

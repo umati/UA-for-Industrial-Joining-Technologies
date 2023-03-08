@@ -85,9 +85,6 @@ export default class SingleTraceData {
         for (let traceStep of this.steps) {
             traceStep.delete();
         }
-
-        //this.chartManager.filterOut([this.selectedTrace]);
-        //XXXXXXXXX
     }
 
     refreshTraceData() {

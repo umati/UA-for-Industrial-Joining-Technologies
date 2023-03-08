@@ -63,10 +63,9 @@ export default class StructureHandler {
             typeDefinition: 'ns=0;i=61',
             nodeClass: 'Object'
         });
-        //this.socket.emit('browse', 'ns=0;i=85', true);
         
-        this.socket.emit('browse', 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/AssetManagement/Assets/Controllers/TighteningController', true);
-        //this.socket.emit('browse', 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/ResultManagement/Results', true);
+        //this.socket.emit('browse', 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/AssetManagement/Assets/Controllers/TighteningController', 'read', true);
+        this.socket.emit('browse', 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/ResultManagement/Results/Result', 'read', true);
     }
 
     generateTree(msg){

@@ -15,7 +15,7 @@ class Reference {
     }
 
     explore() {
-        this.socket.emit('browse', this.nodeId, true);
+        this.socket.emit('browse', this.nodeId, 'read', true);
     }
     createGUIReference() {
         if (this.graphicGenerator && this.graphicGenerator.generateGUIReference) {
@@ -71,9 +71,8 @@ class Node {
     }
 
     explore() {
-        this.socket.emit('browse', this.nodeId, true);
+        this.socket.emit('browse', this.nodeId, 'read', true);
         //console.log('SEND Browse: '+this.nodeId);
-        this.read();
     }
 
     read() {
@@ -263,7 +262,7 @@ export default class AddressSpace {
             return;
         }
         let node = this.nodeMapping[msg.path];
-        if (msg.dataValue) {
+        if (node) {
             node.addReadData(msg.dataValue.value);
         }
         return node;

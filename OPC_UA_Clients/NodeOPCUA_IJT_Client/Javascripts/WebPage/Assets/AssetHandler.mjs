@@ -63,7 +63,7 @@ export default class AssetHandler {
         }
         this.tighteningSystem = tighteningSystems[0];
         this.mapping[this.tighteningSystem] = 'dummy';
-        this.socket.emit('browse', this.tighteningSystem);
+        this.socket.emit('browse', this.tighteningSystem, 'read');
 
     }
 
@@ -99,7 +99,7 @@ export default class AssetHandler {
                             case "Subcomponents":
                             case "Tools":
                                 this.mapping[ref.nodeId] = 'folder';
-                                this.socket.emit('browse', ref.nodeId,true);
+                                this.socket.emit('browse', ref.nodeId, 'read', true);
                                 console.log('browse::' + ref.nodeId);
                                 break;
                             default:
@@ -120,6 +120,5 @@ export default class AssetHandler {
 
         this.mapping[nodeId] = mainbox;
 
-        this.socket.emit('browse', {'nodeId':nodeId, 'details':true});
     }
 }

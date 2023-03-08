@@ -1,6 +1,13 @@
 
 import async from "async";
 
+import  {
+  AttributeIds,
+  OPCUAClient,
+  NumericRange,
+  TimestampsToReturn,
+} from "node-opcua";
+
 export default class NodeOPCUAInterface {
   constructor(io, attributeIds) {
     this.attributeIds = attributeIds;
@@ -22,8 +29,8 @@ export default class NodeOPCUAInterface {
         this.read(msg);
       });
 
-      socket.on('browse', (nodeId, details) => {
-        this.browse(nodeId, details)
+      socket.on('browse', (nodeId, followup, details) => {
+        this.browse(nodeId, followup, details)
       });
 
 
@@ -93,9 +100,10 @@ export default class NodeOPCUAInterface {
     (async () => {
       try {
         //console.log(`READ - nodeId: ${nodeId} \n READ - AttributeIds.Value: ${this.attributeIds.Value}`);
-        const dataValue = await this.session.read({
+        const dataValue2 = await this.session.read({
           nodeId: nodeId,
           attributeId: this.attributeIds.Value,
+          indexRange: new NumericRange("185492:5428372")
         }, (err, dataValue) => {
           if (err) throw err;
           this.io.emit('object message', { 'path': nodeId, 'dataValue': dataValue, 'stringValue': dataValue.toString() });   // Sends the message to the web page
@@ -107,10 +115,65 @@ export default class NodeOPCUAInterface {
 
       } catch (err) {
         this.displayFunction("Node.js OPC UA client error (reading): " + err.message);  // Display the error message first
-        this.displayFunction(err);                                                      // (Then for debug purposes display all of it)
+        this.io.emit('error message', err.toString(), 'read');
+        //this.displayFunction(err);                                                      // (Then for debug purposes display all of it)
       }
+
+
     })()
   };
+
+
+  /*
+const
+endpointUrl =
+    "opc.tcp://localhost:26543";
+
+const
+nodeId =
+
+    "ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/ResultManagement/Results/Result";
+
+(async ()
+=> {
+
+const
+    client =
+        OPCUAClient.create({
+
+            endpointMustExist:
+                false,
+
+        });
+
+
+
+await
+    client.withSessionAsync(endpointUrl,
+        async (session:
+            ClientSession)
+            => {
+
+            const
+                d =
+                    await session.read({
+
+                        nodeId,
+
+                        attributeId:
+                            AttributeIds.Value,
+
+                        indexRange:
+                            new NumericRange("185492:5428372"),
+
+                    });
+
+            console.log(d.toString());
+
+        });
+
+})();
+*/
 
 
   closeConnection(callback) {
@@ -128,7 +191,7 @@ export default class NodeOPCUAInterface {
     console.log("Client disconnected");
   }
 
-  browse(nodeId, details = false) {
+  browse(nodeId, followup, details = false) {
     (async () => {
       try {
         let io = this.io;
@@ -154,7 +217,8 @@ export default class NodeOPCUAInterface {
               //});
               io.emit('browseresult', {
                 'callernodeid': nodeId,
-                'browseresult': browse_result
+                'browseresult': browse_result,
+                'followUp': followup
               });
             };
           }
@@ -162,6 +226,7 @@ export default class NodeOPCUAInterface {
 
       } catch (err) {
         console.log("FAIL Browse call: " + err.message + err);
+        this.io.emit('error message', err, 'browse');
       }
     })();
   }
@@ -191,6 +256,7 @@ export default class NodeOPCUAInterface {
       } catch (err) {
         this.displayFunction("Node.js OPC UA client error (subscribing): " + err.message);
         this.displayFunction(err);
+        this.io.emit('error message', err, 'subscribe');
       }
     })();
   }

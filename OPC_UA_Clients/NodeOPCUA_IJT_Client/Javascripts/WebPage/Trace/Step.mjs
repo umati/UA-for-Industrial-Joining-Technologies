@@ -47,6 +47,12 @@ export default class Step {
 
 
     /////////////////////////////////// CURVE MANAGEMENT ////////////////////////////////////////////
+    /**
+     * This function changes the angle values in the graph if offset
+     * is set to some other point than the start value. 
+     * For example snug is often used as 0 angle
+     * @returns 
+     */
     calculateData() {
         let xValues = this[this.xDimensionName];
         let yValues = this[this.yDimensionName].map(this.absoluteFunction);
@@ -76,6 +82,11 @@ export default class Step {
 
 
     /////////////////////////////////// POINT MANAGEMENT ////////////////////////////////////////////
+    //                                                                                             //  
+    //      These functions handles displaying values as part of the results                       //  
+    //      They are not used to desplay the actual curves                                          //  
+    //                                                                                             //  
+    /////////////////////////////////////////////////////////////////////////////////////////////////
     createPoints(color) {
         for (let value of this.values) {
             let point = this.interpretPoint(value);
@@ -112,7 +123,11 @@ export default class Step {
     }
 
 
-
+/**
+ * Awful method that tries to guess how to display point values and recalculate them with respect to how the trace currently is shown 
+ * @param {*} value This structure contains a target and might contain a upper and lower limit
+ * @returns a structure with target, limits and name where the values have been recalculated to the selected mode of displaying the trace
+ */
     interpretPoint(value) {
         let x, y, xHigh, yHigh, xLow, yLow, xTarget, yTarget, xOffset = 0;
         switch (value.physicalQuantity) {
@@ -221,6 +236,10 @@ export default class Step {
     }
 
     ///////////////////////////////////////////////////////
+    //                                                   //
+    //    Support functions                              //
+    //                                                   //
+    ///////////////////////////////////////////////////////
 
     delete() {          
         for (const [key, value] of Object.entries(this.datasetMapping)) {
@@ -278,7 +297,12 @@ export default class Step {
 
     }
 
-    ///////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+    //                                                                     //
+    //    these methods help with hiding or showing traces and values      //
+    //                                                                     //
+    /////////////////////////////////////////////////////////////////////////
+
 
     hideStepTrace() {
         this.dataset.hide();

@@ -32,6 +32,9 @@
     // Set up essentials
     var socket = io();
     var tabGenerator = new TabGenerator(document.body);
+
+
+
     var modelManager = new ModelManager();
 
     // Create tabs on the webpage 
@@ -59,7 +62,9 @@
       //structure.generateTree(msg);
       let node = addressSpace.addNodeByBrowse(msg);
       assetHandler.receivedBrowse(msg);
-      
+      if(msg.followUp=='read') {
+        node.read();
+      }  
     });
 
     // Listen to result data and convert it into a javascript model then display it
@@ -67,15 +72,9 @@
       if (!msg) {
         return;
       }
-      //console.log(msg.stringValue);
       let node = addressSpace.addNodeByRead(msg);
-      let model = modelManager.createModelFromMessage2(node);
-      //let model2 = modelManager.createModelFromMessage(msg.path, msg.dataValue.value, { 'result': 'ResultDataType' });
-      //console.log(model);
+      let model = modelManager.createModelFromNode(node);
       structure.displayModel(model);
-      //if (node.isComplete()) {
-      //  node.createGUINode();
-      //}
     });
 
 
@@ -107,6 +106,16 @@
       servers.messageDisplay('Session closed');
     });
 
+
+    // Listen to the tree of possible connection points
+    socket.on('error message', function (msg, context) {
+      console.log(msg);
+      console.log(context);
+      servers.messageDisplay(msg);
+      tabGenerator.displayError(msg,context)
+    });
+
+
     /* TODO
    Ensure graying out old traces
     */
@@ -116,6 +125,7 @@
       return;
     };
 
+    tabGenerator.displayError('ABC DEF', 'test');
 
   </script>
 </body>

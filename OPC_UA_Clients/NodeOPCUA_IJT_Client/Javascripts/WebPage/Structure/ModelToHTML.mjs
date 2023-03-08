@@ -80,15 +80,16 @@ export default class ModelToHTML {
         var nameTag = document.createElement('li');
         let name = model.displayName?.text;
         if (!name) {
-            name=model.browseName?.name;
+            name = model.browseName?.name;
         }
         if (!name) {
-            name=model.name;
+            name = model.name;
         }
-        nameTag.innerText = name;
-        nameTag.classList.add('textHeader');
-        longVersion.appendChild(nameTag);
-
+        if (name) {
+            nameTag.innerText = name;
+            nameTag.classList.add('textHeader');
+            longVersion.appendChild(nameTag);
+        }
         // Loop over the model object and handle diffrent types of values 
         // such as arrays, nesting
         for (const [key, value] of Object.entries(model)) {

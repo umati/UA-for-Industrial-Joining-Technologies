@@ -20,6 +20,7 @@ console.log('Home directory (__dirname): '+__dirname);
 import  {
   AttributeIds,
   OPCUAClient,
+  NumericRange,
   TimestampsToReturn,
 } from "node-opcua";
 
@@ -37,6 +38,7 @@ app.get('/', (req, res) => {
 
 // This is to allow files to be accessible
 app.use(express.static(__dirname + '/'));
+
 
 // This is to listen to the correct port
 http.listen(port, () => {
