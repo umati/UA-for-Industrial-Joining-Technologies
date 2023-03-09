@@ -100,25 +100,16 @@ export default class NodeOPCUAInterface {
     (async () => {
       try {
         //console.log(`READ - nodeId: ${nodeId} \n READ - AttributeIds.Value: ${this.attributeIds.Value}`);
-        const dataValue2 = await this.session.read({
+        const dataValue = await this.session.read({
           nodeId: nodeId,
-          attributeId: this.attributeIds.Value
-        }, (err, dataValue) => {
-          if (err) throw err;
-          this.io.emit('object message', { 'path': nodeId, 'dataValue': dataValue, 'stringValue': dataValue.toString() });   // Sends the message to the web page
-          //console.log(`READ - dataValue:  ${dataValue.toString()} \n`);
-
-          //let a = dataValue.value.value.resultContent;  // Is the resultcontent debuffered??? Problem in NodeOPCUA 2.88
-          //console.log(`READ *********************:  ${a} \n`);   
+          attributeId: AttributeIds.Value
         });
-
+        console.log(dataValue.toString());
+        this.io.emit('object message', { 'path': nodeId, 'dataValue': dataValue, 'stringValue': dataValue.toString() });   // Sends the message to the web page
       } catch (err) {
         this.displayFunction("Node.js OPC UA client error (reading): " + err.message);  // Display the error message first
         this.io.emit('error message', err.toString(), 'read');
-        //this.displayFunction(err);                                                      // (Then for debug purposes display all of it)
       }
-
-
     })()
   };
 
