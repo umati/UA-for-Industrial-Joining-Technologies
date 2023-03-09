@@ -50,5 +50,5 @@ npm install
 * If the browser is unable to load the chart elements, change the following as a work-around which will be fixed later.
 In `node_modules/chart.js/dist/chart.js`, change `import '@kurkle/color;` to `import '../../@kurkle/color/dist/color.min.js';`
 
-In `node_modules/chart.js/dist/chunks/helpers.segments.js`, change `import { Color } from '@kurkle/color;` to `import { Color } from '../../../@kurkle/color/dist/color.esm.js';`
+In `node_modules/chart.js/dist/chunks/helpers.segment.js`, change `import { Color } from '@kurkle/color;` to `import { Color } from '../../../@kurkle/color/dist/color.esm.js';`
 
