@@ -107,6 +107,8 @@ export default class AllTraces {
     createNewTrace(event) {
         let { result, trace } = event.detail;
         this.result = result;
+        if (!trace) return;
+        
         let stepTraces = trace.stepTraces;
 
         let newResultandTrace = new SingleTraceData(result, this);

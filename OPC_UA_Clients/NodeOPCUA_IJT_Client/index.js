@@ -50,7 +50,7 @@ http.listen(port, () => {
 const endpointUrls = [
   {
     name: "Local",
-    address: "opc.tcp://localhost:40451",
+    address: "opc.tcp://127.0.0.1:40451",
     tighteningsystemname: 'TighteningSystem',
   },
   {
