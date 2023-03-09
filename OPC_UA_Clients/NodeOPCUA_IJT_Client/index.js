@@ -34,17 +34,17 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html');
 });
 
-// This is to allow files to be accessible
+/*
 app.get('/',
   (req,res,next)=>{console.log('MyGetMiddleware1: '+req.originalUrl); next();}
 );
 
 app.use(
   (req,res,next)=>{console.log('MyGetMiddleware2: '+req.originalUrl); next();}
-);
+);*/
 
+// This is to allow files to be accessible
 app.use(express.static(__dirname + '/'));
-
 
 // This is to listen to the correct port
 http.listen(port, () => {
