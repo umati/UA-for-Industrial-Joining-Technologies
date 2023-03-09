@@ -23,24 +23,22 @@ This client will be updated based on the newer versions of the companion standar
 
 ## Pre-requisites
 
-1. Fork or clone the repo
-2. go to OPCUA_Clients\NodeOPCUA_IJT_Client folder
-3. run  `npm install`
-4. run `node index.js`
-5. visit `http://localhost:3000` in your browser
+1. Fork or clone the repository
+2. Go to OPCUA_Clients\NodeOPCUA_IJT_Client folder
+3. Run  `npm install`
 
 ## How to run?
 
-1. Run the following command: node ./index.js
-2. The above command will start the socket.io server at <http://localhost:3000/>
-3. Open the above socket.io server link in any browser and start using the client.
+1. Run the following command: `node index.js`
+2. The above command will start the socket.io server at `http://localhost:3000`
+3. Open the `http://localhost:3000` in the browser and start using the client.
 
 ## OPC UA Server
 
 1. Use the following OPC UA Server to utilize the OPC UA Client: <https://github.com/umati/UA-for-Industrial-Joining-Technologies>
 2. Select Servers -> Local in the OPC UA Client to connect to the local OPC UA Server.
 
-## tips
+## Tips
 
 * To update existing node-opcua modules, run the following commands:
 
@@ -48,3 +46,9 @@ This client will be updated based on the newer versions of the companion standar
 npx npm-check-updates -u -f "node-opcua*"
 npm install
 ```
+
+* If the browser is unable to load the chart elements, change the following as a work-around which will be fixed later.
+In `node_modules/chart.js/dist/chart.js`, change `import '@kurkle/color;` to `import '../../@kurkle/color/dist/color.min.js';`
+
+In `node_modules/chart.js/dist/chunks/helpers.segments.js`, change `import { Color } from '@kurkle/color;` to `import { Color } from '../../../@kurkle/color/dist/color.esm.js';`
+
