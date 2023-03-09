@@ -19,9 +19,7 @@ console.log('Home directory (__dirname): '+__dirname);
 
 import  {
   AttributeIds,
-  OPCUAClient,
-  NumericRange,
-  TimestampsToReturn,
+  OPCUAClient
 } from "node-opcua";
 
 
@@ -37,6 +35,14 @@ app.get('/', (req, res) => {
 });
 
 // This is to allow files to be accessible
+app.get('/',
+  (req,res,next)=>{console.log('MyGetMiddleware1: '+req.originalUrl); next();}
+);
+
+app.use(
+  (req,res,next)=>{console.log('MyGetMiddleware2: '+req.originalUrl); next();}
+);
+
 app.use(express.static(__dirname + '/'));
 
 
