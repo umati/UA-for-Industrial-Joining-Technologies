@@ -102,8 +102,7 @@ export default class NodeOPCUAInterface {
         //console.log(`READ - nodeId: ${nodeId} \n READ - AttributeIds.Value: ${this.attributeIds.Value}`);
         const dataValue2 = await this.session.read({
           nodeId: nodeId,
-          attributeId: this.attributeIds.Value,
-          indexRange: new NumericRange("185492:5428372")
+          attributeId: this.attributeIds.Value
         }, (err, dataValue) => {
           if (err) throw err;
           this.io.emit('object message', { 'path': nodeId, 'dataValue': dataValue, 'stringValue': dataValue.toString() });   // Sends the message to the web page
