@@ -1,9 +1,4 @@
-import Chartjs from '../../../node_modules/chart.js/auto/auto.js';
-// Comment. In order to get the latest chart.js to work with @kurkle/color
-// dist/chart.js should import:
- // import '../../@kurkle/color/dist/color.esm.js';
-// and chunks/helpers/segments/js should import:
- // import { Color } from '../../../@kurkle/color/dist/color.esm.js';
+import '../../../node_modules/chart.js/dist/chart.umd.js';
 import Dataset from './Dataset.mjs';
 /**
  * Chartmanager should encapsulate all access to chart.js in order to 
@@ -14,7 +9,7 @@ export default class ChartManager {
     constructor(ctx, traceManager) {
         this.context=ctx;
         this.traceManager=traceManager;
-        this.myChart = new Chartjs(ctx, {
+        this.myChart = new Chart(ctx, {
             type: 'line',
             data: {
                 datasets: []
