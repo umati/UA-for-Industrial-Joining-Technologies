@@ -73,6 +73,12 @@ li>li {
   /* border:1px solid green; */
 }
 
+@keyframes errorfade {
+  0% {opacity: 1;}
+  75% {opacity: 1;}
+  100% {opacity: 0;}
+}
+
 .errorTab {
   padding: 20px;
   margin: 10px;
@@ -80,10 +86,12 @@ li>li {
   color:yellow;
   background-color: black;
   position: absolute;
-  left: 20px;
-  right: 20px;
-  top:20px;
-  bottom:20px;
+  width: 400px;
+  right: -5px;
+  top:-5px;
+  z-index: 100;
+  animation-name: errorfade;
+  animation-duration: 15s;
 }
 
 .buttonAreaStyle {

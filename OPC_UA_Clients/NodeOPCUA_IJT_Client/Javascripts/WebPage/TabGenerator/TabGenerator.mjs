@@ -96,6 +96,6 @@ export default class TabGenerator {
         contentDiv.appendChild(innerDiv);
         window.setTimeout(()=>{
             this.container.removeChild(contentDiv);
-        }, 5000)
+        }, 15000)
     }
 }
