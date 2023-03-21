@@ -27,14 +27,13 @@
     import Structure from "./Javascripts/WebPage/Structure/StructureHandler.mjs"
     import AddressSpace from "./Javascripts/WebPage/Structure/AddressSpace.mjs"
     import AssetHandler from "./Javascripts/WebPage/Assets/AssetHandler.mjs"
+    import SocketHandler from "./Javascripts/WebPage/SocketHandler/SocketHandler.mjs"
 
     
     // Set up essentials
     var socket = io();
     var tabGenerator = new TabGenerator(document.body);
-
-
-
+    var socketHandler = new SocketHandler(socket);
     var modelManager = new ModelManager();
 
     // Create tabs on the webpage 
@@ -47,78 +46,64 @@
     //var jointArea = tabGenerator.generateTab('Joints');
 
     // Initiate the different tab handlers
-    var servers = new Servers(serverArea, socket);
-    var addressSpace = new AddressSpace(socket);
-    var structure = new Structure(structureArea, socket, addressSpace);
+    var servers = new Servers(serverArea, socketHandler);
+    var addressSpace = new AddressSpace(socketHandler);
+    var structure = new Structure(structureArea, socketHandler, addressSpace);
     
     let trace = new AllTraces(traceArea, ['angle', 'torque']);
-    let assetHandler = new AssetHandler(assetArea, structure, socket);
+    let assetHandler = new AssetHandler(assetArea, structure, socketHandler);
 
     /*****************  Set up socket listeners to handle input from server *******************/
 
 
-    // Listen to the data from the server regarding the tree of quueriable data and display it
-    socket.on('browseresult', function (msg) {
-      //structure.generateTree(msg);
-      let node = addressSpace.addNodeByBrowse(msg);
-      assetHandler.receivedBrowse(msg);
-      if(msg.followUp=='read') {
-        node.read();
-      }  
-    });
+    // Listen to the data from the server regarding the tree of queriable data and display it
+    socketHandler.registerMandatory('browseresult', function (msg) {
+      return addressSpace.addNodeByBrowse(msg);
+     } );
 
-    // Listen to result data and convert it into a javascript model then display it
-    socket.on('object message', function (msg) {
+      // Listen to result data and convert it into a javascript model then display it
+     socketHandler.registerMandatory('readresult', function (msg) {
       if (!msg) {
         return;
       }
       let node = addressSpace.addNodeByRead(msg);
       let model = modelManager.createModelFromNode(node);
       structure.displayModel(model);
+      return model;
     });
 
-
-    // Listen to status messages from the server
-    socket.on('status message', function (msg) {
+    socketHandler.registerMandatory('status message', function (msg) {
       servers.messageDisplay(msg);
     });
 
     // Listen to the tree of possible connection points
-    socket.on('connection points', function (msg) {
+    socketHandler.registerMandatory('connection points', function (msg) {
       servers.connectionPoints(msg, socket);
     });
 
-    // Listen to the tree of possible connection points
-    socket.on('connection established', function (msg) {
+    // Listen to connection
+    socketHandler.registerMandatory('connection established', function (msg) {
       servers.messageDisplay('Connection established');
     });
 
-    // Listen to the tree of possible connection points
-    socket.on('session established', function (msg) {
+    // Listen to session start
+    socketHandler.registerMandatory('session established', function (msg) {
       servers.messageDisplay('Session established');
       structure.initiateNodeTree();
-
-      //TODO: Here we should initiate the tree building
     });
 
-    // Listen to the tree of possible connection points
-    socket.on('session closed', function (msg) {
+    // Listen to session closure
+    socketHandler.registerMandatory('session closed', function (msg) {
       servers.messageDisplay('Session closed');
     });
 
-
-    // Listen to the tree of possible connection points
-    socket.on('error message', function (msg, context) {
+    // Listen to error messages
+    socketHandler.registerMandatory('error message', function (msg) {
       console.log(msg);
-      console.log(context);
+      //console.log(context);
       servers.messageDisplay(msg);
       tabGenerator.displayError(msg,context)
     });
-
-
-    /* TODO
-   Ensure graying out old traces
-    */
 
     window.onbeforeunload = function () {
       socket.emit('terminate connection');

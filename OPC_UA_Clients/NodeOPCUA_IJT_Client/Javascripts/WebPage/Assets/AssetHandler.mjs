@@ -1,9 +1,9 @@
 
 export default class AssetHandler {
 
-    constructor(container, structure, socket) {
+    constructor(container, addressSpace, socket) {
         this.socket = socket;
-        this.structure = structure;
+        this.addressSpace = addressSpace;
         this.mapping = {};
 
         let backGround = document.createElement('div');
@@ -57,14 +57,38 @@ export default class AssetHandler {
     }
 
     initiate() {
-        let tighteningSystems = this.structure.getTighteningSystems();
+        let tighteningSystems = this.addressSpace.getTighteningSystems();
         if (!tighteningSystems || tighteningSystems.length < 1) {
-            return;
+            throw new Error('No TighteningSystem found in Objects folder');
         }
         this.tighteningSystem = tighteningSystems[0];
-        this.mapping[this.tighteningSystem] = 'dummy';
-        this.socket.emit('browse', this.tighteningSystem, 'read');
+        console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId);
 
+        this.assetNodes={}
+        this.getAssets(['Controllers', 'Tools'], () => { alert('done') });
+
+        //this.mapping[this.tighteningSystem] = 'dummy';
+        //this.socket.emit('browse', this.tighteningSystem, 'read');
+    }
+
+    getAssets(list, f) {
+        let current = list.pop();
+        this.addressSpace.browsePath(
+            this.tighteningSystem,
+            'AssetManagement/Assets/' + current,
+            (node) => {
+                node.explorePromise().then(
+                    (exploredNode) => {
+                        console.log('RECURSIVE NODE Controller:' + exploredNode.browseName.name);
+                        this.assetNodes[current] = exploredNode.getRelations('component');
+                        if (list.length <= 0) {
+                            f();
+                        } else {
+                            this.getAssets(list, f);
+                        }
+                    })
+
+            });
     }
 
     receivedBrowse(msg) {
@@ -79,8 +103,8 @@ export default class AssetHandler {
                 case "Servos":
                 case "Subcomponents":
                 case "Tools":
-                    for(let ref of msg.browseresult.references) {
-                    this.createAsset(ref);
+                    for (let ref of msg.browseresult.references) {
+                        this.createAsset(ref);
                     }
                     break;
                 default:
@@ -112,7 +136,7 @@ export default class AssetHandler {
     }
 
     createAsset(reference) {
-        let nodeId=reference.NodeId;
+        let nodeId = reference.NodeId;
         let mainbox = document.createElement('div');
         mainbox.classList.add("controllerBox");
         mainbox.innerText = reference.displayName.text;

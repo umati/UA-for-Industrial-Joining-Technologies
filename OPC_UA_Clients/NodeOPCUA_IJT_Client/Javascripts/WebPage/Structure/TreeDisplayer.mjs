@@ -4,14 +4,13 @@
 
 export default class TreeDisplayer {
 
-    constructor(structure, autoOpenList) {
+    constructor(structure) {
         this.generatedObjectFolder = structure.leftArea;
         this.structure = structure;
         this.generatedObjectFolder.innerHTML = '';
         this.addressSpace = structure.addressSpace;
         this.socket = structure.socket;
         this.mapping = {};
-        this.autoOpenList = autoOpenList;
     }
 
 

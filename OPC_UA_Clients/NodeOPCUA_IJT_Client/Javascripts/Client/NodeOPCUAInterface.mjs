@@ -30,12 +30,12 @@ export default class NodeOPCUAInterface {
       socket.on('subscribe item', msg => {
         this.addMonitor(msg);
       });
-      socket.on('read item', msg => {
+      socket.on('read', msg => {
         this.read(msg);
       });
 
-      socket.on('browse', (nodeId, followup, details) => {
-        this.browse(nodeId, followup, details)
+      socket.on('browse', (nodeId, details) => {
+        this.browse(nodeId, details)
       });
 
 
@@ -85,15 +85,33 @@ export default class NodeOPCUAInterface {
           if (!err) {
             theSession = session;
             thisContainer.session = session;
+       
+
             io.emit('session established');
           }
           callback(err);
         });
-      }
+      }, /*
+      function(callback) { //Namespaces
+        
+        thisContainer.session.readNamespaceArray((namespaces)=> {
+          console.log("The server do not expose the IJT namespace");
+          /*
+         const nsIJT = namespaces.indexOf("http://opcfoundation.org/UA/IJT/");
+         if (nsIJT < 0) {
+             console.log("The server do not expose the IJT namespace");
+             return;
+         } 
+             //this.displayFunction("Creating namsepaces ");
+        }) 
+      }*/
+
+
     ],
       function (err) {
         if (err) {
           console.log(" Failure during establishing connection to OPC UA server ", err);
+          this.io.emit('error message', err.toString(), 'connection');
           process.exit(0);
         } else {
           console.log("Connection and session established.");
@@ -117,7 +135,7 @@ export default class NodeOPCUAInterface {
           await promoteOpaqueStructure(this.session, [{ value: result.resultContent }]);
         }
         //console.log('dataValue ' + dataValue.toString());
-        this.io.emit('object message', { 'path': nodeId, 'dataValue': dataValue, 'stringValue': dataValue.toString() });
+        this.io.emit('readresult', { 'path': nodeId, 'dataValue': dataValue, 'stringValue': dataValue.toString() });
         return dataValue;
 
       } catch (err) {
@@ -144,12 +162,12 @@ export default class NodeOPCUAInterface {
     console.log("Client disconnected");
   }
 
-  browse(nodeId, followup, details = false) {
+  browse(nodeId, details = false) {
     (async () => {
       try {
         let io = this.io;
         let nodeToBrowse;
-        //console.log('Browse: '+nodeId);
+        //console.log('Browse details: '+details);
         if (details) {
           nodeToBrowse = {
             'nodeId': nodeId,
@@ -171,7 +189,6 @@ export default class NodeOPCUAInterface {
               io.emit('browseresult', {
                 'callernodeid': nodeId,
                 'browseresult': browse_result,
-                'followUp': followup
               });
             };
           }

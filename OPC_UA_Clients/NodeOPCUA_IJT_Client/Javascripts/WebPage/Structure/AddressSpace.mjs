@@ -1,21 +1,22 @@
 
 
+
 class Reference {
-    constructor(parent, reference, socket, graphicGenerator) {
+    constructor(parent, reference, socketHandler, graphicGenerator) {
         this.parent = parent;
         for (const [key, value] of Object.entries(reference)) {
             this[key] = value;
         }
         this.graphicGenerator = graphicGenerator
 
-        this.socket = socket;
+        this.socketHandler = socketHandler;
         if (reference.browseName) {
             this.createGUIReference();
         }
     }
 
     explore() {
-        this.socket.emit('browse', this.nodeId, 'read', true);
+        this.socketHandler.browse(this.nodeId, () => { this.socketHandler.read(this.nodeId, null) }, true);
     }
     createGUIReference() {
         if (this.graphicGenerator && this.graphicGenerator.generateGUIReference) {
@@ -26,33 +27,81 @@ class Reference {
     }
 }
 class Node {
-    constructor(parent, reference, socket, graphicGenerator) {
+    constructor(parent, reference, socketHandler, graphicGenerator) {
         this.parent = parent;
-        this.relations={};
+        this.relations = {};
         this.graphicGenerator = graphicGenerator
         this.value = null;
         this.browseData = {}
-        this.socket = socket;
+        this.socketHandler = socketHandler;
         this.addBrowseData(reference);
         this.createGUINode();
 
     }
 
+    // using organizes and component
+    getChild(browseName, callback) {
+        let handleBrowsed = () => {
+            let children = [...this.getRelations('component'), ...this.getRelations('organizes')];
+
+            for (const child of children) {
+                //console.log('getChild'+child.browseName.name);
+                if (child.browseName.name == browseName) {
+                    callback(child);
+                    return;
+                }
+            }
+            throw new Error(`Node ${this.browseName.name} does not contain a child named ${browseName}`)
+        }
+        if (this.explored) {
+            handleBrowsed();
+        } else {
+            this.socketHandler.browse(this.nodeId, handleBrowsed, true);
+        }
+
+    }
+
+    /*
+    hasInterface(interfaceName) {
+        this.explorePromise().then(
+            (node) => {
+                let children = node.getRelations('interface');
+
+                for (const child of children) {
+                    console.log('getFilteredChildren: ' + child.browseName.name);
+                    if (child.browseName.name == interfaceName) {
+                        callback(child);
+                        return;
+                    }
+                }
+            },
+            function failed() { }
+        )
+    }*/
+
     addRelation(type, id, obj) {
         let row = this.relations[type];
         if (!row) {
-            row={};
+            row = {};
         }
-        row[id]=obj;
-        this.relations[type]=row;
+        row[id] = obj;
+        this.relations[type] = row;
     }
 
     getRelation(type, nodeId) {
-        let row = this.relations[type];
-        if (!row) {
-            return;
-        }
-        return row[nodeId];
+                let row = this.relations[type];
+                if (!row) {
+                    return;
+                }
+                return row[nodeId];
+    }
+
+    getRelations(type) {
+                let row = this.relations[type];
+                if (!row) {
+                    return [];
+                }
+                return Object.values(row);
     }
 
     get nodeId() {
@@ -70,17 +119,41 @@ class Node {
         return this.browseData.typeDefinition;
     }
 
-    explore() {
-        this.socket.emit('browse', this.nodeId, 'read', true);
+    explorePromise() {
+        return new Promise((resolve, reject) => {
+            if (this.explored) {
+                return resolve();
+            }
+            this.socketHandler.browsePromise(this.nodeId, true).then(
+                () => {
+                    this.explored = true;
+                    resolve(this);
+                },
+                function rejected() {
+                    reject();
+                }
+            )
+        });
+    }
+
+    explore(f) {
+        this.socketHandler.browse(this.nodeId, () => {
+            this.socketHandler.read(this.nodeId);
+            if (f) {
+                return f();
+            }
+        }, true);
+        this.explored = true;
         //console.log('SEND Browse: '+this.nodeId);
     }
 
     read() {
-        this.socket.emit('read item', this.nodeId);
+        this.socketHandler.read(this.nodeId, null);
         //console.log('SEND Read: '+this.nodeId);
     }
 
     addReadData(value) {
+        this.read = true;
         this.value = value;
         if (this.browseData != {}) {
             return true;
@@ -89,6 +162,7 @@ class Node {
     }
 
     addBrowseData(input) {
+        this.browsed = true;
         for (const [key, value] of Object.entries(input)) {
             this.browseData[key] = value;
         }
@@ -116,7 +190,7 @@ class Node {
         }
     }
 
-    scrollTo(){
+    scrollTo() {
         if (this.graphicRepresentation) {
             this.graphicGenerator.scrollTo(this.graphicRepresentation);
         }
@@ -133,11 +207,27 @@ class Node {
 }
 
 export default class AddressSpace {
-    constructor(socket) {
-        this.socket = socket;
+    constructor(socketHandler) {
+        this.socketHandler = socketHandler;
         this.nodeMapping = {};
-        this.tighteningSystems = [];
+        this.objectFolder = null;
+        this.selectedTighteningSystem = null;
 
+    }
+
+    /**
+     * Sets up root and the Object folder
+     */
+    initiate() {
+        this.createNode({
+            nodeId: 'ns=0;i=84',
+            browseName: { name: 'Root' },
+            displayName: { text: 'Root' },
+            referenceTypeId: 'ns=0;i=35',
+            typeDefinition: 'ns=0;i=61',
+            nodeClass: 'Object'
+        });
+        this.socketHandler.browse('ns=0;i=85', () => { this.socketHandler.read('ns=0;i=85') }, true);
     }
 
     reset() {
@@ -147,10 +237,11 @@ export default class AddressSpace {
     setGUIGenerator(graphicGenerator) {
         this.graphicGenerator = graphicGenerator;
     }
+
     // This is called whenever a node has been being browsed
     addNodeByBrowse(msg) {
 
-        function findOrCreateNode(reference, parent, self, type='component') {
+        function findOrCreateNode(reference, parent, self, type = 'component') {
             let returnNode;
             let referencedNode = self.nodeMapping[reference.nodeId];
             if (referencedNode) {
@@ -197,6 +288,7 @@ export default class AddressSpace {
 
         let thisNode = findOrCreateNode({ 'nodeId': msg.callernodeid }, null, this);
 
+
         thisNode.references = msg.browseresult.references;
 
         let componentOf = null;
@@ -216,7 +308,7 @@ export default class AddressSpace {
                     break;
                 case ('35'): //Organizes/OrganizedBy
                     if (reference.isForward) {
-                        findOrCreateNode(reference, thisNode, this, 'Organizes');
+                        findOrCreateNode(reference, thisNode, this, 'organizes');
                     } else {
                         if (!organizedBy) {
                             organizedBy = reference;
@@ -231,11 +323,11 @@ export default class AddressSpace {
                     }
                     break;
                 case '17603': // HasInterface
-                findOrCreateNode(reference, thisNode, this, 'hasInterface')
+                    findOrCreateNode(reference, thisNode, this, 'hasInterface')
                     break;
                 case '17604': // HasAddin
-                
-                findOrCreateNode(reference, thisNode, this, 'hasAddin')
+
+                    findOrCreateNode(reference, thisNode, this, 'hasAddin')
                     break;
                 case '24137': // AssociatedWith
                     let newReferenceId = findOrCreateAssociation(reference, thisNode, this)
@@ -244,6 +336,15 @@ export default class AddressSpace {
                     alert('Unhandled type in reference of node:' + type)
             }
         }
+
+        if (thisNode.nodeId == 'ns=0;i=85') { // Setting up objectFolder
+            this.objectFolder = thisNode;
+            let tighteningSystems = this.getTighteningSystems();
+            for (let ts of tighteningSystems) {
+                ts.read();
+            }
+        }
+
         // Prioritize the component relation, but if no parent componentowner exist, use organizedBy reference instead
         if (!componentOf && organizedBy) {
             makeParentAndConnect(organizedBy, thisNode, this)
@@ -286,18 +387,49 @@ export default class AddressSpace {
         return node.toString();
     }
 
-    getTighteningSystems() {
-        return this.tighteningSystems;
-    }
 
     createNode(reference, parent) {
-        let newNode = new Node(parent, reference, this.socket, this.graphicGenerator);
+        let newNode = new Node(parent, reference, this.socketHandler, this.graphicGenerator);
         this.nodeMapping[newNode.nodeId] = newNode;
         return newNode;
     }
 
     createAssociation(reference, caller) {
-        let newReference = new Reference(caller, reference, this.socket, this.graphicGenerator);
+        let newReference = new Reference(caller, reference, this.socketHandler, this.graphicGenerator);
         return newReference;
     }
+
+    getTighteningSystems() {
+        if (!this.objectFolder) {
+            throw new Error('Root/Objects folder not found');
+        }
+        let organizes = this.objectFolder.getRelations('organizes');
+        let tighteningSystems = [];
+        for (let node of organizes) {
+            //let a = findOrCreateNode(relation, objectFolder, self, 'organizes')
+            if (node.typeDefinition == 'ns=4;i=1005') {
+                tighteningSystems.push(node);
+            }
+        }
+        return tighteningSystems;
+    }
+
+
+    browsePath(startNode, path, callback) {
+        let browseChain = (pathArray, node) => {
+            if (pathArray.length <= 0) {
+                callback(node);
+                return;
+            }
+            node.getChild(pathArray.pop(), (childNode) => {
+                return browseChain(pathArray, childNode);
+            });
+        }
+        let pathArray = path.split('/').reverse();
+        if (!startNode) {
+            startNode = this.getTighteningSystems()[0];
+        }
+        return browseChain(pathArray, startNode);
+    }
+
 }

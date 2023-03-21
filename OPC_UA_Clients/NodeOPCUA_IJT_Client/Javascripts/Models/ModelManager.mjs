@@ -63,21 +63,22 @@ export default class ModelManager {
     createModelFromNode(node) {
         //console.log(node.nodeId);
         //console.log(node.typeName);
-        switch (node.typeName) {
+        let model;
+        switch (node.typeDefinition) {
             case ('TighteningSystemType'):
-                return new DefaultNode(node, this);
+                model =  new DefaultNode(node, this);
                 break;
             case ('ResultManagementType'):
-                return new DefaultNode(node, this);
+                model =  new DefaultNode(node, this);
                 break;
-            case ('ResultType'):
-                return new ResultDataType(node.value.value, this)
+            case ('ns=4;i=2001'):
+                model =  new ResultDataType(node, this)
                 break;
             default:
-                return new DefaultNode(node, this);
+                model =  new DefaultNode(node, this);
         }
-
-        return;
+        node.model=model;
+        return model;
 
     }
 

@@ -2,7 +2,8 @@ import IJTBaseModel from './IJTBaseModel.mjs';
 
 // The purpose of this class is to handle the actual subscription or reading of a value and via socketIO send the result to the webpage
 export default class ResultDataModel extends IJTBaseModel {
-    constructor(parameters, modelManager) { 
+    constructor(node, modelManager) { 
+        let parameters = node.value.value;
         let castMapping= { 
             'processingTimes': 'ProcessingTimesDataType',
             'tags':'TagDataType',

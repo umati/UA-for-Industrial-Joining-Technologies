@@ -51,21 +51,17 @@ export default class StructureHandler {
     }
 
     initiateNodeTree(){
-        this.treeDisplayer= new TreeDisplayer(this, ['Root', 'Objects', 'TighteningSystem', 'TighteningSystem_AtlasCopco', 'ResultManagement', 'Results']);
+        this.treeDisplayer= new TreeDisplayer(this);
         this.addressSpace.reset();
         this.addressSpace.setGUIGenerator(this.treeDisplayer); 
 
-        this.addressSpace.createNode({
-            nodeId: 'ns=0;i=84',
-            browseName: { name: 'Root' },
-            displayName: { text: 'Root' },
-            referenceTypeId: 'ns=0;i=35',
-            typeDefinition: 'ns=0;i=61',
-            nodeClass: 'Object'
-        });
+        this.addressSpace.initiate();
+
+        //this.addressSpace.createObjectFolder();
         
         //this.socket.emit('browse', 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/AssetManagement/Assets/Controllers/TighteningController', 'read', true);
-        this.socket.emit('browse', 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/ResultManagement/Results/Result', 'read', true);
+        //this.socket.emit('browse', 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/ResultManagement/Results/Result', 'read', true);
+        //this.socket.emit('browse', 'ns=0;i=85', 'read', true);
     }
 
     generateTree(msg){
@@ -76,9 +72,6 @@ export default class StructureHandler {
         this.treeDisplayer.generateTree(msg);
     }
 
-    getTighteningSystems(){
-        return this.addressSpace.getTighteningSystems();
-    }
     
     displayModel(model){
         this.modelToHTML.display(model);
