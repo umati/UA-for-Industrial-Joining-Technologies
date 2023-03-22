@@ -98,13 +98,12 @@ export default class NodeOPCUAInterface {
         });
       },
       function (callback) { // Namespaces
-        /*
         thisContainer.session.readNamespaceArray((err, namespaces) => {
           console.log("Handling NameSpaces");
           // console.log(namespaces);
 
           io.emit('namespaces', namespaces);
-        }) */
+        }) 
       }
 
 
@@ -125,20 +124,18 @@ export default class NodeOPCUAInterface {
   read(callid, nodeId) {
     (async () => {
       try {
-        console.log('Entered read :'+nodeId);
+        //console.log('Entered read :'+nodeId);
         const dataValue = await this.session.read({
           nodeId,
           attributeId: AttributeIds.Value,
         });
-
-        console.log('dataValue1 ' + dataValue.toString());
 
         const result = dataValue.value.value;
         if (result && result.resultContent) {
           await promoteOpaqueStructure(this.session, [{ value: result.resultContent }]);
         }
 
-        console.log('dataValue ' + dataValue.toString());
+        //console.log('dataValue ' + dataValue.toString());
 
         this.io.emit('readresult', { 'callid': callid, 'dataValue': dataValue, 'stringValue': dataValue.toString(), 'nodeid': nodeId });
         return dataValue;
