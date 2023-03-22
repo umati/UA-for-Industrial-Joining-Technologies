@@ -4,8 +4,8 @@ import ModelToHTML from './ModelToHTML.mjs';
 
 export default class StructureHandler {
 
-    constructor(container, socket, addressSpace) {
-        this.socket=socket;
+    constructor(container, socketHandler, addressSpace) {
+        this.socketHandler=socketHandler;
         this.addressSpace=addressSpace;
         
         let backGround=document.createElement('div');
@@ -58,7 +58,12 @@ export default class StructureHandler {
         this.addressSpace.initiate();
 
         //this.addressSpace.createObjectFolder();
-        
+        /*
+        let nodeId='ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/ResultManagement/Results/Result';
+    this.socketHandler.browse(nodeId, 
+        ()=>{this.socketHandler.browse(nodeId,(x)=>{console.log(x)})});
+        */
+
         //this.socket.emit('browse', 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/AssetManagement/Assets/Controllers/TighteningController', 'read', true);
         //this.socket.emit('browse', 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/ResultManagement/Results/Result', 'read', true);
         //this.socket.emit('browse', 'ns=0;i=85', 'read', true);

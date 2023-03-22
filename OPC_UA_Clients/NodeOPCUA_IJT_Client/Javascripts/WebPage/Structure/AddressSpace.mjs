@@ -89,19 +89,19 @@ class Node {
     }
 
     getRelation(type, nodeId) {
-                let row = this.relations[type];
-                if (!row) {
-                    return;
-                }
-                return row[nodeId];
+        let row = this.relations[type];
+        if (!row) {
+            return;
+        }
+        return row[nodeId];
     }
 
     getRelations(type) {
-                let row = this.relations[type];
-                if (!row) {
-                    return [];
-                }
-                return Object.values(row);
+        let row = this.relations[type];
+        if (!row) {
+            return [];
+        }
+        return Object.values(row);
     }
 
     get nodeId() {
@@ -212,7 +212,13 @@ export default class AddressSpace {
         this.nodeMapping = {};
         this.objectFolder = null;
         this.selectedTighteningSystem = null;
+    }
 
+
+    handleNamespaces(namespaces) {
+        this.nsIJT = namespaces.indexOf("http://opcfoundation.org/UA/IJT/");
+        this.nsMachinery = namespaces.indexOf("http://opcfoundation.org/UA/Machinery/");
+        this.nsDI = namespaces.indexOf("http://opcfoundation.org/UA/DI/");
     }
 
     /**
@@ -286,7 +292,7 @@ export default class AddressSpace {
             return parent;
         }
 
-        let thisNode = findOrCreateNode({ 'nodeId': msg.callernodeid }, null, this);
+        let thisNode = findOrCreateNode({ 'nodeId': msg.nodeid }, null, this);
 
 
         thisNode.references = msg.browseresult.references;
@@ -362,7 +368,7 @@ export default class AddressSpace {
         if (!msg.dataValue.value) {
             return;
         }
-        let node = this.nodeMapping[msg.path];
+        let node = this.nodeMapping[msg.nodeid];
         if (node) {
             node.addReadData(msg.dataValue.value);
         }

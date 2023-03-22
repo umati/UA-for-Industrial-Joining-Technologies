@@ -1,8 +1,8 @@
 
 export default class AssetHandler {
 
-    constructor(container, addressSpace, socket) {
-        this.socket = socket;
+    constructor(container, addressSpace, socketHandler) {
+        this.socketHandler = socketHandler;
         this.addressSpace = addressSpace;
         this.mapping = {};
 
@@ -64,6 +64,10 @@ export default class AssetHandler {
         this.tighteningSystem = tighteningSystems[0];
         console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId);
 
+
+
+        this.socketHandler.emit('pathtoid', nodeId, path);
+
         this.assetNodes={}
         this.getAssets(['Controllers', 'Tools'], () => { alert('done') });
 
@@ -92,8 +96,8 @@ export default class AssetHandler {
     }
 
     receivedBrowse(msg) {
-        if (this.mapping[msg.callernodeid]) {
-            switch (msg.callernodeid.split('/').pop()) {
+        if (this.mapping[msg.callid]) {
+            switch (msg.callid.split('/').pop()) {
                 case "Accessories":
                 case "Batteries":
                 case "Cables":
@@ -123,7 +127,7 @@ export default class AssetHandler {
                             case "Subcomponents":
                             case "Tools":
                                 this.mapping[ref.nodeId] = 'folder';
-                                this.socket.emit('browse', ref.nodeId, 'read', true);
+                                this.socketHandler.emit('browse', ref.nodeId, 'read', true);
                                 console.log('browse::' + ref.nodeId);
                                 break;
                             default:

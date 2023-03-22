@@ -5,56 +5,73 @@ export default class SocketHandler {
         this.socket = socket;
         this.callMapping = {};
         this.failMapping = {};
-        this.mandatoryLists= {};
+        this.mandatoryLists = {};
         this.browseList = [];
         this.readList = [];
+        this.uniqueId = 1;
+        this.registerMandatory('readresult');
+        this.registerMandatory('browseresult');
+        this.registerMandatory('pathtoidresult');
     }
 
 
     read(nodeId, callback) {
-        this.callMapping[nodeId] = callback;
-        this.socket.emit('read', nodeId);
+        this.uniqueId++;
+        this.callMapping[this.uniqueId] = callback;
+        this.socket.emit('read', this.uniqueId, nodeId);
     }
 
     browse(nodeId, callback, details) {
-        this.callMapping[nodeId] = callback;
-        this.socket.emit('browse', nodeId, details);
+        this.uniqueId++;
+        this.callMapping[this.uniqueId] = callback;
+        this.socket.emit('browse', this.uniqueId, nodeId, details);
     }
 
+    pathtoid(nodeId, path, callback) {
+        this.uniqueId++;
+        this.callMapping[this.uniqueId] = callback;
+        this.socket.emit('pathtoid', this.uniqueId, nodeId, path);
+    }
+
+    /*
     browsePromise(nodeId, details) {
         return new Promise((resolve,reject) => {
             this.callMapping[nodeId] = resolve;
             this.failMapping[nodeId] = reject;
             this.socket.emit('browse', nodeId, details);
         });
-    }
+    }*/
 
     registerMandatory(typeList, callback) {
         if (!this.mandatoryLists[typeList]) {
-            this.mandatoryLists[typeList]=[];
+            this.mandatoryLists[typeList] = [];
         }
+        if (this.mandatoryLists[typeList].length == 0) {
+            this.socket.on(typeList, (msg) => {
+
+                let returnNode = this.applyAll(this.mandatoryLists[typeList], msg);
+
+                if (msg && msg.callid) {
+                    let callbackFunction = this.callMapping[msg.callid];
+                    this.callMapping[msg.callid] = null;
+                    if (callbackFunction) {
+                        callbackFunction(msg, returnNode);
+                    }
+                }
+            });
+        }
+
         this.mandatoryLists[typeList].push(callback);
-
-        this.socket.on(typeList, (msg) => {
-            
-            let returnNode = this.applyAll(this.mandatoryLists[typeList], msg);
-
-            if (msg && msg.callernodeid) {
-            let callbackFunction = this.callMapping[msg.callernodeid];
-            this.callMapping[msg.callernodeid] = null;
-            if (callbackFunction) {
-                callbackFunction(msg, returnNode);
-            }
-        }
-        });
     }
-    
+
     applyAll(functionList, msg) {
         let returnValue;
         for (let f of functionList) {
-            let nodeResult = f(msg);
-            if (nodeResult) {
-                returnValue = nodeResult;
+            if (f) {
+                let nodeResult = f(msg);
+                if (nodeResult) {
+                    returnValue = nodeResult;
+                }
             }
         }
         return returnValue;
