@@ -29,7 +29,7 @@
     import AssetHandler from "./Javascripts/WebPage/Assets/AssetHandler.mjs"
     import SocketHandler from "./Javascripts/WebPage/SocketHandler/SocketHandler.mjs"
 
-    
+
     // Set up essentials
     var socket = io();
     var tabGenerator = new TabGenerator(document.body);
@@ -49,20 +49,19 @@
     var servers = new Servers(serverArea, socketHandler);
     var addressSpace = new AddressSpace(socketHandler);
     var structure = new Structure(structureArea, socketHandler, addressSpace);
-    
+
     let trace = new AllTraces(traceArea, ['angle', 'torque']);
     let assetHandler = new AssetHandler(assetArea, structure, socketHandler);
 
     /*****************  Set up socket listeners to handle input from server *******************/
 
-
     // Listen to the data from the server regarding the tree of queriable data and display it
     socketHandler.registerMandatory('browseresult', function (msg) {
       return addressSpace.addNodeByBrowse(msg);
-     } );
+    });
 
-      // Listen to result data and convert it into a javascript model then display it
-     socketHandler.registerMandatory('readresult', function (msg) {
+    // Listen to result data and convert it into a javascript model then display it
+    socketHandler.registerMandatory('readresult', function (msg) {
       if (!msg) {
         return;
       }
@@ -97,13 +96,20 @@
       servers.messageDisplay('Session closed');
     });
 
+    // Listen to namespaces
+    socketHandler.registerMandatory('namespaces', function (msg) {
+      addressSpace.handleNamespaces(msg);
+      servers.messageDisplay('Recieving namespaces');
+    });
+
     // Listen to error messages
     socketHandler.registerMandatory('error message', function (msg) {
       console.log(msg);
-      //console.log(context);
       servers.messageDisplay(msg);
-      tabGenerator.displayError(msg,context)
+      tabGenerator.displayError(msg, context)
     });
+
+
 
     window.onbeforeunload = function () {
       socket.emit('terminate connection');
