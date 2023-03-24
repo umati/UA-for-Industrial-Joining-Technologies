@@ -51,7 +51,7 @@
     var structure = new Structure(structureArea, socketHandler, addressSpace);
 
     let trace = new AllTraces(traceArea, ['angle', 'torque']);
-    let assetHandler = new AssetHandler(assetArea, structure, socketHandler);
+    let assetHandler = new AssetHandler(assetArea, addressSpace, socketHandler);
 
     /*****************  Set up socket listeners to handle input from server *******************/
 
@@ -68,7 +68,7 @@
       let node = addressSpace.addNodeByRead(msg);
       let model = modelManager.createModelFromNode(node);
       structure.displayModel(model);
-      return model;
+      return node;
     });
 
     socketHandler.registerMandatory('status message', function (msg) {
@@ -103,10 +103,10 @@
     });
 
     // Listen to error messages
-    socketHandler.registerMandatory('error message', function (msg) {
+    socketHandler.registerMandatory('error message', function (msg, context) {
       console.log(msg);
       servers.messageDisplay(msg);
-      tabGenerator.displayError(msg, context)
+      tabGenerator.displayError(msg, 'context');
     });
 
 

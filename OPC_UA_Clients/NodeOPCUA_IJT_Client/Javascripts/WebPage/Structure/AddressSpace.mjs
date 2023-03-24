@@ -118,23 +118,31 @@ class Node {
     get typeDefinition() {
         return this.browseData.typeDefinition;
     }
-
+/*
     explorePromise() {
         return new Promise((resolve, reject) => {
             if (this.explored) {
-                return resolve();
+                return resolve(this);
             }
             this.socketHandler.browsePromise(this.nodeId, true).then(
                 () => {
                     this.explored = true;
-                    resolve(this);
+                    return new Promise((resolve2, reject2) => {
+                        this.socketHandler.readPromise(this.nodeId).then(
+                            () => {
+                                resolve2(
+                                    resolve(this)
+                                );
+                            }
+                        )
+                    })
                 },
                 function rejected() {
                     reject();
                 }
             )
         });
-    }
+    }*/
 
     explore(f) {
         this.socketHandler.browse(this.nodeId, () => {
@@ -213,6 +221,24 @@ export default class AddressSpace {
         this.objectFolder = null;
         this.selectedTighteningSystem = null;
     }
+
+    /**
+     * A promise to browse and read a node, given a nodeId
+     * @param {*} nodeId 
+     * @returns 
+     */
+    browseAndRead(nodeId) {
+        return this.socketHandler.browsePromise(nodeId, true).then(
+            (browsecall) => {
+                 return new Promise((resolve, reject2) => {
+                    this.socketHandler.readPromise(nodeId).then(
+                        (response) => {
+                            resolve(response.node);
+                        }
+                    )
+            }
+        )
+    })}
 
 
     handleNamespaces(namespaces) {
@@ -418,24 +444,6 @@ export default class AddressSpace {
             }
         }
         return tighteningSystems;
-    }
-
-
-    browsePath(startNode, path, callback) {
-        let browseChain = (pathArray, node) => {
-            if (pathArray.length <= 0) {
-                callback(node);
-                return;
-            }
-            node.getChild(pathArray.pop(), (childNode) => {
-                return browseChain(pathArray, childNode);
-            });
-        }
-        let pathArray = path.split('/').reverse();
-        if (!startNode) {
-            startNode = this.getTighteningSystems()[0];
-        }
-        return browseChain(pathArray, startNode);
     }
 
 }

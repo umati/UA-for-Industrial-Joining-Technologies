@@ -33,49 +33,76 @@ export default class SocketHandler {
         this.socket.emit('pathtoid', this.uniqueId, nodeId, path);
     }
 
-    /*
+    pathtoidPromise(nodeId, path) {
+        return new Promise((resolve,reject) => {
+        this.uniqueId++;
+        this.callMapping[this.uniqueId] = resolve;
+        this.failMapping[this.uniqueId] = reject;
+        this.socket.emit('pathtoid', this.uniqueId, nodeId, path);
+        });
+    }
+
+    readPromise(nodeId) {
+        return new Promise((resolve,reject) => {
+            this.uniqueId++;
+            this.callMapping[this.uniqueId] = resolve;
+            this.failMapping[this.uniqueId] = reject;
+            this.socket.emit('read', this.uniqueId, nodeId);
+        });
+    }
+
     browsePromise(nodeId, details) {
         return new Promise((resolve,reject) => {
-            this.callMapping[nodeId] = resolve;
-            this.failMapping[nodeId] = reject;
-            this.socket.emit('browse', nodeId, details);
+            this.uniqueId++;
+            this.callMapping[this.uniqueId] = resolve;
+            this.failMapping[this.uniqueId] = reject;
+            this.socket.emit('browse', this.uniqueId, nodeId, details);
         });
-    }*/
+    }
 
-    registerMandatory(typeList, callback) {
-        if (!this.mandatoryLists[typeList]) {
-            this.mandatoryLists[typeList] = [];
+    /**
+     * The main function that listens to the communication from the node OPC-UA server
+     * interface mainly implemented in NodeOPCUAInterface.mjs
+     * @param {*} responseString The string the socket should listen to.
+     * @param {*} callback The function to call when the socket signals using the string
+     */
+    registerMandatory(responseString, callback) {
+        function applyAll(functionList, msg) {
+            let returnValue;
+            for (let f of functionList) {
+                if (f) {
+                    let nodeResult = f(msg);
+                    if (nodeResult) {
+                        returnValue = nodeResult;
+                    }
+                }
+            }
+            return returnValue;
         }
-        if (this.mandatoryLists[typeList].length == 0) {
-            this.socket.on(typeList, (msg) => {
 
-                let returnNode = this.applyAll(this.mandatoryLists[typeList], msg);
+        if (!this.mandatoryLists[responseString]) {
+            this.mandatoryLists[responseString] = [];
+        }
+        if (this.mandatoryLists[responseString].length == 0) {
+            this.socket.on(responseString, (msg) => {
+
+                let returnNode = applyAll(this.mandatoryLists[responseString], msg);
 
                 if (msg && msg.callid) {
                     let callbackFunction = this.callMapping[msg.callid];
                     this.callMapping[msg.callid] = null;
                     if (callbackFunction) {
-                        callbackFunction(msg, returnNode);
+                        //console.log('typeList'+typeList+returnNode?.nodeId);
+                        callbackFunction({message:msg, node:returnNode});
                     }
                 }
             });
         }
 
-        this.mandatoryLists[typeList].push(callback);
+        this.mandatoryLists[responseString].push(callback);
     }
 
-    applyAll(functionList, msg) {
-        let returnValue;
-        for (let f of functionList) {
-            if (f) {
-                let nodeResult = f(msg);
-                if (nodeResult) {
-                    returnValue = nodeResult;
-                }
-            }
-        }
-        return returnValue;
-    }
+    
 
 }
 

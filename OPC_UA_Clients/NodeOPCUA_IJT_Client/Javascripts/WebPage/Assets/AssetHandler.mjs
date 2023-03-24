@@ -63,36 +63,118 @@ export default class AssetHandler {
         }
         this.tighteningSystem = tighteningSystems[0];
         console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId);
-
-
-
-        this.socketHandler.emit('pathtoid', nodeId, path);
-
-        this.assetNodes={}
-        this.getAssets(['Controllers', 'Tools'], () => { alert('done') });
-
-        //this.mapping[this.tighteningSystem] = 'dummy';
-        //this.socket.emit('browse', this.tighteningSystem, 'read');
+        this.concurrentStart().then(
+            ()=>{console.log('Horrayyy')}
+        );
     }
 
-    getAssets(list, f) {
-        let current = list.pop();
-        this.addressSpace.browsePath(
-            this.tighteningSystem,
-            'AssetManagement/Assets/' + current,
-            (node) => {
-                node.explorePromise().then(
-                    (exploredNode) => {
-                        console.log('RECURSIVE NODE Controller:' + exploredNode.browseName.name);
-                        this.assetNodes[current] = exploredNode.getRelations('component');
-                        if (list.length <= 0) {
-                            f();
-                        } else {
-                            this.getAssets(list, f);
-                        }
-                    })
+    concurrentStart() {
+        this.controllers = [];
+        console.log("==CONCURRENT START with await==");
 
+        return Promise.all([
+            this.findFolder('Controllers').then((list) => {
+                this.controllers = list;
+            }),
+            this.findFolder('Tools').then((list) => {
+                this.tools = list;
+            }),
+            this.findFolder('Servos').then((list) => {
+                this.servos = list;
+            }),
+            this.findFolder('MemoryDevices').then((list) => {
+                this.memoryDevices = list;
+            }),
+            this.findFolder('Sensors').then((list) => {
+                this.sensors = list;
+            }),
+            this.findFolder('Cables').then((list) => {
+                this.cables = list;
+            }),
+            this.findFolder('Batteries').then((list) => {
+                this.batteries = list;
+            }),
+            this.findFolder('PowerSupplies').then((list) => {
+                this.powerSupplies = list;
+            }),
+            this.findFolder('Feeders').then((list) => {
+                this.feeders = list;
+            }),
+            this.findFolder('Accessories').then((list) => {
+                this.assecories = list;
+            }),
+            this.findFolder('SubComponents').then((list) => {
+                this.subComponents = list;
+            }),
+
+        ])
+    }
+
+    findFolder(folderName) {
+        return new Promise(
+            (resolve) => {
+                this.getAssetsInFolderPromise(folderName).then(
+                    (contr) => {
+                        this.addressSpace.browseAndRead(contr).then(
+                            (a) => {
+                                let controllers = a.getRelations('component');
+                                resolve(controllers);
+                            }
+                        );
+                    })
+            })
+    }
+
+    getAssetsInFolderPromise(folderName) {
+        console.log(`Starting finding folder ${folderName}`);
+        return new Promise((resolve) => {
+            let nsIJT = this.addressSpace.nsIJT;
+            this.socketHandler.pathtoidPromise(
+                this.tighteningSystem.nodeId,
+                `/${nsIJT}:AssetManagement/${nsIJT}:Assets/${nsIJT}:${folderName}`
+            ).then(
+                (msg) => {
+                    resolve(msg.message.nodeid);
+                }
+            )
+        });
+    }
+
+    getAssetsInFolder(folderName) {
+        console.log(`Starting finding folder ${folderName}`);
+        return new Promise((resolve) => {
+            let nsIJT = this.addressSpace.nsIJT;
+            this.socketHandler.pathtoid(
+                this.tighteningSystem.nodeId,
+                `/${nsIJT}:AssetManagement/${nsIJT}:Assets/${nsIJT}:${folderName}`,
+                (msg) => {
+                    resolve(msg.nodeid);
+                }
+            );
+        });
+    }
+
+    getAssetsInFolder3(folderName) {
+        console.log(`Starting finding folder ${folderName}`);
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve([1, 2, 3, folderName]);
+                console.log(`Done finding folder ${folderName}`);
+            }, 2000);
+        });
+    }
+
+    getAssetsInFolder2(list, folderName) {
+        let nsIJT = this.addressSpace.nsIJT;
+
+        this.socketHandler.pathtoid(
+            this.tighteningSystem.nodeId,
+            `/${nsIJT}:AssetManagement/${nsIJT}:Assets/${nsIJT}:${folderName}`,
+            (msg) => {
+                // Now get all the children and draw figures for them ... eventdriven
+                console.log(msg.nodeid);
             });
+
     }
 
     receivedBrowse(msg) {
