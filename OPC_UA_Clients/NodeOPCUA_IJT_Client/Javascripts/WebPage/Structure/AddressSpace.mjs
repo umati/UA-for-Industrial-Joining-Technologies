@@ -15,6 +15,10 @@ class Reference {
         }
     }
 
+    get associatedNodeId() {
+        return this.nodeId;
+    }
+
     explore() {
         this.socketHandler.browse(this.nodeId, () => { this.socketHandler.read(this.nodeId, null) }, true);
     }
@@ -110,6 +114,9 @@ class Node {
 
     get browseName() {
         return this.browseData.browseName;
+    }
+    get displayName() {
+        return this.browseData.displayName;
     }
     get referenceTypeId() {
         return this.browseData.referenceTypeId;
