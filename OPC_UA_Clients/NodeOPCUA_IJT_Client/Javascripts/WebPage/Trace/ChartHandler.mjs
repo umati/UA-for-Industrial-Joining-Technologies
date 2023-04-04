@@ -8,8 +8,7 @@ export default class ChartManager {
   constructor (ctx, traceManager) {
     this.context = ctx
     this.traceManager = traceManager
-    /* eslint-disable */
-    this.myChart = new Chart(ctx, {
+    this.myChart = new Chart(ctx, { // eslint-disable-line
       type: 'line',
       data: {
         datasets: []
