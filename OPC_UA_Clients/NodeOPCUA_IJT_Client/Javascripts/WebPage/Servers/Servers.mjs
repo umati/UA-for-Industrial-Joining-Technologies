@@ -7,16 +7,16 @@ export default class Serverhandler {
     constructor(container, socket) {
 
         let backGround = document.createElement('div');
-        backGround.classList.add("datastructure");
+        backGround.classList.add('datastructure');
         container.appendChild(backGround);
 
         let leftHalf = document.createElement('div');
-        leftHalf.classList.add("lefthalf");
-        leftHalf.classList.add("scrollableInfoArea");
+        leftHalf.classList.add('lefthalf');
+        leftHalf.classList.add('scrollableInfoArea');
         backGround.appendChild(leftHalf);
 
         let serverDiv = document.createElement('div');
-        serverDiv.classList.add("myHeader");
+        serverDiv.classList.add('myHeader');
         serverDiv.innerText = 'Servers';
         leftHalf.appendChild(serverDiv);
 
@@ -24,21 +24,21 @@ export default class Serverhandler {
         leftHalf.appendChild(this.serverArea);
 
         let rightHalf = document.createElement('div');
-        rightHalf.classList.add("righthalf");
-        rightHalf.classList.add("scrollableInfoArea");
+        rightHalf.classList.add('righthalf');
+        rightHalf.classList.add('scrollableInfoArea');
         backGround.appendChild(rightHalf);
 
         let comDiv = document.createElement('div');
-        comDiv.classList.add("myHeader");
+        comDiv.classList.add('myHeader');
         comDiv.innerText = 'Server status';
         rightHalf.appendChild(comDiv);
 
         let messageArea = document.createElement('div');
-        messageArea.setAttribute("id", "messageArea");
+        messageArea.setAttribute('id', 'messageArea');
         rightHalf.appendChild(messageArea);
 
         this.messages = document.createElement('ul');
-        this.messages.setAttribute("id", "messages");
+        this.messages.setAttribute('id', 'messages');
         messageArea.appendChild(this.messages);
     }
 

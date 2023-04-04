@@ -23,7 +23,7 @@ export default class ModelManager {
     factory(parameterName, content, castMapping) {
         if ('object' == typeof content && Array != content.constructor) {
             let obj;
-            if (content.dataType == "ExtensionObject") {
+            if (content.dataType == 'ExtensionObject') {
                 content = content.value;
             }
             // If the model itself provides a typecasting, then use it
@@ -93,19 +93,19 @@ export default class ModelManager {
                 console.log(`PARSING: ${key}: ${value}`);
                 obj = value;
             }
-        } else if (dObject.dataType == "ExtensionObject") {     // Object
-            if (dObject.arrayType == "Scalar") {
-                let key = path.split("/").pop();
+        } else if (dObject.dataType == 'ExtensionObject') {     // Object
+            if (dObject.arrayType == 'Scalar') {
+                let key = path.split('/').pop();
                 obj = this.factory(key, dObject.value, cast)
-            } else if (dObject.arrayType == "Array") {          // Array
+            } else if (dObject.arrayType == 'Array') {          // Array
                 console.log('PATH:' + path);
-                let key = path.split("/").pop();
+                let key = path.split('/').pop();
                 let a = {};
                 a[key] = dObject.value;
                 obj = this.factory(key, a, cast);
             }
         } else {
-            let key = path.split("/").pop();
+            let key = path.split('/').pop();
             let a = {
                 'key': key,
                 'value': dObject.value

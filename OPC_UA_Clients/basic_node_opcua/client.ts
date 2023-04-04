@@ -15,28 +15,28 @@ import {
     sameNodeId,
     NodeId,
     ReferenceDescription
-} from "node-opcua";
+} from 'node-opcua';
 
 
-const endpointUrl = "opc.tcp://127.0.0.1:40451";
-const nodeId = "ns=1;s=/ObjectsFolder/TighteningSystem/ResultManagement/Results/Result";
+const endpointUrl = 'opc.tcp://127.0.0.1:40451';
+const nodeId = 'ns=1;s=/ObjectsFolder/TighteningSystem/ResultManagement/Results/Result';
 
 
 async function main() {
     const client = OPCUAClient.create({
         endpointMustExist: false,
     });
-    client.on("backoff", (retry, delay) => {
-        console.log("still trying to connect  to ", endpointUrl);
+    client.on('backoff', (retry, delay) => {
+        console.log('still trying to connect  to ', endpointUrl);
     });
     await client.withSessionAsync(endpointUrl, async (session) => {
 
 
         // find the node Id of the Result Object
         const namespaces = await session.readNamespaceArray();
-        const nsIJT = namespaces.indexOf("http://opcfoundation.org/UA/IJT/");
+        const nsIJT = namespaces.indexOf('http://opcfoundation.org/UA/IJT/');
         if (nsIJT < 0) {
-            console.log("The server do not expose the IJT namespace");
+            console.log('The server do not expose the IJT namespace');
             return;
         }
 
@@ -47,9 +47,9 @@ async function main() {
         const tighteningSystemTypeNodeId = resolveNodeId(`ns=${nsIJT};i=1005`);
 
         // get all TightnessSystem objects in the ObjectFodler
-        const thighteningSystems = await findChildrenOfType(ObjectIds.ObjectsFolder, "Organizes", tighteningSystemTypeNodeId);
+        const thighteningSystems = await findChildrenOfType(ObjectIds.ObjectsFolder, 'Organizes', tighteningSystemTypeNodeId);
 
-        console.log("thighteningSystems found =", thighteningSystems.map((a) => a.browseName.toString()).join(","))
+        console.log('thighteningSystems found =', thighteningSystems.map((a) => a.browseName.toString()).join(','))
         // explore each one of them.
         for (const thighteningSystem of thighteningSystems) {
             await exploreTighteningSystem(thighteningSystem);
@@ -68,7 +68,7 @@ async function main() {
             });
 
             if (resultReferences.statusCode !== StatusCodes.Good || !resultReferences.references) {
-                throw new Error("Couldn't browse node " + nodeId.toString());
+                throw new Error('Couldn't browse node ' + nodeId.toString());
             }
            
             // only keep references that are of type ResultType
@@ -80,21 +80,21 @@ async function main() {
 
         async function exploreTighteningSystem(reference: ReferenceDescription): Promise<void> {
 
-            console.log("-------------------------------------------------", reference.browseName.toString());
-            console.log("");
+            console.log('-------------------------------------------------', reference.browseName.toString());
+            console.log('');
 
             const bpr2 = await session.translateBrowsePath(
                 makeBrowsePath(reference.nodeId, `/${nsIJT}:ResultManagement/${nsIJT}:Results`));
 
             if (bpr2.statusCode !== StatusCodes.Good) {
-                console.log("Cannot find the ResultManagement object ");
+                console.log('Cannot find the ResultManagement object ');
                 return;
             }
             const resultsNodeId = bpr2.targets![0].targetId;
 
             // find all results in the Results collection
 
-            const resultReferences = await findChildrenOfType(resultsNodeId, "HasComponent", resultTypeNodeId);
+            const resultReferences = await findChildrenOfType(resultsNodeId, 'HasComponent', resultTypeNodeId);
 
 
             for (const resultReference of resultReferences) {
@@ -109,7 +109,7 @@ async function main() {
                 const result = dataValue.value.value;
                 await promoteOpaqueStructure(session, [{ value: result.resultContent }]);
 
-                console.log("\n  Tightening result : ", resultReference.browseName.toString());
+                console.log('\n  Tightening result : ', resultReference.browseName.toString());
                 console.log(dataValue.toString());
 
             }

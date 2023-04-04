@@ -43,7 +43,7 @@ This client will be updated based on the newer versions of the companion standar
 * To update existing node-opcua modules, run the following commands:
 
 ```bash
-npx npm-check-updates -u -f "node-opcua*"
+npx npm-check-updates -u -f 'node-opcua*'
 npm install
 ```
 

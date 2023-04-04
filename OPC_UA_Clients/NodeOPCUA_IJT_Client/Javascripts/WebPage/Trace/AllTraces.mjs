@@ -63,7 +63,7 @@ export default class AllTraces {
     applyToAll(trace, step, operation) {
 
         if (trace.steps.length == 0) {
-            throw "No trace selected for applyToAll";
+            throw 'No trace selected for applyToAll';
         }
         //let step = trace.findStepByStepId(stepId);
         let programStepId;
@@ -129,7 +129,7 @@ export default class AllTraces {
                     case 11: // Current
                         break;
                     default:
-                        throw "Unknown physicalQuantity in trace"
+                        throw 'Unknown physicalQuantity in trace'
                 }
             }
             newStep.color = this.traceInterface.getRandomColor();
@@ -202,7 +202,7 @@ export default class AllTraces {
     }
 
     showPoints(value) {
-        if (value == "yes") {
+        if (value == 'yes') {
             this.showValuesSelected = true;
         } else {
             this.showValuesSelected = false
@@ -212,7 +212,7 @@ export default class AllTraces {
     }
 
     showLimits(value) {
-        if (value == "yes") {
+        if (value == 'yes') {
             this.showLimitSelected = true;
         } else {
             this.showLimitSelected = false
@@ -272,16 +272,16 @@ export default class AllTraces {
     //////////////   Setup support functions ////////////////////////////
     setupEventListeners() {
         let serverDiv = document.getElementById('connectedServer');
-        serverDiv.addEventListener("newResultReceived", (event) => {
+        serverDiv.addEventListener('newResultReceived', (event) => {
             this.createNewTrace(event);
         }, false);
 
-        this.traceInterface.traceTypeSelect.addEventListener("click", (event) => {
+        this.traceInterface.traceTypeSelect.addEventListener('click', (event) => {
             this.decideTraceType(this.traceInterface.traceTypeSelect.options[this.traceInterface.traceTypeSelect.selectedIndex].value);
         }, false);
 
-        this.traceInterface.absoluteSelect.addEventListener("click", (event) => {
-            if (this.traceInterface.absoluteSelect.options[this.traceInterface.absoluteSelect.selectedIndex].value == "absolute") {
+        this.traceInterface.absoluteSelect.addEventListener('click', (event) => {
+            if (this.traceInterface.absoluteSelect.options[this.traceInterface.absoluteSelect.selectedIndex].value == 'absolute') {
                 this.setAbsolutes();
             } else {
                 this.removeAbsolutes();
@@ -305,30 +305,30 @@ export default class AllTraces {
         this.traceInterface.clearSteps();
 
 /*
-        this.traceInterface.stepSelector.addEventListener("change", (event) => {
+        this.traceInterface.stepSelector.addEventListener('change', (event) => {
             var selected = this.traceInterface.stepSelector.options[this.traceInterface.stepSelector.selectedIndex].value;
             this.selectStep(selected);
         }, false);
 
 
-        this.traceInterface.zoomButton.addEventListener("click", (event) => {
+        this.traceInterface.zoomButton.addEventListener('click', (event) => {
             this.zoom(this.selectedTrace, this.selectedStep);
         }, false);*/
 
-        this.traceInterface.alignButton.addEventListener("click", (event) => {
+        this.traceInterface.alignButton.addEventListener('click', (event) => {
             this.align(this.selectedTrace, this.selectedStep);
         }, false);
 
-        this.traceInterface.valueShower.addEventListener("click", (event) => {
+        this.traceInterface.valueShower.addEventListener('click', (event) => {
             this.showPoints(this.traceInterface.valueShower.options[this.traceInterface.valueShower.selectedIndex].value);
         }, false);
 
-        this.traceInterface.limitShower.addEventListener("click", (event) => {
+        this.traceInterface.limitShower.addEventListener('click', (event) => {
             this.showLimits(this.traceInterface.limitShower.options[this.traceInterface.limitShower.selectedIndex].value);
         }, false);
 
 
-        this.traceInterface.deleteButton.addEventListener("click", (event) => {
+        this.traceInterface.deleteButton.addEventListener('click', (event) => {
             this.deleteSelected();
         }, false);
     }
