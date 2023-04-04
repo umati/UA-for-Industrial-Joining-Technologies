@@ -1,31 +1,29 @@
-import IJTBaseModel from './IJTBaseModel.mjs';
+import IJTBaseModel from './IJTBaseModel.mjs'
 
 // The purpose of this class is to handle the actual subscription or reading of a value and via socketIO send the result to the webpage
 export default class ResultDataModel extends IJTBaseModel {
-    constructor(node, modelManager) { 
-        let parameters = node.value.value;
-        let castMapping= { 
-            'processingTimes': 'ProcessingTimesDataType',
-            'tags':'TagDataType',
-            'resultContent' : 'TighteningResultDataType'
-        }
-        super(parameters, modelManager,castMapping);
-        
-        let event = new CustomEvent(
-            "newResultReceived",
-            {
-                detail: {
-                    result: this,
-                    trace: this.resultContent.trace,
-                },
-                bubbles: true,
-                cancelable: true
-            }
-        );
-
-        let serverDiv = document.getElementById('connectedServer');
-        serverDiv.dispatchEvent(event);
-
+  constructor (node, modelManager) {
+    const parameters = node.value.value
+    const castMapping = {
+      processingTimes: 'ProcessingTimesDataType',
+      tags: 'TagDataType',
+      resultContent: 'TighteningResultDataType'
     }
+    super(parameters, modelManager, castMapping)
 
+    const event = new CustomEvent(
+      'newResultReceived',
+      {
+        detail: {
+          result: this,
+          trace: this.resultContent.trace
+        },
+        bubbles: true,
+        cancelable: true
+      }
+    )
+
+    const serverDiv = document.getElementById('connectedServer')
+    serverDiv.dispatchEvent(event)
+  }
 }

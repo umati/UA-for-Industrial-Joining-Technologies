@@ -1,208 +1,206 @@
-import AssetGraphic from './AssetGraphic.mjs';
+import AssetGraphic from './AssetGraphic.mjs'
 
+/**
+ * The purpose of this tab is to automatically generate a
+ * graphical representation of the assets
+ */
 export default class AssetHandler {
+  constructor (container, addressSpace, socketHandler) {
+    this.socketHandler = socketHandler
+    this.addressSpace = addressSpace
 
-    constructor(container, addressSpace, socketHandler) {
-        this.socketHandler = socketHandler;
-        this.addressSpace = addressSpace;
+    const backGround = document.createElement('div')
+    backGround.classList.add('datastructure')
+    container.appendChild(backGround)
 
-        let backGround = document.createElement('div');
-        backGround.classList.add("datastructure");
-        container.appendChild(backGround);
+    const leftHalf = document.createElement('div')
+    leftHalf.classList.add('lefthalf')
+    leftHalf.classList.add('scrollableInfoArea')
+    backGround.appendChild(leftHalf)
 
-        let leftHalf = document.createElement('div');
-        leftHalf.classList.add("lefthalf");
-        leftHalf.classList.add("scrollableInfoArea");
-        backGround.appendChild(leftHalf);
+    const nodeDiv = document.createElement('div')
+    nodeDiv.classList.add('myHeader')
+    nodeDiv.innerText = 'AssetView'
+    leftHalf.appendChild(nodeDiv)
 
-        let nodeDiv = document.createElement('div');
-        nodeDiv.classList.add("myHeader");
-        nodeDiv.innerText = 'AssetView';
-        leftHalf.appendChild(nodeDiv);
+    const displayArea = document.createElement('div')
+    displayArea.classList.add('drawAssetBox')
+    leftHalf.appendChild(displayArea)
 
-        let displayArea = document.createElement('div');
-        displayArea.classList.add("drawAssetBox");
-        leftHalf.appendChild(displayArea);
+    const serverDiv = document.getElementById('connectedServer')
+    serverDiv.addEventListener('tabOpened', (event) => {
+      if (event.detail.title === 'Assets') {
+        this.initiate()
+      }
+    }, false)
 
-        let serverDiv = document.getElementById('connectedServer');
-        serverDiv.addEventListener("tabOpened", (event) => {
-            if (event.detail.title == 'Assets') {
-                this.initiate();
-            }
-        }, false);
+    this.assetGraphic = new AssetGraphic(displayArea)
+  }
 
-        this.assetGraphic = new AssetGraphic(displayArea);
+  messageDisplay (item) {
+    alert('AssetHandler has no message area')
+  }
+
+  initiate () {
+    const tighteningSystems = this.addressSpace.getTighteningSystems()
+    if (!tighteningSystems || tighteningSystems.length < 1) {
+      throw new Error('No TighteningSystem found in Objects folder')
     }
-
-    messageDisplay(item) {
-        alert('AssetHandler has no message area');
-    }
-
-    initiate() {
-        let tighteningSystems = this.addressSpace.getTighteningSystems();
-        if (!tighteningSystems || tighteningSystems.length < 1) {
-            throw new Error('No TighteningSystem found in Objects folder');
-        }
-        this.tighteningSystem = tighteningSystems[0];
-        console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId);
-        this.loadAllAssets().then(
-            () => {
-                //console.log('All assets loaded.');
-                this.browseAndReadList([...this.controllers, ...this.tools]).then(
-                    () => { this.draw() }
-                )
-            }
-        );
-    }
-
-    /**
-     * 
-     * @returns A promise to load all assets
-     */
-    loadAllAssets() {
-        function addAssetGraphicData(list, folderName) {
-            for (let node of list) {
-                if (!node.assetGraphicData) {
-                    node.addAssetGraphicData = {};
-                }
-                node.addAssetGraphicData.folderName = folderName;
-            }
-        }
-
-        this.controllers = [];
-        let assetFolders=[
-            'Controllers',
-            'Tools',
-            'Servos',
-            'MemoryDevices',
-            'Sensors',
-            'Cables',
-            'Batteries',
-            'PowerSupplies',
-            'Feeders',
-            'Accessories',
-            'SubComponents'
-        ];
-
-        let promiseList = [];
-        for (let folderName of assetFolders) {
-            promiseList.push(
-                this.findContentInFolder(folderName).then((list) => {
-                    addAssetGraphicData(list, folderName)
-                    this[folderName.toLowerCase()] = list;
-                })
-            )
-        }
-
-        return Promise.all(promiseList);
-    }
-
-
-    browseAndReadList(nodeList) {
-        let promiseList = [];
-        for (let node of nodeList) {
-            promiseList.push(
-                this.addressSpace.browseAndRead(node.nodeId).then(
-                    () => { })
-            )
-        }
-
-        return Promise.all(promiseList);
-    }
-
-    findContentInFolder(folderName) {
-        return new Promise(
-            (resolve) => {
-                this.findFolder(folderName).then(
-                    (nodeId) => {
-                        this.addressSpace.browseAndRead(nodeId).then(
-                            (folderNode) => {
-                                let assets = folderNode.getRelations('component');
-                                resolve(assets);
-                            }
-                        );
-                    })
-            },
-            (fail) => { fail(`Failed to find asset folder ${folderName}`) }
+    this.tighteningSystem = tighteningSystems[0]
+    console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId)
+    this.loadAllAssets().then(
+      () => {
+        // console.log('All assets loaded.')
+        this.browseAndReadList([...this.controllers, ...this.tools]).then(
+          () => { this.draw() }
         )
+      }
+    )
+  }
+
+  /**
+   *
+   * @returns A promise to load all assets
+   */
+  loadAllAssets () {
+    function addAssetGraphicData (list, folderName) {
+      for (const node of list) {
+        if (!node.assetGraphicData) {
+          node.addAssetGraphicData = {}
+        }
+        node.addAssetGraphicData.folderName = folderName
+      }
     }
 
-    findFolder(folderName) {
-        return new Promise((resolve) => {
-            let nsIJT = this.addressSpace.nsIJT;
-            this.socketHandler.pathtoidPromise(
-                this.tighteningSystem.nodeId,
-                `/${nsIJT}:AssetManagement/${nsIJT}:Assets/${nsIJT}:${folderName}`
-            ).then(
-                (msg) => {
-                    resolve(msg.message.nodeid);
-                }
+    this.controllers = []
+    const assetFolders = [
+      'Controllers',
+      'Tools',
+      'Servos',
+      'MemoryDevices',
+      'Sensors',
+      'Cables',
+      'Batteries',
+      'PowerSupplies',
+      'Feeders',
+      'Accessories',
+      'SubComponents'
+    ]
+
+    const promiseList = []
+    for (const folderName of assetFolders) {
+      promiseList.push(
+        this.findContentInFolder(folderName).then((list) => {
+          addAssetGraphicData(list, folderName)
+          this[folderName.toLowerCase()] = list
+        })
+      )
+    }
+
+    return Promise.all(promiseList)
+  }
+
+  browseAndReadList (nodeList) {
+    const promiseList = []
+    for (const node of nodeList) {
+      promiseList.push(
+        this.addressSpace.browseAndRead(node.nodeId).then(
+          () => { })
+      )
+    }
+
+    return Promise.all(promiseList)
+  }
+
+  findContentInFolder (folderName) {
+    return new Promise(
+      (resolve) => {
+        this.findFolder(folderName).then(
+          (nodeId) => {
+            this.addressSpace.browseAndRead(nodeId).then(
+              (folderNode) => {
+                resolve(folderNode.getRelations('component'))
+              }
             )
-        },
-            (fail) => { fail(`Failed to get assets in folder ${folderName}`) }
-        );
+          })
+      },
+      (fail) => { fail(`Failed to find asset folder ${folderName}`) }
+    )
+  }
+
+  findFolder (folderName) {
+    return new Promise((resolve) => {
+      const nsIJT = this.addressSpace.nsIJT
+      this.socketHandler.pathtoidPromise(
+        this.tighteningSystem.nodeId,
+        `/${nsIJT}:AssetManagement/${nsIJT}:Assets/${nsIJT}:${folderName}`
+      ).then(
+        (msg) => {
+          resolve(msg.message.nodeid)
+        }
+      )
+    },
+    (fail) => { fail(`Failed to get assets in folder ${folderName}`) }
+    )
+  }
+
+  draw () {
+    const assetGraphic = this.assetGraphic
+
+    function drawAssetRecursive (asset) {
+      drawAssetWithExternals(asset.getRelations('association'), asset)
     }
 
-    draw() {
-        let assetGraphic = this.assetGraphic;
-
-        function drawAssetRecursive(asset) {
-            drawAssetWithExternals(asset.getRelations('association'), asset);
+    function drawAssetWithExternals (associations, containerNode) {
+      for (const external of externals) {
+        for (const association of associations) {
+          if (association.associatedNodeId === external.nodeId) {
+            assetGraphic.addExternal(external, containerNode)
+            drawAssetRecursive(external)
+          }
         }
-
-        function drawAssetWithExternals(associations, containerNode) {
-            for (let external of externals) {
-                for (let association of associations) {
-                    if (association.associatedNodeId == external.nodeId) {
-                        assetGraphic.addExternal(external, containerNode);
-                        drawAssetRecursive(external);
-                    }
-                }
-            }
-            for (let internal of internals) {
-                for (let association of associations) {
-                    if (association.associatedNodeId == internal.nodeId) {
-                        assetGraphic.addInternal(internal, containerNode);
-                        drawAssetRecursive(internal);
-                    }
-                }
-            }
+      }
+      for (const internal of internals) {
+        for (const association of associations) {
+          if (association.associatedNodeId === internal.nodeId) {
+            assetGraphic.addInternal(internal, containerNode)
+            drawAssetRecursive(internal)
+          }
         }
-
-        let i = 0;
-        let externals = [
-            ...this.powersupplies,
-            ...this.feeders,
-            ...this.cables,
-            ...this.accessories];
-        let internals = [
-            ...this.servos,
-            ...this.memorydevices,
-            ...this.subcomponents,
-            ...this.batteries,
-            ...this.sensors];
-        for (let controller of this.controllers) {
-            this.assetGraphic.createController(controller, i, this.controllers.length);
-
-            let associations = controller.getRelations('association');
-
-            drawAssetWithExternals(associations, controller);
-
-            for (let tool of this.tools) {
-                for (let association of associations) {
-                    if (association.associatedNodeId == tool.nodeId) {
-                        let context = this.assetGraphic.addTool(tool, controller);
-                        drawAssetRecursive(tool)
-                    };
-                }
-            }
-
-            //this.assetGraphic.addExternal({ nodeId: 1, displayName: { text: 'Example Stacklight' } }, controller);
-
-            i++;
-        }
-
+      }
     }
 
+    let i = 0
+    const externals = [
+      ...this.powersupplies,
+      ...this.feeders,
+      ...this.cables,
+      ...this.accessories]
+    const internals = [
+      ...this.servos,
+      ...this.memorydevices,
+      ...this.subcomponents,
+      ...this.batteries,
+      ...this.sensors]
+    for (const controller of this.controllers) {
+      this.assetGraphic.createController(controller, i, this.controllers.length)
 
+      const associations = controller.getRelations('association')
+
+      drawAssetWithExternals(associations, controller)
+
+      for (const tool of this.tools) {
+        for (const association of associations) {
+          if (association.associatedNodeId === tool.nodeId) {
+            this.assetGraphic.addTool(tool, controller)
+            drawAssetRecursive(tool)
+          }
+        }
+      }
+
+      // this.assetGraphic.addExternal({ nodeId: 1, displayName: { text: 'Example Stacklight' } }, controller)
+
+      i++
+    }
+  }
 }
