@@ -115,7 +115,7 @@ export default class AssetHandler {
   findContentInFolder (folderName) {
     return new Promise(
       (resolve) => {
-        this.findFolder(folderName).then(
+        this.findAssetFolder(folderName).then(
           (nodeId) => {
             this.addressSpace.browseAndRead(nodeId).then(
               (folderNode) => {
@@ -128,7 +128,8 @@ export default class AssetHandler {
     )
   }
 
-  findFolder (folderName) {
+  // This should be renamed and maybe use the findFolder in addressSpace instead, but works for now.
+  findAssetFolder (folderName) {
     return new Promise((resolve) => {
       const nsIJT = this.addressSpace.nsIJT
       this.socketHandler.pathtoidPromise(
