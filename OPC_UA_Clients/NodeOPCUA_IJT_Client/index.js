@@ -1,6 +1,5 @@
 
 import express from 'express'
-// import fs from 'fs'
 import httpTemp from 'http'
 import { Server } from 'socket.io'
 import { URL } from 'url'
@@ -16,8 +15,6 @@ const app = express()
 const http = httpTemp.Server(app)
 const io = new Server(http)
 const port = process.env.PORT || 3000
-// const __filename = new URL('', import.meta.url).pathname;
-// Will contain trailing slash
 const __dirnameUndecoded = new URL('.', import.meta.url).pathname
 const __dirname = decodeURI(__dirnameUndecoded).substring(1)
 
@@ -44,24 +41,20 @@ http.listen(port, () => {
 const endpointUrls = [
   {
     name: 'Local',
-    address: 'opc.tcp://127.0.0.1:40451',
-    tighteningsystemname: 'TighteningSystem'
+    address: 'opc.tcp://127.0.0.1:40451'
   },
   {
     name: 'Windows simulation',
     address: 'opc.tcp://10.46.19.106:40451',
-    tighteningsystemname: 'TighteningSystem_AtlasCopco',
     autoConnect: 'Yes'
   },
   {
     name: 'ICB-A',
-    address: 'opc.tcp://10.46.16.68:40451',
-    tighteningsystemname: 'TighteningSystem_AtlasCopco'
+    address: 'opc.tcp://10.46.16.68:40451'
   },
   {
     name: 'PF80000',
-    address: 'opc.tcp://10.46.16.174:40451',
-    tighteningsystemname: 'TighteningSystem_AtlasCopco'
+    address: 'opc.tcp://10.46.16.174:40451'
   }]
 
 // This is the function used to display status messages comming from the server

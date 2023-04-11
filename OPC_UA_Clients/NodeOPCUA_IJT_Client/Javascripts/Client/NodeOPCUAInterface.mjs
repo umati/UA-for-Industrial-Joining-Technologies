@@ -160,11 +160,12 @@ export default class NodeOPCUAInterface {
       try {
         // let nsIJT = 4;
 
-        const bpr2 = await this.session.translateBrowsePath(
-          makeBrowsePath(nodeId, path))
+        const bpr2 = await this.session.translateBrowsePath(makeBrowsePath(nodeId, path))
+
+        console.log(`XXX ${nodeId} object.  ${path} `)
 
         if (bpr2.statusCode !== StatusCodes.Good) {
-          console.log(`Cannot find the ${path} object. ${nodeId} - ${bpr2} `)
+          console.log(`Cannot find the ${nodeId} object.  ${path} `)
           return
         }
         const resultsNodeId = bpr2.targets[0].targetId

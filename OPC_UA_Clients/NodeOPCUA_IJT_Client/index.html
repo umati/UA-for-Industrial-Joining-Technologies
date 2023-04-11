@@ -31,90 +31,90 @@
 
 
     // Set up essentials
-    var socket = io();
-    var tabGenerator = new TabGenerator(document.body);
-    var socketHandler = new SocketHandler(socket);
-    var modelManager = new ModelManager();
+    var socket = io()
+    var tabGenerator = new TabGenerator(document.body)
+    var socketHandler = new SocketHandler(socket)
+    var modelManager = new ModelManager()
 
     // Create tabs on the webpage 
-    var serverArea = tabGenerator.generateTab('Servers');
-    var structureArea = tabGenerator.generateTab('Structure', true);          // ********************  GENERATES 'browse'
-    var traceArea = tabGenerator.generateTab('Trace');
-    var assetArea = tabGenerator.generateTab('Assets');
-    //var methodArea = tabGenerator.generateTab('Methods')
-    //var eventArea = tabGenerator.generateTab('Events');
-    //var jointArea = tabGenerator.generateTab('Joints');
+    var serverArea = tabGenerator.generateTab('Servers')
+    var structureArea = tabGenerator.generateTab('Structure', true) // ********************  GENERATES 'browse'
+    var traceArea = tabGenerator.generateTab('Trace')
+    var assetArea = tabGenerator.generateTab('Assets')
+    // var methodArea = tabGenerator.generateTab('Methods')
+    // var eventArea = tabGenerator.generateTab('Events')
+    // var jointArea = tabGenerator.generateTab('Joints')
 
     // Initiate the different tab handlers
-    var servers = new Servers(serverArea, socketHandler);
-    var addressSpace = new AddressSpace(socketHandler);
-    var structure = new Structure(structureArea, socketHandler, addressSpace);
+    var servers = new Servers(serverArea, socketHandler)
+    var addressSpace = new AddressSpace(socketHandler)
+    var structure = new Structure(structureArea, socketHandler, addressSpace)
 
-    let trace = new AllTraces(traceArea, ['angle', 'torque']);
-    let assetHandler = new AssetHandler(assetArea, addressSpace, socketHandler);
+    let trace = new AllTraces(traceArea, ['angle', 'torque'], addressSpace)
+    let assetHandler = new AssetHandler(assetArea, addressSpace, socketHandler)
 
     /*****************  Set up socket listeners to handle input from server *******************/
 
     // Listen to the data from the server regarding the tree of queriable data and display it
     socketHandler.registerMandatory('browseresult', function (msg) {
-      return addressSpace.addNodeByBrowse(msg);
-    });
+      return addressSpace.addNodeByBrowse(msg)
+    })
 
     // Listen to result data and convert it into a javascript model then display it
     socketHandler.registerMandatory('readresult', function (msg) {
       if (!msg) {
-        return;
+        return
       }
-      let node = addressSpace.addNodeByRead(msg);
-      let model = modelManager.createModelFromNode(node);
-      structure.displayModel(model);
-      return node;
-    });
+      let node = addressSpace.addNodeByRead(msg)
+      let model = modelManager.createModelFromNode(node)
+      structure.displayModel(model)
+      return node
+    })
 
     socketHandler.registerMandatory('status message', function (msg) {
-      servers.messageDisplay(msg);
-    });
+      servers.messageDisplay(msg)
+    })
 
     // Listen to the tree of possible connection points
     socketHandler.registerMandatory('connection points', function (msg) {
-      servers.connectionPoints(msg, socket);
-    });
+      servers.connectionPoints(msg, socket)
+    })
 
     // Listen to connection
     socketHandler.registerMandatory('connection established', function (msg) {
-      servers.messageDisplay('Connection established');
-    });
+      servers.messageDisplay('Connection established')
+    })
 
     // Listen to session start
     socketHandler.registerMandatory('session established', function (msg) {
-      servers.messageDisplay('Session established');
-      structure.initiateNodeTree();
-    });
+      servers.messageDisplay('Session established')
+      structure.initiateNodeTree()
+    })
 
     // Listen to session closure
     socketHandler.registerMandatory('session closed', function (msg) {
-      servers.messageDisplay('Session closed');
-    });
+      servers.messageDisplay('Session closed')
+    })
 
     // Listen to namespaces
     socketHandler.registerMandatory('namespaces', function (msg) {
-      addressSpace.handleNamespaces(msg);
-      servers.messageDisplay('Recieving namespaces');
-    });
+      addressSpace.handleNamespaces(msg)
+      servers.messageDisplay('Recieving namespaces')
+    })
 
     // Listen to error messages
     socketHandler.registerMandatory('error message', function (msg, context) {
-      console.log(msg);
-      servers.messageDisplay(msg);
-      tabGenerator.displayError(msg, 'context');
-    });
+      console.log(msg)
+      servers.messageDisplay(msg)
+      tabGenerator.displayError(msg, 'context')
+    })
 
 
 
     window.onbeforeunload = function () {
-      socket.emit('terminate connection');
-      return;
-    };
+      socket.emit('terminate connection')
+      return
+    }
 
   </script>
 </body>

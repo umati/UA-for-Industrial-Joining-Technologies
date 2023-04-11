@@ -87,6 +87,16 @@ class Node {
     return Object.values(row)
   }
 
+  getNamedRelation (type, browseName) {
+    const row = this.relations[type]
+    if (!row) {
+      return []
+    }
+    const resNode = Object.values(row).find(
+      x => browseName === x.browseName.name)
+    return resNode
+  }
+
   get nodeId () {
     return this.browseData.nodeId
   }
@@ -115,12 +125,12 @@ class Node {
       }
     }, true)
     this.explored = true
-    // console.log('SEND Browse: '+this.nodeId);
+    // console.log('SEND Browse: '+this.nodeId)
   }
 
   read () {
     this.socketHandler.read(this.nodeId, null)
-    // console.log('SEND Read: '+this.nodeId);
+    // console.log('SEND Read: '+this.nodeId)
   }
 
   addReadData (value) {
@@ -206,6 +216,7 @@ export default class AddressSpace {
     this.nsIJT = namespaces.indexOf('http://opcfoundation.org/UA/IJT/')
     this.nsMachinery = namespaces.indexOf('http://opcfoundation.org/UA/Machinery/')
     this.nsDI = namespaces.indexOf('http://opcfoundation.org/UA/DI/')
+    this.nsIJTApplication = namespaces.indexOf('http://www.atlascopco.com/TighteningApplication/')
   }
 
   /**
@@ -399,5 +410,36 @@ export default class AddressSpace {
       }
     }
     return tighteningSystems
+  }
+
+  /**
+   * note that this normally only returns the call message, not the actual node as might be expected.
+   * The nodeId needs to be extracted from the message.
+   * @param {*} path The path that should be traversed
+   * @param {*} startFolderId The starting node
+   * @returns the call message
+   */
+  findFolder (path, startFolderId) {
+    if (!startFolderId) {
+      const tgtSystem = this.getTighteningSystems()
+      if (tgtSystem.length > 0) {
+        startFolderId = tgtSystem[0].nodeId
+      } else {
+        throw new Error('Failed to find starting folder')
+      }
+    }
+    return this.socketHandler.pathtoidPromise(startFolderId, path)
+
+    /*
+    return new Promise((resolve) => {
+      this.socketHandler.pathtoidPromise(startFolderId, path).then(
+        (msg) => {
+          resolve(msg.message.nodeid)
+        },
+        (err) => {
+          throw new Error(`Failed to find node ${startFolderId} when looking for path ${path}. ${err}`)
+        }
+      )
+    }) */
   }
 }
