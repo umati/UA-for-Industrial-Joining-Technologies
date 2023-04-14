@@ -104,7 +104,7 @@ export default class AssetHandler {
     const promiseList = []
     for (const node of nodeList) {
       promiseList.push(
-        this.addressSpace.browseAndRead(node.nodeId).then(
+        node.GUIexplore().then(
           () => { })
       )
     }
@@ -117,7 +117,7 @@ export default class AssetHandler {
       (resolve) => {
         this.findAssetFolder(folderName).then(
           (nodeId) => {
-            this.addressSpace.browseAndRead(nodeId).then(
+            this.addressSpace.browseAndReadWithNodeId(nodeId).then(
               (folderNode) => {
                 resolve(folderNode.getRelations('component'))
               }

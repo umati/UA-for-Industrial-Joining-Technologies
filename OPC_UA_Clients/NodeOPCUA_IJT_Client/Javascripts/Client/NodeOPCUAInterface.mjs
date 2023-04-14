@@ -199,7 +199,14 @@ export default class NodeOPCUAInterface {
             resultMask: 63
           }
         } else {
-          nodeToBrowse = nodeId
+          nodeToBrowse = {
+            nodeId,
+            includeSubtypes: true,
+            nodeClassMask: 0,
+            browseDirection: 'Both',
+            referenceTypeId: 'References',
+            resultMask: 63
+          }
         }
         await this.session.browse(nodeToBrowse,
           function (err, browseResult) {
@@ -210,7 +217,8 @@ export default class NodeOPCUAInterface {
               io.emit('browseresult', {
                 callid,
                 browseresult: browseResult,
-                nodeid: nodeId
+                nodeid: nodeId,
+                details
               })
             };
           }

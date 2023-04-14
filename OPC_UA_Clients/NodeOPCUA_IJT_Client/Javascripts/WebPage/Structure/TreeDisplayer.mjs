@@ -69,9 +69,9 @@ export default class TreeDisplayer {
         this.myContainer.style.display = 'none'
         this.innerHTML = '+'
       } else { // Open
-        this.node.explore()
         this.myContainer.style.display = 'block'
         this.innerHTML = '-'
+        this.node.GUIexplore(true).then()
       }
     }
     buttonArea.appendChild(browse)
@@ -88,12 +88,12 @@ export default class TreeDisplayer {
 
     read.onclick = function () {
       if (this.node.read) {
-        this.node.explore()
+        this.node.GUIexplore(true).then()
         if (this.innerHTML !== '+') {
           this.myContainer.style.display = 'none'
         }
       } else {
-        this.node.explore()
+        this.node.GUIexplore(true).then()
       }
     }
 

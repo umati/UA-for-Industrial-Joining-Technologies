@@ -1,42 +1,70 @@
 
-class Reference {
-  constructor (parent, reference, socketHandler, graphicGenerator) {
+class PartialNode {
+  constructor (parent, graphicGenerator, socketHandler) {
     this.parent = parent
-    for (const [key, value] of Object.entries(reference)) {
-      this[key] = value
-    }
     this.graphicGenerator = graphicGenerator
-
     this.socketHandler = socketHandler
-    if (reference.browseName) {
-      this.createGUIReference()
-    }
   }
 
-  get associatedNodeId () {
-    return this.nodeId
+  /**
+   * Use addressSpace.browseAndReadWithNodeId if only the Id is available
+   * @param {*} response
+   * @returns
+   */
+  GUIexplore (details = false) {
+    return this.socketHandler.browsePromise(this.nodeId, details).then(
+      () => {
+        return new Promise((resolve) => {
+          this.socketHandler.readPromise(this.nodeId).then(
+            (response) => {
+              resolve(response.node)
+            })
+        })
+      })
   }
 
-  explore () {
-    this.socketHandler.browse(this.nodeId, () => { this.socketHandler.read(this.nodeId, null) }, true)
+  read () {
+    // console.log('SEND Read: '+this.nodeId)
+    return new Promise((resolve) => {
+      this.socketHandler.readPromise(this.nodeId).then(
+        (response) => {
+          resolve(response.node)
+        })
+    })
   }
 
-  createGUIReference () {
-    if (this.graphicGenerator && this.graphicGenerator.generateGUIReference) {
+  createGUINode () {
+    if (this.graphicGenerator && this.graphicGenerator.generateGUINode) {
       if (!this.graphicRepresentation) {
         this.graphicRepresentation = this.graphicGenerator.generateGUINode(this)
       }
     }
   }
 }
-class Node {
+
+class Reference extends PartialNode {
   constructor (parent, reference, socketHandler, graphicGenerator) {
-    this.parent = parent
+    super(parent, graphicGenerator, socketHandler)
+    for (const [key, value] of Object.entries(reference)) {
+      this[key] = value
+    }
+
+    if (reference.browseName) {
+      this.createGUINode()
+    }
+  }
+
+  get associatedNodeId () {
+    return this.nodeId
+  }
+}
+
+class Node extends PartialNode {
+  constructor (parent, reference, socketHandler, graphicGenerator) {
+    super(parent, graphicGenerator, socketHandler)
     this.relations = {}
-    this.graphicGenerator = graphicGenerator
     this.value = null
     this.browseData = {}
-    this.socketHandler = socketHandler
     this.addBrowseData(reference)
     this.createGUINode()
   }
@@ -114,23 +142,12 @@ class Node {
   }
 
   get typeDefinition () {
-    return this.browseData.typeDefinition
-  }
-
-  explore (f) {
-    this.socketHandler.browse(this.nodeId, () => {
-      this.socketHandler.read(this.nodeId)
-      if (f) {
-        return f()
-      }
-    }, true)
-    this.explored = true
-    // console.log('SEND Browse: '+this.nodeId)
-  }
-
-  read () {
-    this.socketHandler.read(this.nodeId, null)
-    // console.log('SEND Read: '+this.nodeId)
+    if (this.browseData.typeDefinition) { // If a READ operation has been performed
+      return this.browseData.typeDefinition
+    } else { // Loop through the relation and find the hasType relation and return its NodeId
+      const typeRelation = this.getRelations('hasType')[0]
+      return typeRelation.nodeId
+    }
   }
 
   addReadData (value) {
@@ -175,14 +192,6 @@ class Node {
       this.graphicGenerator.scrollTo(this.graphicRepresentation)
     }
   }
-
-  createGUINode () {
-    if (this.graphicGenerator && this.graphicGenerator.generateGUINode) {
-      if (!this.graphicRepresentation) {
-        this.graphicRepresentation = this.graphicGenerator.generateGUINode(this)
-      }
-    }
-  }
 }
 
 export default class AddressSpace {
@@ -191,25 +200,6 @@ export default class AddressSpace {
     this.nodeMapping = {}
     this.objectFolder = null
     this.selectedTighteningSystem = null
-  }
-
-  /**
-   * A promise to browse and read a node, given a nodeId
-   * @param {*} nodeId
-   * @returns
-   */
-  browseAndRead (nodeId) {
-    return this.socketHandler.browsePromise(nodeId, true).then(
-      (browsecall) => {
-        return new Promise((resolve) => {
-          this.socketHandler.readPromise(nodeId).then(
-            (response) => {
-              resolve(response.node)
-            }
-          )
-        }
-        )
-      })
   }
 
   handleNamespaces (namespaces) {
@@ -223,15 +213,8 @@ export default class AddressSpace {
    * Sets up root and the Object folder
    */
   initiate () {
-    this.createNode({
-      nodeId: 'ns=0;i=84',
-      browseName: { name: 'Root' },
-      displayName: { text: 'Root' },
-      referenceTypeId: 'ns=0;i=35',
-      typeDefinition: 'ns=0;i=61',
-      nodeClass: 'Object'
-    })
-    this.socketHandler.browse('ns=0;i=85', () => { this.socketHandler.read('ns=0;i=85') }, true)
+    this.browseAndReadWithNodeId('ns=0;i=84', true).then() // Get root
+    this.browseAndReadWithNodeId('ns=0;i=85', true).then() // Get Objects
   }
 
   reset () {
@@ -252,9 +235,9 @@ export default class AddressSpace {
         returnNode.addBrowseData(reference)
       } else {
         returnNode = self.createNode(reference, parent)
-        if (parent) {
-          parent.addRelation(type, reference.nodeId, returnNode)
-        }
+      }
+      if (parent) {
+        parent.addRelation(type, reference.nodeId, returnNode)
       }
       returnNode.scrollTo()
       return returnNode
@@ -278,12 +261,12 @@ export default class AddressSpace {
         parent.addBrowseData(reference)
         thisNode.setParent(parent)
         if (!thisNode.browseName) {
-          parent.explore() // Forcing parent to get this node's name
+          parent.GUIexplore() // Forcing parent to get this node's name
         }
       } else {
         parent = self.createNode(reference)
         parent.addRelation('component', thisNode.nodeId, thisNode)
-        parent.explore()
+        parent.GUIexplore()
         thisNode.setParent(parent)
       }
       return parent
@@ -343,7 +326,8 @@ export default class AddressSpace {
       this.objectFolder = thisNode
       const tighteningSystems = this.getTighteningSystems()
       for (const ts of tighteningSystems) {
-        ts.read()
+        ts.read().then(
+          () => {})
       }
     }
 
@@ -358,6 +342,32 @@ export default class AddressSpace {
   setParent (parent, child) {
     child.setParent(parent)
   }
+
+  /**
+   * A promise to browse and read a node, given a nodeId
+   * @param {*} nodeId
+   * @returns
+   */
+  browseAndReadWithNodeId (nodeId, details = false) {
+    let referencedNode = this.nodeMapping[nodeId]
+    if (!referencedNode) {
+      referencedNode = this.createNode({ nodeId })
+    }
+    return referencedNode.GUIexplore(details)
+  }
+
+  /*      return this.socketHandler.browsePromise(this.nodeId, true).then(
+        (browsecall) => {
+          return new Promise((resolve) => {
+            this.socketHandler.readPromise(this.nodeId).then(
+              (response) => {
+                resolve(response.node)
+              }
+            )
+          }
+          )
+        })
+    } */
 
   // This is called whenever a node has been being read
   addNodeByRead (msg) {

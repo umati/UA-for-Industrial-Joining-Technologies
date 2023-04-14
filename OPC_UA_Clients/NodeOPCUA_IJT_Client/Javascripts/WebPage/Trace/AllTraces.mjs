@@ -50,7 +50,8 @@ export default class AllTraces {
 
     this.addressSpace.findFolder(`/${ijt}:ResultManagement/${ijt}:Results/${appl}:Result`).then(
       (call) => {
-        this.addressSpace.browseAndRead(call.message.nodeid).then()
+        this.addressSpace.browseAndReadWithNodeId(call.message.nodeid).then(
+          (x) => { console.log(x) })
       })
   }
 

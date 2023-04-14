@@ -13,24 +13,12 @@ export default class SocketHandler {
     this.registerMandatory('pathtoidresult')
   }
 
-  read (nodeId, callback) {
-    this.uniqueId++
-    this.callMapping[this.uniqueId] = callback
-    this.socket.emit('read', this.uniqueId, nodeId)
-  }
-
-  browse (nodeId, callback, details) {
-    this.uniqueId++
-    this.callMapping[this.uniqueId] = callback
-    this.socket.emit('browse', this.uniqueId, nodeId, details)
-  }
-
-  pathtoid (nodeId, path, callback) {
-    this.uniqueId++
-    this.callMapping[this.uniqueId] = callback
-    this.socket.emit('pathtoid', this.uniqueId, nodeId, path)
-  }
-
+  /**
+   * A promise to get a nodeId from another nodeId following the path
+   * @param {*} nodeId
+   * @param {*} path
+   * @returns
+   */
   pathtoidPromise (nodeId, path) {
     return new Promise((resolve, reject) => {
       this.uniqueId++
@@ -40,6 +28,11 @@ export default class SocketHandler {
     })
   }
 
+  /**
+   * A promise to read a node
+   * @param {*} nodeId
+   * @returns
+   */
   readPromise (nodeId) {
     return new Promise((resolve, reject) => {
       this.uniqueId++
@@ -49,6 +42,12 @@ export default class SocketHandler {
     })
   }
 
+  /**
+   * A promise to browse a node. If details is TRUE then more relations are included in the response
+   * @param {*} nodeId
+   * @param {*} details
+   * @returns
+   */
   browsePromise (nodeId, details) {
     return new Promise((resolve, reject) => {
       this.uniqueId++
