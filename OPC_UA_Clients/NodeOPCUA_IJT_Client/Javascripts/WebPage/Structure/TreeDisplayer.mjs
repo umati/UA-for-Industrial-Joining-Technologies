@@ -87,7 +87,7 @@ export default class TreeDisplayer {
     read.style.margin = '-5px'
 
     read.onclick = function () {
-      if (this.node.read) {
+      if (this.node.hasBeenRead) {
         this.node.GUIexplore(true).then()
         if (this.innerHTML !== '+') {
           this.myContainer.style.display = 'none'
@@ -97,33 +97,19 @@ export default class TreeDisplayer {
       }
     }
 
-    switch (type) {
-      case '47': // HasComponent
-        read.style.color = 'black'
-        read.title = 'Role: Component'
-        break
-      /* case '40': // HasTypeDefinition
-           //read.style.color = 'blue'
-           //read.title='Role: HasTypeDefinition'
-           if(node && node.parent && node.parent.readButton) {
-           node.parent.readButton.title+='\nType: '+node.browseName.name
-           }
-           break */
-      case '17603': // HasInterface
-        read.style.color = 'green'
-        read.title = 'Role: Interface'
-        break
-      case '17604': // HasAddin
-        read.style.color = 'brown'
-        read.title = 'Role: Addin'
-        break
-      case '24137': // AssociatedWith
-        read.style.color = 'grey'
-        read.title = 'Role: Association'
-        break
-      default:
-        read.style.color = 'black'
+    let color = this.addressSpace.typeMapping[type].color
+    let typeName = this.addressSpace.typeMapping[type].name
+    if (!color) {
+      color = 'black'
     }
+    if (typeName) {
+      typeName = 'Role: ' + typeName
+    } else {
+      typeName = ''
+    }
+    read.style.color = color
+    read.title = typeName
+
     buttonArea.appendChild(read)
 
     const container = document.createElement('div')

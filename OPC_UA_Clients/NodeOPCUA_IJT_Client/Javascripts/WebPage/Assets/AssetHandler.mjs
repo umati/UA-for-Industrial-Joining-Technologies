@@ -9,32 +9,14 @@ export default class AssetHandler {
     this.socketHandler = socketHandler
     this.addressSpace = addressSpace
 
-    const backGround = document.createElement('div')
-    backGround.classList.add('datastructure')
-    container.appendChild(backGround)
-
-    const leftHalf = document.createElement('div')
-    leftHalf.classList.add('lefthalf')
-    leftHalf.classList.add('scrollableInfoArea')
-    backGround.appendChild(leftHalf)
-
-    const nodeDiv = document.createElement('div')
-    nodeDiv.classList.add('myHeader')
-    nodeDiv.innerText = 'AssetView'
-    leftHalf.appendChild(nodeDiv)
-
-    const displayArea = document.createElement('div')
-    displayArea.classList.add('drawAssetBox')
-    leftHalf.appendChild(displayArea)
-
-    const serverDiv = document.getElementById('connectedServer')
+    const serverDiv = document.getElementById('connectedServer') // listen to tab switch
     serverDiv.addEventListener('tabOpened', (event) => {
       if (event.detail.title === 'Assets') {
         this.initiate()
       }
     }, false)
 
-    this.assetGraphic = new AssetGraphic(displayArea)
+    this.assetGraphic = new AssetGraphic(container)
   }
 
   messageDisplay (item) {

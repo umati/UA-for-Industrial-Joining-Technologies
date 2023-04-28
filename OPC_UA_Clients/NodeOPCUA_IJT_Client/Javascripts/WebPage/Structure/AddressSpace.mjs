@@ -1,9 +1,23 @@
 
+const typeMapping = {
+  0: { name: 'error' },
+  61: { name: 'relation' },
+  40: { name: 'hasType' },
+  46: { name: 'hasProperty' },
+  35: { name: 'organizes' },
+  47: { name: 'component', color: 'black' },
+  17603: { name: 'hasInterface', color: 'green' },
+  17604: { name: 'hasAddin', color: 'brown' },
+  24137: { name: 'association', color: 'grey' }
+}
+
 class PartialNode {
-  constructor (parent, graphicGenerator, socketHandler) {
+  constructor (parent, graphicGenerator, socketHandler, makeGUI) {
     this.parent = parent
     this.graphicGenerator = graphicGenerator
     this.socketHandler = socketHandler
+    this.makeGUI = makeGUI
+    this.browseData = {}
   }
 
   /**
@@ -40,16 +54,36 @@ class PartialNode {
       }
     }
   }
+
+  scrollTo () {
+    if (this.graphicRepresentation) {
+      this.graphicGenerator.scrollTo(this.graphicRepresentation)
+    }
+  }
+
+  addBrowseData (input) {
+    this.browsed = true
+    for (const [key, value] of Object.entries(input)) {
+      this.browseData[key] = value
+    }
+    if (this.browseName && this.graphicRepresentation) {
+      this.graphicRepresentation.button.innerText = this.browseName.name
+    }
+    if (this.value) {
+      return true
+    }
+    return false
+  }
 }
 
 class Reference extends PartialNode {
-  constructor (parent, reference, socketHandler, graphicGenerator) {
-    super(parent, graphicGenerator, socketHandler)
+  constructor (parent, reference, socketHandler, graphicGenerator, makeGUI = true) {
+    super(parent, graphicGenerator, socketHandler, makeGUI)
     for (const [key, value] of Object.entries(reference)) {
       this[key] = value
     }
 
-    if (reference.browseName) {
+    if (reference.browseName && this.makeGUI) {
       this.createGUINode()
     }
   }
@@ -60,13 +94,14 @@ class Reference extends PartialNode {
 }
 
 class Node extends PartialNode {
-  constructor (parent, reference, socketHandler, graphicGenerator) {
-    super(parent, graphicGenerator, socketHandler)
+  constructor (parent, reference, socketHandler, graphicGenerator, makeGUI = true) {
+    super(parent, graphicGenerator, socketHandler, makeGUI)
     this.relations = {}
     this.value = null
-    this.browseData = {}
     this.addBrowseData(reference)
-    this.createGUINode()
+    if (this.makeGUI) {
+      this.createGUINode()
+    }
   }
 
   // using organizes and component
@@ -146,28 +181,18 @@ class Node extends PartialNode {
       return this.browseData.typeDefinition
     } else { // Loop through the relation and find the hasType relation and return its NodeId
       const typeRelation = this.getRelations('hasType')[0]
-      return typeRelation.nodeId
+      if (typeRelation) {
+        return typeRelation.nodeId
+      } else {
+        return ''
+      }
     }
   }
 
   addReadData (value) {
-    this.read = true
+    this.hasBeenRead = true
     this.value = value
     if (this.browseData !== {}) {
-      return true
-    }
-    return false
-  }
-
-  addBrowseData (input) {
-    this.browsed = true
-    for (const [key, value] of Object.entries(input)) {
-      this.browseData[key] = value
-    }
-    if (this.browseName && this.graphicRepresentation) {
-      this.graphicRepresentation.button.innerText = this.browseName.name
-    }
-    if (this.value) {
       return true
     }
     return false
@@ -182,14 +207,11 @@ class Node extends PartialNode {
   }
 
   setParent (parent) {
-    if (this.graphicRepresentation.whole.parentElement !== parent.graphicRepresentation.container) {
+    if (this.graphicRepresentation &&
+      this.graphicRepresentation.whole &&
+      parent.graphicRepresentation &&
+      this.graphicRepresentation.whole.parentElement !== parent.graphicRepresentation.container) {
       this.graphicGenerator.addChild(parent.graphicRepresentation, this.graphicRepresentation)
-    }
-  }
-
-  scrollTo () {
-    if (this.graphicRepresentation) {
-      this.graphicGenerator.scrollTo(this.graphicRepresentation)
     }
   }
 }
@@ -200,6 +222,113 @@ export default class AddressSpace {
     this.nodeMapping = {}
     this.objectFolder = null
     this.selectedTighteningSystem = null
+    this.typeMapping = typeMapping
+  }
+
+  /**
+   * This is called whenever a node has been being browsed
+   * @param {*} msg The message from the NodeOPCUA_IJT_Client
+   * @returns
+   */
+  addNodeByBrowse (msg) {
+    const makeGUI = msg.details
+    const thisNode = this.findOrCreateNode({ nodeId: msg.nodeid }, null, null, makeGUI)
+    thisNode.references = msg.browseresult.references
+    let componentOf = null
+    let organizedBy = null
+
+    for (const reference of msg.browseresult.references) {
+      const type = reference.referenceTypeId.split('=').pop()
+      if (reference.isForward) {
+        this.findOrCreateNode(reference, thisNode, typeMapping[type].name, makeGUI)
+      } else { // upwards references
+        switch (type) {
+          case ('35'): // OrganizedBy
+            if (!organizedBy) {
+              organizedBy = reference
+            }
+            break
+          case ('47'): // ComponentOf
+            componentOf = this.makeParentAndConnect(reference, thisNode, makeGUI)
+            break
+        }
+      }
+    }
+
+    if (thisNode.nodeId === 'ns=0;i=85') { // Setting up objectFolder
+      this.objectFolder = thisNode
+      const tighteningSystems = this.getTighteningSystems()
+      for (const ts of tighteningSystems) {
+        ts.read().then(
+          () => {})
+      }
+    }
+
+    // Prioritize the component relation, but if no parent componentowner exist, use organizedBy reference instead
+    if (!componentOf && organizedBy) {
+      this.makeParentAndConnect(organizedBy, thisNode, makeGUI)
+    }
+
+    return thisNode
+  }
+
+  /**
+   * Core function theat either finds an already created Node or create a new if none exists
+   * @param {*} reference the type of reference the relation have
+   * @param {*} parent the parent node in the hierarhy
+   * @param {*} type the type of the component (as a string name)
+   * @param {*} makeGUI Should this generate a representation in the structure view
+   * @returns a node
+   */
+  findOrCreateNode (reference, parent, type = 'component', makeGUI) {
+    let returnNode
+    let referencedNode = this.nodeMapping[reference.nodeId]
+    if (type === 'association') {
+      referencedNode = parent.getRelation(type, reference.nodeId)
+    }
+    if (referencedNode) {
+      if (referencedNode.browseName && !referencedNode.makeGUI && makeGUI) {
+        referencedNode.parent = parent
+        referencedNode.createGUINode()
+      }
+      returnNode = referencedNode
+      returnNode.addBrowseData(reference)
+    } else {
+      if (type === 'association') {
+        returnNode = this.createAssociation(reference, parent, makeGUI)
+      } else {
+        returnNode = this.createNode(reference, parent, makeGUI)
+      }
+    }
+    if (parent) {
+      parent.addRelation(type, reference.nodeId, returnNode)
+    }
+    returnNode.scrollTo()
+    return returnNode
+  }
+
+  /**
+   * Core function that creates a parent if none exists and creates the current node to it
+   * @param {*} reference the reference data type
+   * @param {*} thisNode the current node
+   * @param {*} makeGUI Should this generate a representation in the structure view
+   * @returns a reference
+   */
+  makeParentAndConnect (reference, thisNode, makeGUI) {
+    let parent = this.nodeMapping[reference.nodeId]
+    if (parent) {
+      parent.addBrowseData(reference)
+      thisNode.setParent(parent)
+      if (!thisNode.browseName) {
+        parent.GUIexplore(makeGUI) // Forcing parent to get this node's name
+      }
+    } else {
+      parent = this.createNode(reference)
+      parent.addRelation('component', thisNode.nodeId, thisNode)
+      parent.GUIexplore(makeGUI)
+      thisNode.setParent(parent)
+    }
+    return parent
   }
 
   handleNamespaces (namespaces) {
@@ -225,149 +354,18 @@ export default class AddressSpace {
     this.graphicGenerator = graphicGenerator
   }
 
-  // This is called whenever a node has been being browsed
-  addNodeByBrowse (msg) {
-    function findOrCreateNode (reference, parent, self, type = 'component') {
-      let returnNode
-      const referencedNode = self.nodeMapping[reference.nodeId]
-      if (referencedNode) {
-        returnNode = referencedNode
-        returnNode.addBrowseData(reference)
-      } else {
-        returnNode = self.createNode(reference, parent)
-      }
-      if (parent) {
-        parent.addRelation(type, reference.nodeId, returnNode)
-      }
-      returnNode.scrollTo()
-      return returnNode
-    }
-
-    function findOrCreateAssociation (reference, parent, self) {
-      let returnNode
-      const referencedNode = parent.getRelation('association', reference.nodeId)
-      if (referencedNode) {
-        returnNode = referencedNode
-      } else {
-        returnNode = self.createAssociation(reference, thisNode)
-        parent.addRelation('association', reference.nodeId, returnNode)
-      }
-      return returnNode
-    }
-
-    function makeParentAndConnect (reference, thisNode, self) {
-      let parent = self.nodeMapping[reference.nodeId]
-      if (parent) {
-        parent.addBrowseData(reference)
-        thisNode.setParent(parent)
-        if (!thisNode.browseName) {
-          parent.GUIexplore() // Forcing parent to get this node's name
-        }
-      } else {
-        parent = self.createNode(reference)
-        parent.addRelation('component', thisNode.nodeId, thisNode)
-        parent.GUIexplore()
-        thisNode.setParent(parent)
-      }
-      return parent
-    }
-
-    const thisNode = findOrCreateNode({ nodeId: msg.nodeid }, null, this)
-
-    thisNode.references = msg.browseresult.references
-
-    let componentOf = null
-    let organizedBy = null
-
-    for (const reference of msg.browseresult.references) {
-      const type = reference.referenceTypeId.split('=').pop()
-      switch (type) {
-        case ('61'): // Hastype?????
-          findOrCreateNode(reference, thisNode, this, 'relation?')
-          break
-        case ('40'): // HasTypeDefinition
-          findOrCreateNode(reference, thisNode, this, 'hasType')
-          break
-        case ('46'): // HasProperty
-          findOrCreateNode(reference, thisNode, this, 'hasProperty')
-          break
-        case ('35'): // Organizes/OrganizedBy
-          if (reference.isForward) {
-            findOrCreateNode(reference, thisNode, this, 'organizes')
-          } else {
-            if (!organizedBy) {
-              organizedBy = reference
-            }
-          }
-          break
-        case ('47'): // Component/ComponentOf
-          if (reference.isForward) {
-            findOrCreateNode(reference, thisNode, this)
-          } else {
-            componentOf = makeParentAndConnect(reference, thisNode, this)
-          }
-          break
-        case '17603': // HasInterface
-          findOrCreateNode(reference, thisNode, this, 'hasInterface')
-          break
-        case '17604': // HasAddin
-
-          findOrCreateNode(reference, thisNode, this, 'hasAddin')
-          break
-        case '24137': // AssociatedWith
-          findOrCreateAssociation(reference, thisNode, this)
-          break
-        default:
-          alert('Unhandled type in reference of node:' + type)
-      }
-    }
-
-    if (thisNode.nodeId === 'ns=0;i=85') { // Setting up objectFolder
-      this.objectFolder = thisNode
-      const tighteningSystems = this.getTighteningSystems()
-      for (const ts of tighteningSystems) {
-        ts.read().then(
-          () => {})
-      }
-    }
-
-    // Prioritize the component relation, but if no parent componentowner exist, use organizedBy reference instead
-    if (!componentOf && organizedBy) {
-      makeParentAndConnect(organizedBy, thisNode, this)
-    }
-
-    return thisNode
-  }
-
-  setParent (parent, child) {
-    child.setParent(parent)
-  }
-
   /**
-   * A promise to browse and read a node, given a nodeId
+   * A promise to browse and read a node, given only a nodeId
    * @param {*} nodeId
-   * @returns
+   * @returns the node
    */
   browseAndReadWithNodeId (nodeId, details = false) {
     let referencedNode = this.nodeMapping[nodeId]
     if (!referencedNode) {
-      referencedNode = this.createNode({ nodeId })
+      referencedNode = this.createNode({ nodeId }, null, details)
     }
     return referencedNode.GUIexplore(details)
   }
-
-  /*      return this.socketHandler.browsePromise(this.nodeId, true).then(
-        (browsecall) => {
-          return new Promise((resolve) => {
-            this.socketHandler.readPromise(this.nodeId).then(
-              (response) => {
-                resolve(response.node)
-              }
-            )
-          }
-          )
-        })
-    } */
 
   // This is called whenever a node has been being read
   addNodeByRead (msg) {
@@ -381,15 +379,6 @@ export default class AddressSpace {
     return node
   }
 
-  // This is called whenever a node has been being read
-  getNodeParentId (references) {
-    for (const reference of references) {
-      if (reference.isForward === false && reference.referenceTypeId === 'ns=0;i=47') {
-        return reference.nodeId
-      }
-    }
-  }
-
   toString (nodeId) {
     const node = this.nodeMapping[nodeId]
     if (!node) {
@@ -398,14 +387,14 @@ export default class AddressSpace {
     return node.toString()
   }
 
-  createNode (reference, parent) {
-    const newNode = new Node(parent, reference, this.socketHandler, this.graphicGenerator)
+  createNode (reference, parent, makeGUI) {
+    const newNode = new Node(parent, reference, this.socketHandler, this.graphicGenerator, makeGUI)
     this.nodeMapping[newNode.nodeId] = newNode
     return newNode
   }
 
-  createAssociation (reference, caller) {
-    return new Reference(caller, reference, this.socketHandler, this.graphicGenerator)
+  createAssociation (reference, caller, makeGUI) {
+    return new Reference(caller, reference, this.socketHandler, this.graphicGenerator, makeGUI)
   }
 
   getTighteningSystems () {
@@ -439,17 +428,5 @@ export default class AddressSpace {
       }
     }
     return this.socketHandler.pathtoidPromise(startFolderId, path)
-
-    /*
-    return new Promise((resolve) => {
-      this.socketHandler.pathtoidPromise(startFolderId, path).then(
-        (msg) => {
-          resolve(msg.message.nodeid)
-        },
-        (err) => {
-          throw new Error(`Failed to find node ${startFolderId} when looking for path ${path}. ${err}`)
-        }
-      )
-    }) */
   }
 }

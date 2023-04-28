@@ -1,7 +1,25 @@
 
 export default class AssetGraphics {
   constructor (container) {
-    this.container = container
+    const backGround = document.createElement('div')
+    backGround.classList.add('datastructure')
+    container.appendChild(backGround)
+
+    const leftHalf = document.createElement('div')
+    leftHalf.classList.add('lefthalf')
+    leftHalf.classList.add('scrollableInfoArea')
+    backGround.appendChild(leftHalf)
+
+    const nodeDiv = document.createElement('div')
+    nodeDiv.classList.add('myHeader')
+    nodeDiv.innerText = 'AssetView'
+    leftHalf.appendChild(nodeDiv)
+
+    const displayArea = document.createElement('div')
+    displayArea.classList.add('drawAssetBox')
+    leftHalf.appendChild(displayArea)
+
+    this.container = displayArea
   }
 
   createController (node, controllerNr, parts) {

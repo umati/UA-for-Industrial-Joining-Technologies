@@ -158,8 +158,6 @@ export default class NodeOPCUAInterface {
   translateBrowsePath (callid, nodeId, path) {
     (async () => {
       try {
-        // let nsIJT = 4;
-
         const bpr2 = await this.session.translateBrowsePath(makeBrowsePath(nodeId, path))
 
         console.log(`XXX ${nodeId} object.  ${path} `)
@@ -187,26 +185,15 @@ export default class NodeOPCUAInterface {
     (async () => {
       try {
         const io = this.io
-        let nodeToBrowse
-        // console.log('Browse details: '+details);
+        const nodeToBrowse = {
+          nodeId,
+          includeSubtypes: true,
+          nodeClassMask: 0,
+          referenceTypeId: 'References',
+          resultMask: 63
+        }
         if (details) {
-          nodeToBrowse = {
-            nodeId,
-            includeSubtypes: true,
-            nodeClassMask: 0,
-            browseDirection: 'Both',
-            referenceTypeId: 'References',
-            resultMask: 63
-          }
-        } else {
-          nodeToBrowse = {
-            nodeId,
-            includeSubtypes: true,
-            nodeClassMask: 0,
-            browseDirection: 'Both',
-            referenceTypeId: 'References',
-            resultMask: 63
-          }
+          nodeToBrowse.browseDirection = 'Both'
         }
         await this.session.browse(nodeToBrowse,
           function (err, browseResult) {
