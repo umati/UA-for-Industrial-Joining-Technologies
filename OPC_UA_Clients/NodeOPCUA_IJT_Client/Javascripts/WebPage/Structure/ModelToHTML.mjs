@@ -1,4 +1,7 @@
-
+/**
+ * The purpose of this class is to take a model and make a HTML representation
+ * of it where a user can expand subsections to view more data
+ */
 export default class ModelToHTML {
   constructor (messageArea) {
     this.messageArea = messageArea

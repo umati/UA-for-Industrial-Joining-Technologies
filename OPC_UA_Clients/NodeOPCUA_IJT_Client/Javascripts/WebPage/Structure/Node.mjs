@@ -8,6 +8,22 @@ class PartialNode {
     this.browseData = {}
   }
 
+  get nodeId () {
+    return this.browseData.nodeId
+  }
+
+  get browseName () {
+    return this.browseData.browseName
+  }
+
+  get displayName () {
+    return this.browseData.displayName
+  }
+
+  get referenceTypeId () {
+    return this.browseData.referenceTypeId
+  }
+
   /**
    * Use addressSpace.browseAndReadWithNodeId if only the Id is available
    * @param {*} response
@@ -73,6 +89,19 @@ export class Reference extends PartialNode {
 
     if (reference.browseName && this.makeGUI) {
       this.createGUINode()
+    }
+  }
+
+  get typeDefinition () {
+    if (this.browseData.typeDefinition) { // If a READ operation has been performed
+      return this.browseData.typeDefinition
+    } else { // Loop through the relation and find the hasType relation and return its NodeId
+      const typeRelation = this.getRelations('hasType')[0]
+      if (typeRelation) {
+        return typeRelation.nodeId
+      } else {
+        return ''
+      }
     }
   }
 
@@ -146,35 +175,6 @@ export class Node extends PartialNode {
     const resNode = Object.values(row).find(
       x => browseName === x.browseName.name)
     return resNode
-  }
-
-  get nodeId () {
-    return this.browseData.nodeId
-  }
-
-  get browseName () {
-    return this.browseData.browseName
-  }
-
-  get displayName () {
-    return this.browseData.displayName
-  }
-
-  get referenceTypeId () {
-    return this.browseData.referenceTypeId
-  }
-
-  get typeDefinition () {
-    if (this.browseData.typeDefinition) { // If a READ operation has been performed
-      return this.browseData.typeDefinition
-    } else { // Loop through the relation and find the hasType relation and return its NodeId
-      const typeRelation = this.getRelations('hasType')[0]
-      if (typeRelation) {
-        return typeRelation.nodeId
-      } else {
-        return ''
-      }
-    }
   }
 
   addReadData (value) {

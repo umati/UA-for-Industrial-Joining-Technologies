@@ -201,6 +201,8 @@ export default class NodeOPCUAInterface {
               // browse_result.references.forEach(function (reference) {
               // console.log(reference.browseName);
               // });
+              console.log(nodeId)
+              console.log(browseResult)
               io.emit('browseresult', {
                 callid,
                 browseresult: browseResult,
