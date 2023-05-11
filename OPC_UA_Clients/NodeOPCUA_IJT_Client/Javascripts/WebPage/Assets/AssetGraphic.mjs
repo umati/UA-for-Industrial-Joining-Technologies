@@ -19,6 +19,12 @@ export default class AssetGraphics {
     displayArea.classList.add('drawAssetBox')
     leftHalf.appendChild(displayArea)
 
+    /*
+    const canvasArea = document.createElement('canvas')
+    canvasArea.classList.add('canvasBox')
+    leftHalf.appendChild(canvasArea)
+    */
+
     this.container = displayArea
   }
 

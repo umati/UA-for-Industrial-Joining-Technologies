@@ -12,16 +12,45 @@ class PartialNode {
     return this.browseData.nodeId
   }
 
+  set nodeId (id) {
+    this.browseData.nodeId = id
+  }
+
   get browseName () {
     return this.browseData.browseName
+  }
+
+  set browseName (name) {
+    this.browseData.browseName = name
   }
 
   get displayName () {
     return this.browseData.displayName
   }
 
-  get referenceTypeId () {
-    return this.browseData.referenceTypeId
+  set displayName (name) {
+    this.browseData.displayName = name
+  }
+
+  get typeDefinition () {
+    if (this.browseData.typeDefinition) { // If a READ operation has been performed
+      return this.browseData.typeDefinition
+    } else { // Loop through the relation and find the hasType relation and return its NodeId
+      const typeRelation = this.getRelations('hasType')[0]
+      if (typeRelation) {
+        return typeRelation.nodeId
+      } else {
+        return ''
+      }
+    }
+  }
+
+  set typeDefinition (def) {
+    this.browseData.typeDefinition = def
+  }
+
+  get associatedNodeId () {
+    return this.nodeId
   }
 
   /**
@@ -91,23 +120,6 @@ export class Reference extends PartialNode {
       this.createGUINode()
     }
   }
-
-  get typeDefinition () {
-    if (this.browseData.typeDefinition) { // If a READ operation has been performed
-      return this.browseData.typeDefinition
-    } else { // Loop through the relation and find the hasType relation and return its NodeId
-      const typeRelation = this.getRelations('hasType')[0]
-      if (typeRelation) {
-        return typeRelation.nodeId
-      } else {
-        return ''
-      }
-    }
-  }
-
-  get associatedNodeId () {
-    return this.nodeId
-  }
 }
 
 export class Node extends PartialNode {
@@ -119,6 +131,10 @@ export class Node extends PartialNode {
     if (this.makeGUI) {
       this.createGUINode()
     }
+  }
+
+  get referenceTypeId () {
+    return this.browseData.referenceTypeId
   }
 
   // using organizes and component
