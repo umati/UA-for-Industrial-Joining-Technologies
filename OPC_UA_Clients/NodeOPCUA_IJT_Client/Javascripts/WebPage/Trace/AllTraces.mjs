@@ -45,14 +45,16 @@ export default class AllTraces {
    * Setup-function the first time the view is opened to load a trace if none exists
    */
   initiate () {
+    /*
     const ijt = this.addressSpace.nsIJT
     const appl = this.addressSpace.nsIJTApplication
 
     this.addressSpace.findFolder(`/${ijt}:ResultManagement/${ijt}:Results/${appl}:Result`).then(
       (call) => {
         this.addressSpace.browseAndReadWithNodeId(call.message.nodeid).then(
-          (x) => { console.log(x) })
+          (x) => {  console.log(x)  })
       })
+      */
   }
 
   decideTraceType (yName) {

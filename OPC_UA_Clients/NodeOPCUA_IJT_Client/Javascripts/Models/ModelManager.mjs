@@ -52,6 +52,33 @@ export default class ModelManager {
 
   /**
    * This method handles the top level interpretation of a message that should be
+   * converted to a model. 
+   * @param {*} msg
+   * @returns
+   */
+  createModelFromMessage (msg) {
+    // console.log(node.nodeId)
+    // console.log(node.typeName)
+    let model
+    switch (msg.EventType.value) {
+      case ('TighteningSystemType'):
+        model = new DefaultNode(msg, this)
+        break
+      case ('ResultManagementType'):
+        model = new DefaultNode(msg, this)
+        break
+      case ('ns=4;i=1007'):
+        model = new ResultDataType(msg.Result.value, this)
+        break
+      default:
+        model = new DefaultNode(msg, this)
+    }
+    //node.model = model
+    return model
+  }
+
+  /**
+   * This method handles the top level interpretation of a node that should be
    * converted to a model. This is probably unnecessary and could likely
    * be handled by the factory function with little modifications.
    * @param {*} node
@@ -69,7 +96,7 @@ export default class ModelManager {
         model = new DefaultNode(node, this)
         break
       case ('ns=4;i=2001'):
-        model = new ResultDataType(node, this)
+        model = new ResultDataType(node.value.value, this)
         break
       default:
         model = new DefaultNode(node, this)
@@ -78,6 +105,7 @@ export default class ModelManager {
     return model
   }
 
+  /*
   // This method handles the top level interpretation of a message that should be
   // converted to a model. This is probably unnecessary and could likely
   // be handled by the factory function with little modifications.
@@ -109,5 +137,5 @@ export default class ModelManager {
       return obj
     }
     return obj
-  }
+  }*/
 }

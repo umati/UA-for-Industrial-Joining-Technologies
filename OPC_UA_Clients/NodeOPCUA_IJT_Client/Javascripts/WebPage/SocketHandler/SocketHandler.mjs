@@ -14,6 +14,16 @@ export default class SocketHandler {
   }
 
   /**
+   * Subscribe to an event
+   * @param {*} nodeId
+   * @param {*} path
+   * @returns
+   */
+  subscribeEvent (msg) {
+    this.socket.emit('subscribe event', msg)
+  }
+
+  /**
    * A promise to get a nodeId from another nodeId following the path
    * @param {*} nodeId
    * @param {*} path
@@ -25,6 +35,35 @@ export default class SocketHandler {
       this.callMapping[this.uniqueId] = resolve
       this.failMapping[this.uniqueId] = reject
       this.socket.emit('pathtoid', this.uniqueId, nodeId, path)
+    })
+  }
+
+  /**
+   * A promise to get a construct an extension
+   * @param {*} nodeId
+   * @param {*} parameters
+   * @returns
+   */
+  constructExtensionObjectPromise (nodeId, parameters) {
+    return new Promise((resolve, reject) => {
+      this.uniqueId++
+      this.callMapping[this.uniqueId] = resolve
+      this.failMapping[this.uniqueId] = reject
+      this.socket.emit('constructextension', this.uniqueId, nodeId, parameters)
+    })
+  }
+
+  /**
+   * A promise to call a method
+   * @param {*} methodToCall a structure with the method to call
+   * @returns
+   */
+  methodCall (methodToCall) {
+    return new Promise((resolve, reject) => {
+      this.uniqueId++
+      this.callMapping[this.uniqueId] = resolve
+      this.failMapping[this.uniqueId] = reject
+      this.socket.emit('methodcall', this.uniqueId, methodToCall)
     })
   }
 

@@ -6,7 +6,13 @@ import {
   promoteOpaqueStructure,
   makeBrowsePath,
   StatusCodes,
-  TimestampsToReturn
+  // TimestampsToReturn,
+  constructEventFilter,
+  ClientMonitoredItem,
+  DataType,
+  coerceNodeId
+  // resolveNodeId,
+  // ObjectIds
 } from 'node-opcua'
 
 export default class NodeOPCUAInterface {
@@ -30,7 +36,6 @@ export default class NodeOPCUAInterface {
     this.session = null
 
     io.on('connection', (socket) => {
-      // ----------------------------------------------------------------------------------------- SOCKET: Interaction with items item
       socket.on('subscribe item', (callid, msg) => {
         this.addMonitor(callid, msg)
       })
@@ -42,6 +47,10 @@ export default class NodeOPCUAInterface {
         this.browse(callid, nodeId, details)
       })
 
+      socket.on('methodcall', (callid, method) => {
+        this.methodCall(callid, method)
+      })
+
       socket.on('pathtoid', (callid, nodeId, path) => {
         this.translateBrowsePath(callid, nodeId, path)
       })
@@ -51,11 +60,17 @@ export default class NodeOPCUAInterface {
         this.closeConnection()
       })
 
-      // ----------------------------------------------------------------------------------------- SOCKET: Connect and establish a structure of items
       socket.on('connect to', msg => {
         console.log('Nodejs OPC UA client attempting to connect to ' + msg)
         if (msg) {
           this.setupClient(msg, this.displayFunction, this.OPCUAClient, this.io)
+        }
+      })
+
+      socket.on('subscribe event', msg => {
+        console.log('Nodejs OPC UA client attempting to subscribe to ' + msg)
+        if (msg) {
+          this.eventSubscription(msg, this.displayFunction, this.OPCUAClient)
         }
       })
 
@@ -73,7 +88,10 @@ export default class NodeOPCUAInterface {
     this.endpointUrl = endpointUrl
 
     async.series([
-      function (callback) { // Connect
+      // ----------------------------------------------------------------------------------
+      // create connection
+      // ----------------------------------------------------------------------------------
+      function (callback) {
         client.connect(endpointUrl, function (err) {
           if (err) {
             console.log('Cannot connect to endpoint :', endpointUrl)
@@ -84,13 +102,37 @@ export default class NodeOPCUAInterface {
           callback(err)
         })
       },
-      function (callback) { // Session
+      // ----------------------------------------------------------------------------------
+      // create session
+      // ----------------------------------------------------------------------------------
+      function (callback) {
         client.createSession(function (err, session) {
           if (!err) {
-            // theSession = session
             thisContainer.session = session
-
+            console.log('Session established.')
             io.emit('session established')
+          }
+          callback(err)
+        })
+      },
+      // ----------------------------------------------------------------------------------
+      // create subscription
+      // ----------------------------------------------------------------------------------
+      function (callback) {
+        const parameters = {
+          maxNotificationsPerPublish: 10,
+          priority: 10,
+          publishingEnabled: true,
+          requestedLifetimeCount: 1000,
+          requestedMaxKeepAliveCount: 12,
+          requestedPublishingInterval: 2000
+        }
+        thisContainer.session.createSubscription2(parameters, function (err, subscription) {
+          if (!err) {
+            thisContainer.subscription = subscription
+
+            console.log('Subscription established')
+            io.emit('subscription created')
           }
           callback(err)
         })
@@ -114,8 +156,7 @@ export default class NodeOPCUAInterface {
       } else {
         console.log('Connection and session established.')
       }
-    }
-    )
+    })
   }
 
   /**
@@ -160,7 +201,7 @@ export default class NodeOPCUAInterface {
       try {
         const bpr2 = await this.session.translateBrowsePath(makeBrowsePath(nodeId, path))
 
-        console.log(`XXX ${nodeId} object.  ${path} `)
+        // console.log(`XXX ${nodeId} object.  ${path} `)
 
         if (bpr2.statusCode !== StatusCodes.Good) {
           console.log(`Cannot find the ${nodeId} object.  ${path} `)
@@ -201,8 +242,8 @@ export default class NodeOPCUAInterface {
               // browse_result.references.forEach(function (reference) {
               // console.log(reference.browseName);
               // });
-              console.log(nodeId)
-              console.log(browseResult)
+              // console.log(nodeId)
+              // console.log(browseResult)
               io.emit('browseresult', {
                 callid,
                 browseresult: browseResult,
@@ -215,6 +256,47 @@ export default class NodeOPCUAInterface {
       } catch (err) {
         console.log('FAIL Browse call: ' + err.message + err)
         this.io.emit('error message', err, 'browse')
+      }
+    })()
+  }
+
+  /**
+   *
+   * @param {*} callid A unique identifier to match a query to OPC UA with a response
+   * @param {*} methodToCall The information about the method to call
+   */
+  methodCall (callid, methodToCall) {
+    (async () => {
+      const theSession = this.session
+      try {
+        const io = this.io
+
+        const objectId = coerceNodeId('ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco') // SERVER
+        const methodId = coerceNodeId('ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/SimulateResult') // GetMonitoredItems
+
+        const inputArguments = [{ dataType: DataType.UInt32, value: 1 }]
+
+        const methodToCall2 = {
+          objectId,
+          methodId,
+          inputArguments
+        }
+        console.log('   TEST4')
+
+        theSession.call(methodToCall2, (err, results) => {
+          if (err) {
+            console.log('FAIL Method call (in callback): ' + err)
+          } else {
+            console.log('Call result: ' + results)
+            io.emit('callresult', {
+              callid,
+              results
+            })
+          }
+        })
+      } catch (err) {
+        console.log('FAIL method call: ' + err)
+        this.io.emit('error message', err, 'method')
       }
     })()
   }
@@ -234,6 +316,7 @@ export default class NodeOPCUAInterface {
     console.log('Client disconnected')
   }
 
+  /*
   // Subscribe to some value.      Not tested    Total Rewrite???
   addMonitor (callid, path) {
     const itemToMonitor = {
@@ -260,5 +343,84 @@ export default class NodeOPCUAInterface {
         this.io.emit('error message', err, 'subscribe')
       }
     })()
+  }
+
+  async function main () {
+    const client = OPCUAClient.create({})
+
+    const endpointUrl = 'opc.tcp://opcua.demo-this.com:62544/Quickstarts/AlarmConditionServer'
+
+    const subscriptionParamters = {
+      requestedPublishingInterval: 1000,
+      maxNotificationsPerPublish: 100,
+      publishingEnabled: true,
+      priority: 10
+    } */
+
+  async eventSubscription (msg, displayFunction, clientArgument) {
+    // const baseEventTypeId = 'i=2041'
+    const serverObjectId = 'i=2253'
+
+    const fields = [
+      'EventId',
+      'EventType',
+      'SourceNode',
+      'SourceName',
+      'Time',
+      'ReceiveTime',
+      'Message',
+      'Severity',
+      'Result'
+
+    ]
+    const eventFilter = constructEventFilter(fields)
+
+    const eventMonitoringItem = ClientMonitoredItem.create(
+      this.subscription,
+      {
+        attributeId: AttributeIds.EventNotifier,
+        nodeId: serverObjectId
+      },
+      {
+        discardOldest: true,
+        filter: eventFilter,
+        queueSize: 100000
+      }
+    )
+
+    eventMonitoringItem.on('initialized', () => {
+      console.log('event_monitoringItem initialized')
+    })
+
+    eventMonitoringItem.on('changed', (events) => {
+      (async () => {
+        try {
+          for (let i = 0; i < events.length; i++) {
+            // console.log(fields[i], '=', events[i].toString())
+            // console.log(events[i].value.resultContent)
+
+            if (fields[i] === 'Result') {
+              if (events[i] && events[i].value && events[i].value.resultContent) {
+                await promoteOpaqueStructure(this.session, [{ value: events[i].value.resultContent }])
+              }
+            }
+
+            // this.io.emit('subscribed event', { field: fields[i], value: events[i].value, stringValue: events[i].toString() })
+            // console.log('XXXXXXXXXXXXX...\n\n')
+            // console.log(events[i].value)
+          }
+          const result = {}
+          for (let i = 0; i < events.length; i++) {
+            result[fields[i]] = events[i]
+          }
+          this.io.emit('subscribed event', result)
+        } catch (err) {
+          this.displayFunction('Node.js OPC UA client error (eventMonitoring): ' + err.message) // Display the error message first
+          this.io.emit('error message', err.toString(), 'eventMonitoring') // (Then for debug purposes display all of it)
+        }
+      })()
+    })
+
+    await new Promise((resolve) => process.once('SIGINT', resolve))
   }
 }

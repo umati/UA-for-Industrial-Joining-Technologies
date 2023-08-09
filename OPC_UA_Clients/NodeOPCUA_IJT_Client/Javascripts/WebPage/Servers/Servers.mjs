@@ -1,85 +1,81 @@
 
-//import ModelToHTML from './ModelToHTML.mjs';
-
+// import ModelToHTML from './ModelToHTML.mjs'
 
 export default class Serverhandler {
+  constructor (container, socket) {
+    const backGround = document.createElement('div')
+    backGround.classList.add('datastructure')
+    container.appendChild(backGround)
 
-    constructor(container, socket) {
+    const leftHalf = document.createElement('div')
+    leftHalf.classList.add('lefthalf')
+    leftHalf.classList.add('scrollableInfoArea')
+    backGround.appendChild(leftHalf)
 
-        let backGround = document.createElement('div');
-        backGround.classList.add('datastructure');
-        container.appendChild(backGround);
+    const serverDiv = document.createElement('div')
+    serverDiv.classList.add('myHeader')
+    serverDiv.innerText = 'Servers'
+    leftHalf.appendChild(serverDiv)
 
-        let leftHalf = document.createElement('div');
-        leftHalf.classList.add('lefthalf');
-        leftHalf.classList.add('scrollableInfoArea');
-        backGround.appendChild(leftHalf);
+    this.serverArea = document.createElement('ul')
+    this.serverArea.classList.add('tightUL')
+    leftHalf.appendChild(this.serverArea)
 
-        let serverDiv = document.createElement('div');
-        serverDiv.classList.add('myHeader');
-        serverDiv.innerText = 'Servers';
-        leftHalf.appendChild(serverDiv);
+    const rightHalf = document.createElement('div')
+    rightHalf.classList.add('righthalf')
+    rightHalf.classList.add('scrollableInfoArea')
+    backGround.appendChild(rightHalf)
 
-        this.serverArea = document.createElement('ul');
-        leftHalf.appendChild(this.serverArea);
+    const comDiv = document.createElement('div')
+    comDiv.classList.add('myHeader')
+    comDiv.innerText = 'Server status'
+    rightHalf.appendChild(comDiv)
 
-        let rightHalf = document.createElement('div');
-        rightHalf.classList.add('righthalf');
-        rightHalf.classList.add('scrollableInfoArea');
-        backGround.appendChild(rightHalf);
+    const messageArea = document.createElement('div')
+    messageArea.setAttribute('id', 'messageArea')
+    rightHalf.appendChild(messageArea)
 
-        let comDiv = document.createElement('div');
-        comDiv.classList.add('myHeader');
-        comDiv.innerText = 'Server status';
-        rightHalf.appendChild(comDiv);
+    this.messages = document.createElement('ul')
+    this.messages.setAttribute('id', 'messages')
+    messageArea.appendChild(this.messages)
+  }
 
-        let messageArea = document.createElement('div');
-        messageArea.setAttribute('id', 'messageArea');
-        rightHalf.appendChild(messageArea);
+  clearDisplay () {
+    this.messages.innerHTML = ''
+  }
 
-        this.messages = document.createElement('ul');
-        this.messages.setAttribute('id', 'messages');
-        messageArea.appendChild(this.messages);
+  // Display a status message from the server
+  messageDisplay (msg) {
+    let item
+    if (msg !== 'keepalive') {
+      item = document.createElement('li')
+      item.textContent = msg
+      this.messages.appendChild(item)
+      this.messages.scrollTo(0, this.messages.scrollHeight)
+      item.scrollIntoView()
     }
+  }
 
-    clearDisplay() {
-        this.messages.innerHTML = '';
+  // Display the different OPC UA servers that the web server suggests
+  connectionPoints (msg, socket) {
+    function connect (point) {
+      document.getElementById('displayedServerName').innerText = point.name
+      socket.emit('connect to', point.address)
     }
-
-    //Display a status message from the server
-    messageDisplay(msg) {
-        var item;
-        if (msg == 'keepalive') {
-            return;
-        } else {
-            item = document.createElement('li');
-            item.textContent = msg;
-            this.messages.appendChild(item);
-            this.messages.scrollTo(0, this.messages.scrollHeight);
-            item.scrollIntoView();
-        }
+    this.serverArea.innerHTML = ''
+    for (const point of msg) {
+      const item = document.createElement('button')
+      item.classList.add('myButton')
+      item.style.display = 'block'
+      item.innerHTML = point.name
+      item.onclick = () => {
+        connect(point)
+      }
+      if (point.autoConnect) {
+        connect(point)
+      }
+      this.serverArea.appendChild(item)
+      window.scrollTo(0, document.body.scrollHeight)
     }
-
-    // Display the different OPC UA servers that the web server suggests 
-    connectionPoints(msg, socket) {
-        function connect(point) {
-            document.getElementById('displayedServerName').innerText = point.name;;
-            socket.emit('connect to', point.address)
-        }
-        this.serverArea.innerHTML = '';
-        for (let point of msg) {
-            var item = document.createElement('button');
-            item.classList.add('myButton');
-            item.style.display = 'block';
-            item.innerHTML = point.name;
-            item.onclick = () => {
-                connect(point);
-            };
-            if (point.autoConnect) {
-                connect(point);
-            }
-            this.serverArea.appendChild(item);
-            window.scrollTo(0, document.body.scrollHeight);
-        }
-    }
+  }
 }

@@ -24,11 +24,14 @@
     import IJTBaseModel from './Javascripts/Models/IJTBaseModel.mjs'
     import AllTraces from './Javascripts/WebPage/Trace/AllTraces.mjs'
     import Servers from './Javascripts/WebPage/Servers/Servers.mjs'
-    import Structure from './Javascripts/WebPage/Structure/StructureHandler.mjs'
+    import NodeGraphics from './Javascripts/WebPage/Structure/NodeGraphics.mjs'
     import AddressSpace from './Javascripts/WebPage/Structure/AddressSpace.mjs'
     import AssetHandler from './Javascripts/WebPage/Assets/AssetHandler.mjs'
     import SocketHandler from './Javascripts/WebPage/SocketHandler/SocketHandler.mjs'
-
+    import EventManager from './Javascripts/WebPage/Events/EventManager.mjs'
+    import EventGraphics from './Javascripts/WebPage/Events/EventGraphics.mjs'
+    import MethodGraphics from './Javascripts/WebPage/Methods/MethodGraphics.mjs'
+    
 
     // Set up essentials
     var socket = io()
@@ -36,23 +39,16 @@
     var socketHandler = new SocketHandler(socket)
     var modelManager = new ModelManager()
 
-    // Create tabs on the webpage 
-    var serverArea = tabGenerator.generateTab('Servers')
-    var structureArea = tabGenerator.generateTab('Structure', true) // ********************  GENERATES 'browse'
-    var traceArea = tabGenerator.generateTab('Trace')
-    var assetArea = tabGenerator.generateTab('Assets')
-    // var methodArea = tabGenerator.generateTab('Methods')
-    // var eventArea = tabGenerator.generateTab('Events')
-    // var jointArea = tabGenerator.generateTab('Joints')
-
     // Initiate the different tab handlers
-    var servers = new Servers(serverArea, socketHandler)
+    var servers = new Servers(tabGenerator.generateTab('Servers'), socketHandler)
     var addressSpace = new AddressSpace(socketHandler)
-    var structure = new Structure(structureArea, socketHandler, addressSpace)
-
-    let trace = new AllTraces(traceArea, ['angle', 'torque'], addressSpace)
-    let assetHandler = new AssetHandler(assetArea, addressSpace, socketHandler)
-
+    var nodeGraphics = new NodeGraphics(tabGenerator.generateTab('Nodes', true), socketHandler, addressSpace)
+    var eventGraphics = new EventGraphics (tabGenerator.generateTab('Events'), socketHandler)
+    var eventManager = new EventManager(modelManager, eventGraphics);
+    let assetHandler = new AssetHandler(tabGenerator.generateTab('Assets'), addressSpace, socketHandler)
+    let trace = new AllTraces(tabGenerator.generateTab('Trace'), ['angle', 'torque'], addressSpace)
+    let methodGraphics = new MethodGraphics(tabGenerator.generateTab('Methods'), socketHandler)
+   
     /*****************  Set up socket listeners to handle input from server *******************/
 
     // Listen to the data from the server regarding the tree of queriable data and display it
@@ -67,10 +63,22 @@
       }
       let node = addressSpace.addNodeByRead(msg)
       let model = modelManager.createModelFromNode(node)
-      structure.displayModel(model)
+      nodeGraphics.displayModel(model)
       return node
     })
 
+    // Listen to subscribed events messages
+    socketHandler.registerMandatory('subscribed event', function (msg, context) {
+      let model = eventManager.interpretMessage(msg)
+    })
+
+    // Listen to subscribed events messages
+    socketHandler.registerMandatory('methodresult event', function (msg, context) {
+
+      console.log('method result:'+msg+context)
+    })
+
+    // Listen to status messages from Node-OPCUA
     socketHandler.registerMandatory('status message', function (msg) {
       servers.messageDisplay(msg)
     })
@@ -88,7 +96,7 @@
     // Listen to session start
     socketHandler.registerMandatory('session established', function (msg) {
       servers.messageDisplay('Session established')
-      structure.initiateNodeTree()
+      nodeGraphics.initiateNodeTree()
     })
 
     // Listen to session closure
@@ -108,8 +116,7 @@
       servers.messageDisplay(msg)
       tabGenerator.displayError(msg, 'context')
     })
-
-
+    
 
     window.onbeforeunload = function () {
       socket.emit('terminate connection')
