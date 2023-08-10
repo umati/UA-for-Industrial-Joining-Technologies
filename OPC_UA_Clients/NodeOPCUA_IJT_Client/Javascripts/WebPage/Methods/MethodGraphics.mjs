@@ -1,27 +1,3 @@
-
-/* import {
-  DataType
-} from 'node-opcua'
-*/
-
-/*
-import {
-  AttributeIds,
-  promoteOpaqueStructure,
-  makeBrowsePath,
-  StatusCodes,
-  // TimestampsToReturn,
-  constructEventFilter,
-  ClientMonitoredItem
-  // resolveNodeId,
-  // ObjectIds
-} from 'node-opcua'
-// import { DataType } from '../../../node_modules/node-opcua/dist/index.js'
-
-/**
- * The purpose of this tab is to automatically generate a
- * graphical representation of the some available methods
- */
 export default class MethodGraphics {
   constructor (container, socketHandler) {
     this.container = container
@@ -42,7 +18,6 @@ export default class MethodGraphics {
     leftHalf.appendChild(nodeDiv)
 
     const leftArea = document.createElement('div')
-    leftArea.innerText = 'Subscribes'
     leftHalf.appendChild(leftArea)
     this.leftArea = leftArea
 
@@ -63,6 +38,18 @@ export default class MethodGraphics {
     this.messages = document.createElement('ul')
     this.messages.setAttribute('id', 'messages')
     messageArea.appendChild(this.messages)
+    const browse = document.createElement('button')
+
+    browse.classList.add('buttonAreaStyle')
+
+    browse.socketHandler = this.socketHandler
+    browse.functionToCall = this.simulateResultCall
+    browse.innerHTML = 'SimulateResult'
+
+    browse.onclick = function () {
+      this.functionToCall()
+    }
+    this.leftArea.appendChild(browse)
 
     // this.treeDisplayer = null
     // this.modelToHTML = new ModelToHTML(this.messages)
@@ -76,18 +63,7 @@ export default class MethodGraphics {
   }
 
   initiate () {
-    const browse = document.createElement('button')
 
-    browse.classList.add('buttonAreaStyle')
-
-    browse.socketHandler = this.socketHandler
-    browse.functionToCall = this.simulateResultCall
-    browse.innerHTML = 'SimulateResult'
-
-    browse.onclick = function () {
-      this.functionToCall()
-    }
-    this.leftArea.appendChild(browse)
   }
 
   simulateResultCall () {
