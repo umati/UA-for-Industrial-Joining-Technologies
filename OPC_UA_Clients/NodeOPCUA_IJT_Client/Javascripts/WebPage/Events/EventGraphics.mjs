@@ -47,7 +47,17 @@ export default class EventGraphics {
     this.messages = document.createElement('ul')
     this.messages.setAttribute('id', 'messages')
     messageArea.appendChild(this.messages)
+    const browse = document.createElement('button')
 
+    browse.classList.add('buttonAreaStyle')
+
+    browse.socketHandler = this.socketHandler
+    browse.innerHTML = 'EVENT'
+
+    browse.onclick = function () {
+      this.socketHandler.subscribeEvent('test Text aaa')
+    }
+    this.leftArea.appendChild(browse)
     // this.treeDisplayer = null
     // this.modelToHTML = new ModelToHTML(this.messages)
 
@@ -60,17 +70,7 @@ export default class EventGraphics {
   }
 
   initiate () {
-    const browse = document.createElement('button')
 
-    browse.classList.add('buttonAreaStyle')
-
-    browse.socketHandler = this.socketHandler
-    browse.innerHTML = 'EVENT'
-
-    browse.onclick = function () {
-      this.socketHandler.subscribeEvent('test Text aaa')
-    }
-    this.leftArea.appendChild(browse)
   }
 
   displayEvent (event) {
