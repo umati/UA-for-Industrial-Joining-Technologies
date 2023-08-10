@@ -1,4 +1,3 @@
-
 /* Example from the web
 
 const { OPCUAClient, NodeId, NodeIdType, DataType } = require('node-opcua')

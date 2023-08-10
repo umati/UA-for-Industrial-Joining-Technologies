@@ -70,12 +70,11 @@
     // Listen to subscribed events messages
     socketHandler.registerMandatory('subscribed event', function (msg, context) {
       let model = eventManager.interpretMessage(msg)
+      
     })
 
     // Listen to subscribed events messages
-    socketHandler.registerMandatory('methodresult event', function (msg, context) {
-
-      console.log('method result:'+msg+context)
+    socketHandler.registerMandatory('callresult', function (msg) {
     })
 
     // Listen to status messages from Node-OPCUA
@@ -83,7 +82,7 @@
       servers.messageDisplay(msg)
     })
 
-    // Listen to the tree of possible connection points
+    // Listen to the tree of possible connection points (Available OPC UA servers)
     socketHandler.registerMandatory('connection points', function (msg) {
       servers.connectionPoints(msg, socket)
     })
@@ -93,10 +92,18 @@
       servers.messageDisplay('Connection established')
     })
 
+    // Listen to general subscription start
+    // Here you could add code to actually subscribe to fields
+    socketHandler.registerMandatory('subscription created', function (msg) {
+      servers.messageDisplay('Subscription created')
+      socketHandler.subscribeEvent('Result') // Start listening for Result
+    })
+
     // Listen to session start
     socketHandler.registerMandatory('session established', function (msg) {
       servers.messageDisplay('Session established')
       nodeGraphics.initiateNodeTree()
+
     })
 
     // Listen to session closure
@@ -107,7 +114,12 @@
     // Listen to namespaces
     socketHandler.registerMandatory('namespaces', function (msg) {
       addressSpace.handleNamespaces(msg)
-      servers.messageDisplay('Recieving namespaces')
+      servers.messageDisplay('Receiving namespaces')
+    })
+    // Listen to datatypes. Needed for method calls
+    socketHandler.registerMandatory('datatypes', function (datatypes) {
+      methodGraphics.setDataTypes(datatypes)
+      methodGraphics.messageDisplay('Receiving datatypes')
     })
 
     // Listen to error messages
@@ -116,13 +128,11 @@
       servers.messageDisplay(msg)
       tabGenerator.displayError(msg, 'context')
     })
-    
 
     window.onbeforeunload = function () {
       socket.emit('terminate connection')
       return
     }
-
   </script>
 </body>
 

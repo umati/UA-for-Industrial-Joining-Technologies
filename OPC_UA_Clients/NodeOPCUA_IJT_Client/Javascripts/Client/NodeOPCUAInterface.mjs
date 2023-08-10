@@ -1,4 +1,3 @@
-
 import async from 'async'
 
 import {
@@ -47,8 +46,8 @@ export default class NodeOPCUAInterface {
         this.browse(callid, nodeId, details)
       })
 
-      socket.on('methodcall', (callid, method) => {
-        this.methodCall(callid, method)
+      socket.on('methodcall', (callid, objectNode, methodNode, inputArgs) => {
+        this.methodCall(callid, objectNode, methodNode, inputArgs)
       })
 
       socket.on('pathtoid', (callid, nodeId, path) => {
@@ -68,7 +67,7 @@ export default class NodeOPCUAInterface {
       })
 
       socket.on('subscribe event', msg => {
-        console.log('Nodejs OPC UA client attempting to subscribe to ' + msg)
+        // console.log('Nodejs OPC UA client attempting to subscribe to ' + msg)
         if (msg) {
           this.eventSubscription(msg, this.displayFunction, this.OPCUAClient)
         }
@@ -116,7 +115,7 @@ export default class NodeOPCUAInterface {
         })
       },
       // ----------------------------------------------------------------------------------
-      // create subscription
+      // create subscription (on events)
       // ----------------------------------------------------------------------------------
       function (callback) {
         const parameters = {
@@ -137,6 +136,11 @@ export default class NodeOPCUAInterface {
           callback(err)
         })
       },
+      function (callback) { // DataTypes
+        console.log('Handling Datatypes')
+        io.emit('datatypes', DataType)
+        callback()
+      },
       function (callback) { // Namespaces
         thisContainer.session.readNamespaceArray((err, namespaces) => {
           if (err) {
@@ -144,9 +148,9 @@ export default class NodeOPCUAInterface {
           }
           console.log('Handling NameSpaces')
           io.emit('namespaces', namespaces)
+          callback(err)
         })
       }
-
     ],
     function (err) {
       if (err) {
@@ -265,29 +269,24 @@ export default class NodeOPCUAInterface {
    * @param {*} callid A unique identifier to match a query to OPC UA with a response
    * @param {*} methodToCall The information about the method to call
    */
-  methodCall (callid, methodToCall) {
+  methodCall (callid, objectNode, methodNode, inputArguments) {
     (async () => {
       const theSession = this.session
       try {
         const io = this.io
-
-        const objectId = coerceNodeId('ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco') // SERVER
-        const methodId = coerceNodeId('ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/SimulateResult') // GetMonitoredItems
-
-        const inputArguments = [{ dataType: DataType.UInt32, value: 1 }]
+        const objectId = coerceNodeId(objectNode) // SERVER
+        const methodId = coerceNodeId(methodNode) // GetMonitoredItems
 
         const methodToCall2 = {
           objectId,
           methodId,
           inputArguments
         }
-        console.log('   TEST4')
 
         theSession.call(methodToCall2, (err, results) => {
           if (err) {
             console.log('FAIL Method call (in callback): ' + err)
           } else {
-            console.log('Call result: ' + results)
             io.emit('callresult', {
               callid,
               results
@@ -357,7 +356,7 @@ export default class NodeOPCUAInterface {
       priority: 10
     } */
 
-  async eventSubscription (msg, displayFunction, clientArgument) {
+  async eventSubscription (msg) {
     // const baseEventTypeId = 'i=2041'
     const serverObjectId = 'i=2253'
 
@@ -389,7 +388,7 @@ export default class NodeOPCUAInterface {
     )
 
     eventMonitoringItem.on('initialized', () => {
-      console.log('event_monitoringItem initialized')
+      console.log('event_monitoringItem initialized (' + msg + ')')
     })
 
     eventMonitoringItem.on('changed', (events) => {
@@ -406,7 +405,6 @@ export default class NodeOPCUAInterface {
             }
 
             // this.io.emit('subscribed event', { field: fields[i], value: events[i].value, stringValue: events[i].toString() })
-            // console.log('XXXXXXXXXXXXX...\n\n')
             // console.log(events[i].value)
           }
           const result = {}

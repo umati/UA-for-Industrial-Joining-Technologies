@@ -38,51 +38,61 @@ export default class MethodGraphics {
     this.messages = document.createElement('ul')
     this.messages.setAttribute('id', 'messages')
     messageArea.appendChild(this.messages)
-    const browse = document.createElement('button')
 
-    browse.classList.add('buttonAreaStyle')
+    const simulateResultDiv = document.createElement('div')
+    simulateResultDiv.classList.add('methodDiv')
+    this.leftArea.appendChild(simulateResultDiv)
+    const simulateButton = document.createElement('button')
 
-    browse.socketHandler = this.socketHandler
-    browse.functionToCall = this.simulateResultCall
-    browse.innerHTML = 'SimulateResult'
+    simulateButton.classList.add('buttonAreaStyle')
 
-    browse.onclick = function () {
-      this.functionToCall()
+    simulateButton.socketHandler = this.socketHandler
+    simulateButton.functionToCall = this.simulateResultCall
+    simulateButton.innerHTML = 'SimulateResult'
+
+    simulateButton.onclick = () => {
+      this.simulateResultCall()
     }
-    this.leftArea.appendChild(browse)
-
-    // this.treeDisplayer = null
-    // this.modelToHTML = new ModelToHTML(this.messages)
+    simulateResultDiv.appendChild(simulateButton)
 
     const serverDiv = document.getElementById('connectedServer') // listen to tab switch
     serverDiv.addEventListener('tabOpened', (event) => {
       if (event.detail.title === 'Methods') {
-        this.initiate()
+        // this.initiate()
       }
     }, false)
   }
 
-  initiate () {
+  setDataTypes (dataTypeEnumeration) {
+    this.dataTypeEnumeration = dataTypeEnumeration
+  }
 
+  // Display a status message from the server
+  messageDisplay (msg) {
+    const item = document.createElement('li')
+    item.textContent = msg
+    this.messages.appendChild(item)
+    this.messages.scrollTo(0, this.messages.scrollHeight)
+    item.scrollIntoView()
   }
 
   simulateResultCall () {
-    const methodToCall = {
-      objectId: 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/ResultManagement',
-      methodId: 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/SimulateResult',
-      inputArguments: [
-        {
-          // dataType: DataType.Number,
-          value: 1
-        }
-      ]
-    }
-    this.socketHandler.methodCall(methodToCall).then(
-      (err, results) => {
+    const objectNode = 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco'
+    const methodNode = 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/SimulateResult'
+    const inputArguments = [
+      {
+        dataType: this.dataTypeEnumeration.UInt32,
+        value: 1
+      }
+    ]
+
+    this.socketHandler.methodCall(objectNode, methodNode, inputArguments).then(
+      (results, err) => {
         if (err) {
           console.log(err)
         } else {
-          console.log(results)
+          this.messageDisplay('Called ' + methodNode)
+          this.messageDisplay('   Result: ' + JSON.stringify(results.message.results))
         }
       }
     )

@@ -1,4 +1,3 @@
-
 export default class SocketHandler {
   constructor (socket) {
     this.socket = socket
@@ -58,12 +57,12 @@ export default class SocketHandler {
    * @param {*} methodToCall a structure with the method to call
    * @returns
    */
-  methodCall (methodToCall) {
+  methodCall (objectNode, methodNode, inputArguments) {
     return new Promise((resolve, reject) => {
       this.uniqueId++
       this.callMapping[this.uniqueId] = resolve
       this.failMapping[this.uniqueId] = reject
-      this.socket.emit('methodcall', this.uniqueId, methodToCall)
+      this.socket.emit('methodcall', this.uniqueId, objectNode, methodNode, inputArguments)
     })
   }
 
