@@ -114,8 +114,10 @@
     // Listen to namespaces
     socketHandler.registerMandatory('namespaces', function (msg) {
       addressSpace.handleNamespaces(msg)
+     
       servers.messageDisplay('Receiving namespaces')
     })
+
     // Listen to datatypes. Needed for method calls
     socketHandler.registerMandatory('datatypes', function (datatypes) {
       methodGraphics.setDataTypes(datatypes)
@@ -128,6 +130,11 @@
       servers.messageDisplay(msg.message)
       tabGenerator.displayError(msg)
     })
+
+    addressSpace.getTighteningsSystemsPromise().then(
+        (tighteningSystemNodes) => { 
+          methodGraphics.setTighteningSystem(tighteningSystemNodes[0]) }
+      )
 
     window.onbeforeunload = function () {
       socket.emit('terminate connection')

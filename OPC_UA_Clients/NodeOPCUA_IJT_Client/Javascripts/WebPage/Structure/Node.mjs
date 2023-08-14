@@ -1,4 +1,3 @@
-
 class PartialNode {
   constructor (parent, graphicGenerator, socketHandler, makeGUI) {
     this.parent = parent

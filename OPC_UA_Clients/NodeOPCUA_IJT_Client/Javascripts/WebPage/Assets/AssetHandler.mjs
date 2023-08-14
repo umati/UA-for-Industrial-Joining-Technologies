@@ -24,18 +24,23 @@ export default class AssetHandler {
   }
 
   initiate () {
-    const tighteningSystems = this.addressSpace.getTighteningSystems()
-    if (!tighteningSystems || tighteningSystems.length < 1) {
-      throw new Error('No TighteningSystem found in Objects folder')
-    }
-    this.tighteningSystem = tighteningSystems[0]
-    console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId)
-    this.loadAllAssets().then(
-      () => {
-        // console.log('All assets loaded.')
-        this.browseAndReadList([...this.controllers, ...this.tools]).then(
-          () => { this.draw() }
+    // const tighteningSystems = this.addressSpace.getTighteningSystems()
+
+    this.addressSpace.getTighteningsSystemsPromise().then(
+      (tighteningSystems) => {
+        this.tighteningSystem = tighteningSystems[0]
+        console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId)
+        this.loadAllAssets().then(
+          () => {
+            // console.log('All assets loaded.')
+            this.browseAndReadList([...this.controllers, ...this.tools]).then(
+              () => { this.draw() }
+            )
+          }
         )
+      },
+      () => {
+        throw new Error('No TighteningSystem found in Objects folder')
       }
     )
   }

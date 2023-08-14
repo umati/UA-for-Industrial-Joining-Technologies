@@ -10,10 +10,20 @@ export default class MethodCallBase {
     container.appendChild(this.simulateResultDiv)
   }
 
-  initiate (dataTypeEnumeration, tighteningSystemName) {
+  setTighteningSystem (tighteningSystemNode) {
+    this.tighteningSystemNode = tighteningSystemNode
+    this.setupComplete()
+  }
+
+  setDataTypes (dataTypeEnumeration) {
     this.dataTypeEnumeration = dataTypeEnumeration
-    this.tighteningSystemName = tighteningSystemName
-    this.simulateResultDiv.style.borderColor = 'yellow'
+    this.setupComplete()
+  }
+
+  setupComplete () {
+    if (this.tighteningSystemNode && this.dataTypeEnumeration) {
+      this.simulateResultDiv.style.borderColor = 'yellow'
+    }
   }
 
   createButton (name, callback) {

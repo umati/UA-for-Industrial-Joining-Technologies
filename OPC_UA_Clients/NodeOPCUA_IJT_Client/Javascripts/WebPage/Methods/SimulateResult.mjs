@@ -10,7 +10,7 @@ export default class SimulateResult extends MethodCallBase {
 
   simulateResultCall () {
     try {
-      const methodNode = this.tighteningSystemName + '/SimulateResult'
+      const methodNode = this.tighteningSystemNode.nodeId + '/SimulateResult'
       const inputArguments = [
         {
           dataType: this.dataTypeEnumeration.UInt32,
@@ -18,7 +18,7 @@ export default class SimulateResult extends MethodCallBase {
         }
       ]
 
-      this.socketHandler.methodCall(this.tighteningSystemName, methodNode, inputArguments).then(
+      this.socketHandler.methodCall(this.tighteningSystemNode.nodeId, methodNode, inputArguments).then(
         (results, err) => {
           if (err) {
             console.log(err)
@@ -29,7 +29,7 @@ export default class SimulateResult extends MethodCallBase {
         }
       )
     } catch (err) {
-      this.messageReceiver.messageDisplay('Method call error: ' + err)
+      this.messageReceiver.messageDisplay('Preparation of method call error (simulateResult): ' + err)
     }
   }
 }

@@ -17,8 +17,9 @@ export default class AddressSpace {
     this.socketHandler = socketHandler
     this.nodeMapping = {}
     this.objectFolder = null
-    this.selectedTighteningSystem = null
+    // this.selectedTighteningSystem = null
     this.typeMapping = typeMapping
+    this.listOfTSPromises = []
   }
 
   /**
@@ -54,10 +55,20 @@ export default class AddressSpace {
     if (thisNode.nodeId === 'ns=0;i=85') { // Setting up objectFolder
       this.objectFolder = thisNode
       const tighteningSystems = this.getTighteningSystems()
+      if (tighteningSystems.length === 0) {
+        for (const cb of this.listOfTSPromises) {
+          cb.reject('No TighteningSystem found')
+        }
+        throw new Error('No Tighteningsystem found')
+      }
       for (const ts of tighteningSystems) {
         ts.read().then(
           () => {})
       }
+      for (const cb of this.listOfTSPromises) {
+        cb.resolve(tighteningSystems)
+      }
+      this.listOfTSPromises = []
     }
 
     // Prioritize the component relation, but if no parent componentowner exist, use organizedBy reference instead
@@ -193,13 +204,23 @@ export default class AddressSpace {
     return new Reference(caller, reference, this.socketHandler, this.graphicGenerator, makeGUI)
   }
 
+  getTighteningsSystemsPromise () {
+    return new Promise((resolve, reject) => {
+      if (this.objectFolder) {
+        resolve(this.getTighteningSystems())
+        return
+      }
+      this.listOfTSPromises.push({ resolve, reject })
+    }
+    )
+  }
+
   getTighteningSystems () {
     if (!this.objectFolder) {
       throw new Error('Root/Objects folder not found')
     }
     const tighteningSystems = []
     for (const node of this.objectFolder.getRelations('organizes')) {
-      // let a = findOrCreateNode(relation, objectFolder, self, 'organizes')
       if (node.typeDefinition === 'ns=4;i=1005') {
         tighteningSystems.push(node)
       }
