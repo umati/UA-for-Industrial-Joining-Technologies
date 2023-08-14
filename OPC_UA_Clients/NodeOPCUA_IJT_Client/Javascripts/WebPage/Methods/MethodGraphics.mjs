@@ -52,10 +52,16 @@ export default class MethodGraphics {
     }, false)
   }
 
+  setTighteningSystem (tighteningSystem) {
+    for (const method of this.methods) {
+      method.setTighteningSystem(tighteningSystem)
+    }
+  }
+
   setDataTypes (dataTypeEnumeration) {
     this.dataTypeEnumeration = dataTypeEnumeration
     for (const method of this.methods) {
-      method.initiate(dataTypeEnumeration, 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco')
+      method.setDataTypes(dataTypeEnumeration)
     }
   }
 
