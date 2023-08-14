@@ -1,7 +1,10 @@
+import SimulateResult from './SimulateResult.mjs'
+
 export default class MethodGraphics {
   constructor (container, socketHandler) {
     this.container = container
     this.socketHandler = socketHandler
+    this.methods = []
 
     const backGround = document.createElement('div')
     backGround.classList.add('datastructure')
@@ -39,21 +42,7 @@ export default class MethodGraphics {
     this.messages.setAttribute('id', 'messages')
     messageArea.appendChild(this.messages)
 
-    const simulateResultDiv = document.createElement('div')
-    simulateResultDiv.classList.add('methodDiv')
-    this.leftArea.appendChild(simulateResultDiv)
-    const simulateButton = document.createElement('button')
-
-    simulateButton.classList.add('buttonAreaStyle')
-
-    simulateButton.socketHandler = this.socketHandler
-    simulateButton.functionToCall = this.simulateResultCall
-    simulateButton.innerHTML = 'SimulateResult'
-
-    simulateButton.onclick = () => {
-      this.simulateResultCall()
-    }
-    simulateResultDiv.appendChild(simulateButton)
+    this.methods.push(new SimulateResult(this.leftArea, socketHandler, this))
 
     const serverDiv = document.getElementById('connectedServer') // listen to tab switch
     serverDiv.addEventListener('tabOpened', (event) => {
@@ -65,6 +54,9 @@ export default class MethodGraphics {
 
   setDataTypes (dataTypeEnumeration) {
     this.dataTypeEnumeration = dataTypeEnumeration
+    for (const method of this.methods) {
+      method.initiate(dataTypeEnumeration, 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco')
+    }
   }
 
   // Display a status message from the server
@@ -74,28 +66,6 @@ export default class MethodGraphics {
     this.messages.appendChild(item)
     this.messages.scrollTo(0, this.messages.scrollHeight)
     item.scrollIntoView()
-  }
-
-  simulateResultCall () {
-    const objectNode = 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco'
-    const methodNode = 'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/SimulateResult'
-    const inputArguments = [
-      {
-        dataType: this.dataTypeEnumeration.UInt32,
-        value: 1
-      }
-    ]
-
-    this.socketHandler.methodCall(objectNode, methodNode, inputArguments).then(
-      (results, err) => {
-        if (err) {
-          console.log(err)
-        } else {
-          this.messageDisplay('Called ' + methodNode)
-          this.messageDisplay('   Result: ' + JSON.stringify(results.message.results))
-        }
-      }
-    )
   }
 
   /*

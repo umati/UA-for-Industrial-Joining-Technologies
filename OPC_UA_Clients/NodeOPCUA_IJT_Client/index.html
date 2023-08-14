@@ -123,10 +123,10 @@
     })
 
     // Listen to error messages
-    socketHandler.registerMandatory('error message', function (msg, context) {
-      console.log(msg)
-      servers.messageDisplay(msg)
-      tabGenerator.displayError(msg, 'context')
+    socketHandler.registerMandatory('error message', function (msg) {
+      console.log(msg.message)
+      servers.messageDisplay(msg.message)
+      tabGenerator.displayError(msg)
     })
 
     window.onbeforeunload = function () {

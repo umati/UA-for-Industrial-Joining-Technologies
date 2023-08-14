@@ -16,6 +16,7 @@ import {
 
 export default class NodeOPCUAInterface {
   constructor (io, attributeIds) {
+    console.log('Establishing interface')
     this.attributeIds = attributeIds
     this.io = io
   }
@@ -28,6 +29,7 @@ export default class NodeOPCUAInterface {
    * @param {*} OPCUAClient
    */
   setupSocketIO (endpointUrls, displayFunction, OPCUAClient) {
+    console.log('Establishing sockets')
     const io = this.io
     this.displayFunction = displayFunction
     this.OPCUAClient = OPCUAClient
@@ -91,6 +93,7 @@ export default class NodeOPCUAInterface {
       // create connection
       // ----------------------------------------------------------------------------------
       function (callback) {
+        console.log('Establishing connection')
         client.connect(endpointUrl, function (err) {
           if (err) {
             console.log('Cannot connect to endpoint :', endpointUrl)
@@ -155,7 +158,8 @@ export default class NodeOPCUAInterface {
     function (err) {
       if (err) {
         console.log('Failure during establishing connection to OPC UA server ', err)
-        this.io.emit('error message', err.toString(), 'connection')
+        // this.io.emit('error message', err.toString(), 'connection')
+        this.io.emit('error message', { error: err, context: 'connection', message: err.message })
         process.exit(0)
       } else {
         console.log('Connection and session established.')
@@ -188,10 +192,11 @@ export default class NodeOPCUAInterface {
         return dataValue
       } catch (err) {
         this.displayFunction('Node.js OPC UA client error (reading): ' + err.message) // Display the error message first
-        this.io.emit('error message', err.toString(), 'read') // (Then for debug purposes display all of it)
+        // this.io.emit('error message', err.toString(), 'read') // (Then for debug purposes display all of it)
+        this.io.emit('error message', { error: err, context: 'read', message: err.message })
       }
     })()
-  };
+  }
 
   /**
    * Get a nodeId from a start-node and a path.
@@ -215,10 +220,11 @@ export default class NodeOPCUAInterface {
         this.io.emit('pathtoidresult', { callid, nodeid: resultsNodeId })
       } catch (err) {
         this.displayFunction('Node.js OPC UA client error (translateBrowsePath): ' + err.message) // Display the error message first
-        this.io.emit('error message', err.toString(), 'translateBrowsePath')
+        // this.io.emit('error message', err.toString(), 'translateBrowsePath')
+        this.io.emit('error message', { error: err, context: 'translateBrowsePath', message: err.message })
       }
     })()
-  };
+  }
 
   /**
    *
@@ -259,7 +265,7 @@ export default class NodeOPCUAInterface {
         )
       } catch (err) {
         console.log('FAIL Browse call: ' + err.message + err)
-        this.io.emit('error message', err, 'browse')
+        this.io.emit('error message', { error: err, context: 'browse', message: err.message })
       }
     })()
   }
@@ -295,7 +301,7 @@ export default class NodeOPCUAInterface {
         })
       } catch (err) {
         console.log('FAIL method call: ' + err)
-        this.io.emit('error message', err, 'method')
+        this.io.emit('error message', { error: err, context: 'method', message: err.message })
       }
     })()
   }
@@ -321,7 +327,7 @@ export default class NodeOPCUAInterface {
     const itemToMonitor = {
       nodeId: path,
       attributeId: this.AttributeIds.Value
-    };
+    }
 
     (async () => {
       try {
@@ -414,7 +420,8 @@ export default class NodeOPCUAInterface {
           this.io.emit('subscribed event', result)
         } catch (err) {
           this.displayFunction('Node.js OPC UA client error (eventMonitoring): ' + err.message) // Display the error message first
-          this.io.emit('error message', err.toString(), 'eventMonitoring') // (Then for debug purposes display all of it)
+          // this.io.emit('error message', err.toString(), 'eventMonitoring')
+          this.io.emit('error message', { error: err, context: 'eventMonitoring', message: err.message }) // (Then for debug purposes display all of it)
         }
       })()
     })
