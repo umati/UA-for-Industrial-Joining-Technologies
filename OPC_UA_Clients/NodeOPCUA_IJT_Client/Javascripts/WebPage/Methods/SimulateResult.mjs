@@ -1,20 +1,30 @@
 import MethodCallBase from './MethodCallBase.mjs'
 
+/**
+ * The purpose of this class is to model the SimulateResult OPC UA IJT method
+ */
 export default class SimulateResult extends MethodCallBase {
-  constructor (container, socketHandler, messageReceiver, tighteningSystemName) {
-    super(container, socketHandler, messageReceiver, tighteningSystemName)
+  constructor (socketHandler, graphicHandler, tighteningSystemName) {
+    super(socketHandler, graphicHandler, tighteningSystemName)
+    this.name = 'SimulateResult'
 
-    this.createButton('SimulateResult', this.simulateResultCall)
-    this.inputvalue1 = this.createInput(1)
+    if (graphicHandler) {
+      // graphicHandler.createButton(this)
+      graphicHandler.createMethodButton(this)
+      this.inputvalue1 = graphicHandler.createMethodInput('Arg1', this, 1)
+    }
   }
 
-  simulateResultCall () {
+  callMethod (argument1) {
     try {
       const methodNode = this.tighteningSystemNode.nodeId + '/SimulateResult'
+      if (!argument1) {
+        argument1 = parseInt(this.inputvalue1())
+      }
       const inputArguments = [
         {
           dataType: this.dataTypeEnumeration.UInt32,
-          value: parseInt(this.inputvalue1())
+          value: argument1
         }
       ]
 
@@ -23,13 +33,13 @@ export default class SimulateResult extends MethodCallBase {
           if (err) {
             console.log(err)
           } else {
-            this.messageReceiver.messageDisplay('Called ' + methodNode)
-            this.messageReceiver.messageDisplay('Result: ' + JSON.stringify(results.message.results))
+            this.graphicHandler.messageDisplay('Called ' + methodNode)
+            this.graphicHandler.messageDisplay('Result: ' + JSON.stringify(results.message.results))
           }
         }
       )
     } catch (err) {
-      this.messageReceiver.messageDisplay('Preparation of method call error (simulateResult): ' + err)
+      this.graphicHandler.messageDisplay('Preparation of method call error (simulateResult): ' + err)
     }
   }
 }

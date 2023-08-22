@@ -31,6 +31,7 @@
     import EventManager from './Javascripts/WebPage/Events/EventManager.mjs'
     import EventGraphics from './Javascripts/WebPage/Events/EventGraphics.mjs'
     import MethodGraphics from './Javascripts/WebPage/Methods/MethodGraphics.mjs'
+    import MethodManager from './Javascripts/WebPage/Methods/MethodManager.mjs'
     
 
     // Set up essentials
@@ -47,7 +48,8 @@
     var eventManager = new EventManager(modelManager, eventGraphics);
     let assetHandler = new AssetHandler(tabGenerator.generateTab('Assets'), addressSpace, socketHandler)
     let trace = new AllTraces(tabGenerator.generateTab('Trace'), ['angle', 'torque'], addressSpace)
-    let methodGraphics = new MethodGraphics(tabGenerator.generateTab('Methods'), socketHandler)
+    let methodGraphics = new MethodGraphics(tabGenerator.generateTab('Methods'))
+    const methodManager = new MethodManager(socketHandler, methodGraphics)
    
     /*****************  Set up socket listeners to handle input from server *******************/
 
@@ -62,8 +64,10 @@
         return
       }
       let node = addressSpace.addNodeByRead(msg)
-      let model = modelManager.createModelFromNode(node)
-      nodeGraphics.displayModel(model)
+      if (node) {
+        let model = modelManager.createModelFromNode(node)
+        nodeGraphics.displayModel(model)
+      }
       return node
     })
 
@@ -120,7 +124,7 @@
 
     // Listen to datatypes. Needed for method calls
     socketHandler.registerMandatory('datatypes', function (datatypes) {
-      methodGraphics.setDataTypes(datatypes)
+      methodManager.setDataTypes(datatypes)
       methodGraphics.messageDisplay('Receiving datatypes')
     })
 
@@ -133,7 +137,7 @@
 
     addressSpace.getTighteningsSystemsPromise().then(
         (tighteningSystemNodes) => { 
-          methodGraphics.setTighteningSystem(tighteningSystemNodes[0]) }
+          methodManager.setTighteningSystem(tighteningSystemNodes[0]) }
       )
 
     window.onbeforeunload = function () {

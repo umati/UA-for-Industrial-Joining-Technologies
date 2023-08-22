@@ -1,77 +1,52 @@
-import SimulateResult from './SimulateResult.mjs'
-
-export default class MethodGraphics {
-  constructor (container, socketHandler) {
+import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScreen.mjs'
+/**
+ * The purpose of this class is to encapsulate the code resposnible for the HTML representation of method
+ * invocations in OPC UA Industrial Joining Technologies
+ */
+export default class MethodGraphics extends ControlMessageSplitScreen {
+  constructor (container) {
+    super(container, 'Methods', 'Call results')
     this.container = container
-    this.socketHandler = socketHandler
-    this.methods = []
-
-    const backGround = document.createElement('div')
-    backGround.classList.add('datastructure')
-    container.appendChild(backGround)
-
-    const leftHalf = document.createElement('div')
-    leftHalf.classList.add('lefthalf')
-    // leftHalf.classList.add('scrollableInfoArea')
-    backGround.appendChild(leftHalf)
-
-    const nodeDiv = document.createElement('div')
-    nodeDiv.classList.add('myHeader')
-    nodeDiv.innerText = 'Methods'
-    leftHalf.appendChild(nodeDiv)
-
-    const leftArea = document.createElement('div')
-    leftHalf.appendChild(leftArea)
-    this.leftArea = leftArea
-
-    const rightHalf = document.createElement('div')
-    rightHalf.classList.add('righthalf')
-    rightHalf.classList.add('scrollableInfoArea')
-    backGround.appendChild(rightHalf)
-
-    const eventHeader = document.createElement('div')
-    eventHeader.classList.add('myHeader')
-    eventHeader.innerText = 'call results'
-    rightHalf.appendChild(eventHeader)
-
-    const messageArea = document.createElement('div')
-    messageArea.setAttribute('id', 'messageArea')
-    rightHalf.appendChild(messageArea)
-
-    this.messages = document.createElement('ul')
-    this.messages.setAttribute('id', 'messages')
-    messageArea.appendChild(this.messages)
-
-    this.methods.push(new SimulateResult(this.leftArea, socketHandler, this))
-
-    const serverDiv = document.getElementById('connectedServer') // listen to tab switch
-    serverDiv.addEventListener('tabOpened', (event) => {
-      if (event.detail.title === 'Methods') {
-        // this.initiate()
-      }
-    }, false)
   }
 
-  setTighteningSystem (tighteningSystem) {
-    for (const method of this.methods) {
-      method.setTighteningSystem(tighteningSystem)
+  initiate () {
+    // run everytime the tab is opened
+  }
+
+  signalOKArea (method) {
+    method.container.style.borderColor = 'yellow'
+  }
+
+  createMethodButton (method) {
+    /* const newButton = document.createElement('button')
+    newButton.method = method
+    newButton.classList.add('myButton')
+
+    newButton.innerHTML = method.name
+
+    newButton.onclick = () => {
+      newButton.method.callMethod()
     }
+    method.container.appendChild(newButton)
+*/
+
+    this.createButton(method.name, method.container, () => {
+      method.callMethod()
+    })
   }
 
-  setDataTypes (dataTypeEnumeration) {
-    this.dataTypeEnumeration = dataTypeEnumeration
-    for (const method of this.methods) {
-      method.setDataTypes(dataTypeEnumeration)
+  createMethodInput (title, method, initialValue) {
+    /* const newInput = document.createElement('input')
+    newInput.classList.add('methodInputStyle')
+    newInput.value = initialValue
+
+    method.container.appendChild(newInput)
+    return function () {
+      return newInput.value
     }
-  }
+    */
 
-  // Display a status message from the server
-  messageDisplay (msg) {
-    const item = document.createElement('li')
-    item.textContent = msg
-    this.messages.appendChild(item)
-    this.messages.scrollTo(0, this.messages.scrollHeight)
-    item.scrollIntoView()
+    return this.createInput(title, method.container, initialValue)
   }
 
   /*

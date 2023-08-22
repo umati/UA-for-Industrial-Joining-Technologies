@@ -71,6 +71,7 @@ export default class TabGenerator {
     contentDiv.setAttribute('role', 'tab-panel')
     contentDiv.setAttribute('aria-labeledby', 'specification')
     contentDiv.setAttribute('aria-hidden', 'true')
+    contentDiv.tabTitle = title
     listItem.appendChild(contentDiv)
     this.containerList.push(contentDiv)
 
