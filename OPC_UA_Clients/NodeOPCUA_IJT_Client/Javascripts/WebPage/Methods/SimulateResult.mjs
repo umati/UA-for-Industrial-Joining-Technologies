@@ -9,7 +9,6 @@ export default class SimulateResult extends MethodCallBase {
     this.name = 'SimulateResult'
 
     if (graphicHandler) {
-      // graphicHandler.createButton(this)
       graphicHandler.createMethodButton(this)
       this.inputvalue1 = graphicHandler.createMethodInput('Arg1', this, 1)
     }

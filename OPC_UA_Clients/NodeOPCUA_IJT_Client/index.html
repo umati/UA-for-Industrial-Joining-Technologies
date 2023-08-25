@@ -23,7 +23,7 @@
     import TabGenerator from './Javascripts/WebPage/TabGenerator/TabGenerator.mjs'
     import IJTBaseModel from './Javascripts/Models/IJTBaseModel.mjs'
     import AllTraces from './Javascripts/WebPage/Trace/AllTraces.mjs'
-    import Servers from './Javascripts/WebPage/Servers/Servers.mjs'
+    import ServerGraphics from './Javascripts/WebPage/Servers/ServerGraphics.mjs'
     import NodeGraphics from './Javascripts/WebPage/Structure/NodeGraphics.mjs'
     import AddressSpace from './Javascripts/WebPage/Structure/AddressSpace.mjs'
     import AssetHandler from './Javascripts/WebPage/Assets/AssetHandler.mjs'
@@ -41,7 +41,7 @@
     var modelManager = new ModelManager()
 
     // Initiate the different tab handlers
-    var servers = new Servers(tabGenerator.generateTab('Servers'), socketHandler)
+    var servers = new ServerGraphics(tabGenerator.generateTab('Servers'), socketHandler)
     var addressSpace = new AddressSpace(socketHandler)
     var nodeGraphics = new NodeGraphics(tabGenerator.generateTab('Nodes', true), socketHandler, addressSpace)
     var eventGraphics = new EventGraphics (tabGenerator.generateTab('Events'), socketHandler)

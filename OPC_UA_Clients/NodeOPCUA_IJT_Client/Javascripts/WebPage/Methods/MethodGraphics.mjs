@@ -13,77 +13,32 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
     // run everytime the tab is opened
   }
 
+  /**
+  * Turns the surounding border yellow when all is set up correctly
+  * @param {*} method The method that should be turned yellow
+  */
   signalOKArea (method) {
     method.container.style.borderColor = 'yellow'
   }
 
+  /**
+   * Makes it easier to create a button for method invokation
+   * @param {*} method is the method that should have the button
+   */
   createMethodButton (method) {
-    /* const newButton = document.createElement('button')
-    newButton.method = method
-    newButton.classList.add('myButton')
-
-    newButton.innerHTML = method.name
-
-    newButton.onclick = () => {
-      newButton.method.callMethod()
-    }
-    method.container.appendChild(newButton)
-*/
-
     this.createButton(method.name, method.container, () => {
       method.callMethod()
     })
   }
 
+  /**
+   * Simplify how an input field for method invokation is created and used
+   * @param {*} title the name of input field in the GUI
+   * @param {*} method the method that needs input
+   * @param {*} initialValue The value that initially should be in the field
+   * @returns a function that tells the value in the input field
+   */
   createMethodInput (title, method, initialValue) {
-    /* const newInput = document.createElement('input')
-    newInput.classList.add('methodInputStyle')
-    newInput.value = initialValue
-
-    method.container.appendChild(newInput)
-    return function () {
-      return newInput.value
-    }
-    */
-
     return this.createInput(title, method.container, initialValue)
   }
-
-  /*
-  simulateResultCallWITHSTRUCTURE () { // UNTESTED EXAMPLE OF METHODCALL WITH STRUCTURE. constructExtensionObjectPromise NOT IMPLEMENTED in NodeOPCUAInterface
-    const params = {
-      duration: 0,
-      cycles: 0,
-      dataAvailable: false,
-      locationType: 0
-    }
-
-    this.socketHandler.constructExtensionObjectPromise(
-      'ns=1;s=/ObjectsFolder/TighteningSystem_AtlasCopco/SimulateResult',
-      params
-    ).then(
-      (scanSettingsObj) => {
-        const methodToCall = {
-          objectId: 'ns=4;s=rfr310',
-          methodId: 'ns=4;s=rfr310.ScanStart',
-          inputArguments: [
-            {
-              dataType: DataType.ExtensionObject,
-              value: scanSettingsObj
-            }
-          ]
-        }
-        this.socketHandler.methodCall(methodToCall).then(
-          (err, results) => {
-            if (err) {
-              console.log(err)
-            } else {
-              console.log(results)
-            }
-          }
-        )
-      }
-    )
-  }
-  */
 }

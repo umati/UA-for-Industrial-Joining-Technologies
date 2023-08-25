@@ -1,7 +1,7 @@
 import TreeDisplayer from './TreeDisplayer.mjs'
 import ModelToHTML from '../../Models/ModelToHTML.mjs'
 
-export default class StructureHandler {
+export default class AddressSpeceGraphics {
   constructor (container, socketHandler, addressSpace) {
     this.socketHandler = socketHandler
     this.addressSpace = addressSpace
@@ -53,17 +53,6 @@ export default class StructureHandler {
     this.addressSpace.setGUIGenerator(this.treeDisplayer)
 
     this.addressSpace.initiate()
-
-    // this.addressSpace.createObjectFolder()
-    /*
-    let nodeId='ns=1s=/ObjectsFolder/TighteningSystem_AtlasCopco/ResultManagement/Results/Result'
-this.socketHandler.browse(nodeId,
-    ()=>{this.socketHandler.browse(nodeId,(x)=>{console.log(x)})})
-    */
-
-    // this.socket.emit('browse', 'ns=1s=/ObjectsFolder/TighteningSystem_AtlasCopco/AssetManagement/Assets/Controllers/TighteningController', 'read', true)
-    // this.socket.emit('browse', 'ns=1s=/ObjectsFolder/TighteningSystem_AtlasCopco/ResultManagement/Results/Result', 'read', true)
-    // this.socket.emit('browse', 'ns=0i=85', 'read', true)
   }
 
   generateTree (msg) {
