@@ -65,7 +65,7 @@ export default class TabGenerator {
     listItem.appendChild(label)
 
     const contentDiv = document.createElement('div')
-    contentDiv.classList.add('tab-content')
+    // contentDiv.classList.add('datastructure')
     contentDiv.setAttribute('id', 'tab-content' + nr)
     contentDiv.classList.add('tab-content')
     contentDiv.setAttribute('role', 'tab-panel')

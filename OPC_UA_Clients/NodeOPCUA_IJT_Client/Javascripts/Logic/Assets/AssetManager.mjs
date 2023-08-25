@@ -1,4 +1,4 @@
-import AssetGraphic from './AssetGraphic.mjs'
+import AssetGraphic from '../../Views/Assets/AssetGraphic.mjs'
 
 /**
  * The purpose of this tab is to automatically generate a

@@ -20,18 +20,18 @@
 
   <script type='module'>
     import ModelManager from './Javascripts/Models/ModelManager.mjs'
-    import TabGenerator from './Javascripts/WebPage/TabGenerator/TabGenerator.mjs'
+    import TabGenerator from './Javascripts/Views/TabGenerator/TabGenerator.mjs'
     import IJTBaseModel from './Javascripts/Models/IJTBaseModel.mjs'
-    import AllTraces from './Javascripts/WebPage/Trace/AllTraces.mjs'
-    import ServerGraphics from './Javascripts/WebPage/Servers/ServerGraphics.mjs'
-    import NodeGraphics from './Javascripts/WebPage/Structure/NodeGraphics.mjs'
-    import AddressSpace from './Javascripts/WebPage/Structure/AddressSpace.mjs'
-    import AssetHandler from './Javascripts/WebPage/Assets/AssetHandler.mjs'
-    import SocketHandler from './Javascripts/WebPage/SocketHandler/SocketHandler.mjs'
-    import EventManager from './Javascripts/WebPage/Events/EventManager.mjs'
-    import EventGraphics from './Javascripts/WebPage/Events/EventGraphics.mjs'
-    import MethodGraphics from './Javascripts/WebPage/Methods/MethodGraphics.mjs'
-    import MethodManager from './Javascripts/WebPage/Methods/MethodManager.mjs'
+    import AllTraces from './Javascripts/Views/Trace/AllTraces.mjs'
+    import ServerGraphics from './Javascripts/Views/Servers/ServerGraphics.mjs'
+    import NodeGraphics from './Javascripts/Views/AddressSpace/NodeGraphics.mjs'
+    import AddressSpace from './Javascripts/Logic/AddressSpace/AddressSpace.mjs'
+    import AssetHandler from './Javascripts/Logic/Assets/AssetManager.mjs'
+    import SocketHandler from './Javascripts/Views/SocketHandler/SocketHandler.mjs'
+    import EventManager from './Javascripts/Views/Events/EventManager.mjs'
+    import EventGraphics from './Javascripts/Views/Events/EventGraphics.mjs'
+    import MethodGraphics from './Javascripts/Views/Methods/MethodGraphics.mjs'
+    import MethodManager from './Javascripts/Logic/Methods/MethodManager.mjs'
     
 
     // Set up essentials
@@ -73,6 +73,7 @@
 
     // Listen to subscribed events messages
     socketHandler.registerMandatory('subscribed event', function (msg, context) {
+      console.log(msg.SourceName.value)
       let model = eventManager.interpretMessage(msg)
       
     })

@@ -3,7 +3,7 @@
 
 export default class TreeDisplayer {
   constructor (structure) {
-    this.generatedObjectFolder = structure.leftArea
+    this.generatedObjectFolder = structure.controlArea
     this.structure = structure
     this.generatedObjectFolder.innerHTML = ''
     this.addressSpace = structure.addressSpace
