@@ -1,85 +1,31 @@
 import ModelToHTML from '../../Models/ModelToHTML.mjs'
 import ModelManager from '../../Models/ModelManager.mjs'
+import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScreen.mjs'
 /**
  * The purpose of this tab is to automatically generate a
  * graphical representation of the events
  */
-export default class EventGraphics {
+export default class EventGraphics extends ControlMessageSplitScreen {
   constructor (container, socketHandler) {
-    this.container = container
+    super(container, 'Events', 'Event content')
     this.socketHandler = socketHandler
     this.modelManager = new ModelManager()
     this.modelToHTML = new ModelToHTML()
 
-    const backGround = document.createElement('div')
-    backGround.classList.add('datastructure')
-    container.appendChild(backGround)
-
-    const leftHalf = document.createElement('div')
-    leftHalf.classList.add('lefthalf')
-    // leftHalf.classList.add('scrollableInfoArea')
-    backGround.appendChild(leftHalf)
-
-    const nodeDiv = document.createElement('div')
-    nodeDiv.classList.add('myHeader')
-    nodeDiv.innerText = 'Subscribe'
-    leftHalf.appendChild(nodeDiv)
-
-    const leftArea = document.createElement('div')
-    // leftArea.innerText = 'Subscribes'leftArea
-    leftHalf.appendChild(leftArea)
-    this.leftArea = leftArea
-
-    const rightHalf = document.createElement('div')
-    rightHalf.classList.add('righthalf')
-    rightHalf.classList.add('scrollableInfoArea')
-    backGround.appendChild(rightHalf)
-
-    const eventHeader = document.createElement('div')
-    eventHeader.classList.add('myHeader')
-    eventHeader.innerText = 'Events'
-    rightHalf.appendChild(eventHeader)
-
-    const messageArea = document.createElement('div')
-    messageArea.setAttribute('id', 'messageArea')
-    rightHalf.appendChild(messageArea)
-
-    this.messages = document.createElement('ul')
-    this.messages.setAttribute('id', 'messages')
-    messageArea.appendChild(this.messages)
-    /*
-    const browse = document.createElement('button')
-
-    browse.classList.add('buttonAreaStyle')
-
-    browse.socketHandler = this.socketHandler
-    browse.innerHTML = 'EVENT'
-
-    browse.onclick = function () {
+    this.createButton('Subscribe to result event', this.controlArea, () => {
       this.socketHandler.subscribeEvent('ABCD')
-    }
-    this.leftArea.appendChild(browse)
-    */
-    // this.treeDisplayer = null
-    // this.modelToHTML = new ModelToHTML(this.messages)
-
-    const serverDiv = document.getElementById('connectedServer') // listen to tab switch
-    serverDiv.addEventListener('tabOpened', (event) => {
-      if (event.detail.title === 'Events') {
-        this.initiate()
-      }
-    }, false)
+    })
   }
 
   initiate () {
 
   }
 
-  displayEvent (event) {
-    this.eventToHTML(event)
+  displayEvent (e) {
+    this.eventToHTML(e)
   }
 
-  eventToHTML (event) {
+  eventToHTML (e) {
     const x = (event, content) => {
       for (const [key, value] of Object.entries(event)) {
         const row = document.createElement('li')
@@ -106,26 +52,26 @@ export default class EventGraphics {
     const content = document.createElement('li')
     content.classList.add('indent')
 
-    switch (event.EventType.value) {
+    switch (e.EventType.value) {
       case 'ns=4;i=1007': {
         // Send the result to trace viewer
-        const model = this.modelManager.createModelFromMessage(event)
-        const a = this.modelToHTML.toHTML(model, true, event.SourceName.value)
+        const model = this.modelManager.createModelFromMessage(e)
+        const a = this.modelToHTML.toHTML(model, true, e.SourceName.value)
         header.appendChild(a)
         break
       }
       default:
-        if (event.SourceName) {
-          header.innerText = event.SourceName.value
+        if (e.SourceName) {
+          header.innerText = e.SourceName.value
         }
         if (event.EventType) {
-          header.innerText = header.innerText + ' (Type: ' + event.EventType.value + ')'
+          header.innerText = header.innerText + ' (Type: ' + e.EventType.value + ')'
         }
         if (!header.innerText) {
           header.innerText = 'EVENT'
         }
         header.appendChild(content)
-        x(event, content)
+        x(e, content)
     }
   }
 }

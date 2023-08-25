@@ -1,5 +1,6 @@
 /**
  * The purpose of this class is to interpret events
+ * [subscribe via SocketHandler.subscribeEvent('XYZ')]
  */
 export default class EventManager {
   constructor (modelManager, displayObject) {
@@ -9,12 +10,5 @@ export default class EventManager {
 
   interpretMessage (event) {
     this.displayObject.displayEvent(event)
-
-    switch (event.EventType.value) {
-      case 'ns=4;i=1007':
-        // Send the result to trace viewer
-        break
-      default:
-    }
   }
 }
