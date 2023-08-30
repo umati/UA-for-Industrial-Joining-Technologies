@@ -1,28 +1,38 @@
-import AssetGraphic from '../../Views/Assets/AssetGraphic.mjs'
-
 /**
  * The purpose of this tab is to automatically generate a
- * graphical representation of the assets
+ * a representation of the assets
  */
 export default class AssetHandler {
-  constructor (container, addressSpace, socketHandler) {
+  constructor (addressSpace, socketHandler) {
     this.socketHandler = socketHandler
     this.addressSpace = addressSpace
+  }
 
-    const serverDiv = document.getElementById('connectedServer') // listen to tab switch
-    serverDiv.addEventListener('tabOpened', (event) => {
-      if (event.detail.title === 'Assets') {
-        this.initiate()
+  fixAssets (assetTypes, doneCallback) {
+    this.addressSpace.getTighteningsSystemsPromise().then(
+      (tighteningSystems) => {
+        this.tighteningSystem = tighteningSystems[0]
+        console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId)
+        this.loadAllAssets().then(
+          () => {
+            // console.log('All assets loaded.')
+            let fullList = []
+            for (const assetType of assetTypes) {
+              fullList = [...fullList, ...this[assetType]]
+            }
+            this.browseAndReadList(fullList).then(
+              () => { doneCallback() }
+            )
+          }
+        )
+      },
+      () => {
+        throw new Error('No TighteningSystem found in Objects folder')
       }
-    }, false)
-
-    this.assetGraphic = new AssetGraphic(container)
+    )
   }
 
-  messageDisplay (item) {
-    alert('AssetHandler has no message area')
-  }
-
+  /*
   initiate () {
     // const tighteningSystems = this.addressSpace.getTighteningSystems()
 
@@ -34,7 +44,7 @@ export default class AssetHandler {
           () => {
             // console.log('All assets loaded.')
             this.browseAndReadList([...this.controllers, ...this.tools]).then(
-              () => { this.draw() }
+              () => { this.assetGraphics.draw() }
             )
           }
         )
@@ -44,6 +54,7 @@ export default class AssetHandler {
       }
     )
   }
+  */
 
   /**
    *
@@ -130,65 +141,5 @@ export default class AssetHandler {
     },
     (fail) => { fail(`Failed to get assets in folder ${folderName}`) }
     )
-  }
-
-  draw () {
-    const assetGraphic = this.assetGraphic
-
-    function drawAssetRecursive (asset) {
-      drawAssetWithExternals(asset.getRelations('association'), asset)
-    }
-
-    function drawAssetWithExternals (associations, containerNode) {
-      for (const external of externals) {
-        for (const association of associations) {
-          if (association.associatedNodeId === external.nodeId) {
-            assetGraphic.addExternal(external, containerNode)
-            drawAssetRecursive(external)
-          }
-        }
-      }
-      for (const internal of internals) {
-        for (const association of associations) {
-          if (association.associatedNodeId === internal.nodeId) {
-            assetGraphic.addInternal(internal, containerNode)
-            drawAssetRecursive(internal)
-          }
-        }
-      }
-    }
-
-    let i = 0
-    const externals = [
-      ...this.powersupplies,
-      ...this.feeders,
-      ...this.cables,
-      ...this.accessories]
-    const internals = [
-      ...this.servos,
-      ...this.memorydevices,
-      ...this.subcomponents,
-      ...this.batteries,
-      ...this.sensors]
-    for (const controller of this.controllers) {
-      this.assetGraphic.createController(controller, i, this.controllers.length)
-
-      const associations = controller.getRelations('association')
-
-      drawAssetWithExternals(associations, controller)
-
-      for (const tool of this.tools) {
-        for (const association of associations) {
-          if (association.associatedNodeId === tool.nodeId) {
-            this.assetGraphic.addTool(tool, controller)
-            drawAssetRecursive(tool)
-          }
-        }
-      }
-
-      // this.assetGraphic.addExternal({ nodeId: 1, displayName: { text: 'Example Stacklight' } }, controller)
-
-      i++
-    }
   }
 }

@@ -1,7 +1,7 @@
 // The purpose of this class is to generate a tree of the things that can be
 // clicked in order to subscribe or read data
 
-export default class TreeDisplayer {
+export default class AddressSpaceTree {
   constructor (structure) {
     this.generatedObjectFolder = structure.controlArea
     this.structure = structure

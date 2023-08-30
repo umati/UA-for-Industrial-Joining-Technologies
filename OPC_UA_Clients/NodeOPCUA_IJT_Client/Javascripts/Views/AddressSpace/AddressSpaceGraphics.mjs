@@ -1,8 +1,8 @@
-import TreeDisplayer from './TreeDisplayer.mjs'
+import AddressSpaceTree from './AddressSpaceTree.mjs'
 import ModelToHTML from '../../Models/ModelToHTML.mjs'
 import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScreen.mjs'
 
-export default class AddressSpeceGraphics extends ControlMessageSplitScreen {
+export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
   constructor (container, socketHandler, addressSpace) {
     super(container, 'AddressSpace', 'Messages')
     this.addressSpace = addressSpace
@@ -12,7 +12,7 @@ export default class AddressSpeceGraphics extends ControlMessageSplitScreen {
   }
 
   initiateNodeTree () {
-    this.treeDisplayer = new TreeDisplayer(this)
+    this.treeDisplayer = new AddressSpaceTree(this)
     this.addressSpace.reset()
     this.addressSpace.setGUIGenerator(this.treeDisplayer)
 
@@ -22,7 +22,7 @@ export default class AddressSpeceGraphics extends ControlMessageSplitScreen {
   generateTree (msg) {
     if (!this.leftArea) {
       alert('too early call to generateTree')
-      this.treeDisplayer = new TreeDisplayer(this, ['Root', 'Objects', 'TighteningSystem', 'ResultManagement', 'Results'])
+      this.treeDisplayer = new AddressSpaceTree(this, ['Root', 'Objects', 'TighteningSystem', 'ResultManagement', 'Results'])
     }
     this.treeDisplayer.generateTree(msg)
   }

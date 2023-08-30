@@ -1,12 +1,18 @@
 // The purpose of this class is to display traces on the screen and manage
-// user interaction with them
+// user interaction with them. It has little to do with the OPC UA communication as such
+// and is consequently kept entierly in the View folder.
 
 import ChartManager from './ChartHandler.mjs'
 import TraceInterface from './TraceInterface.mjs'
 import SingleTraceData from './SingleTraceData.mjs'
 import Step from './Step.mjs'
 
-export default class AllTraces {
+/**
+ * TraceGraphics displays result events in order to display the traces (graphs)
+ * on the screen and management of the displayed traces such as selection and such.
+ * Little to none OPC UA relevant logic happens here
+ */
+export default class TraceGraphics {
   constructor (container, dimensions, addressSpace) {
     this.traceInterface = new TraceInterface(container)
     this.xDimensionName = dimensions[0]
@@ -45,18 +51,54 @@ export default class AllTraces {
    * Setup-function the first time the view is opened to load a trace if none exists
    */
   initiate () {
-    /*
-    const ijt = this.addressSpace.nsIJT
-    const appl = this.addressSpace.nsIJTApplication
 
-    this.addressSpace.findFolder(`/${ijt}:ResultManagement/${ijt}:Results/${appl}:Result`).then(
-      (call) => {
-        this.addressSpace.browseAndReadWithNodeId(call.message.nodeid).then(
-          (x) => {  console.log(x)  })
-      })
-      */
   }
 
+  // /////////////////////////////////////////////////////////////////////////
+  createNewTrace (event) {
+    const { result, trace } = event.detail
+    this.result = result
+
+    if (!trace) return
+
+    const stepTraces = trace.stepTraces
+    const newResultandTrace = new SingleTraceData(result, this)
+
+    for (const step of stepTraces) {
+      const newStep = new Step(step, newResultandTrace)
+      for (const data of step.stepTraceContent) {
+        switch (data.physicalQuantity) {
+          case 1: // Time
+            newStep.time = data.values
+            break
+          case 2: // Torque
+            newStep.torque = data.values
+            break
+          case 3: // Angle
+            newStep.angle = data.values
+            break
+          case 11: // Current
+            break
+          default:
+            throw new Error('Unknown physicalQuantity in trace')
+        }
+      }
+      newStep.color = this.traceInterface.getRandomColor()
+      if (!newStep.time) {
+        newStep.time = Array.from(Array(newStep.torque.length), (_, x) => step.samplingInterval * x / 1000)
+      }
+      newResultandTrace.addStep(newStep)
+    }
+
+    newResultandTrace.displayName += '(' + (this.identityCounter++) + ')'
+
+    this.allTraces.push(newResultandTrace)
+    newResultandTrace.generateTrace()
+    this.traceInterface.updateTracesInGUI(this.allTraces)
+    this.selectTrace(newResultandTrace)
+  }
+
+  // /////////////////////////////////////////////////////////////////////////
   decideTraceType (yName) {
     switch (yName) {
       case 'toa': // Torque over Angle
@@ -122,50 +164,6 @@ export default class AllTraces {
         step.hideStepTrace()
       }
     }
-  }
-
-  // /////////////////////////////////////////////////////////////////////////
-  createNewTrace (event) {
-    const { result, trace } = event.detail
-    this.result = result
-
-    if (!trace) return
-
-    const stepTraces = trace.stepTraces
-    const newResultandTrace = new SingleTraceData(result, this)
-
-    for (const step of stepTraces) {
-      const newStep = new Step(step, newResultandTrace)
-      for (const data of step.stepTraceContent) {
-        switch (data.physicalQuantity) {
-          case 1: // Time
-            newStep.time = data.values
-            break
-          case 2: // Torque
-            newStep.torque = data.values
-            break
-          case 3: // Angle
-            newStep.angle = data.values
-            break
-          case 11: // Current
-            break
-          default:
-            throw new Error('Unknown physicalQuantity in trace')
-        }
-      }
-      newStep.color = this.traceInterface.getRandomColor()
-      if (!newStep.time) {
-        newStep.time = Array.from(Array(newStep.torque.length), (_, x) => step.samplingInterval * x / 1000)
-      }
-      newResultandTrace.addStep(newStep)
-    }
-
-    newResultandTrace.displayName += '(' + (this.identityCounter++) + ')'
-
-    this.allTraces.push(newResultandTrace)
-    newResultandTrace.generateTrace()
-    this.traceInterface.updateTracesInGUI(this.allTraces)
-    this.selectTrace(newResultandTrace)
   }
 
   deleteSelected () {

@@ -12,8 +12,9 @@ export default class EventGraphics extends ControlMessageSplitScreen {
     this.modelManager = new ModelManager()
     this.modelToHTML = new ModelToHTML()
 
-    this.createButton('Subscribe to result event', this.controlArea, () => {
-      this.socketHandler.subscribeEvent('ABCD')
+    const box = this.createArea()
+    this.createButton('Subscribe to result event', box, () => {
+      this.socketHandler.subscribeEvent('Result')
     })
   }
 
@@ -32,7 +33,19 @@ export default class EventGraphics extends ControlMessageSplitScreen {
         row.innerText = key
         switch (value.dataType) {
           case 'ByteString':
-            row.innerHTML += ' = BYTESTRING'
+            {
+              row.innerHTML += ' = ['
+              let first = true
+              for (const v of value.value.data) {
+                if (!first) {
+                  row.innerHTML += ', '
+                } else {
+                  first = false
+                }
+                row.innerHTML += v
+              }
+              row.innerHTML += ']'
+            }
             break
           case 'LocalizedText':
             row.innerHTML += ' = ' + value.value.text

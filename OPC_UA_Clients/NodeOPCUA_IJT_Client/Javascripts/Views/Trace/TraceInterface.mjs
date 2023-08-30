@@ -1,4 +1,3 @@
-
 export default class TraceInterface {
   constructor (container) {
     this.generateHTML(container)

@@ -1,19 +1,18 @@
+import BasicScreen from './BasicScreen.mjs'
 /**
  * Support class that creates the split screen
  * Use this.controlArea to add things to interact with
  * Use this.messageDisplay(msg) to desplay user feedback
  * Implement your own initiate() function to run code every time the tab is opened
  */
-export default class ControlMessageSplitScreen {
+export default class ControlMessageSplitScreen extends BasicScreen {
   constructor (container, leftText, rightText) {
-    const backGround = document.createElement('div')
-    backGround.classList.add('datastructure')
-    container.appendChild(backGround)
+    super(container)
 
     const leftHalf = document.createElement('div')
     leftHalf.classList.add('lefthalf')
     leftHalf.classList.add('scrollableInfoArea')
-    backGround.appendChild(leftHalf)
+    this.backGround.appendChild(leftHalf)
 
     const nodeDiv = document.createElement('div')
     nodeDiv.classList.add('myHeader')
@@ -28,7 +27,7 @@ export default class ControlMessageSplitScreen {
     const rightHalf = document.createElement('div')
     rightHalf.classList.add('righthalf')
     rightHalf.classList.add('scrollableInfoArea')
-    backGround.appendChild(rightHalf)
+    this.backGround.appendChild(rightHalf)
 
     const comDiv = document.createElement('div')
     comDiv.classList.add('myHeader')
@@ -42,15 +41,6 @@ export default class ControlMessageSplitScreen {
     this.messages = document.createElement('div')
     this.messages.setAttribute('id', 'messages')
     messageArea.appendChild(this.messages)
-
-    const serverDiv = document.getElementById('connectedServer') // listen to tab switch
-    serverDiv.addEventListener('tabOpened', (event) => {
-      if (event.detail.title === container.tabTitle) {
-        if (this.initiate) {
-          this.initiate()
-        }
-      }
-    }, false)
   }
 
   messageDisplay (msg) {

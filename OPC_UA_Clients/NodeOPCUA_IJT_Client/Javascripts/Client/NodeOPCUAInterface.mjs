@@ -307,18 +307,30 @@ export default class NodeOPCUAInterface {
   }
 
   closeConnection (callback) {
-    console.log('Closing')
-    if (!this || !this.session || !this.client) {
-      console.log('Already closed')
-      return
+    try {
+      console.log('Unsubscribe')
+      if (this.subscription) {
+        this.subscription.terminate(function () {
+          console.log('Unsubscribed')
+        })
+      }
+
+      console.log('Closing session')
+      if (!this || !this.session || !this.client) {
+        console.log('Already closed')
+      } else {
+        this.session.close(function () {
+          console.log('Session closed')
+        })
+      }
+      console.log('Disconnect client')
+      this.client.disconnect(function () {
+        console.log('Client disconnected.\n**********************************************')
+      })
+    } catch (err) {
+      console.log('FAIL to close down correctly: ' + err)
+      this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
     }
-
-    this.session.close(function () {
-      console.log('Session closed')
-    })
-
-    this.client.disconnect(function () { })
-    console.log('Client disconnected')
   }
 
   /*
@@ -376,7 +388,6 @@ export default class NodeOPCUAInterface {
       'Message',
       'Severity',
       'Result'
-
     ]
     const eventFilter = constructEventFilter(fields)
 

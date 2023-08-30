@@ -19,19 +19,22 @@
   <script src='/socket.io/socket.io.js'></script>
 
   <script type='module'>
-    import ModelManager from './Javascripts/Models/ModelManager.mjs'
-    import TabGenerator from './Javascripts/Views/TabGenerator/TabGenerator.mjs'
-    import IJTBaseModel from './Javascripts/Models/IJTBaseModel.mjs'
-    import AllTraces from './Javascripts/Views/Trace/AllTraces.mjs'
+    import ModelManager   from './Javascripts/Models/ModelManager.mjs'
+    import IJTBaseModel   from './Javascripts/Models/IJTBaseModel.mjs'
+
+    import AddressSpace   from './Javascripts/Logic/AddressSpace/AddressSpace.mjs'
+    import AssetManager   from './Javascripts/Logic/Assets/AssetManager.mjs'
+    import MethodManager  from './Javascripts/Logic/Methods/MethodManager.mjs'
+    import EventManager   from './Javascripts/Logic/Events/EventManager.mjs'
+    import SocketHandler  from './Javascripts/Logic/SocketHandler/SocketHandler.mjs'
+
+    import TabGenerator   from './Javascripts/Views/GraphicSupport/TabGenerator.mjs'
+    import TraceGraphics  from './Javascripts/Views/Trace/TraceGraphics.mjs'
     import ServerGraphics from './Javascripts/Views/Servers/ServerGraphics.mjs'
-    import NodeGraphics from './Javascripts/Views/AddressSpace/NodeGraphics.mjs'
-    import AddressSpace from './Javascripts/Logic/AddressSpace/AddressSpace.mjs'
-    import AssetHandler from './Javascripts/Logic/Assets/AssetManager.mjs'
-    import SocketHandler from './Javascripts/Views/SocketHandler/SocketHandler.mjs'
-    import EventManager from './Javascripts/Views/Events/EventManager.mjs'
-    import EventGraphics from './Javascripts/Views/Events/EventGraphics.mjs'
+    import AddressSpaceGraphics   from './Javascripts/Views/AddressSpace/AddressSpaceGraphics.mjs'
+    import EventGraphics  from './Javascripts/Views/Events/EventGraphics.mjs'
     import MethodGraphics from './Javascripts/Views/Methods/MethodGraphics.mjs'
-    import MethodManager from './Javascripts/Logic/Methods/MethodManager.mjs'
+    import AssetGraphics   from './Javascripts/Views/Assets/AssetGraphics.mjs'
     
 
     // Set up essentials
@@ -43,11 +46,12 @@
     // Initiate the different tab handlers
     var servers = new ServerGraphics(tabGenerator.generateTab('Servers'), socketHandler)
     var addressSpace = new AddressSpace(socketHandler)
-    var nodeGraphics = new NodeGraphics(tabGenerator.generateTab('Nodes', true), socketHandler, addressSpace)
+    var addressSpaceGraphics = new AddressSpaceGraphics(tabGenerator.generateTab('Nodes', true), socketHandler, addressSpace)
     var eventGraphics = new EventGraphics (tabGenerator.generateTab('Events'), socketHandler)
     var eventManager = new EventManager(modelManager, eventGraphics);
-    let assetHandler = new AssetHandler(tabGenerator.generateTab('Assets'), addressSpace, socketHandler)
-    let trace = new AllTraces(tabGenerator.generateTab('Trace'), ['angle', 'torque'], addressSpace)
+    let assets = new AssetManager(addressSpace, socketHandler)
+    let asstetGraphics = new AssetGraphics(tabGenerator.generateTab('Assets'), assets)
+    let trace = new TraceGraphics(tabGenerator.generateTab('Trace'), ['angle', 'torque'], addressSpace)
     let methodGraphics = new MethodGraphics(tabGenerator.generateTab('Methods'))
     const methodManager = new MethodManager(socketHandler, methodGraphics)
    
@@ -66,7 +70,7 @@
       let node = addressSpace.addNodeByRead(msg)
       if (node) {
         let model = modelManager.createModelFromNode(node)
-        nodeGraphics.displayModel(model)
+        addressSpaceGraphics.displayModel(model)
       }
       return node
     })
@@ -107,7 +111,7 @@
     // Listen to session start
     socketHandler.registerMandatory('session established', function (msg) {
       servers.messageDisplay('Session established')
-      nodeGraphics.initiateNodeTree()
+      addressSpaceGraphics.initiateNodeTree()
 
     })
 

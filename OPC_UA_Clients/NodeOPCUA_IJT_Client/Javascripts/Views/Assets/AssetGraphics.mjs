@@ -1,14 +1,13 @@
-
-export default class AssetGraphics {
-  constructor (container) {
-    const backGround = document.createElement('div')
-    backGround.classList.add('datastructure')
-    container.appendChild(backGround)
+import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
+export default class AssetGraphics extends BasicScreen {
+  constructor (container, assetManager) {
+    super(container)
+    this.assetManager = assetManager
 
     const leftHalf = document.createElement('div')
     leftHalf.classList.add('lefthalf')
     leftHalf.classList.add('scrollableInfoArea')
-    backGround.appendChild(leftHalf)
+    this.backGround.appendChild(leftHalf)
 
     const nodeDiv = document.createElement('div')
     nodeDiv.classList.add('myHeader')
@@ -26,6 +25,70 @@ export default class AssetGraphics {
     */
 
     this.container = displayArea
+  }
+
+  initiate () {
+    this.assetManager.fixAssets(['controllers', 'tools'], () => { this.draw() })
+  }
+
+  draw () {
+    const assetManager = this.assetManager
+    const assetGraphics = this
+
+    function drawAssetRecursive (asset) {
+      drawAssetWithExternals(asset.getRelations('association'), asset)
+    }
+
+    function drawAssetWithExternals (associations, containerNode) {
+      for (const external of externals) {
+        for (const association of associations) {
+          if (association.associatedNodeId === external.nodeId) {
+            assetGraphics.addExternal(external, containerNode)
+            drawAssetRecursive(external)
+          }
+        }
+      }
+      for (const internal of internals) {
+        for (const association of associations) {
+          if (association.associatedNodeId === internal.nodeId) {
+            assetGraphics.addInternal(internal, containerNode)
+            drawAssetRecursive(internal)
+          }
+        }
+      }
+    }
+
+    let i = 0
+    const externals = [
+      ...assetManager.powersupplies,
+      ...assetManager.feeders,
+      ...assetManager.cables,
+      ...assetManager.accessories]
+    const internals = [
+      ...assetManager.servos,
+      ...assetManager.memorydevices,
+      ...assetManager.subcomponents,
+      ...assetManager.batteries,
+      ...assetManager.sensors]
+    for (const controller of assetManager.controllers) {
+      this.createController(controller, i, assetManager.controllers.length)
+
+      const associations = controller.getRelations('association')
+
+      drawAssetWithExternals(associations, controller)
+
+      for (const tool of assetManager.tools) {
+        for (const association of associations) {
+          if (association.associatedNodeId === tool.nodeId) {
+            assetGraphics.addTool(tool, controller)
+            drawAssetRecursive(tool)
+          }
+        }
+      }
+      // this.assetGraphic.addExternal({ nodeId: 1, displayName: { text: 'Example Stacklight' } }, controller)
+
+      i++
+    }
   }
 
   createController (node, controllerNr, parts) {
