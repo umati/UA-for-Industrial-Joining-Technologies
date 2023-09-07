@@ -1,25 +1,32 @@
+/* const colorMapping = {
+  component: 'black',
+  hasInterface: 'green',
+  hasAddin: 'brown',
+  association: 'grey'
+} */
+
 // The purpose of this class is to generate a tree of the things that can be
 // clicked in order to subscribe or read data
 
 export default class AddressSpaceTree {
-  constructor (structure) {
-    this.generatedObjectFolder = structure.controlArea
-    this.structure = structure
-    this.generatedObjectFolder.innerHTML = ''
-    this.addressSpace = structure.addressSpace
-    this.socket = structure.socket
-    this.mapping = {}
+  constructor (context) {
+    this.context = context
+    context.controlArea.innerHTML = ''
+    this.addressSpace = context.addressSpace
   }
 
   generateGUINode (node) {
     let container
-    if (!node.parent) {
-      container = this.generatedObjectFolder
-    } else {
-      container = this.mapping[node.parent.nodeId]
+    const parents = node.getParentRelations()
+    if (parents && parents.length > 0) {
+      this.addressSpace.findOrLoadNode(parents[0].nodeId).then((parentNode) => {
+        container = parentNode.graphicArea
+        return this.generateGUINodeSupport(node, container)
+      })
+    } else { // No parent
+      container = this.context.controlArea
+      return this.generateGUINodeSupport(node, container)
     }
-
-    return this.generateGUINodeSupport(node, container)
   }
 
   scrollTo (innerContainer) {
@@ -28,14 +35,138 @@ export default class AddressSpaceTree {
     }
   }
 
-  generateGUINodeSupport (node, context) {
-    const nodeId = node.nodeId
-    let name = 'undefined'
-    if (node.browseName && node.browseName.name) {
-      name = node.browseName.name
+  ReplaceOldButtonArea (context, buttonArea, nodeId) {
+    for (const child of context.children) {
+      if (child.nodeId === nodeId) {
+        context.insertBefore(buttonArea, child)
+        context.removeChild(child)
+        return
+      }
     }
-    const browse = document.createElement('button')
+    context.appendChild(buttonArea)
+  }
 
+  createRelation (relation, context, clickCallback) {
+    console.log(relation.browseName.name)
+
+    const buttonArea = document.createElement('div')
+    buttonArea.style.border = '1px solid red' // debug
+    buttonArea.style.margin = '0px 0px 0px 10px'
+    buttonArea.nodeId = relation.nodeId
+    context.appendChild(buttonArea)
+
+    const browse = document.createElement('button')
+    browse.classList.add('buttonAreaStyle')
+    browse.innerHTML = relation.browseName.name + '  [' + relation.referenceTypeName + ']'
+    browse.callback = clickCallback
+    browse.relation = relation
+    browse.classList.add('invisButton')
+    browse.classList.add('updownpointer')
+    browse.classList.add('treeButton')
+    browse.style.margin = '-5px 0px -5px -5px'
+    browse.title = 'Browse this node from the server'
+    browse.style.color = 'grey'
+
+    browse.onclick = function () {
+      this.callback()
+    }
+
+    buttonArea.appendChild(browse)
+    return browse
+  }
+
+  generateGUINodeSupport (node, context) {
+    // const nodeId = node.nodeId
+    let name = 'undefined'
+    if (node.browseName) {
+      name = node.browseName
+    }
+
+    let color
+    switch (node.nodeClass.value) {
+      case 1:
+        color = 'black' // object
+        break
+      case 2: // variable?
+        color = 'red'
+        break
+      case 3:
+        color = 'lightgreen'
+        break
+      case 4: // method
+        color = 'green'
+        break
+      default:
+        color = 'black'
+    }
+
+    let buttonArea
+    if (node.graphicArea) {
+      buttonArea = node.graphicArea
+    } else {
+      buttonArea = document.createElement('div')
+      buttonArea.style.border = '1px solid red' // debug
+      buttonArea.style.margin = '0px 0px 0px 10px'
+      buttonArea.nodeId = node.nodeId
+      this.ReplaceOldButtonArea(context, buttonArea, node.nodeId)
+      node.graphicArea = buttonArea
+    }
+    if (!node.browseButton) {
+      const browse = document.createElement('button')
+      browse.classList.add('buttonAreaStyle')
+      browse.innerHTML = name
+      browse.classList.add('invisButton')
+      browse.classList.add('updownpointer')
+      browse.classList.add('treeButton')
+      browse.style.margin = '-5px 0px -5px -5px'
+      browse.title = 'Browse this node from the server'
+      browse.style.color = color
+      browse.buttonArea = buttonArea
+
+      browse.onclick = () => { this.toggleNodeContent(node, buttonArea) }
+      buttonArea.appendChild(browse)
+      node.browseButton = browse
+    }
+    return buttonArea
+  }
+
+  cleanse (area) {
+    while (area.children.length > 1) {
+      this.cleanse(area.children[1])
+      const node = this.addressSpace.nodeMapping[area.children[1].nodeId]
+      if (node) {
+        // node.graphicArea = null
+        this.addressSpace.cleanse(node)
+      }
+      area.removeChild(area.children[1])
+    }
+  }
+
+  toggleNodeContent (node, buttonArea) {
+    if (buttonArea.children.length > 1) {
+      this.cleanse(buttonArea)
+    } else {
+      for (const relation of node.getChildRelations()) {
+        switch (relation.referenceTypeName) {
+          case 'hasType':
+            break
+          case 'apple':
+            break
+          default:
+            // buttonArea.style.border = '4px solid blue'
+            this.createRelation(relation, buttonArea, x => this.convertRelationToNode(relation.nodeId))
+        }
+      }
+    }
+  }
+
+  convertRelationToNode (nodeId) {
+    this.addressSpace.findOrLoadNode(nodeId).then((newNode) => {
+      this.toggleNodeContent(newNode, newNode.graphicArea)
+    })
+  }
+
+  /*
     let type = 0
     if (node.referenceTypeId) {
       type = node.referenceTypeId.split('=').pop()
@@ -43,16 +174,17 @@ export default class AddressSpaceTree {
 
     if (type === '40') {
       if (node && node.parent && node.parent.readButton) {
-        node.parent.typeName = node.browseName.name
-        node.parent.readButton.title += '\nType: ' + node.browseName.name
+        node.parent.typeName = node.browseName
+        node.parent.readButton.title += '\nType: ' + node.browseName
         return
       }
     }
 
     const buttonArea = document.createElement('div')
     context.appendChild(buttonArea)
-    browse.classList.add('buttonAreaStyle')
 
+    const browse = document.createElement('button')
+    browse.classList.add('buttonAreaStyle')
     browse.innerHTML = '+'
     browse.myNodeId = nodeId
     browse.socket = this.socket
@@ -97,7 +229,7 @@ export default class AddressSpaceTree {
       }
     }
 
-    let color = this.addressSpace.typeMapping[type].color
+    //let color = colorMapping[type]
     let typeName = this.addressSpace.typeMapping[type].name
     if (!color) {
       color = 'black'
@@ -128,9 +260,17 @@ export default class AddressSpaceTree {
       button: read,
       browse
     }
-  }
 
   addChild (parent, child) {
+    if (child.graphicRepresentation &&
+      child.graphicRepresentation.whole &&
+      parent.graphicRepresentation &&
+      child.graphicRepresentation.whole.parentElement !== parent.graphicRepresentation.container) {
+      child.graphicGenerator.addChild2(parent.graphicRepresentation, child.graphicRepresentation)
+    }
+  }
+
+  addChild2 (parent, child) {
     parent.container.appendChild(child.whole)
     parent.browse.innerHTML = '-'
     parent.container.style.display = 'block'
@@ -141,7 +281,7 @@ export default class AddressSpaceTree {
   generateGUIReference (reference) {
     let container
     if (!reference.parent) {
-      container = this.generatedObjectFolder
+      container = this.context.controlArea
     } else {
       container = this.mapping[reference.parent.nodeId]
     }
@@ -152,7 +292,7 @@ export default class AddressSpaceTree {
 
   generateGUIReferenceSupport (reference, context) {
     const nodeId = reference.nodeId
-    const name = reference.browseName.name
+    const name = reference.browseName
     const browse = document.createElement('button')
 
     // const type = reference.referenceTypeId.split('=').pop()
@@ -184,5 +324,5 @@ export default class AddressSpaceTree {
     this.mapping[reference.nodeId] = container
 
     return { whole: buttonArea, container, button: browse }
-  }
+  } */
 }
