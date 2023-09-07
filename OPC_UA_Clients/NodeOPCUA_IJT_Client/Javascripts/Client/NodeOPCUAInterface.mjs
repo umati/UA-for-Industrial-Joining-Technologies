@@ -40,8 +40,8 @@ export default class NodeOPCUAInterface {
       socket.on('subscribe item', (callid, msg) => {
         this.addMonitor(callid, msg)
       })
-      socket.on('read', (callid, msg) => {
-        this.read(callid, msg)
+      socket.on('read', (callid, msg, attribute) => {
+        this.read(callid, msg, attribute)
       })
 
       socket.on('browse', (callid, nodeId, details) => {
@@ -173,20 +173,29 @@ export default class NodeOPCUAInterface {
    * @param {*} callid A unique identifier to match a query to OPC UA with a response
    * @param {*} nodeId The identity of the node to read
    */
-  read (callid, nodeId) {
+  read (callid, nodeId, attribute) {
     (async () => {
       try {
+        if (!attribute) {
+          attribute = 'DisplayName'
+        }
         const dataValue = await this.session.read({
           nodeId,
-          attributeId: AttributeIds.Value
+          attributeId: AttributeIds[attribute]
         })
-
+        console.log('1:xxx ' + attribute)
+        /* console.log('1:nodeId ' + nodeId)
+        console.log('1:a ' + AttributeIds)
+        console.log('1:b ' + AttributeIds.DisplayName)
+        console.log('1:c ' + AttributeIds['DisplayName'])
+        console.log('1:nodeId ' + nodeId) */
+        console.log('1:dataValue ' + dataValue.toString())
         const result = dataValue.value.value
         if (result && result.resultContent) {
           await promoteOpaqueStructure(this.session, [{ value: result.resultContent }])
         }
 
-        // console.log('dataValue ' + dataValue.toString());
+        console.log('2:dataValue ' + dataValue.toString())
 
         this.io.emit('readresult', { callid, dataValue, stringValue: dataValue.toString(), nodeid: nodeId })
         return dataValue
@@ -374,11 +383,11 @@ export default class NodeOPCUAInterface {
       priority: 10
     } */
 
-  async eventSubscription (msg) {
+  async eventSubscription (fields) {
     // const baseEventTypeId = 'i=2041'
     const serverObjectId = 'i=2253'
 
-    const fields = [
+    /*  const fields = [
       'EventId',
       'EventType',
       'SourceNode',
@@ -388,7 +397,8 @@ export default class NodeOPCUAInterface {
       'Message',
       'Severity',
       'Result'
-    ]
+    ] */
+
     const eventFilter = constructEventFilter(fields)
 
     const eventMonitoringItem = ClientMonitoredItem.create(
@@ -405,7 +415,7 @@ export default class NodeOPCUAInterface {
     )
 
     eventMonitoringItem.on('initialized', () => {
-      console.log('event_monitoringItem initialized (' + msg + ')')
+      console.log('event_monitoringItem initialized (' + fields + ')')
     })
 
     eventMonitoringItem.on('changed', (events) => {

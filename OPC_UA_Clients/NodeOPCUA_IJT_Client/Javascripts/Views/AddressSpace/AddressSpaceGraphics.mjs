@@ -3,7 +3,7 @@ import ModelToHTML from '../../Models/ModelToHTML.mjs'
 import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScreen.mjs'
 
 export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
-  constructor (container, socketHandler, addressSpace) {
+  constructor (container, addressSpace) {
     super(container, 'AddressSpace', 'Messages')
     this.addressSpace = addressSpace
 
@@ -14,7 +14,15 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
   initiateNodeTree () {
     this.treeDisplayer = new AddressSpaceTree(this)
     this.addressSpace.reset()
-    this.addressSpace.setGUIGenerator(this.treeDisplayer)
+
+    this.addressSpace.subscribeToNewNode((node) => {
+      this.treeDisplayer.generateGUINode(node)
+    })
+    this.addressSpace.subscribeToParentRelation((parentNode, childNode) => {
+      this.treeDisplayer.addChild(parentNode, childNode)
+    })
+
+    // this.addressSpace.setGUIGenerator(this.treeDisplayer)
 
     this.addressSpace.initiate()
   }

@@ -1,4 +1,4 @@
-import { NodeFactory } from './Node.mjs'
+import { NodeFactory } from '../Node.mjs'
 
 export default class AddressSpace {
   constructor (socketHandler) {
@@ -26,7 +26,6 @@ export default class AddressSpace {
     for (const callback of this.newNodeSubscription) {
       callback(newNode)
     }
-    return newNode
   }
 
   /**
@@ -40,28 +39,102 @@ export default class AddressSpace {
     return returnNode
   }
 
-  /**
-   *
-   */
-  findOrLoadNode (nodeId) {
-    const returnNode = this.nodeMapping[nodeId]
-    if (returnNode) {
-      return new Promise((resolve, reject) => {
-        resolve(returnNode)
-      })
-    } else {
-      return new Promise((resolve, reject) => {
-        this.browseAndRead(nodeId, true).then((m) => {
-          resolve(this.createNode(m))
-        })
-      })
-    }
-  }
-
   createBasicNode (basicNodeData) {
     const newNode = NodeFactory(basicNodeData)
     this.nodeMapping[newNode.nodeId] = newNode
     return newNode
+  }
+
+  /**
+   * This is called whenever a node has been being browsed
+   * @param {*} msg The message from the NodeOPCUA_IJT_Client
+   * @returns the node
+   */
+  addNodeByBrowse2 (msg) {
+    const makeGUI = msg.details
+    const thisNode = this.findOrCreateNode({ nodeId: msg.nodeid }, null, null, makeGUI)
+    thisNode.references = msg.browseresult.references
+    let componentOf = null
+    let organizedBy = null
+
+    for (const reference of msg.browseresult.references) {
+      const type = reference.referenceTypeId.split('=').pop()
+      if (reference.isForward) {
+        this.findOrCreateNode(reference, thisNode, typeMapping[type].name, makeGUI)
+      } else { // upwards references
+        switch (type) {
+          case ('35'): // OrganizedBy
+            if (!organizedBy) {
+              organizedBy = reference
+            }
+            break
+          case ('47'): // ComponentOf
+            componentOf = this.makeParentAndConnect(reference, thisNode, makeGUI)
+            break
+        }
+      }
+    }
+
+    if (thisNode.nodeId === 'ns=0;i=85') { // Setting up objectFolder
+      this.objectFolder = thisNode
+      const tighteningSystems = this.getTighteningSystems()
+      if (tighteningSystems.length === 0) {
+        for (const cb of this.listOfTSPromises) {
+          cb.reject('No TighteningSystem found')
+        }
+        throw new Error('No Tighteningsystem found')
+      }
+      for (const ts of tighteningSystems) {
+        ts.read().then(
+          () => {})
+      }
+      for (const cb of this.listOfTSPromises) {
+        cb.resolve(tighteningSystems)
+      }
+      this.listOfTSPromises = []
+    }
+
+    // Prioritize the component relation, but if no parent componentowner exist, use organizedBy reference instead
+    if (!componentOf && organizedBy) {
+      this.makeParentAndConnect(organizedBy, thisNode, makeGUI)
+    }
+
+    return thisNode
+  }
+
+  /**
+   * Core function theat either finds an already created Node or create a new if none exists
+   * @param {*} reference the type of reference the relation have
+   * @param {*} parent the parent node in the hierarhy
+   * @param {*} type the type of the component (as a string name)
+   * @param {*} makeGUI Should this generate a representation in the structure view
+   * @returns a node
+   */
+  findOrCreateNode2 (reference, parent, type = 'component', makeGUI) {
+    let returnNode
+    let referencedNode = this.nodeMapping[reference.nodeId]
+    if (type === 'association') {
+      referencedNode = parent.getRelation('association', reference.nodeId)
+    }
+    if (referencedNode) {
+      if (referencedNode.browseName && !referencedNode.makeGUI && makeGUI) {
+        referencedNode.parent = parent
+        referencedNode.createGUINode()
+      }
+      returnNode = referencedNode
+      returnNode.addBrowseData(reference)
+    } else {
+      if (type === 'association') {
+        returnNode = this.createAssociation(reference, parent, makeGUI)
+      } else {
+        returnNode = this.createBasicNode(reference, parent, makeGUI)
+      }
+    }
+    if (parent) {
+      parent.addRelation(type, reference.nodeId, returnNode)
+    }
+    returnNode.scrollTo()
+    return returnNode
   }
 
   /**
@@ -70,7 +143,7 @@ export default class AddressSpace {
    * @param {*} thisNode the current node
    * @param {*} makeGUI Should this generate a representation in the structure view
    * @returns a reference
-   *
+   */
   makeParentAndConnect (reference, thisNode, makeGUI) {
     let parent = this.nodeMapping[reference.nodeId]
     if (parent) {
@@ -92,7 +165,7 @@ export default class AddressSpace {
       }
     }
     return parent
-  } */
+  }
 
   handleNamespaces (namespaces) {
     this.nsIJT = namespaces.indexOf('http://opcfoundation.org/UA/IJT/')
@@ -105,23 +178,16 @@ export default class AddressSpace {
    * Sets up root and the Object folder
    */
   initiate () {
-    this.loadAndCreate('ns=0;i=84') // GRoot
-    this.loadAndCreate('ns=0;i=85') // Get Objects
-  }
-
-  loadAndCreate (nodeId) {
-    this.browseAndRead(nodeId, true).then((m) => {
+    this.browseAndRead('ns=0;i=84', true).then((m) => {
       this.createNode(m)
-    })
+    }) // Get root
+    this.browseAndRead('ns=0;i=85', true).then((m) => {
+      this.createNode(m)
+    }) // Get Objects
   }
 
   reset () {
     this.nodeMapping = {}
-  }
-
-  cleanse (node) {
-    console.log(`Cleansing node ${node.nodeId}`)
-    this.nodeMapping[node.nodeId] = null
   }
 
   setGUIGenerator (graphicGenerator) {
@@ -159,6 +225,23 @@ export default class AddressSpace {
       return nodeId + ' has not been browsed yet'
     }
     return node.toString()
+  }
+
+  createNode2 (browseData, parent, makeGUI) {
+    const newNode = new Node(parent, browseData, this, makeGUI)
+    this.nodeMapping[newNode.nodeId] = newNode
+    for (const callback of this.newNodeSubscription) {
+      callback(newNode)
+    }
+    return newNode
+  }
+
+  createAssociation (reference, caller, makeGUI) {
+    const newRelation = new Reference(caller, reference, this.socketHandler, this.graphicGenerator, makeGUI)
+    for (const callback of this.newNodeSubscription) {
+      callback(newRelation) // Is this correct????
+    }
+    return newRelation
   }
 
   getTighteningsSystemsPromise () {

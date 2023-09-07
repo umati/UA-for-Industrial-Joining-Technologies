@@ -46,9 +46,9 @@
     // Initiate the different tab handlers
     var servers = new ServerGraphics(tabGenerator.generateTab('Servers'), socketHandler)
     var addressSpace = new AddressSpace(socketHandler)
-    var addressSpaceGraphics = new AddressSpaceGraphics(tabGenerator.generateTab('Nodes', true), socketHandler, addressSpace)
-    var eventGraphics = new EventGraphics (tabGenerator.generateTab('Events'), socketHandler)
-    var eventManager = new EventManager(modelManager, eventGraphics);
+    var addressSpaceGraphics = new AddressSpaceGraphics(tabGenerator.generateTab('Nodes', true), addressSpace)
+    var eventManager = new EventManager(socketHandler);
+    var eventGraphics = new EventGraphics (tabGenerator.generateTab('Events'), eventManager)
     let assets = new AssetManager(addressSpace, socketHandler)
     let asstetGraphics = new AssetGraphics(tabGenerator.generateTab('Assets'), assets)
     let trace = new TraceGraphics(tabGenerator.generateTab('Trace'), ['angle', 'torque'], addressSpace)
@@ -59,27 +59,23 @@
 
     // Listen to the data from the server regarding the tree of queriable data and display it
     socketHandler.registerMandatory('browseresult', function (msg) {
-      return addressSpace.addNodeByBrowse(msg)
+      // return addressSpace.addNodeByBrowse(msg)
     })
 
     // Listen to result data and convert it into a javascript model then display it
     socketHandler.registerMandatory('readresult', function (msg) {
-      if (!msg) {
-        return
-      }
-      let node = addressSpace.addNodeByRead(msg)
-      if (node) {
-        let model = modelManager.createModelFromNode(node)
-        addressSpaceGraphics.displayModel(model)
-      }
-      return node
+  
     })
 
     // Listen to subscribed events messages
     socketHandler.registerMandatory('subscribed event', function (msg, context) {
-      console.log(msg.SourceName.value)
-      let model = eventManager.interpretMessage(msg)
-      
+      if (msg && msg.SourceName && msg.SourceName.value) {
+        console.log(msg.SourceName.value)
+      } else {
+        console.log('Event lacking SourceName received')
+      }
+      eventManager.receivedEvent(msg)
+      // eventGraphics.interpretMessage(msg)
     })
 
     // Listen to subscribed events messages
@@ -105,7 +101,14 @@
     // Here you could add code to actually subscribe to fields
     socketHandler.registerMandatory('subscription created', function (msg) {
       servers.messageDisplay('Subscription created')
-      socketHandler.subscribeEvent('Result') // Start listening for Result
+      eventManager.simpleSubscribeEvent(['Result'],
+        (e) => { // Filter
+          return true
+        },
+        (e) => { // Callback
+          eventGraphics.eventToHTML(e)
+        }
+      )
     })
 
     // Listen to session start

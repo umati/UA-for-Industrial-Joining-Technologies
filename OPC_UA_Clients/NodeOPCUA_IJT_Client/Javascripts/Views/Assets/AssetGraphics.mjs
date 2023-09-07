@@ -18,12 +18,6 @@ export default class AssetGraphics extends BasicScreen {
     displayArea.classList.add('drawAssetBox')
     leftHalf.appendChild(displayArea)
 
-    /*
-    const canvasArea = document.createElement('canvas')
-    canvasArea.classList.add('canvasBox')
-    leftHalf.appendChild(canvasArea)
-    */
-
     this.container = displayArea
   }
 

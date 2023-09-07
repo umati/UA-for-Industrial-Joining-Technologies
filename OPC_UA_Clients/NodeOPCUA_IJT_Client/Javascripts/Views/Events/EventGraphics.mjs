@@ -6,15 +6,23 @@ import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScre
  * graphical representation of the events
  */
 export default class EventGraphics extends ControlMessageSplitScreen {
-  constructor (container, socketHandler) {
+  constructor (container, eventManager) {
     super(container, 'Events', 'Event content')
-    this.socketHandler = socketHandler
+    this.eventManager = eventManager
     this.modelManager = new ModelManager()
     this.modelToHTML = new ModelToHTML()
 
     const box = this.createArea()
     this.createButton('Subscribe to result event', box, () => {
-      this.socketHandler.subscribeEvent('Result')
+      eventManager.listenEvent( // We use this function since the actual subscription has been set up once and for all
+        (e) => { // filter
+          return true
+        },
+        (e) => { // callback
+          console.log('In buttonsubscribed event')
+          this.eventToHTML(e)
+        }
+      )
     })
   }
 
@@ -22,12 +30,13 @@ export default class EventGraphics extends ControlMessageSplitScreen {
 
   }
 
-  displayEvent (e) {
+  interpretMessage (e) {
+    alert('here')
     this.eventToHTML(e)
   }
 
   eventToHTML (e) {
-    const x = (event, content) => {
+    const supportDataTypePrinting = (event, content) => {
       for (const [key, value] of Object.entries(event)) {
         const row = document.createElement('li')
         row.innerText = key
@@ -59,6 +68,10 @@ export default class EventGraphics extends ControlMessageSplitScreen {
       }
     }
 
+    if (!e.EventType) {
+      throw new Error('trying to display an event lacking an EventType.')
+    }
+
     const header = document.createElement('li')
     this.messages.appendChild(header)
 
@@ -77,14 +90,14 @@ export default class EventGraphics extends ControlMessageSplitScreen {
         if (e.SourceName) {
           header.innerText = e.SourceName.value
         }
-        if (event.EventType) {
+        if (e.EventType) {
           header.innerText = header.innerText + ' (Type: ' + e.EventType.value + ')'
         }
         if (!header.innerText) {
           header.innerText = 'EVENT'
         }
         header.appendChild(content)
-        x(e, content)
+        supportDataTypePrinting(e, content)
     }
   }
 }

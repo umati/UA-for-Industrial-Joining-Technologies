@@ -71,12 +71,12 @@ export default class SocketHandler {
    * @param {*} nodeId
    * @returns
    */
-  readPromise (nodeId) {
+  readPromise (nodeId, attribute) {
     return new Promise((resolve, reject) => {
       this.uniqueId++
       this.callMapping[this.uniqueId] = resolve
       this.failMapping[this.uniqueId] = reject
-      this.socket.emit('read', this.uniqueId, nodeId)
+      this.socket.emit('read', this.uniqueId, nodeId, attribute)
     })
   }
 
