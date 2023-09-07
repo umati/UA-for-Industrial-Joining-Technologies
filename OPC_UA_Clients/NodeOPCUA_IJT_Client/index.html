@@ -51,21 +51,17 @@
     var eventGraphics = new EventGraphics (tabGenerator.generateTab('Events'), eventManager)
     let assets = new AssetManager(addressSpace, socketHandler)
     let asstetGraphics = new AssetGraphics(tabGenerator.generateTab('Assets'), assets)
-    let trace = new TraceGraphics(tabGenerator.generateTab('Trace'), ['angle', 'torque'], addressSpace)
+    let trace = new TraceGraphics(tabGenerator.generateTab('Trace'), ['angle', 'torque'], socketHandler, eventManager)
     let methodGraphics = new MethodGraphics(tabGenerator.generateTab('Methods'))
     const methodManager = new MethodManager(socketHandler, methodGraphics)
    
     /*****************  Set up socket listeners to handle input from server *******************/
 
     // Listen to the data from the server regarding the tree of queriable data and display it
-    socketHandler.registerMandatory('browseresult', function (msg) {
-      // return addressSpace.addNodeByBrowse(msg)
-    })
+    socketHandler.registerMandatory('browseresult', function (msg) {})
 
     // Listen to result data and convert it into a javascript model then display it
-    socketHandler.registerMandatory('readresult', function (msg) {
-  
-    })
+    socketHandler.registerMandatory('readresult', function (msg) {})
 
     // Listen to subscribed events messages
     socketHandler.registerMandatory('subscribed event', function (msg, context) {
@@ -75,12 +71,10 @@
         console.log('Event lacking SourceName received')
       }
       eventManager.receivedEvent(msg)
-      // eventGraphics.interpretMessage(msg)
     })
 
     // Listen to subscribed events messages
-    socketHandler.registerMandatory('callresult', function (msg) {
-    })
+    socketHandler.registerMandatory('callresult', function (msg) {})
 
     // Listen to status messages from Node-OPCUA
     socketHandler.registerMandatory('status message', function (msg) {
@@ -114,6 +108,7 @@
     // Listen to session start
     socketHandler.registerMandatory('session established', function (msg) {
       servers.messageDisplay('Session established')
+      addressSpace.initiate();
       addressSpaceGraphics.initiateNodeTree()
 
     })
@@ -126,7 +121,6 @@
     // Listen to namespaces
     socketHandler.registerMandatory('namespaces', function (msg) {
       addressSpace.handleNamespaces(msg)
-     
       servers.messageDisplay('Receiving namespaces')
     })
 
@@ -145,7 +139,8 @@
 
     addressSpace.getTighteningsSystemsPromise().then(
         (tighteningSystemNodes) => { 
-          methodManager.setTighteningSystem(tighteningSystemNodes[0]) }
+          console.log(tighteningSystemNodes)
+          methodManager.setTighteningSystem(tighteningSystemNodes) }
       )
 
     window.onbeforeunload = function () {

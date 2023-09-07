@@ -1,4 +1,4 @@
-import ModelToHTML from '../../Models/ModelToHTML.mjs'
+import ModelToHTML from '../AddressSpace/ModelToHTML.mjs'
 import ModelManager from '../../Models/ModelManager.mjs'
 import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScreen.mjs'
 /**
@@ -28,11 +28,6 @@ export default class EventGraphics extends ControlMessageSplitScreen {
 
   initiate () {
 
-  }
-
-  interpretMessage (e) {
-    alert('here')
-    this.eventToHTML(e)
   }
 
   eventToHTML (e) {
@@ -81,7 +76,7 @@ export default class EventGraphics extends ControlMessageSplitScreen {
     switch (e.EventType.value) {
       case 'ns=4;i=1007': {
         // Send the result to trace viewer
-        const model = this.modelManager.createModelFromMessage(e)
+        const model = this.modelManager.createModelFromEvent(e)
         const a = this.modelToHTML.toHTML(model, true, e.SourceName.value)
         header.appendChild(a)
         break
