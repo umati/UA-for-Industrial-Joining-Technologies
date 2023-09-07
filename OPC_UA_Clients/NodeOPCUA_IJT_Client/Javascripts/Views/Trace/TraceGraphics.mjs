@@ -1,7 +1,7 @@
 // The purpose of this class is to display traces on the screen and manage
 // user interaction with them. It has little to do with the OPC UA communication as such
 // and is consequently kept entierly in the View folder.
-
+import ModelManager from '../../Models/ModelManager.mjs'
 import ChartManager from './ChartHandler.mjs'
 import TraceInterface from './TraceInterface.mjs'
 import SingleTraceData from './SingleTraceData.mjs'
@@ -13,11 +13,10 @@ import Step from './Step.mjs'
  * Little to none OPC UA relevant logic happens here
  */
 export default class TraceGraphics {
-  constructor (container, dimensions, addressSpace) {
+  constructor (container, dimensions, socketHandler, eventManager) {
     this.traceInterface = new TraceInterface(container)
     this.xDimensionName = dimensions[0]
     this.yDimensionName = dimensions[1]
-    this.addressSpace = addressSpace
     this.result = null
     this.showValuesSelected = false
     this.showLimitsSelected = false
@@ -33,6 +32,24 @@ export default class TraceGraphics {
         annotations: {}
       }
     }
+    this.modelManager = new ModelManager()
+
+    socketHandler.registerMandatory('readresult', (msg) => {
+      const value = msg?.dataValue?.value?.value
+      if (value && value.resultId) {
+        this.createNewTrace(value)
+      }
+    })
+
+    eventManager.listenEvent( // We use this function since the actual subscription has been set up once and for all
+      (e) => { // filter
+        return e.Result?.value
+      },
+      (e) => { // callback
+        console.log('In result event')
+        this.createNewTrace(e.Result.value)
+      }
+    )
 
     this.chartManager = new ChartManager(this.traceInterface.canvas, this)
     this.setupEventListeners()
@@ -55,8 +72,12 @@ export default class TraceGraphics {
   }
 
   // /////////////////////////////////////////////////////////////////////////
-  createNewTrace (event) {
-    const { result, trace } = event.detail
+
+  createNewTrace (values) {
+    const model = this.modelManager.createModelFromRead(values)
+
+    const trace = model.resultContent.trace
+    const result = model
     this.result = result
 
     if (!trace) return
@@ -288,10 +309,10 @@ export default class TraceGraphics {
 
   // ////////////   Setup support functions ////////////////////////////
   setupEventListeners () {
-    const serverDiv = document.getElementById('connectedServer')
-    serverDiv.addEventListener('newResultReceived', (event) => {
-      this.createNewTrace(event)
-    }, false)
+    // const serverDiv = document.getElementById('connectedServer')
+    // serverDiv.addEventListener('newResultReceived', (event) => {
+    // this.createNewTrace(event)
+    // }, false)
 
     this.traceInterface.traceTypeSelect.addEventListener('click', (event) => {
       this.decideTraceType(this.traceInterface.traceTypeSelect.options[this.traceInterface.traceTypeSelect.selectedIndex].value)

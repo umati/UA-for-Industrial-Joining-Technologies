@@ -5,96 +5,33 @@ export default class AddressSpace {
     this.socketHandler = socketHandler
     this.nodeMapping = {}
     this.objectFolder = null
-    // this.selectedTighteningSystem = null
-    // this.typeMapping = typeMapping
     this.listOfTSPromises = []
     this.ParentRelationSubscription = []
     this.newNodeSubscription = []
   }
 
   /**
-   *
-   */
-  createNode (nodeData) {
-    console.log('fixit')
-    const newNode = this.findOrCreateNode(nodeData)
-
-    // console.log(newNode.getRelation('ns=0;i=86'))
-    console.log(newNode.getNamedRelation('Objects'))
-    // console.log(newNode.getRelations('organizes'))
-
-    for (const callback of this.newNodeSubscription) {
-      callback(newNode)
-    }
-    return newNode
-  }
-
-  /**
-   *
-   */
-  findOrCreateNode (nodeData) {
-    let returnNode = this.nodeMapping[nodeData.nodeid]
-    if (!returnNode) {
-      returnNode = this.createBasicNode(nodeData)
-    }
-    return returnNode
-  }
-
-  /**
-   *
-   */
+  * This is the main promise for creating a node
+  * @param {*} nodeId the node identity
+  * @returns a Promise of a node
+  */
   findOrLoadNode (nodeId) {
     const returnNode = this.nodeMapping[nodeId]
     if (returnNode) {
       return new Promise((resolve, reject) => {
-        resolve(returnNode)
+        resolve(returnNode, false)
       })
     } else {
       return new Promise((resolve, reject) => {
         this.browseAndRead(nodeId, true).then((m) => {
-          resolve(this.createNode(m))
+          resolve(this.createNode(m), true)
         })
       })
     }
   }
 
-  createBasicNode (basicNodeData) {
-    const newNode = NodeFactory(basicNodeData)
-    this.nodeMapping[newNode.nodeId] = newNode
-    return newNode
-  }
-
-  /**
-   * Core function that creates a parent if none exists and creates the current node to it
-   * @param {*} reference the reference data type
-   * @param {*} thisNode the current node
-   * @param {*} makeGUI Should this generate a representation in the structure view
-   * @returns a reference
-   *
-  makeParentAndConnect (reference, thisNode, makeGUI) {
-    let parent = this.nodeMapping[reference.nodeId]
-    if (parent) {
-      parent.addBrowseData(reference)
-      // thisNode.setParent(parent)
-      for (const callback of this.ParentRelationSubscription) {
-        callback(parent, thisNode)
-      }
-      if (!thisNode.browseName) {
-        parent.GUIexplore(makeGUI) // Forcing parent to get this node's name
-      }
-    } else {
-      parent = this.createBasicNode(reference)
-      parent.addRelation('component', thisNode.nodeId, thisNode)
-      parent.GUIexplore(makeGUI)
-      // thisNode.setParent(parent)
-      for (const callback of this.ParentRelationSubscription) {
-        callback(parent, thisNode)
-      }
-    }
-    return parent
-  } */
-
   handleNamespaces (namespaces) {
+    this.OPCUA = namespaces.indexOf('http://opcfoundation.org/UA/')
     this.nsIJT = namespaces.indexOf('http://opcfoundation.org/UA/IJT/')
     this.nsMachinery = namespaces.indexOf('http://opcfoundation.org/UA/Machinery/')
     this.nsDI = namespaces.indexOf('http://opcfoundation.org/UA/DI/')
@@ -102,16 +39,23 @@ export default class AddressSpace {
   }
 
   /**
-   * Sets up root and the Object folder
+   * Sets up root and the Object folder and find a Tightening System
    */
   initiate () {
-    this.loadAndCreate('ns=0;i=84') // GRoot
-    this.loadAndCreate('ns=0;i=85') // Get Objects
-  }
-
-  loadAndCreate (nodeId) {
-    this.browseAndRead(nodeId, true).then((m) => {
-      this.createNode(m)
+    this.findOrLoadNode('ns=0;i=84').then((rootFolder) => { // GRoot
+      this.findOrLoadNode('ns=0;i=85').then((objectFolder) => {
+        this.objectFolder = objectFolder
+        const typerelations = objectFolder.getTypeDefinitionRelations('ns=4;i=1005')
+        if (!typerelations || typerelations.length === 0) {
+          throw new Error('Could not find Tightening System')
+        }
+        this.findOrLoadNode(typerelations[0].nodeId).then((tgtSystem) => {
+          for (const promise of this.listOfTSPromises) {
+            this.tighteningSystem = tgtSystem
+            promise.resolve(tgtSystem)
+          }
+        })
+      })
     })
   }
 
@@ -119,70 +63,15 @@ export default class AddressSpace {
     this.nodeMapping = {}
   }
 
-  cleanse (node) {
-    console.log(`Cleansing node ${node.nodeId}`)
-    this.nodeMapping[node.nodeId] = null
-  }
-
-  setGUIGenerator (graphicGenerator) {
-    this.graphicGenerator = graphicGenerator
-  }
-
-  /**
-   * A promise to browse and read a node, given only a nodeId
-   * @param {*} nodeId
-   * @returns the node
-   */
-  browseAndReadWithNodeId (nodeId, details = false) {
-    let referencedNode = this.nodeMapping[nodeId]
-    if (!referencedNode) {
-      referencedNode = this.createBasicNode({ nodeId }, null, details)
-    }
-    return referencedNode.GUIexplore(details)
-  }
-
-  // This is called whenever a node has been being read
-  addNodeByRead (msg) {
-    if (!msg.dataValue.value) {
-      return
-    }
-    const node = this.nodeMapping[msg.nodeid]
-    if (node) {
-      node.addReadData(msg.dataValue.value)
-    }
-    return node
-  }
-
-  toString (nodeId) {
-    const node = this.nodeMapping[nodeId]
-    if (!node) {
-      return nodeId + ' has not been browsed yet'
-    }
-    return node.toString()
-  }
-
   getTighteningsSystemsPromise () {
     return new Promise((resolve, reject) => {
-      if (this.objectFolder) {
-        resolve(this.getTighteningSystems())
+      if (this.tighteningSystem) {
+        resolve(this.tighteningSystem)
         return
       }
       this.listOfTSPromises.push({ resolve, reject })
     }
     )
-  }
-
-  getTighteningSystems () {
-    if (!this.objectFolder) {
-      throw new Error('Root/Objects folder not found')
-    }
-    const tighteningSystems = []
-    for (const node of this.objectFolder.getRelations('organizes')) {
-      if (node.typeDefinition === 'ns=4;i=1005') {
-        tighteningSystems.push(node)
-      }
-    }
-    return tighteningSystems
   }
 
   /**
@@ -213,9 +102,11 @@ export default class AddressSpace {
   }
 
   /**
-   * Use addressSpace.browseAndReadWithNodeId if only the Id is available
-   * @param {*} response
-   * @returns
+   * This function is a promise to load the relevant data and then resolv a special structure that
+   * can be set up to create a node. Most often loadAndCreate works better
+   * @param {*} nodeId the node identity
+   * @param {*} details do we want the extra data from the browse?
+   * @returns a promise of a datastructure that can be used to create a node
    */
   browseAndRead (nodeId, details = false) {
     return this.socketHandler.browsePromise(nodeId, details).then(
@@ -232,12 +123,41 @@ export default class AddressSpace {
                       displayname: readname.message.dataValue.value,
                       relations: browseMsg.message.browseresult.references
                     }
-                    resolve(returnValue)
+                    if (readclass.message.dataValue.value.value === 2) {
+                      return new Promise(() => {
+                        this.socketHandler.readPromise(nodeId, 'Value').then(
+                          (value) => {
+                            returnValue.value = value
+                            resolve(returnValue)
+                          })
+                      })
+                    } else {
+                      resolve(returnValue)
+                    }
                   })
               })
             })
         })
       })
+  }
+
+  /**
+   * Supportfunction that takes the data from browseAndRead and turn it into an actual node
+   * @param {*} nodeData the data from browseAndRead
+   * @returns a node
+   */
+  createNode (nodeData) {
+    let newNode = this.nodeMapping[nodeData.nodeid]
+
+    if (!newNode) {
+      newNode = NodeFactory(nodeData)
+      this.nodeMapping[newNode.nodeId] = newNode
+    }
+
+    for (const callback of this.newNodeSubscription) {
+      callback(newNode)
+    }
+    return newNode
   }
 
   read (nodeId, attribute) {

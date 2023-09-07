@@ -58,6 +58,11 @@ class PartialNode {
     return Object.values(this.data.relations).filter(
       (x) => { return (x.isForward === false) })
   }
+
+  getTypeDefinitionRelations (typeDefinition) {
+    return Object.values(this.data.relations).filter(
+      (x) => { return (x.typeDefinition === typeDefinition) })
+  }
 }
 
 export class Reference {
@@ -102,47 +107,4 @@ class MethodNode extends PartialNode {
     super(data)
     this.a = 1
   }
-
-  get referenceTypeId () {
-    return this.browseData.referenceTypeId
-  }
-
-  // using organizes and component
-  getChild (browseName, callback) {
-
-  }
-
-  addRelation (type, id, obj) {
-
-  }
-
-  getRelation (type, nodeId) {
-
-  }
-
-  getRelations (type) {
-
-  }
-
-  getNamedRelation (type, browseName) {
-
-  }
-
-  addReadData (value) {
-  }
-
-  isComplete () {
-
-  }
-
-  /* setParent (parent) {
-    if (this.graphicRepresentation &&
-      this.graphicRepresentation.whole &&
-      parent.graphicRepresentation &&
-      this.graphicRepresentation.whole.parentElement !== parent.graphicRepresentation.container) {
-      this.graphicGenerator.addChild(parent.graphicRepresentation, this.graphicRepresentation)
-    }
-  } */
 }
-
-// SetParent createGUINode ScrollTo

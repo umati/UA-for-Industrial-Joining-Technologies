@@ -1,9 +1,8 @@
-/* const colorMapping = {
-  component: 'black',
-  hasInterface: 'green',
-  hasAddin: 'brown',
-  association: 'grey'
-} */
+const nodeClassColor = {
+  Object: 'grey',
+  Method: 'green',
+  Variable: 'red'
+}
 
 // The purpose of this class is to generate a tree of the things that can be
 // clicked in order to subscribe or read data
@@ -13,26 +12,6 @@ export default class AddressSpaceTree {
     this.context = context
     context.controlArea.innerHTML = ''
     this.addressSpace = context.addressSpace
-  }
-
-  generateGUINode (node) {
-    let container
-    const parents = node.getParentRelations()
-    if (parents && parents.length > 0) {
-      this.addressSpace.findOrLoadNode(parents[0].nodeId).then((parentNode) => {
-        container = parentNode.graphicArea
-        return this.generateGUINodeSupport(node, container)
-      })
-    } else { // No parent
-      container = this.context.controlArea
-      return this.generateGUINodeSupport(node, container)
-    }
-  }
-
-  scrollTo (innerContainer) {
-    if (innerContainer && innerContainer.whole) {
-      innerContainer.whole.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' })
-    }
   }
 
   ReplaceOldButtonArea (context, buttonArea, nodeId) {
@@ -46,11 +25,20 @@ export default class AddressSpaceTree {
     context.appendChild(buttonArea)
   }
 
+  generateGUINode (node, container) {
+    if (container) {
+      return this.generateGUINodeSupport(node, container)
+    }
+
+    container = this.context.controlArea
+    return this.generateGUINodeSupport(node, container)
+  }
+
   createRelation (relation, context, clickCallback) {
     console.log(relation.browseName.name)
 
     const buttonArea = document.createElement('div')
-    buttonArea.style.border = '1px solid red' // debug
+    // buttonArea.style.border = '1px solid red' // debug
     buttonArea.style.margin = '0px 0px 0px 10px'
     buttonArea.nodeId = relation.nodeId
     context.appendChild(buttonArea)
@@ -65,7 +53,7 @@ export default class AddressSpaceTree {
     browse.classList.add('treeButton')
     browse.style.margin = '-5px 0px -5px -5px'
     browse.title = 'Browse this node from the server'
-    browse.style.color = 'grey'
+    browse.style.color = nodeClassColor[relation.nodeClass]
 
     browse.onclick = function () {
       this.callback()
@@ -76,41 +64,16 @@ export default class AddressSpaceTree {
   }
 
   generateGUINodeSupport (node, context) {
-    // const nodeId = node.nodeId
     let name = 'undefined'
     if (node.browseName) {
       name = node.browseName
     }
+    const buttonArea = document.createElement('div')
+    // buttonArea.style.border = '1px solid red' // debug
+    buttonArea.style.margin = '0px 0px 0px 10px'
+    buttonArea.nodeId = node.nodeId
+    this.ReplaceOldButtonArea(context, buttonArea, node.nodeId)
 
-    let color
-    switch (node.nodeClass.value) {
-      case 1:
-        color = 'black' // object
-        break
-      case 2: // variable?
-        color = 'red'
-        break
-      case 3:
-        color = 'lightgreen'
-        break
-      case 4: // method
-        color = 'green'
-        break
-      default:
-        color = 'black'
-    }
-
-    let buttonArea
-    if (node.graphicArea) {
-      buttonArea = node.graphicArea
-    } else {
-      buttonArea = document.createElement('div')
-      buttonArea.style.border = '1px solid red' // debug
-      buttonArea.style.margin = '0px 0px 0px 10px'
-      buttonArea.nodeId = node.nodeId
-      this.ReplaceOldButtonArea(context, buttonArea, node.nodeId)
-      node.graphicArea = buttonArea
-    }
     if (!node.browseButton) {
       const browse = document.createElement('button')
       browse.classList.add('buttonAreaStyle')
@@ -120,10 +83,10 @@ export default class AddressSpaceTree {
       browse.classList.add('treeButton')
       browse.style.margin = '-5px 0px -5px -5px'
       browse.title = 'Browse this node from the server'
-      browse.style.color = color
+      browse.style.color = 'black'
       browse.buttonArea = buttonArea
-
       browse.onclick = () => { this.toggleNodeContent(node, buttonArea) }
+
       buttonArea.appendChild(browse)
       node.browseButton = browse
     }
@@ -133,11 +96,6 @@ export default class AddressSpaceTree {
   cleanse (area) {
     while (area.children.length > 1) {
       this.cleanse(area.children[1])
-      const node = this.addressSpace.nodeMapping[area.children[1].nodeId]
-      if (node) {
-        // node.graphicArea = null
-        this.addressSpace.cleanse(node)
-      }
       area.removeChild(area.children[1])
     }
   }
@@ -148,181 +106,35 @@ export default class AddressSpaceTree {
     } else {
       for (const relation of node.getChildRelations()) {
         switch (relation.referenceTypeName) {
-          case 'hasType':
-            break
-          case 'apple':
+          case 'hasType': // skip the boring FolderTypes
             break
           default:
-            // buttonArea.style.border = '4px solid blue'
-            this.createRelation(relation, buttonArea, x => this.convertRelationToNode(relation.nodeId))
+            this.createRelation(relation, buttonArea, x => this.convertRelationToNode(relation, buttonArea))
         }
       }
     }
   }
 
-  convertRelationToNode (nodeId) {
-    this.addressSpace.findOrLoadNode(nodeId).then((newNode) => {
-      this.toggleNodeContent(newNode, newNode.graphicArea)
-    })
-  }
+  convertRelationToNode (relation, subscriberArea) {
+    switch (relation.nodeClass) {
+      case 'Method':
 
-  /*
-    let type = 0
-    if (node.referenceTypeId) {
-      type = node.referenceTypeId.split('=').pop()
-    }
-
-    if (type === '40') {
-      if (node && node.parent && node.parent.readButton) {
-        node.parent.typeName = node.browseName
-        node.parent.readButton.title += '\nType: ' + node.browseName
-        return
-      }
-    }
-
-    const buttonArea = document.createElement('div')
-    context.appendChild(buttonArea)
-
-    const browse = document.createElement('button')
-    browse.classList.add('buttonAreaStyle')
-    browse.innerHTML = '+'
-    browse.myNodeId = nodeId
-    browse.socket = this.socket
-    browse.addressSpace = this.addressSpace
-    browse.node = node
-    browse.classList.add('invisButton')
-    browse.classList.add('updownpointer')
-    browse.classList.add('treeButton')
-    browse.style.margin = '-5px 0px -5px -5px'
-    browse.title = 'Browse this node from the server'
-
-    browse.onclick = function () {
-      if (this.myContainer.style.display === 'block' && this.innerHTML !== '+') { // Close
-        this.myContainer.style.display = 'none'
-        this.innerHTML = '+'
-      } else { // Open
-        this.myContainer.style.display = 'block'
-        this.innerHTML = '-'
-        this.node.GUIexplore(true).then()
-      }
-    }
-    buttonArea.appendChild(browse)
-    const read = document.createElement('button')
-    node.readButton = read
-    read.innerHTML = name
-    read.node = node
-    read.socket = this.socket
-    read.structure = this.structure
-    read.classList.add('invisButton')
-    read.classList.add('selectpointer')
-    read.classList.add('treeButton')
-    read.style.margin = '-5px'
-
-    read.onclick = function () {
-      if (this.node.hasBeenRead) {
-        this.node.GUIexplore(true).then()
-        if (this.innerHTML !== '+') {
-          this.myContainer.style.display = 'none'
-        }
-      } else {
-        this.node.GUIexplore(true).then()
-      }
-    }
-
-    //let color = colorMapping[type]
-    let typeName = this.addressSpace.typeMapping[type].name
-    if (!color) {
-      color = 'black'
-    }
-    if (typeName) {
-      typeName = 'Role: ' + typeName
-    } else {
-      typeName = ''
-    }
-    read.style.color = color
-    read.title = typeName
-
-    buttonArea.appendChild(read)
-
-    const container = document.createElement('div')
-    container.classList.add('treeDiv')
-    container.style.display = 'block'
-
-    // container.innerText='node-area: '+name
-    buttonArea.appendChild(container)
-    browse.myContainer = container
-    read.myContainer = container
-    this.mapping[node.nodeId] = container
-
-    return {
-      whole: buttonArea,
-      container,
-      button: read,
-      browse
-    }
-
-  addChild (parent, child) {
-    if (child.graphicRepresentation &&
-      child.graphicRepresentation.whole &&
-      parent.graphicRepresentation &&
-      child.graphicRepresentation.whole.parentElement !== parent.graphicRepresentation.container) {
-      child.graphicGenerator.addChild2(parent.graphicRepresentation, child.graphicRepresentation)
+        break
+      case 'Variable':
+        this.addressSpace.findOrLoadNode(relation.nodeId).then((newNode) => {
+        })
+        break
+      default:
+        this.addressSpace.findOrLoadNode(relation.nodeId).then((newNode) => {
+          const newArea = this.generateGUINode(newNode, subscriberArea)
+          this.toggleNodeContent(newNode, newArea)
+        })
     }
   }
 
-  addChild2 (parent, child) {
-    parent.container.appendChild(child.whole)
-    parent.browse.innerHTML = '-'
-    parent.container.style.display = 'block'
-    child.container.style.display = 'block'
-    child.browse.innerHTML = '-'
-  }
-
-  generateGUIReference (reference) {
-    let container
-    if (!reference.parent) {
-      container = this.context.controlArea
-    } else {
-      container = this.mapping[reference.parent.nodeId]
+  scrollTo (innerContainer) {
+    if (innerContainer && innerContainer.whole) {
+      innerContainer.whole.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' })
     }
-
-    this.generateGUIReferenceSupport(reference, container)
-    return container
   }
-
-  generateGUIReferenceSupport (reference, context) {
-    const nodeId = reference.nodeId
-    const name = reference.browseName
-    const browse = document.createElement('button')
-
-    // const type = reference.referenceTypeId.split('=').pop()
-
-    const buttonArea = document.createElement('div')
-    context.appendChild(buttonArea)
-    browse.classList.add('buttonAreaStyle')
-
-    browse.innerHTML = name
-    browse.myNodeId = nodeId
-    browse.socket = this.socket
-    browse.addressSpace = this.addressSpace
-    browse.reference = reference
-    browse.classList.add('invisButton')
-    browse.classList.add('updownpointer')
-    browse.classList.add('treeButton')
-    browse.style.margin = '-5px 0px -5px -5px'
-    browse.title = 'Browse this node from the server'
-
-    browse.onclick = function () {
-      this.reference.explore()
-    }
-    buttonArea.appendChild(browse)
-
-    const container = document.createElement('div')
-    container.classList.add('treeDiv')
-    buttonArea.appendChild(container)
-    browse.myContainer = container
-    this.mapping[reference.nodeId] = container
-
-    return { whole: buttonArea, container, button: browse }
-  } */
 }

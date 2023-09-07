@@ -183,21 +183,21 @@ export default class NodeOPCUAInterface {
           nodeId,
           attributeId: AttributeIds[attribute]
         })
-        console.log('1:xxx ' + attribute)
+        // console.log('1:xxx ' + attribute)
         /* console.log('1:nodeId ' + nodeId)
         console.log('1:a ' + AttributeIds)
         console.log('1:b ' + AttributeIds.DisplayName)
         console.log('1:c ' + AttributeIds['DisplayName'])
         console.log('1:nodeId ' + nodeId) */
-        console.log('1:dataValue ' + dataValue.toString())
+        // console.log('1:dataValue ' + dataValue.toString())
         const result = dataValue.value.value
         if (result && result.resultContent) {
           await promoteOpaqueStructure(this.session, [{ value: result.resultContent }])
         }
 
-        console.log('2:dataValue ' + dataValue.toString())
+        // console.log('2:dataValue ' + dataValue.toString())
 
-        this.io.emit('readresult', { callid, dataValue, stringValue: dataValue.toString(), nodeid: nodeId })
+        this.io.emit('readresult', { callid, dataValue, stringValue: dataValue.toString(), nodeid: nodeId, attribute })
         return dataValue
       } catch (err) {
         this.displayFunction('Node.js OPC UA client error (reading): ' + err.message) // Display the error message first

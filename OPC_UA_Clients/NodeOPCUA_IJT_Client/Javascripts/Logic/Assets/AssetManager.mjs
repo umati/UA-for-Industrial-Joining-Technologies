@@ -11,7 +11,7 @@ export default class AssetHandler {
   fixAssets (assetTypes, doneCallback) {
     this.addressSpace.getTighteningsSystemsPromise().then(
       (tighteningSystems) => {
-        this.tighteningSystem = tighteningSystems[0]
+        this.tighteningSystem = tighteningSystems
         console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId)
         this.loadAllAssets().then(
           () => {
@@ -102,7 +102,7 @@ export default class AssetHandler {
     const promiseList = []
     for (const node of nodeList) {
       promiseList.push(
-        node.GUIexplore().then(
+        this.addressSpace.findOrLoadNode(node.nodeId).then(
           () => { })
       )
     }
@@ -115,7 +115,7 @@ export default class AssetHandler {
       (resolve) => {
         this.findAssetFolder(folderName).then(
           (nodeId) => {
-            this.addressSpace.browseAndReadWithNodeId(nodeId).then(
+            this.addressSpace.findOrLoadNode(nodeId).then(
               (folderNode) => {
                 resolve(folderNode.getRelations('component'))
               }

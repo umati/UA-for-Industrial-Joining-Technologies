@@ -56,7 +56,7 @@ export default class ModelManager {
    * @param {*} msg
    * @returns
    */
-  createModelFromMessage (msg) {
+  createModelFromEvent (msg) {
     // console.log(node.nodeId)
     // console.log(node.typeName)
     let model
@@ -75,6 +75,17 @@ export default class ModelManager {
     }
     //node.model = model
     return model
+  }
+  /**
+   * This method handles the top level interpretation of a message that should be
+   * converted to a model. 
+   * @param {*} values
+   * @returns
+   */
+  createModelFromRead (values) {
+    if (values.resultId) {
+      return new ResultDataType(values, this)
+     }
   }
 
   /**

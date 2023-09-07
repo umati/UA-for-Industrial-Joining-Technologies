@@ -160,10 +160,10 @@ export default class ModelToHTML {
     return combined
   }
 
-  display (model) {
+  display (model, name = 'Response') {
     let onScreen
     if (typeof model === 'object') { // Handle a model
-      const onScreen = this.toHTML(model, true, 'Response')
+      const onScreen = this.toHTML(model, true, name)
       if (onScreen.expandLong) {
         onScreen.expandLong()
       }
@@ -176,7 +176,7 @@ export default class ModelToHTML {
       onScreen.scrollIntoView()
     } else { // Handle a single value
       onScreen = document.createElement('li')
-      onScreen.innerHTML = model
+      onScreen.innerHTML = name + ' ' + model
       this.messageArea.appendChild(onScreen)
       this.messageArea.scrollTo(0, this.messageArea.scrollHeight)
       onScreen.scrollIntoView()
