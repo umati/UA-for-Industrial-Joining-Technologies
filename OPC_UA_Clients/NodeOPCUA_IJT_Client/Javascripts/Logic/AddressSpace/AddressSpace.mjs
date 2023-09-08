@@ -16,6 +16,65 @@ export default class AddressSpace {
   * @returns a Promise of a node
   */
   findOrLoadNode (nodeId) {
+    /**
+     * Supportfunction that takes the data from browseAndRead and turn it into an actual node
+     * @param {*} nodeData the data from browseAndRead
+     * @returns a node
+     */
+    const createNode = (nodeData) => {
+      let newNode = this.nodeMapping[nodeData.nodeid]
+
+      if (!newNode) {
+        newNode = NodeFactory(nodeData)
+        this.nodeMapping[newNode.nodeId] = newNode
+      }
+
+      for (const callback of this.newNodeSubscription) {
+        callback(newNode)
+      }
+      return newNode
+    }
+
+    /**
+     * This function is a promise to load the relevant data and then resolv a special structure that
+     * can be set up to create a node. Most often loadAndCreate works better
+     * @param {*} nodeId the node identity
+     * @param {*} details do we want the extra data from the browse?
+     * @returns a promise of a datastructure that can be used to create a node
+     */
+    const browseAndRead = (nodeId, details = false) => {
+      return this.socketHandler.browsePromise(nodeId, details).then(
+        (browseMsg) => {
+          return new Promise((resolve) => {
+            this.socketHandler.readPromise(nodeId, 'DisplayName').then(
+              (readname) => {
+                return new Promise(() => {
+                  this.socketHandler.readPromise(nodeId, 'NodeClass').then(
+                    (readclass) => {
+                      const returnValue = {
+                        nodeid: browseMsg.message.nodeid,
+                        nodeclass: readclass.message.dataValue.value,
+                        displayname: readname.message.dataValue.value,
+                        relations: browseMsg.message.browseresult.references
+                      }
+                      if (readclass.message.dataValue.value.value === 2) {
+                        return new Promise(() => {
+                          this.socketHandler.readPromise(nodeId, 'Value').then(
+                            (value) => {
+                              returnValue.value = value
+                              resolve(returnValue)
+                            })
+                        })
+                      } else {
+                        resolve(returnValue)
+                      }
+                    })
+                })
+              })
+          })
+        })
+    }
+
     const returnNode = this.nodeMapping[nodeId]
     if (returnNode) {
       return new Promise((resolve, reject) => {
@@ -23,8 +82,8 @@ export default class AddressSpace {
       })
     } else {
       return new Promise((resolve, reject) => {
-        this.browseAndRead(nodeId, true).then((m) => {
-          resolve(this.createNode(m), true)
+        browseAndRead(nodeId, true).then((m) => {
+          resolve(createNode(m), true)
         })
       })
     }
@@ -107,7 +166,6 @@ export default class AddressSpace {
    * @param {*} nodeId the node identity
    * @param {*} details do we want the extra data from the browse?
    * @returns a promise of a datastructure that can be used to create a node
-   */
   browseAndRead (nodeId, details = false) {
     return this.socketHandler.browsePromise(nodeId, details).then(
       (browseMsg) => {
@@ -139,13 +197,13 @@ export default class AddressSpace {
             })
         })
       })
-  }
+  } */
 
   /**
    * Supportfunction that takes the data from browseAndRead and turn it into an actual node
    * @param {*} nodeData the data from browseAndRead
    * @returns a node
-   */
+
   createNode (nodeData) {
     let newNode = this.nodeMapping[nodeData.nodeid]
 
@@ -158,6 +216,28 @@ export default class AddressSpace {
       callback(newNode)
     }
     return newNode
+  } */
+
+  /**
+   * Turn a list of relations into a promise of a list of node
+   * @param {*} relations a list of relations
+   * @returns a Promise of a list of nodes
+   */
+  relationsToNodes (relations) {
+    const promiseList = []
+    // const nodeList = []
+    for (const relation of relations) {
+      promiseList.push(
+        // this.findOrLoadNode(relation.nodeId)
+        new Promise((resolve, reject) => {
+          this.findOrLoadNode(relation.nodeId).then((node) => {
+            resolve(node)
+          })
+        })
+      )
+    }
+
+    return Promise.all(promiseList)
   }
 
   read (nodeId, attribute) {

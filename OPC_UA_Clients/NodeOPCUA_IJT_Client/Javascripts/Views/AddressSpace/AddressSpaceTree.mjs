@@ -35,7 +35,7 @@ export default class AddressSpaceTree {
   }
 
   createRelation (relation, context, clickCallback) {
-    console.log(relation.browseName.name)
+    // console.log(relation.browseName.name)
 
     const buttonArea = document.createElement('div')
     // buttonArea.style.border = '1px solid red' // debug

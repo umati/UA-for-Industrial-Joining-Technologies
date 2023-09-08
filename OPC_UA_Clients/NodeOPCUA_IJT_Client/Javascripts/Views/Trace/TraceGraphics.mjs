@@ -46,7 +46,7 @@ export default class TraceGraphics {
         return e.Result?.value
       },
       (e) => { // callback
-        console.log('In result event')
+        // console.log('In result event')
         this.createNewTrace(e.Result.value)
       }
     )

@@ -14,15 +14,13 @@ export default class AssetHandler {
         this.tighteningSystem = tighteningSystems
         console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId)
         this.loadAllAssets().then(
-          () => {
-            // console.log('All assets loaded.')
-            let fullList = []
-            for (const assetType of assetTypes) {
-              fullList = [...fullList, ...this[assetType]]
-            }
-            this.browseAndReadList(fullList).then(
-              () => { doneCallback() }
-            )
+          (x) => {
+            console.log('All assets loaded. ')
+            // let fullList = []
+            // for (const assetType of assetTypes) {
+            // fullList = [...fullList, ...this[assetType]]
+            // }
+            doneCallback()
           }
         )
       },
@@ -91,19 +89,8 @@ export default class AssetHandler {
         this.findContentInFolder(folderName).then((list) => {
           addAssetGraphicData(list, folderName)
           this[folderName.toLowerCase()] = list
+          return list
         })
-      )
-    }
-
-    return Promise.all(promiseList)
-  }
-
-  browseAndReadList (nodeList) {
-    const promiseList = []
-    for (const node of nodeList) {
-      promiseList.push(
-        this.addressSpace.findOrLoadNode(node.nodeId).then(
-          () => { })
       )
     }
 
@@ -112,17 +99,25 @@ export default class AssetHandler {
 
   findContentInFolder (folderName) {
     return new Promise(
-      (resolve) => {
+      (resolve, reject) => {
         this.findAssetFolder(folderName).then(
           (nodeId) => {
             this.addressSpace.findOrLoadNode(nodeId).then(
               (folderNode) => {
-                resolve(folderNode.getRelations('component'))
-              }
+                const relations = folderNode.getChildRelations('component')
+                if (relations.length > 0) {
+                  this.addressSpace.relationsToNodes(relations).then((values) => {
+                    resolve(values)
+                  })
+                } else {
+                  resolve([])
+                }
+              },
+              () => reject(new Error('failed to load a node in a folder'))
             )
-          })
-      },
-      (fail) => { fail(`Failed to find asset folder ${folderName}`) }
+          },
+          () => reject(new Error('failed to load a node in a folder')))
+      }
     )
   }
 

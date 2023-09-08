@@ -19,7 +19,7 @@ export default class EventGraphics extends ControlMessageSplitScreen {
           return true
         },
         (e) => { // callback
-          console.log('In buttonsubscribed event')
+          // console.log('In buttonsubscribed event')
           this.eventToHTML(e)
         }
       )

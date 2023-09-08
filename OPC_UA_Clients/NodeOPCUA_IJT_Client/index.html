@@ -55,13 +55,16 @@
     let methodGraphics = new MethodGraphics(tabGenerator.generateTab('Methods'))
     const methodManager = new MethodManager(socketHandler, methodGraphics)
    
-    /*****************  Set up socket listeners to handle input from server *******************/
+    /* ****************  Set up socket listeners to handle input from server ****************** */
 
     // Listen to the data from the server regarding the tree of queriable data and display it
     socketHandler.registerMandatory('browseresult', function (msg) {})
 
     // Listen to result data and convert it into a javascript model then display it
     socketHandler.registerMandatory('readresult', function (msg) {})
+
+    // Listen to pathtoid data and convert it into a javascript model then display it
+    socketHandler.registerMandatory('pathtoidresult', function (msg) {})
 
     // Listen to subscribed events messages
     socketHandler.registerMandatory('subscribed event', function (msg, context) {
@@ -139,7 +142,7 @@
 
     addressSpace.getTighteningsSystemsPromise().then(
         (tighteningSystemNodes) => { 
-          console.log(tighteningSystemNodes)
+          // console.log(tighteningSystemNodes)
           methodManager.setTighteningSystem(tighteningSystemNodes) }
       )
 

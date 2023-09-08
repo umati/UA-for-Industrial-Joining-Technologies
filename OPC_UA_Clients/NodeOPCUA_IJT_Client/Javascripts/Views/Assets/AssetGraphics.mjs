@@ -36,7 +36,7 @@ export default class AssetGraphics extends BasicScreen {
     function drawAssetWithExternals (associations, containerNode) {
       for (const external of externals) {
         for (const association of associations) {
-          if (association.associatedNodeId === external.nodeId) {
+          if (association.nodeId === external.nodeId) {
             assetGraphics.addExternal(external, containerNode)
             drawAssetRecursive(external)
           }
@@ -44,7 +44,7 @@ export default class AssetGraphics extends BasicScreen {
       }
       for (const internal of internals) {
         for (const association of associations) {
-          if (association.associatedNodeId === internal.nodeId) {
+          if (association.nodeId === internal.nodeId) {
             assetGraphics.addInternal(internal, containerNode)
             drawAssetRecursive(internal)
           }
@@ -73,7 +73,7 @@ export default class AssetGraphics extends BasicScreen {
 
       for (const tool of assetManager.tools) {
         for (const association of associations) {
-          if (association.associatedNodeId === tool.nodeId) {
+          if (association.nodeId === tool.nodeId) {
             assetGraphics.addTool(tool, controller)
             drawAssetRecursive(tool)
           }
@@ -141,7 +141,7 @@ export default class AssetGraphics extends BasicScreen {
     }
     const asset = document.createElement('div')
     asset.classList.add('assetArea')
-    asset.innerText = node.displayName.text
+    asset.innerText = node.displayName
     asset.style.backgroundColor = 'brown'
     asset.style.left = '10%'
     asset.style.right = '10%'
@@ -166,7 +166,7 @@ export default class AssetGraphics extends BasicScreen {
   addHorizontal (node, container) {
     const mainbox = document.createElement('div')
     mainbox.classList.add('assetBox')
-    mainbox.innerText = node.displayName.text
+    mainbox.innerText = node.displayName
     mainbox.style.top = '60%'
     mainbox.style.bottom = '10%'
     container.appendChild(mainbox)

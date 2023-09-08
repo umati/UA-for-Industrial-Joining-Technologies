@@ -49,9 +49,9 @@ class PartialNode {
       x => type === x.referenceTypeName)
   }
 
-  getChildRelations () {
+  getChildRelations (type) {
     return Object.values(this.data.relations).filter(
-      x => x.isForward)
+      x => { return x.isForward && (!type || type === x.referenceTypeName) })
   }
 
   getParentRelations () {
@@ -91,20 +91,26 @@ export function NodeFactory (data) {
 class ObjectNode extends PartialNode {
   constructor (data) {
     super(data)
-    this.a = 1
+    if (data?.displayname?.value?.text) {
+      this.aname = data.displayname.value.text + ' Object' // To simplify debugging
+    }
   }
 }
 
 class VariableNode extends PartialNode {
   constructor (data) {
     super(data)
-    this.a = 1
+    if (data?.displayname?.value?.text) {
+      this.aname = data.displayname.value.text + 'Variable' // To simplify debugging
+    }
   }
 }
 
 class MethodNode extends PartialNode {
   constructor (data) {
     super(data)
-    this.a = 1
+    if (data?.displayname?.value?.text) {
+      this.aname = data.displayname.value.text + ' Method' // To simplify debugging
+    }
   }
 }
