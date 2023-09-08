@@ -25,51 +25,16 @@ export default class AddressSpaceTree {
     context.appendChild(buttonArea)
   }
 
-  generateGUINode (node, container) {
-    if (container) {
-      return this.generateGUINodeSupport(node, container)
+  generateGUINode (node, context) {
+    if (!context) {
+      context = this.context.controlArea
     }
 
-    container = this.context.controlArea
-    return this.generateGUINodeSupport(node, container)
-  }
-
-  createRelation (relation, context, clickCallback) {
-    // console.log(relation.browseName.name)
-
-    const buttonArea = document.createElement('div')
-    // buttonArea.style.border = '1px solid red' // debug
-    buttonArea.style.margin = '0px 0px 0px 10px'
-    buttonArea.nodeId = relation.nodeId
-    context.appendChild(buttonArea)
-
-    const browse = document.createElement('button')
-    browse.classList.add('buttonAreaStyle')
-    browse.innerHTML = relation.browseName.name + '  [' + relation.referenceTypeName + ']'
-    browse.callback = clickCallback
-    browse.relation = relation
-    browse.classList.add('invisButton')
-    browse.classList.add('updownpointer')
-    browse.classList.add('treeButton')
-    browse.style.margin = '-5px 0px -5px -5px'
-    browse.title = 'Browse this node from the server'
-    browse.style.color = nodeClassColor[relation.nodeClass]
-
-    browse.onclick = function () {
-      this.callback()
-    }
-
-    buttonArea.appendChild(browse)
-    return browse
-  }
-
-  generateGUINodeSupport (node, context) {
     let name = 'undefined'
     if (node.browseName) {
       name = node.browseName
     }
     const buttonArea = document.createElement('div')
-    // buttonArea.style.border = '1px solid red' // debug
     buttonArea.style.margin = '0px 0px 0px 10px'
     buttonArea.nodeId = node.nodeId
     this.ReplaceOldButtonArea(context, buttonArea, node.nodeId)
@@ -79,7 +44,7 @@ export default class AddressSpaceTree {
       browse.classList.add('buttonAreaStyle')
       browse.innerHTML = name
       browse.classList.add('invisButton')
-      browse.classList.add('updownpointer')
+      browse.classList.add('pointer')
       browse.classList.add('treeButton')
       browse.style.margin = '-5px 0px -5px -5px'
       browse.title = 'Browse this node from the server'
@@ -91,6 +56,32 @@ export default class AddressSpaceTree {
       node.browseButton = browse
     }
     return buttonArea
+  }
+
+  createRelation (relation, context, clickCallback) {
+    const buttonArea = document.createElement('div')
+    buttonArea.style.margin = '0px 0px 0px 10px'
+    buttonArea.nodeId = relation.nodeId
+    context.appendChild(buttonArea)
+
+    const browse = document.createElement('button')
+    browse.classList.add('buttonAreaStyle')
+    browse.innerHTML = relation.browseName.name + '  [' + relation.referenceTypeName + ']'
+    browse.callback = clickCallback
+    browse.relation = relation
+    browse.classList.add('invisButton')
+    browse.classList.add('pointer')
+    browse.classList.add('treeButton')
+    browse.style.margin = '-5px 0px -5px -5px'
+    browse.title = 'Browse this node from the server'
+    browse.style.color = nodeClassColor[relation.nodeClass]
+
+    browse.onclick = function () {
+      this.callback()
+    }
+
+    buttonArea.appendChild(browse)
+    return browse
   }
 
   cleanse (area) {

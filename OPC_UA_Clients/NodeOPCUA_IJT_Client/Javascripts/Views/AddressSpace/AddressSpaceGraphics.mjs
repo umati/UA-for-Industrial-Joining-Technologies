@@ -14,20 +14,13 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     this.treeDisplayer = new AddressSpaceTree(this)
     this.addressSpace.reset()
 
-    // this.addressSpace.subscribeToNewNode((node) => {
-    //  this.treeDisplayer.generateGUINode(node)
-    // })
-    this.addressSpace.subscribeToParentRelation((parentNode, childNode) => {
-      this.treeDisplayer.addChild(parentNode, childNode)
-    })
-
-    // this.addressSpace.setGUIGenerator(this.treeDisplayer)
-
-    // this.addressSpace.initiate()
+    // Subscribe to browse results to show in left column
     this.addressSpace.socketHandler.registerMandatory('browseresult', (msg) => {
       const modelToHTML = new ModelToHTML(this.messages)
       modelToHTML.display(msg.browseresult, `Browse ${msg.nodeid}:`)
     })
+
+    // Subscribe to read results to show in left column
     this.addressSpace.socketHandler.registerMandatory('readresult', (msg) => {
       const modelToHTML = new ModelToHTML(this.messages)
       let shortId = msg.nodeid
@@ -37,20 +30,14 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
       modelToHTML.display(msg.dataValue.value.value, `Read ${shortId} (${msg.attribute}):`)
     })
 
-    // 'ns=0;i=85'
+    // Initially display the ROOT and toggle it
     this.addressSpace.findOrLoadNode('ns=0;i=84').then((newNode) => {
-      this.treeDisplayer.generateGUINode(newNode)
+      const area = this.treeDisplayer.generateGUINode(newNode)
+      this.treeDisplayer.toggleNodeContent(newNode, area)
     })
   }
 
-  generateTree (msg) {
-    if (!this.leftArea) {
-      alert('too early call to generateTree')
-      this.treeDisplayer = new AddressSpaceTree(this, ['Root', 'Objects', 'TighteningSystem', 'ResultManagement', 'Results'])
-    }
-    this.treeDisplayer.generateTree(msg)
-  }
-
+  /*
   displayModel (model) {
     this.modelToHTML.display(model)
   }
@@ -61,5 +48,5 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     this.messages.appendChild(item)
     this.messages.scrollTo(0, this.messages.scrollHeight)
     item.scrollIntoView()
-  }
+  } */
 }
