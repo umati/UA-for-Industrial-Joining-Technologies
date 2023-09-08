@@ -219,13 +219,16 @@ export default class NodeOPCUAInterface {
       try {
         const bpr2 = await this.session.translateBrowsePath(makeBrowsePath(nodeId, path))
 
-        // console.log(`XXX ${nodeId} object.  ${path} `)
+        console.log(`translateBrowsePath: ${nodeId} start.  ${path} path`)
 
         if (bpr2.statusCode !== StatusCodes.Good) {
           console.log(`Cannot find the ${nodeId} object.  ${path} `)
           return
         }
         const resultsNodeId = bpr2.targets[0].targetId
+
+        console.log(`translateBrowsePath Resulting node Id: ${resultsNodeId}. `)
+
         this.io.emit('pathtoidresult', { callid, nodeid: resultsNodeId })
       } catch (err) {
         this.displayFunction('Node.js OPC UA client error (translateBrowsePath): ' + err.message) // Display the error message first
@@ -317,6 +320,11 @@ export default class NodeOPCUAInterface {
 
   closeConnection (callback) {
     try {
+      console.log('Terminate eventmonitoring')
+      if (this.eventMonitoringItem) {
+        this.eventMonitoringItem.terminate()
+      }
+
       console.log('Unsubscribe')
       if (this.subscription) {
         this.subscription.terminate(function () {
@@ -342,62 +350,9 @@ export default class NodeOPCUAInterface {
     }
   }
 
-  /*
-  // Subscribe to some value.      Not tested    Total Rewrite???
-  addMonitor (callid, path) {
-    const itemToMonitor = {
-      nodeId: path,
-      attributeId: this.AttributeIds.Value
-    }
-
-    (async () => {
-      try {
-        const parameters = {
-          samplingInterval: 100,
-          discardOldest: true,
-          queueSize: 100
-        }
-        const monitoredItem = await this.subscription.monitor(itemToMonitor, parameters, TimestampsToReturn.Both)
-
-        monitoredItem.on('changed', (dataValue) => {
-          console.log('******************* dataValue.value.value.toString()')
-          this.io.emit('object message', dataValue)
-        })
-      } catch (err) {
-        this.displayFunction('Node.js OPC UA client error (subscribing): ' + err.message)
-        this.displayFunction(err)
-        this.io.emit('error message', err, 'subscribe')
-      }
-    })()
-  }
-
-  async function main () {
-    const client = OPCUAClient.create({})
-
-    const endpointUrl = 'opc.tcp://opcua.demo-this.com:62544/Quickstarts/AlarmConditionServer'
-
-    const subscriptionParamters = {
-      requestedPublishingInterval: 1000,
-      maxNotificationsPerPublish: 100,
-      publishingEnabled: true,
-      priority: 10
-    } */
-
   async eventSubscription (fields) {
     // const baseEventTypeId = 'i=2041'
     const serverObjectId = 'i=2253'
-
-    /*  const fields = [
-      'EventId',
-      'EventType',
-      'SourceNode',
-      'SourceName',
-      'Time',
-      'ReceiveTime',
-      'Message',
-      'Severity',
-      'Result'
-    ] */
 
     const eventFilter = constructEventFilter(fields)
 
@@ -441,12 +396,53 @@ export default class NodeOPCUAInterface {
           this.io.emit('subscribed event', result)
         } catch (err) {
           this.displayFunction('Node.js OPC UA client error (eventMonitoring): ' + err.message) // Display the error message first
-          // this.io.emit('error message', err.toString(), 'eventMonitoring')
           this.io.emit('error message', { error: err, context: 'eventMonitoring', message: err.message }) // (Then for debug purposes display all of it)
         }
       })()
     })
 
+    this.eventMonitoringItem = eventMonitoringItem
     await new Promise((resolve) => process.once('SIGINT', resolve))
   }
 }
+
+/*
+  // Subscribe to some value.      Not tested    Total Rewrite???
+  addMonitor (callid, path) {
+    const itemToMonitor = {
+      nodeId: path,
+      attributeId: this.AttributeIds.Value
+    }
+
+    (async () => {
+      try {
+        const parameters = {
+          samplingInterval: 100,
+          discardOldest: true,
+          queueSize: 100
+        }
+        const monitoredItem = await this.subscription.monitor(itemToMonitor, parameters, TimestampsToReturn.Both)
+
+        monitoredItem.on('changed', (dataValue) => {
+          console.log('******************* dataValue.value.value.toString()')
+          this.io.emit('object message', dataValue)
+        })
+      } catch (err) {
+        this.displayFunction('Node.js OPC UA client error (subscribing): ' + err.message)
+        this.displayFunction(err)
+        this.io.emit('error message', err, 'subscribe')
+      }
+    })()
+  }
+
+  async function main () {
+    const client = OPCUAClient.create({})
+
+    const endpointUrl = 'opc.tcp://opcua.demo-this.com:62544/Quickstarts/AlarmConditionServer'
+
+    const subscriptionParamters = {
+      requestedPublishingInterval: 1000,
+      maxNotificationsPerPublish: 100,
+      publishingEnabled: true,
+      priority: 10
+    } */

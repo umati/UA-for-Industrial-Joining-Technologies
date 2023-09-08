@@ -3,6 +3,7 @@ import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScre
 export default class ServerGraphics extends ControlMessageSplitScreen {
   constructor (container) {
     super(container, 'Servers', 'Server status')
+    this.lastMessage = ''
   }
 
   /**
@@ -28,7 +29,8 @@ export default class ServerGraphics extends ControlMessageSplitScreen {
         connect(point)
       })
 
-      if (point.autoConnect) {
+      if (point.autoConnect && this.lastMessage !== msg) { // Only automatically connect first time
+        this.lastMessage = msg
         connect(point)
       }
     }
