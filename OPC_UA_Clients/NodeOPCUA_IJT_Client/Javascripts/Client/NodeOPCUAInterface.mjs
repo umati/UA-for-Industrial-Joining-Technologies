@@ -183,12 +183,7 @@ export default class NodeOPCUAInterface {
           nodeId,
           attributeId: AttributeIds[attribute]
         })
-        // console.log('1:xxx ' + attribute)
-        /* console.log('1:nodeId ' + nodeId)
-        console.log('1:a ' + AttributeIds)
-        console.log('1:b ' + AttributeIds.DisplayName)
-        console.log('1:c ' + AttributeIds['DisplayName'])
-        console.log('1:nodeId ' + nodeId) */
+
         // console.log('1:dataValue ' + dataValue.toString())
         const result = dataValue.value.value
         if (result && result.resultContent) {

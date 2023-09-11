@@ -10,6 +10,9 @@ const typeMapping = {
   24137: { name: 'association', color: 'grey' }
 }
 
+/**
+ * This abstract class contains all functionality any type of node should have
+ */
 class PartialNode {
   constructor (data) {
     this.data = data
@@ -65,17 +68,12 @@ class PartialNode {
   }
 }
 
-export class Reference {
-  constructor (data) {
-    this.data = data
-  }
-}
-export class Placeholder {
-  constructor (data) {
-    this.data = data
-  }
-}
-
+/**
+ * factory function that given node data from OPC UA calls create an internal node in
+ * our address space implementation
+ * @param {*} data from the OPC UA calls
+ * @returns a node
+ */
 export function NodeFactory (data) {
   switch (data.nodeclass.value) {
     case 1:
