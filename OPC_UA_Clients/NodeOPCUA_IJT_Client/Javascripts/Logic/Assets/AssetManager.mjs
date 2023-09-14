@@ -18,7 +18,6 @@ export default class AssetHandler {
         (tighteningSystem) => {
           this.getAssetFolder(tighteningSystem).then((assetFolder) => {
             this.loadAllAssetsSupport(assetFolder).then((nodeList) => {
-              console.log(nodeList)
               const returnObject = {}
               for (const row of nodeList) {
                 returnObject[row[0]] = row[1]

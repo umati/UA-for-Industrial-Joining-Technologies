@@ -16,10 +16,11 @@ export default class SocketHandler {
    * Subscribe to an event
    * @param {*} nodeId
    * @param {*} path
+   * @param {*} subscriberDetails // Optional data to help debugging
    * @returns
    */
-  subscribeEvent (msg) {
-    this.socket.emit('subscribe event', msg)
+  subscribeEvent (msg, subscriberDetails) {
+    this.socket.emit('subscribe event', msg, subscriberDetails)
   }
 
   /**

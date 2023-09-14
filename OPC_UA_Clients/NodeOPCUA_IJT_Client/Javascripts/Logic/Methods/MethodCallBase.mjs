@@ -18,7 +18,7 @@ export default class MethodCallBase {
 
   setupComplete () {
     if (this.tighteningSystemNode && this.dataTypeEnumeration) {
-      this.graphicHandler.signalOKArea(this)
+      // this.graphicHandler.signalOKArea(this)
     }
   }
 }

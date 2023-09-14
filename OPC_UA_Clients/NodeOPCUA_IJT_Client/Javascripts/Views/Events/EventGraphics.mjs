@@ -15,11 +15,10 @@ export default class EventGraphics extends ControlMessageSplitScreen {
     const box = this.createArea()
     this.createButton('Subscribe to result event', box, () => {
       eventManager.listenEvent( // We use this function since the actual subscription has been set up once and for all
-        (e) => { // filter
-          return true
+        (e) => { // Filter
+          return true // Always go here with all events
         },
         (e) => { // callback
-          // console.log('In buttonsubscribed event')
           this.eventToHTML(e)
         }
       )
@@ -30,6 +29,10 @@ export default class EventGraphics extends ControlMessageSplitScreen {
 
   }
 
+  /**
+   * function that turns an event into a text representation on the message area of the screen
+   * @param {*} e the event
+   */
   eventToHTML (e) {
     const supportDataTypePrinting = (event, content) => {
       for (const [key, value] of Object.entries(event)) {

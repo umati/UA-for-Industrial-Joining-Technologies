@@ -14,7 +14,7 @@ export default class EventManager {
    * @param {*} filter a function that if it returns true will call the callback
    * @param {*} callback a function to call if the event was received
    */
-  simpleSubscribeEvent (newFields, filter, callback) {
+  simpleSubscribeEvent (newFields, filter, callback, subscriberDetails) {
     const fields = [
       'EventId',
       'EventType',
@@ -24,7 +24,7 @@ export default class EventManager {
       'ReceiveTime',
       'Message',
       'Severity']
-    this.subscribeEvent([...fields, ...newFields], filter, callback)
+    this.subscribeEvent([...fields, ...newFields], filter, callback, subscriberDetails)
   }
 
   /**
@@ -33,11 +33,11 @@ export default class EventManager {
    * @param {*} filter a function that if it returns true will call the callback
    * @param {*} callback a function to call if the event was received
    */
-  subscribeEvent (fields, filter, callback) {
+  subscribeEvent (fields, filter, callback, subscriberDetails) {
     if (filter) {
-      this.callbacks.push({ filter, callback })
+      this.callbacks.push({ filter, callback, subscriberDetails })
     }
-    this.socketHandler.subscribeEvent(fields)
+    this.socketHandler.subscribeEvent(fields, subscriberDetails)
   }
 
   /**
@@ -46,13 +46,14 @@ export default class EventManager {
    * @param {*} filter a function that if it returns true will call the callback
    * @param {*} callback a function to call if the event was received
    */
-  listenEvent (filter, callback) {
-    this.callbacks.push({ filter, callback })
+  listenEvent (filter, callback, subscriberDetails) {
+    this.callbacks.push({ filter, callback, subscriberDetails })
   }
 
   receivedEvent (msg) {
     for (const item of this.callbacks) {
       if (item.filter && item.filter(msg)) {
+        // console.log(`SUBSCRIPTION: ${item.subscriberDetails}`)
         item.callback(msg)
       }
     }

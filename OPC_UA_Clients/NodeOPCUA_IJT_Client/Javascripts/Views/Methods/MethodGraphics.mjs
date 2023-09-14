@@ -17,7 +17,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
   * Turns the surounding border yellow when all is set up correctly
   * @param {*} method The method that should be turned yellow
   */
-  signalOKArea (method) {
+  activate (method) {
     method.container.style.borderColor = 'yellow'
   }
 

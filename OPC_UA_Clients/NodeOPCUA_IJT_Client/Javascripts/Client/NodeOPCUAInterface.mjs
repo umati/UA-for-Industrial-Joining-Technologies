@@ -19,6 +19,8 @@ export default class NodeOPCUAInterface {
     console.log('Establishing interface')
     this.attributeIds = attributeIds
     this.io = io
+    this.debugNr = 0
+    this.eventMonitoringItems = []
   }
 
   /**
@@ -62,16 +64,17 @@ export default class NodeOPCUAInterface {
       })
 
       socket.on('connect to', msg => {
+        console.log('**********************************************')
         console.log('Nodejs OPC UA client attempting to connect to ' + msg)
         if (msg) {
           this.setupClient(msg, this.displayFunction, this.OPCUAClient, this.io)
         }
       })
 
-      socket.on('subscribe event', msg => {
+      socket.on('subscribe event', (msg, subscriberDetails) => {
         // console.log('Nodejs OPC UA client attempting to subscribe to ' + msg)
         if (msg) {
-          this.eventSubscription(msg, this.displayFunction, this.OPCUAClient)
+          this.eventSubscription(msg, this.displayFunction, this.OPCUAClient, subscriberDetails)
         }
       })
 
@@ -214,7 +217,7 @@ export default class NodeOPCUAInterface {
       try {
         const bpr2 = await this.session.translateBrowsePath(makeBrowsePath(nodeId, path))
 
-        console.log(`translateBrowsePath: ${nodeId} start.  ${path} path`)
+        // console.log(`translateBrowsePath: ${nodeId} start.  ${path} path`)
 
         if (bpr2.statusCode !== StatusCodes.Good) {
           console.log(`Cannot find the ${nodeId} object.  ${path} `)
@@ -222,7 +225,7 @@ export default class NodeOPCUAInterface {
         }
         const resultsNodeId = bpr2.targets[0].targetId
 
-        console.log(`translateBrowsePath Resulting node Id: ${resultsNodeId}. `)
+        // console.log(`translateBrowsePath Resulting node Id: ${resultsNodeId}. `)
 
         this.io.emit('pathtoidresult', { callid, nodeid: resultsNodeId })
       } catch (err) {
@@ -316,17 +319,30 @@ export default class NodeOPCUAInterface {
   closeConnection (callback) {
     try {
       console.log('Terminate eventmonitoring')
-      if (this.eventMonitoringItem) {
-        this.eventMonitoringItem.terminate()
+      if (this.eventMonitoringItems) {
+        for (const monitor of this.eventMonitoringItems) {
+          monitor.terminate(() => { console.log('Eventmonitoring terminated ') })
+        }
       }
+    } catch (err) {
+      console.log('************ FAIL to close down EventMonitor: ' + err)
+      this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
+    }
 
+    this.eventMonitoringItems = []
+
+    try {
       console.log('Unsubscribe')
       if (this.subscription) {
         this.subscription.terminate(function () {
           console.log('Unsubscribed')
         })
       }
-
+    } catch (err) {
+      console.log('************ FAIL to unsubscribe: ' + err)
+      this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
+    }
+    try {
       console.log('Closing session')
       if (!this || !this.session || !this.client) {
         console.log('Already closed')
@@ -335,21 +351,26 @@ export default class NodeOPCUAInterface {
           console.log('Session closed')
         })
       }
+    } catch (err) {
+      console.log('************ FAIL to close session: ' + err)
+      this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
+    }
+    try {
       console.log('Disconnect client')
       this.client.disconnect(function () {
         console.log('Client disconnected.\n**********************************************')
       })
     } catch (err) {
-      console.log('FAIL to close down correctly: ' + err)
+      console.log('************ FAIL to disconnect client: ' + err)
       this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
     }
   }
 
-  async eventSubscription (fields) {
-    // const baseEventTypeId = 'i=2041'
+  async eventSubscription (fields, subscriberDetails) {
     const serverObjectId = 'i=2253'
-
     const eventFilter = constructEventFilter(fields)
+
+    const subscribeDebugNr = this.debugNr++
 
     const eventMonitoringItem = ClientMonitoredItem.create(
       this.subscription,
@@ -363,6 +384,8 @@ export default class NodeOPCUAInterface {
         queueSize: 100000
       }
     )
+
+    console.log('eventsubscription reached ' + subscribeDebugNr)
 
     eventMonitoringItem.on('initialized', () => {
       console.log('event_monitoringItem initialized (' + fields + ')')
@@ -380,7 +403,6 @@ export default class NodeOPCUAInterface {
                 await promoteOpaqueStructure(this.session, [{ value: events[i].value.resultContent }])
               }
             }
-
             // this.io.emit('subscribed event', { field: fields[i], value: events[i].value, stringValue: events[i].toString() })
             // console.log(events[i].value)
           }
@@ -388,6 +410,8 @@ export default class NodeOPCUAInterface {
           for (let i = 0; i < events.length; i++) {
             result[fields[i]] = events[i]
           }
+          result.subscriberDetails = subscriberDetails
+          console.log('eventsubscription triggered ' + subscribeDebugNr)
           this.io.emit('subscribed event', result)
         } catch (err) {
           this.displayFunction('Node.js OPC UA client error (eventMonitoring): ' + err.message) // Display the error message first
@@ -396,7 +420,7 @@ export default class NodeOPCUAInterface {
       })()
     })
 
-    this.eventMonitoringItem = eventMonitoringItem
+    this.eventMonitoringItems.push(eventMonitoringItem)
     await new Promise((resolve) => process.once('SIGINT', resolve))
   }
 }

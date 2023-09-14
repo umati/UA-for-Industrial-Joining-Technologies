@@ -11,6 +11,7 @@ export default class TabGenerator {
      * Set up the tabs
      */
     this.container = container
+    this.activationSubscriptions = {}
     this.containerList = []
     this.list = document.createElement('ul')
     this.list.classList.add('tabs')
@@ -18,26 +19,62 @@ export default class TabGenerator {
   }
 
   /**
+   * This state is set during setup
+   * 'oncreate' means this tab is active directly
+   * 'subscribed' this is triggered when communication with the device is estblished and subscription is active
+   * 'tighteningsystem' is triggered when we are sure there is a tightening system to communicate with
+   * @param {*} state * @param {String} activationPhase  ['oncreate', 'subscribed', 'tighteningsystem']
+   */
+  setState (state) {
+    for (const tab of this.activationSubscriptions[state]) {
+      const title = tab.label.innerText
+      const input = tab.input
+      tab.label.style.color = 'yellow'
+
+      input.setAttribute('id', 'tab' + tab.number)
+
+      input.onchange = () => {
+        const event = new CustomEvent(
+          'tabOpened',
+          {
+            detail: {
+              title
+            },
+            bubbles: true,
+            cancelable: true
+          }
+        )
+        const serverDiv = document.getElementById('connectedServer')
+        serverDiv.dispatchEvent(event)
+      }
+    }
+  }
+
+  /**
    * generateTab creates a new tab and returns its HTML element
    * @param {String} title The name of the tab
    * @param {Boolean} selected Put this to true on the tab that should be oopen at the start
+   * @param {String} activationPhase when, during setup, is the tab being activated ['oncreate, 'subscribed', 'tighteningsystem']
    * @returns
    */
-  generateTab (title, selected = false) {
+  generateTab (title, selected = false, activationPhase = 'oncreate') {
     const nr = this.containerList.length
 
     const listItem = document.createElement('li')
     listItem.setAttribute('role', 'tab')
+    listItem.selected = selected
+    listItem.title = title
     this.list.appendChild(listItem)
 
     const input = document.createElement('input')
     input.setAttribute('type', 'radio')
     input.setAttribute('name', 'tabs')
-    input.setAttribute('id', 'tab' + nr)
+    // input.setAttribute('id', 'tab' + nr)
     if (selected) {
       input.setAttribute('checked', 'true')
     }
 
+    /*
     input.onchange = () => {
       const event = new CustomEvent(
         'tabOpened',
@@ -51,7 +88,7 @@ export default class TabGenerator {
       )
       const serverDiv = document.getElementById('connectedServer')
       serverDiv.dispatchEvent(event)
-    }
+    } */
 
     listItem.appendChild(input)
 
@@ -61,8 +98,15 @@ export default class TabGenerator {
     label.setAttribute('aria-selected', 'false')
     label.setAttribute('aria-controls', 'panel' + nr)
     label.setAttribute('tab-index', nr)
+    label.style.color = 'grey'
     label.innerText = title
     listItem.appendChild(label)
+
+    if (!this.activationSubscriptions[activationPhase]) {
+      this.activationSubscriptions[activationPhase] = [{ label, input, selected, number: nr }]
+    } else {
+      this.activationSubscriptions[activationPhase].push({ label, input, selected, number: nr })
+    }
 
     const contentDiv = document.createElement('div')
     // contentDiv.classList.add('datastructure')

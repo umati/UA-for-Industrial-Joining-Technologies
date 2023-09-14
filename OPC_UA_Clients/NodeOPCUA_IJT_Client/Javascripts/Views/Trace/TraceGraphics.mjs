@@ -70,7 +70,8 @@ export default class TraceGraphics {
       (e) => { // callback
         // console.log('In result event')
         this.createNewTrace(e.Result.value)
-      })
+      },
+      'TraceGraphics in activate()')
   }
 
   // /////////////////////////////////////////////////////////////////////////
