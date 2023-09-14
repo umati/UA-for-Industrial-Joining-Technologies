@@ -86,6 +86,7 @@
 
     // Listen to the tree of possible connection points (Available OPC UA servers)
     socketHandler.registerMandatory('connection points', function (msg) {
+      eventManager.reset()
       servers.connectionPoints(msg, socket)
     })
 
@@ -98,6 +99,8 @@
     // Here you could add code to actually subscribe to fields
     socketHandler.registerMandatory('subscription created', function (msg) {
       servers.messageDisplay('Subscription created')
+      eventManager.reset()
+      trace.activate()
       eventManager.simpleSubscribeEvent(['Result'],
         (e) => { // Filter
           return true

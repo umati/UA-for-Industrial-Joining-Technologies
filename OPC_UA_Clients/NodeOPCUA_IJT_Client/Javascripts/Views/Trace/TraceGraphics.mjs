@@ -17,6 +17,7 @@ export default class TraceGraphics {
     this.traceInterface = new TraceInterface(container)
     this.xDimensionName = dimensions[0]
     this.yDimensionName = dimensions[1]
+    this.eventManager = eventManager
     this.result = null
     this.showValuesSelected = false
     this.showLimitsSelected = false
@@ -41,16 +42,6 @@ export default class TraceGraphics {
       }
     })
 
-    eventManager.listenEvent( // We use this function since the actual subscription has been set up once and for all
-      (e) => { // filter
-        return e.Result?.value
-      },
-      (e) => { // callback
-        // console.log('In result event')
-        this.createNewTrace(e.Result.value)
-      }
-    )
-
     this.chartManager = new ChartManager(this.traceInterface.canvas, this)
     this.setupEventListeners()
 
@@ -69,6 +60,17 @@ export default class TraceGraphics {
    */
   initiate () {
 
+  }
+
+  activate () {
+    this.eventManager.listenEvent( // We use this function since the actual subscription has been set up once and for all
+      (e) => { // filter
+        return e.Result?.value
+      },
+      (e) => { // callback
+        // console.log('In result event')
+        this.createNewTrace(e.Result.value)
+      })
   }
 
   // /////////////////////////////////////////////////////////////////////////

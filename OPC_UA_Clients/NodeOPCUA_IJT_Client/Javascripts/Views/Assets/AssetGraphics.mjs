@@ -1,4 +1,9 @@
 import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
+/**
+ * This illustrates how a simple view of all the assets can be done using the assetManager.
+ * Start by making sure all assets are loaded, then loop through the controllers and draw them and their
+ * associated assets
+ */
 export default class AssetGraphics extends BasicScreen {
   constructor (container, assetManager) {
     super(container)
@@ -21,23 +26,30 @@ export default class AssetGraphics extends BasicScreen {
     this.container = displayArea
   }
 
+  /**
+   * Run every time the page is opened and first load all the Assets using the assetmanager and
+   * then sends the result to the draw function
+   */
   initiate () {
-    this.assetManager.fixAssets(['controllers', 'tools'], () => { this.draw() })
+    this.assetManager.setupAndLoadAllAssets().then((assetObject) => {
+      this.draw(assetObject)
+    })
   }
 
-  draw () {
-    const assetManager = this.assetManager
-    const assetGraphics = this
-
+  /**
+   * Takes an object containing all the Assets and then draw graphics to represent them
+   * @param {*} assetObject an object from assetManager.setupAndLoadAllAssets that contain all assets
+   */
+  draw (assetObject) {
     function drawAssetRecursive (asset) {
       drawAssetWithExternals(asset.getRelations('association'), asset)
     }
 
-    function drawAssetWithExternals (associations, containerNode) {
+    const drawAssetWithExternals = (associations, containerNode) => {
       for (const external of externals) {
         for (const association of associations) {
           if (association.nodeId === external.nodeId) {
-            assetGraphics.addExternal(external, containerNode)
+            this.addExternal(external, containerNode)
             drawAssetRecursive(external)
           }
         }
@@ -45,7 +57,7 @@ export default class AssetGraphics extends BasicScreen {
       for (const internal of internals) {
         for (const association of associations) {
           if (association.nodeId === internal.nodeId) {
-            assetGraphics.addInternal(internal, containerNode)
+            this.addInternal(internal, containerNode)
             drawAssetRecursive(internal)
           }
         }
@@ -53,28 +65,29 @@ export default class AssetGraphics extends BasicScreen {
     }
 
     let i = 0
-    const externals = [
-      ...assetManager.powersupplies,
-      ...assetManager.feeders,
-      ...assetManager.cables,
-      ...assetManager.accessories]
-    const internals = [
-      ...assetManager.servos,
-      ...assetManager.memorydevices,
-      ...assetManager.subcomponents,
-      ...assetManager.batteries,
-      ...assetManager.sensors]
-    for (const controller of assetManager.controllers) {
-      this.createController(controller, i, assetManager.controllers.length)
+    const externals = [ // What goues outside the box
+      ...assetObject.PowerSupplies,
+      ...assetObject.Feeders,
+      ...assetObject.Cables,
+      ...assetObject.Accessories]
+    const internals = [ // What goes inside the box
+      ...assetObject.Servos,
+      ...assetObject.MemoryDevices,
+      ...assetObject.SubComponents,
+      ...assetObject.Batteries,
+      ...assetObject.Sensors]
 
-      const associations = controller.getRelations('association')
+    for (const controller of assetObject.Controllers) {
+      this.createController(controller, i, assetObject.Controllers.length) // Create a controller graphic object
 
-      drawAssetWithExternals(associations, controller)
+      const associations = controller.getRelations('association') // Check the connected assets
 
-      for (const tool of assetManager.tools) {
-        for (const association of associations) {
+      drawAssetWithExternals(associations, controller) // Draw it
+
+      for (const tool of assetObject.Tools) { // Draw the tool separately
+        for (const association of associations) { // But only the tools assocoated to the above controller
           if (association.nodeId === tool.nodeId) {
-            assetGraphics.addTool(tool, controller)
+            this.createTool(tool, controller)
             drawAssetRecursive(tool)
           }
         }
@@ -131,7 +144,7 @@ export default class AssetGraphics extends BasicScreen {
     this.addHorizontal(node, containerNode.assetGraphicData.externals)
   }
 
-  addTool (node, containerNode) {
+  createTool (node, containerNode) {
     this.addVertical(node, containerNode.assetGraphicData.tools)
   }
 

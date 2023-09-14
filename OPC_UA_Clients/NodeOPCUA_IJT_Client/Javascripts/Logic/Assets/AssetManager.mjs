@@ -6,20 +6,107 @@ export default class AssetHandler {
   constructor (addressSpace, socketHandler) {
     this.socketHandler = socketHandler
     this.addressSpace = addressSpace
+    this.counter = 0
   }
 
-  fixAssets (assetTypes, doneCallback) {
+  /**
+   * Main function for ennsuring all assets are loaded from scratch
+   */
+  setupAndLoadAllAssets () {
+    return new Promise((resolve, reject) => {
+      this.addressSpace.getTighteningsSystemsPromise().then(
+        (tighteningSystem) => {
+          this.getAssetFolder(tighteningSystem).then((assetFolder) => {
+            this.loadAllAssetsSupport(assetFolder).then((nodeList) => {
+              console.log(nodeList)
+              const returnObject = {}
+              for (const row of nodeList) {
+                returnObject[row[0]] = row[1]
+              }
+              resolve(returnObject)
+            })
+          })
+        })
+    })
+  }
+
+  /**
+   * Support function that given the Assets node loads all assets and return a list of Assets
+   * @param {*} node the Assets folder node
+   * @returns list of assets
+   */
+  loadAllAssetsSupport (node) {
+    return new Promise((_resolve, reject) => {
+      const promiseList = []
+      const relations = node.getChildRelations('component')
+      if (relations.length > 0) {
+        this.addressSpace.relationsToNodes(relations).then((nodes) => {
+          for (const childNode of nodes) {
+            const hasAddins = childNode.getChildRelations('hasAddin')
+            if (hasAddins.length > 0) {
+              const nsMachinery = this.addressSpace.nsMachinery
+              const hasIdentification = hasAddins.filter(
+                x => (x.typeDefinition === `ns=${nsMachinery};i=1012` || // Machine
+                x.typeDefinition === `ns=${nsMachinery};i=1005`)) // Machinery Component
+              if (hasIdentification.length === 1) {
+                promiseList.push(new Promise((resolve, reject) => {
+                  resolve(childNode)
+                }))
+              }
+            } else {
+              promiseList.push(
+                new Promise((resolve, reject) => {
+                  this.loadAllAssetsSupport(childNode).then((list) => {
+                    if (list && list.length > 0) {
+                      resolve([childNode.displayName, list])
+                    } else {
+                      resolve([childNode.displayName, list])
+                    }
+                  })
+                })
+              )
+            }
+          }
+          if (promiseList.length > 0) {
+            return Promise.all(promiseList).then((a) => {
+              _resolve(a)
+            },
+            (b) => {
+              console.log(b)
+            }
+            )
+          } else {
+            _resolve([])
+          }
+        })
+      } else {
+        _resolve([])
+      }
+    })
+  }
+
+  getAssetFolder (tighteningSystem) {
+    return new Promise((resolve, reject) => {
+      const nsIJT = this.addressSpace.nsIJT
+      this.socketHandler.pathtoidPromise(
+        tighteningSystem.nodeId,
+        `/${nsIJT}:AssetManagement/${nsIJT}:Assets`).then((assetsFolderMessage) => {
+        this.addressSpace.findOrLoadNode(assetsFolderMessage.message.nodeid).then((node) => {
+          resolve(node)
+        })
+      })
+    })
+  }
+
+  /*
+  fixAssets (doneCallback) {
     this.addressSpace.getTighteningsSystemsPromise().then(
       (tighteningSystems) => {
         this.tighteningSystem = tighteningSystems
         console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId)
-        this.loadAllAssets().then(
+        this.loadAllAssetsSupport().then(
           (x) => {
             console.log('All assets loaded. ')
-            // let fullList = []
-            // for (const assetType of assetTypes) {
-            // fullList = [...fullList, ...this[assetType]]
-            // }
             doneCallback()
           }
         )
@@ -28,113 +115,5 @@ export default class AssetHandler {
         throw new Error('No TighteningSystem found in Objects folder')
       }
     )
-  }
-
-  /*
-  initiate () {
-    // const tighteningSystems = this.addressSpace.getTighteningSystems()
-
-    this.addressSpace.getTighteningsSystemsPromise().then(
-      (tighteningSystems) => {
-        this.tighteningSystem = tighteningSystems[0]
-        console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId)
-        this.loadAllAssets().then(
-          () => {
-            // console.log('All assets loaded.')
-            this.browseAndReadList([...this.controllers, ...this.tools]).then(
-              () => { this.assetGraphics.draw() }
-            )
-          }
-        )
-      },
-      () => {
-        throw new Error('No TighteningSystem found in Objects folder')
-      }
-    )
-  }
-  */
-
-  /**
-   *
-   * @returns A promise to load all assets
-   */
-  loadAllAssets () {
-    function addAssetGraphicData (list, folderName) {
-      for (const node of list) {
-        if (!node.assetGraphicData) {
-          node.addAssetGraphicData = {}
-        }
-        node.addAssetGraphicData.folderName = folderName
-      }
-    }
-
-    this.controllers = []
-    const assetFolders = [
-      'Controllers',
-      'Tools',
-      'Servos',
-      'MemoryDevices',
-      'Sensors',
-      'Cables',
-      'Batteries',
-      'PowerSupplies',
-      'Feeders',
-      'Accessories',
-      'SubComponents'
-    ]
-
-    const promiseList = []
-    for (const folderName of assetFolders) {
-      promiseList.push(
-        this.findContentInFolder(folderName).then((list) => {
-          addAssetGraphicData(list, folderName)
-          this[folderName.toLowerCase()] = list
-          return list
-        })
-      )
-    }
-
-    return Promise.all(promiseList)
-  }
-
-  findContentInFolder (folderName) {
-    return new Promise(
-      (resolve, reject) => {
-        this.findAssetFolder(folderName).then(
-          (nodeId) => {
-            this.addressSpace.findOrLoadNode(nodeId).then(
-              (folderNode) => {
-                const relations = folderNode.getChildRelations('component')
-                if (relations.length > 0) {
-                  this.addressSpace.relationsToNodes(relations).then((values) => {
-                    resolve(values)
-                  })
-                } else {
-                  resolve([])
-                }
-              },
-              () => reject(new Error('failed to load a node in a folder'))
-            )
-          },
-          () => reject(new Error('failed to load a node in a folder')))
-      }
-    )
-  }
-
-  // This should be renamed and maybe use the findFolder in addressSpace instead, but works for now.
-  findAssetFolder (folderName) {
-    return new Promise((resolve) => {
-      const nsIJT = this.addressSpace.nsIJT
-      this.socketHandler.pathtoidPromise(
-        this.tighteningSystem.nodeId,
-        `/${nsIJT}:AssetManagement/${nsIJT}:Assets/${nsIJT}:${folderName}`
-      ).then(
-        (msg) => {
-          resolve(msg.message.nodeid)
-        }
-      )
-    },
-    (fail) => { fail(`Failed to get assets in folder ${folderName}`) }
-    )
-  }
+  } */
 }

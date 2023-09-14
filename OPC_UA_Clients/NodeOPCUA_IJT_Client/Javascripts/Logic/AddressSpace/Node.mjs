@@ -83,7 +83,8 @@ export function NodeFactory (data) {
     case 4:
       return new MethodNode(data)
     default:
-      throw new Error('NodeFactory trying to create unknown type of NodeClass')
+      return new ObjectNode(data)
+      // throw new Error('NodeFactory trying to create unknown type of NodeClass '+ data)
   }
 }
 class ObjectNode extends PartialNode {

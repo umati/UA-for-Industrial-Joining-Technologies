@@ -57,4 +57,8 @@ export default class EventManager {
       }
     }
   }
+
+  reset () {
+    this.callbacks = []
+  }
 }
