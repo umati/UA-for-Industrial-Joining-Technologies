@@ -7,6 +7,19 @@ export default class AddressSpace {
     this.objectFolder = null
     this.listOfTSPromises = []
     this.newNodeSubscription = []
+    this.status = []
+
+    // Listen to namespaces
+    socketHandler.registerMandatory('namespaces', (msg) => {
+      this.handleNamespaces(msg)
+      this.addressSpaceSetup('namespaces')
+    })
+
+    // Listen to datatypes. Needed for method calls
+    socketHandler.registerMandatory('datatypes', (dataTypeEnumeration) => {
+      this.dataTypeEnumeration = dataTypeEnumeration
+      this.addressSpaceSetup('datatypes')
+    })
   }
 
   /**
@@ -21,11 +34,55 @@ export default class AddressSpace {
           throw new Error('Could not find Tightening System')
         }
         this.findOrLoadNode(typerelations[0].nodeId).then((tgtSystem) => {
-          for (const promise of this.listOfTSPromises) {
+          this.tighteningSystem = tgtSystem
+          this.addressSpaceSetup('tighteningsystem')
+          /* for (const promise of this.listOfTSPromises) {
             this.tighteningSystem = tgtSystem
             promise.resolve(tgtSystem)
-          }
+          } */
         })
+      })
+    })
+  }
+
+  /**
+   * Check that addressSpace has been set up and a tightening system exists
+   * @returns true if the addressSpace is set up
+   */
+  addressSpaceCheck () {
+    return this.status.find(x => x === 'namespaces') && this.status.find(x => x === 'datatypes') && this.status.find(x => x === 'tighteningsystem')
+  }
+
+  addressSpaceSetup (status) {
+    this.status.push(status)
+    if (this.addressSpaceCheck()) {
+      for (const promise of this.listOfTSPromises) {
+        promise.resolve(this.tighteningSystem)
+      }
+      this.listOfTSPromises = []
+    }
+  }
+
+  /**
+   * This returns a promise to get a fully set up address space system, including a loaded tightening system node, the namespace and the datatypes
+   * Use this since the addressSpace might not be loaded yet
+   * @returns a promise of a tightening system
+   */
+  addressSpacePromise () {
+    return new Promise((resolve, reject) => {
+      if (this.addressSpaceCheck()) { // Already fixed
+        resolve(this.tighteningSystem)
+        return
+      }
+      this.listOfTSPromises.push({ resolve, reject }) // Queue up and let them know later
+    }
+    )
+  }
+
+  methodCall (locationId, methodNode, args) {
+    return new Promise((resolve, reject) => {
+      this.socketHandler.methodCall(locationId, methodNode, args).then((result, err) => {
+        resolve(result, err)
       })
     })
   }
@@ -129,31 +186,15 @@ export default class AddressSpace {
   }
 
   /**
-   * This returns a promise to get a tightening system.
-   * Use this since the addressSpace might not be loaded yet
-   * @returns a promise of a tightening system
-   */
-  getTighteningsSystemsPromise () {
-    return new Promise((resolve, reject) => {
-      if (this.tighteningSystem) {
-        resolve(this.tighteningSystem)
-        return
-      }
-      this.listOfTSPromises.push({ resolve, reject })
-    }
-    )
-  }
-
-  /**
    * note that this normally only returns the call message, not the actual node as might be expected.
    * The nodeId needs to be extracted from the message.
    * @param {*} path The path that should be traversed
    * @param {*} startFolderId The starting node
    * @returns the call message
-   */
+   *
   findFolder (path, startFolderId) {
     if (!startFolderId) {
-      const tgtSystem = this.getTighteningSystems()
+      const tgtSystem = this.addressSpacePromise()
       if (tgtSystem.length > 0) {
         startFolderId = tgtSystem[0].nodeId
       } else {
@@ -161,6 +202,23 @@ export default class AddressSpace {
       }
     }
     return this.socketHandler.pathtoidPromise(startFolderId, path)
+  } */
+
+  /**
+   * Returns a promise to find the node at the relative path from the tightening system
+   * @param {*} path The path from the tightening system
+   * @returns the node at the paths end
+   */
+  findNodeFromPathPromise (path) {
+    return new Promise((resolve, reject) =>
+      this.addressSpacePromise().then((tgtSystem) => {
+        this.socketHandler.pathtoidPromise(tgtSystem.nodeId, path).then((msg) => {
+          this.findOrLoadNode(msg.message.nodeid).then((node) => {
+            resolve(node)
+          })
+        })
+      })
+    )
   }
 
   subscribeToNewNode (callback) {
@@ -168,7 +226,7 @@ export default class AddressSpace {
   }
 
   /**
-   * Turn a list of relations into a promise of a list of node
+   * Turn a list of relations into a promise of a list of nodes
    * @param {*} relations a list of relations
    * @returns a Promise of a list of nodes
    */

@@ -6,18 +6,20 @@ import ChartManager from './ChartHandler.mjs'
 import TraceInterface from './TraceInterface.mjs'
 import SingleTraceData from './SingleTraceData.mjs'
 import Step from './Step.mjs'
+import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
 
 /**
  * TraceGraphics displays result events in order to display the traces (graphs)
  * on the screen and management of the displayed traces such as selection and such.
  * Little to none OPC UA relevant logic happens here
  */
-export default class TraceGraphics {
-  constructor (container, dimensions, socketHandler, eventManager) {
-    this.traceInterface = new TraceInterface(container)
+export default class TraceGraphics extends BasicScreen {
+  constructor (dimensions, resultManager) {
+    super('Traces', 'subscribed')
+    this.traceInterface = new TraceInterface(this.backGround)
     this.xDimensionName = dimensions[0]
     this.yDimensionName = dimensions[1]
-    this.eventManager = eventManager
+    this.resultManager = resultManager
     this.result = null
     this.showValuesSelected = false
     this.showLimitsSelected = false
@@ -35,12 +37,13 @@ export default class TraceGraphics {
     }
     this.modelManager = new ModelManager()
 
+    /*
     socketHandler.registerMandatory('readresult', (msg) => {
       const value = msg?.dataValue?.value?.value
       if (value && value.resultId) {
         this.createNewTrace(value)
       }
-    })
+    }) */
 
     this.chartManager = new ChartManager(this.traceInterface.canvas, this)
     this.setupEventListeners()
@@ -63,23 +66,23 @@ export default class TraceGraphics {
   }
 
   activate () {
-    this.eventManager.listenEvent( // We use this function since the actual subscription has been set up once and for all
-      (e) => { // filter
-        return e.Result?.value
-      },
-      (e) => { // callback
-        // console.log('In result event')
-        this.createNewTrace(e.Result.value)
-      },
-      'TraceGraphics in activate()')
+    this.resultManager.subscribe((result) => {
+      this.createNewTrace(result)
+    }
+
+    )
   }
 
   // /////////////////////////////////////////////////////////////////////////
 
-  createNewTrace (values) {
-    const model = this.modelManager.createModelFromRead(values)
+  createNewTrace (model) {
+    // const model = this.modelManager.createModelFromRead(values)
 
-    const trace = model.resultContent.trace
+    const trace = model?.resultContent?.trace
+    if (!trace) {
+      return
+    }
+
     const result = model
     this.result = result
 

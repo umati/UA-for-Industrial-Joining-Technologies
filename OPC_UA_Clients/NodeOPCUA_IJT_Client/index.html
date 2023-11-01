@@ -26,6 +26,7 @@
     import AssetManager   from './Javascripts/Logic/Assets/AssetManager.mjs'
     import MethodManager  from './Javascripts/Logic/Methods/MethodManager.mjs'
     import EventManager   from './Javascripts/Logic/Events/EventManager.mjs'
+    import ResultHandler  from './Javascripts/Logic/Results/ResultManager.mjs'
     import SocketHandler  from './Javascripts/Logic/SocketHandler/SocketHandler.mjs'
 
     import TabGenerator   from './Javascripts/Views/GraphicSupport/TabGenerator.mjs'
@@ -40,20 +41,36 @@
     // Set up essentials
     var socket = io()
     var tabGenerator = new TabGenerator(document.body)
+    
+    // oncreate, subscribed, tighteningsystem
+    function setUpCoordinator(state) {
+      tabGenerator.setState(state) // This takes care of activating the web pages when all are loaded
+
+    } 
     var socketHandler = new SocketHandler(socket)
     var modelManager = new ModelManager()
 
     // Initiate the different tab handlers
-    var servers = new ServerGraphics(tabGenerator.generateTab('Servers'), socketHandler)
-    var addressSpace = new AddressSpace(socketHandler)
-    var addressSpaceGraphics = new AddressSpaceGraphics(tabGenerator.generateTab('Nodes', true,'subscribed'), addressSpace)
-    var eventManager = new EventManager(socketHandler);
-    var eventGraphics = new EventGraphics (tabGenerator.generateTab('Events', false,'subscribed'), eventManager)
-    let assets = new AssetManager(addressSpace, socketHandler)
-    let asstetGraphics = new AssetGraphics(tabGenerator.generateTab('Assets', false, 'tighteningsystem'), assets)
-    let trace = new TraceGraphics(tabGenerator.generateTab('Trace',false,'subscribed'), ['angle', 'torque'], socketHandler, eventManager)
-    let methodGraphics = new MethodGraphics(tabGenerator.generateTab('Methods',false,'tighteningsystem'))
-    const methodManager = new MethodManager(socketHandler, methodGraphics)
+    //var servers = new ServerGraphics(tabGenerator.generateTab('Servers'), socketHandler)
+
+    const servers = new ServerGraphics()
+    tabGenerator.generateTab(servers)
+    const addressSpace = new AddressSpace(socketHandler)
+    const addressSpaceGraphics = new AddressSpaceGraphics(addressSpace)
+    tabGenerator.generateTab(addressSpaceGraphics, true)
+    const eventManager = new EventManager(socketHandler);
+    const eventGraphics = new EventGraphics (eventManager)
+    tabGenerator.generateTab(eventGraphics, false)
+    const resultManager = new ResultHandler(eventManager)
+    const assets = new AssetManager(addressSpace, socketHandler)
+    const asstetGraphics = new AssetGraphics(assets)
+    tabGenerator.generateTab(asstetGraphics)
+    const traceGraphics = new TraceGraphics(['angle', 'torque'], resultManager)
+    tabGenerator.generateTab(traceGraphics)
+    const methodManager = new MethodManager(addressSpace)
+    let methodGraphics = new MethodGraphics(methodManager, addressSpace)
+    tabGenerator.generateTab(methodGraphics)
+
    
     /* ****************  Set up socket listeners to handle input from server ****************** */
 
@@ -98,20 +115,11 @@
     // Here you could add code to actually subscribe to fields
     socketHandler.registerMandatory('subscription created', function (msg) {
       servers.messageDisplay('Subscription created')
-      tabGenerator.setState('subscribed')
+      setUpCoordinator('subscribed')
       eventManager.reset()
-      trace.activate()
-      eventManager.simpleSubscribeEvent(['Result'],
-        (e) => { // Filter
-          return true
-        },
-        (e) => { // Callback
-          eventGraphics.eventToHTML(e)
-        },
-        'General subscription of the Events view to display all types of events'
-      )
-      addressSpace.getTighteningsSystemsPromise().then(()=> {
-        tabGenerator.setState('tighteningsystem')
+      resultManager.activate()
+      addressSpace.addressSpacePromise().then(()=> {
+        setUpCoordinator('tighteningsystem')
       })
     })
 
@@ -128,17 +136,6 @@
       servers.messageDisplay('Session closed')
     })
 
-    // Listen to namespaces
-    socketHandler.registerMandatory('namespaces', function (msg) {
-      addressSpace.handleNamespaces(msg)
-      servers.messageDisplay('Receiving namespaces')
-    })
-
-    // Listen to datatypes. Needed for method calls
-    socketHandler.registerMandatory('datatypes', function (datatypes) {
-      methodManager.setDataTypes(datatypes)
-      methodGraphics.messageDisplay('Receiving datatypes')
-    })
 
     // Listen to error messages
     socketHandler.registerMandatory('error message', function (msg) {
@@ -147,18 +144,12 @@
       tabGenerator.displayError(msg)
     })
 
-    addressSpace.getTighteningsSystemsPromise().then(
-        (tighteningSystemNodes) => { 
-          // console.log(tighteningSystemNodes)
-          methodManager.setTighteningSystem(tighteningSystemNodes) }
-      )
-
     window.onbeforeunload = function () {
       socket.emit('terminate connection')
       return
     }
 
-    tabGenerator.setState('oncreate') // Set up all tabs that do not have any advanced dependencies
+    setUpCoordinator('oncreate') // Set up all tabs that do not have any advanced dependencies
   </script>
 </body>
 

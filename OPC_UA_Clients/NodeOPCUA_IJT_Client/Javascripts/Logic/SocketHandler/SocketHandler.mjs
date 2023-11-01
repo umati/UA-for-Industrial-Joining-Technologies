@@ -30,6 +30,7 @@ export default class SocketHandler {
    * @returns
    */
   pathtoidPromise (nodeId, path) {
+    // console.log('LOOKING FOR: '+nodeId+path)
     return new Promise((resolve, reject) => {
       this.uniqueId++
       this.callMapping[this.uniqueId] = resolve

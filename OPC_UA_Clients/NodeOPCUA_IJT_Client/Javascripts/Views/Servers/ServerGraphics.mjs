@@ -1,8 +1,8 @@
 import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScreen.mjs'
 
 export default class ServerGraphics extends ControlMessageSplitScreen {
-  constructor (container) {
-    super(container, 'Servers', 'Server status')
+  constructor () {
+    super('Servers', 'Servers', 'Server status')
     this.lastConnection = ''
   }
 

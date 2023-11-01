@@ -35,7 +35,10 @@ export default class ChartManager {
       }
     })
 
-    document.getElementById('myChart').onclick = (evt) => {
+    const canvas = this.traceManager.traceInterface.canvas
+
+    // document.getElementById('myChart')
+    canvas.onclick = (evt) => {
       const points = this.myChart.getElementsAtEventForMode(evt,
         'nearest', { intersect: true }, true)
 

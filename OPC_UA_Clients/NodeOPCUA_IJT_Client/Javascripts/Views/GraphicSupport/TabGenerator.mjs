@@ -27,43 +27,32 @@ export default class TabGenerator {
    */
   setState (state) {
     for (const tab of this.activationSubscriptions[state]) {
-      const title = tab.label.innerText
+      // const title = tab.label.innerText
       const input = tab.input
       tab.label.style.color = 'yellow'
 
-      input.setAttribute('id', 'tab' + tab.number)
+      tab.content.activate(state)
 
-      input.onchange = () => {
-        const event = new CustomEvent(
-          'tabOpened',
-          {
-            detail: {
-              title
-            },
-            bubbles: true,
-            cancelable: true
-          }
-        )
-        const serverDiv = document.getElementById('connectedServer')
-        serverDiv.dispatchEvent(event)
-      }
+      input.setAttribute('id', 'tab' + tab.number)
     }
   }
 
   /**
    * generateTab creates a new tab and returns its HTML element
-   * @param {String} title The name of the tab
+   * @param {Object} content The graphical representation of the content, preferably a decendant of the BasicScreen class
    * @param {Boolean} selected Put this to true on the tab that should be oopen at the start
    * @param {String} activationPhase when, during setup, is the tab being activated ['oncreate, 'subscribed', 'tighteningsystem']
    * @returns
    */
-  generateTab (title, selected = false, activationPhase = 'oncreate') {
+  generateTab (content, selected = false) {
     const nr = this.containerList.length
+
+    const activationPhase = content.activationPhase
 
     const listItem = document.createElement('li')
     listItem.setAttribute('role', 'tab')
     listItem.selected = selected
-    listItem.title = title
+    listItem.title = content.title
     this.list.appendChild(listItem)
 
     const input = document.createElement('input')
@@ -74,13 +63,12 @@ export default class TabGenerator {
       input.setAttribute('checked', 'true')
     }
 
-    /*
     input.onchange = () => {
       const event = new CustomEvent(
         'tabOpened',
         {
           detail: {
-            title
+            title: content.title
           },
           bubbles: true,
           cancelable: true
@@ -88,7 +76,7 @@ export default class TabGenerator {
       )
       const serverDiv = document.getElementById('connectedServer')
       serverDiv.dispatchEvent(event)
-    } */
+    }
 
     listItem.appendChild(input)
 
@@ -99,13 +87,13 @@ export default class TabGenerator {
     label.setAttribute('aria-controls', 'panel' + nr)
     label.setAttribute('tab-index', nr)
     label.style.color = 'grey'
-    label.innerText = title
+    label.innerText = content.title
     listItem.appendChild(label)
 
     if (!this.activationSubscriptions[activationPhase]) {
-      this.activationSubscriptions[activationPhase] = [{ label, input, selected, number: nr }]
+      this.activationSubscriptions[activationPhase] = [{ label, input, selected, number: nr, content }]
     } else {
-      this.activationSubscriptions[activationPhase].push({ label, input, selected, number: nr })
+      this.activationSubscriptions[activationPhase].push({ label, input, selected, number: nr, content })
     }
 
     const contentDiv = document.createElement('div')
@@ -115,9 +103,11 @@ export default class TabGenerator {
     contentDiv.setAttribute('role', 'tab-panel')
     contentDiv.setAttribute('aria-labeledby', 'specification')
     contentDiv.setAttribute('aria-hidden', 'true')
-    contentDiv.tabTitle = title
+    contentDiv.tabTitle = content.title
     listItem.appendChild(contentDiv)
     this.containerList.push(contentDiv)
+
+    contentDiv.appendChild(content.backGround)
 
     return contentDiv
   }

@@ -6,8 +6,8 @@ import BasicScreen from './BasicScreen.mjs'
  * Implement your own initiate() function to run code every time the tab is opened
  */
 export default class ControlMessageSplitScreen extends BasicScreen {
-  constructor (container, leftText, rightText) {
-    super(container)
+  constructor (title, leftText, rightText, activationPhase) {
+    super(title, activationPhase)
 
     const leftHalf = document.createElement('div')
     leftHalf.classList.add('lefthalf')
@@ -66,19 +66,17 @@ export default class ControlMessageSplitScreen extends BasicScreen {
     newButton.innerHTML = title
 
     newButton.onclick = () => {
-      newButton.callback()
+      newButton.callback(newButton)
     }
     area.appendChild(newButton)
+    return newButton
   }
 
-  createInput (title, area, initialValue) {
+  createInput (title, area) {
     const newInput = document.createElement('input')
     newInput.classList.add('methodInputStyle')
-    newInput.value = initialValue
 
     area.appendChild(newInput)
-    return function () {
-      return newInput.value
-    }
+    return newInput
   }
 }

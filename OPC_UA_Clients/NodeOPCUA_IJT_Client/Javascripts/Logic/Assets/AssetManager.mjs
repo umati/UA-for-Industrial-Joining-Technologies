@@ -14,7 +14,7 @@ export default class AssetHandler {
    */
   setupAndLoadAllAssets () {
     return new Promise((resolve, reject) => {
-      this.addressSpace.getTighteningsSystemsPromise().then(
+      this.addressSpace.addressSpacePromise().then(
         (tighteningSystem) => {
           this.getAssetFolder(tighteningSystem).then((assetFolder) => {
             this.loadAllAssetsSupport(assetFolder).then((nodeList) => {
@@ -84,6 +84,11 @@ export default class AssetHandler {
     })
   }
 
+  /**
+   * Support function that finds the Assets Folder
+   * @param {*} tighteningSystem The tightening system node
+   * @returns the Assdet folder node
+   */
   getAssetFolder (tighteningSystem) {
     return new Promise((resolve, reject) => {
       const nsIJT = this.addressSpace.nsIJT
@@ -96,23 +101,4 @@ export default class AssetHandler {
       })
     })
   }
-
-  /*
-  fixAssets (doneCallback) {
-    this.addressSpace.getTighteningsSystemsPromise().then(
-      (tighteningSystems) => {
-        this.tighteningSystem = tighteningSystems
-        console.log('Selected TighteningSystem: ' + this.tighteningSystem.nodeId)
-        this.loadAllAssetsSupport().then(
-          (x) => {
-            console.log('All assets loaded. ')
-            doneCallback()
-          }
-        )
-      },
-      () => {
-        throw new Error('No TighteningSystem found in Objects folder')
-      }
-    )
-  } */
 }

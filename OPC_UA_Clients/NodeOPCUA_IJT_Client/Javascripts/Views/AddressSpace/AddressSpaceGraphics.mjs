@@ -12,8 +12,8 @@ const nodeClassColor = {
  * This class is a simple example of a graphical representation of address space
  */
 export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
-  constructor (container, addressSpace) {
-    super(container, 'AddressSpace', 'Messages')
+  constructor (addressSpace) {
+    super('Address Space', 'Address Space', 'Messages', 'subscribed')
     this.addressSpace = addressSpace
   }
 

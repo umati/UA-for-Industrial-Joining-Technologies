@@ -10,7 +10,7 @@ export default class ResultDataModel extends IJTBaseModel {
     }
     super(parameters, modelManager, castMapping)
 
-    const event = new CustomEvent(
+    /* const event = new CustomEvent(
       'newResultReceived',
       {
         detail: {
@@ -23,6 +23,6 @@ export default class ResultDataModel extends IJTBaseModel {
     )
 
     const serverDiv = document.getElementById('connectedServer')
-    serverDiv.dispatchEvent(event)
+    serverDiv.dispatchEvent(event) */
   }
 }
