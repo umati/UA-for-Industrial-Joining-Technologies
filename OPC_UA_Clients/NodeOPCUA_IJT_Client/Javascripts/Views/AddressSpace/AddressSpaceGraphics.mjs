@@ -117,7 +117,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
 
     const browse = document.createElement('button')
     browse.classList.add('buttonAreaStyle')
-    browse.innerHTML = relation.browseName.name + '  [' + relation.referenceTypeName + ']'
+    browse.innerHTML = relation.browseName.name // + '  [' + relation.referenceTypeName + ']'
     browse.callback = clickCallback
     browse.relation = relation
     browse.classList.add('invisButton')

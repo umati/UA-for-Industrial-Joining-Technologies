@@ -1,7 +1,7 @@
 // The purpose of this class is to display traces on the screen and manage
 // user interaction with them. It has little to do with the OPC UA communication as such
 // and is consequently kept entierly in the View folder.
-import ModelManager from '../../Models/ModelManager.mjs'
+// import ModelManager from '../../Models/ModelManager.mjs'
 import ChartManager from './ChartHandler.mjs'
 import TraceInterface from './TraceInterface.mjs'
 import SingleTraceData from './SingleTraceData.mjs'
@@ -35,7 +35,7 @@ export default class TraceGraphics extends BasicScreen {
         annotations: {}
       }
     }
-    this.modelManager = new ModelManager()
+    // this.modelManager = new ModelManager()
 
     /*
     socketHandler.registerMandatory('readresult', (msg) => {
@@ -68,9 +68,7 @@ export default class TraceGraphics extends BasicScreen {
   activate () {
     this.resultManager.subscribe((result) => {
       this.createNewTrace(result)
-    }
-
-    )
+    })
   }
 
   // /////////////////////////////////////////////////////////////////////////

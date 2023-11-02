@@ -1,5 +1,5 @@
 import ModelToHTML from '../AddressSpace/ModelToHTML.mjs'
-import ModelManager from '../../Models/ModelManager.mjs'
+import ModelManager from '../../Logic/Models/ModelManager.mjs'
 import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScreen.mjs'
 /**
  * The purpose of this tab is to automatically generate a

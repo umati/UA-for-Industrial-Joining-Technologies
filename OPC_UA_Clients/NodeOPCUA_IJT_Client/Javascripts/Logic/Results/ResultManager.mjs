@@ -1,4 +1,4 @@
-import ModelManager from '../../Models/ModelManager.mjs'
+import ModelManager from '../Models/ModelManager.mjs'
 
 export default class ResultManager {
   constructor (eventManager) {
