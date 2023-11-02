@@ -1,4 +1,4 @@
-export default class MethodManager {
+export class MethodManager {
   constructor (addressSpace) {
     this.addressSpace = addressSpace
   }

@@ -1,6 +1,6 @@
-import ModelManager from '../Models/ModelManager.mjs'
+import { ModelManager } from '../Models/ModelManager.mjs'
 
-export default class ResultManager {
+export class ResultManager {
   constructor (eventManager) {
     this.eventManager = eventManager
     this.modelManager = new ModelManager()

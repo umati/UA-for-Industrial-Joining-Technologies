@@ -19,15 +19,14 @@
   <script src='/socket.io/socket.io.js'></script>
 
   <script type='module'>
-    import ModelManager   from './Javascripts/Logic/Models/ModelManager.mjs'
-    import IJTBaseModel   from './Javascripts/Logic/Models/IJTBaseModel.mjs'
 
-    import AddressSpace   from './Javascripts/Logic/AddressSpace/AddressSpace.mjs'
-    import AssetManager   from './Javascripts/Logic/Assets/AssetManager.mjs'
-    import MethodManager  from './Javascripts/Logic/Methods/MethodManager.mjs'
-    import EventManager   from './Javascripts/Logic/Events/EventManager.mjs'
-    import ResultHandler  from './Javascripts/Logic/Results/ResultManager.mjs'
-    import SocketHandler  from './Javascripts/Logic/SocketHandler/SocketHandler.mjs'
+    import {  AddressSpace, 
+              AssetManager, 
+              MethodManager, 
+              EventManager, 
+              ResultManager, 
+              ModelManager, 
+              SocketHandler} from './Javascripts/ijt-support/ijt-support.mjs'
 
     import TabGenerator   from './Javascripts/Views/GraphicSupport/TabGenerator.mjs'
     import TraceGraphics  from './Javascripts/Views/Trace/TraceGraphics.mjs'
@@ -59,9 +58,9 @@
     const addressSpaceGraphics = new AddressSpaceGraphics(addressSpace)
     tabGenerator.generateTab(addressSpaceGraphics, true)
     const eventManager = new EventManager(socketHandler);
-    const eventGraphics = new EventGraphics (eventManager)
+    const eventGraphics = new EventGraphics (eventManager, modelManager)
     tabGenerator.generateTab(eventGraphics, false)
-    const resultManager = new ResultHandler(eventManager)
+    const resultManager = new ResultManager(eventManager)
     const assets = new AssetManager(addressSpace, socketHandler)
     const asstetGraphics = new AssetGraphics(assets)
     tabGenerator.generateTab(asstetGraphics)

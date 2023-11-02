@@ -2,7 +2,7 @@
  * The purpose of this class is to interpret events
  *
  */
-export default class EventManager {
+export class EventManager {
   constructor (socketHandler) {
     this.socketHandler = socketHandler
     this.callbacks = []

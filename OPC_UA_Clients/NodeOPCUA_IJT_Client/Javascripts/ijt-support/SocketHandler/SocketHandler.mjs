@@ -1,4 +1,4 @@
-export default class SocketHandler {
+export class SocketHandler {
   constructor (socket) {
     this.socket = socket
     this.callMapping = {}

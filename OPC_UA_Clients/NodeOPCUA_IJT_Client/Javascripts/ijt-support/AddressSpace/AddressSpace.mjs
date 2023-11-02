@@ -1,6 +1,6 @@
 import { NodeFactory } from './Node.mjs'
 
-export default class AddressSpace {
+export class AddressSpace {
   constructor (socketHandler) {
     this.socketHandler = socketHandler
     this.nodeMapping = {}

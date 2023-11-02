@@ -10,7 +10,7 @@ import TagDataType from './TagDataType.mjs'
 import { LocalizationModel, keyValuePair } from './SupportModels.mjs'
 import { TighteningTraceDataType, StepTraceDataType, TraceContentDataType, TraceValueDataType } from './TighteningTraceDataType.mjs'
 /* eslint-disable */
-export default class ModelManager {
+export class ModelManager {
   /**
    * The purpose of this method is to create a javascript class from a parameter name
    * @param {*} parameterName

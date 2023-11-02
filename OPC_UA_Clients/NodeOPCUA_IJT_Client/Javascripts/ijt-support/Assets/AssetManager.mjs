@@ -2,7 +2,7 @@
  * The purpose of this tab is to automatically generate a
  * a representation of the assets
  */
-export default class AssetHandler {
+export class AssetManager {
   constructor (addressSpace, socketHandler) {
     this.socketHandler = socketHandler
     this.addressSpace = addressSpace

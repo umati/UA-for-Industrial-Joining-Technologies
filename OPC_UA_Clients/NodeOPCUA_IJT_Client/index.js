@@ -8,7 +8,7 @@ import {
   OPCUAClient
 } from 'node-opcua'
 
-import NodeOPCUAInterface from './Javascripts/Client/NodeOPCUAInterface.mjs'
+import NodeOPCUAInterface from './Javascripts/ijt-support/Client/NodeOPCUAInterface.mjs'
 
 const app = express()
 const http = httpTemp.Server(app)

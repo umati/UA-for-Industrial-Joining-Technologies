@@ -1,15 +1,14 @@
 import ModelToHTML from '../AddressSpace/ModelToHTML.mjs'
-import ModelManager from '../../Logic/Models/ModelManager.mjs'
 import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScreen.mjs'
 /**
  * The purpose of this tab is to automatically generate a
  * graphical representation of the events
  */
 export default class EventGraphics extends ControlMessageSplitScreen {
-  constructor (eventManager) {
+  constructor (eventManager, modelManager) {
     super('Events', 'Events', 'Event content', 'subscribed')
     this.eventManager = eventManager
-    this.modelManager = new ModelManager()
+    this.modelManager = modelManager
     this.modelToHTML = new ModelToHTML()
 
     const box = this.createArea()
