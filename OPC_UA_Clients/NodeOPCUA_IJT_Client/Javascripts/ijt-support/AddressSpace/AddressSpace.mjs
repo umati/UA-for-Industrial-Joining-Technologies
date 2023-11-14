@@ -16,8 +16,8 @@ export class AddressSpace {
     })
 
     // Listen to datatypes. Needed for method calls
-    socketHandler.registerMandatory('datatypes', (dataTypeEnumeration) => {
-      this.dataTypeEnumeration = dataTypeEnumeration
+    socketHandler.registerMandatory('datatypes', (msg) => {
+      this.dataTypeEnumeration = msg.datatype
       this.addressSpaceSetup('datatypes')
     })
   }
@@ -170,7 +170,8 @@ export class AddressSpace {
    * This simplifies the use of the correct namespaces
    * @param {*} namespaces is the data sent bu the OPC UA client
    */
-  handleNamespaces (namespaces) {
+  handleNamespaces (namespaceMessage) {
+    const namespaces = namespaceMessage.namespaces
     this.OPCUA = namespaces.indexOf('http://opcfoundation.org/UA/')
     this.nsIJT = namespaces.indexOf('http://opcfoundation.org/UA/IJT/')
     this.nsMachinery = namespaces.indexOf('http://opcfoundation.org/UA/Machinery/')

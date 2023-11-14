@@ -8,7 +8,7 @@ import {
   OPCUAClient
 } from 'node-opcua'
 
-import NodeOPCUAInterface from './Javascripts/ijt-support/Client/NodeOPCUAInterface.mjs'
+import { NodeOPCUAInterface } from './Javascripts/ijt-support/Client/NodeOPCUAInterface.mjs'
 
 const app = express()
 const http = httpTemp.Server(app)
@@ -35,39 +35,7 @@ http.listen(port, () => {
   console.log(`Socket.IO server running at http://localhost:${port}/`)
 })
 
-// ----------------------------------------------------------------- OPC UA --------------------------------------------------------
-// This is a list of the OPC UA servers we want to be able to communicate with
-const endpointUrls = [
-  {
-    name: 'Local',
-    address: 'opc.tcp://127.0.0.1:40451'
-  },
-  {
-    name: 'Windows simulation',
-    address: 'opc.tcp://10.46.19.106:40451',
-    autoConnect: 'Yes'
-  },
-  {
-    name: 'ICB-A',
-    address: 'opc.tcp://10.46.16.68:40451'
-  },
-  {
-    name: 'PF80000',
-    address: 'opc.tcp://10.46.16.174:40451'
-  }]
-
-// This is the function used to display status messages comming from the server
-function displayM (msg) {
-  // console.log(msg);
-  console.log('status message: ' + msg)
-  io.emit('status message', msg)
-}
-
-// Set up the ability to subscribe and read results from the OPC UA server
-// const monitor = new Monitor(displayM, AttributeIds, io);
-
 // ----------------------------------------------------------------- SocketIO --------------------------------------------------------
-// Set up SocketIO so we can communicate with the web page
-
-const nodeOPCUAInterface = new NodeOPCUAInterface(io, AttributeIds)
-nodeOPCUAInterface.setupSocketIO(endpointUrls, displayM, OPCUAClient)
+// Set up Websockets so the web page and the node.js application can communicate
+const nodeOPCUAInterface = new NodeOPCUAInterface(io, AttributeIds, OPCUAClient)
+nodeOPCUAInterface.setupSocketIO(OPCUAClient)

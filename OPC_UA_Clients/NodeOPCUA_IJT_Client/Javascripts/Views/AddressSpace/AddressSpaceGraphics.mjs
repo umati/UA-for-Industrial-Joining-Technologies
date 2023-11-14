@@ -18,7 +18,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
   }
 
   /**
-   * initiateNodeTree creates the start of the nodetree on the left side of the screen
+   * initiateNodeTree creates the root of the nodetree on the left side of the screen
    */
   initiateNodeTree () {
     // Clean any old stuff

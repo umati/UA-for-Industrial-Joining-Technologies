@@ -14,13 +14,36 @@ import {
   // ObjectIds
 } from 'node-opcua'
 
-export default class NodeOPCUAInterface {
+import { promises as fs } from 'fs'
+
+async function readFile (filePath) {
+  try {
+    const data = await fs.readFile(filePath)
+    // console.log(data.toString())
+    return data
+  } catch (error) {
+    console.error(`Got an error trying to read the file: ${error.message}`)
+  }
+}
+
+function writeFile (filePath, content) {
+  try {
+    fs.writeFile(filePath, content, (error) => {
+      if (error) {
+        console.error(`Got an error trying to write the file: ${error.message}`)
+      }
+    })
+  } catch (error) {
+    console.error(`Got an error trying to write the file: ${error.message}`)
+  }
+}
+
+export class NodeOPCUAInterface {
   constructor (io, attributeIds) {
     console.log('Establishing interface')
     this.attributeIds = attributeIds
     this.io = io
-    this.debugNr = 0
-    this.eventMonitoringItems = []
+    this.connectionList = {}
   }
 
   /**
@@ -30,64 +53,134 @@ export default class NodeOPCUAInterface {
    * @param {*} displayFunction a function that displays messages
    * @param {*} OPCUAClient
    */
-  setupSocketIO (endpointUrls, displayFunction, OPCUAClient) {
+  setupSocketIO (OPCUAClient) {
+    // This is the function used to display status messages comming from the server
+    function displayFunction (msg) {
+      // console.log(msg);
+      console.log('status message: ' + msg)
+      io.emit('status message', msg)
+    }
+
     console.log('Establishing sockets')
     const io = this.io
     this.displayFunction = displayFunction
     this.OPCUAClient = OPCUAClient
-    this.endpointUrls = endpointUrls
+
     this.session = null
 
     io.on('connection', (socket) => {
-      socket.on('subscribe item', (callid, msg) => {
-        this.addMonitor(callid, msg)
-      })
-      socket.on('read', (callid, msg, attribute) => {
-        this.read(callid, msg, attribute)
+      /* socket.on('subscribe item', (endpoint, callid, msg) => {
+        this.addMonitor(endpoint, callid, msg)
+      }) */
+
+      socket.on('read', (endpoint, callid, msg, attribute) => {
+        const connectionObject = this.connectionList[endpoint]
+        if (!connectionObject) {
+          return
+        }
+        connectionObject.read(callid, msg, attribute)
       })
 
-      socket.on('browse', (callid, nodeId, details) => {
-        this.browse(callid, nodeId, details)
+      socket.on('browse', (endpoint, callid, nodeId, details) => {
+        const connectionObject = this.connectionList[endpoint]
+        if (!connectionObject) {
+          return
+        }
+        /*
+        console.log('C ' + connectionObject)
+        console.log('CC ' + endpoint)
+        console.log('CCC ' + callid) */
+
+        connectionObject.browse(callid, nodeId, details)
       })
 
-      socket.on('methodcall', (callid, objectNode, methodNode, inputArgs) => {
-        this.methodCall(callid, objectNode, methodNode, inputArgs)
+      socket.on('methodcall', (endpoint, callid, objectNode, methodNode, inputArgs) => {
+        const connectionObject = this.connectionList[endpoint]
+        if (!connectionObject) {
+          return
+        }
+        connectionObject.methodCall(callid, objectNode, methodNode, inputArgs)
       })
 
-      socket.on('pathtoid', (callid, nodeId, path) => {
-        this.translateBrowsePath(callid, nodeId, path)
+      socket.on('pathtoid', (endpoint, callid, nodeId, path) => {
+        const connectionObject = this.connectionList[endpoint]
+        if (!connectionObject) {
+          return
+        }
+        connectionObject.translateBrowsePath(callid, nodeId, path)
       })
 
-      socket.on('terminate connection', () => {
+      socket.on('terminate connection', (endpoint) => {
         console.log('Recieving terminate session request')
-        this.closeConnection()
+        const connectionObject = this.connectionList[endpoint]
+        if (!connectionObject) {
+          return
+        }
+        connectionObject.closeConnection()
       })
 
-      socket.on('connect to', msg => {
+      socket.on('get connectionpoints', () => {
+        readFile('./Resources/connectionpoints.json').then((filecontent) => {
+          this.io.emit('connection points', filecontent.toString())
+        })
+      })
+
+      socket.on('set connectionpoints', (connectionpoints) => {
+        writeFile('./Resources/connectionpoints2.json', connectionpoints)
+      })
+
+      socket.on('connect to', endpointUrl => {
         console.log('**********************************************')
-        console.log('Nodejs OPC UA client attempting to connect to ' + msg)
-        if (msg) {
-          this.setupClient(msg, this.displayFunction, this.OPCUAClient, this.io)
+        console.log('Nodejs OPC UA client attempting to connect to ' + endpointUrl)
+        if (endpointUrl) {
+          const newConnection = new Connection(endpointUrl, this.displayFunction, this.OPCUAClient, this.io)
+          newConnection.setupClient()
+          this.connectionList[endpointUrl] = newConnection
+          // console.log('A ' + endpointUrl)
         }
       })
 
-      socket.on('subscribe event', (msg, subscriberDetails) => {
+      socket.on('disconnect from', endpointUrl => {
+        console.log('**********************************************')
+        console.log('Nodejs OPC UA client attempting to disconnect from ' + endpointUrl)
+        if (endpointUrl) {
+          const connection = this.connectionList[endpointUrl]
+          if (connection) {
+            connection.closeConnection()
+          }
+          this.connectionList[endpointUrl] = null
+        }
+      })
+
+      socket.on('subscribe event', (endpoint, msg, subscriberDetails) => {
         // console.log('Nodejs OPC UA client attempting to subscribe to ' + msg)
+        const connectionObject = this.connectionList[endpoint]
+        if (!connectionObject) {
+          return
+        }
         if (msg) {
-          this.eventSubscription(msg, this.displayFunction, this.OPCUAClient, subscriberDetails)
+          connectionObject.eventSubscription(msg, this.displayFunction, this.OPCUAClient, subscriberDetails)
         }
       })
-
-      // Send the listed access points IP addresses to the GUI
-      this.io.emit('connection points', endpointUrls)
     })
   }
+}
 
-  setupClient (endpointUrl, displayFunction, OPCUAClient) {
+class Connection {
+  constructor (endpointUrl, displayFunction, client, io) {
+    this.endpointUrl = endpointUrl
+    this.io = io
+    this.displayFunction = displayFunction
+    this.OPCUAClient = client
+    this.debugNr = 0
+    this.eventMonitoringItems = []
+  }
+
+  setupClient () {
     const io = this.io
-    // let theSession;
+    const endpointUrl = this.endpointUrl
     const thisContainer = this
-    const client = OPCUAClient.create({ endpointMustExist: false })
+    const client = this.OPCUAClient.create({ endpointMustExist: false })
     this.client = client
     this.endpointUrl = endpointUrl
 
@@ -101,8 +194,8 @@ export default class NodeOPCUAInterface {
           if (err) {
             console.log('Cannot connect to endpoint :', endpointUrl)
           } else {
-            console.log('Connection established.')
-            io.emit('connection established')
+            console.log('Connection established to endpoint ' + endpointUrl)
+            io.emit('connection established', { endpointurl: endpointUrl })
           }
           callback(err)
         })
@@ -114,8 +207,8 @@ export default class NodeOPCUAInterface {
         client.createSession(function (err, session) {
           if (!err) {
             thisContainer.session = session
-            console.log('Session established.')
-            io.emit('session established')
+            console.log('*************** Session established. (' + endpointUrl + ')')
+            io.emit('session established', { endpointurl: endpointUrl })
           }
           callback(err)
         })
@@ -136,15 +229,15 @@ export default class NodeOPCUAInterface {
           if (!err) {
             thisContainer.subscription = subscription
 
-            console.log('Subscription established')
-            io.emit('subscription created')
+            console.log('Subscription established. (' + endpointUrl + ')')
+            io.emit('subscription created', { endpointurl: endpointUrl })
           }
           callback(err)
         })
       },
       function (callback) { // DataTypes
         console.log('Handling Datatypes')
-        io.emit('datatypes', DataType)
+        io.emit('datatypes', { endpointurl: endpointUrl, datatype: DataType })
         callback()
       },
       function (callback) { // Namespaces
@@ -153,7 +246,7 @@ export default class NodeOPCUAInterface {
             throw new Error(err)
           }
           console.log('Handling NameSpaces')
-          io.emit('namespaces', namespaces)
+          io.emit('namespaces', { endpointurl: endpointUrl, namespaces })
           callback(err)
         })
       }
@@ -162,7 +255,7 @@ export default class NodeOPCUAInterface {
       if (err) {
         console.log('Failure during establishing connection to OPC UA server ', err)
         // this.io.emit('error message', err.toString(), 'connection')
-        this.io.emit('error message', { error: err, context: 'connection', message: err.message })
+        this.io.emit('error message', { error: err, context: 'connection', message: err.message, endpointUrl })
         process.exit(0)
       } else {
         console.log('Connection and session established.')
@@ -195,12 +288,12 @@ export default class NodeOPCUAInterface {
 
         // console.log('2:dataValue ' + dataValue.toString())
 
-        this.io.emit('readresult', { callid, dataValue, stringValue: dataValue.toString(), nodeid: nodeId, attribute })
+        this.io.emit('readresult', { endpointurl: this.endpointUrl, callid, dataValue, stringValue: dataValue.toString(), nodeid: nodeId, attribute })
         return dataValue
       } catch (err) {
         this.displayFunction('Node.js OPC UA client error (reading): ' + err.message) // Display the error message first
         // this.io.emit('error message', err.toString(), 'read') // (Then for debug purposes display all of it)
-        this.io.emit('error message', { error: err, context: 'read', message: err.message })
+        this.io.emit('error message', { error: err, context: 'read', message: err.message, endpointurl: this.endpointUrl })
       }
     })()
   }
@@ -227,7 +320,7 @@ export default class NodeOPCUAInterface {
 
         // console.log(`translateBrowsePath Resulting node Id: ${resultsNodeId}. `)
 
-        this.io.emit('pathtoidresult', { callid, nodeid: resultsNodeId })
+        this.io.emit('pathtoidresult', { endpointurl: this.endpointUrl, callid, nodeid: resultsNodeId })
       } catch (err) {
         this.displayFunction('Node.js OPC UA client error (translateBrowsePath): ' + err.message) // Display the error message first
         // this.io.emit('error message', err.toString(), 'translateBrowsePath')
@@ -246,6 +339,7 @@ export default class NodeOPCUAInterface {
     (async () => {
       try {
         const io = this.io
+        const endpointurl = this.endpointUrl
         const nodeToBrowse = {
           nodeId,
           includeSubtypes: true,
@@ -265,6 +359,7 @@ export default class NodeOPCUAInterface {
               // console.log(nodeId)
               // console.log(browseResult)
               io.emit('browseresult', {
+                endpointurl,
                 callid,
                 browseresult: browseResult,
                 nodeid: nodeId,
@@ -275,7 +370,7 @@ export default class NodeOPCUAInterface {
         )
       } catch (err) {
         console.log('FAIL Browse call: ' + err.message + err)
-        this.io.emit('error message', { error: err, context: 'browse', message: err.message })
+        this.io.emit('error message', { error: err, context: 'browse', message: err.message, endpointurl: this.endpointUrl })
       }
     })()
   }
@@ -304,6 +399,7 @@ export default class NodeOPCUAInterface {
             console.log('FAIL Method call (in callback): ' + err)
           } else {
             io.emit('callresult', {
+              endpointurl: this.endpointUrl,
               callid,
               results
             })
@@ -356,7 +452,7 @@ export default class NodeOPCUAInterface {
       this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
     }
     try {
-      console.log('Disconnect client')
+      console.log('Disconnect client. (' + this.endpointUrl + ')')
       this.client.disconnect(function () {
         console.log('Client disconnected.\n**********************************************')
       })
@@ -412,10 +508,10 @@ export default class NodeOPCUAInterface {
           }
           result.subscriberDetails = subscriberDetails
           console.log('eventsubscription triggered ' + subscribeDebugNr)
-          this.io.emit('subscribed event', result)
+          this.io.emit('subscribed event', { endpointurl: this.endpointUrl, result })
         } catch (err) {
           this.displayFunction('Node.js OPC UA client error (eventMonitoring): ' + err.message) // Display the error message first
-          this.io.emit('error message', { error: err, context: 'eventMonitoring', message: err.message }) // (Then for debug purposes display all of it)
+          this.io.emit('error message', { error: err, context: 'eventMonitoring', message: err.message, endpointurl: this.endpointUrl }) // (Then for debug purposes display all of it)
         }
       })()
     })

@@ -47,15 +47,6 @@ export default class TraceGraphics extends BasicScreen {
 
     this.chartManager = new ChartManager(this.traceInterface.canvas, this)
     this.setupEventListeners()
-
-    const serverDiv = document.getElementById('connectedServer')
-    serverDiv.addEventListener('tabOpened', (event) => {
-      if (event.detail.title === 'Trace') {
-        if (this.allTraces.length === 0) {
-          this.initiate()
-        }
-      }
-    }, false)
   }
 
   /**

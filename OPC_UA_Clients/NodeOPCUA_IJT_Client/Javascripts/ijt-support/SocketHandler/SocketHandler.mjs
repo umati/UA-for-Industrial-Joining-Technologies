@@ -1,5 +1,6 @@
 export class SocketHandler {
-  constructor (socket) {
+  constructor (socket, endpointUrl) {
+    this.endpointUrl = endpointUrl
     this.socket = socket
     this.callMapping = {}
     this.failMapping = {}
@@ -10,7 +11,23 @@ export class SocketHandler {
     this.registerMandatory('readresult')
     this.registerMandatory('browseresult')
     this.registerMandatory('pathtoidresult')
+    this.connectionList = []
   }
+
+  /*
+  addConnection (endpointUrl) {
+    if (this.connectionList.indexOf(endpointUrl) === -1) {
+      this.connectionList.push(endpointUrl)
+    }
+  }
+
+  getConnection (endpointUrl) {
+    return this.connectionList
+  }
+
+  removeConnection (endpointUrl) {
+    this.connectionList = this.connectionList.filter(item => item !== endpointUrl)
+  } */
 
   /**
    * Subscribe to an event
@@ -20,7 +37,7 @@ export class SocketHandler {
    * @returns
    */
   subscribeEvent (msg, subscriberDetails) {
-    this.socket.emit('subscribe event', msg, subscriberDetails)
+    this.socket.emit('subscribe event', this.endpointUrl, msg, subscriberDetails)
   }
 
   /**
@@ -35,7 +52,7 @@ export class SocketHandler {
       this.uniqueId++
       this.callMapping[this.uniqueId] = resolve
       this.failMapping[this.uniqueId] = reject
-      this.socket.emit('pathtoid', this.uniqueId, nodeId, path)
+      this.socket.emit('pathtoid', this.endpointUrl, this.uniqueId, nodeId, path)
     })
   }
 
@@ -50,7 +67,7 @@ export class SocketHandler {
       this.uniqueId++
       this.callMapping[this.uniqueId] = resolve
       this.failMapping[this.uniqueId] = reject
-      this.socket.emit('constructextension', this.uniqueId, nodeId, parameters)
+      this.socket.emit('constructextension', this.endpointUrl, this.uniqueId, nodeId, parameters)
     })
   }
 
@@ -64,7 +81,7 @@ export class SocketHandler {
       this.uniqueId++
       this.callMapping[this.uniqueId] = resolve
       this.failMapping[this.uniqueId] = reject
-      this.socket.emit('methodcall', this.uniqueId, objectNode, methodNode, inputArguments)
+      this.socket.emit('methodcall', this.endpointUrl, this.uniqueId, objectNode, methodNode, inputArguments)
     })
   }
 
@@ -78,7 +95,7 @@ export class SocketHandler {
       this.uniqueId++
       this.callMapping[this.uniqueId] = resolve
       this.failMapping[this.uniqueId] = reject
-      this.socket.emit('read', this.uniqueId, nodeId, attribute)
+      this.socket.emit('read', this.endpointUrl, this.uniqueId, nodeId, attribute)
     })
   }
 
@@ -93,7 +110,7 @@ export class SocketHandler {
       this.uniqueId++
       this.callMapping[this.uniqueId] = resolve
       this.failMapping[this.uniqueId] = reject
-      this.socket.emit('browse', this.uniqueId, nodeId, details)
+      this.socket.emit('browse', this.endpointUrl, this.uniqueId, nodeId, details)
     })
   }
 
@@ -122,6 +139,10 @@ export class SocketHandler {
     }
     if (this.mandatoryLists[responseString].length === 0) {
       this.socket.on(responseString, (msg) => {
+        if (msg.endpointurl && msg.endpointurl !== this.endpointUrl) {
+          return // This socket message is aimed at another socketHandler
+        }
+        // console.log('R: ' + responseString)
         const returnNode = applyAll(this.mandatoryLists[responseString], msg)
 
         if (msg && msg.callid) {

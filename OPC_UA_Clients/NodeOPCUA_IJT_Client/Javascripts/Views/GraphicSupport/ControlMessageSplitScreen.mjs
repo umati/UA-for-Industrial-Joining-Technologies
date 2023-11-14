@@ -9,10 +9,14 @@ export default class ControlMessageSplitScreen extends BasicScreen {
   constructor (title, leftText, rightText, activationPhase) {
     super(title, activationPhase)
 
+    const columnSetter = document.createElement('div')
+    columnSetter.classList.add('columns')
+    this.backGround.appendChild(columnSetter)
+
     const leftHalf = document.createElement('div')
     leftHalf.classList.add('lefthalf')
     leftHalf.classList.add('scrollableInfoArea')
-    this.backGround.appendChild(leftHalf)
+    columnSetter.appendChild(leftHalf)
 
     const nodeDiv = document.createElement('div')
     nodeDiv.classList.add('myHeader')
@@ -27,7 +31,7 @@ export default class ControlMessageSplitScreen extends BasicScreen {
     const rightHalf = document.createElement('div')
     rightHalf.classList.add('righthalf')
     rightHalf.classList.add('scrollableInfoArea')
-    this.backGround.appendChild(rightHalf)
+    columnSetter.appendChild(rightHalf)
 
     const comDiv = document.createElement('div')
     comDiv.classList.add('myHeader')

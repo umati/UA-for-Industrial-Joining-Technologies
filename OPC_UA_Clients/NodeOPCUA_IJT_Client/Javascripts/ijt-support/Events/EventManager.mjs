@@ -52,9 +52,9 @@ export class EventManager {
 
   receivedEvent (msg) {
     for (const item of this.callbacks) {
-      if (item.filter && item.filter(msg)) {
+      if (item.filter && item.filter(msg.result)) {
         // console.log(`SUBSCRIPTION: ${item.subscriberDetails}`)
-        item.callback(msg)
+        item.callback(msg.result)
       }
     }
   }

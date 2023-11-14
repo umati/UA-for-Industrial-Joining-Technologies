@@ -6,16 +6,25 @@
  */
 
 export default class TabGenerator {
-  constructor (container) {
+  constructor (container, identityString = 'topLevel') {
     /**
      * Set up the tabs
      */
     this.container = container
+    this.identityString = identityString
     this.activationSubscriptions = {}
     this.containerList = []
-    this.list = document.createElement('ul')
-    this.list.classList.add('tabs')
-    this.container.appendChild(this.list)
+    this.tabBase = document.createElement('div')
+    this.container.appendChild(this.tabBase)
+    this.tabBase.classList.add('tabGeneratorBase')
+
+    this.selector = document.createElement('div')
+    this.selector.classList.add('tabSelect')
+    this.tabBase.appendChild(this.selector)
+
+    this.contentDiv = document.createElement('div')
+    this.contentDiv.classList.add('tabContent')
+    this.tabBase.appendChild(this.contentDiv)
   }
 
   /**
@@ -28,23 +37,31 @@ export default class TabGenerator {
   setState (state) {
     for (const tab of this.activationSubscriptions[state]) {
       // const title = tab.label.innerText
-      const input = tab.input
-      tab.label.style.color = 'yellow'
+      // const input = tab.input
+      tab.button.style.color = 'yellow'
 
       tab.content.activate(state)
-
-      input.setAttribute('id', 'tab' + tab.number)
     }
   }
 
   /**
    * generateTab creates a new tab and returns its HTML element
-   * @param {Object} content The graphical representation of the content, preferably a decendant of the BasicScreen class
+   * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
+   * @param {Boolean} selected Put this to true on the tab that should be oopen at the start
+   * @returns
+   */
+  generateTab (content, selected) {
+    this.containerList.push(new Tab(this.contentDiv, content, this.selector, this.activationSubscriptions, selected))
+  }
+
+  /**
+   * generateTab creates a new tab and returns its HTML element
+   * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
    * @param {Boolean} selected Put this to true on the tab that should be oopen at the start
    * @param {String} activationPhase when, during setup, is the tab being activated ['oncreate, 'subscribed', 'tighteningsystem']
    * @returns
    */
-  generateTab (content, selected = false) {
+  generateTab2 (content, selected = false) {
     const nr = this.containerList.length
 
     const activationPhase = content.activationPhase
@@ -62,8 +79,12 @@ export default class TabGenerator {
     if (selected) {
       input.setAttribute('checked', 'true')
     }
+    input.AATitle = content.title
+    input.AAcontainer = this.container
+    this.container.style.border = '3px solid red'
+    input.style.color = 'pink'
 
-    input.onchange = () => {
+    input.onchange = function () {
       const event = new CustomEvent(
         'tabOpened',
         {
@@ -74,8 +95,8 @@ export default class TabGenerator {
           cancelable: true
         }
       )
-      const serverDiv = document.getElementById('connectedServer')
-      serverDiv.dispatchEvent(event)
+      // const serverDiv = document.getElementById('connectedServer')
+      this.AAcontainer.dispatchEvent(event)
     }
 
     listItem.appendChild(input)
@@ -108,6 +129,14 @@ export default class TabGenerator {
     this.containerList.push(contentDiv)
 
     contentDiv.appendChild(content.backGround)
+
+    this.container.addEventListener('tabOpened', (event) => {
+      if (event.detail.title === content.title) {
+        if (content.initiate) {
+          content.initiate()
+        }
+      }
+    }, false)
 
     return contentDiv
   }
@@ -153,5 +182,41 @@ export default class TabGenerator {
     window.setTimeout(() => {
       this.container.removeChild(contentDiv)
     }, 15000)
+  }
+}
+
+class Tab {
+  /**
+   * generateTab creates a new tab and returns its HTML element
+   * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
+   * @param {Boolean} selected Put this to true on the tab that should be oopen at the start
+   * @returns
+   */
+  constructor (container, content, selectorArea, activationSubscriptions, selected = false) {
+    this.container = container
+    this.content = content
+    this.selectorArea = selectorArea
+    /*
+    const label = document.createElement('label')
+    label.style.color = 'grey'
+    label.innerText = content.title
+    this.selector.appendChild(label) */
+
+    const button = document.createElement('input')
+    button.type = 'button'
+    button.value = content.title
+    button.classList.add('tabButton')
+    button.onclick = () => {
+      this.container.innerHTML = ''
+      this.container.appendChild(this.content.backGround)
+      this.content.initiate()
+    }
+    this.selectorArea.appendChild(button)
+
+    if (!activationSubscriptions[content.activationPhase]) {
+      activationSubscriptions[content.activationPhase] = [{ button, selected, content }]
+    } else {
+      activationSubscriptions[content.activationPhase].push({ button, selected, content })
+    }
   }
 }
