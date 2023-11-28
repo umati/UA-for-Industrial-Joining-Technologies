@@ -36,8 +36,6 @@
     import TabGenerator   from 'views/GraphicSupport/TabGenerator.mjs'
     import EndpointGraphics   from 'views/Servers/EndpointGraphics.mjs'
 
-    
-
     // Set up essentials
     var socket = io()
     
@@ -46,27 +44,9 @@
     document.body.appendChild(baseDiv)
     const tabGenerator = new TabGenerator(baseDiv, 'topLevelTabSelector')
     
-    /* oncreate, subscribed, tighteningsystem
-    function setUpCoordinator(state) {
-      tabGenerator.setState(state) // This takes care of activating the web pages at the right stage
-
-    } */
-
     const servers = new ServerGraphics(socket, tabGenerator)
     tabGenerator.generateTab(servers)
 
-    /*
-    let wind = new EndpointGraphics('O-Windows')
-    wind.instantiate('opc.tcp://10.46.19.106:40451', socket)
-    tabGenerator.generateTab(wind, true)
-  
-    let ixb = new EndpointGraphics('O-IXB')
-    ixb.instantiate('opc.tcp://10.46.16.68:40451', socket)
-    tabGenerator.generateTab(ixb, false)
-*/
-
-
-    //setUpCoordinator('oncreate') // Set up all tabs that do not have any advanced dependencies
   </script>
 </body>
 

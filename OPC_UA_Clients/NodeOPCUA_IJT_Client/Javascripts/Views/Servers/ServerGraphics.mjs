@@ -9,6 +9,7 @@ export default class ServerGraphics extends BasicScreen {
 
     const makeLabel = function (text) {
       const a = document.createElement('label')
+      a.classList.add('labelStyle')
       a.innerHTML = text
       return a
     }
@@ -116,8 +117,6 @@ export default class ServerGraphics extends BasicScreen {
     }
   }
 
-  // Connect, disconnect, delete, add, highlight default
-
   makeConnectionPointRow (point, socket, endpointTabGenerator) {
     function connect (point, endpointTabGenerator) {
       const newConnection = new EndpointGraphics(point.name)
@@ -157,12 +156,3 @@ export default class ServerGraphics extends BasicScreen {
     this.rows.appendChild(row)
   }
 }
-
-/*
-{
-  "connectionpoints" : [
-    {
-      "name": "Local",
-      "address": "opc.tcp://127.0.0.1:40451"
-    },
-    */
