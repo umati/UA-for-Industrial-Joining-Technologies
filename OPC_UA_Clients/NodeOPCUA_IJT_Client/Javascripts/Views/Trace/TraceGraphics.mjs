@@ -14,8 +14,8 @@ import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
  * Little to none OPC UA relevant logic happens here
  */
 export default class TraceGraphics extends BasicScreen {
-  constructor (dimensions, resultManager) {
-    super('Traces', 'subscribed')
+  constructor (dimensions, addressSpace, resultManager) {
+    super('Traces')
     this.traceInterface = new TraceInterface(this.backGround)
     this.xDimensionName = dimensions[0]
     this.yDimensionName = dimensions[1]
@@ -47,6 +47,9 @@ export default class TraceGraphics extends BasicScreen {
 
     this.chartManager = new ChartManager(this.traceInterface.canvas, this)
     this.setupEventListeners()
+    addressSpace.connectionManager.subscribe('subscription', true, () => {
+      this.activate()
+    })
   }
 
   /**

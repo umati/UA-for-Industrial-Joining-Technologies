@@ -111,9 +111,10 @@ export class NodeOPCUAInterface {
       })
 
       socket.on('terminate connection', (endpoint) => {
-        console.log('Recieving terminate session request')
+        console.log('Recieving terminate session request (' + endpoint + ')')
         const connectionObject = this.connectionList[endpoint]
         if (!connectionObject) {
+          console.log('Nodejs OPC UA client failed to find EndpointUrl ' + this.endpointUrl + ' for termination')
           return
         }
         connectionObject.closeConnection()
@@ -126,7 +127,8 @@ export class NodeOPCUAInterface {
       })
 
       socket.on('set connectionpoints', (connectionpoints) => {
-        writeFile('./Resources/connectionpoints2.json', connectionpoints)
+        console.log(connectionpoints)
+        writeFile('./Resources/connectionpoints.json', connectionpoints)
       })
 
       socket.on('connect to', endpointUrl => {
@@ -189,7 +191,7 @@ class Connection {
       // create connection
       // ----------------------------------------------------------------------------------
       function (callback) {
-        console.log('Establishing connection')
+        console.log('Attempting to establish connection')
         client.connect(endpointUrl, function (err) {
           if (err) {
             console.log('Cannot connect to endpoint :', endpointUrl)
@@ -441,7 +443,7 @@ class Connection {
     try {
       console.log('Closing session')
       if (!this || !this.session || !this.client) {
-        console.log('Already closed')
+        console.log('Session already closed')
       } else {
         this.session.close(function () {
           console.log('Session closed')
@@ -453,9 +455,12 @@ class Connection {
     }
     try {
       console.log('Disconnect client. (' + this.endpointUrl + ')')
-      this.client.disconnect(function () {
-        console.log('Client disconnected.\n**********************************************')
-      })
+      if (this.client) {
+        this.client.disconnect(function () {
+          console.log('Client disconnected.\n**********************************************')
+          this.io.emit('client disconnected', { endpointurl: this.endpointUrl })
+        })
+      }
     } catch (err) {
       console.log('************ FAIL to disconnect client: ' + err)
       this.io.emit('error message', { error: err, context: 'closedown', message: err.message })

@@ -13,38 +13,15 @@ export default class ControlMessageSplitScreen extends BasicScreen {
     columnSetter.classList.add('columns')
     this.backGround.appendChild(columnSetter)
 
-    const leftHalf = document.createElement('div')
-    leftHalf.classList.add('lefthalf')
-    leftHalf.classList.add('scrollableInfoArea')
-    columnSetter.appendChild(leftHalf)
+    this.controlArea = this.makeNamedArea(leftText, 'lefthalf')
+    columnSetter.appendChild(this.controlArea)
 
-    const nodeDiv = document.createElement('div')
-    nodeDiv.classList.add('myHeader')
-    nodeDiv.innerText = leftText
-    leftHalf.appendChild(nodeDiv)
-
-    const leftArea = document.createElement('div')
-    leftArea.classList.add('tightUL')
-    leftHalf.appendChild(leftArea)
-    this.controlArea = leftArea
-
-    const rightHalf = document.createElement('div')
-    rightHalf.classList.add('righthalf')
-    rightHalf.classList.add('scrollableInfoArea')
-    columnSetter.appendChild(rightHalf)
-
-    const comDiv = document.createElement('div')
-    comDiv.classList.add('myHeader')
-    comDiv.innerText = rightText
-    rightHalf.appendChild(comDiv)
-
-    const messageArea = document.createElement('div')
-    messageArea.setAttribute('id', 'messageArea')
-    rightHalf.appendChild(messageArea)
+    this.messageArea = this.makeNamedArea(rightText, 'righthalf')
+    columnSetter.appendChild(this.messageArea)
 
     this.messages = document.createElement('div')
     this.messages.setAttribute('id', 'messages')
-    messageArea.appendChild(this.messages)
+    this.messageArea.appendChild(this.messages)
   }
 
   messageDisplay (msg) {
@@ -60,27 +37,5 @@ export default class ControlMessageSplitScreen extends BasicScreen {
     simulateResultDiv.classList.add('methodDiv')
     this.controlArea.appendChild(simulateResultDiv)
     return simulateResultDiv
-  }
-
-  createButton (title, area, callback) {
-    const newButton = document.createElement('button')
-    newButton.callback = callback
-    newButton.classList.add('myButton')
-
-    newButton.innerHTML = title
-
-    newButton.onclick = () => {
-      newButton.callback(newButton)
-    }
-    area.appendChild(newButton)
-    return newButton
-  }
-
-  createInput (title, area) {
-    const newInput = document.createElement('input')
-    newInput.classList.add('methodInputStyle')
-
-    area.appendChild(newInput)
-    return newInput
   }
 }

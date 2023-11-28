@@ -11,23 +11,16 @@ export class SocketHandler {
     this.registerMandatory('readresult')
     this.registerMandatory('browseresult')
     this.registerMandatory('pathtoidresult')
-    this.connectionList = []
+    this.registerMandatory('callresult')
   }
 
-  /*
-  addConnection (endpointUrl) {
-    if (this.connectionList.indexOf(endpointUrl) === -1) {
-      this.connectionList.push(endpointUrl)
-    }
+  connect () {
+    this.socket.emit('connect to', this.endpointUrl)
   }
 
-  getConnection (endpointUrl) {
-    return this.connectionList
+  close () {
+    this.socket.emit('terminate connection', this.endpointUrl)
   }
-
-  removeConnection (endpointUrl) {
-    this.connectionList = this.connectionList.filter(item => item !== endpointUrl)
-  } */
 
   /**
    * Subscribe to an event

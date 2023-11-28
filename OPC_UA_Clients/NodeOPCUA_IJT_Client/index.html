@@ -32,14 +32,10 @@
               ModelManager, 
               SocketHandler} from 'ijt-support/ijt-support.mjs'
 
+    import ServerGraphics from 'views/Servers/ServerGraphics.mjs'
     import TabGenerator   from 'views/GraphicSupport/TabGenerator.mjs'
     import EndpointGraphics   from 'views/Servers/EndpointGraphics.mjs'
-    import TraceGraphics  from 'views/Trace/TraceGraphics.mjs'
-    import ServerGraphics from 'views/Servers/ServerGraphics.mjs'
-    import AddressSpaceGraphics   from 'views/AddressSpace/AddressSpaceGraphics.mjs'
-    import EventGraphics  from 'views/Events/EventGraphics.mjs'
-    import MethodGraphics from 'views/Methods/MethodGraphics.mjs'
-    import AssetGraphics  from 'views/Assets/AssetGraphics.mjs'
+
     
 
     // Set up essentials
@@ -50,22 +46,27 @@
     document.body.appendChild(baseDiv)
     const tabGenerator = new TabGenerator(baseDiv, 'topLevelTabSelector')
     
-    // oncreate, subscribed, tighteningsystem
+    /* oncreate, subscribed, tighteningsystem
     function setUpCoordinator(state) {
-      tabGenerator.setState(state) // This takes care of activating the web pages when all are loaded
+      tabGenerator.setState(state) // This takes care of activating the web pages at the right stage
 
-    } 
-    let wind = new EndpointGraphics('Windows')
+    } */
+
+    const servers = new ServerGraphics(socket, tabGenerator)
+    tabGenerator.generateTab(servers)
+
+    /*
+    let wind = new EndpointGraphics('O-Windows')
     wind.instantiate('opc.tcp://10.46.19.106:40451', socket)
-
     tabGenerator.generateTab(wind, true)
   
-    let ixb = new EndpointGraphics('IXB')
+    let ixb = new EndpointGraphics('O-IXB')
     ixb.instantiate('opc.tcp://10.46.16.68:40451', socket)
-
     tabGenerator.generateTab(ixb, false)
+*/
 
-    setUpCoordinator('oncreate') // Set up all tabs that do not have any advanced dependencies
+
+    //setUpCoordinator('oncreate') // Set up all tabs that do not have any advanced dependencies
   </script>
 </body>
 

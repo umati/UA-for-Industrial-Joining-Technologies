@@ -1,11 +1,15 @@
 import { ModelManager } from '../Models/ModelManager.mjs'
 
 export class ResultManager {
-  constructor (eventManager) {
+  constructor (connectionManager, eventManager) {
     this.eventManager = eventManager
     this.modelManager = new ModelManager()
     this.results = {}
     this.subscribers = []
+
+    connectionManager.subscribe('subscription', true, () => {
+      this.activate()
+    })
   }
 
   addResult (result) {

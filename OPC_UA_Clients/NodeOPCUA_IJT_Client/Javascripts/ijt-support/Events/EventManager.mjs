@@ -3,9 +3,23 @@
  *
  */
 export class EventManager {
-  constructor (socketHandler) {
-    this.socketHandler = socketHandler
+  constructor (connectionManager) {
+    this.socketHandler = connectionManager.socketHandler
     this.callbacks = []
+
+    connectionManager.subscribe('subscription', true, () => {
+      this.reset()
+    })
+
+    // Listen to subscribed events messages
+    this.socketHandler.registerMandatory('subscribed event', (msg, context) => {
+      if (msg && msg.result.SourceName && msg.result.SourceName.value) {
+        console.log('Subscribed event triggered: ' + msg.result.SourceName.value)
+      } else {
+        console.log('Event lacking SourceName received')
+      }
+      this.receivedEvent(msg)
+    })
   }
 
   /**

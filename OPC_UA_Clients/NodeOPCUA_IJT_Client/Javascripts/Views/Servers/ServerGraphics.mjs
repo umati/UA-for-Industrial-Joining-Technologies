@@ -1,21 +1,91 @@
-import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScreen.mjs'
+import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
+import EndpointGraphics from './EndpointGraphics.mjs'
 
-export default class ServerGraphics extends ControlMessageSplitScreen {
-  constructor () {
-    super('Servers', 'Servers', 'Server status')
-    this.lastConnection = ''
+export default class ServerGraphics extends BasicScreen {
+  constructor (io, endpointTabGenerator) {
+    super('+')
+    this.socket = io
+    this.endpointTabGenerator = endpointTabGenerator
 
-    this.createButton('Add', this.controlArea, () => {
-      if (this.socket) {
-        this.socket.emit('set connectionpoints', 'Hallo')
+    const makeLabel = function (text) {
+      const a = document.createElement('label')
+      a.innerHTML = text
+      return a
+    }
+    const column = this.makeNamedArea('Servers', 'leftArea')
+    this.backGround.appendChild(column)
+
+    column.appendChild(this.makeServerRow(
+      makeLabel('Name'),
+      makeLabel('EndpointUrl'),
+      makeLabel('Connect'),
+      makeLabel('Delete')
+    ))
+
+    this.rows = document.createElement('div')
+    column.appendChild(this.rows)
+
+    const newRow = document.createElement('div')
+    newRow.style.textAlign = 'right'
+
+    this.createButton('Add new server', newRow, () => {
+      this.makeConnectionPointRow({
+        name: '<NEW NAME>',
+        address: '<NEW ENDPOINTURL>'
+      }, this.socket, this.endpointTabGenerator)
+    })
+    column.appendChild(newRow)
+
+    this.createButton('Save', newRow, () => {
+      const connectionpoints = []
+      for (const row of this.rows.children) {
+        const name = row.children[0].children[0].value
+        const address = row.children[1].children[0].value
+        const autoconnect = row.children[2].children[0].checked
+        connectionpoints.push({ name, address, autoconnect })
       }
+      const saveObject = { connectionpoints }
+      this.socket.emit('set connectionpoints', JSON.stringify(saveObject))
     })
 
-    this.createButton('Select', this.controlArea, () => {
-      if (this.socket) {
-        this.socket.emit('set connectionpoints', 'Hallo')
-      }
+    // Listen to the tree of possible connection points (Available OPC UA servers)
+    this.socket.on('connection points', (msg) => {
+      this.connectionPoints(JSON.parse(msg).connectionpoints, this.socket, this.endpointTabGenerator)
     })
+
+    // Ask for the currently stored connectionpoints (Answer in 'connection points')
+    this.socket.emit('get connectionpoints')
+  }
+
+  makeServerRow (nameContent, endpointUrlContent, connectContent, deleteContent) {
+    const row = document.createElement('div')
+    row.classList.add('serverRow')
+
+    const name = document.createElement('div')
+    name.classList.add('serverName')
+    name.appendChild(nameContent)
+    row.appendChild(name)
+
+    const endp = document.createElement('div')
+    endp.classList.add('serverEndpoint')
+    endp.appendChild(endpointUrlContent)
+    row.appendChild(endp)
+
+    const connect = document.createElement('div')
+    connect.classList.add('serverConnect')
+    connect.appendChild(connectContent)
+    row.appendChild(connect)
+
+    const deleteArea = document.createElement('div')
+    deleteArea.classList.add('serverDelete')
+    deleteArea.appendChild(deleteContent)
+    row.appendChild(deleteArea)
+
+    return row
+  }
+
+  initiate () {
+
   }
 
   /**
@@ -30,59 +100,69 @@ export default class ServerGraphics extends ControlMessageSplitScreen {
    * @param {*} msg the message received
    * @param {*} socket the socket to use to call the 'connect to'
    */
-  connectionPoints (msg, socket) {
-    /*
+  connectionPoints (msg, socket, endpointTabGenerator) {
     this.socket = socket
     function connect (point) {
-      document.getElementById('displayedServerName').innerText = point.name
+      // document.getElementById('displayedServerName').innerText = point.name
       socket.emit('connect to', point.address)
     }
-    this.controlArea.innerHTML = ''
+    this.rows.innerHTML = ''
     for (const point of msg) {
-      this.makeConnectionPointRow(point, socket)
+      this.makeConnectionPointRow(point, socket, endpointTabGenerator)
       if (point.autoConnect && this.lastConnection !== point.address) { // Only automatically connect first time
         this.lastConnection = point.address
         connect(point)
       }
-    } */
+    }
   }
 
   // Connect, disconnect, delete, add, highlight default
 
-  makeConnectionPointRow (point, socket) {
-    function connect (point) {
-      document.getElementById('displayedServerName').innerText = point.name
-      socket.emit('connect to', point.address)
+  makeConnectionPointRow (point, socket, endpointTabGenerator) {
+    function connect (point, endpointTabGenerator) {
+      const newConnection = new EndpointGraphics(point.name)
+      newConnection.instantiate(point.address, socket)
+      endpointTabGenerator.generateTab(newConnection, true)
     }
-    function disconnect (point) {
-      document.getElementById('displayedServerName').innerText = point.name
-      socket.emit('disconnect from', point.address)
+    function disconnect (point, endpointTabGenerator) {
+      endpointTabGenerator.close(point)
     }
-    const row = document.createElement('div')
-    row.classList.add('row')
-    this.controlArea.appendChild(row)
 
-    this.createButton(point.name, row, () => {
-      connect(point)
+    const nameInput = this.createInput(point.name, null, () => {})
+
+    const addrInput = this.createInput(point.address, null, (x) => {
+      console.log(x)
     })
 
     const x = document.createElement('INPUT')
     x.setAttribute('type', 'checkbox')
+    if (point.autoconnect) {
+      x.checked = true
+      connect(point, endpointTabGenerator)
+    }
     x.onclick = function () {
       if (this.checked) {
-        connect(point)
+        connect(point, endpointTabGenerator)
       } else {
-        disconnect(point)
+        disconnect(point, endpointTabGenerator)
       }
     }
-    row.appendChild(x)
 
-    this.createButton('Save', row, () => {
-      connect(point)
+    const deleteButton = this.createButton('Delete', null, function () {
+      this.deleteReference.rows.removeChild(this.deleteReference.row)
     })
+    const row = this.makeServerRow(nameInput, addrInput, x, deleteButton)
+    deleteButton.deleteReference = { rows: this.rows, row }
 
-    this.createButton('Delete', row, () => {
-      connect(point)
-    })
+    this.rows.appendChild(row)
   }
 }
+
+/*
+{
+  "connectionpoints" : [
+    {
+      "name": "Local",
+      "address": "opc.tcp://127.0.0.1:40451"
+    },
+    */

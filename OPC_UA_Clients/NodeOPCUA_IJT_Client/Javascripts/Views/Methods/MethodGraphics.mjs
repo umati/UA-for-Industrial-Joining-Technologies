@@ -5,9 +5,12 @@ import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScre
  */
 export default class MethodGraphics extends ControlMessageSplitScreen {
   constructor (methodManager, addressSpace) {
-    super('Methods', 'Methods', 'Call results', 'tighteningsystem')
+    super('Methods', 'Methods', 'Call results')
     this.methodManager = methodManager
     this.addressSpace = addressSpace // This is just used to get the namespace number. Can this be done in a better way?
+    addressSpace.connectionManager.subscribe('tighteningsystem', true, () => {
+      this.activate()
+    })
   }
 
   /**
@@ -69,7 +72,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
    * @returns a function that tells the value of the input field
    */
   createMethodInput (arg, area) {
-    const input = this.createInput(arg.name, area)
+    const input = this.createInput('', area)
 
     input.dataType = arg.dataType
     input.title = 'Datatype: ' + arg.typeName + '\n' + (arg?.description?.text ? arg.description.text : '')

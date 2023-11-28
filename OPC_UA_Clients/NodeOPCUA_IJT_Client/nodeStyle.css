@@ -49,17 +49,19 @@ body {
 #messages>li {
   border: 0px solid transparent;
   border-radius: 0px;
-  margin: -5px 0px;
+  margin: 0px 0px;
   background-color: rgba(52, 63, 72, 0.9);
+  color:yellow
 }
 
 canvas{
   margin:0px 0px 40px 0px;
 }
 
+/*
 li>li {
-  margin: -5px 0px;
-}
+  margin: 5px 0px; 
+} */
 
 #messages>li:nth-child(odd) {
   background-color: rgba(62, 73, 82, 0.9);
@@ -84,48 +86,43 @@ li>li {
   }*/
 
 .startScreen {
-  height: 100vh;
+  height: 97vh;
   /* border:  2px solid red; */
   left:0px;
   right:0px;
   background-color: black;
+  width: 99vw;
 }
 
-.startScreen {}
-
-.startScreen {}
-
-.startScreen {}
-
-  .tabGeneratorBase {
-    display: flex;
-    flex-direction: column;
-  }
-
 .tabGeneratorBase {
-    /* height: 100%; */
-    /* border:  2px solid green; */
+    /* display: flex; */
+    flex-direction: column;
 }
   
   .basescreen {
-    display: inline-block;
+    /* display: block; */
     flex-direction: column;
     /* default value; can be omitted */
     justify-content: space-between;
+    font-weight: lighter;
+    color:yellow;
     /* switched from default (flex-start, see below) */
-    height: 100%;
-    max-height: 100%;
+    /* height: 100%; */
+    /* max-height: 100%; */
     /* border: 2px solid green; */
+    min-height: 100%;
   }
 
 .columns {
   display: flex;
   flex-direction: row;
+  color:black;
+  /* height: 100%; */
 }
 
 .tabSelect {
   width: 100%;
-  height: 20px;
+  height: 22px;
   padding: 5px;
 }
 
@@ -152,11 +149,13 @@ li>li {
 .tabContent {
   background-color: rgba(52, 63, 72, 0.9);
   color: yellow;
+  overflow:hidden;
   border-top: 1px solid yellow;
   width: 100%;
-  height: 100%;
+  /* height: 92vh; */
   margin: 0;
   padding: 0;
+  /* vertical-align: bottom; */
 }
 
 .underlined {text-decoration: underline;}
@@ -183,7 +182,7 @@ li>li {
 }
 
 .methodInputStyle {
-  width: 20%;
+  width: 100%;
   display: inline
 }
 
@@ -225,6 +224,21 @@ li>li {
   cursor: pointer;
   }
   
+.myLabel {
+  color: black;
+  margin: 5px;
+}
+
+.myLabelWidth {
+  width: 40%;
+  display:inline-block;
+}
+
+.inputStyle {
+  width: 90%;
+  display: inline
+}
+
 .myButton {
   background: IndianRed;
   color: black;
@@ -268,8 +282,37 @@ li>li {
   background: yellow;
 }
 
-.row {
-  border: 1px solid orange;
+.serverRow {
+  border-bottom: 1px solid black;
+  text-align: left;
+}
+
+.serverName {
+  display: inline-block;
+  text-align: center;
+  width: 28%;
+  padding: 3px;
+}
+
+.serverEndpoint {
+  text-align: center;
+  display: inline-block;
+  width: 28%;
+  padding: 3px;
+}
+
+.serverConnect {
+  display: inline-block;
+  text-align: center;
+  width: 12%;
+  padding: 3px;
+}
+
+.serverDelete {
+  display: inline-block;
+  text-align: center;
+  width: 15%;
+  padding: 3px;
 }
 
 .arrayLine {
@@ -328,7 +371,7 @@ ul,
 
 .lefthalf {
   width: 49%;
-  display: inline-block;
+  /* display: inline-block; */
 }
 
 .righthalf {
@@ -350,11 +393,14 @@ ul,
   padding: 5px;
   margin: 5px;
   min-width: 380px;
-  width:98%
+  width:98%;
+  /* height: 400px; */
 }
 
 .scrollableInfoArea {
   overflow: scroll;
+  height: 80vh;
+  margin: 5px;
 }
 
 .smallSettingArea{
@@ -448,7 +494,7 @@ html {
 .traceArea {
   margin: 5px;
   overflow: hidden;
-  height: 70%;
+  height: 60vh;
 }
 
 #myChart {

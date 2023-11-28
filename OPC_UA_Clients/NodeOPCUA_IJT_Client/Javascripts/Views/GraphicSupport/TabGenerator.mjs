@@ -12,7 +12,6 @@ export default class TabGenerator {
      */
     this.container = container
     this.identityString = identityString
-    this.activationSubscriptions = {}
     this.containerList = []
     this.tabBase = document.createElement('div')
     this.container.appendChild(this.tabBase)
@@ -21,6 +20,13 @@ export default class TabGenerator {
     this.selector = document.createElement('div')
     this.selector.classList.add('tabSelect')
     this.tabBase.appendChild(this.selector)
+    this.selector.resetButtons = function () {
+      for (const item of this.childNodes) {
+        if (item.reset) {
+          item.reset()
+        }
+      }
+    }
 
     this.contentDiv = document.createElement('div')
     this.contentDiv.classList.add('tabContent')
@@ -28,117 +34,12 @@ export default class TabGenerator {
   }
 
   /**
-   * This state is set during setup
-   * 'oncreate' means this tab is active directly
-   * 'subscribed' this is triggered when communication with the device is estblished and subscription is active
-   * 'tighteningsystem' is triggered when we are sure there is a tightening system to communicate with
-   * @param {*} state * @param {String} activationPhase  ['oncreate', 'subscribed', 'tighteningsystem']
-   */
-  setState (state) {
-    for (const tab of this.activationSubscriptions[state]) {
-      // const title = tab.label.innerText
-      // const input = tab.input
-      tab.button.style.color = 'yellow'
-
-      tab.content.activate(state)
-    }
-  }
-
-  /**
    * generateTab creates a new tab and returns its HTML element
    * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
-   * @param {Boolean} selected Put this to true on the tab that should be oopen at the start
    * @returns
    */
-  generateTab (content, selected) {
-    this.containerList.push(new Tab(this.contentDiv, content, this.selector, this.activationSubscriptions, selected))
-  }
-
-  /**
-   * generateTab creates a new tab and returns its HTML element
-   * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
-   * @param {Boolean} selected Put this to true on the tab that should be oopen at the start
-   * @param {String} activationPhase when, during setup, is the tab being activated ['oncreate, 'subscribed', 'tighteningsystem']
-   * @returns
-   */
-  generateTab2 (content, selected = false) {
-    const nr = this.containerList.length
-
-    const activationPhase = content.activationPhase
-
-    const listItem = document.createElement('li')
-    listItem.setAttribute('role', 'tab')
-    listItem.selected = selected
-    listItem.title = content.title
-    this.list.appendChild(listItem)
-
-    const input = document.createElement('input')
-    input.setAttribute('type', 'radio')
-    input.setAttribute('name', 'tabs')
-    // input.setAttribute('id', 'tab' + nr)
-    if (selected) {
-      input.setAttribute('checked', 'true')
-    }
-    input.AATitle = content.title
-    input.AAcontainer = this.container
-    this.container.style.border = '3px solid red'
-    input.style.color = 'pink'
-
-    input.onchange = function () {
-      const event = new CustomEvent(
-        'tabOpened',
-        {
-          detail: {
-            title: content.title
-          },
-          bubbles: true,
-          cancelable: true
-        }
-      )
-      // const serverDiv = document.getElementById('connectedServer')
-      this.AAcontainer.dispatchEvent(event)
-    }
-
-    listItem.appendChild(input)
-
-    const label = document.createElement('label')
-    label.setAttribute('for', 'tab' + nr)
-    label.setAttribute('role', 'tabs')
-    label.setAttribute('aria-selected', 'false')
-    label.setAttribute('aria-controls', 'panel' + nr)
-    label.setAttribute('tab-index', nr)
-    label.style.color = 'grey'
-    label.innerText = content.title
-    listItem.appendChild(label)
-
-    if (!this.activationSubscriptions[activationPhase]) {
-      this.activationSubscriptions[activationPhase] = [{ label, input, selected, number: nr, content }]
-    } else {
-      this.activationSubscriptions[activationPhase].push({ label, input, selected, number: nr, content })
-    }
-
-    const contentDiv = document.createElement('div')
-    // contentDiv.classList.add('datastructure')
-    contentDiv.setAttribute('id', 'tab-content' + nr)
-    contentDiv.classList.add('tab-content')
-    contentDiv.setAttribute('role', 'tab-panel')
-    contentDiv.setAttribute('aria-labeledby', 'specification')
-    contentDiv.setAttribute('aria-hidden', 'true')
-    contentDiv.tabTitle = content.title
-    listItem.appendChild(contentDiv)
-    this.containerList.push(contentDiv)
-
-    contentDiv.appendChild(content.backGround)
-
-    this.container.addEventListener('tabOpened', (event) => {
-      if (event.detail.title === content.title) {
-        if (content.initiate) {
-          content.initiate()
-        }
-      }
-    }, false)
-
-    return contentDiv
+  generateTab (content) {
+    this.containerList.push(new Tab(this.contentDiv, content, this.selector))
   }
 
   /**
@@ -183,40 +84,59 @@ export default class TabGenerator {
       this.container.removeChild(contentDiv)
     }, 15000)
   }
+
+  close (point) {
+    for (const tab of this.containerList) {
+      if (point.name === tab.content.title) {
+        tab.close()
+      }
+    }
+  }
 }
 
 class Tab {
   /**
    * generateTab creates a new tab and returns its HTML element
    * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
-   * @param {Boolean} selected Put this to true on the tab that should be oopen at the start
    * @returns
    */
-  constructor (container, content, selectorArea, activationSubscriptions, selected = false) {
+  constructor (container, content, selectorArea) {
     this.container = container
     this.content = content
     this.selectorArea = selectorArea
-    /*
-    const label = document.createElement('label')
-    label.style.color = 'grey'
-    label.innerText = content.title
-    this.selector.appendChild(label) */
 
-    const button = document.createElement('input')
-    button.type = 'button'
-    button.value = content.title
-    button.classList.add('tabButton')
-    button.onclick = () => {
+    this.button = document.createElement('input')
+    this.button.type = 'button'
+    this.button.value = content.title
+    this.button.classList.add('tabButton')
+
+    this.button.style.color = 'yellow'
+    this.button.onclick = () => {
       this.container.innerHTML = ''
+
+      // const inter = document.createElement('div')
+      // inter.classList.add('wrapperTest')
+
+      // inter.appendChild(this.content.backGround)
+
       this.container.appendChild(this.content.backGround)
       this.content.initiate()
+      this.selectorArea.resetButtons()
+      this.button.style.backgroundColor = 'rgba(52, 63, 72, 0.9)'
+      this.button.style.fontWeight = 'bold'
+      this.button.style.borderBottom = '1px solid rgba(52, 63, 72, 0.9)'
     }
-    this.selectorArea.appendChild(button)
+    this.button.reset = function () {
+      this.style.backgroundColor = 'black'
+      this.style.fontWeight = 'normal'
+      this.style.borderBottom = '1px solid yellow'
+    }
 
-    if (!activationSubscriptions[content.activationPhase]) {
-      activationSubscriptions[content.activationPhase] = [{ button, selected, content }]
-    } else {
-      activationSubscriptions[content.activationPhase].push({ button, selected, content })
-    }
+    this.selectorArea.appendChild(this.button)
+  }
+
+  close () {
+    this.selectorArea.removeChild(this.button)
+    this.content.close()
   }
 }

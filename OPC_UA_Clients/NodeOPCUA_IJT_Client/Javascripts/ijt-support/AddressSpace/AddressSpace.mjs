@@ -1,8 +1,9 @@
 import { NodeFactory } from './Node.mjs'
 
 export class AddressSpace {
-  constructor (socketHandler) {
-    this.socketHandler = socketHandler
+  constructor (connectionManager) {
+    this.connectionManager = connectionManager
+    this.socketHandler = connectionManager.socketHandler
     this.nodeMapping = {}
     this.objectFolder = null
     this.listOfTSPromises = []
@@ -10,15 +11,19 @@ export class AddressSpace {
     this.status = []
 
     // Listen to namespaces
-    socketHandler.registerMandatory('namespaces', (msg) => {
+    this.socketHandler.registerMandatory('namespaces', (msg) => {
       this.handleNamespaces(msg)
       this.addressSpaceSetup('namespaces')
     })
 
-    // Listen to datatypes. Needed for method calls
-    socketHandler.registerMandatory('datatypes', (msg) => {
+    // Listen to datatypes. Needed for method calls. SHOULD BE REMOVED???
+    this.socketHandler.registerMandatory('datatypes', (msg) => {
       this.dataTypeEnumeration = msg.datatype
       this.addressSpaceSetup('datatypes')
+    })
+
+    this.connectionManager.subscribe('session', true, () => {
+      this.initiate()
     })
   }
 
@@ -36,6 +41,7 @@ export class AddressSpace {
         this.findOrLoadNode(typerelations[0].nodeId).then((tgtSystem) => {
           this.tighteningSystem = tgtSystem
           this.addressSpaceSetup('tighteningsystem')
+          this.connectionManager.trigger('tighteningsystem', true)
           /* for (const promise of this.listOfTSPromises) {
             this.tighteningSystem = tgtSystem
             promise.resolve(tgtSystem)
