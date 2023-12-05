@@ -25,6 +25,8 @@ export default class EndpointGraphics extends BasicScreen {
   constructor (title) {
     super(title)
     this.endpointUrl = ''
+
+    console.log('========================================================= open 0')
   }
 
   close () {
@@ -40,6 +42,8 @@ export default class EndpointGraphics extends BasicScreen {
     this.endpointUrl = endpointUrl
     this.backGround.innerHTML = 'EndpointUrl: ' + endpointUrl
     this.socketHandler = new SocketHandler(socket, endpointUrl)
+
+    // console.log('========================================================= open 1')
 
     // mixing background and current tab content here
 
@@ -63,7 +67,7 @@ export default class EndpointGraphics extends BasicScreen {
     const eventGraphics = new EventGraphics(eventManager, modelManager)
     tabGenerator.generateTab(eventGraphics, false)
     const resultManager = new ResultManager(this.connectionManager, eventManager)
-    const assets = new AssetManager(addressSpace, this.socketHandler)
+    const assets = new AssetManager(addressSpace, this.connectionManager)
     const asstetGraphics = new AssetGraphics(assets)
     tabGenerator.generateTab(asstetGraphics)
     const traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
@@ -75,19 +79,20 @@ export default class EndpointGraphics extends BasicScreen {
     /* ****************  Set up socket listeners to handle input from server ******************/
 
     // Listen to error messages
-    this.socketHandler.registerMandatory('error message', function (msg) {
+    this.connectionManager.socketHandler.registerMandatory('error message', function (msg) {
       console.log(msg.message)
       // servers.messageDisplay(msg.message)
       tabGenerator.displayError(msg)
     })
 
-    window.onbeforeunload = function () {
-      this.connectionManager.close()
-    }
+    console.log('========================================================= o3 ' + this.endpointUrl)
 
-/*
+    // console.log('========================================================= o4 ' + this.endpointUrl)
+
+    /*
     if (window.performance.getEntriesByType) {
       if (window.performance.getEntriesByType('navigation')[0].type === 'reload') {
+        console.log('===== When reloaded ======================================= Close 2 ' + this.endpointUrl + ' : ' + this.rndseed)
         this.connectionManager.close()
       }
     } */

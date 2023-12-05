@@ -36,16 +36,26 @@
     import TabGenerator   from 'views/GraphicSupport/TabGenerator.mjs'
     import EndpointGraphics   from 'views/Servers/EndpointGraphics.mjs'
 
-    // Set up essentials
+    // Set up websocket to the server
     var socket = io()
     
+    // Create background
     const baseDiv = document.createElement('div')
     baseDiv.classList.add('startScreen')
     document.body.appendChild(baseDiv)
+
+    //create the top tab handler
     const tabGenerator = new TabGenerator(baseDiv, 'topLevelTabSelector')
     
+    // Create the server management tab
     const servers = new ServerGraphics(socket, tabGenerator)
     tabGenerator.generateTab(servers)
+
+    // Ensure all connections are closed when leaving page or refreshing it
+    window.onbeforeunload = function (event) {
+      tabGenerator.close()
+      // event.returnValue = 'test'
+    }
 
   </script>
 </body>

@@ -40,6 +40,10 @@ export default class TabGenerator {
    */
   generateTab (content) {
     this.containerList.push(new Tab(this.contentDiv, content, this.selector))
+    // If it is the first, then show it
+    if (this.containerList.length === 1) {
+      this.containerList[0].select()
+    }
   }
 
   /**
@@ -87,7 +91,7 @@ export default class TabGenerator {
 
   close (point) {
     for (const tab of this.containerList) {
-      if (point.name === tab.content.title) {
+      if (!point || point.name === tab.content.title) {
         tab.close()
       }
     }
@@ -135,8 +139,14 @@ class Tab {
     this.selectorArea.appendChild(this.button)
   }
 
+  select () {
+    this.button.onclick()
+  }
+
   close () {
     this.selectorArea.removeChild(this.button)
-    this.content.close()
+    if (this.content && this.content.close) {
+      this.content.close()
+    }
   }
 }

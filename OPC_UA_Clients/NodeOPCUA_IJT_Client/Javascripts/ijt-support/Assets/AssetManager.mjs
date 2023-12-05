@@ -3,8 +3,8 @@
  * a representation of the assets
  */
 export class AssetManager {
-  constructor (addressSpace, socketHandler) {
-    this.socketHandler = socketHandler
+  constructor (addressSpace, connectionManager) {
+    this.socketHandler = connectionManager.socketHandler
     this.addressSpace = addressSpace
     this.counter = 0
   }

@@ -2,9 +2,9 @@ import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
 import EndpointGraphics from './EndpointGraphics.mjs'
 
 export default class ServerGraphics extends BasicScreen {
-  constructor (io, endpointTabGenerator) {
+  constructor (socket, endpointTabGenerator) {
     super('+')
-    this.socket = io
+    this.socket = socket
     this.endpointTabGenerator = endpointTabGenerator
 
     const makeLabel = function (text) {
@@ -123,6 +123,7 @@ export default class ServerGraphics extends BasicScreen {
       newConnection.instantiate(point.address, socket)
       endpointTabGenerator.generateTab(newConnection, true)
     }
+
     function disconnect (point, endpointTabGenerator) {
       endpointTabGenerator.close(point)
     }
