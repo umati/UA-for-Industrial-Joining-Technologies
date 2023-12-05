@@ -110,14 +110,28 @@ export class NodeOPCUAInterface {
         connectionObject.translateBrowsePath(callid, nodeId, path)
       })
 
-      socket.on('terminate connection', (endpoint) => {
-        console.log('Recieving terminate session request (' + endpoint + ')')
-        const connectionObject = this.connectionList[endpoint]
+      socket.on('terminate connection', (endpointUrl) => {
+        console.log('**********************************************------------------------')
+        console.log('Recieving terminate session request (' + endpointUrl + ')')
+        const connectionObject = this.connectionList[endpointUrl]
         if (!connectionObject) {
-          console.log('Nodejs OPC UA client failed to find EndpointUrl ' + this.endpointUrl + ' for termination')
+          console.log('Nodejs OPC UA client failed to find EndpointUrl ' + endpointUrl + ' for termination')
           return
         }
         connectionObject.closeConnection()
+        this.connectionList[endpointUrl] = null
+      })
+
+      socket.on('disconnect from', endpointUrl => {
+        console.log('**********************************************------------------------')
+        console.log('Nodejs OPC UA client attempting to disconnect from ' + endpointUrl)
+        if (endpointUrl) {
+          const connection = this.connectionList[endpointUrl]
+          if (connection) {
+            connection.closeConnection()
+          }
+          this.connectionList[endpointUrl] = null
+        }
       })
 
       socket.on('get connectionpoints', () => {
@@ -139,18 +153,6 @@ export class NodeOPCUAInterface {
           newConnection.setupClient()
           this.connectionList[endpointUrl] = newConnection
           // console.log('A ' + endpointUrl)
-        }
-      })
-
-      socket.on('disconnect from', endpointUrl => {
-        console.log('**********************************************')
-        console.log('Nodejs OPC UA client attempting to disconnect from ' + endpointUrl)
-        if (endpointUrl) {
-          const connection = this.connectionList[endpointUrl]
-          if (connection) {
-            connection.closeConnection()
-          }
-          this.connectionList[endpointUrl] = null
         }
       })
 
@@ -457,8 +459,10 @@ class Connection {
       console.log('Disconnect client. (' + this.endpointUrl + ')')
       if (this.client) {
         this.client.disconnect(function () {
-          console.log('Client disconnected.\n**********************************************')
-          this.io.emit('client disconnected', { endpointurl: this.endpointUrl })
+          console.log('Client disconnected.\n=========================================')
+          if (this && this.io) {
+            this.io.emit('client disconnected', { endpointurl: this.endpointUrl })
+          }
         })
       }
     } catch (err) {
