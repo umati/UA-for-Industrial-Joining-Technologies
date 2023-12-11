@@ -90,17 +90,26 @@ export default class TabGenerator {
   }
 
   close (point) {
+    let removeItem
     for (const tab of this.containerList) {
       if (!point || point.name === tab.content.title) {
         tab.close()
+        removeItem = tab
       }
     }
+    this.containerList = this.containerList.filter(function (ele) {
+      return ele !== removeItem
+    })
+  }
+
+  setSelectorBackground (style) {
+    this.selector.classList.add(style)
   }
 }
 
 class Tab {
   /**
-   * generateTab creates a new tab and returns its HTML element
+   * Creates a new tab and returns its HTML element
    * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
    * @returns
    */
@@ -115,13 +124,10 @@ class Tab {
     this.button.classList.add('tabButton')
 
     this.button.style.color = 'yellow'
+    this.button.aaID = Math.random(1000)
+    this.button.aaNAME = content.title
     this.button.onclick = () => {
       this.container.innerHTML = ''
-
-      // const inter = document.createElement('div')
-      // inter.classList.add('wrapperTest')
-
-      // inter.appendChild(this.content.backGround)
 
       this.container.appendChild(this.content.backGround)
       this.content.initiate()

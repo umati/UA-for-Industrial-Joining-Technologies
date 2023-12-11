@@ -16,6 +16,11 @@ import {
 
 import { promises as fs } from 'fs'
 
+/**
+ * Support function to read a file
+ * @param {*} filePath  the name of the file including file path
+ * @returns the data in the file
+ */
 async function readFile (filePath) {
   try {
     const data = await fs.readFile(filePath)
@@ -26,6 +31,11 @@ async function readFile (filePath) {
   }
 }
 
+/**
+ * Support function to store a file
+ * @param {*} filePath the name of the file including file path
+ * @param {*} content the Content to be stored
+ */
 function writeFile (filePath, content) {
   try {
     fs.writeFile(filePath, content, (error) => {
@@ -38,6 +48,10 @@ function writeFile (filePath, content) {
   }
 }
 
+/**
+ * A class that encapsulates the Websocket communication between the webpage
+ * and the Node.js OPC UA implementation
+ */
 export class NodeOPCUAInterface {
   constructor (io, attributeIds) {
     console.log('Establishing interface')
@@ -49,8 +63,6 @@ export class NodeOPCUAInterface {
   /**
    * Sets up the socket communication to listen to the calls from the webpage and direct them
    * to the applicable function
-   * @param {*} endpointUrls
-   * @param {*} displayFunction a function that displays messages
    * @param {*} OPCUAClient
    */
   setupSocketIO (OPCUAClient) {
@@ -86,10 +98,6 @@ export class NodeOPCUAInterface {
         if (!connectionObject) {
           return
         }
-        /*
-        console.log('C ' + connectionObject)
-        console.log('CC ' + endpoint)
-        console.log('CCC ' + callid) */
 
         connectionObject.browse(callid, nodeId, details)
       })
@@ -152,7 +160,6 @@ export class NodeOPCUAInterface {
           const newConnection = new Connection(endpointUrl, this.displayFunction, this.OPCUAClient, this.io)
           newConnection.setupClient()
           this.connectionList[endpointUrl] = newConnection
-          // console.log('A ' + endpointUrl)
         }
       })
 
@@ -170,6 +177,9 @@ export class NodeOPCUAInterface {
   }
 }
 
+/**
+ * An object to store a specific connection
+ */
 class Connection {
   constructor (endpointUrl, displayFunction, client, io) {
     this.endpointUrl = endpointUrl
@@ -180,6 +190,9 @@ class Connection {
     this.eventMonitoringItems = []
   }
 
+  /**
+   * Create the actual connection
+   */
   setupClient () {
     const io = this.io
     const endpointUrl = this.endpointUrl
@@ -259,8 +272,10 @@ class Connection {
       if (err) {
         console.log('Failure during establishing connection to OPC UA server ', err)
         // this.io.emit('error message', err.toString(), 'connection')
-        this.io.emit('error message', { error: err, context: 'connection', message: err.message, endpointUrl })
-        process.exit(0)
+        if (this && this.io) {
+          this.io.emit('error message', { error: err, context: 'connection', message: err.message, endpointUrl })
+        }
+        // process.exit(0)
       } else {
         console.log('Connection and session established.')
       }
@@ -272,6 +287,7 @@ class Connection {
    * The result is communicated to the webpage  over the io socket using 'readresult'
    * @param {*} callid A unique identifier to match a query to OPC UA with a response
    * @param {*} nodeId The identity of the node to read
+   * @param {*} attribute The attribute to read. Default is 'DisplayName'
    */
   read (callid, nodeId, attribute) {
     (async () => {
@@ -284,19 +300,15 @@ class Connection {
           attributeId: AttributeIds[attribute]
         })
 
-        // console.log('1:dataValue ' + dataValue.toString())
         const result = dataValue.value.value
         if (result && result.resultContent) {
           await promoteOpaqueStructure(this.session, [{ value: result.resultContent }])
         }
 
-        // console.log('2:dataValue ' + dataValue.toString())
-
         this.io.emit('readresult', { endpointurl: this.endpointUrl, callid, dataValue, stringValue: dataValue.toString(), nodeid: nodeId, attribute })
         return dataValue
       } catch (err) {
         this.displayFunction('Node.js OPC UA client error (reading): ' + err.message) // Display the error message first
-        // this.io.emit('error message', err.toString(), 'read') // (Then for debug purposes display all of it)
         this.io.emit('error message', { error: err, context: 'read', message: err.message, endpointurl: this.endpointUrl })
       }
     })()
@@ -314,15 +326,11 @@ class Connection {
       try {
         const bpr2 = await this.session.translateBrowsePath(makeBrowsePath(nodeId, path))
 
-        // console.log(`translateBrowsePath: ${nodeId} start.  ${path} path`)
-
         if (bpr2.statusCode !== StatusCodes.Good) {
           console.log(`Cannot find the ${nodeId} object.  ${path} `)
           return
         }
         const resultsNodeId = bpr2.targets[0].targetId
-
-        // console.log(`translateBrowsePath Resulting node Id: ${resultsNodeId}. `)
 
         this.io.emit('pathtoidresult', { endpointurl: this.endpointUrl, callid, nodeid: resultsNodeId })
       } catch (err) {
@@ -334,7 +342,7 @@ class Connection {
   }
 
   /**
-   *
+   * Browse the content of a node
    * @param {*} callid A unique identifier to match a query to OPC UA with a response
    * @param {*} nodeId The identity of the node to browse
    * @param {*} details set this to true if you want relations in both directions (browseDirection: Both)
@@ -373,14 +381,14 @@ class Connection {
           }
         )
       } catch (err) {
-        console.log('FAIL Browse call: ' + err.message + err)
+        console.log('************  FAIL Browse call: ' + err.message + err)
         this.io.emit('error message', { error: err, context: 'browse', message: err.message, endpointurl: this.endpointUrl })
       }
     })()
   }
 
   /**
-   *
+   * Call a given method
    * @param {*} callid A unique identifier to match a query to OPC UA with a response
    * @param {*} methodToCall The information about the method to call
    */
@@ -400,7 +408,7 @@ class Connection {
 
         theSession.call(methodToCall2, (err, results) => {
           if (err) {
-            console.log('FAIL Method call (in callback): ' + err)
+            console.log('************  FAIL Method call (in callback): ' + err)
           } else {
             io.emit('callresult', {
               endpointurl: this.endpointUrl,
@@ -410,18 +418,22 @@ class Connection {
           }
         })
       } catch (err) {
-        console.log('FAIL method call: ' + err)
+        console.log('************ FAIL method call: ' + err)
         this.io.emit('error message', { error: err, context: 'method', message: err.message })
       }
     })()
   }
 
+  /**
+   * Close a connection and clean everything up
+   * @param {*} callback Call this when the connection is closed
+   */
   closeConnection (callback) {
     try {
       console.log('Terminate eventmonitoring')
       if (this.eventMonitoringItems) {
         for (const monitor of this.eventMonitoringItems) {
-          monitor.terminate(() => { console.log('Eventmonitoring terminated ') })
+          monitor.terminate(() => { console.log('Eventmonitoring terminated ' + this.endpointUrl) })
         }
       }
     } catch (err) {
@@ -457,7 +469,7 @@ class Connection {
     }
     try {
       console.log('Disconnect client. (' + this.endpointUrl + ')')
-      if (this.client) {
+      if (this && this.client) {
         this.client.disconnect(function () {
           console.log('Client disconnected.\n=========================================')
           if (this && this.io) {
@@ -471,6 +483,11 @@ class Connection {
     }
   }
 
+  /**
+   * Subscribe to an event
+   * @param {*} fields The fields you want to subscribe to
+   * @param {*} subscriberDetails contains a string that is carried over into the responses of the subscription
+   */
   async eventSubscription (fields, subscriberDetails) {
     const serverObjectId = 'i=2253'
     const eventFilter = constructEventFilter(fields)
@@ -516,7 +533,7 @@ class Connection {
             result[fields[i]] = events[i]
           }
           result.subscriberDetails = subscriberDetails
-          console.log('eventsubscription triggered ' + subscribeDebugNr)
+          console.log('eventsubscription triggered ' + subscribeDebugNr + ' (' + this.endpointUrl + ')')
           this.io.emit('subscribed event', { endpointurl: this.endpointUrl, result })
         } catch (err) {
           this.displayFunction('Node.js OPC UA client error (eventMonitoring): ' + err.message) // Display the error message first

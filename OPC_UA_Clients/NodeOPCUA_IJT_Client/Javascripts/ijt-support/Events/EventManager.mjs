@@ -7,8 +7,10 @@ export class EventManager {
     this.socketHandler = connectionManager.socketHandler
     this.callbacks = []
 
-    connectionManager.subscribe('subscription', true, () => {
-      this.reset()
+    connectionManager.subscribe('subscription', (setToTrue) => {
+      if (setToTrue) {
+        this.reset()
+      }
     })
 
     // Listen to subscribed events messages

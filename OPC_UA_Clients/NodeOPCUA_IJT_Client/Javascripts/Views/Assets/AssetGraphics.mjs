@@ -9,19 +9,9 @@ export default class AssetGraphics extends BasicScreen {
     super('Assets', 'tighteningsystem')
     this.assetManager = assetManager
 
-    const leftHalf = document.createElement('div')
-    leftHalf.classList.add('lefthalf')
-    leftHalf.classList.add('scrollableInfoArea')
-    this.backGround.appendChild(leftHalf)
-
-    const nodeDiv = document.createElement('div')
-    nodeDiv.classList.add('myHeader')
-    nodeDiv.innerText = 'AssetView'
-    leftHalf.appendChild(nodeDiv)
-
     const displayArea = document.createElement('div')
     displayArea.classList.add('drawAssetBox')
-    leftHalf.appendChild(displayArea)
+    this.backGround.appendChild(displayArea)
 
     this.container = displayArea
   }
@@ -107,8 +97,6 @@ export default class AssetGraphics extends BasicScreen {
     }
     const mainbox = document.createElement('div')
     mainbox.classList.add('assetArea')
-    mainbox.style.left = '0%'
-    mainbox.style.right = '0%'
     mainbox.style.top = Math.round(controllerNr * height) + '%'
     mainbox.style.height = height + '%'
     this.container.appendChild(mainbox)
@@ -116,9 +104,7 @@ export default class AssetGraphics extends BasicScreen {
     const leftbox = document.createElement('div')
     leftbox.classList.add('assetArea')
     leftbox.innerText = ''
-    leftbox.style.left = '0%'
     leftbox.style.right = (100 - rightPercent) + '%'
-    leftbox.style.top = '0%'
     leftbox.style.height = '100%'
     mainbox.appendChild(leftbox)
 
@@ -126,8 +112,6 @@ export default class AssetGraphics extends BasicScreen {
     rightbox.classList.add('assetArea')
     rightbox.innerText = 'Tools'
     rightbox.style.left = rightPercent + '%'
-    rightbox.style.right = '0%'
-    rightbox.style.top = '0%'
     rightbox.style.height = '100%'
     mainbox.appendChild(rightbox)
     node.assetGraphicData.tools = rightbox
@@ -166,8 +150,6 @@ export default class AssetGraphics extends BasicScreen {
 
     const externals = document.createElement('div')
     externals.classList.add('assetArea')
-    externals.style.left = '0%'
-    externals.style.right = '0%'
     externals.style.top = '50%'
     externals.style.height = '50%'
     container.appendChild(externals)

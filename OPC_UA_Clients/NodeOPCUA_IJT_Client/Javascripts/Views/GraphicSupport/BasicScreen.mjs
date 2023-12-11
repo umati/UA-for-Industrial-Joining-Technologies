@@ -28,6 +28,7 @@ export default class BasicScreen {
     return newButton
   }
 
+  /*
   createLabel (title, area) {
     const newContainer = document.createElement('div')
     newContainer.classList.add('myLabelWidth')
@@ -41,6 +42,14 @@ export default class BasicScreen {
     }
     newContainer.appendChild(newLabel)
     return newContainer
+  } */
+
+  // Support to generate the labels in the title row
+  createLabel (text) {
+    const a = document.createElement('label')
+    a.classList.add('labelStyle')
+    a.innerHTML = text
+    return a
   }
 
   /*

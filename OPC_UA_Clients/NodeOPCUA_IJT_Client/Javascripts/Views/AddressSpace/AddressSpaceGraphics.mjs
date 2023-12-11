@@ -16,8 +16,10 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     super('Address Space', 'Address Space', 'Messages', 'subscribed')
     this.addressSpace = addressSpace
 
-    addressSpace.connectionManager.subscribe('session', true, () => {
-      this.initiateNodeTree()
+    addressSpace.connectionManager.subscribe('session', (setToTrue) => {
+      if (setToTrue) {
+        this.initiateNodeTree()
+      }
     })
   }
 

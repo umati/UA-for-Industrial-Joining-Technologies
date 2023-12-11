@@ -2,9 +2,12 @@
  * The purpose of this class is to interpret events
  *
  */
+import {
+  SocketHandler
+} from 'ijt-support/ijt-support.mjs'
 export class ConnectionManager {
-  constructor (socketHandler) {
-    this.socketHandler = socketHandler
+  constructor (socket, endpointUrl) {
+    this.socketHandler = new SocketHandler(socket, endpointUrl)
     this.callbacks = []
 
     this.socketHandler.registerMandatory('connection established', (msg) => {
@@ -27,18 +30,17 @@ export class ConnectionManager {
     this.socketHandler.connect()
   }
 
-  subscribe (state, changeTo, callback) {
-    if (this[state] === changeTo) {
+  subscribe (state, callback) {
+    /* if (this[state] === changeTo) {
       callback()
-    } else {
-      this.callbacks.push({ state, changeTo, callback })
-    }
+    } else { */
+    this.callbacks.push({ state, callback })
   }
 
   trigger (state, changeTo) {
     if (this[state] !== changeTo) {
       for (const row of this.callbacks) {
-        if (row.state === state && row.changeTo === changeTo) {
+        if (row.state === state) {
           row.callback(changeTo)
         }
       }

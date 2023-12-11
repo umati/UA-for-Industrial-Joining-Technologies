@@ -7,8 +7,10 @@ export class ResultManager {
     this.results = {}
     this.subscribers = []
 
-    connectionManager.subscribe('subscription', true, () => {
-      this.activate()
+    connectionManager.subscribe('subscription', (setToTrue) => {
+      if (setToTrue) {
+        this.activate()
+      }
     })
   }
 

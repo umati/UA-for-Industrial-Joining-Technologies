@@ -8,8 +8,10 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
     super('Methods', 'Methods', 'Call results')
     this.methodManager = methodManager
     this.addressSpace = addressSpace // This is just used to get the namespace number. Can this be done in a better way?
-    addressSpace.connectionManager.subscribe('tighteningsystem', true, () => {
-      this.activate()
+    addressSpace.connectionManager.subscribe('tighteningsystem', (setToTrue) => {
+      if (setToTrue) {
+        this.activate()
+      }
     })
   }
 

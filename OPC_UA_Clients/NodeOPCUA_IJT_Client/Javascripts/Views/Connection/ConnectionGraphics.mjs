@@ -4,16 +4,34 @@ export default class ConnectionGraphics extends ControlMessageSplitScreen {
   constructor (connectionManager) {
     super('Connection', 'Overview', 'Messages')
 
-    connectionManager.subscribe('connection', true, () => {
-      this.messageDisplay('Connection established')
-    })
+    this.connectionManager = connectionManager
 
-    connectionManager.subscribe('session', true, () => {
-      this.messageDisplay('Session established')
-    })
+    this.createStatus('connection', 'Connection', 'NO')
+    this.createStatus('session', 'Session', 'NO')
+    this.createStatus('subscription', 'Subscription', 'NO')
+    this.createStatus('tighteningsystem', 'TighteningSystem', 'NO')
+  }
 
-    connectionManager.subscribe('subscription', true, () => {
-      this.messageDisplay('Event subscription established')
+  createStatus (trigger, name, initial) {
+    const area = this.createArea('')
+    const connectionTitleLabel = this.createLabel(name + ': ')
+    area.appendChild(connectionTitleLabel)
+    const connectionLabel = this.createLabel(initial)
+    area.appendChild(connectionLabel)
+    connectionLabel.classList.add('offColor')
+
+    this.connectionManager.subscribe(trigger, (setToTrue) => {
+      if (setToTrue) {
+        this.messageDisplay(name + ' established')
+        connectionLabel.innerHTML = 'ESTABLISHED'
+        connectionLabel.classList.remove('offColor')
+        connectionLabel.classList.add('onColor')
+      } else {
+        this.messageDisplay(name + 'lost')
+        connectionLabel.innerHTML = 'LOST'
+        connectionLabel.classList.remove('onColor')
+        connectionLabel.classList.add('offColor')
+      }
     })
   }
 }

@@ -22,8 +22,10 @@ export class AddressSpace {
       this.addressSpaceSetup('datatypes')
     })
 
-    this.connectionManager.subscribe('session', true, () => {
-      this.initiate()
+    this.connectionManager.subscribe('session', (setToTrue) => {
+      if (setToTrue) {
+        this.initiate()
+      }
     })
   }
 

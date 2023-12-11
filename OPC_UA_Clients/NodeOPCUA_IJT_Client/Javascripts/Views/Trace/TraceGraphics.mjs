@@ -47,8 +47,10 @@ export default class TraceGraphics extends BasicScreen {
 
     this.chartManager = new ChartManager(this.traceInterface.canvas, this)
     this.setupEventListeners()
-    addressSpace.connectionManager.subscribe('subscription', true, () => {
-      this.activate()
+    addressSpace.connectionManager.subscribe('subscription', (setToTrue) => {
+      if (setToTrue) {
+        this.activate()
+      }
     })
   }
 
