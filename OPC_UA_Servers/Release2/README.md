@@ -14,3 +14,7 @@ Refer to the following document for the usage of the reference server: **Usage_I
 2023-12-08: Issue fixes.
 1. Removed the workarounds done to IJT NodeSets, Code, after the issue resolutions in the OPC UA SDK.
 2. Updated the latest NodeSet files with the fixes done for few of the RC comments.
+
+2023-12-19: Minor Issue fixes.
+1. Added some missing OPC UA References to Asset->Health object.
+2. Correction of NodeIds for Simulation methods.
