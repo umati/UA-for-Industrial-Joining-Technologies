@@ -1,12 +1,15 @@
 const typeMapping = {
   0: { name: 'error' },
   61: { name: 'relation' },
-  40: { name: 'hasType' },
-  46: { name: 'hasProperty' },
-  35: { name: 'organizes' },
-  47: { name: 'component', color: 'black' },
+  40: { name: 'hasTypeDefinition' },
+  46: { name: 'hasProperty', isHierarchical: true },
+  35: { name: 'organizes', isHierarchical: true },
+  41: { name: 'generatesEvents', color: 'black' },
+  45: { name: 'hasSubtype', color: 'black', isHierarchical: true },
+  47: { name: 'component', color: 'black', isHierarchical: true },
+  48: { name: 'hasNotifier', color: 'black' },
   17603: { name: 'hasInterface', color: 'green' },
-  17604: { name: 'hasAddin', color: 'brown' },
+  17604: { name: 'hasAddin', color: 'brown', isHierarchical: true },
   24137: { name: 'association', color: 'grey' }
 }
 
@@ -17,7 +20,11 @@ class PartialNode {
   constructor (data) {
     this.data = data
     for (const x of data.relations) {
-      x.referenceTypeName = typeMapping[x.referenceTypeId.substring(x.referenceTypeId.indexOf(';i=') + 3)].name
+      const index = x.referenceTypeId.substring(x.referenceTypeId.indexOf(';i=') + 3)
+      if (!index || !typeMapping[index]) {
+        throw new Error('referenceTypeId ' + index + ' not mapped.')
+      }
+      x.referenceTypeName = typeMapping[index].name
     }
   }
 
@@ -64,7 +71,7 @@ class PartialNode {
 
   getTypeDefinitionRelations (typeDefinition) {
     return Object.values(this.data.relations).filter(
-      (x) => { return (x.typeDefinition === typeDefinition) })
+      (x) => { return (x.typeDefinition.substring(x.typeDefinition.indexOf(';i=') + 3) === typeDefinition) })
   }
 }
 

@@ -112,24 +112,22 @@ export default class ServerGraphics extends BasicScreen {
       console.log(x)
     })
 
-    const x = document.createElement('INPUT')
-    x.setAttribute('type', 'checkbox')
-    if (point.autoconnect) {
-      x.checked = true
-      connect(point, endpointTabGenerator)
-    }
-    x.onclick = function () {
-      if (this.checked) {
+    const checkBox = this.createCheckbox(point.autoconnect, (newValue) => {
+      if (newValue) {
         connect(point, endpointTabGenerator)
       } else {
         disconnect(point, endpointTabGenerator)
       }
+    })
+
+    if (point.autoconnect) {
+      connect(point, endpointTabGenerator)
     }
 
     const deleteButton = this.createButton('Delete', null, function () {
       this.deleteReference.rows.removeChild(this.deleteReference.row)
     })
-    const row = this.makeServerRow(nameInput, addrInput, x, deleteButton)
+    const row = this.makeServerRow(nameInput, addrInput, checkBox, deleteButton)
     deleteButton.deleteReference = { rows: this.rows, row }
 
     this.rows.appendChild(row)

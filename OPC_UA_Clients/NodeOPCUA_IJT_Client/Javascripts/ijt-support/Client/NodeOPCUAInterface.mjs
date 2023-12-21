@@ -410,6 +410,8 @@ class Connection {
           if (err) {
             console.log('************  FAIL Method call (in callback): ' + err)
           } else {
+            // console.log('Callresult: ' + results)
+
             io.emit('callresult', {
               endpointurl: this.endpointUrl,
               callid,
@@ -492,7 +494,7 @@ class Connection {
     const serverObjectId = 'i=2253'
     const eventFilter = constructEventFilter(fields)
 
-    const subscribeDebugNr = this.debugNr++
+    // const subscribeDebugNr = this.debugNr++
 
     const eventMonitoringItem = ClientMonitoredItem.create(
       this.subscription,
@@ -507,33 +509,41 @@ class Connection {
       }
     )
 
-    console.log('eventsubscription reached ' + subscribeDebugNr)
+    console.log('eventsubscription reached ')
 
     eventMonitoringItem.on('initialized', () => {
       console.log('event_monitoringItem initialized (' + fields + ')')
     })
 
+    console.log('================= 3')
+
     eventMonitoringItem.on('changed', (events) => {
       (async () => {
         try {
+          console.log('================= RECIEVED EVENT')
           for (let i = 0; i < events.length; i++) {
-            // console.log(fields[i], '=', events[i].toString())
+            // console.log('================= LOOPING OVER ARGUMENTS ' + i)
+            // console.log('FIELD: ' + fields[i], '=', events[i].toString())
             // console.log(events[i].value.resultContent)
 
             if (fields[i] === 'Result') {
-              if (events[i] && events[i].value && events[i].value.resultContent) {
-                await promoteOpaqueStructure(this.session, [{ value: events[i].value.resultContent }])
+              // console.log('=================================================')
+              // console.log('======EVENT RESULT VALUE' + events[i].value)
+              // console.log('=================================================')
+              if (events[i] && events[i].value) {
+                await promoteOpaqueStructure(this.session, [{ value: events[i].value }])
               }
+              // console.log('------------ Opaque structure promoted')
+              // console.log(events[i].value)
             }
             // this.io.emit('subscribed event', { field: fields[i], value: events[i].value, stringValue: events[i].toString() })
-            // console.log(events[i].value)
           }
           const result = {}
           for (let i = 0; i < events.length; i++) {
             result[fields[i]] = events[i]
           }
           result.subscriberDetails = subscriberDetails
-          console.log('eventsubscription triggered ' + subscribeDebugNr + ' (' + this.endpointUrl + ')')
+          // console.log('eventsubscription triggered  (' + this.endpointUrl + ')')
           this.io.emit('subscribed event', { endpointurl: this.endpointUrl, result })
         } catch (err) {
           this.displayFunction('Node.js OPC UA client error (eventMonitoring): ' + err.message) // Display the error message first
@@ -543,6 +553,7 @@ class Connection {
     })
 
     this.eventMonitoringItems.push(eventMonitoringItem)
+
     await new Promise((resolve) => process.once('SIGINT', resolve))
   }
 }

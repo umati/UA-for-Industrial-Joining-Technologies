@@ -12,6 +12,13 @@ export default class BasicScreen {
 
   activate () {}
 
+  /**
+   * Create a button containing named title, in area and call callback when pressed
+   * @param {*} title the name on the btton
+   * @param {*} area the area where to put it
+   * @param {*} callback call this when pressed
+   * @returns the button
+   */
   createButton (title, area, callback) {
     const newButton = document.createElement('button')
     newButton.callback = callback
@@ -28,22 +35,6 @@ export default class BasicScreen {
     return newButton
   }
 
-  /*
-  createLabel (title, area) {
-    const newContainer = document.createElement('div')
-    newContainer.classList.add('myLabelWidth')
-    const newLabel = document.createElement('label')
-    newLabel.classList.add('myLabel')
-
-    newLabel.innerHTML = title
-
-    if (area) {
-      area.appendChild(newContainer)
-    }
-    newContainer.appendChild(newLabel)
-    return newContainer
-  } */
-
   // Support to generate the labels in the title row
   createLabel (text) {
     const a = document.createElement('label')
@@ -52,16 +43,6 @@ export default class BasicScreen {
     return a
   }
 
-  /*
-  createInput2 (title, area) {
-    const newInput = document.createElement('input')
-    newInput.classList.add('methodInputStyle')
-
-    area.appendChild(newInput)
-    return newInput
-  }
-  */
-
   /**
    * create an input field that helps in the invokation of a method
    * @param {*} arg the argument that you want the data for
@@ -69,26 +50,35 @@ export default class BasicScreen {
    * @param {*} onchange this function is called when the value changed
    * @returns a function that tells the value of the input field
    */
-  createInput (title, area, onchange) {
+  createInput (title, area, onchange, width = 90) {
     const newInput = document.createElement('input')
     newInput.classList.add('inputStyle')
+    newInput.style.width = width + '%'
     newInput.value = title
     newInput.spellcheck = false
     newInput.onchange = onchange
-
     if (area) {
       area.appendChild(newInput)
     }
-
     return newInput
-
-  /*
-    return function () {
-      return newInput.value
-    }
-    */
   }
 
+  createCheckbox (initialValue, onchange, name) {
+    const x = document.createElement('INPUT')
+    x.setAttribute('type', 'checkbox')
+    x.checked = initialValue
+    x.onclick = function () {
+      onchange(this.checked)
+    }
+    return x
+  }
+
+  /**
+   * Create a screena area with a title
+   * @param {*} text the title
+   * @param {*} style the css style
+   * @returns the new area where to put things
+   */
   makeNamedArea (text, style) {
     const namedArea = document.createElement('div')
     namedArea.classList.add(style)

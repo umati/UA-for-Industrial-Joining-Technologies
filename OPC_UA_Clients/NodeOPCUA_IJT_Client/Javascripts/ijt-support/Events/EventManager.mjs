@@ -39,7 +39,16 @@ export class EventManager {
       'Time',
       'ReceiveTime',
       'Message',
-      'Severity']
+      'Severity',
+      'ConditionClassId',
+      'ConditionClassName',
+      'ConditionSubClassId',
+      'ConditionSubClassName',
+      'JoiningTechnology',
+      'EventText',
+      'EventCode',
+      'AssociatedEntities',
+      'ReportedValues']
     this.subscribeEvent([...fields, ...newFields], filter, callback, subscriberDetails)
   }
 

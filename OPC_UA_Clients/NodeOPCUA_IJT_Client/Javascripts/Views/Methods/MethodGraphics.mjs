@@ -27,8 +27,13 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
   */
   activate (state) {
     const methodFolders = [ // These folders should be searched for methods
-      `/${this.addressSpace.nsIJT}:ResultManagement`, // The result folder
-      '' // The top folder in the tightening system
+    `/${this.addressSpace.nsTighteningServer}:Simulations/${this.addressSpace.nsTighteningServer}:SimulateResults`, // The simulateResult folder
+    `/${this.addressSpace.nsTighteningServer}:Simulations/${this.addressSpace.nsTighteningServer}:SimulateEventsAndConditions`, // The simulateResult folder
+    `/${this.addressSpace.nsMachineryResult}:ResultManagement`, // The result folder
+    `/${this.addressSpace.nsIJT}:JointManagement`, // The joint folder
+    `/${this.addressSpace.nsIJT}:JoiningProcessManagement`, // The job folder
+    `/${this.addressSpace.nsIJT}:AssetManagement/${this.addressSpace.nsIJT}:MethodSet`, // The job folder
+    '' // The top folder in the tightening system
     ]
 
     this.methodManager.setupMethodsInFolders(methodFolders).then(() => {
@@ -53,34 +58,94 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
   createMethodArea (methodData) {
     const methodNode = methodData.methodNode
     const area = this.createArea(methodNode.displayName)
-    const button = this.createButton(methodNode.displayName, area, (button) => {
+    area.classList.add('methodBorder')
+    const titleLabel = this.createLabel(methodNode.displayName)
+    area.appendChild(titleLabel)
+
+    const listOfValuegrabbers = []
+    for (const arg of methodData.arguments) {
+      const lineArea = this.createArea()
+      lineArea.classList.add('methodRowDistance')
+      area.appendChild(lineArea)
+      listOfValuegrabbers.push(this.createMethodInput(arg, lineArea))
+    }
+
+    const button = this.createButton('Call', area, (button) => {
       const values = []
       for (const argValue of button.listOfValuegrabbers) {
         values.push(argValue())
       }
-      this.methodManager.call(methodData.methodNode, values)
+      this.methodManager.call(methodData, values)
     })
 
-    button.listOfValuegrabbers = []
-    for (const arg of methodData.arguments) {
-      button.listOfValuegrabbers.push(this.createMethodInput(arg, area))
-    }
+    button.listOfValuegrabbers = listOfValuegrabbers
   }
 
   /**
-   * create an input field that helps in the invokation of a method
+   * Create an input field that helps in the invokation of a method
    * @param {*} arg the argument that you want the data for
    * @param {*} area the area where the input field should go
    * @returns a function that tells the value of the input field
    */
   createMethodInput (arg, area) {
-    const input = this.createInput('', area)
+    const titleLabel = this.createLabel(arg.name + '  ')
+    area.appendChild(titleLabel)
 
-    input.dataType = arg.dataType
-    input.title = 'Datatype: ' + arg.typeName + '\n' + (arg?.description?.text ? arg.description.text : '')
+    switch (arg.typeName) {
+      case 'Byte':
+      case 'Int32':
+      case 'UInt32': {
+        const input = this.createInput('', area, null, 30)
 
-    return function () {
-      return { value: input.value, type: input.dataType }
+        input.dataType = arg.dataType
+        input.title = 'Datatype: ' + arg.typeName + '\n' + (arg?.description?.text ? arg.description.text : '')
+        input.value = 0
+        return function () {
+          return { value: input.value, type: input.dataType }
+        }
+      }
+      case 'String': {
+        const input = this.createInput('', area, null, 30)
+
+        input.dataType = arg.dataType
+        input.title = 'Datatype: ' + arg.typeName + '\n' + (arg?.description?.text ? arg.description.text : '')
+        input.value = 0
+        return function () {
+          return { value: input.value, type: input.dataType }
+        }
+      }
+      case 'Boolean': {
+        let returnValue = false
+        const input = this.createCheckbox(returnValue, (newValue) => {
+          returnValue = newValue
+        })
+
+        input.dataType = arg.dataType
+        input.title = 'Datatype: ' + arg.typeName + '\n' + (arg?.description?.text ? arg.description.text : '')
+
+        area.appendChild(input)
+
+        return function () {
+          if (returnValue) {
+            return { value: true, type: input.dataType }
+          } else {
+            return { value: false, type: input.dataType }
+          }
+        }
+      }
+      default: {
+        const input = this.createInput('', area, null, 30)
+
+        input.dataType = arg.dataType
+        if (arg.typeName) {
+          input.title = 'Datatype: ' + arg.typeName + '\n' + (arg?.description?.text ? arg.description.text : '')
+        } else {
+          input.title = 'Datatype: IDENTIFIER \n' + (arg?.description?.text ? arg.description.text : '')
+        }
+        return function () {
+          return { value: input.value, type: input.dataType }
+        }
+      }
     }
   }
 }

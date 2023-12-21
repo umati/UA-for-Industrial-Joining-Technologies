@@ -12,7 +12,7 @@ export default class EventGraphics extends ControlMessageSplitScreen {
     this.modelToHTML = new ModelToHTML()
 
     const box = this.createArea()
-    this.createButton('Subscribe to result event', box, () => {
+    this.createButton('Subscribe to events', box, () => {
       eventManager.listenEvent( // We use this function since the actual subscription has been set up once and for all
         (e) => { // Filter
           return true // Always go here with all events
@@ -33,33 +33,40 @@ export default class EventGraphics extends ControlMessageSplitScreen {
    * @param {*} e the event
    */
   eventToHTML (e) {
-    const supportDataTypePrinting = (event, content) => {
-      for (const [key, value] of Object.entries(event)) {
+    const supportDataTypePrinting = (event, content) => { // Support to print the values
+      function handleTextandLists (list, getter) { // Subsupport to print lists smoothly
+        if (list.constructor !== Array) {
+          return getter(list)
+        }
+        let innerHTML = ' [ '
+        let first = true
+        for (const v of list) {
+          if (!first) {
+            innerHTML += ', '
+          } else {
+            first = false
+          }
+          innerHTML += getter(v)
+        }
+        return innerHTML + ' ]'
+      }
+      for (const [key, value] of Object.entries(event)) { // Loop through content and print on screen
         const row = document.createElement('li')
         row.innerText = key
         switch (value.dataType) {
-          case 'ByteString':
-            {
-              row.innerHTML += ' = ['
-              let first = true
-              for (const v of value.value.data) {
-                if (!first) {
-                  row.innerHTML += ', '
-                } else {
-                  first = false
-                }
-                row.innerHTML += v
-              }
-              row.innerHTML += ']'
-            }
-            break
-          case 'LocalizedText':
-            row.innerHTML += ' = ' + value.value.text
-            break
           case 'Null':
             row.innerHTML += ' = Null'
             break
-          default: row.innerHTML += ' = ' + value.value
+          case 'ByteString':
+            row.innerHTML += ' = ' + handleTextandLists(value.value.data, (e) => e)
+            break
+          case 'LocalizedText':
+            row.innerHTML += ' = ' + handleTextandLists(value.value, (e) => e.text)
+            break
+          default: row.innerHTML += ' = ' + handleTextandLists(value.value, (e) => e)
+        }
+        if (key === 'ConditionClassName' || key === 'ConditionSubClassName') {
+          row.classList.add('textHeader')
         }
         content.appendChild(row)
       }
@@ -76,8 +83,8 @@ export default class EventGraphics extends ControlMessageSplitScreen {
     content.classList.add('indent')
 
     switch (e.EventType.value) {
-      case 'ns=4;i=1007': {
-        // Send the result to trace viewer
+      case 'ns=4;i=1007': { // Handle result
+        // Send the "result" to modelToHTML converter
         const model = this.modelManager.createModelFromEvent(e)
         const a = this.modelToHTML.toHTML(model, true, e.SourceName.value)
         header.appendChild(a)

@@ -36,7 +36,7 @@ export class AddressSpace {
     this.findOrLoadNode('ns=0;i=84').then((rootFolder) => { // GRoot
       this.findOrLoadNode('ns=0;i=85').then((objectFolder) => {
         this.objectFolder = objectFolder
-        const typerelations = objectFolder.getTypeDefinitionRelations('ns=4;i=1005')
+        const typerelations = objectFolder.getTypeDefinitionRelations('1005')
         if (!typerelations || typerelations.length === 0) {
           throw new Error('Could not find Tightening System')
         }
@@ -181,8 +181,11 @@ export class AddressSpace {
   handleNamespaces (namespaceMessage) {
     const namespaces = namespaceMessage.namespaces
     this.OPCUA = namespaces.indexOf('http://opcfoundation.org/UA/')
-    this.nsIJT = namespaces.indexOf('http://opcfoundation.org/UA/IJT/')
+    this.nsIJT = namespaces.indexOf('http://opcfoundation.org/UA/IJT/Base/')
+    this.nsTightening = namespaces.indexOf('http://opcfoundation.org/UA/IJT/Tightening/')
+    this.nsTighteningServer = namespaces.indexOf('urn:AtlasCopco:IJT:Tightening:Server/')
     this.nsMachinery = namespaces.indexOf('http://opcfoundation.org/UA/Machinery/')
+    this.nsMachineryResult = namespaces.indexOf('http://opcfoundation.org/UA/Machinery/Result/')
     this.nsDI = namespaces.indexOf('http://opcfoundation.org/UA/DI/')
     this.nsIJTApplication = namespaces.indexOf('http://www.atlascopco.com/TighteningApplication/')
   }

@@ -63,7 +63,7 @@ export class MethodManager {
         }
         Promise.all(methodPromises).then((methodList) => {
           for (const methodItem of methodList) {
-            this.methodObject[methodItem.methodNode.displayName] = { methodNode: methodItem.methodNode, arguments: methodItem.arguments }
+            this.methodObject[methodItem.methodNode.displayName] = { parentNode: folderNode, methodNode: methodItem.methodNode, arguments: methodItem.arguments }
           }
           resolve()
         })
@@ -84,9 +84,14 @@ export class MethodManager {
       this.addressSpace.relationsToNodes([inputArgumets]).then((inputArgumentsNode) => {
         const simplifiedArguments = []
         for (const arg of inputArgumentsNode) {
-          const argContent = arg?.data?.value?.message?.dataValue?.value?.value[0]
-          argContent.typeName = this.addressSpace.dataTypeEnumeration[argContent.dataType.split('=').pop()]
-          simplifiedArguments.push(argContent)
+          for (const argContent of arg?.data?.value?.message?.dataValue?.value?.value) {
+            if (argContent) {
+              argContent.typeName = this.addressSpace.dataTypeEnumeration[argContent.dataType.split('=').pop()]
+              simplifiedArguments.push(argContent)
+            } else {
+              console.log('Method arguments could not be found: ' + arg?.data?.value?.message)
+            }
+          }
         }
         resolve({ methodNode, arguments: simplifiedArguments })
       })
@@ -115,17 +120,28 @@ export class MethodManager {
    * @param {*} methodNode the method Node
    * @param {*} inputs the argument data
    */
-  call (methodNode, inputs) {
+  call (methodData, inputs) {
     const inputArguments = []
     for (const row of inputs) {
+      let castValue
       const typeNr = row.type.split('=').pop()
+      switch (typeNr) {
+        case '7' : {
+          castValue = parseInt(row.value)
+          break
+        }
+        case '1' : {
+          castValue = row.value
+          break
+        }
+      }
       inputArguments.push({
         dataType: parseInt(typeNr),
-        value: parseInt(row.value)
+        value: castValue
       })
     }
 
-    this.addressSpace.methodCall(this.tighteningSystemNode.nodeId, methodNode.data.nodeid, inputArguments).then(
+    this.addressSpace.methodCall(methodData.parentNode.nodeId, methodData.methodNode.nodeId, inputArguments).then(
       (results, err) => {
         if (err) {
           console.log(err)

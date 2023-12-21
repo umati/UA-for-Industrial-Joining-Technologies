@@ -24,6 +24,9 @@
 
   <script type='module'>
 
+    /* This webpage relies on /index.js running on the node.js server.
+    Start this by typing 'node ./index.js' in the terminal in the main directory of this project */
+
     import {  AddressSpace, 
               AssetManager, 
               MethodManager, 
@@ -55,7 +58,6 @@
     // Ensure all connections are closed when leaving page or refreshing it
     window.onbeforeunload = function (event) {
       tabGenerator.close()
-      // event.returnValue = 'test'
     }
 
   </script>

@@ -145,10 +145,16 @@ class Tab {
     this.selectorArea.appendChild(this.button)
   }
 
+  /**
+   * In this case, selecting an area is exactly the same as pressing the tab button on the top
+   */
   select () {
     this.button.onclick()
   }
 
+  /**
+   * When closing this area, make sure to close the connections and such things
+   */
   close () {
     this.selectorArea.removeChild(this.button)
     if (this.content && this.content.close) {

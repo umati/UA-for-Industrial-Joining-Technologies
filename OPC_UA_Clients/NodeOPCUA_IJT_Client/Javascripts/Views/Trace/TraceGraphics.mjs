@@ -35,16 +35,6 @@ export default class TraceGraphics extends BasicScreen {
         annotations: {}
       }
     }
-    // this.modelManager = new ModelManager()
-
-    /*
-    socketHandler.registerMandatory('readresult', (msg) => {
-      const value = msg?.dataValue?.value?.value
-      if (value && value.resultId) {
-        this.createNewTrace(value)
-      }
-    }) */
-
     this.chartManager = new ChartManager(this.traceInterface.canvas, this)
     this.setupEventListeners()
     addressSpace.connectionManager.subscribe('subscription', (setToTrue) => {
@@ -61,6 +51,10 @@ export default class TraceGraphics extends BasicScreen {
 
   }
 
+  /**
+   * This should be run when this view is set up, which should be after
+   * subscription to events have been done. Then subscribe to results
+   */
   activate () {
     this.resultManager.subscribe((result) => {
       this.createNewTrace(result)

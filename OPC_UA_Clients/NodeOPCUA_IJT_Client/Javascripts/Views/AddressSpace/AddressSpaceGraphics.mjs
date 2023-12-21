@@ -165,7 +165,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     } else {
       for (const relation of node.getChildRelations()) {
         switch (relation.referenceTypeName) {
-          case 'hasType': // skip the boring FolderTypes
+          case 'hasTypeDefinition': // skip the boring FolderTypes
             break
           default:
             this.createRelation(relation, buttonArea, x => this.convertRelationToNode(relation, buttonArea))
