@@ -18,3 +18,7 @@ Refer to the following document for the usage of the reference server: **Usage_I
 2023-12-19: Minor Issue fixes.
 1. Added some missing OPC UA References to Asset->Health object.
 2. Correction of NodeIds for Simulation methods.
+
+2024-01-10: Minor Issue fixes.
+1. Added Over Temperature Event Simulation.
+2. Few minor fixes and optimizations.
