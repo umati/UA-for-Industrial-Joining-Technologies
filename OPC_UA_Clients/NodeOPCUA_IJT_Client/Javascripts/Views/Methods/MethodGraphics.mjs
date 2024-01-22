@@ -27,13 +27,8 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
   */
   activate (state) {
     const methodFolders = [ // These folders should be searched for methods
-    `/${this.addressSpace.nsTighteningServer}:Simulations/${this.addressSpace.nsTighteningServer}:SimulateResults`, // The simulateResult folder
-    `/${this.addressSpace.nsTighteningServer}:Simulations/${this.addressSpace.nsTighteningServer}:SimulateEventsAndConditions`, // The simulateResult folder
-    `/${this.addressSpace.nsMachineryResult}:ResultManagement`, // The result folder
-    `/${this.addressSpace.nsIJT}:JointManagement`, // The joint folder
-    `/${this.addressSpace.nsIJT}:JoiningProcessManagement`, // The job folder
-    `/${this.addressSpace.nsIJT}:AssetManagement/${this.addressSpace.nsIJT}:MethodSet`, // The job folder
-    '' // The top folder in the tightening system
+    // ${this.addressSpace.nsTighteningServer}:Simulations/${this.addressSpace.nsTighteningServer}:SimulateResults`, // The simulateResult folder
+      '' // The top folder in the tightening system
     ]
 
     this.methodManager.setupMethodsInFolders(methodFolders).then(() => {
