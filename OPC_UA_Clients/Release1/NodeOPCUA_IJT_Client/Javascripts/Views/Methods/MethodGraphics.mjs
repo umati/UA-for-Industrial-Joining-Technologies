@@ -27,7 +27,6 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
   */
   activate (state) {
     const methodFolders = [ // These folders should be searched for methods
-    // ${this.addressSpace.nsTighteningServer}:Simulations/${this.addressSpace.nsTighteningServer}:SimulateResults`, // The simulateResult folder
       '' // The top folder in the tightening system
     ]
 
