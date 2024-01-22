@@ -1,0 +1,638 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+#form {
+  background: rgba(0, 0, 0, 0.15);
+  padding: 0.25rem;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  height: 3rem;
+  box-sizing: border-box;
+  /* --webkit-backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px); */
+}
+
+#input {
+  border: none;
+  padding: 0 1rem;
+  flex-grow: 1;
+  border-radius: 2rem;
+  margin: 0.25rem;
+}
+
+#input:focus {
+  outline: none;
+}
+
+#form>button {
+  background: #333;
+  border: none;
+  padding: 0 1rem;
+  margin: 0.25rem;
+  border-radius: 3px;
+  outline: none;
+  color: #fff;
+}
+
+#messages {
+  list-style-type: none;
+  padding: 0;
+  font-size: x-small;
+}
+
+#messages>li {
+  border: 0px solid transparent;
+  border-radius: 0px;
+  margin: 0px 0px;
+  background-color: rgba(52, 63, 72, 0.9);
+  color: yellow;
+  padding: 0px 0px 0px 2px;
+}
+
+canvas {
+  margin: 0px 0px 40px 0px;
+}
+
+/*
+li>li {
+  margin: 5px 0px; 
+} */
+
+#messages>li:nth-child(odd) {
+  background-color: rgba(62, 73, 82, 0.9);
+}
+
+.treeDiv {
+  position: relative;
+  padding: 0px 0px 0px 10px;
+  margin: 0px;
+  /* border:1px solid green; */
+}
+
+@keyframes errorfade {
+  0% {
+    opacity: 1;
+  }
+
+  75% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/*
+  .total {
+    height:95%;
+  }*/
+
+.startScreen {
+  height: 97vh;
+  /* border:  2px solid red; */
+  left: 0px;
+  right: 0px;
+  background-color: rgba(52, 63, 72, 0.9);
+  ;
+  width: 99vw;
+}
+
+.tabGeneratorBase {
+  /* display: flex; */
+  flex-direction: column;
+}
+
+.basescreen {
+  /* display: block; */
+  flex-direction: column;
+  /* default value; can be omitted */
+  justify-content: space-between;
+  font-weight: lighter;
+  color: yellow;
+  /* switched from default (flex-start, see below) */
+  /* height: 100%; */
+  /* max-height: 100%; */
+  /* border: 2px solid green; */
+  min-height: 100%;
+  /* background-color: yellow; */
+}
+
+.columns {
+  display: flex;
+  flex-direction: row;
+  color: black;
+  /* height: 100%; */
+}
+
+.tabSelect {
+  width: 100%;
+  height: 22px;
+  padding: 5px;
+}
+
+.topLevelSelectorBackground {
+  background-color: black;
+}
+
+.labelStyle {
+  color: black;
+}
+
+.tabButton {
+  background-color: black;
+  color: gray;
+  padding: 5px;
+  border: 1px solid yellow;
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
+}
+
+.tabButton:hover {
+  background: darkgray;
+  transition: background-color 100ms linear;
+}
+
+.tabButton:active {
+  background: lightgray;
+  transition: background-color 100ms linear;
+  color: black
+}
+
+.tabContent {
+  background-color: rgba(52, 63, 72, 0.9);
+  color: yellow;
+  overflow: hidden;
+  border-top: 1px solid yellow;
+  width: 100%;
+  /* height: 92vh; */
+  margin: 0;
+  padding: 0;
+  /* vertical-align: bottom; */
+}
+
+.underlined {
+  text-decoration: underline;
+}
+
+.errorTab {
+  padding: 20px;
+  margin: 10px;
+  border: 10px solid yellow;
+  color: yellow;
+  background-color: black;
+  position: absolute;
+  width: 400px;
+  right: -5px;
+  top: -5px;
+  z-index: 100;
+  animation-name: errorfade;
+  animation-duration: 15s;
+}
+
+.methodDiv {
+  padding: 5px;
+  margin: 5px;
+  /* border-bottom: 1px solid rgba(52, 63, 72, 0.9); */
+}
+
+.methodInputStyle {
+  width: 50%;
+  display: inline
+}
+
+.buttonAreaStyle {
+  display: block
+}
+
+.treeButton {
+  display: inline
+}
+
+.tightUL {
+  padding: 0px;
+}
+
+.myHeader {
+  background: darkgray;
+  position: relative;
+  top: 0px;
+  left: 0px;
+  right: 0px;
+  color: white;
+  padding: 5px;
+}
+
+.textHeader {
+  font-weight: bold;
+  text-shadow: 1px 1px black;
+  text-decoration-line: underline;
+}
+
+.updownpointer {
+  cursor: n-resize;
+}
+
+.pointer {
+  cursor: pointer;
+}
+
+.selectpointer {
+  cursor: pointer;
+}
+
+.myLabel {
+  color: black;
+  margin: 5px;
+}
+
+.myLabelWidth {
+  width: 40%;
+  display: inline-block;
+}
+
+.inputStyle {
+  width: 50%;
+  display: inline
+}
+
+.myButton {
+  background: IndianRed;
+  color: black;
+  margin: 5px;
+}
+
+.methodBorder {
+  border: 1px solid black
+}
+
+.methodRowDistance {
+  padding: 0px 5px
+}
+
+.myButton:hover {
+  background: red;
+}
+
+.myButton:active {
+  background: yellow;
+}
+
+
+.invisButton {
+  background: transparent;
+  border-color: transparent;
+  border-width: 0px;
+  color: black;
+  margin: 5px;
+}
+
+.invisButton:hover {
+  background: red;
+}
+
+.invisButton:active {
+  background: yellow;
+}
+
+
+
+.ogbutton:active {
+  background-color: #000000;
+  border: 1px yellow solid;
+  color: black;
+}
+
+.myButtonSelected {
+  background: yellow;
+}
+
+.serverRow {
+  border-bottom: 1px solid black;
+  text-align: left;
+}
+
+.serverName {
+  display: inline-block;
+  text-align: center;
+  width: 28%;
+  padding: 3px;
+}
+
+.serverEndpoint {
+  text-align: center;
+  display: inline-block;
+  width: 28%;
+  padding: 3px;
+}
+
+.serverConnect {
+  display: inline-block;
+  text-align: center;
+  width: 12%;
+  padding: 3px;
+}
+
+.serverDelete {
+  display: inline-block;
+  text-align: center;
+  width: 15%;
+  padding: 3px;
+}
+
+.arrayLine {
+  border-left: 2px solid blue;
+  border-bottom: 2px solid blue;
+  margin: 2px;
+}
+
+.objectLine {
+  border-left: 10px solid green;
+  margin: 2px;
+}
+
+/* Remove default bullets */
+ul,
+#myUL {
+  list-style-type: none;
+}
+
+/* Remove margins and padding from the parent ul */
+#myUL {
+  margin: 0;
+  padding: 0;
+}
+
+/* Style the caret/arrow */
+.caret {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  /* Prevent text selection */
+}
+
+/* Create the caret/arrow with a unicode, and style it */
+.caret::before {
+  content: '\25B6';
+  color: black;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+/* Rotate the caret/arrow icon when clicked on (using JavaScript) */
+.caret-down::before {
+  transform: rotate(90deg);
+}
+
+/* Hide the nested list */
+.nested {
+  display: none;
+}
+
+/* Show the nested list when the user clicks on the caret/arrow (with JavaScript) */
+.active {
+  display: block;
+}
+
+.lefthalf {
+  width: 49%;
+  /* display: inline-block; */
+}
+
+.righthalf {
+  width: 49%;
+  max-height: 100%;
+  display: inline-block;
+}
+
+.traceList {
+  /*min-width: 500px;*/
+  border-color: blue;
+  border-style: solid;
+  border-width: 2px;
+  border-radius: 5;
+}
+
+.myInfoArea,
+.scrollableInfoArea {
+  background: lightgray;
+  padding: 5px;
+  margin: 5px;
+  min-width: 380px;
+  width: 98%;
+  /* height: 400px; */
+}
+
+.scrollableInfoArea {
+  overflow: scroll;
+  height: 80vh;
+  margin: 5px;
+}
+
+.smallSettingArea {
+  margin: 5px;
+  min-width: 180px;
+  width: 50%
+}
+
+.thinView {
+  margin: 5px;
+  min-width: 140px;
+  width: 140px;
+}
+
+.indent {
+  margin-left: 15px;
+}
+
+html {
+  background-color: #000000;
+}
+
+
+.tabs {
+  float: none;
+  list-style: none;
+  position: relative;
+  text-align: left;
+  margin: 10px 15px 5px 15px;
+  background-color: rgba(52, 63, 72, 0.9);
+}
+
+.tabs>li {
+  float: left;
+  display: block;
+  border-top: solid #FCDF07 3px;
+  border-left: solid #FCDF07 3px;
+  border-right-style: solid #FCDF07 3px;
+  border-radius: 10px 10px 0px 0px;
+  color: #FCDF07;
+  padding: 15px;
+  background-color: rgba(52, 63, 72, 0.9);
+}
+
+.tabs input[type='radio'] {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+}
+
+.tabs [id^='tab']:checked+label {
+  background-color: black;
+  font-weight: 500;
+}
+
+.tabs [id^='tab']:checked~[id^='tab-content'] {
+  display: block;
+}
+
+.tab-content {
+  border-top: 3px #FCDF07 solid;
+  background-color: rgba(52, 63, 72, 1.0);
+  z-index: 2;
+  display: none;
+  overflow: hidden;
+  font-size: 17px;
+  line-height: 25px;
+  padding: 5px;
+  position: fixed;
+  top: 60px;
+  left: 0px;
+  right: 0px;
+  bottom: 0px;
+  background: 'pink';
+}
+
+.connectedServer {
+  position: fixed;
+  top: 5px;
+  right: 5px;
+  width: 150px;
+  border: 1px #FCDF07 solid;
+  color: #FCDF07;
+  background-color: rgba(52, 63, 72, 0.9);
+}
+
+.connectedServerName {
+  display: block;
+}
+
+.traceArea {
+  margin: 5px;
+  overflow: hidden;
+  height: 60vh;
+}
+
+#myChart {
+  width: 100%;
+  height: 100%;
+}
+
+.traceButtonArea {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  height: 27%;
+}
+
+
+.kvPair {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.kvKey {
+  color: black;
+  width: 50%;
+}
+
+.kvValue {
+  width: 50%;
+}
+
+.kvSelect {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  color: black;
+  cursor: pointer;
+  background-color: darkgray;
+  width: 100%;
+  padding: 5px;
+}
+
+.asset {
+  color: black;
+  cursor: pointer;
+  border-color: black;
+  border-width: 1px;
+  border-style: solid;
+  width: 90%;
+  padding: 25px;
+  margin: 20px;
+}
+
+.drawAssetBox {
+  /* border: 2px solid gray; */
+  position: fixed;
+  top: 115px;
+  left: 15px;
+  right: 30px;
+  bottom: 35px;
+  /* background-color: green; */
+}
+
+.canvasBox {
+  border: 2px solid orange;
+  position: fixed;
+  top: 200px;
+  left: 200px;
+  right: 200px;
+  bottom: 200px;
+}
+
+.assetArea {
+  position: absolute;
+  top:0%;
+  left:0%;
+  bottom:0%;
+  right:0%;
+  color: yellow;
+
+}
+
+.assetBox {
+  border: 1px solid black;
+  position: absolute;
+  word-wrap: break-word;
+}
+
+.controllerBox {
+  background-color: green;
+  position: absolute;
+}
+
+.controllerBox {
+  height: 100px;
+}
+
+.toolBox {
+  background-color: blue;
+  position: absolute;
+}
+
+.offColor {
+  color:red;
+}
+
+.onColor {
+  color:green;
+}
