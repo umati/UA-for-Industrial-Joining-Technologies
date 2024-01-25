@@ -23,7 +23,7 @@ This application uses the open source OPC UA ASYNCUA Stack. The purpose of this 
      Python -m venv venv
 
      venv/Scripts/activate.ps1
-5. **Install** the following packages in the virtual environment:
+5. **Install** the following python packages in the virtual environment:
 
      pip install --upgrade pip
 
@@ -32,6 +32,10 @@ This application uses the open source OPC UA ASYNCUA Stack. The purpose of this 
      pip install asyncua
 
      pip install live-server
+6. **Install** the following javascript packages in the virtual environment:
+
+     npm install chart.js
+
 
 ## How to run?
 
