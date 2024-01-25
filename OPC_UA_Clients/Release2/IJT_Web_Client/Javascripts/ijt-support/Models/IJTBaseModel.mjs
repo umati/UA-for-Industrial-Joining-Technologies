@@ -16,7 +16,7 @@ export default class IJTBaseModel {
             this[key].push(modelManager.factory(key, element, castMapping))
           }
         } else if (typeof value === 'object') {
-          console.log('IJTBAseclass: ' + key)
+          // console.log('IJTBAseclass: ' + key)
           this[key] = modelManager.factory(key, value, castMapping)
         } else {
           this[key] = value

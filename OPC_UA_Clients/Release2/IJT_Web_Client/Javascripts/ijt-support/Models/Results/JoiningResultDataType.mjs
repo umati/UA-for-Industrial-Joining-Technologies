@@ -1,12 +1,13 @@
-import IJTBaseModel from './IJTBaseModel.mjs'
+import IJTBaseModel from '../IJTBaseModel.mjs'
 
 // The purpose of this class is to model the tag structure for external identifiers
-export default class ResultContent extends IJTBaseModel {
+export default class JoiningResultDataType extends IJTBaseModel {
   constructor (parameters, modelManager) {
     const castMapping = {
       // AssociatedEntities: 'AssociatedEntities',
       // ProcessingTimes: 'ProcessingTimes'
       // tags: 'TagDataType',
+      // Value: 'TighteningResultDataType',
       overallResultValues: 'ResultValueDataType',
       stepResults: 'StepResultDataType',
       errors: 'ErrorInformationDataType',
@@ -17,9 +18,7 @@ export default class ResultContent extends IJTBaseModel {
     if (parameters.Value) {
       parameters = parameters.Value
     }
-    /*
-    switch(parameters.ResultMetaData.Classification)
-    case () */
-    super(parameters.Value, modelManager, castMapping)
+
+    super(parameters, modelManager, castMapping)
   }
 }

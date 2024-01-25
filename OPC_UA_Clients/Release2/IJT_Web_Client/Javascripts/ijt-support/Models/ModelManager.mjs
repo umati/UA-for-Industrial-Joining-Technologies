@@ -3,10 +3,11 @@ import ResultValueDataType from './Results/ResultValueDataType.mjs'
 //import ProcessingTimesDataType from './ProcessingTimesDataType.mjs'
 import { DefaultNode, BrowseNameDataType, DisplayNameDataType } from './DefaultNode.mjs'
 //import ErrorInformationDataType from './ErrorInformationDataType.mjs'
-import TighteningResultDataType from './Results/TighteningResultDataType.mjs'
-import BatchModel from './Results/BatchModel.mjs'
-import JobModel from './Results/JobModel.mjs'
-import ResultDataModel from './Results/ResultDataModel.mjs'
+import TighteningDataType from './Results/TighteningDataType.mjs'
+import BatchDataModel from './Results/BatchDataType.mjs'
+import JobDataModel from './Results/JobDataModel.mjs'
+import ResultDataType from './Results/ResultDataType.mjs'
+import JoiningResultDataType from './Results/JoiningResultDataType.mjs'
 import StepResultDataType from './Results/StepResultDataType.mjs'
 import TagDataType from './TagDataType.mjs'
 import { LocalizationModel, 
@@ -48,11 +49,13 @@ export class ModelManager {
                   content.Value?.ResultMetaData?.Classification
                 switch (classification) {
                   case "4": 
-                    return new JobModel(content, this)
+                    return new JobDataModel(content, this)
                   case "3": 
-                    return new BatchModel(content, this)
+                    return new BatchDataModel(content, this)
                   case "1": 
-                    return new TighteningResultDataType(content, this)
+                    return new TighteningDataType(content, this)
+                  default:
+                    return new ResultDataType(content, this)
                  }
             } else { // Some non-result data structure
               return eval('new ' + name[1] + '(content,this)') // eslint-disable-line
@@ -77,7 +80,7 @@ export class ModelManager {
         a[content.key] = content.value
         return new LocalizationModel(a, this)
       } else {
-        console.log('Factory: '+parameterName)
+        // console.log('Factory: '+parameterName)
         return new IJTBaseModel(content, this, castMapping)
       }
 
@@ -92,8 +95,6 @@ export class ModelManager {
    * @returns
    */
   createModelFromEvent (msg) {
-    // console.log(node.nodeId)
-    // console.log(node.typeName)
     let model
     switch (msg.EventType.Identifier) {
       case ('1006'):
@@ -105,7 +106,6 @@ export class ModelManager {
       default:
         model = new DefaultNode(msg, this)
     }
-    //node.model = model
     return model
   }
   /**
@@ -116,7 +116,7 @@ export class ModelManager {
    */
   createModelFromRead (values) {
     if (values.ResultMetaData) {
-      return new ResultDataModel(values, this)
+      return new ResultDataType(values, this)
      }
   }
 
@@ -139,7 +139,7 @@ export class ModelManager {
         model = new DefaultNode(node, this)
         break
       case ('ns=4;i=2001'):
-        model = new ResultDataModel(node.value.value, this)
+        model = new ResultDataType(node.value.value, this)
         break
       default:
         model = new DefaultNode(node, this)
