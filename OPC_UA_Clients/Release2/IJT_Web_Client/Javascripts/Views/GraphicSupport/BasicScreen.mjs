@@ -73,6 +73,34 @@ export default class BasicScreen {
     return x
   }
 
+  createDropdown (name, onchange) {
+    const container = document.createElement('div')
+    const label = document.createElement('label')
+    label.innerHTML = name + '  '
+    this.select = document.createElement('select')
+    container.appendChild(label)
+    container.appendChild(this.select)
+
+    container.addOption = (opt, key) => {
+      const option = document.createElement('option')
+      option.value = key
+      option.innerHTML = opt
+      this.select.appendChild(option)
+    }
+
+    container.clearOptions = () => {
+      const L = this.select.options.length - 1
+      for (let i = L; i >= 0; i--) {
+        this.select.remove(i)
+      }
+    }
+
+    this.select.onchange = function () {
+      onchange(this.value)
+    }
+    return container
+  }
+
   /**
    * Create a screena area with a title
    * @param {*} text the title

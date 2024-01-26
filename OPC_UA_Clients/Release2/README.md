@@ -17,7 +17,7 @@ This application uses the open source OPC UA ASYNCUA Stack. The purpose of this 
 ## Pre-requisites
 
 1. Fork or clone the repository.
-2. **Go to** OPCUA_Clients\Release2\NodeOPCUA_IJT_Client folder.
+2. **Go to** OPCUA_Clients\Release2\IJT_Web_Client folder.
 3. **Set up** Python virtual environment as per the following steps:
 
      Python -m venv venv

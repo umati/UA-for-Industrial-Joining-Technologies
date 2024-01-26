@@ -15,7 +15,7 @@ export class ResultManager {
   }
 
   addResult (result) {
-    this.results[result.resultId] = result
+    this.results[result.id] = result
     for (const subscriber of this.subscribers) {
       subscriber(result)
     }
