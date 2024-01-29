@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<HTML lang='en'>
+
+<head>
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <title>OPC UA IJT Demo</title>
+  <link rel='stylesheet' type='text/css' href='nodeStyle.css'>
+</head>
+
+<body>
+  <script type="importmap">
+    {
+      "imports": {
+        "ijt-support/": "/Javascripts/ijt-support/",
+        "views/": "/Javascripts/Views/"
+      }
+    }
+    </script>
+
+  <script type='module'>
+    // py -m http.server
+
+    import {  AddressSpace, 
+              AssetManager, 
+              MethodManager, 
+              EventManager, 
+              ResultManager, 
+              ModelManager,
+              SocketHandler} from 'ijt-support/ijt-support.mjs'
+  
+    import {WebSocketManager} from 'ijt-support/Connection/WebSocketManager.mjs'
+
+    import ServerGraphics from 'views/Servers/ServerGraphics.mjs'
+    import TabGenerator   from 'views/GraphicSupport/TabGenerator.mjs'
+    import EndpointGraphics   from 'views/Servers/EndpointGraphics.mjs' 
+
+
+    let connection = false
+    let tabGenerator
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // Initialize the UI. 
+      const baseDiv = document.createElement('div')
+      baseDiv.classList.add('startScreen')
+      document.body.appendChild(baseDiv)
+
+      tabGenerator = new TabGenerator(baseDiv, 'topLevelTabSelector')
+      tabGenerator.setSelectorBackground('topLevelSelectorBackground')
+
+    })
+
+    /**
+     * Run this when the websocket to the webserver has been initialized
+     */
+    function afterWebSocketConnect(webSocketManager) {
+      const event = {}
+
+      const servers = new ServerGraphics(webSocketManager, tabGenerator)
+      tabGenerator.generateTab(servers)
+
+      
+
+      // webSocketManager.send('connect to', 'opc.tcp://127.0.0.1:40451')
+      /*
+      webSocketManager.subscribe('opc.tcp://127.0.0.1:40451', 'read', (content,uniqueid) => {
+        console.log('content ' + content)
+        console.log('uniqueid' + uniqueid)
+      })
+
+      webSocketManager.subscribe('opc.tcp://127.0.0.1:40451', 'connection established', (content, uniqueid) => {
+        console.log('content ' + content)
+        console.log('uniqueid' + uniqueid)
+  
+        webSocketManager.send('read', 'opc.tcp://127.0.0.1:40451', 5, {
+        "nodeid": "ns=1;s=/ObjectsFolder/TighteningSystem"
+      })
+      })
+      */
+    }
+
+    // Establish a websocket to the webserver
+    const webSocketManager = new WebSocketManager(afterWebSocketConnect)
+
+    // Ensure all connections are closed when leaving page or refreshing it
+    window.onbeforeunload = function (event) {
+      tabGenerator.close()
+    }
+
+  </script>
+</body>
+
+</html>
