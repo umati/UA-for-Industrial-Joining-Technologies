@@ -26,6 +26,20 @@ import IJTBaseModel from './IJTBaseModel.mjs'
 
 /* eslint-disable */
 export class ModelManager {
+  constructor () {
+    this.resultSubscribeList = []
+  }
+
+  resultTypeNotification(result) {
+    for (const f of this.resultSubscribeList) {
+      f(result)
+    }
+  }
+
+  subscribeSubResults(f) {
+    this.resultSubscribeList.push(f)
+  }
+
   /**
    * The purpose of this method is to create a javascript class from a parameter name
    * @param {*} parameterName

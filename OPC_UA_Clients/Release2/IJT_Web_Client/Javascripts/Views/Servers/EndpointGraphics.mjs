@@ -54,8 +54,8 @@ export default class EndpointGraphics extends BasicScreen {
     const addressSpaceGraphics = new AddressSpaceGraphics(addressSpace)
     tabGenerator.generateTab(addressSpaceGraphics, false)
 
-    const eventManager = new EventManager(this.connectionManager)
-    const eventGraphics = new EventGraphics(eventManager, modelManager)
+    const eventManager = new EventManager(this.connectionManager, modelManager)
+    const eventGraphics = new EventGraphics(eventManager)
     tabGenerator.generateTab(eventGraphics, false)
 
     const resultManager = new ResultManager(this.connectionManager, eventManager)

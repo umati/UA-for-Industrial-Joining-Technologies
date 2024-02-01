@@ -13,6 +13,7 @@ export default class ResultDataType extends IJTBaseModel {
     }
 
     super(parameters, modelManager, castMapping)
+    modelManager.resultTypeNotification(this)
   }
 
   get id () {
@@ -36,5 +37,12 @@ export default class ResultDataType extends IJTBaseModel {
       return true
     }
     return false
+  }
+
+  get time () {
+    if (this.ResultMetaData?.ProcessingTimes?.EndTime) {
+      return this.ResultMetaData.ProcessingTimes.EndTime
+    }
+    return 'No Time'
   }
 }

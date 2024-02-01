@@ -2,9 +2,17 @@ import ResultDataType from './ResultDataType.mjs'
 // The purpose of this class is to handle the actual subscription or reading of a value and via socketIO send the result to the webpage
 export default class TighteningDataType extends ResultDataType {
   constructor (parameters, modelManager) {
-    const simplifiedParameters = {
-      ResultMetaData: parameters.Value.ResultMetaData,
-      ResultContent: parameters.Value.ResultContent
+    let simplifiedParameters
+    if (parameters.Value) {
+      simplifiedParameters = {
+        ResultMetaData: parameters.Value.ResultMetaData,
+        ResultContent: parameters.Value.ResultContent
+      }
+    } else {
+      simplifiedParameters = {
+        ResultMetaData: parameters.ResultMetaData,
+        ResultContent: parameters.ResultContent
+      }
     }
     const castMapping = {
       ResultContent: 'JoiningResultDataType'

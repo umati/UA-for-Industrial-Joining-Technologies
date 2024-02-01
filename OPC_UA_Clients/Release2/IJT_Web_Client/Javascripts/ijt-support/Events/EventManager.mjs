@@ -1,13 +1,12 @@
-import { ModelManager } from '../Models/ModelManager.mjs'
 /**
  * The purpose of this class is to interpret events
  *
  */
 export class EventManager {
-  constructor (connectionManager) {
+  constructor (connectionManager, modelManager) {
     this.socketHandler = connectionManager.socketHandler
     this.callbacks = []
-    this.modelManager = new ModelManager()
+    this.modelManager = modelManager
 
     connectionManager.subscribe('subscription', (setToTrue) => {
       if (setToTrue) {

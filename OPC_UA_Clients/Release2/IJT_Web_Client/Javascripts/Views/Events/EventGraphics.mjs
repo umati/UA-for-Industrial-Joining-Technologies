@@ -5,10 +5,9 @@ import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScre
  * graphical representation of the events
  */
 export default class EventGraphics extends ControlMessageSplitScreen {
-  constructor (eventManager, modelManager) {
+  constructor (eventManager) {
     super('Events', 'Events', 'Event content', 'subscribed')
     this.eventManager = eventManager
-    this.modelManager = modelManager
     this.modelToHTML = new ModelToHTML()
 
     eventManager.listenEvent( // We use this function since the actual subscription has been set up once and for all
@@ -40,7 +39,6 @@ export default class EventGraphics extends ControlMessageSplitScreen {
     const content = document.createElement('li')
     content.classList.add('indent')
 
-    // const model = this.modelManager.createModelFromEvent(e)
     const a = this.modelToHTML.toHTML(e, true, e.SourceName)
     header.appendChild(a)
   }

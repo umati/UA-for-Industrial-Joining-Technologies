@@ -5,18 +5,13 @@ import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
 export default class ResultGraphics extends BasicScreen {
   constructor (resultManager) {
     super('Result')
-    this.results = {
-      1: [],
-      3: [],
-      4: []
-    }
+    this.resultManager = resultManager
 
     this.displayedIdentity = 0
-    this.selectType = '1'
-    this.selectId = ''
+    this.selectType = '-1'
+    this.selectResult = '-1'
     resultManager.subscribe((result) => {
-      this.store(result)
-      this.refresh(result.id)
+      this.refreshDrawing(result.id)
     })
 
     this.header = document.createElement('div')
@@ -24,20 +19,23 @@ export default class ResultGraphics extends BasicScreen {
     this.backGround.appendChild(this.header)
 
     this.selectResultType = this.createDropdown('Select result type', (selection) => {
-      this.selectType = selection
+      this.selectType = parseInt(selection)
       this.changeResultList(selection)
+      this.refreshDrawing(this.selectResult)
     })
     this.selectResultType.addOption('Latest', -1)
     this.selectResultType.addOption('Jobs', 4)
     this.selectResultType.addOption('Batches', 3)
     this.selectResultType.addOption('Single tightenings', 1)
+    this.selectResultType.addOption('Other', 0)
     this.header.appendChild(this.selectResultType)
 
-    this.selectResult = this.createDropdown('Select result', (selection) => {
-      this.refresh(selection)
+    this.selectResultDropdown = this.createDropdown('Select result', (selection) => {
+      this.selectResult = selection
+      this.refreshDrawing(selection)
     })
-    this.selectResult.addOption('One', 3)
-    this.header.appendChild(this.selectResult)
+    this.selectResultDropdown.addOption('Latest', -1)
+    this.header.appendChild(this.selectResultDropdown)
 
     this.display = document.createElement('div')
     this.display.classList.add('drawResultBox')
@@ -45,34 +43,34 @@ export default class ResultGraphics extends BasicScreen {
   }
 
   changeResultList (selectedtype) {
-    this.selectResult.clearOptions()
-    this.selectResult.addOption('a', 1)
-    for (const a of this.results[parseInt(selectedtype)]) {
-      this.selectResult.addOption(a.name, a.id)
+    this.selectResultDropdown.clearOptions()
+    this.selectResultDropdown.addOption('Latest', -1)
+    for (const a of this.resultManager.getResultOfType(parseInt(selectedtype))) {
+      this.selectResultDropdown.addOption(a.name + ' [' + a.time + ']', a.id)
     }
   }
 
-  resultFromId (id) {
-    for (const r of this.results[parseInt(this.selectType)]) {
-      if (id === r.id) {
-        return r
-      }
-    }
-  }
-
-  refresh (id) {
-    const r = this.resultFromId(id)
+  refreshDrawing (id) {
     this.display.innerHTML = ''
+
+    if (this.selectType === -1) {
+      this.drawResultBoxes(this.resultManager.getLatest(-1), this.display)
+      return
+    }
+    if (this.selectResult === '-1') {
+      this.drawResultBoxes(this.resultManager.getLatest(this.selectType), this.display)
+      return
+    }
+    const r = this.resultManager.resultFromId(id, this.selectType)
     if (r) {
       this.drawResultBoxes(r, this.display)
     }
   }
 
-  store (result) {
-    this.results[parseInt(result.classification)].push(result)
-  }
-
   drawResultBoxes (result, container) {
+    if (!result) {
+      return
+    }
     // const classification = result.ResultMetaData.Classification
     const top = document.createElement('div')
     const bottom = document.createElement('div')
