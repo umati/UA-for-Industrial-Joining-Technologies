@@ -1,11 +1,19 @@
 # UA-for-Industrial-Joining-Technologies
-The purpose of the **VDMA Industrial Joining Technologies (IJT)** Working Group is to define standard information model for various **joining** **technologies** such as Tightening, Gluing, Riveting, Flow Drill Fastening, etc.
+The purpose of the **VDMA OPC UA Industrial Joining Technologies (IJT)** Working Group is to define standard information model for various **joining** **technologies** such as Tightening, Gluing, Riveting, Flow Drill Fastening, etc.
 
-**OPC UA IJT Overview:** https://opcfoundation.org/markets-collaboration/IJT/
+**OPC UA IJT Overview:** 
 
-**IJT Joining Specification:** https://opcfoundation.org/developer-tools/documents/view/343 
+https://opcfoundation.org/markets-collaboration/IJT/
 
-**IJT Tightening Specification:** https://opcfoundation.org/developer-tools/documents/view/341 
+https://vdma.org/viewer/-/v2article/render/88084510 
+
+**IJT Joining Specification:** 
+
+https://opcfoundation.org/developer-tools/documents/view/343 
+
+**IJT Tightening Specification:** 
+
+https://opcfoundation.org/developer-tools/documents/view/341 
 
 The **Joining** **Specification** **(OPC 40450)** is the **Base** part for the joining technologies.
 
