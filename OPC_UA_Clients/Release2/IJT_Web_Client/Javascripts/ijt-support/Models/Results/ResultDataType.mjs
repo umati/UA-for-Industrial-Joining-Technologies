@@ -5,7 +5,7 @@ export default class ResultDataType extends IJTBaseModel {
   constructor (parameters, modelManager, castMapping = {}) {
     castMapping.ResultMetaData = 'ResultMetaData'
     if (!castMapping.ResultContent) {
-      castMapping.ResultContent = 'ResultContent'
+      castMapping.ResultContent = 'JoiningResultDataType'
     }
 
     if (parameters.Value) {
@@ -13,7 +13,7 @@ export default class ResultDataType extends IJTBaseModel {
     }
 
     super(parameters, modelManager, castMapping)
-    modelManager.resultTypeNotification(this)
+    // modelManager.resultTypeNotification(this)
   }
 
   get id () {

@@ -89,14 +89,16 @@ export default class Step {
    * @param {*} color
    */
   createPoints (color) {
-    for (const value of this.values) {
-      const point = this.interpretPoint(value)
-      const datasets = this.createDatasets(value.name, point, color)
+    if (this.values) {
+      for (const value of this.values) {
+        const point = this.interpretPoint(value)
+        const datasets = this.createDatasets(value.name, point, color)
 
-      this.datasetMapping[value.valueId] = {
-        valueDataset: datasets.value,
-        limitsDataset: datasets.limits,
-        targetDataset: datasets.target
+        this.datasetMapping[value.valueId] = {
+          valueDataset: datasets.value,
+          limitsDataset: datasets.limits,
+          targetDataset: datasets.target
+        }
       }
     }
   }

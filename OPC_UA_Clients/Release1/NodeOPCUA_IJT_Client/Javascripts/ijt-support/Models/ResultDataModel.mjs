@@ -9,20 +9,5 @@ export default class ResultDataModel extends IJTBaseModel {
       resultContent: 'TighteningResultDataType'
     }
     super(parameters, modelManager, castMapping)
-
-    /* const event = new CustomEvent(
-      'newResultReceived',
-      {
-        detail: {
-          result: this,
-          trace: this.resultContent.trace
-        },
-        bubbles: true,
-        cancelable: true
-      }
-    )
-
-    const serverDiv = document.getElementById('connectedServer')
-    serverDiv.dispatchEvent(event) */
   }
 }

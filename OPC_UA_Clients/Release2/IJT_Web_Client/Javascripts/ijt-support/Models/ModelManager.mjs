@@ -61,16 +61,19 @@ export class ModelManager {
                 (content.Value?.ResultMetaData && content.Value?.ResultContent)) { // We got a result
                 const classification = content.ResultMetaData?.Classification ||
                   content.Value?.ResultMetaData?.Classification
+                let result
                 switch (classification) {
                   case "4": 
-                    return new JobDataModel(content, this)
+                    result= new JobDataModel(content, this)
                   case "3": 
-                    return new BatchDataModel(content, this)
+                    result = new BatchDataModel(content, this)
                   case "1": 
-                    return new TighteningDataType(content, this)
+                    result = new TighteningDataType(content, this)
                   default:
-                    return new ResultDataType(content, this)
+                    result = new ResultDataType(content, this)
                  }
+                 this.resultTypeNotification(result)
+                 return result
             } else { // Some non-result data structure
               return eval('new ' + name[1] + '(content,this)') // eslint-disable-line
             }

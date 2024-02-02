@@ -4,10 +4,6 @@ import IJTBaseModel from '../IJTBaseModel.mjs'
 export default class JoiningResultDataType extends IJTBaseModel {
   constructor (parameters, modelManager) {
     const castMapping = {
-      // AssociatedEntities: 'AssociatedEntities',
-      // ProcessingTimes: 'ProcessingTimes'
-      // tags: 'TagDataType',
-      // Value: 'TighteningResultDataType',
       overallResultValues: 'ResultValueDataType',
       stepResults: 'StepResultDataType',
       errors: 'ErrorInformationDataType',

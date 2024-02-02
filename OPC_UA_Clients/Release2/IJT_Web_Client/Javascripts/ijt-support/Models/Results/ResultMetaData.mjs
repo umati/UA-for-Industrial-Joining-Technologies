@@ -6,8 +6,6 @@ export default class ResultMetaData extends IJTBaseModel {
     const castMapping = {
       AssociatedEntities: 'AssociatedEntities',
       ResultCounters: 'ResultCounters'
-      // tags: 'TagDataType',
-      // resultContent: 'TighteningResultDataType'
     }
 
     super(parameters, modelManager, castMapping)

@@ -21,33 +21,16 @@ export default class TighteningDataType extends ResultDataType {
 
     this.aaaa = 'Joining'
 
-    if (this.Trace) {
-      this.Trace.createConnections(this)
+    if (this.ResultContent[0]?.Trace) {
+      this.ResultContent[0].Trace.createConnections(this)
     }
   }
 
-  /*
-  constructor (parameters, modelManager) {
-    const castMapping = {
-      overallResultValues: 'ResultValueDataType',
-      stepResults: 'StepResultDataType',
-      errors: 'ErrorInformationDataType',
-      trace: 'TighteningTraceDataType'
-    }
-
-    super(parameters, modelManager, castMapping)
-
-    // Here we connect the trace steps with the result steps to simplify the use
-    if (this.Trace) {
-      this.Trace.createConnections(this)
-    }
-  } */
-
   getStep (Id) {
-    if (!this.StepResults || this.StepResults.length < 1) {
+    if (!this.ResultContent[0].StepResults || this.ResultContent[0].StepResults.length < 1) {
       throw new Error('Could not find stepResult with Id: ' + Id)
     }
-    for (const step of this.StepResults) {
+    for (const step of this.ResultContent[0].StepResults) {
       if (step.getIdentifier() === Id) {
         return step
       }

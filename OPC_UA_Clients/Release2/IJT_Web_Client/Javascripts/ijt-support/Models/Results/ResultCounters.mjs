@@ -4,10 +4,6 @@ import IJTBaseModel from '../IJTBaseModel.mjs'
 export default class ResultCounters extends IJTBaseModel {
   constructor (parameters, modelManager) {
     const castMapping = {
-      // AssociatedEntities: 'AssociatedEntities',
-      // ProcessingTimes: 'ProcessingTimes'
-      // tags: 'TagDataType',
-      // resultContent: 'TighteningResultDataType'
     }
 
     super(parameters, modelManager, castMapping)

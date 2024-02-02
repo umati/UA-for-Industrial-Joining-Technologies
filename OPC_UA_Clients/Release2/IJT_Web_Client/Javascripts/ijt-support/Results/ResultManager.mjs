@@ -18,11 +18,12 @@ export class ResultManager {
       4: []
     }
 
+    /*
     connectionManager.subscribe('subscription', (setToTrue) => {
       if (setToTrue) {
         this.activate()
       }
-    })
+    }) */
   }
 
   /**
