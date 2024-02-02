@@ -25,7 +25,7 @@ The **Joining** **Specification** **(OPC 40450)** is the **Base** part for the j
 - OPC UA **Reference** Client and Server based on OPC **40451-1** UA CS for **Tightening** Systems **1.00.0** are available in the following location:
 
    * **Server:** OPC_UA_Servers/**Release1**/**IJT_OPC_UA_Server_Simulator.zip**
-   * **Client:** OPC_UA_Clients/**Release2**/**IJT_Web_Client**
+   * **Client:** OPC_UA_Clients/**Release1**/**NodeOPCUA_IJTClient**
 
 
 
