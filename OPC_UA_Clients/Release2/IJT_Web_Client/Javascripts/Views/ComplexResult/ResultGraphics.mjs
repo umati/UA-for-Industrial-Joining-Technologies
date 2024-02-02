@@ -10,6 +10,7 @@ export default class ResultGraphics extends BasicScreen {
     this.displayedIdentity = 0
     this.selectType = '-1'
     this.selectResult = '-1'
+    // Subscribe to new results
     resultManager.subscribe((result) => {
       this.refreshDrawing(result.id)
     })
@@ -18,6 +19,7 @@ export default class ResultGraphics extends BasicScreen {
     this.header.classList.add('resultheader')
     this.backGround.appendChild(this.header)
 
+    // Type selection dropdown
     this.selectResultType = this.createDropdown('Select result type', (selection) => {
       this.selectType = parseInt(selection)
       this.changeResultList(selection)
@@ -30,6 +32,7 @@ export default class ResultGraphics extends BasicScreen {
     this.selectResultType.addOption('Other', 0)
     this.header.appendChild(this.selectResultType)
 
+    // Result selection dropdown
     this.selectResultDropdown = this.createDropdown('Select result', (selection) => {
       this.selectResult = selection
       this.refreshDrawing(selection)
@@ -42,14 +45,24 @@ export default class ResultGraphics extends BasicScreen {
     this.backGround.appendChild(this.display)
   }
 
+  /**
+   * update the dropdown of results
+   * @param {*} selectedtype the classification of results that should be in the dropdown
+   */
   changeResultList (selectedtype) {
     this.selectResultDropdown.clearOptions()
     this.selectResultDropdown.addOption('Latest', -1)
     for (const a of this.resultManager.getResultOfType(parseInt(selectedtype))) {
-      this.selectResultDropdown.addOption(a.name + ' [' + a.time + ']', a.id)
+      this.selectResultDropdown.addOption(a.name + ' [' + a.time.substring(11, 19) + '] ' + a.uniqueCounter, a.id)
     }
   }
 
+  /**
+   * Draw nested boxes that respresents a complex result
+   * @date 2/2/2024 - 8:38:34 AM
+   *
+   * @param {*} id the identity of what you want to draw
+   */
   refreshDrawing (id) {
     this.display.innerHTML = ''
 
@@ -67,6 +80,13 @@ export default class ResultGraphics extends BasicScreen {
     }
   }
 
+  /**
+   * Recursively draw nested boxes of results
+   * @date 2/2/2024 - 8:40:09 AM
+   *
+   * @param {*} result the result you want to draw
+   * @param {*} container the container where you want it drawn
+   */
   drawResultBoxes (result, container) {
     if (!result) {
       return
@@ -95,6 +115,14 @@ export default class ResultGraphics extends BasicScreen {
     }
   }
 
+  /**
+   * Decide how a result should look and how its children should be stacked
+   * @date 2/2/2024 - 8:40:57 AM
+   *
+   * @param {*} box the main area
+   * @param {*} childArea the area where its children should be stacked
+   * @param {*} result the result that we want to decide how it should look
+   */
   setStyle (box, childArea, result) {
     if (result.isPartial) {
       box.classList.add('resPartial')

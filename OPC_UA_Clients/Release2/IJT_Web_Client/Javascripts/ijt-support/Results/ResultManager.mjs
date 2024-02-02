@@ -10,6 +10,7 @@ export class ResultManager {
     })
     this.results = {}
     this.subscribers = []
+    this.resultUniqueCounter = 0
     this.results = {
       0: [],
       1: [],
@@ -24,14 +25,30 @@ export class ResultManager {
     })
   }
 
+  /**
+   * Store all new result for later use and
+   * let all subscribers know its here
+   * @param {*} result the new result
+   */
   addResult (result) {
     this.results[result.id] = result
+
+    let classification = 0
+    if (result.classification) {
+      classification = parseInt(result.classification)
+    }
+    result.uniqueCounter = this.resultUniqueCounter++
+    this.results[classification].push(result)
+    this.results[-1] = [result]
+
     for (const subscriber of this.subscribers) {
-      this.store(result)
       subscriber(result)
     }
   }
 
+  /**
+   * Whenever a new JoiningSystemResultReadyEventModel comes. Add it
+   *
   activate () {
     this.eventManager.subscribeEvent(
       (model) => { // Filter
@@ -42,33 +59,50 @@ export class ResultManager {
       },
       'ResultManager subscription of the results'
     )
-  }
+  } */
 
+  /**
+   * Subscribe to results
+   * @param {*} func the callback to call when new results occur
+   */
   subscribe (func) {
     this.subscribers.push(func)
   }
 
-  store (result) {
-    let classification = 0
-    if (result.classification) {
-      classification = parseInt(result.classification)
+  /**
+   * return a stored result
+   * @param {*} id the id of the result that should be retrieved
+   * @param {*} selectTypeInput use this result type if you want to narrow the serch (optional)
+   * @returns a result
+   */
+  resultFromId (id, selectTypeInput) {
+    let looplist = [selectTypeInput]
+    if (!selectTypeInput) {
+      looplist = Object.keys(this.results)
     }
-    this.results[classification].push(result)
-    this.results[-1] = [result]
-  }
-
-  resultFromId (id, selectType) {
-    for (const r of this.results[parseInt(selectType)]) {
-      if (id === r.id) {
-        return r
+    for (const selectType of looplist) {
+      for (const r of this.results[parseInt(selectType)]) {
+        if (id === r.id) {
+          return r
+        }
       }
     }
   }
 
+  /**
+   * return the latest result of a given classification
+   * @param {*} resultType the classification of the result you want
+   * @returns a result
+   */
   getLatest (resultType) {
     return this.results[resultType][this.results[resultType].length - 1]
   }
 
+  /**
+   * Get a list of all result of a given classification
+   * @param {*} resultType the classification
+   * @returns a list of all results with right classification
+   */
   getResultOfType (resultType) {
     return this.results[resultType]
   }

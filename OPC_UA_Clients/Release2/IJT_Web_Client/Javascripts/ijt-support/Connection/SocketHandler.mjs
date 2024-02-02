@@ -19,14 +19,22 @@ export class SocketHandler {
     this.registerMandatory('methodcall')
     this.registerMandatory('namespaces')
     this.registerMandatory('event', (a, b, c) => {
-      console.log(JSON.parse(a))
+      // console.log(JSON.parse(a))
     })
   }
 
+  /**
+   * Connect to the endpoint
+   * @date 2/2/2024 - 8:44:02 AM
+   */
   connect () {
     this.webSocketManager.send('connect to', this.endpointUrl)
   }
 
+  /**
+   * Close the connection to the endpoint
+   * @date 2/2/2024 - 8:44:31 AM
+   */
   close () {
     this.webSocketManager.send('terminate connection', this.endpointUrl)
   }
@@ -60,21 +68,6 @@ export class SocketHandler {
       })
     })
   }
-
-  /**
-   * A promise to get a construct an extension
-   * @param {*} nodeId
-   * @param {*} parameters
-   * @returns
-   *
-  constructExtensionObjectPromise (nodeId, parameters) {
-    return new Promise((resolve, reject) => {
-      this.uniqueId++
-      this.callMapping[this.uniqueId] = resolve
-      this.failMapping[this.uniqueId] = reject
-      this.webSocketManager.send('constructextension', this.endpointUrl, this.uniqueId, nodeId, parameters)
-    })
-  } */
 
   /**
    * A promise to call a method
@@ -124,6 +117,13 @@ export class SocketHandler {
     })
   }
 
+  /**
+   * Supportfunction to create a node identity string of the right format
+   * @date 2/2/2024 - 8:44:59 AM
+   *
+   * @param {*} nodeId the node string or object
+   * @returns {*} a string representation
+   */
   stringify (nodeId) {
     if (typeof nodeId === 'string' || nodeId instanceof String) {
       return nodeId

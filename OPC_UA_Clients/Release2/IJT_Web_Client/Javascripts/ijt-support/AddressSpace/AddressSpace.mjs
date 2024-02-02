@@ -11,22 +11,10 @@ export class AddressSpace {
     this.status = []
 
     this.socketHandler.namespacePromise().then((namespaces) => {
-      console.log(namespaces)
+      // console.log(namespaces)
       this.handleNamespaces(namespaces.message)
       this.addressSpaceSetup('namespaces')
     })
-
-    /* Listen to namespaces
-    this.socketHandler.registerMandatory('namespaces', (msg) => {
-      this.handleNamespaces(msg)
-      this.addressSpaceSetup('namespaces')
-    })
-
-    // Listen to datatypes. Needed for method calls. SHOULD BE REMOVED???
-    this.socketHandler.registerMandatory('datatypes', (msg) => {
-      this.dataTypeEnumeration = msg.datatype
-      this.addressSpaceSetup('datatypes')
-    }) */
 
     this.connectionManager.subscribe('connection', (setToTrue) => {
       if (setToTrue) {
@@ -50,10 +38,6 @@ export class AddressSpace {
           this.tighteningSystem = tgtSystem
           this.addressSpaceSetup('tighteningsystem')
           this.connectionManager.trigger('tighteningsystem', true)
-          /* for (const promise of this.listOfTSPromises) {
-            this.tighteningSystem = tgtSystem
-            promise.resolve(tgtSystem)
-          } */
         })
       })
     })
@@ -68,6 +52,10 @@ export class AddressSpace {
     // return this.status.find(x => x === 'namespaces') && this.status.find(x => x === 'datatypes') && this.status.find(x => x === 'tighteningsystem')
   }
 
+  /**
+   * In setup, fullfill all previous promises
+   * @param {*} status add this status
+   */
   addressSpaceSetup (status) {
     this.status.push(status)
     if (this.addressSpaceCheck()) {
@@ -94,6 +82,13 @@ export class AddressSpace {
     )
   }
 
+  /**
+   * return a promise to call a method
+   * @param {*} locationId the parent node
+   * @param {*} methodNode the method node
+   * @param {*} args the arguments
+   * @returns a promise of the json return value of the function
+   */
   methodCall (locationId, methodNode, args) {
     return new Promise((resolve, reject) => {
       this.socketHandler.methodCall(locationId, methodNode, args).then(
@@ -107,6 +102,11 @@ export class AddressSpace {
     })
   }
 
+  /**
+   * Supportfunction that determines the correct letter in a nodes address string
+   * @param {} str the Identifier
+   * @returns the right part of a nodestring
+   */
   getIS (str) {
     if (Number(str)) {
       return ';i='
@@ -114,6 +114,11 @@ export class AddressSpace {
     return ';s='
   }
 
+  /**
+   * Add a node to a list of cached nodes
+   * @param {*} nodeId the nodes Id, can be a string or a nodeId object
+   * @param {*} newNode the content of the node
+   */
   setNodeMapping (nodeId, newNode) {
     if (typeof nodeId === 'string' || nodeId instanceof String) {
       this.nodeMapping[nodeId] = newNode
@@ -122,6 +127,11 @@ export class AddressSpace {
     }
   }
 
+  /**
+   * Return a cached node
+   * @param {*} nodeId the nodes Id, can be a string or a nodeId object
+   * @returns if the node has been cached, this will return the node object
+   */
   getNodeMapping (nodeId) {
     if (typeof nodeId === 'string' || nodeId instanceof String) {
       return this.nodeMapping[nodeId]
