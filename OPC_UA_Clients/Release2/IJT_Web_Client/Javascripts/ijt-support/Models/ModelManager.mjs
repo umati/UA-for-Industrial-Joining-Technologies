@@ -65,10 +65,13 @@ export class ModelManager {
                 switch (classification) {
                   case "4": 
                     result= new JobDataModel(content, this)
+                    break
                   case "3": 
                     result = new BatchDataModel(content, this)
+                    break
                   case "1": 
                     result = new TighteningDataType(content, this)
+                    break
                   default:
                     result = new ResultDataType(content, this)
                  }

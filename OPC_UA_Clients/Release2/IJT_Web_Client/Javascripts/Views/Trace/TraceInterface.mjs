@@ -15,7 +15,7 @@ export default class TraceInterface {
       tracebutton.classList.add('myButton')
       tracebutton.innerText = trace.displayName
       this.traceDiv.appendChild(tracebutton)
-      tracebutton.resultId = trace.result.resultId
+      tracebutton.resultId = trace.result.id
 
       tracebutton.addEventListener('click', this.selectTraceEventHandler)
     }

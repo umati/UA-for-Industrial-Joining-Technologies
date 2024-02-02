@@ -58,7 +58,8 @@ export default class Step {
     const yValues = this[this.yDimensionName].map(this.absoluteFunction)
 
     if (this.xDimensionName === 'time') {
-      xValues = xValues.map((x) => { return x + this.startTimeOffset })
+      const startTimeOffset = parseFloat(this.startTimeOffset)
+      xValues = xValues.map((x) => { return x + startTimeOffset })
     }
     this.dataset.data = []
     if (xValues.length !== yValues.length) {
@@ -67,7 +68,7 @@ export default class Step {
     for (let i = 0; i < xValues.length; i++) {
       this.dataset.data.push({
         x: xValues[i] - this.displayOffset,
-        y: yValues[i]
+        y: parseFloat(yValues[i])
       })
     }
 
@@ -89,6 +90,7 @@ export default class Step {
    * @param {*} color
    */
   createPoints (color) {
+    return
     if (this.values) {
       for (const value of this.values) {
         const point = this.interpretPoint(value)
@@ -117,6 +119,7 @@ export default class Step {
   }
 
   updatePoint (value, hide) {
+    return
     const points = this.interpretPoint(value)
     this.datasetMapping[value.valueId].valueDataset.data = [points.value]
     this.datasetMapping[value.valueId].limitsDataset.data = points.limits

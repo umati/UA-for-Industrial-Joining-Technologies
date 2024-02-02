@@ -103,7 +103,7 @@ export default class TraceGraphics extends BasicScreen {
       }
       newStep.color = this.traceInterface.getRandomColor()
       if (!newStep.time) {
-        newStep.time = Array.from(Array(newStep.torque.length), (_, x) => step.samplingInterval * x / 1000)
+        newStep.time = Array.from(Array(newStep.torque.length), (_, x) => parseFloat(step.SamplingInterval * x / 1000))
       }
       newResultandTrace.addStep(newStep)
     }
@@ -267,8 +267,9 @@ export default class TraceGraphics extends BasicScreen {
   }
 
   findTrace (Id) {
-    return this.allTraces.find((element) => { return element.result.resultId === Id }
-    )
+    return this.allTraces.find((element) => {
+      return element.result.id === Id
+    })
   }
 
   setAbsolutes () {
