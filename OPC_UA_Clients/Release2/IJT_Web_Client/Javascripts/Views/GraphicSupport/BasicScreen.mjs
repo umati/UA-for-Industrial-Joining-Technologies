@@ -77,25 +77,25 @@ export default class BasicScreen {
     const container = document.createElement('div')
     const label = document.createElement('label')
     label.innerHTML = name + '  '
-    this.select = document.createElement('select')
+    container.select = document.createElement('select')
     container.appendChild(label)
-    container.appendChild(this.select)
+    container.appendChild(container.select)
 
-    container.addOption = (opt, key) => {
+    container.addOption = function (opt, key) {
       const option = document.createElement('option')
       option.value = key
       option.innerHTML = opt
       this.select.appendChild(option)
     }
 
-    container.clearOptions = () => {
+    container.clearOptions = function () {
       const L = this.select.options.length - 1
       for (let i = L; i >= 0; i--) {
         this.select.remove(i)
       }
     }
 
-    this.select.onchange = function () {
+    container.select.onchange = function () {
       onchange(this.value)
     }
     return container

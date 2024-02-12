@@ -638,9 +638,9 @@ html {
 }
 
 .drawResultBox {
-  border-style: solid;
-  border-width: 1px;
   margin: 10px;
+  padding: 10px;
+  font-size: xx-small;
 }
 
 .resPartial {
@@ -653,14 +653,48 @@ html {
 
 .resNOK {
   background-color: red;
+  color: white;
+}
+.resOK {
+  background-color: green;
+  color: white;
 }
 
 .resTightening {
-  border-color: yellow;
+  border-color: black;
+  text-align: center;
+  border-width: 1px;
+  margin: 0px 5px 0px 0px;
+  padding: 5px;
 }
 
 .resBatch {
-  border-color: lightseagreen;
+  background-color: DeepSkyBlue;
+  border-color: black;
+  color: black;
+  text-align: center;
+  border-width: 1px;
+  margin: 0px 5px 0px 0px;
+  padding: 5px;
+}
+
+.resJob {
+  background-color: LightGrey;
+  border-color: black;
+  color: black;
+  text-align: center;
+  border-width: 1px;
+  margin: 0px 5px 0px 0px;
+  padding: 5px;
+}
+
+.resOther {
+  background-color: midnightblue;
+  border-color: black;
+  color: white;
+  text-align: center;
+  border-width: 1px;
+  margin: 0px 5px 0px 0px;
 }
 
 .resBatchStacking {
@@ -670,18 +704,11 @@ html {
   align-items: center;
 }
 
-.resJob {
-  border-color: green;
-}
-
 .resJobStacking {
   display:flex;
   flex-direction: column;
 }
 
-.resOther {
-  border-color: purple;
-}
 
 .resOtherStacking {
   display:flex;
@@ -691,4 +718,90 @@ html {
 .resultHeader {
   height: 20px;
   border: 1px solid red;
+  display:flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.resultHeaderItem {
+  display:inline;
+  padding: 0px 5px;
+}
+
+.rootTop {
+  display:flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.rootCenterRef {
+  min-width: 10px;
+  max-width: 1000px;
+  display:flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  
+}
+
+.rootCenterHier {
+  min-width: 10px;
+  max-width: 1000px;
+  display:flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 5px;
+  
+}
+
+.horStack {
+  display:flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items:start
+}
+
+.rootChildRef {
+  min-width: 10px;
+  max-width: 1000px;
+  display:flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  
+}
+
+.rootChildHier {
+  min-width: 10px;
+  max-width: 1000px;
+  display:flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 5px;
+}
+
+
+.snibbRow {
+  display:flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  width:100%;
+}
+.snibbNone {
+  width: 50%;
+  height: 10px;
+}
+.snibbRight {
+  border-left: 1px solid white;
+  width: 50%;
+  height: 10px;
+}
+.snibbTopRef {
+  border-top: 1px solid white;
 }

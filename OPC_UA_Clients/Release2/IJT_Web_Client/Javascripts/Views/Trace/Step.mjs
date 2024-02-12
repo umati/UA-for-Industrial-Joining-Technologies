@@ -90,7 +90,6 @@ export default class Step {
    * @param {*} color
    */
   createPoints (color) {
-    return
     if (this.values) {
       for (const value of this.values) {
         const point = this.interpretPoint(value)
@@ -108,8 +107,8 @@ export default class Step {
   calculatePoints () {
     for (const value of this.values) {
       let hide = this.hidden
-      if ((this.xDimensionName === 'angle' && value.physicalQuantity === 1) ||
-        (this.xDimensionName === 'time' && value.physicalQuantity === 3) ||
+      if ((this.xDimensionName === 'angle' && value.PhysicalQuantity === 1) ||
+        (this.xDimensionName === 'time' && value.PhysicalQuantity === 3) ||
         (!this.showValuesSelected)) {
         hide = true
       }
@@ -119,7 +118,6 @@ export default class Step {
   }
 
   updatePoint (value, hide) {
-    return
     const points = this.interpretPoint(value)
     this.datasetMapping[value.valueId].valueDataset.data = [points.value]
     this.datasetMapping[value.valueId].limitsDataset.data = points.limits

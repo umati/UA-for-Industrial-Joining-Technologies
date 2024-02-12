@@ -10,9 +10,10 @@ export default class ResultGraphics extends BasicScreen {
     this.displayedIdentity = 0
     this.selectType = '-1'
     this.selectResult = '-1'
+    this.envelope = 'true'
     // Subscribe to new results
     resultManager.subscribe((result) => {
-      this.refreshDrawing(result.id)
+      this.refreshDrawing2(result.id)
     })
 
     this.header = document.createElement('div')
@@ -23,26 +24,120 @@ export default class ResultGraphics extends BasicScreen {
     this.selectResultType = this.createDropdown('Select result type', (selection) => {
       this.selectType = parseInt(selection)
       this.changeResultList(selection)
-      this.refreshDrawing(this.selectResult)
+      this.refreshDrawing2(this.selectResult)
     })
     this.selectResultType.addOption('Latest', -1)
     this.selectResultType.addOption('Jobs', 4)
     this.selectResultType.addOption('Batches', 3)
     this.selectResultType.addOption('Single tightenings', 1)
     this.selectResultType.addOption('Other', 0)
+    this.selectResultType.classList.add('resultHeaderItem')
     this.header.appendChild(this.selectResultType)
 
     // Result selection dropdown
     this.selectResultDropdown = this.createDropdown('Select result', (selection) => {
       this.selectResult = selection
-      this.refreshDrawing(selection)
+      this.refreshDrawing2(selection)
     })
     this.selectResultDropdown.addOption('Latest', -1)
+    this.selectResultDropdown.classList.add('resultHeaderItem')
     this.header.appendChild(this.selectResultDropdown)
+
+    // display type dummy selection dropdown
+    this.dummyDropdown = this.createDropdown('Display type', (selection) => {
+      this.envelope = selection
+      this.refreshDrawing2(this.selectResult)
+    })
+    this.dummyDropdown.addOption('Enveloped', true)
+    this.dummyDropdown.addOption('Hierarchical', false)
+    this.dummyDropdown.classList.add('resultHeaderItem')
+    this.header.appendChild(this.dummyDropdown)
 
     this.display = document.createElement('div')
     this.display.classList.add('drawResultBox')
     this.backGround.appendChild(this.display)
+  }
+
+  appyClasses (element, list) {
+    for (const style of list) {
+      element.classList.add(style)
+    }
+  }
+
+  makeRoot (parentBox, children, counter, size, state, enveloped) {
+    function makeSnibb (container, counter, length) {
+      const row = document.createElement('div')
+      row.classList.add('snibbRow')
+      container.appendChild(row)
+      const left = document.createElement('div')
+      left.classList.add('snibbNone')
+      row.appendChild(left)
+      const right = document.createElement('div')
+      if (enveloped) {
+        right.classList.add('snibbNone')
+      } else {
+        right.classList.add('snibbRight')
+      }
+      if ((!enveloped) && (counter !== 0)) {
+        left.classList.add('snibbTopRef')
+      }
+      if ((!enveloped) && (length - counter > 1)) {
+        right.classList.add('snibbTopRef')
+      }
+      row.appendChild(right)
+    }
+
+    // TODO: Display counter, size and state
+
+    // TODO: Handle Abort, and other interuptions
+
+    const container = document.createElement('div')
+    const top = document.createElement('div')
+    top.classList.add('rootTop')
+    container.appendChild(top)
+
+    const parentCenter = document.createElement('div')
+    if (enveloped) {
+      parentCenter.classList.add('rootCenterHier')
+    } else {
+      parentCenter.classList.add('rootCenterRef')
+    }
+    top.appendChild(parentCenter)
+    parentCenter.appendChild(parentBox)
+
+    if (children.length === 0) { // Skip rest if no children
+      return container
+    }
+
+    if (!enveloped) {
+      makeSnibb(parentCenter, 0, 0)
+    }
+
+    const bottom = document.createElement('div')
+    bottom.classList.add('horStack')
+    container.appendChild(bottom)
+
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i].element
+      const style = children[i].style
+      const childContainer = document.createElement('div')
+      if (enveloped) {
+        childContainer.classList.add('rootChildHier')
+      } else {
+        childContainer.classList.add('rootChildRef')
+      }
+      bottom.appendChild(childContainer)
+
+      if (!enveloped) {
+        makeSnibb(childContainer, i, children.length)
+      }
+      childContainer.appendChild(child)
+
+      if (enveloped) {
+        this.appyClasses(childContainer, style)
+      }
+    }
+    return container
   }
 
   /**
@@ -63,20 +158,22 @@ export default class ResultGraphics extends BasicScreen {
    *
    * @param {*} id the identity of what you want to draw
    */
-  refreshDrawing (id) {
+  refreshDrawing2 (id) {
     this.display.innerHTML = ''
-
+    let selection
     if (this.selectType === -1) {
-      this.drawResultBoxes(this.resultManager.getLatest(-1), this.display)
-      return
+      selection = this.resultManager.getLatest(-1)
+    } else if (this.selectResult === '-1') {
+      selection = this.resultManager.getLatest(this.selectType)
+    } else {
+      selection = this.resultManager.resultFromId(id, this.selectType)
     }
-    if (this.selectResult === '-1') {
-      this.drawResultBoxes(this.resultManager.getLatest(this.selectType), this.display)
-      return
-    }
-    const r = this.resultManager.resultFromId(id, this.selectType)
-    if (r) {
-      this.drawResultBoxes(r, this.display)
+    if (selection) {
+      const drawResult = this.drawResultBoxes2(selection)
+      if (this.envelope === 'true') {
+        this.appyClasses(drawResult.element, drawResult.style)
+      }
+      this.display.appendChild(drawResult.element)
     }
   }
 
@@ -87,31 +184,59 @@ export default class ResultGraphics extends BasicScreen {
    * @param {*} result the result you want to draw
    * @param {*} container the container where you want it drawn
    */
-  drawResultBoxes (result, container) {
+  drawResultBoxes2 (result) {
+    function getSizeAndCounter (counterList) {
+      const res = { size: 0, counter: 0 }
+      if (counterList) {
+        for (const c of counterList) {
+          if (c.CounterType === '2') {
+            res.size = c.CounterValue
+          } else if (c.CounterType === '3') {
+            res.counter = c.CounterValue
+          }
+        }
+      }
+      return res
+    }
+
     if (!result) {
       return
     }
     // const classification = result.ResultMetaData.Classification
     const top = document.createElement('div')
-    const bottom = document.createElement('div')
-    container.appendChild(top)
-    container.appendChild(bottom)
     if (result.name) {
       top.innerText = result.name
     } else {
       top.innerText = 'Id: ' + result.id
     }
-    this.setStyle(container, bottom, result)
+
+    const style = this.getStyle(result)
+
+    if (this.envelope !== 'true') {
+      this.appyClasses(top, style)
+    }
 
     const contentList = result.ResultContent
+    const children = []
 
     for (const content of contentList) {
       if (content.id) {
-        const box = document.createElement('div')
-        box.classList.add('drawResultBox')
-        bottom.appendChild(box)
-        this.drawResultBoxes(content, box)
+        const childBox = this.drawResultBoxes2(content)
+        children.push(childBox)
       }
+    }
+
+    const counterInfo = getSizeAndCounter(result.ResultMetaData.ResultCounters)
+
+    return {
+      element: this.makeRoot(
+        top,
+        children,
+        counterInfo.counter,
+        counterInfo.size,
+        result.ResultMetaData.ResultState,
+        this.envelope === 'true'),
+      style
     }
   }
 
@@ -119,32 +244,35 @@ export default class ResultGraphics extends BasicScreen {
    * Decide how a result should look and how its children should be stacked
    * @date 2/2/2024 - 8:40:57 AM
    *
-   * @param {*} box the main area
-   * @param {*} childArea the area where its children should be stacked
    * @param {*} result the result that we want to decide how it should look
    */
-  setStyle (box, childArea, result) {
+  getStyle (result) {
+    const style = []
     if (result.isPartial) {
-      box.classList.add('resPartial')
+      style.push('resPartial')
     } else {
-      box.classList.add('resFull')
+      style.push('resFull')
     }
     if (!result.evaluation) {
-      box.classList.add('resNOK')
+      style.push('resNOK')
     }
+
     switch (parseInt(result.classification)) {
       case 1:
-        box.classList.add('resTightening')
-        childArea.classList.add('resTighteningStacking')
+        style.push('resTightening')
+        if (result.evaluation) {
+          style.push('resOK')
+        }
         break
       case 3:
-        box.classList.add('resBatch')
-        childArea.classList.add('resBatchStacking')
+        style.push('resBatch')
         break
       case 4:
-        box.classList.add('resJob')
-        childArea.classList.add('resJobStacking')
+        style.push('resJob')
         break
+      default:
+        style.push('resOther')
     }
+    return style
   }
 }
