@@ -22,3 +22,12 @@ Refer to the following document for the usage of the reference server: **Usage_I
 2024-01-10: Minor Issue fixes.
 1. Added Over Temperature Event Simulation.
 2. Few minor fixes and optimizations.
+
+2024-02-07: Few enhacements and issue fixes as follows.
+1.	Integrated MachineryLifetimeCounterType as part of the IJoiningSystemAssetType.
+2.	Added ExtendedMetaData in JoiningResultMetaDataType
+3.	Added AssociatedEntities in JoiningProcessMetaDataType
+4.	Updated ResultCounter, SequenceNumber from Integer to Unsigned Integers.
+5.	Enabled RetranmissionQueue for auto-recovery
+6.	Few other bug fixes and optimizations.
+
