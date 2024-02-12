@@ -58,12 +58,31 @@ export default class ResultGraphics extends BasicScreen {
     this.backGround.appendChild(this.display)
   }
 
+  /**
+   * Support function that applies a list of styles to an element
+   * @date 2/12/2024 - 7:27:41 PM
+   *
+   * @param {*} element
+   * @param {*} list
+   */
   appyClasses (element, list) {
     for (const style of list) {
       element.classList.add(style)
     }
   }
 
+  /**
+   * This function returns a HTML representation of the parent and its children
+   * @date 2/12/2024 - 7:24:26 PM
+   *
+   * @param {*} parentBox the top result
+   * @param {*} children a list of children
+   * @param {*} counter the current counter of for example a batch
+   * @param {*} size the size of for example a batch
+   * @param {*} state the state of the result (in progress, completed, aborted, ...)
+   * @param {*} enveloped should it be represented as enveloped boxes or hierarchical roots
+   * @returns {*} a HTML representation of the parent-child relation
+   */
   makeRoot (parentBox, children, counter, size, state, enveloped) {
     function makeSnibb (container, counter, length) {
       const row = document.createElement('div')
@@ -178,11 +197,11 @@ export default class ResultGraphics extends BasicScreen {
   }
 
   /**
-   * Recursively draw nested boxes of results
-   * @date 2/2/2024 - 8:40:09 AM
+   * Description placeholder
+   * @date 2/12/2024 - 7:22:10 PM
    *
    * @param {*} result the result you want to draw
-   * @param {*} container the container where you want it drawn
+   * @returns {*} An object containing the HTML element and a list of styles that can be applied to the container
    */
   drawResultBoxes2 (result) {
     function getSizeAndCounter (counterList) {
@@ -245,6 +264,7 @@ export default class ResultGraphics extends BasicScreen {
    * @date 2/2/2024 - 8:40:57 AM
    *
    * @param {*} result the result that we want to decide how it should look
+   * @returns {*} a list of styles that should be applied to itself or its parent
    */
   getStyle (result) {
     const style = []
