@@ -33,6 +33,7 @@ export class ResultManager {
    */
   addResult (result) {
     this.results[result.id] = result
+    result.clientLatestRecievedTime = new Date().getTime()
 
     let classification = 0
     if (result.classification) {

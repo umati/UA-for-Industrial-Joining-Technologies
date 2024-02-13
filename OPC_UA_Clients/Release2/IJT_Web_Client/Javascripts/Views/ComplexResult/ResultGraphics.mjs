@@ -106,8 +106,6 @@ export default class ResultGraphics extends BasicScreen {
       row.appendChild(right)
     }
 
-    // TODO: Display counter, size and state
-
     // TODO: Handle Abort, and other interuptions
 
     const container = document.createElement('div')
@@ -229,6 +227,12 @@ export default class ResultGraphics extends BasicScreen {
       top.innerText = 'Id: ' + result.id
     }
 
+    const counterInfo = getSizeAndCounter(result.ResultMetaData.ResultCounters)
+
+    if (counterInfo.size > 0) {
+      top.innerText += ' [' + counterInfo.counter + '/' + counterInfo.size + ']'
+    }
+
     const style = this.getStyle(result)
 
     if (this.envelope !== 'true') {
@@ -244,8 +248,6 @@ export default class ResultGraphics extends BasicScreen {
         children.push(childBox)
       }
     }
-
-    const counterInfo = getSizeAndCounter(result.ResultMetaData.ResultCounters)
 
     return {
       element: this.makeRoot(
@@ -275,6 +277,11 @@ export default class ResultGraphics extends BasicScreen {
     }
     if (!result.evaluation) {
       style.push('resNOK')
+    }
+
+    if ((new Date().getTime() - result.clientLatestRecievedTime < 60000) &&
+      (this.envelope !== 'true')) {
+      style.push('resNew')
     }
 
     switch (parseInt(result.classification)) {

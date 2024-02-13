@@ -641,10 +641,11 @@ html {
   margin: 10px;
   padding: 10px;
   font-size: xx-small;
+  background-color: white;
 }
 
 .resPartial {
-  border-style: dashed;
+  border-style: solid;
 }
 
 .resFull {
@@ -695,6 +696,26 @@ html {
   text-align: center;
   border-width: 1px;
   margin: 0px 5px 0px 0px;
+}
+
+.resNew {
+  transition: box-shadow 5px 5px 5px darkgrey;
+}
+
+.resNew {
+  animation: shadow 60s;
+}
+
+@keyframes shadow {
+  /* The 0% keyframe represents the initial state of the element */
+  0% {
+    box-shadow: 0 5px 5px rgba(0,0,0,1);
+  }
+ 
+  /* The 100% keyframe represents the final state of the element */
+  100% {
+    box-shadow: 0 5px 5px rgba(0,0,0,0);
+  }
 }
 
 .resBatchStacking {
@@ -798,10 +819,10 @@ html {
   height: 10px;
 }
 .snibbRight {
-  border-left: 1px solid white;
+  border-left: 1px solid black;
   width: 50%;
   height: 10px;
 }
 .snibbTopRef {
-  border-top: 1px solid white;
+  border-top: 1px solid black;
 }
