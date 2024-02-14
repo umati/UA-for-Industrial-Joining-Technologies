@@ -135,6 +135,10 @@ export class MethodManager {
             castValue = parseInt(row.value)
             break
           }
+          case '3': { // treat a byte as an int, for now
+            castValue = parseInt(row.value)
+            break
+          }
           case '1': {
             castValue = row.value
             break

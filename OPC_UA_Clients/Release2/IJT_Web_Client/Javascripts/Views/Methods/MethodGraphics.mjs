@@ -108,6 +108,15 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
     switch (arg.DataType.Identifier) {
       case 'Byte': // Change this to a number
         throw new Error('Byte is not implemented in MethodGraphics.mjs')
+      case '3': { // Also byte. For the time being, treat it as an int
+        const input = this.createInput('', area, null, 30)
+        input.dataType = arg.DataType
+        input.title = 'Datatype: Number\n' + (arg?.Description?._text ? arg.Description._text : '')
+        input.value = 0
+        return function () {
+          return { value: input.value, type: input.dataType }
+        }
+      }
       case '6': // Int32
       case '7': { // UInt32
         const input = this.createInput('', area, null, 30)

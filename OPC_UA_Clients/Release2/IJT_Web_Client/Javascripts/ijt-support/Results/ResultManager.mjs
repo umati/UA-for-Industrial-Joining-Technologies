@@ -17,13 +17,6 @@ export class ResultManager {
       3: [],
       4: []
     }
-
-    /*
-    connectionManager.subscribe('subscription', (setToTrue) => {
-      if (setToTrue) {
-        this.activate()
-      }
-    }) */
   }
 
   /**
@@ -47,21 +40,6 @@ export class ResultManager {
       subscriber(result)
     }
   }
-
-  /**
-   * Whenever a new JoiningSystemResultReadyEventModel comes. Add it
-   *
-  activate () {
-    this.eventManager.subscribeEvent(
-      (model) => { // Filter
-        return model.constructor.name === 'JoiningSystemResultReadyEventModel'
-      },
-      (model) => { // Callback
-        this.addResult(model.Result)
-      },
-      'ResultManager subscription of the results'
-    )
-  } */
 
   /**
    * Subscribe to results
