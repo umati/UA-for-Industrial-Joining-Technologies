@@ -279,9 +279,18 @@ export default class ResultGraphics extends BasicScreen {
       style.push('resNOK')
     }
 
-    if ((new Date().getTime() - result.clientLatestRecievedTime < 60000) &&
-      (this.envelope !== 'true')) {
-      style.push('resNew')
+    // Fade out the shadow on new results
+    const secondsOld = (new Date().getTime() - result.clientLatestRecievedTime) / 1000
+    if (this.envelope !== 'true') {
+      if (secondsOld < 15) {
+        style.push('resNew4')
+      } else if (secondsOld < 30) {
+        style.push('resNew3')
+      } else if (secondsOld < 45) {
+        style.push('resNew2')
+      } else if (secondsOld < 60) {
+        style.push('resNew1')
+      }
     }
 
     switch (parseInt(result.classification)) {
