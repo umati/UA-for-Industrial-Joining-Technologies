@@ -31,3 +31,8 @@ Refer to the following document for the usage of the reference server: **Usage_I
 5.	Enabled RetranmissionQueue for auto-recovery
 6.	Few other bug fixes and optimizations.
 
+2024-02-16: Few enhacements and issue fixes as follows.
+1. Updated the latest NodeSet based on the all the fixes for Release Candidate Comments.
+2. Added latest version of the OPC UA SDK UA 1.05 Concrete SubTypes.
+3. Few minor bugs and optimizations.
+
