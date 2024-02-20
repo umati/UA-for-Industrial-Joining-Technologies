@@ -44,9 +44,9 @@ export default class SingleTraceData {
       dataset.setBorderWidth(1)
 
       traceStep.dataset = dataset
-      traceStep.calculateData()
+      traceStep.calculateData(this.displayOffset)
       traceStep.createPoints(color)
-      traceStep.calculatePoints()
+      traceStep.calculatePoints(this.displayOffset)
     }
   }
 
@@ -85,8 +85,8 @@ export default class SingleTraceData {
 
   refreshTraceData () {
     for (const traceStep of this.steps) {
-      traceStep.calculateData()
-      traceStep.calculatePoints()
+      traceStep.calculateData(this.displayOffset)
+      traceStep.calculatePoints(this.displayOffset)
     }
   }
 

@@ -82,8 +82,10 @@ export default class TraceGraphics extends BasicScreen {
     const stepTraces = trace.StepTraces
     const newResultandTrace = new SingleTraceData(result, this)
 
+    let nr = 1
+
     for (const step of stepTraces) {
-      const newStep = new Step(step, newResultandTrace)
+      const newStep = new Step(step, newResultandTrace, nr++)
       for (const data of step.StepTraceContent) {
         switch (parseInt(data.PhysicalQuantity)) {
           case 1: // Time

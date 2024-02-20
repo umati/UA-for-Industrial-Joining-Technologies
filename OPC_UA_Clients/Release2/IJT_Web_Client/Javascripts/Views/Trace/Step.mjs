@@ -2,9 +2,10 @@
 // import SingleTraceData from './SingleTraceData.mjs'
 
 export default class Step {
-  constructor (step, owner) {
+  constructor (step, owner, nr) {
     this.name = step.StepResultId.link.Name
     this.stepId = step.StepResultId
+    this.nr = nr
     this.color = ''
     this.time = null
     this.torque = null
@@ -18,9 +19,10 @@ export default class Step {
     this.owner = owner
   }
 
+  /*
   get displayOffset () {
     return this.owner.displayOffset
-  }
+  } */
 
   get xDimensionName () {
     return this.owner.owner.xDimensionName
@@ -46,14 +48,16 @@ export default class Step {
     return this.owner.showLimitSelected
   }
 
-  /* /////////////////////////////////// CURVE MANAGEMENT /////////////////////////////////////////// */
   /**
    * This function changes the angle values in the graph if offset
    * is set to some other point than the start value.
+   * displayOffset is used to calculate this and taken from the owner of this class
    * For example snug is often used as 0 angle
-   * @returns
+   * @date 2/16/2024 - 9:18:15 AM
+   *
+   * @param {*} displayOffset the angle you want all x values to decrease
    */
-  calculateData () {
+  calculateData (displayOffset) {
     let xValues = this[this.xDimensionName]
     const yValues = this[this.yDimensionName].map(this.absoluteFunction)
 
@@ -63,11 +67,16 @@ export default class Step {
     }
     this.dataset.data = []
     if (xValues.length !== yValues.length) {
-      throw new Error('data in step ' + this.name + ' is not the same in X and Y lists')
+      if (!this.name) {
+        this.name = 'number ' + this.nr
+      }
+      throw new Error('In step ' + this.name +
+      ' there are not the same number of trace sample points in the ' + this.xDimensionName +
+      ' and ' + this.yDimensionName + ' lists')
     }
     for (let i = 0; i < xValues.length; i++) {
       this.dataset.data.push({
-        x: xValues[i] - this.displayOffset,
+        x: xValues[i] - displayOffset,
         y: parseFloat(yValues[i])
       })
     }
@@ -104,7 +113,7 @@ export default class Step {
     }
   }
 
-  calculatePoints () {
+  calculatePoints (displayOffset) {
     for (const value of this.values) {
       let hide = this.hidden
       if ((this.xDimensionName === 'angle' && value.PhysicalQuantity === 1) ||
@@ -113,12 +122,12 @@ export default class Step {
         hide = true
       }
 
-      this.updatePoint(value, hide)
+      this.updatePoint(value, displayOffset, hide)
     }
   }
 
-  updatePoint (value, hide) {
-    const points = this.interpretPoint(value)
+  updatePoint (value, displayOffset, hide) {
+    const points = this.interpretPoint(value, displayOffset)
     this.datasetMapping[value.valueId].valueDataset.data = [points.value]
     this.datasetMapping[value.valueId].limitsDataset.data = points.limits
     this.datasetMapping[value.valueId].targetDataset.data = [points.target]
@@ -131,7 +140,7 @@ export default class Step {
    * @param {*} value This structure contains a target and might contain a upper and lower limit
    * @returns a structure with target, limits and name where the values have been recalculated to the selected mode of displaying the trace
    */
-  interpretPoint (value) {
+  interpretPoint (value, displayOffset) {
     let x; let y; let xHigh; let yHigh; let xLow; let yLow; let xTarget; let yTarget; let xOffset = 0
     switch (parseInt(value.PhysicalQuantity)) {
       case 1: // Time
@@ -159,7 +168,7 @@ export default class Step {
       case 11: // Current
         break
       default:
-        throw new Error('Unknown physicalQuantity in trace')
+        throw new Error('Unknown physicalQuantity in trace [physicalQuantity=' + value.PhysicalQuantity + ']')
     }
 
     // Guess where on the non described dimension it should be put
@@ -188,25 +197,27 @@ export default class Step {
     const limits = []
     let target
     const limitYOffset = 5
+    const stepOffset = displayOffset + xOffset
+
     if (xHigh != null) {
-      limits.push({ x: xHigh - this.displayOffset + xOffset, y: y + limitYOffset, name: '[limit]', type: 'limit' })
+      limits.push({ x: xHigh - stepOffset, y: y + limitYOffset, name: '[limit]', type: 'limit' })
     }
     if (yHigh != null) {
-      limits.push({ x: x - this.displayOffset + xOffset, y: yHigh + limitYOffset, name: '[limit]', type: 'limit' })
+      limits.push({ x: x - stepOffset, y: yHigh + limitYOffset, name: '[limit]', type: 'limit' })
     }
-    const value2 = { x: x - this.displayOffset + xOffset, y, type: '' }
+    const value2 = { x: x - stepOffset, y, type: '' }
 
     if (xLow != null) {
-      limits.push({ x: xLow - this.displayOffset + xOffset, y: y + limitYOffset, name: '[limit]', type: 'limit' })
+      limits.push({ x: xLow - stepOffset, y: y + limitYOffset, name: '[limit]', type: 'limit' })
     }
     if (yLow != null) {
-      limits.push({ x: x - this.displayOffset + xOffset, y: yLow + limitYOffset, name: '[limit]', type: 'limit' })
+      limits.push({ x: x - stepOffset, y: yLow + limitYOffset, name: '[limit]', type: 'limit' })
     }
     if (xTarget != null) {
-      target = { x: xTarget - this.displayOffset + xOffset, y: y + limitYOffset, name: '[target]', type: 'target' }
+      target = { x: xTarget - stepOffset, y: y + limitYOffset, name: '[target]', type: 'target' }
     }
     if (yTarget != null) {
-      target = { x: x - this.displayOffset + xOffset, y: yTarget + limitYOffset, name: '[target]', type: 'target' }
+      target = { x: x - stepOffset, y: yTarget + limitYOffset, name: '[target]', type: 'target' }
     }
 
     return {

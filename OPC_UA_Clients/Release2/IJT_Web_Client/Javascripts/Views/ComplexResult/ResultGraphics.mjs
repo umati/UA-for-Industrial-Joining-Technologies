@@ -277,6 +277,8 @@ export default class ResultGraphics extends BasicScreen {
     }
     if (!result.evaluation) {
       style.push('resNOK')
+    } else {
+      style.push('resOK')
     }
 
     // Fade out the shadow on new results
