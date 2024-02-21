@@ -155,7 +155,7 @@ export default class TraceGraphics extends BasicScreen {
     if (!step) {
       programStepId = 'all'
     } else {
-      programStepId = step.stepId.link.programStepId
+      programStepId = step.stepId.link.ProgramStepId
     }
     for (const trace of this.allTraces) {
       operation(trace, programStepId)

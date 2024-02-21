@@ -105,7 +105,7 @@ export default class SingleTraceData {
       return 'all'
     }
     return this.steps.find((element) => {
-      return element.stepId.link.programStepId === id
+      return element.stepId.link.ProgramStepId === id
     }
     )
   }
