@@ -37,7 +37,6 @@ export default class ChartManager {
 
     const canvas = this.traceManager.traceInterface.canvas
 
-    // document.getElementById('myChart')
     canvas.onclick = (evt) => {
       const points = this.myChart.getElementsAtEventForMode(evt,
         'nearest', { intersect: true }, true)
@@ -68,7 +67,6 @@ export default class ChartManager {
   createDataset (name) {
     const dataset = new Dataset(name)
     this.myChart.data.datasets.push(dataset)
-    // this.myChart.data.labels.push(name)
     return dataset
   }
 

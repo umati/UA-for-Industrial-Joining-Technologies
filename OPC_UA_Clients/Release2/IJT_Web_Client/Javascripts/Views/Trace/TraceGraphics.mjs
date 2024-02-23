@@ -5,7 +5,7 @@
 import ChartManager from './ChartHandler.mjs'
 import TraceInterface from './TraceInterface.mjs'
 import SingleTraceData from './SingleTraceData.mjs'
-import Step from './Step.mjs'
+// import Step from './Step.mjs'
 import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
 
 /**
@@ -61,64 +61,36 @@ export default class TraceGraphics extends BasicScreen {
     })
   }
 
-  // /////////////////////////////////////////////////////////////////////////
-
+  /**
+   * Main function for generating a new graphical representation of a trace
+   * @date 2/23/2024 - 6:19:47 PM
+   *
+   * @param {*} model the OPC UA IJT model of a result
+   * @returns {string} possible error message
+   */
   createNewTrace (model) {
-    // const model = this.modelManager.createModelFromRead(values)
-
-    if (model?.ResultMetaData.Classification !== '1') {
+    if (model?.ResultMetaData.Classification !== '1') { // Only for single traces
       return 'Only traces for single results'
     }
-    const trace = model?.ResultContent[0].Trace
-    if (!trace) {
+
+    if (!model?.ResultContent[0].Trace) { // A trace must be included in the result
       return
     }
+    this.result = model
 
-    const result = model
-    this.result = result
-
-    if (!trace) return
-
-    const stepTraces = trace.StepTraces
-    const newResultandTrace = new SingleTraceData(result, this)
-
-    let nr = 1
-
-    for (const step of stepTraces) {
-      const newStep = new Step(step, newResultandTrace, nr++)
-      for (const data of step.StepTraceContent) {
-        switch (parseInt(data.PhysicalQuantity)) {
-          case 1: // Time
-            newStep.time = data.Values
-            break
-          case 2: // Torque
-            newStep.torque = data.Values
-            break
-          case 3: // Angle
-            newStep.angle = data.Values
-            break
-          case 11: // Current
-            break
-          default:
-            throw new Error('Unknown physicalQuantity in trace')
-        }
-      }
-      newStep.color = this.traceInterface.getRandomColor()
-      if (!newStep.time) {
-        newStep.time = Array.from(Array(newStep.torque.length), (_, x) => parseFloat(step.SamplingInterval * x / 1000))
-      }
-      newResultandTrace.addStep(newStep)
-    }
-
-    newResultandTrace.displayName += '(' + (this.identityCounter++) + ')'
+    const newResultandTrace = new SingleTraceData(this.result, this, this.chartManager, this.identityCounter++, () => { return this.traceInterface.getRandomColor() })
 
     this.allTraces.push(newResultandTrace)
-    newResultandTrace.generateTrace()
     this.traceInterface.updateTracesInGUI(this.allTraces)
     this.selectTrace(newResultandTrace)
   }
 
-  // /////////////////////////////////////////////////////////////////////////
+  /**
+   * Set if you want a curve over time or over angle
+   * @date 2/23/2024 - 6:20:50 PM
+   *
+   * @param {*} yName
+   */
   decideTraceType (yName) {
     switch (yName) {
       case 'toa': // Torque over Angle
@@ -300,7 +272,7 @@ export default class TraceGraphics extends BasicScreen {
   }
 
   clicked (resultId, stepId) {
-    if (resultId !== this.selectedTrace.resultId) {
+    if (resultId !== this.selectedTrace.ResultId) {
       this.selectTrace(this.findTrace(resultId))
     } else {
       this.selectStep(stepId)
@@ -309,11 +281,6 @@ export default class TraceGraphics extends BasicScreen {
 
   // ////////////   Setup support functions ////////////////////////////
   setupEventListeners () {
-    // const serverDiv = document.getElementById('connectedServer')
-    // serverDiv.addEventListener('newResultReceived', (event) => {
-    // this.createNewTrace(event)
-    // }, false)
-
     this.traceInterface.traceTypeSelect.addEventListener('click', (event) => {
       this.decideTraceType(this.traceInterface.traceTypeSelect.options[this.traceInterface.traceTypeSelect.selectedIndex].value)
     }, false)

@@ -1,28 +1,60 @@
 // import ChartManager from './ChartHandler.mjs'
-// import SingleTraceData from './SingleTraceData.mjs'
+import ResultValueHandler from './ResultValueHandler.mjs'
 
 export default class Step {
-  constructor (step, owner, nr) {
+  constructor (step, owner, nr, chartManager, resultId, color) {
     this.name = step.StepResultId.link.Name
     this.stepId = step.StepResultId
+    this.resultId = resultId
     this.nr = nr
-    this.color = ''
+    this.chartManager = chartManager
+    this.color = color
     this.time = null
     this.torque = null
     this.angle = null
     this.hidden = false
-    this.values = step.StepResultId.link.StepResultValues
     this.last = {}
     this.datasetMapping = {}
     this.startTimeOffset = step.StartTimeOffset
     this.dataset = []
     this.owner = owner
-  }
+    this.resultValueHandler = new ResultValueHandler(this, step.StepResultId.link.StepResultValues, chartManager)
 
-  /*
-  get displayOffset () {
-    return this.owner.displayOffset
-  } */
+    for (const data of step.StepTraceContent) {
+      switch (parseInt(data.PhysicalQuantity)) {
+        case 1: // Time
+          this.time = data.Values
+          break
+        case 2: // Torque
+          this.torque = data.Values
+          break
+        case 3: // Angle
+          this.angle = data.Values
+          break
+        case 11: // Current
+          break
+        default:
+          throw new Error('Unknown physicalQuantity in trace')
+      }
+    }
+    if (!this.time) {
+      this.time = Array.from(Array(this.torque.length), (_, x) => parseFloat(step.SamplingInterval * x / 1000))
+    }
+
+    const dataset = chartManager.createDataset(this.name)
+
+    dataset.show()
+    dataset.setResultId(this.resultId)
+    dataset.setStepId(this.stepId)
+    dataset.setBackgroundColor(this.color)
+    dataset.setBorderColor(this.color)
+    dataset.setBorderWidth(1)
+
+    this.dataset = dataset
+    this.calculateData(0)
+    this.resultValueHandler.createPoints(this.color, 0)
+    this.resultValueHandler.calculatePoints(0, this.showLimitSelected)
+  }
 
   get xDimensionName () {
     return this.owner.owner.xDimensionName
@@ -34,10 +66,6 @@ export default class Step {
 
   get absoluteFunction () {
     return this.owner.owner.absoluteFunction
-  }
-
-  get chartManager () {
-    return this.owner.chartManager
   }
 
   get showValuesSelected () {
@@ -88,164 +116,13 @@ export default class Step {
     }
   }
 
-  /* ///////////////////////////////// POINT MANAGEMENT ////////////////////////////////////////////
-  //                                                                                             //
-  //      These functions handles displaying values as part of the results                       //
-  //      They are not used to desplay the actual curves                                          //
-  //                                                                                             //
-  /////////////////////////////////////////////////////////////////////////////////////////////////*
   /**
-   *
-   * @param {*} color
+   * Refresh all the data by recalculating based on new offset
+   * @param {*} offset
    */
-  createPoints (color) {
-    if (this.values) {
-      for (const value of this.values) {
-        const point = this.interpretPoint(value)
-        const datasets = this.createDatasets(value.name, point, color)
-
-        this.datasetMapping[value.valueId] = {
-          valueDataset: datasets.value,
-          limitsDataset: datasets.limits,
-          targetDataset: datasets.target
-        }
-      }
-    }
-  }
-
-  calculatePoints (displayOffset) {
-    for (const value of this.values) {
-      let hide = this.hidden
-      if ((this.xDimensionName === 'angle' && value.PhysicalQuantity === 1) ||
-        (this.xDimensionName === 'time' && value.PhysicalQuantity === 3) ||
-        (!this.showValuesSelected)) {
-        hide = true
-      }
-
-      this.updatePoint(value, displayOffset, hide)
-    }
-  }
-
-  updatePoint (value, displayOffset, hide) {
-    const points = this.interpretPoint(value, displayOffset)
-    this.datasetMapping[value.valueId].valueDataset.data = [points.value]
-    this.datasetMapping[value.valueId].limitsDataset.data = points.limits
-    this.datasetMapping[value.valueId].targetDataset.data = [points.target]
-
-    this.displayValuesAccordingToSettings(value, !hide, this.showLimitSelected)
-  }
-
-  /**
-   * Awful method that tries to guess how to display point values and recalculate them with respect to how the trace currently is shown
-   * @param {*} value This structure contains a target and might contain a upper and lower limit
-   * @returns a structure with target, limits and name where the values have been recalculated to the selected mode of displaying the trace
-   */
-  interpretPoint (value, displayOffset) {
-    let x; let y; let xHigh; let yHigh; let xLow; let yLow; let xTarget; let yTarget; let xOffset = 0
-    switch (parseInt(value.PhysicalQuantity)) {
-      case 1: // Time
-        x = value.Value
-        xHigh = value.HighLimit
-        xLow = value.LowLimit
-        xTarget = value.TargetValue
-        xOffset = this.startTimeOffset
-        break
-      case 2: // Torque
-        y = value.Value
-        yHigh = value.HighLimit
-        yLow = value.LowLimit
-        yTarget = value.TargetValue
-        break
-      case 3: // Angle
-        x = value.Value
-        xHigh = value.HighLimit
-        xLow = value.LowLimit
-        xTarget = value.TargetValue
-        if (this.angle.length > 0) {
-          xOffset = this.angle[0]
-        }
-        break
-      case 11: // Current
-        break
-      default:
-        throw new Error('Unknown physicalQuantity in trace [physicalQuantity=' + value.PhysicalQuantity + ']')
-    }
-
-    // Guess where on the non described dimension it should be put
-    if (y == null) {
-      y = -1
-      yHigh = null
-      yLow = null
-      yTarget = null
-    }
-    if (x == null) {
-      x = this.last.x
-      xHigh = null
-      xLow = null
-      xTarget = null
-    }
-    // Avoid drawing spans when high and low are not set
-    if (yHigh === 0 && yLow === 0) {
-      yHigh = null
-      yLow = null
-    }
-    if (xHigh === 0 && xLow === 0) {
-      xHigh = null
-      xLow = null
-    }
-
-    const limits = []
-    let target
-    const limitYOffset = 5
-    const stepOffset = displayOffset + xOffset
-
-    if (xHigh != null) {
-      limits.push({ x: xHigh - stepOffset, y: y + limitYOffset, name: '[limit]', type: 'limit' })
-    }
-    if (yHigh != null) {
-      limits.push({ x: x - stepOffset, y: yHigh + limitYOffset, name: '[limit]', type: 'limit' })
-    }
-    const value2 = { x: x - stepOffset, y, type: '' }
-
-    if (xLow != null) {
-      limits.push({ x: xLow - stepOffset, y: y + limitYOffset, name: '[limit]', type: 'limit' })
-    }
-    if (yLow != null) {
-      limits.push({ x: x - stepOffset, y: yLow + limitYOffset, name: '[limit]', type: 'limit' })
-    }
-    if (xTarget != null) {
-      target = { x: xTarget - stepOffset, y: y + limitYOffset, name: '[target]', type: 'target' }
-    }
-    if (yTarget != null) {
-      target = { x: x - stepOffset, y: yTarget + limitYOffset, name: '[target]', type: 'target' }
-    }
-
-    return {
-      target,
-      limits,
-      value: value2,
-      name: value.name
-    }
-  }
-
-  createDatasets (name, points, color) {
-    const res = {}
-    function handleGroup (list, tag, chartManager) {
-      const dataset = chartManager.createDataset(name + tag)
-      dataset.show()
-      dataset.setBackgroundColor(color)
-      dataset.setBorderColor('gray')
-      dataset.setBorderWidth(1)
-      dataset.setRadius(3)
-      dataset.setPoints(list)
-      return dataset
-    }
-
-    res.value = handleGroup([points.value], '', this.chartManager)
-    res.limits = handleGroup(points.limits, '[limit]', this.chartManager)
-    res.target = handleGroup([points.target], '[target]', this.chartManager)
-
-    return res
+  refresh (offset) {
+    this.calculateData(offset)
+    this.resultValueHandler.calculatePoints(offset, this.showLimitSelected)
   }
 
   /// ////////////////////////////////////////////////////
@@ -256,12 +133,9 @@ export default class Step {
 
   delete () {
     for (const value of Object.values(this.datasetMapping)) {
-      this.chartManager.filterOut([value.valueDataset])
-      this.chartManager.filterOut([value.targetDataset])
-      this.chartManager.filterOut([value.limitsDataset])
-      this.chartManager.filterOut([this.highLightDataset])
-      this.chartManager.filterOut([this.dataset])
+      this.chartManager.filterOut([value.valueDataset, value.targetDataset, value.limitsDataset])
     }
+    this.chartManager.filterOut([this.highLightDataset, this.dataset])
   }
 
   select () {
@@ -310,44 +184,27 @@ export default class Step {
 
   /// //////////////////////////////////////////////////////////////////////
   //                                                                     //
-  //    these methods help with hiding or showing traces and values      //
+  //    These methods help with hiding or showing traces and values      //
   //                                                                     //
   /// //////////////////////////////////////////////////////////////////////
 
   hideStepTrace () {
-    this.dataset.hide()
+    this.dataset.hide() // Hide the trace curve
     this.hidden = true
-    this.hideValues()
+    this.resultValueHandler.hideValues() // Hide the reported step values
   }
 
   showStepTrace () {
-    this.dataset.show()
+    this.dataset.show() // Show the trace curve
     this.hidden = false
-    for (const value of this.values) {
-      this.displayValuesAccordingToSettings(value, this.showValuesSelected, this.showLimitSelected)
-    }
+    this.resultValueHandler.showValues(this.showValuesSelected, this.showLimitSelected) // Show the reported step values
   }
 
-  hideValues () {
-    for (const value of this.values) {
-      this.hideValue(value)
-    }
+  getDataSet (valueId) {
+    return this.datasetMapping[valueId]
   }
 
-  hideValue (value) {
-    this.datasetMapping[value.valueId].valueDataset.hide()
-    this.datasetMapping[value.valueId].limitsDataset.hide()
-    this.datasetMapping[value.valueId].targetDataset.hide()
-  }
-
-  displayValuesAccordingToSettings (value, showValue, showLimits) {
-    this.hideValue(value)
-    if (showValue) {
-      this.datasetMapping[value.valueId].valueDataset.show()
-      if (showLimits) {
-        this.datasetMapping[value.valueId].limitsDataset.show()
-        this.datasetMapping[value.valueId].targetDataset.show()
-      }
-    }
+  setDataSet (valueId, content) {
+    this.datasetMapping[valueId] = content
   }
 }

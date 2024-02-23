@@ -1,54 +1,55 @@
 // import ChartManager from './ChartHandler.mjs'
-// import Dataset from './Dataset.mjs'
+import Step from './Step.mjs'
 
 export default class SingleTraceData {
-  constructor (result, owner) {
+  constructor (result, owner, chartManager, identityCounter, colorFunction) {
+    this.chartManager = chartManager
     this.steps = []
     this.result = result
     this.resultId = result.ResultMetaData.ResultId
+    // this.colorFunction = colorFunction
+    this.trace = result?.ResultContent[0].Trace
     this.displayOffset = 0
     this.owner = owner
     this.selected = false
     this.highLights = []
-    this.displayName = result.ResultMetaData.CreationTime.substr(11, 5)
+    this.displayName = result.ResultMetaData.CreationTime.substr(11, 5) + '(' + (identityCounter++) + ')'
+
+    for (const resultStep of this.trace.StepTraces) {
+      const nr = this.steps.length
+      const newStep = new Step(resultStep, this, nr, this.chartManager, this.resultId, colorFunction())
+      this.steps.push(newStep)
+    }
   }
 
-  get chartManager () {
-    return this.owner.chartManager
-  }
-
+  /**
+   * Is the value showing turned on in the GUI
+   * @date 2/23/2024 - 5:40:20 PM
+   *
+   * @readonly
+   * @type {*}
+   */
   get showValuesSelected () {
     return this.owner.showValuesSelected
   }
 
+  /**
+   * Is the limit showing turned on in the GUI
+   * @date 2/23/2024 - 5:41:02 PM
+   *
+   * @readonly
+   * @type {*}
+   */
   get showLimitSelected () {
     return this.owner.showLimitSelected
   }
 
-  addStep (step) {
-    this.steps.push(step)
-  }
-
-  generateTrace () {
+  /*
+  initiate () {
     for (const traceStep of this.steps) {
-      const color = traceStep.color
-      const cm = this.chartManager
-
-      const dataset = cm.createDataset(traceStep.name)
-
-      dataset.show()
-      dataset.setResultId(this.result.resultId)
-      dataset.setStepId(traceStep.stepId)
-      dataset.setBackgroundColor(color)
-      dataset.setBorderColor(color)
-      dataset.setBorderWidth(1)
-
-      traceStep.dataset = dataset
-      traceStep.calculateData(this.displayOffset)
-      traceStep.createPoints(color)
-      traceStep.calculatePoints(this.displayOffset)
+      traceStep.initiate(this.result.resultId)
     }
-  }
+  } */
 
   highLight () {
     this.deHighLight()
@@ -85,8 +86,7 @@ export default class SingleTraceData {
 
   refreshTraceData () {
     for (const traceStep of this.steps) {
-      traceStep.calculateData(this.displayOffset)
-      traceStep.calculatePoints(this.displayOffset)
+      traceStep.refresh(this.displayOffset)
     }
   }
 
