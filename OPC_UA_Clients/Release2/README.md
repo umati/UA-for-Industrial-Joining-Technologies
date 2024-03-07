@@ -45,6 +45,7 @@ This application uses the open source OPC UA ASYNCUA Stack. The purpose of this 
 
      py index.py or python index.py
 4. **Start** live server to present the webpage and reload when files are updated. Run the following command from a separate terminal:
+
      pip install live-server
 
      live-server --port=8000
