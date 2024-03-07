@@ -31,7 +31,6 @@ This application uses the open source OPC UA ASYNCUA Stack. The purpose of this 
 
      pip install asyncua
 
-     pip install live-server
 6. **Install** the following javascript packages in the virtual environment:
 
      npm install chart.js
@@ -46,6 +45,7 @@ This application uses the open source OPC UA ASYNCUA Stack. The purpose of this 
 
      py index.py or python index.py
 4. **Start** live server to present the webpage and reload when files are updated. Run the following command from a separate terminal:
+     pip install live-server
 
      live-server --port=8000
 6. The above commands will start the socket.io server at `http://localhost:3000`
