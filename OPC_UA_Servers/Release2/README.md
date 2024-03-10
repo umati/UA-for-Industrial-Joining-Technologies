@@ -41,3 +41,7 @@ Refer to the following document for the usage of the reference server: **Usage_I
 2. Added newer version of the OPC UA SDK received.
 3. Fixed issue related to method call where TrimmedString was not getting converted internally when passed as an input argument.
 
+2024-03-10: Few enhacements and issue fixes as follows.
+1. Updated the formally released NodeSets.
+2. Correction in the NamespaceIndex of JoiningSystem->Identification
+3. Minor bugs and optimizations.
