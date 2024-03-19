@@ -9,11 +9,11 @@ https://vdma.org/viewer/-/v2article/render/88084510
 
 **IJT Joining Specification:** 
 
-https://opcfoundation.org/developer-tools/documents/view/343 
+https://reference.opcfoundation.org/nodesets?u=http://opcfoundation.org/UA/IJT/Base/
 
 **IJT Tightening Specification:** 
 
-https://opcfoundation.org/developer-tools/documents/view/341 
+https://reference.opcfoundation.org/nodesets?u=http://opcfoundation.org/UA/IJT/Tightening/ 
 
 The **Joining** **Specification** **(OPC 40450)** is the **Base** part for the joining technologies.
 
