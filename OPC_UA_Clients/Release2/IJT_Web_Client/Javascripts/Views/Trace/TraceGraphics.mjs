@@ -5,7 +5,6 @@
 import ChartManager from './ChartHandler.mjs'
 import TraceInterface from './TraceInterface.mjs'
 import SingleTraceData from './SingleTraceData.mjs'
-// import Step from './Step.mjs'
 import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
 
 /**
@@ -35,7 +34,8 @@ export default class TraceGraphics extends BasicScreen {
         annotations: {}
       }
     }
-    this.chartManager = new ChartManager(this.traceInterface.canvas, this)
+
+    this.chartManager = new ChartManager(this)
     this.setupEventListeners()
     addressSpace.connectionManager.subscribe('subscription', (setToTrue) => {
       if (setToTrue) {
@@ -78,10 +78,17 @@ export default class TraceGraphics extends BasicScreen {
     }
     this.result = model
 
+    // Create new trace and align it
     const newResultandTrace = new SingleTraceData(this.result, this, this.chartManager, this.identityCounter++, () => { return this.traceInterface.getRandomColor() })
+    this.align(newResultandTrace, this.alignStep)
 
+    // Store it
     this.allTraces.push(newResultandTrace)
+
+    // Show buttons to select the trace and its substeps
     this.traceInterface.updateTracesInGUI(this.allTraces)
+
+    // Select it
     this.selectTrace(newResultandTrace)
   }
 
@@ -110,19 +117,29 @@ export default class TraceGraphics extends BasicScreen {
   }
 
   // Step handling ////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  align (trace, step) {
+  alignCORRECT (trace, step) {
     this.applyToAll(trace, step, (a, b) => { this.alignByProgramStepId(a, b) })
   }
 
-  zoom (trace, step) {
+  zoomCORRECT (trace, step) {
     this.applyToAll(trace, step, (a, b) => { this.zoomByProgramStepId(a, b) })
+  }
+
+  align (trace, step) { // Temp solution until programStepId is correct in simulator
+    const index = trace.steps.indexOf(step)
+    this.applyToAll(trace, step, (a, b) => { this.alignByIndex(a, index) })
+  }
+
+  zoom (trace, step) {
+    const index = trace.steps.indexOf(step)
+    this.applyToAll(trace, step, (a, b) => { this.zoomByIndex(a, index) })
   }
 
   applyToAll (trace, step, operation) {
     if (trace.steps.length === 0) {
       throw new Error('No trace selected for applyToAll')
     }
-    // let step = trace.findStepByStepId(stepId)
+
     let programStepId
     if (!step) {
       programStepId = 'all'
@@ -138,12 +155,34 @@ export default class TraceGraphics extends BasicScreen {
     this.chartManager.update()
   }
 
-  alignByProgramStepId (trace, programStepId) {
-    const step = trace.findStepByProgramStepId(programStepId)
-    if (step === 'all') {
+  alignByIndex (trace, index) { // Temp solution until programStepId is correct in simulator
+    const step = trace.steps[index]
+    if (index === -1) {
       trace.displayOffset = 0
     } else {
       trace.displayOffset = this.findExtremes(step).min
+    }
+  }
+
+  alignByProgramStepId (trace, programStepId) {
+    const step = trace.findStepByProgramStepId(programStepId)
+    if (step) {
+      if (step === 'all') {
+        trace.displayOffset = 0
+      } else {
+        trace.displayOffset = this.findExtremes(step).min
+      }
+    }
+  }
+
+  zoomByIndex (trace, index) {
+    const zoomedStep = trace.steps[index]
+    for (const step of trace.steps) {
+      if (index === -1 || step === zoomedStep) {
+        step.showStepTrace()
+      } else {
+        step.hideStepTrace()
+      }
     }
   }
 
@@ -207,8 +246,8 @@ export default class TraceGraphics extends BasicScreen {
       } else {
         step.deselect()
       }
-      this.chartManager.update()
     }
+    this.chartManager.update()
   }
 
   showPoints (value) {
@@ -272,14 +311,14 @@ export default class TraceGraphics extends BasicScreen {
   }
 
   clicked (resultId, stepId) {
-    if (resultId !== this.selectedTrace.ResultId) {
+    if (resultId !== this.selectedTrace.resultId) {
       this.selectTrace(this.findTrace(resultId))
     } else {
       this.selectStep(stepId)
     }
   }
 
-  // ////////////   Setup support functions ////////////////////////////
+  // ////////////   Setup GUI related functionality ////////////////////////////
   setupEventListeners () {
     this.traceInterface.traceTypeSelect.addEventListener('click', (event) => {
       this.decideTraceType(this.traceInterface.traceTypeSelect.options[this.traceInterface.traceTypeSelect.selectedIndex].value)
@@ -302,6 +341,7 @@ export default class TraceGraphics extends BasicScreen {
 
     this.traceInterface.setStepSelectEventListener((event) => {
       this.selectStep(event.currentTarget.stepId)
+      this.chartManager.resetZoom()
       this.zoom(this.selectedTrace, this.selectedStep)
     })
 
@@ -309,6 +349,7 @@ export default class TraceGraphics extends BasicScreen {
 
     this.traceInterface.alignButton.addEventListener('click', (event) => {
       this.align(this.selectedTrace, this.selectedStep)
+      this.alignStep = this.selectStep
     }, false)
 
     this.traceInterface.valueShower.addEventListener('click', (event) => {
@@ -322,5 +363,137 @@ export default class TraceGraphics extends BasicScreen {
     this.traceInterface.deleteButton.addEventListener('click', (event) => {
       this.deleteSelected()
     }, false)
+  }
+
+  onclick = (evt, coord, resultId, stepId) => {
+    if (resultId) {
+      this.clicked(resultId, stepId)
+    } else if (this.pressed) {
+      this.chartManager.zoom(this.startZoomCoord, coord)
+      // this.zoom(Math.min(down.x, up.x), Math.max(down.x, up.x))
+    }
+    this.traceInterface.zoomBoxDraw(null, null)
+    this.pressed = null
+    this.startZoomCoord = null
+  }
+
+  onmousedown = (evt, coord) => {
+    switch (evt.button) {
+      case 0:
+        this.divOffset = {
+          x: evt.x - evt.offsetX,
+          y: evt.y - evt.offsetY
+        }
+        this.startZoomCoord = coord
+        this.pressed = evt
+        // this.traceInterface.zoomBox(evt, coord)
+
+        break
+      default:
+        this.chartManager.resetZoom()
+    }
+  }
+
+  onmousewheel = (evt, coord) => {
+    const sensitivity = 500
+    const deltaY = (evt.deltaY / sensitivity) + 1
+    let deltaX
+
+    if (evt.button === 0) {
+      deltaX = deltaY
+    } else {
+      deltaX = (evt.deltaX / sensitivity) + 1
+    }
+
+    if ((deltaX < 0.5) || (deltaX > 2) || (deltaY < 0.5) || (deltaY > 2)) {
+      return // Ignore random very large zooms
+    }
+
+    const currentZoom = this.chartManager.getZoom()
+
+    const new1 = {
+      x: coord.x - (coord.x - currentZoom.xmin) * deltaX,
+      y: coord.y - (coord.y - currentZoom.ymin) * deltaY
+    }
+
+    const new2 = {
+      x: coord.x + (currentZoom.xmax - coord.x) * deltaX,
+      y: coord.y + (currentZoom.ymax - coord.y) * deltaY
+    }
+    this.chartManager.zoom(new1, new2)
+  }
+
+  onmousemove = (evt, coord) => {
+    if (this.pressed) {
+      this.traceInterface.zoomBoxDraw(evt, this.pressed, this.divOffset)
+    }
+  }
+
+  touchstart (evt, coord) {
+    this.touchStarts = evt.touches
+    this.touchStartZoom = this.chartManager.getZoom()
+    this.touchStartWindow = this.chartManager.getWindowDimensions()
+  }
+
+  normalizeTouches (first, second) {
+    const minX = Math.min(first.clientX, second.clientX)
+    const minY = Math.min(first.clientY, second.clientY)
+    const maxX = Math.max(first.clientX, second.clientX)
+    const maxY = Math.max(first.clientY, second.clientY)
+    return {
+      lower: { x: minX, y: minY },
+      upper: { x: maxX, y: maxY }
+    }
+  }
+
+  touchmove (evt, coord) {
+    const xMultiplier = 1
+    const yMultiplier = 1
+
+    if (evt.touches.length === 2) {
+      const startPoints = this.normalizeTouches(this.touchStarts[0], this.touchStarts[1])
+      const currentPoints = this.normalizeTouches(evt.touches[0], evt.touches[1])
+
+      /* const startPoints = {
+        lower: { x: 800, y: 400 },
+        upper: { x: 1100, y: 800 }
+      }
+      const currentPoints = {
+        lower: { x: 800, y: 400 },
+        upper: { x: 1000, y: 800 }
+      } */
+
+      const xLength = this.touchStartWindow.right - this.touchStartWindow.left
+      const yLength = this.touchStartWindow.bottom - this.touchStartWindow.top
+
+      const deltaXlower = (startPoints.lower.x - currentPoints.lower.x) / xLength
+      const deltaYlower = (startPoints.lower.y - currentPoints.lower.y) / yLength
+      const deltaXupper = (startPoints.upper.x - currentPoints.upper.x) / xLength
+      const deltaYupper = (startPoints.upper.y - currentPoints.upper.y) / yLength
+
+      const originalZoom = this.touchStartZoom
+      const originaXLength = originalZoom.right - originalZoom.left
+      const originaYLength = originalZoom.bottom - originalZoom.top
+
+      const newLower = {
+        x: originalZoom.left + originaXLength * deltaXlower * xMultiplier,
+        y: originalZoom.bottom - originaYLength * deltaYupper * yMultiplier
+      }
+      const newUpper = {
+        x: originalZoom.right + originaXLength * deltaXupper * xMultiplier,
+        y: originalZoom.top - originaYLength * deltaYlower * yMultiplier
+      }
+
+      this.chartManager.zoom(newLower, newUpper)
+      console.log(newLower)
+    }
+  }
+
+  touchend (evt, coord) {
+    // console.log(coord)
+  }
+
+  touchcancel (evt, coord) {
+    // console.log(coord)
   }
 }

@@ -1,9 +1,12 @@
 /**
  * The ResultValueHandler is a class that tries to display step related
  * values and their limits in the graph. FinalTorque and FinalAngle are for
- * example useful to see in a graph
+ * example useful to see in a graph.
+ *
+ * This is not needed for displaying Traces.
+ *
  * All the decisions of how to display these values relies quite a bit from
- * guesswork and might be vendor specific
+ * guesswork and might be vendor specific.
  * @date 2/23/2024 - 12:21:19 PM
  *
  * @export
@@ -15,6 +18,7 @@ export default class ResultValueHandler {
     this.step = step
     this.values = values
     this.chartManager = chartManager
+    this.graphic = null
   }
 
   /* ///////////////////////////////// POINT MANAGEMENT ////////////////////////////////////////////
@@ -27,17 +31,12 @@ export default class ResultValueHandler {
    *
    * @param {*} color
    */
-  createPoints (color, displayOffset) {
+  createStepValues (graphic, color, displayOffset) {
+    this.graphic = graphic
     if (this.values) {
       for (const value of this.values) {
         const point = this.interpretPoint(value, displayOffset)
-        const datasets = this.createDatasets(value.Name, point, color)
-
-        this.step.setDataSet(value.ValueId, {
-          valueDataset: datasets.value,
-          limitsDataset: datasets.limits,
-          targetDataset: datasets.target
-        })
+        this.chartManager.createStepValue(value, point, color, this.graphic)
       }
     }
   }
@@ -48,18 +47,16 @@ export default class ResultValueHandler {
    * @date 2/23/2024 - 6:22:16 PM
    *
    * @param {*} displayOffset
-   * @param {*} limits
    */
-  calculatePoints (displayOffset, limits) {
+  calculatePoints (displayOffset) {
     for (const value of this.values) {
-      let show = !this.step.hidden
       if ((this.step.xDimensionName === 'angle' && parseInt(value.PhysicalQuantity) === 1) ||
         (this.step.xDimensionName === 'time' && parseInt(value.PhysicalQuantity) === 3) ||
         (!this.step.showValuesSelected)) {
-        show = false
+        this.graphic.hideValue(value)
       }
 
-      this.updatePoint(value, displayOffset, show, limits)
+      this.updatePoint(value, displayOffset)
     }
   }
 
@@ -69,19 +66,10 @@ export default class ResultValueHandler {
    *
    * @param {*} value
    * @param {*} displayOffset
-   * @param {*} show
-   * @param {*} limits
    */
-  updatePoint (value, displayOffset, show, limits) {
-    this.displayValuesAccordingToSettings(value, show, limits)
-
-    if (show) {
-      const points = this.interpretPoint(value, displayOffset)
-      const dataset = this.step.getDataSet(value.ValueId)
-      dataset.valueDataset.data = [points.value]
-      dataset.limitsDataset.data = points.limits
-      dataset.targetDataset.data = [points.target]
-    }
+  updatePoint (value, displayOffset) {
+    const points = this.interpretPoint(value, displayOffset)
+    this.graphic.updateValue(value, points)
   }
 
   /**
@@ -176,57 +164,6 @@ export default class ResultValueHandler {
       limits,
       value: value2,
       name: value.Name
-    }
-  }
-
-  createDatasets (name, points, color) {
-    const res = {}
-    function handleGroup (list, tag, chartManager) {
-      const dataset = chartManager.createDataset(name + tag)
-      dataset.show()
-      dataset.setBackgroundColor(color)
-      dataset.setBorderColor('gray')
-      dataset.setBorderWidth(1)
-      dataset.setRadius(3)
-      dataset.setPoints(list)
-      return dataset
-    }
-
-    res.value = handleGroup([points.value], '', this.chartManager)
-    res.limits = handleGroup(points.limits, '[limit]', this.chartManager)
-    res.target = handleGroup([points.target], '[target]', this.chartManager)
-
-    return res
-  }
-
-  hideValues () {
-    for (const value of this.values) {
-      this.hideValue(value)
-    }
-  }
-
-  hideValue (value) {
-    const dataset = this.step.getDataSet(value.ValueId)
-    dataset.valueDataset.hide()
-    dataset.limitsDataset.hide()
-    dataset.targetDataset.hide()
-  }
-
-  showValues (showValuesSelected, showLimitSelected) {
-    for (const value of this.values) {
-      this.displayValuesAccordingToSettings(value, showValuesSelected, showLimitSelected)
-    }
-  }
-
-  displayValuesAccordingToSettings (value, showValue, showLimits) {
-    this.hideValue(value)
-    if (showValue) {
-      const dataset = this.step.getDataSet(value.ValueId)
-      dataset.valueDataset.show()
-      if (showLimits) {
-        dataset.limitsDataset.show()
-        dataset.targetDataset.show()
-      }
     }
   }
 }

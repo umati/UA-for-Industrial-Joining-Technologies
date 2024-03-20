@@ -2,14 +2,14 @@
 import Step from './Step.mjs'
 
 export default class SingleTraceData {
-  constructor (result, owner, chartManager, identityCounter, colorFunction) {
+  constructor (result, owner, chartManager, identityCounter, colorFunction, displayOffset = 0) {
     this.chartManager = chartManager
     this.steps = []
     this.result = result
     this.resultId = result.ResultMetaData.ResultId
     // this.colorFunction = colorFunction
     this.trace = result?.ResultContent[0].Trace
-    this.displayOffset = 0
+    this.displayOffset = displayOffset
     this.owner = owner
     this.selected = false
     this.highLights = []
@@ -17,7 +17,7 @@ export default class SingleTraceData {
 
     for (const resultStep of this.trace.StepTraces) {
       const nr = this.steps.length
-      const newStep = new Step(resultStep, this, nr, this.chartManager, this.resultId, colorFunction())
+      const newStep = new Step(resultStep, this, nr, this.chartManager, this.resultId, colorFunction(), displayOffset)
       this.steps.push(newStep)
     }
   }
@@ -43,13 +43,6 @@ export default class SingleTraceData {
   get showLimitSelected () {
     return this.owner.showLimitSelected
   }
-
-  /*
-  initiate () {
-    for (const traceStep of this.steps) {
-      traceStep.initiate(this.result.resultId)
-    }
-  } */
 
   highLight () {
     this.deHighLight()

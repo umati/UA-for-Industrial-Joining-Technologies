@@ -1,14 +1,16 @@
 import '../../../node_modules/chart.js/dist/chart.umd.js'
-import Dataset from './Dataset.mjs'
+import Graphic from './Graphic.mjs'
 /**
  * Chartmanager should encapsulate all access to chart.js in order to
  * make it possible to exchange chart component with minimal effort
  */
 export default class ChartManager {
-  constructor (ctx, traceManager) {
-    this.context = ctx
+  constructor (traceManager) {
+    this.context = traceManager.traceInterface.canvas
     this.traceManager = traceManager
-    this.myChart = new Chart(ctx, { // eslint-disable-line
+    this.pressed = null
+    this.dummy = 0
+    this.myChart = new Chart(this.context, { // eslint-disable-line
       type: 'line',
       data: {
         datasets: []
@@ -35,21 +37,170 @@ export default class ChartManager {
       }
     })
 
-    const canvas = this.traceManager.traceInterface.canvas
-
-    canvas.onclick = (evt) => {
+    this.traceManager.traceInterface.canvasCoverLayer.addEventListener('mouseup', (evt) => {
       const points = this.myChart.getElementsAtEventForMode(evt,
         'nearest', { intersect: true }, true)
 
+      let resultId = null
+      let stepId = null
       if (points.length) {
         const firstPoint = points[0]
         const dataset = this.myChart.data.datasets[firstPoint.datasetIndex]
-        console.log(dataset.resultId)
-        console.log(dataset.stepId)
-        this.traceManager.clicked(dataset.resultId, dataset.stepId.value)
+        resultId = dataset.resultId
+        stepId = dataset.stepId
+        // this.traceManager.clicked(dataset.resultId, dataset.stepId.value)
       }
-      // use _datasetIndex and _index from each element of the activePoints array
+
+      this.traceManager.onclick(
+        evt,
+        this.pixelToValue(evt),
+        resultId,
+        stepId)
+    })
+
+    this.context.onmousedown = (evt) => {
+      this.traceManager.onmousedown(evt, this.pixelToValue(evt))
     }
+
+    this.context.addEventListener('mousemove', (evt) => {
+      evt.preventDefault()
+      this.traceManager.onmousemove(evt, this.pixelToValue(evt))
+    })
+
+    this.context.addEventListener('wheel', (evt) => {
+      evt.preventDefault()
+      this.traceManager.onmousewheel(evt, this.pixelToValue(evt))
+    })
+
+    /*
+    this.touchlistExtendWithCoordinates = (touches) => {
+      for (const touch of touches) {
+        // console.log('x :' + touch.clientX + ' y: ' + touch.clientY)
+        touch.coordinates = this.pixelToValue({ x: touch.clientX, y: touch.clientY })
+
+        console.log('x :' + touch.coordinates.x + ' y: ' + touch.coordinates.y)
+      }
+    } */
+
+    this.context.addEventListener('touchstart', (evt) => {
+      this.traceManager.touchstart(evt, this.pixelToValue(evt))
+    })
+
+    this.context.addEventListener('touchend', (evt) => {
+      this.traceManager.touchend(evt, this.pixelToValue(evt))
+    })
+
+    this.context.addEventListener('touchcancel', (evt) => {
+      this.traceManager.touchcancel(evt, this.pixelToValue(evt))
+    })
+
+    this.context.addEventListener('touchmove', (evt) => {
+      evt.preventDefault()
+      this.traceManager.touchmove(evt, this.pixelToValue(evt))
+    })
+  }
+
+  /**
+   * Takes a value {x: ?, y: ??} in the coordinate system and return
+   * its pixel position on the canvas
+   * @date 3/12/2024 - 1:28:39 PM
+   *
+   * @param {*} value a graph position object containing an x and a y value
+   * @returns {{ x: any; y: any; }} a pixel position on the canvas
+   */
+  valueToPixel (value) {
+    const axis = this.myChart.scales
+    return {
+      x: axis.x.getPixelForValue(value.x),
+      y: axis.y.getPixelForValue(value.y)
+    }
+  }
+
+  /**
+   * Takes a value {x: ?, y: ??} pixel position on the canvas and return
+   * its graph position object
+   * @date 3/12/2024 - 1:31:18 PM
+   *
+   * @param {*} pos a pixel position on the canvas
+   * @returns {{ x: any; y: any; }}  a graph position object
+   */
+  pixelToValue (pos) {
+    const canvasPosition = this.canvasPixelPosition(pos)
+    return {
+      x: this.myChart.scales?.x?.getValueForPixel(canvasPosition.x),
+      y: this.myChart.scales?.y?.getValueForPixel(canvasPosition.y)
+    }
+  }
+
+  canvasPixelPosition (pos) {
+    return Chart.helpers.getRelativePosition(pos, this.myChart) // eslint-disable-line
+  }
+
+  /**
+   * zoom in to an area given the coordinates in the graph
+   * @date 3/14/2024 - 11:05:19 AM
+   *
+   * @param {*} coord1 one corner position
+   * @param {*} coord2 the other corner position
+   */
+  zoom (coord1, coord2) {
+    const minX = Math.min(coord1.x, coord2.x)
+    const maxX = Math.max(coord1.x, coord2.x)
+    const minY = Math.min(coord1.y, coord2.y)
+    const maxY = Math.max(coord1.y, coord2.y)
+
+    const ticksX = this.myChart.config.options.scales.x
+    ticksX.min = minX
+    ticksX.max = maxX
+
+    const ticksY = this.myChart.config.options.scales.y
+    ticksY.min = minY
+    ticksY.max = maxY
+
+    this.myChart.scales.x.min = minX
+    this.myChart.scales.x.max = maxX
+    this.myChart.scales.y.min = minY
+    this.myChart.scales.y.max = maxY
+
+    console.log('heh 1 ' + this.myChart.scales.x.min)
+
+    if ((this.dummy++ % 10) === 0) {
+      this.myChart.update()
+    }
+  }
+
+  /**
+   * reset zoom
+   * @date 3/14/2024 - 11:06:11 AM
+   */
+  resetZoom () {
+    const ticks = this.myChart.config.options.scales.x
+    ticks.min = null
+    ticks.max = null
+
+    const ticksY = this.myChart.config.options.scales.y
+    ticksY.min = null
+    ticksY.max = null
+    this.myChart.update()
+  }
+
+  /**
+   * Return the corner positions of the currently shown part of the graph area
+   * @date 3/14/2024 - 11:06:37 AM
+   *
+   * @returns {{ xmin: any; xmax: any; ymin: any; ymax: any; }}
+   */
+  getZoom () {
+    return {
+      left: this.myChart.scales.x.min,
+      right: this.myChart.scales.x.max,
+      top: this.myChart.scales.y.min,
+      bottom: this.myChart.scales.y.max
+    }
+  }
+
+  getWindowDimensions () {
+    return this.myChart.chartArea
   }
 
   /**
@@ -64,10 +215,29 @@ export default class ChartManager {
    * @param {*} name
    * @returns
    */
-  createDataset (name) {
-    const dataset = new Dataset(name)
-    this.myChart.data.datasets.push(dataset)
-    return dataset
+  createGraphic (name, resultId, stepId, color) {
+    const graphic = new Graphic(name, resultId, stepId, color)
+    this.myChart.data.datasets.push(graphic.mainDataset)
+
+    this.myChart.data.datasets.push(graphic.highlightDataset)
+    return graphic
+  }
+
+  /**
+   * Create a step values graphical representation
+   * @date 3/5/2024 - 10:51:13 AM
+   *
+   * @param {*} value the step value
+   * @param {*} point the (x, y) position of the value
+   * @param {*} color the intended color
+   * @param {*} graphic the graphic representation of the step
+   */
+  createStepValue (value, points, color, graphic) {
+    const datasets = graphic.createStepValue(value, points, color)
+
+    this.myChart.data.datasets.push(datasets.valueDataset)
+    this.myChart.data.datasets.push(datasets.limitsDataset)
+    this.myChart.data.datasets.push(datasets.targetDataset)
   }
 
   /**
@@ -78,6 +248,17 @@ export default class ChartManager {
     this.myChart.data.datasets = this.myChart.data.datasets.filter((e) => {
       return selectedDataSets.indexOf(e) < 0
     })
+  }
+
+  /**
+   *  Remove some of the datasets from the drawing area
+   * @param {*} selectedDataSets
+   */
+  filterOutGraphic (graphic) {
+    this.filterOut([graphic.mainDataset, graphic.highlightDataset])
+    for (const value of Object.values(graphic.datasetMapping)) {
+      this.filterOut([value.valueDataset, value.targetDataset, value.limitsDataset])
+    }
   }
 
   /**

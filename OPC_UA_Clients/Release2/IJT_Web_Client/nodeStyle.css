@@ -59,11 +59,6 @@ canvas {
   margin: 0px 0px 40px 0px;
 }
 
-/*
-li>li {
-  margin: 5px 0px; 
-} */
-
 #messages>li:nth-child(odd) {
   background-color: rgba(62, 73, 82, 0.9);
 }
@@ -89,19 +84,24 @@ li>li {
   }
 }
 
-/*
-  .total {
-    height:95%;
-  }*/
-
 .startScreen {
   height: 97vh;
-  /* border:  2px solid red; */
   left: 0px;
   right: 0px;
   background-color: rgba(52, 63, 72, 0.9);
   ;
   width: 99vw;
+}
+
+.zoomwindow {
+  position: absolute;
+  pointer-events: none;
+  left: 50px;
+  right: 50px;
+  top: 50px;
+  height: 150px;
+  background-color: rgba(0, 255, 0, 0.3);
+  border: 1px solid green
 }
 
 .tabGeneratorBase {
@@ -110,25 +110,18 @@ li>li {
 }
 
 .basescreen {
-  /* display: block; */
   flex-direction: column;
   /* default value; can be omitted */
   justify-content: space-between;
   font-weight: lighter;
   color: yellow;
-  /* switched from default (flex-start, see below) */
-  /* height: 100%; */
-  /* max-height: 100%; */
-  /* border: 2px solid green; */
   min-height: 100%;
-  /* background-color: yellow; */
 }
 
 .columns {
   display: flex;
   flex-direction: row;
   color: black;
-  /* height: 100%; */
 }
 
 .tabSelect {
@@ -527,6 +520,7 @@ html {
   margin: 5px;
   overflow: hidden;
   height: 60vh;
+  position:relative; 
 }
 
 #myChart {

@@ -2,7 +2,7 @@
 import ResultValueHandler from './ResultValueHandler.mjs'
 
 export default class Step {
-  constructor (step, owner, nr, chartManager, resultId, color) {
+  constructor (step, owner, nr, chartManager, resultId, color, displayOffset) {
     this.name = step.StepResultId.link.Name
     this.stepId = step.StepResultId
     this.resultId = resultId
@@ -14,9 +14,8 @@ export default class Step {
     this.angle = null
     this.hidden = false
     this.last = {}
-    this.datasetMapping = {}
     this.startTimeOffset = step.StartTimeOffset
-    this.dataset = []
+    this.graphic = []
     this.owner = owner
     this.resultValueHandler = new ResultValueHandler(this, step.StepResultId.link.StepResultValues, chartManager)
 
@@ -41,18 +40,11 @@ export default class Step {
       this.time = Array.from(Array(this.torque.length), (_, x) => parseFloat(step.SamplingInterval * x / 1000))
     }
 
-    const dataset = chartManager.createDataset(this.name)
+    this.graphic = chartManager.createGraphic(this.name, this.resultId, this.stepId, this.color)
+    this.graphic.display(!this.hidden, !this.hidden && this.showValuesSelected, !this.hidden && this.showLimitSelected)
 
-    dataset.show()
-    dataset.setResultId(this.resultId)
-    dataset.setStepId(this.stepId)
-    dataset.setBackgroundColor(this.color)
-    dataset.setBorderColor(this.color)
-    dataset.setBorderWidth(1)
-
-    this.dataset = dataset
-    this.calculateData(0)
-    this.resultValueHandler.createPoints(this.color, 0)
+    this.calculateData(displayOffset)
+    this.resultValueHandler.createStepValues(this.graphic, this.color, displayOffset)
     this.resultValueHandler.calculatePoints(0, this.showLimitSelected)
   }
 
@@ -93,8 +85,9 @@ export default class Step {
       const startTimeOffset = parseFloat(this.startTimeOffset)
       xValues = xValues.map((x) => { return x + startTimeOffset })
     }
-    this.dataset.data = []
-    if (xValues.length !== yValues.length) {
+    this.graphic.clearPoints()
+
+    if (xValues.length !== yValues.length) { // Error handling
       if (!this.name) {
         this.name = 'number ' + this.nr
       }
@@ -102,8 +95,9 @@ export default class Step {
       ' there are not the same number of trace sample points in the ' + this.xDimensionName +
       ' and ' + this.yDimensionName + ' lists')
     }
+
     for (let i = 0; i < xValues.length; i++) {
-      this.dataset.data.push({
+      this.graphic.addPoint({
         x: xValues[i] - displayOffset,
         y: parseFloat(yValues[i])
       })
@@ -111,9 +105,6 @@ export default class Step {
 
     this.last.x = xValues[xValues.length - 1]
     this.last.y = yValues[yValues.length - 1]
-    if (this.highLightDataset) {
-      this.highLightDataset.data = this.dataset.data
-    }
   }
 
   /**
@@ -121,8 +112,9 @@ export default class Step {
    * @param {*} offset
    */
   refresh (offset) {
-    this.calculateData(offset)
-    this.resultValueHandler.calculatePoints(offset, this.showLimitSelected)
+    this.graphic.display(!this.hidden, !this.hidden && this.showValuesSelected, !this.hidden && this.showLimitSelected)
+    this.calculateData(offset) // Trace
+    this.resultValueHandler.calculatePoints(offset) // Step values
   }
 
   /// ////////////////////////////////////////////////////
@@ -132,54 +124,24 @@ export default class Step {
   /// ////////////////////////////////////////////////////
 
   delete () {
-    for (const value of Object.values(this.datasetMapping)) {
-      this.chartManager.filterOut([value.valueDataset, value.targetDataset, value.limitsDataset])
-    }
-    this.chartManager.filterOut([this.highLightDataset, this.dataset])
+    // this.resultValueHandler.deleteValues()
+    this.chartManager.filterOutGraphic(this.graphic)
   }
 
   select () {
-    this.dataset.select()
+    this.graphic.select()
   }
 
   deselect () {
-    this.dataset.deselect()
+    this.graphic.deselect()
   }
 
   highLight () {
-    if (!this.highLightDataset) {
-      this.highLightDataset = this.chartManager.createDataset('highlight')
-      const color = 'rgba( 255, 255, 180, 0.4 )'
-      this.highLightDataset.setBackgroundColor(color)
-      this.highLightDataset.setBorderColor(color)
-      this.highLightDataset.setBorderWidth(5)
-    }
-    this.highLightDataset.setPoints(this.dataset.data)
-    if (this.hidden) {
-      this.highLightDataset.hide()
-    } else {
-      this.highLightDataset.show()
-    }
+
   }
 
   deHighLight () {
-    if (this.highLightDataset) {
-      this.highLightDataset.hide()
-    }
-  }
 
-  createHighlightDataset () {
-    if (this.hidden) {
-      return
-    }
-    const dataset = this.chartManager.createDataset('highlight')
-    dataset.show()
-    const color = 'rgba( 255, 255, 180, 0.4 )'
-    dataset.setBackgroundColor(color)
-    dataset.setBorderColor(color)
-    dataset.setBorderWidth(5)
-    dataset.setPoints(this.dataset.data)
-    return dataset
   }
 
   /// //////////////////////////////////////////////////////////////////////
@@ -189,22 +151,13 @@ export default class Step {
   /// //////////////////////////////////////////////////////////////////////
 
   hideStepTrace () {
-    this.dataset.hide() // Hide the trace curve
     this.hidden = true
-    this.resultValueHandler.hideValues() // Hide the reported step values
+    this.graphic.display(!this.hidden, false, false) // Hide the trace curve
+    // this.resultValueHandler.hideValues() // Hide the reported step values
   }
 
   showStepTrace () {
-    this.dataset.show() // Show the trace curve
     this.hidden = false
-    this.resultValueHandler.showValues(this.showValuesSelected, this.showLimitSelected) // Show the reported step values
-  }
-
-  getDataSet (valueId) {
-    return this.datasetMapping[valueId]
-  }
-
-  setDataSet (valueId, content) {
-    this.datasetMapping[valueId] = content
+    this.graphic.display(!this.hidden, this.showValuesSelected, this.showLimitSelected) // Show the trace curve
   }
 }

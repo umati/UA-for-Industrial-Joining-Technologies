@@ -2,10 +2,35 @@ export default class TraceInterface {
   constructor (container) {
     this.generateHTML(container)
     this.resetColor()
+    this.zoomBox = null
   }
 
   setTraceSelectEventListener (evtHandler) {
     this.selectTraceEventHandler = evtHandler
+  }
+
+  zoomBoxDraw (pos1, pos2, offset) {
+    if (!pos1 || !pos2) {
+      if (this.zoomBox) {
+        this.canvasCoverLayer.removeChild(this.zoomBox)
+        this.zoomBox = null
+      }
+      return
+    }
+    if (!this.zoomBox) {
+      this.zoomBox = document.createElement('div')
+      this.zoomBox.classList.add('zoomwindow')
+      this.canvasCoverLayer.appendChild(this.zoomBox)
+    }
+    const left = Math.min(pos1.clientX, pos2.clientX)
+    const right = Math.max(pos1.clientX, pos2.clientX)
+    const top = Math.min(pos1.clientY, pos2.clientY)
+    const bottom = Math.max(pos1.clientY, pos2.clientY)
+
+    this.zoomBox.style.left = left - offset.x + 'px'
+    this.zoomBox.style.top = top - offset.y + 'px'
+    this.zoomBox.style.width = right - left + 'px'
+    this.zoomBox.style.height = bottom - top + 'px'
   }
 
   updateTracesInGUI (allTraces) {
@@ -92,6 +117,7 @@ export default class TraceInterface {
       content.classList.add('kvValue')
       content.appendChild(right)
       outer.appendChild(content)
+
       return outer
     }
 
@@ -114,7 +140,6 @@ export default class TraceInterface {
 
     const backGround = document.createElement('div')
     backGround.classList.add('myInfoArea')
-    backGround.classList.add('traceArea')
     container.appendChild(backGround)
 
     const title = document.createElement('div')
@@ -122,9 +147,13 @@ export default class TraceInterface {
     title.innerText = 'Trace'
     backGround.appendChild(title)
 
+    this.canvasCoverLayer = document.createElement('div')
+    this.canvasCoverLayer.classList.add('traceArea')
+    backGround.appendChild(this.canvasCoverLayer)
+
     this.canvas = document.createElement('canvas')
     this.canvas.setAttribute('id', 'myChart')
-    backGround.appendChild(this.canvas)
+    this.canvasCoverLayer.appendChild(this.canvas)
 
     const interfaceArea = document.createElement('div')
     interfaceArea.classList.add('traceButtonArea')
@@ -145,11 +174,6 @@ export default class TraceInterface {
 
     this.stepDiv = document.createElement('div')
     trace.appendChild(this.stepDiv)
-
-    /* this.zoomButton = document.createElement('button')
-    this.zoomButton.classList.add('myButton')
-    this.zoomButton.innerText = 'Zoom'
-    trace.appendChild(this.zoomButton) */
 
     const view = document.createElement('div')
     view.classList.add('myInfoArea')

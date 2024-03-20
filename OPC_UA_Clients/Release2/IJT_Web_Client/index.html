@@ -58,25 +58,6 @@
 
       const servers = new ServerGraphics(webSocketManager, tabGenerator)
       tabGenerator.generateTab(servers)
-
-      
-
-      // webSocketManager.send('connect to', 'opc.tcp://127.0.0.1:40451')
-      /*
-      webSocketManager.subscribe('opc.tcp://127.0.0.1:40451', 'read', (content,uniqueid) => {
-        console.log('content ' + content)
-        console.log('uniqueid' + uniqueid)
-      })
-
-      webSocketManager.subscribe('opc.tcp://127.0.0.1:40451', 'connection established', (content, uniqueid) => {
-        console.log('content ' + content)
-        console.log('uniqueid' + uniqueid)
-  
-        webSocketManager.send('read', 'opc.tcp://127.0.0.1:40451', 5, {
-        "nodeid": "ns=1;s=/ObjectsFolder/TighteningSystem"
-      })
-      })
-      */
     }
 
     // Establish a websocket to the webserver
