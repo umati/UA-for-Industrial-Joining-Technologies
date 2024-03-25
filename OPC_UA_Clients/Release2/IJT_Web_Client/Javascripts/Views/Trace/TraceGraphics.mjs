@@ -314,7 +314,7 @@ export default class TraceGraphics extends BasicScreen {
     if (resultId !== this.selectedTrace.resultId) {
       this.selectTrace(this.findTrace(resultId))
     } else {
-      this.selectStep(stepId)
+      this.selectStep(stepId.value)
     }
   }
 
@@ -369,8 +369,16 @@ export default class TraceGraphics extends BasicScreen {
     if (resultId) {
       this.clicked(resultId, stepId)
     } else if (this.pressed) {
-      this.chartManager.zoom(this.startZoomCoord, coord)
-      // this.zoom(Math.min(down.x, up.x), Math.max(down.x, up.x))
+      const originalZoom = this.chartManager.getZoom()
+      const originaXLength = originalZoom.right - originalZoom.left
+      const originaYLength = originalZoom.bottom - originalZoom.top
+
+      const amountOfXChange = Math.abs(this.startZoomCoord.x - coord.x) / originaXLength
+      const amountOfYChange = Math.abs(this.startZoomCoord.y - coord.y) / originaYLength
+
+      if (amountOfXChange > 0.005 && amountOfYChange > 0.005) { // prevent single click zoom
+        this.chartManager.zoom(this.startZoomCoord, coord)
+      }
     }
     this.traceInterface.zoomBoxDraw(null, null)
     this.pressed = null
@@ -386,8 +394,6 @@ export default class TraceGraphics extends BasicScreen {
         }
         this.startZoomCoord = coord
         this.pressed = evt
-        // this.traceInterface.zoomBox(evt, coord)
-
         break
       default:
         this.chartManager.resetZoom()
@@ -395,15 +401,16 @@ export default class TraceGraphics extends BasicScreen {
   }
 
   onmousewheel = (evt, coord) => {
-    const sensitivity = 500
-    const deltaY = (evt.deltaY / sensitivity) + 1
-    let deltaX
+    const sensitivityWheel = 500
+    const sensitivityPad = 100
 
-    if (evt.button === 0) {
-      deltaX = deltaY
-    } else {
-      deltaX = (evt.deltaX / sensitivity) + 1
+    let deltaY = (evt.deltaY / sensitivityWheel) + 1
+
+    if (evt.ctrlKey) { // Only way to differentiate between touchpad and mousewheel???
+      deltaY = (evt.deltaY / sensitivityPad) + 1
     }
+
+    const deltaX = deltaY
 
     if ((deltaX < 0.5) || (deltaX > 2) || (deltaY < 0.5) || (deltaY > 2)) {
       return // Ignore random very large zooms
@@ -412,13 +419,13 @@ export default class TraceGraphics extends BasicScreen {
     const currentZoom = this.chartManager.getZoom()
 
     const new1 = {
-      x: coord.x - (coord.x - currentZoom.xmin) * deltaX,
-      y: coord.y - (coord.y - currentZoom.ymin) * deltaY
+      x: coord.x - (coord.x - currentZoom.left) * deltaX,
+      y: coord.y - (coord.y - currentZoom.top) * deltaY
     }
 
     const new2 = {
-      x: coord.x + (currentZoom.xmax - coord.x) * deltaX,
-      y: coord.y + (currentZoom.ymax - coord.y) * deltaY
+      x: coord.x + (currentZoom.right - coord.x) * deltaX,
+      y: coord.y + (currentZoom.bottom - coord.y) * deltaY
     }
     this.chartManager.zoom(new1, new2)
   }
@@ -454,15 +461,6 @@ export default class TraceGraphics extends BasicScreen {
       const startPoints = this.normalizeTouches(this.touchStarts[0], this.touchStarts[1])
       const currentPoints = this.normalizeTouches(evt.touches[0], evt.touches[1])
 
-      /* const startPoints = {
-        lower: { x: 800, y: 400 },
-        upper: { x: 1100, y: 800 }
-      }
-      const currentPoints = {
-        lower: { x: 800, y: 400 },
-        upper: { x: 1000, y: 800 }
-      } */
-
       const xLength = this.touchStartWindow.right - this.touchStartWindow.left
       const yLength = this.touchStartWindow.bottom - this.touchStartWindow.top
 
@@ -477,15 +475,14 @@ export default class TraceGraphics extends BasicScreen {
 
       const newLower = {
         x: originalZoom.left + originaXLength * deltaXlower * xMultiplier,
-        y: originalZoom.bottom - originaYLength * deltaYupper * yMultiplier
+        y: originalZoom.bottom - originaYLength * deltaYlower * yMultiplier
       }
       const newUpper = {
         x: originalZoom.right + originaXLength * deltaXupper * xMultiplier,
-        y: originalZoom.top - originaYLength * deltaYlower * yMultiplier
+        y: originalZoom.top - originaYLength * deltaYupper * yMultiplier
       }
 
       this.chartManager.zoom(newLower, newUpper)
-      console.log(newLower)
     }
   }
 

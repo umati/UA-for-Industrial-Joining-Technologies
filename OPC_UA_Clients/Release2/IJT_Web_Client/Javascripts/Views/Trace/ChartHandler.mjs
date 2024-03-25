@@ -8,6 +8,7 @@ export default class ChartManager {
   constructor (traceManager) {
     this.context = traceManager.traceInterface.canvas
     this.traceManager = traceManager
+    this.lastTimeZoom = window.performance.now()
     this.pressed = null
     this.dummy = 0
     this.myChart = new Chart(this.context, { // eslint-disable-line
@@ -162,9 +163,10 @@ export default class ChartManager {
     this.myChart.scales.y.min = minY
     this.myChart.scales.y.max = maxY
 
-    console.log('heh 1 ' + this.myChart.scales.x.min)
+    // console.log('heh 1 ' + this.myChart.scales.x.min)
 
-    if ((this.dummy++ % 10) === 0) {
+    if (window.performance.now() - this.lastTimeZoom > 100) {
+      this.lastTimeZoom = window.performance.now()
       this.myChart.update()
     }
   }
