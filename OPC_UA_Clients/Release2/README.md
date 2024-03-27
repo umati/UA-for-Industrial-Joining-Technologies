@@ -49,8 +49,8 @@ This application uses the open source OPC UA ASYNCUA Stack. The purpose of this 
      pip install live-server
 
      live-server --port=8000
-6. The above commands will start the socket.io server at `http://localhost:3000`
-7. Open the `http://localhost:3000` in the browser and start using the client.
+6. The above commands will start the socket.io server at `http://localhost:8000`
+7. Open the `http://localhost:8000` in the browser and start using the client.
 
 ## OPC UA Server
 
