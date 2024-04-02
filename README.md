@@ -17,7 +17,7 @@ https://reference.opcfoundation.org/nodesets?u=http://opcfoundation.org/UA/IJT/T
 
 The **Joining** **Specification** **(OPC 40450)** is the **Base** part for the joining technologies.
 
-- OPC UA **Reference** Client and Server based on OPC **40450-1** UA CS for **Joining** Systems 1.00.0 **RC** and OPC **40451-1** UA CS for **Tightening** Systems **2.00.0** **RC** are available in the following location:
+- OPC UA **Reference** Client and Server based on OPC **40450-1** UA CS for **Joining** Systems 1.00.0 and OPC **40451-1** UA CS for **Tightening** Systems **2.00.0** are available in the following location:
 
     * **Server:** OPC_UA_Servers/**Release2**/**OPC_UA_IJT_Server_Simulator.zip**
     * **Client:** OPC_UA_Clients/**Release2**/**IJT_Web_Client**
@@ -27,5 +27,6 @@ The **Joining** **Specification** **(OPC 40450)** is the **Base** part for the j
    * **Server:** OPC_UA_Servers/**Release1**/**IJT_OPC_UA_Server_Simulator.zip**
    * **Client:** OPC_UA_Clients/**Release1**/**NodeOPCUA_IJTClient**
 
+For any **questions/feedback/issues** related to the above simulators, you can contact **mohit.agarwal@atlascopco.com**
 
 
