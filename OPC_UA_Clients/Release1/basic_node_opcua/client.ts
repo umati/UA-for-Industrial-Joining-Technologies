@@ -68,7 +68,7 @@ async function main() {
             });
 
             if (resultReferences.statusCode !== StatusCodes.Good || !resultReferences.references) {
-                throw new Error('Couldn't browse node ' + nodeId.toString());
+                throw new Error("Couldn't browse node " + nodeId.toString());
             }
            
             // only keep references that are of type ResultType
