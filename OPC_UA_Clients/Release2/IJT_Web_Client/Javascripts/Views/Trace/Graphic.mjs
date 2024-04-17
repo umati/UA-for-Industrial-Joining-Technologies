@@ -20,11 +20,12 @@ export default class Graphic {
     this.mainDataset.setBorderWidth(1)
 
     // The look of highlighting of trace
+    /*
     this.highlightDataset = new Dataset(name + '_highlight')
     const highlightColor = 'rgba( 255, 255, 180, 0.4 )'
     this.highlightDataset.setBackgroundColor(highlightColor)
     this.highlightDataset.setBorderColor(highlightColor)
-    this.highlightDataset.setBorderWidth(5)
+    this.highlightDataset.setBorderWidth(5) */
 
     this.datasetMapping = {}
   }
@@ -62,17 +63,17 @@ export default class Graphic {
 
   clearPoints () {
     this.mainDataset.clearPoints()
-    this.highlightDataset.clearPoints()
+    // this.highlightDataset.clearPoints()
   }
 
   setPoints (points) {
     this.mainDataset.setPoints(points)
-    this.highlightDataset.setPoints(points)
+    // this.highlightDataset.setPoints(points)
   }
 
   addPoint (point) {
     this.mainDataset.addPoint(point)
-    this.highlightDataset.addPoint(point)
+    // this.highlightDataset.addPoint(point)
   }
 
   updateValue (value, point) {
@@ -92,7 +93,7 @@ export default class Graphic {
    */
   display (showTrace = true, showValue = false, showLimits = false) {
     this.mainDataset.display(showTrace)
-    this.highlightDataset.display(showTrace)
+    // this.highlightDataset.display(showTrace)
     for (const value of Object.values(this.datasetMapping)) {
       value.valueDataset.display(showValue)
       value.targetDataset.display(showLimits)

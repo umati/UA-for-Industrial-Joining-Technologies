@@ -84,21 +84,38 @@ export default class ChartManager {
     } */
 
     this.context.addEventListener('touchstart', (evt) => {
-      this.traceManager.touchstart(evt, this.pixelToValue(evt))
+      // console.log('x: ' + Math.round(evt.touches[0].clientY))
+      // console.log('y1: ' + Math.round(newPos.offsetX))
+      for (const touch of evt.touches) {
+        touch.internalCoordinates = this.pixelToValue(touch)
+      }
+      this.traceManager.touchstart(evt, this.pixelToValue(evt), this.getTouchOffset())
     })
 
     this.context.addEventListener('touchend', (evt) => {
-      this.traceManager.touchend(evt, this.pixelToValue(evt))
+      this.traceManager.touchend(evt, this.pixelToValue(evt), this.getTouchOffset())
     })
 
     this.context.addEventListener('touchcancel', (evt) => {
-      this.traceManager.touchcancel(evt, this.pixelToValue(evt))
+      this.traceManager.touchcancel(evt, this.pixelToValue(evt), this.getTouchOffset())
     })
 
+    // this.context.style.border = '2px solid red'
     this.context.addEventListener('touchmove', (evt) => {
       evt.preventDefault()
-      this.traceManager.touchmove(evt, this.pixelToValue(evt))
+      for (const touch of evt.touches) {
+        touch.internalCoordinates = this.pixelToValue(touch)
+      }
+      this.traceManager.touchmove(evt, this.pixelToValue(evt), this.getTouchOffset())
     })
+  }
+
+  getTouchOffset () {
+    const offsets = this.context.getBoundingClientRect()
+    return {
+      x: offsets.left + this.myChart.chartArea.left,
+      y: offsets.top + this.myChart.chartArea.top
+    }
   }
 
   /**
@@ -221,7 +238,7 @@ export default class ChartManager {
     const graphic = new Graphic(name, resultId, stepId, color)
     this.myChart.data.datasets.push(graphic.mainDataset)
 
-    this.myChart.data.datasets.push(graphic.highlightDataset)
+    // this.myChart.data.datasets.push(graphic.highlightDataset)
     return graphic
   }
 

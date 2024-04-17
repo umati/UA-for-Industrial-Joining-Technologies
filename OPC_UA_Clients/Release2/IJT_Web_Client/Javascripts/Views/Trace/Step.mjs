@@ -136,13 +136,14 @@ export default class Step {
     this.graphic.deselect()
   }
 
+  /*
   highLight () {
 
   }
 
   deHighLight () {
 
-  }
+  } */
 
   /// //////////////////////////////////////////////////////////////////////
   //                                                                     //

@@ -44,6 +44,7 @@ export default class SingleTraceData {
     return this.owner.showLimitSelected
   }
 
+  /*
   highLight () {
     this.deHighLight()
     for (const traceStep of this.steps) {
@@ -55,16 +56,16 @@ export default class SingleTraceData {
     for (const traceStep of this.steps) {
       traceStep.deHighLight()
     }
-  }
+  } */
 
   select () {
     this.selected = true
-    this.highLight()
+    // this.highLight()
   }
 
   deselect () {
     this.selected = false
-    this.deHighLight()
+    // this.deHighLight()
     for (const traceStep of this.steps) {
       traceStep.deselect()
     }
