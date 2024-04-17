@@ -40,17 +40,17 @@ This application uses the open source OPC UA ASYNCUA Stack. The purpose of this 
 
 1. **Open** the Python Virtual Environment:
 
-     & "<Path>/OPC_UA_Clients/Release2/NodeOPCUA_IJT_Client/venv/Scripts/Activate.ps1"
-3. **Start** Python Server using the following command:
+     & "<Path>/IJT_Web_Client/venv/Scripts/Activate.ps1"
+3. **Start** Python Server using the following command inside the virtual environment:
 
      py index.py or python index.py
-4. **Start** live server to present the webpage and reload when files are updated. Run the following command from a separate terminal:
-
-     pip install live-server
-
-     live-server --port=8000
-6. The above commands will start the socket.io server at `http://localhost:3000`
-7. Open the `http://localhost:3000` in the browser and start using the client.
+4. **Launch** a new terminal from the working directory: **IJT_Web_Client**. Run the following command:
+   
+     **npx serve**
+    
+6. **Open** the URL listed after running the above command in the browser. The port number might be different which will be available in the terminal output. **Example:** `http://localhost:3000`
+7. **Start** using the client from the browser.
+8. **Note:** Any live-server or http-server can be used to publish the HTML content to the browser. npx serve is one of the possible options.
 
 ## OPC UA Server
 
