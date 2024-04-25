@@ -119,7 +119,9 @@ export default class USDemo extends BasicScreen {
     this.propertyView = new PropertyView(
       ['result.ResultMetaData.Name',
         'result.ResultMetaData.ResultEvaluationCode',
-        'result.ResultMetaData.CreationTime'],
+        'result.ResultMetaData.CreationTime',
+        'result.ResultMetaData.SequenceNumber',
+        'result.ResultMetaData.ResultId'],
       infoArea,
       this.resultManager)
 
