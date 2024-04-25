@@ -4,6 +4,6 @@ import ResultDataType from './ResultDataType.mjs'
 export default class BatchDataModel extends ResultDataType {
   constructor (parameters, modelManager, castMapping) {
     super(parameters, modelManager, castMapping)
-    this.aaaa = 'Batch'
+    this.consolidatedResultType = 'Batch'
   }
 }

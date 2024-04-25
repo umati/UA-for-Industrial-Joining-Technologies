@@ -1,5 +1,48 @@
-export default class TraceInterface {
+export class TraceInterface {
   constructor (container) {
+    this.resetColor()
+  }
+
+  getRandomColor () {
+    if (this.lightness < 0) {
+      this.resetColor()
+    }
+    return 'hsl(' + (this.hue += 108) + ', 100%, ' + (this.lightness -= 1) + '%)'
+  }
+
+  resetColor () {
+    this.hue = 0
+    this.saturation = 100
+    this.lightness = 40
+  }
+
+  zoomBoxDraw (evt, pressed, divOffset) {
+
+  }
+
+  selectStep (selectedStep) {
+
+  }
+
+  clearSteps () {
+
+  }
+
+  selectTrace (resultId) {
+
+  }
+
+  addStepInGUI (step, stepIdValue) {
+
+  }
+
+  updateTracesInGUI (allTraces) {
+
+  }
+}
+export class ButtonTraceInterface extends TraceInterface {
+  constructor (container) {
+    super()
     this.generateHTML(container)
     this.resetColor()
     this.zoomBox = null
@@ -9,6 +52,7 @@ export default class TraceInterface {
     this.selectTraceEventHandler = evtHandler
   }
 
+  /*
   zoomBoxDraw (pos1, pos2, offset) {
     if (!pos1 || !pos2) {
       if (this.zoomBox) {
@@ -31,7 +75,7 @@ export default class TraceInterface {
     this.zoomBox.style.top = top - offset.y + 'px'
     this.zoomBox.style.width = right - left + 'px'
     this.zoomBox.style.height = bottom - top + 'px'
-  }
+  } */
 
   updateTracesInGUI (allTraces) {
     this.traceDiv.innerHTML = ''
@@ -86,19 +130,6 @@ export default class TraceInterface {
     }
   }
 
-  resetColor () {
-    this.hue = 0
-    this.saturation = 100
-    this.lightness = 40
-  }
-
-  getRandomColor () {
-    if (this.lightness < 0) {
-      this.resetColor()
-    }
-    return 'hsl(' + (this.hue += 108) + ', 100%, ' + (this.lightness -= 1) + '%)'
-  }
-
   generateHTML (container) {
     function createHeader (container, name) {
       const header = document.createElement('div')
@@ -147,13 +178,8 @@ export default class TraceInterface {
     title.innerText = 'Trace'
     backGround.appendChild(title)
 
-    this.canvasCoverLayer = document.createElement('div')
-    this.canvasCoverLayer.classList.add('traceArea')
-    backGround.appendChild(this.canvasCoverLayer)
-
-    this.canvas = document.createElement('canvas')
-    this.canvas.setAttribute('id', 'myChart')
-    this.canvasCoverLayer.appendChild(this.canvas)
+    this.traceArea = document.createElement('div') // This is where the trace graphics will do
+    backGround.appendChild(this.traceArea)
 
     const interfaceArea = document.createElement('div')
     interfaceArea.classList.add('traceButtonArea')

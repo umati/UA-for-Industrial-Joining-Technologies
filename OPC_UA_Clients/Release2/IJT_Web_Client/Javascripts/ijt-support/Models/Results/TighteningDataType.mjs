@@ -19,7 +19,7 @@ export default class TighteningDataType extends ResultDataType {
     }
     super(simplifiedParameters, modelManager, castMapping)
 
-    this.aaaa = 'Joining'
+    this.consolidatedResultType = 'Joining'
 
     if (this.ResultContent[0]?.Trace) {
       this.ResultContent[0].Trace.createConnections(this)
@@ -36,5 +36,20 @@ export default class TighteningDataType extends ResultDataType {
       }
     }
     // throw new Error('Could not find stepResult with Id: '+Id);
+  }
+
+  getTaggedValues (tag) {
+    if (!this.ResultContent[0].StepResults || this.ResultContent[0].StepResults.length < 1) {
+      throw new Error('Could not find stepResults, when looking for tag')
+    }
+    const listOfValues = []
+    for (const step of this.ResultContent[0].StepResults) {
+      for (const stepvalue of step.StepResultValues) {
+        if (parseInt(stepvalue.ValueTag) === parseInt(tag)) {
+          listOfValues.push(stepvalue)
+        }
+      }
+    }
+    return listOfValues
   }
 }

@@ -5,13 +5,14 @@ import Graphic from './Graphic.mjs'
  * make it possible to exchange chart component with minimal effort
  */
 export default class ChartManager {
-  constructor (traceManager) {
-    this.context = traceManager.traceInterface.canvas
+  constructor (traceManager, context) {
+    this.traceManager = traceManager
+    this.context = context
     this.traceManager = traceManager
     this.lastTimeZoom = window.performance.now()
     this.pressed = null
     this.dummy = 0
-    this.myChart = new Chart(this.context, { // eslint-disable-line
+    this.myChart = new Chart(context, { // eslint-disable-line
       type: 'line',
       data: {
         datasets: []
@@ -38,6 +39,7 @@ export default class ChartManager {
       }
     })
 
+    /*
     this.traceManager.traceInterface.canvasCoverLayer.addEventListener('mouseup', (evt) => {
       const points = this.myChart.getElementsAtEventForMode(evt,
         'nearest', { intersect: true }, true)
@@ -57,7 +59,7 @@ export default class ChartManager {
         this.pixelToValue(evt),
         resultId,
         stepId)
-    })
+    }) */
 
     this.context.onmousedown = (evt) => {
       this.traceManager.onmousedown(evt, this.pixelToValue(evt))

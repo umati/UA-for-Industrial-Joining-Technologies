@@ -15,6 +15,7 @@ import TraceGraphics from 'views/Trace/TraceGraphics.mjs'
 import AddressSpaceGraphics from 'views/AddressSpace/AddressSpaceGraphics.mjs'
 import EventGraphics from 'views/Events/EventGraphics.mjs'
 import MethodGraphics from 'views/Methods/MethodGraphics.mjs'
+import USDemo from 'views/Demo/USDemo.mjs'
 import AssetGraphics from 'views/Assets/AssetGraphics.mjs'
 import ConnectionGraphics from 'views/Connection/ConnectionGraphics.mjs'
 import ResultGraphics from 'views/ComplexResult/ResultGraphics.mjs'
@@ -70,6 +71,9 @@ export default class EndpointGraphics extends BasicScreen {
     const methodManager = new MethodManager(addressSpace)
     const methodGraphics = new MethodGraphics(methodManager, addressSpace)
     tabGenerator.generateTab(methodGraphics)
+
+    const demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager)
+    tabGenerator.generateTab(demoGraphics)
 
     const resultGraphics = new ResultGraphics(resultManager)
     tabGenerator.generateTab(resultGraphics)

@@ -21,6 +21,7 @@ export class MethodManager {
 
           this.methodObject = {}
           Promise.all(methodPromises).then((methodList) => {
+            this.addressSpace.connectionManager.trigger('methods', true)
             resolve()
           })
         })

@@ -85,12 +85,10 @@ canvas {
 }
 
 .startScreen {
-  height: 97vh;
-  left: 0px;
-  right: 0px;
+  height: 100vh;
   background-color: rgba(52, 63, 72, 0.9);
-  ;
-  width: 99vw;
+  width: 100%;
+  /*overflow:hidden;*/
 }
 
 .zoomwindow {
@@ -107,6 +105,8 @@ canvas {
 .tabGeneratorBase {
   /* display: flex; */
   flex-direction: column;
+  height:100%;
+  width:100%
 }
 
 .basescreen {
@@ -115,17 +115,19 @@ canvas {
   justify-content: space-between;
   font-weight: lighter;
   color: yellow;
-  min-height: 100%;
+  height: 100%;
+  width:100%;
 }
 
 .columns {
   display: flex;
   flex-direction: row;
+  height: 100vh;
   color: black;
 }
 
 .tabSelect {
-  width: 100%;
+  width: 99%;
   height: 22px;
   padding: 5px;
 }
@@ -159,13 +161,15 @@ canvas {
 }
 
 .tabContent {
+  display:flex;
   background-color: rgba(52, 63, 72, 0.9);
   color: yellow;
   overflow: hidden;
   border-top: 1px solid yellow;
-  width: 100%;
+  width: 99%;
+  height:95%
   /* height: 92vh; */
-  margin: 0;
+  /* margin: 0;
   padding: 0;
   /* vertical-align: bottom; */
 }
@@ -424,7 +428,7 @@ ul,
 
 .scrollableInfoArea {
   overflow: scroll;
-  height: 80vh;
+  height: 100vh;
   margin: 5px;
 }
 
@@ -883,4 +887,41 @@ html {
 }
 .snibbTopRef {
   border-top: 1px solid black;
+}
+
+
+.demoRow {
+  display:flex;
+  flex-direction: row;
+  /*justify-content: center;
+  align-items: center;*/
+  height:97%;
+  margin: 5px;
+}
+
+.demoCol {
+  display:flex;
+  flex-direction: column;
+  height:97%;
+  margin: 5px;
+}
+
+.demoButton {
+  background-color: black;
+  color: gray;
+  padding: 5px;
+  border: 1px solid yellow;
+  border-radius: 5px;
+  margin: 10px;
+}
+
+.demoButton:hover {
+  background: darkgray;
+  transition: background-color 100ms linear;
+}
+
+.demoButton:active {
+  background: lightgray;
+  transition: background-color 100ms linear;
+  color: black
 }
