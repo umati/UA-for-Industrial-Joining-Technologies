@@ -45,3 +45,8 @@ Refer to the following document for the usage of the reference server: **Usage_I
 1. Updated the formally released NodeSets.
 2. Correction in the NamespaceIndex of JoiningSystem->Identification
 3. Minor bugs and optimizations.
+
+2024-04-19: Few enhacements and issue fixes as follows.
+1. Formally released version of OPC UA SDK with new fixes.
+2. Added logic for 12 commands which will Log the input arguments on invocation as a test simulation.
+3. Minor bugs and optimizations.
