@@ -50,3 +50,8 @@ Refer to the following document for the usage of the reference server: **Usage_I
 1. Formally released version of OPC UA SDK with new fixes.
 2. Added logic for 12 commands which will Log the input arguments on invocation as a test simulation.
 3. Minor bugs and optimizations.
+
+2024-04-29: Setting the value to NULL for the following ResultMetaData properties.
+1. The below properties are recommended to be used from ResultMetaData.AssociatedEntities which is the standardized encapsulation for all the identifiers.
+	StepId, PartId, ExternalRecipeId, InternalRecipeId, ProductId, ExternalConfigurationId, InternalConfigurationId, JobId.
+2. HasTransferableDataOnFile, ResultUri, FileFormat are NOT applicable for a Result generated from a joining system since Results are NOT reported as Files.
