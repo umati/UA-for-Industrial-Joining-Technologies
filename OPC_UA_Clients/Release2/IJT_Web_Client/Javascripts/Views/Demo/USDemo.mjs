@@ -101,8 +101,13 @@ export default class USDemo extends BasicScreen {
 
       const values = [
         {
-          DataType: '12',
-          Value: 'productinst'
+          value: 'TestProduct',
+          type: {
+            pythonclass: 'NodeId',
+            Identifier: '12',
+            NamespaceIndex: '0',
+            NodeIdType: 'NodeIdType.TwoByte'
+          }
         },
         {
           type: {
