@@ -49,11 +49,11 @@ export default class USDemo extends BasicScreen {
     this.container.appendChild(buttonArea)
 
     const button1 = document.createElement('button')
-    button1.innerText = 'Tightening program 1'
+    button1.innerText = 'SimulateSingleResult'
     button1.classList.add('demoButton')
     buttonArea.appendChild(button1)
 
-    const mth = this.methodManager.getMethod('SimulateSingleResult')
+    const simulateSingleResult = this.methodManager.getMethod('SimulateSingleResult')
 
     button1.addEventListener('click', (edu) => {
       const values = [
@@ -77,7 +77,7 @@ export default class USDemo extends BasicScreen {
         }
       ]
 
-      this.methodManager.call(mth, values).then(
+      this.methodManager.call(simulateSingleResult, values).then(
         (success) => {
           console.log(JSON.stringify(success))
         },
@@ -92,20 +92,59 @@ export default class USDemo extends BasicScreen {
     button2.classList.add('demoButton')
     buttonArea.appendChild(button2)
 
+    const selectJoiningProcess1 = this.methodManager.getMethod('SelectJoiningProcess')
+
+    button2.addEventListener('click', (edu) => {
+      if (!selectJoiningProcess1) {
+        return
+      }
+
+      const values = [
+        {
+          DataType: '12',
+          Value: 'productinst'
+        },
+        {
+          type: {
+            Identifier: 3029,
+            NamespaceIndex: 3
+          },
+          value: [
+            {
+              value: '',
+              type: '31918'
+            }, {
+              value: '',
+              type: '31918'
+            }, {
+              value: 'ProgramIndex_1',
+              type: '31918'
+            }]
+        }
+      ]
+
+      this.methodManager.call(selectJoiningProcess1, values).then(
+        (success) => {
+          console.log(JSON.stringify(success))
+        },
+        (fail) => {
+          console.log(JSON.stringify(fail))
+        }
+      )
+    })
+
+    /*
     const button3 = document.createElement('button')
     button3.innerText = 'Tightening program 3'
     button3.classList.add('demoButton')
-    buttonArea.appendChild(button3)
+    buttonArea.appendChild(button3) */
 
     const resultArea = document.createElement('div')
-    // displayArea.classList.add('drawAssetBox')
-    // resultArea.style.border = '2px solid blue'
     resultArea.style.width = '80%'
     resultArea.classList.add('demoCol')
     this.container.appendChild(resultArea)
 
     const resultTopArea = document.createElement('div')
-    // displayArea.classList.add('drawAssetBox')
     resultTopArea.style.height = '200px'
     resultTopArea.classList.add('demoRow')
     resultArea.appendChild(resultTopArea)
@@ -114,7 +153,6 @@ export default class USDemo extends BasicScreen {
     infoArea.style.border = '2px solid white'
     infoArea.style.height = '200px'
     infoArea.style.width = '600px'
-    // infoArea.innerText = 'Name: CreationTime: ResultId: ResultEvaluation:'
     resultTopArea.appendChild(infoArea)
     this.propertyView = new PropertyView(
       ['result.ResultMetaData.Name',

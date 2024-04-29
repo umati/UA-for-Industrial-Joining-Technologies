@@ -225,15 +225,29 @@ class Connection:
           method = self.client.get_node(IdObjectToString(methodNode)) # get the method node
           
           #print("METHODCALL: " + IdObjectToString(objectNode))
-          #print("METHODCALL: " + IdObjectToString(methodNode))
+          print(arguments[1])
 
           attrList = []
           attrList.append(method)
 
           for argument in arguments:
-            inp = ua.Variant(argument["value"], ua.VariantType(argument["dataType"]))
-            attrList.append(inp)
-             
+            value = argument["value"]
+            if argument["dataType"] == 3029:
+              inp = ua.JoiningProcessIdentificationDataType()
+              arg0 = value[0] 
+              print("METHODCALL [JoiningProcessIdentification]: ")
+              print(arg0["value"])
+              inp.JoiningProcessId = arg0["value"]
+              arg1 = value[1]
+              print(arg1["value"])
+              inp.JoiningProcessOriginId = arg1["value"]
+              arg2 = value[2]
+              print(arg2["value"])
+              inp.SelectionName = arg2["value"]
+            else:
+              inp = ua.Variant(value, ua.VariantType(argument["dataType"]))
+            attrList.append(inp)  
+            #print("METHODCALL2: ")
 
           methodRepr = getattr(obj, "call_method")
           out = await methodRepr(*attrList) # call the method and get the output

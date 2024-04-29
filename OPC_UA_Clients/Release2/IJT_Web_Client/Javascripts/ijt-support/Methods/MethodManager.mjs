@@ -132,6 +132,10 @@ export class MethodManager {
         let castValue
         const typeNr = row.type.Identifier
         switch (typeNr) {
+          case '3029': {
+            castValue = row.value
+            break
+          }
           case '7': {
             castValue = parseInt(row.value)
             break

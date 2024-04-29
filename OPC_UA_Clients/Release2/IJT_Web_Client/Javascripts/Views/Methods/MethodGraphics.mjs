@@ -108,6 +108,42 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
     switch (arg.DataType.Identifier) {
       case 'Byte': // Change this to a number
         throw new Error('Byte is not implemented in MethodGraphics.mjs')
+      case '3029':{ // JoiningProcessIdentification
+        const input1 = this.createInput('', area, null, 30)
+        input1.dataType = arg.DataType
+        input1.title = 'Datatype: Id\n' + (arg?.Description?._text ? arg.Description._text : '')
+        input1.value = 0
+
+        const input2 = this.createInput('', area, null, 30)
+        input2.dataType = arg.DataType
+        input2.title = 'Datatype: Id\n' + (arg?.Description?._text ? arg.Description._text : '')
+        input2.value = 0
+
+        const input3 = this.createInput('', area, null, 30)
+        input3.dataType = arg.DataType
+        input3.title = 'Datatype: Id\n' + (arg?.Description?._text ? arg.Description._text : '')
+        input3.value = 0
+        return function () {
+          return {
+            type: {
+              Identifier: '3029',
+              NamespaceIndex: '3'
+            },
+            structure: 'JoiningProcessIdentification',
+            value: [
+              {
+                value: input1.value,
+                type: '31918'
+              }, {
+                value: input2.value,
+                type: '31918'
+              }, {
+                value: input3.value,
+                type: '31918'
+              }]
+          }
+        }
+      }
       case '3': { // Also byte. For the time being, treat it as an int
         const input = this.createInput('', area, null, 30)
         input.dataType = arg.DataType
