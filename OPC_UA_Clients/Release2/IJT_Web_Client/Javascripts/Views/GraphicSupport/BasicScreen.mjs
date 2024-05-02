@@ -120,6 +120,7 @@ export default class BasicScreen {
     const contentArea = document.createElement('div')
     contentArea.classList.add('tightUL')
     namedArea.appendChild(contentArea)
+    namedArea.contentArea = contentArea
 
     return namedArea
   }

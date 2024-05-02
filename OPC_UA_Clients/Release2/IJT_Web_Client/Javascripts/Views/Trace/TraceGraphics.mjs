@@ -111,29 +111,30 @@ export default class TraceGraphics extends BasicScreen {
     }, false)
 
     this.traceInterface.setTraceSelectEventListener((event) => {
-      this.selectTrace(this.findTrace(event.currentTarget.resultId))
+      this.traceDisplay.selectTrace(this.traceDisplay.findTrace(event.currentTarget.resultId))
       this.selectedStep = null
     })
 
     this.traceInterface.setStepSelectEventListener((event) => {
-      this.selectStep(event.currentTarget.stepId)
-      this.chartManager.resetZoom()
-      this.zoom(this.selectedTrace, this.selectedStep)
+      this.traceInterface.selectStep(event.currentTarget.stepId)
+      this.traceDisplay.selectStep(event.currentTarget.stepId)
+      // this.traceDisplay.resetZoom()
+      this.traceDisplay.zoom(this.traceDisplay.selectedTrace, this.traceDisplay.selectedStep)
     })
 
     this.traceInterface.clearSteps()
 
     this.traceInterface.alignButton.addEventListener('click', (event) => {
-      this.align(this.selectedTrace, this.selectedStep)
+      this.align(this.traceDisplay.selectedTrace, this.traceDisplay.selectedStep)
       this.alignStep = this.selectStep
     }, false)
 
     this.traceInterface.valueShower.addEventListener('click', (event) => {
-      this.showPoints(this.traceInterface.valueShower.options[this.traceInterface.valueShower.selectedIndex].value)
+      this.traceDisplay.showPoints(this.traceInterface.valueShower.options[this.traceInterface.valueShower.selectedIndex].value)
     }, false)
 
     this.traceInterface.limitShower.addEventListener('click', (event) => {
-      this.showLimits(this.traceInterface.limitShower.options[this.traceInterface.limitShower.selectedIndex].value)
+      this.traceDisplay.showLimits(this.traceInterface.limitShower.options[this.traceInterface.limitShower.selectedIndex].value)
     }, false)
 
     this.traceInterface.deleteButton.addEventListener('click', (event) => {

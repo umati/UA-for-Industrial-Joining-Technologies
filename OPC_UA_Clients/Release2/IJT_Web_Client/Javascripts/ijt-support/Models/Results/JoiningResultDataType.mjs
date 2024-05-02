@@ -17,4 +17,19 @@ export default class JoiningResultDataType extends IJTBaseModel {
 
     super(parameters, modelManager, castMapping)
   }
+
+  getTaggedValues (tag) {
+    if (!this.StepResults || this.StepResults.length < 1) {
+      throw new Error('Could not find stepResults, when looking for tag')
+    }
+    const listOfValues = []
+    for (const step of this.StepResults) {
+      for (const stepvalue of step.StepResultValues) {
+        if (parseInt(stepvalue.ValueTag) === parseInt(tag)) {
+          listOfValues.push(stepvalue)
+        }
+      }
+    }
+    return listOfValues
+  }
 }
