@@ -41,7 +41,11 @@ export default class IJTPropertyView {
         this.name.appendChild(line1)
 
         const line2 = document.createElement('div')
-        line2.innerText = final.LowLimit
+        if (final.LowLimit !== final.HighLimit) {
+          line2.innerText = final.LowLimit
+        } else {
+          line2.innerText = '-'
+        }
         this.low.appendChild(line2)
 
         const line3 = document.createElement('div')
@@ -52,7 +56,11 @@ export default class IJTPropertyView {
         this.measured.appendChild(line3)
 
         const line4 = document.createElement('div')
-        line4.innerText = final.HighLimit
+        if (final.LowLimit !== final.HighLimit) {
+          line4.innerText = final.HighLimit
+        } else {
+          line4.innerText = '-'
+        }
         this.high.appendChild(line4)
 
         /*
