@@ -260,7 +260,7 @@ export default class USDemo extends BasicScreen {
       infoArea.contentArea,
       this.resultManager)
 
-    const tqAngleBoax = this.makeNamedArea('Tightening Specific Data', 'demoMachine')
+    const tqAngleBoax = this.makeNamedArea('Tightening Result Data', 'demoMachine')
     tqAngleBoax.style.border = '2px solid black'
     tqAngleBoax.style.height = '200px'
     tqAngleBoax.style.width = '300px'
