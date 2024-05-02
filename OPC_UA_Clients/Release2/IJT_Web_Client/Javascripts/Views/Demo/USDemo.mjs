@@ -246,7 +246,7 @@ export default class USDemo extends BasicScreen {
     resultTopArea.classList.add('demoRow')
     resultArea.appendChild(resultTopArea)
 
-    const infoArea = this.makeNamedArea('Common Result Parameters', 'demoMachine')
+    const infoArea = this.makeNamedArea('Common Result Data', 'demoMachine')
     infoArea.style.border = '2px solid white'
     infoArea.style.height = '200px'
     infoArea.style.width = '500px'
@@ -260,7 +260,7 @@ export default class USDemo extends BasicScreen {
       infoArea.contentArea,
       this.resultManager)
 
-    const tqAngleBoax = this.makeNamedArea('Tightening Specific Parameters', 'demoMachine')
+    const tqAngleBoax = this.makeNamedArea('Tightening Specific Data', 'demoMachine')
     tqAngleBoax.style.border = '2px solid black'
     tqAngleBoax.style.height = '200px'
     tqAngleBoax.style.width = '300px'
