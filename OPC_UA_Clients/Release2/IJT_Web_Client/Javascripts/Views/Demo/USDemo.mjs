@@ -14,7 +14,7 @@ export default class USDemo extends BasicScreen {
     super('Demo', 'tighteningsystem')
     this.methodManager = methodManager
     this.resultManager = resultManager
-    this.productId = 'testProduct'
+    this.productId = 'www.atlascopco.com/CABLE-B0000000-'
     this.JoiningProcess1 = 'ProgramIndex_1'
     this.JoiningProcess2 = 'ProgramIndex_2'
     this.JoiningProcess3 = 'ProgramIndex_3'
@@ -253,7 +253,7 @@ export default class USDemo extends BasicScreen {
     resultTopArea.appendChild(infoArea)
     this.propertyView = new CommonPropertyView(
       ['result.ResultMetaData.Name',
-        'result.ResultMetaData.ResultEvaluationCode',
+        'result.ResultMetaData.ResultEvaluation',
         'result.ResultMetaData.CreationTime',
         'result.ResultMetaData.SequenceNumber',
         'result.ResultMetaData.ResultId'],
