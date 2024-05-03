@@ -26,14 +26,22 @@ export default class IJTPropertyView {
    * Run everytime the tab is opened
    */
   displayProps (result) {
+    function makeHeading (text) {
+      const heading = document.createElement('div')
+      heading.classList.add('demoHeading')
+      heading.innerText = text
+      return heading
+    }
     const content = result.ResultContent[0]
     // const peaks = content.getTaggedValues(8)
     const finals = content.getTaggedValues(1)
 
-    this.name.innerHTML = 'VALUE'
-    this.low.innerHTML = 'LOW'
-    this.measured.innerHTML = 'MEASURED'
-    this.high.innerHTML = 'HIGH'
+    this.name.appendChild(makeHeading('Value'))
+
+    // this.name.innerHTML = 'VALUE'
+    this.low.appendChild(makeHeading('Low'))
+    this.measured.appendChild(makeHeading('Measured'))
+    this.high.appendChild(makeHeading('High'))
     if (finals && finals.length > 0) {
       for (const final of finals) {
         const line1 = document.createElement('div')

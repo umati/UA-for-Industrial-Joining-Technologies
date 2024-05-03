@@ -10,14 +10,14 @@ import IJTPropertyView from './IJTPropertyView.mjs' // The machine properties vi
  * display of a result for OPC UA Industrial Joining Technologies communication
  */
 export default class USDemo extends BasicScreen {
-  constructor (methodManager, resultManager, connectionManager) {
+  constructor (methodManager, resultManager, connectionManager, settings) {
     super('Demo', 'tighteningsystem')
     this.methodManager = methodManager
     this.resultManager = resultManager
-    this.productId = 'www.atlascopco.com/CABLE-B0000000-'
-    this.JoiningProcess1 = 'ProgramIndex_1'
-    this.JoiningProcess2 = 'ProgramIndex_2'
-    this.JoiningProcess3 = 'ProgramIndex_3'
+    this.settings = settings
+    // this.productId = 'www.atlascopco.com/CABLE-B0000000-'
+    // this.JoiningProcess1 = 'ProgramIndex_1'
+    // this.JoiningProcess2 = 'ProgramIndex_2'
 
     const displayArea = document.createElement('div')
     // displayArea.classList.add('drawAssetBox')
@@ -54,6 +54,7 @@ export default class USDemo extends BasicScreen {
     buttonArea.style.justifyContent = 'center'
     this.container.appendChild(buttonArea)
 
+    /*
     const button1 = document.createElement('button')
     button1.innerText = 'Tigtening program 1'
     button1.classList.add('demoButton')
@@ -102,7 +103,7 @@ export default class USDemo extends BasicScreen {
           console.log(JSON.stringify(fail))
         }
       )
-    }) */
+    })
 
     const simulateSingleResult = this.methodManager.getMethod('SimulateSingleResult')
 
@@ -137,10 +138,10 @@ export default class USDemo extends BasicScreen {
           console.log(JSON.stringify(fail))
         }
       )
-    })
+    }) */
 
     const button2 = document.createElement('button')
-    button2.innerText = 'Tightening program 2'
+    button2.innerText = 'Select program 1'
     button2.classList.add('demoButton')
     buttonArea.appendChild(button2)
 
@@ -149,9 +150,11 @@ export default class USDemo extends BasicScreen {
         return
       }
 
+      console.log(this.settings.productId)
+
       const values = [
         {
-          value: this.productId,
+          value: this.settings.productId,
           type: {
             pythonclass: 'NodeId',
             Identifier: '12',
@@ -172,7 +175,7 @@ export default class USDemo extends BasicScreen {
               value: '',
               type: '31918'
             }, {
-              value: this.JoiningProcess2,
+              value: this.settings.JoiningProcess1,
               type: '31918'
             }]
         }
@@ -189,7 +192,7 @@ export default class USDemo extends BasicScreen {
     })
 
     const button3 = document.createElement('button')
-    button3.innerText = 'Tightening program 3'
+    button3.innerText = 'Select program 2'
     button3.classList.add('demoButton')
     buttonArea.appendChild(button3)
 
@@ -200,7 +203,7 @@ export default class USDemo extends BasicScreen {
 
       const values = [
         {
-          value: this.productId,
+          value: this.settings.productId,
           type: {
             pythonclass: 'NodeId',
             Identifier: '12',
@@ -221,7 +224,7 @@ export default class USDemo extends BasicScreen {
               value: '',
               type: '31918'
             }, {
-              value: this.JoiningProcess3,
+              value: this.settings.JoiningProcess2,
               type: '31918'
             }]
         }

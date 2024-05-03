@@ -3,7 +3,7 @@
  */
 import {
   AddressSpace,
-  AssetManager,
+  // AssetManager,
   MethodManager,
   EventManager,
   ResultManager,
@@ -15,8 +15,9 @@ import TraceGraphics from 'views/Trace/TraceGraphics.mjs'
 import AddressSpaceGraphics from 'views/AddressSpace/AddressSpaceGraphics.mjs'
 import EventGraphics from 'views/Events/EventGraphics.mjs'
 import MethodGraphics from 'views/Methods/MethodGraphics.mjs'
+import USDemoSettings from 'views/Demo/USDemoSettings.mjs'
 import USDemo from 'views/Demo/USDemo.mjs'
-import AssetGraphics from 'views/Assets/AssetGraphics.mjs'
+// import AssetGraphics from 'views/Assets/AssetGraphics.mjs'
 import ConnectionGraphics from 'views/Connection/ConnectionGraphics.mjs'
 import ResultGraphics from 'views/ComplexResult/ResultGraphics.mjs'
 import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
@@ -61,9 +62,9 @@ export default class EndpointGraphics extends BasicScreen {
 
     const resultManager = new ResultManager(this.connectionManager, eventManager)
 
-    const assets = new AssetManager(addressSpace, this.connectionManager)
-    const asstetGraphics = new AssetGraphics(assets)
-    tabGenerator.generateTab(asstetGraphics)
+    // const assets = new AssetManager(addressSpace, this.connectionManager)
+    // const asstetGraphics = new AssetGraphics(assets)
+    // tabGenerator.generateTab(asstetGraphics)
 
     const traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
     tabGenerator.generateTab(traceGraphics)
@@ -72,7 +73,10 @@ export default class EndpointGraphics extends BasicScreen {
     const methodGraphics = new MethodGraphics(methodManager, addressSpace)
     tabGenerator.generateTab(methodGraphics)
 
-    const demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager)
+    const demoSettings = new USDemoSettings()
+    tabGenerator.generateTab(demoSettings)
+
+    const demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager, demoSettings)
     tabGenerator.generateTab(demoGraphics)
 
     const resultGraphics = new ResultGraphics(resultManager)
