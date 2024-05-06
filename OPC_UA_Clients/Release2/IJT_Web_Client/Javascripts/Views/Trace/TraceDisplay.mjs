@@ -101,6 +101,8 @@ export default class TraceDisplay {
     }
     this.result = model
 
+    this.handleOldTraces(this.traceInterface.refreshTraceCallback())
+
     // Create new trace and align it
     const newResultandTrace = new SingleTraceData(this.result, this, this.chartManager, this.identityCounter++, () => { return this.traceInterface.getRandomColor() })
 
@@ -115,6 +117,14 @@ export default class TraceDisplay {
     }
     // Select it
     this.selectTrace(newResultandTrace)
+  }
+
+  handleOldTraces (refreshCallback) {
+    if (refreshCallback) {
+      for (const oldTrace of this.allTraces) {
+        refreshCallback(oldTrace, this)
+      }
+    }
   }
 
   /**
@@ -222,7 +232,10 @@ export default class TraceDisplay {
     }
   }
 
-  deleteSelected () {
+  deleteSelected (trace) {
+    if (trace) {
+      this.selectedTrace = trace
+    }
     if (!this.selectedTrace) {
       throw new Error('No trace selected.')
     }

@@ -1,6 +1,7 @@
 export class TraceInterface {
-  constructor (container) {
+  constructor (container, settings) {
     this.resetColor()
+    this.settings = settings
   }
 
   getRandomColor () {
@@ -8,6 +9,15 @@ export class TraceInterface {
       this.resetColor()
     }
     return 'hsl(' + (this.hue += 108) + ', 100%, ' + (this.lightness -= 1) + '%)'
+  }
+
+  refreshTraceCallback () {
+    if (this.settings) {
+      if (this.settings.refreshTraceCallback) {
+        return this.settings.refreshTraceCallback
+      }
+    }
+    return false
   }
 
   resetColor () {

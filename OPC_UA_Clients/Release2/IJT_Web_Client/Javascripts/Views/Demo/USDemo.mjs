@@ -245,12 +245,12 @@ export default class USDemo extends BasicScreen {
     this.container.appendChild(resultArea)
 
     const resultTopArea = document.createElement('div')
-    resultTopArea.style.height = '220px'
+    resultTopArea.style.height = '200px'
     resultTopArea.classList.add('demoRow')
     resultArea.appendChild(resultTopArea)
 
     const infoArea = this.makeNamedArea('Common Result Data', 'demoMachine')
-    infoArea.style.border = '2px solid white'
+    // infoArea.style.border = '2px solid white'
     infoArea.style.height = '200px'
     infoArea.style.width = '500px'
     resultTopArea.appendChild(infoArea)
@@ -264,7 +264,7 @@ export default class USDemo extends BasicScreen {
       this.resultManager)
 
     const tqAngleBoax = this.makeNamedArea('Tightening Result Data', 'demoMachine')
-    tqAngleBoax.style.border = '2px solid black'
+    // tqAngleBoax.style.border = '2px solid black'
     tqAngleBoax.style.height = '200px'
     tqAngleBoax.style.width = '300px'
     // tqAngleBoax.contentArea.innerText = 'FinalTorque: FinalAngle'
@@ -273,6 +273,7 @@ export default class USDemo extends BasicScreen {
 
     const resultBottomArea = document.createElement('div')
     resultBottomArea.style.height = '50%'
+    resultBottomArea.style.margin = '5px'
     resultArea.appendChild(resultBottomArea)
 
     const backGround = document.createElement('div')
@@ -288,7 +289,7 @@ export default class USDemo extends BasicScreen {
     backGround.appendChild(field)
     //
 
-    this.traceInterface = new TraceInterface(resultBottomArea)
+    this.traceInterface = new TraceInterface(resultBottomArea, this.settings)
     this.traceDisplay = new TraceDisplay(['angle', 'torque'], this.resultManager, this, field)
 
     this.zoomHandler = new ZoomHandler(this.traceDisplay)

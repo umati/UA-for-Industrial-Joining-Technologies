@@ -12,6 +12,10 @@ export default class USDemo extends BasicScreen {
     this.JoiningProcess1 = 'ProgramIndex_1'
     this.JoiningProcess2 = 'ProgramIndex_2'
 
+    this.refreshTraceCallback = (trace, traceOwner) => {
+      traceOwner.deleteSelected(trace)
+    }
+
     const displayArea = document.createElement('div')
     this.backGround.appendChild(displayArea)
 

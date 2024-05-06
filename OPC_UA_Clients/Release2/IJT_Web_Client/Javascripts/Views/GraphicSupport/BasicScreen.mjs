@@ -50,14 +50,16 @@ export default class BasicScreen {
    * @param {*} onchange this function is called when the value changed
    * @returns a function that tells the value of the input field
    */
-  createInput (title, area, aaa, width = 90) {
+  createInput (title, area, changeFunction, width = 90) {
     const newInput = document.createElement('input')
     newInput.classList.add('inputStyle')
     newInput.style.width = width + '%'
     newInput.value = title
     newInput.spellcheck = false
     newInput.onchange = (x) => {
-      aaa(x)
+      if (changeFunction) {
+        changeFunction(x)
+      }
     }
     if (area) {
       area.appendChild(newInput)
