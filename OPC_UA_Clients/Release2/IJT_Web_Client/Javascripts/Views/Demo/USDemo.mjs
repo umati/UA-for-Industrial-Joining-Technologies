@@ -251,7 +251,7 @@ export default class USDemo extends BasicScreen {
 
     const infoArea = this.makeNamedArea('Common Result Data', 'demoMachine')
     // infoArea.style.border = '2px solid white'
-    infoArea.style.height = '200px'
+    infoArea.style.height = '180px'
     infoArea.style.width = '500px'
     resultTopArea.appendChild(infoArea)
     this.propertyView = new CommonPropertyView(
@@ -265,7 +265,7 @@ export default class USDemo extends BasicScreen {
 
     const tqAngleBoax = this.makeNamedArea('Tightening Result Data', 'demoMachine')
     // tqAngleBoax.style.border = '2px solid black'
-    tqAngleBoax.style.height = '200px'
+    tqAngleBoax.style.height = '180px'
     tqAngleBoax.style.width = '300px'
     // tqAngleBoax.contentArea.innerText = 'FinalTorque: FinalAngle'
     resultTopArea.appendChild(tqAngleBoax)
