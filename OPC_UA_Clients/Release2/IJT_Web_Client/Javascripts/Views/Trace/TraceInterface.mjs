@@ -9,7 +9,7 @@ export class TraceInterface {
       this.resetColor()
     }
     const lightness = Math.floor(15 + 35 * Math.random())
-    return 'hsla(' + (this.hue += 108) + ', 100%, ' + lightness + '%, 1.0)'
+    return 'hsla(' + (this.hue += 78) + ', 100%, ' + lightness + '%, 1.0)'
   }
 
   refreshTraceCallback () {
@@ -22,7 +22,7 @@ export class TraceInterface {
   }
 
   resetColor () {
-    this.hue = 0
+    this.hue = 20
     this.saturation = 100
     this.lightness = 40
   }
