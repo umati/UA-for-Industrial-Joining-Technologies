@@ -78,6 +78,13 @@ export default class SingleTraceData {
     }
   }
 
+  fade (factionFade) {
+    for (const traceStep of this.steps) {
+      traceStep.fade(factionFade)
+    }
+    this.owner.update()
+  }
+
   refreshTraceData () {
     for (const traceStep of this.steps) {
       traceStep.refresh(this.displayOffset)

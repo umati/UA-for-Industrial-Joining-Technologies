@@ -61,6 +61,12 @@ export default class Graphic {
     this.datasetMapping[valueId] = content
   }
 
+  fade (fractionFade) {
+    // for (const ds of Object.values(this.datasetMapping)) {
+    this.mainDataset.fade(fractionFade)
+    // }
+  }
+
   clearPoints () {
     this.mainDataset.clearPoints()
     // this.highlightDataset.clearPoints()
@@ -170,5 +176,23 @@ export class Dataset {
 
   setStepId (id) {
     this.stepId = id
+  }
+
+  fade (fractionFade) {
+    this.backgroundColor = this.fadeSupport(fractionFade, this.backgroundColor)
+    this.borderColor = this.fadeSupport(fractionFade, this.borderColor)
+  }
+
+  fadeSupport (fractionFade, color) {
+    const colorList = color.split(',')
+    const a = colorList.pop()
+    const l = colorList.pop()
+    const s = colorList.pop()
+    const h = colorList.pop()
+    const b = a.slice(0, -1)
+    let c = parseFloat(b)
+    c = 100 * (c - fractionFade) / 100
+
+    return h + ',' + s + ',' + l + ',' + c + ')'
   }
 }

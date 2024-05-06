@@ -36,9 +36,13 @@ export default class IJTPropertyView {
     // const peaks = content.getTaggedValues(8)
     const finals = content.getTaggedValues(1)
 
+    this.name.innerHTML = ''
     this.name.appendChild(makeHeading('Value'))
 
-    // this.name.innerHTML = 'VALUE'
+    // this.name.innerHTML = 'VALUE'this.low.appendChild(makeHeading('Low'))
+    this.measured.innerHTML = ''
+    this.high.innerHTML = ''
+    this.low.innerHTML = ''
     this.low.appendChild(makeHeading('Low'))
     this.measured.appendChild(makeHeading('Measured'))
     this.high.appendChild(makeHeading('High'))

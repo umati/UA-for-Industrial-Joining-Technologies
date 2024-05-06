@@ -11,6 +11,28 @@ export default class USDemo extends BasicScreen {
     this.productId = 'www.atlascopco.com/CABLE-B0000000-'
     this.JoiningProcess1 = 'ProgramIndex_1'
     this.JoiningProcess2 = 'ProgramIndex_2'
+    this.fadeList = {}
+    this.fadeTime = 10000
+    this.fadeSteps = 5
+
+    this.refreshTraceCallbackFade = (trace, traceOwner) => {
+      const fadeFunc = () => {
+        if (trace.fadeCounter < 1) {
+          traceOwner.deleteSelected(trace)
+          this.fadeList[trace.resultId] = false
+        } else {
+          trace.fadeCounter--
+          trace.fade(1 / (this.fadeSteps + 1))
+          setTimeout(fadeFunc, this.fadeTime / this.fadeSteps)
+        }
+      }
+      const currentCounter = this.fadeList[trace.resultId]
+      if (!currentCounter) {
+        this.fadeList[trace.resultId] = true
+        trace.fadeCounter = this.fadeSteps
+        setTimeout(fadeFunc, this.fadeTime / this.fadeSteps)
+      }
+    }
 
     this.refreshTraceCallback = (trace, traceOwner) => {
       traceOwner.deleteSelected(trace)

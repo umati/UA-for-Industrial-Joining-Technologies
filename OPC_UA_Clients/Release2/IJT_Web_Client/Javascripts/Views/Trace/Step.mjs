@@ -68,6 +68,10 @@ export default class Step {
     return this.owner.showLimitSelected
   }
 
+  fade (fractionFade) {
+    this.graphic.fade(fractionFade)
+  }
+
   /**
    * This function changes the angle values in the graph if offset
    * is set to some other point than the start value.

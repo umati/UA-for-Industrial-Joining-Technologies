@@ -5,10 +5,11 @@ export class TraceInterface {
   }
 
   getRandomColor () {
-    if (this.lightness < 0) {
+    if (this.hue > 100000) {
       this.resetColor()
     }
-    return 'hsl(' + (this.hue += 108) + ', 100%, ' + (this.lightness -= 1) + '%)'
+    const lightness = Math.floor(15 + 35 * Math.random())
+    return 'hsla(' + (this.hue += 108) + ', 100%, ' + lightness + '%, 1.0)'
   }
 
   refreshTraceCallback () {
