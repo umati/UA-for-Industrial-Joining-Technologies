@@ -211,7 +211,10 @@ class Connection:
              "namespaces" : json.dumps(namespacesReply)
           }
           return event
-
+        except Exception as e:
+          print("--- Exception in NAMESPACES ")
+          print("--- Exception:" + str(e))
+          return { "exception" : str(e) }
         finally:
            pass
 

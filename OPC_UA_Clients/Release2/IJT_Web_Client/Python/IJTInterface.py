@@ -41,9 +41,14 @@ class IJTInterface:
                   print("Endpoint was already connected. Closing down old connection.")  
                   self.connectionList[endpoint].terminate()
                   self.connectionList[endpoint] = None
-              connection = Connection(endpoint, websocket)
-              self.connectionList[endpoint] = connection
-              returnValues = await connection.connect()
+              try:
+                connection = Connection(endpoint, websocket)
+                self.connectionList[endpoint] = connection
+                returnValues = await connection.connect()
+              
+              except Exception as e:
+                print("--- Exception in Connect ")
+                print("--- Exception:" + str(e))
 
           case "terminate connection":
               print("SOCKET: terminate")
