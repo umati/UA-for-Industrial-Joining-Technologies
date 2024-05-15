@@ -4,6 +4,7 @@ const typeMapping = {
   40: { name: 'hasTypeDefinition' },
   46: { name: 'hasProperty', isHierarchical: true },
   35: { name: 'organizes', isHierarchical: true },
+  37: { name: '???', isHierarchical: true, color: 'red' },
   41: { name: 'generatesEvents', color: 'black' },
   45: { name: 'hasSubtype', color: 'black', isHierarchical: true },
   47: { name: 'component', color: 'black', isHierarchical: true },

@@ -3,9 +3,9 @@ import ModelToHTML from './ModelToHTML.mjs'
 import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScreen.mjs'
 
 const nodeClassColor = {
-  Object: 'grey',
-  Method: 'green',
-  Variable: 'red'
+  'NodeClass.Object': 'grey',
+  'NodeClass.Method': 'green',
+  'NodeClass.Variable': 'red'
 }
 
 /**
@@ -63,7 +63,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
    * @param {*} context Where do you want the new node
    * @returns a graphical representation of the node
    */
-  createGUINode (node, context) {
+  createGUINode (node, context, relation) {
     // Support function to replace a relation at the right position
     function ReplaceOldButtonArea (context, newNodeGUIComponent, newNodeId) {
       for (const child of context.children) {
@@ -85,7 +85,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
       name = node.browseName
     }
     const buttonArea = document.createElement('div')
-    buttonArea.style.margin = '0px 0px 0px 10px'
+    buttonArea.classList.add('buttonArea')
     buttonArea.nodeId = node.nodeId
     ReplaceOldButtonArea(context, buttonArea, node.nodeId)
 
@@ -96,9 +96,11 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
       browse.classList.add('invisButton')
       browse.classList.add('pointer')
       browse.classList.add('treeButton')
-      browse.style.margin = '-5px 0px -5px -5px'
+      browse.classList.add('treeButtonPlace')
       browse.title = 'Browse this node from the server'
-      browse.style.color = 'black'
+      if (relation) {
+        browse.style.color = nodeClassColor[relation.NodeClass_]
+      }
       browse.buttonArea = buttonArea
       browse.onclick = () => {
         return this.toggleNodeContent(node, buttonArea)
@@ -135,10 +137,13 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     browse.classList.add('treeButton')
     browse.style.margin = '-5px 0px -5px -5px'
     browse.title = 'Browse this node from the server'
-    browse.style.color = nodeClassColor[relation.NodeClass]
+    browse.style.color = nodeClassColor[relation.NodeClass_]
 
     browse.onclick = function () {
       this.callback()
+    }
+    if (relation.ReferenceTypeId.Identifier === '46') { // Why 47 in health
+      clickCallback()
     }
 
     buttonArea.appendChild(browse)
@@ -178,6 +183,43 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
         }
       }
     }
+    if (buttonArea.children.length === 1 && node.data.value) {
+      const value = buttonArea.children[0]
+      value.innerText += ' = ' + this.nodeValueToText(node.data.value)
+      buttonArea.appendChild(value)
+    }
+  }
+
+  nodeValueToText (value) {
+    if (!value && value === '{}') {
+      return ''
+    }
+    if (Array.isArray(value)) {
+      let result = ''
+      for (const item of value) {
+        result += this.nodeValueToText(item) + ' '
+      }
+      return result
+    }
+    if (value.Text) {
+      return value.Text
+    }
+    if (value.DisplayName) {
+      if (value.DisplayName.Text) {
+        return value.DisplayName.Text
+      } else {
+        return ''
+      }
+    }
+    if (value.value) {
+      if (value.value.displayname) {
+        return value.value.displayname.Text
+      } else {
+        throw new Error('value.value format error')
+      }
+    } else {
+      return value
+    }
   }
 
   /**
@@ -186,17 +228,25 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
    * @param {*} subscriberArea is where the result should be put
    */
   convertRelationToNode (relation, subscriberArea) {
-    switch (relation.nodeClass) {
-      case 'Method':
+    switch (relation.NodeClass_) {
+      case 'NodeClass.Method':
 
         break
-      case 'Variable':
+      case 'NodeClass.Variable':
         this.addressSpace.findOrLoadNode(relation.NodeId).then((newNode) => {
+          const newArea = this.createGUINode(newNode, subscriberArea, relation)
+          this.toggleNodeContent(newNode, newArea)
+        })
+        break
+      case 'NodeClass.Object':
+        this.addressSpace.findOrLoadNode(relation.NodeId).then((newNode) => {
+          const newArea = this.createGUINode(newNode, subscriberArea, relation)
+          this.toggleNodeContent(newNode, newArea)
         })
         break
       default:
         this.addressSpace.findOrLoadNode(relation.NodeId).then((newNode) => {
-          const newArea = this.createGUINode(newNode, subscriberArea)
+          const newArea = this.createGUINode(newNode, subscriberArea, relation)
           this.toggleNodeContent(newNode, newArea)
         })
     }

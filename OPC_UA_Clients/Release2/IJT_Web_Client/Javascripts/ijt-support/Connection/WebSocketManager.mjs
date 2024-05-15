@@ -4,9 +4,12 @@
  */
 export class WebSocketManager {
   constructor (establishedCallback) {
-    this.websocket = new WebSocket('ws://localhost:8001/')
     this.subscribers = {}
+    this.establishWebSocket(establishedCallback)
+  }
 
+  establishWebSocket (establishedCallback) {
+    this.websocket = new WebSocket('ws://localhost:8001/')
     this.websocket.onopen = () => {
       console.log('Websocket connected from web page')
       this.connection = true
@@ -35,20 +38,6 @@ export class WebSocketManager {
           }
         }
       }
-
-      /*
-      switch (event.type) {
-        case 'connection points':
-          console.log(event.connectionpoints)
-          break
-        case 'abc':
-          this.websocket.close(1000)
-          break
-        case 'error':
-          break
-        default:
-          throw new Error(`Unsupported event type: ${event.type}.`)
-      } */
     })
   }
 
@@ -89,6 +78,12 @@ export class WebSocketManager {
     }
     if (uniqueId) {
       event.uniqueid = uniqueId
+    }
+    if (this.websocket.readyState !== this.websocket.OPEN) {
+      this.establishWebSocket(() => {
+        this.websocket.send(JSON.stringify(event))
+      })
+      return
     }
     this.websocket.send(JSON.stringify(event))
   }
