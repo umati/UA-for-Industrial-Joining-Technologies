@@ -221,41 +221,45 @@ class Connection:
           
     async def methodcall(self, data):
        try:
+          print("METHODCALL: ")
           objectNode = data["objectnode"]
           methodNode = data["methodnode"]
           arguments = data["arguments"]
           obj = self.client.get_node(IdObjectToString(objectNode)) # get the parent object node
           method = self.client.get_node(IdObjectToString(methodNode)) # get the method node
           
-          #print("METHODCALL: " + IdObjectToString(objectNode))
-          print(arguments[1])
+          print("METHODCALL: " + IdObjectToString(objectNode))
+          #print(arguments[1])
 
           attrList = []
           attrList.append(method)
+
+          print("1")
 
           for argument in arguments:
             value = argument["value"]
             if argument["dataType"] == 3029:
               inp = ua.JoiningProcessIdentificationDataType()
               arg0 = value[0] 
-              print("METHODCALL [JoiningProcessIdentification]: ")
-              print(arg0["value"])
+              #print("METHODCALL [JoiningProcessIdentification]: ")
+              #print(arg0["value"])
               inp.JoiningProcessId = arg0["value"]
               arg1 = value[1]
-              print(arg1["value"])
+              #print(arg1["value"])
               inp.JoiningProcessOriginId = arg1["value"]
               arg2 = value[2]
-              print(arg2["value"])
+              #print(arg2["value"])
               inp.SelectionName = arg2["value"]
             else:
               inp = ua.Variant(value, ua.VariantType(argument["dataType"]))
             attrList.append(inp)  
-            #print("METHODCALL2: ")
+          
+          print("METHODCALL2: ")
 
           methodRepr = getattr(obj, "call_method")
           out = await methodRepr(*attrList) # call the method and get the output
 
-          print(serializeValue(out))
+          #print(serializeValue(out))
 
           return { "output" : serializeValue(out) }
        

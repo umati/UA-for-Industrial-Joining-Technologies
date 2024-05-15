@@ -32,17 +32,24 @@ export default class IJTPropertyView {
       heading.innerText = text
       return heading
     }
-    const content = result.ResultContent[0]
-    // const peaks = content.getTaggedValues(8)
-    const finals = content.getTaggedValues(1)
-
     this.name.innerHTML = ''
-    this.name.appendChild(makeHeading('Value'))
-
-    // this.name.innerHTML = 'VALUE'this.low.appendChild(makeHeading('Low'))
     this.measured.innerHTML = ''
     this.high.innerHTML = ''
     this.low.innerHTML = ''
+
+    const content = result.ResultContent[0]
+
+    if (content?.constructor?.name !== 'JoiningResultDataType') {
+      this.name.appendChild(makeHeading('Not single tightening result'))
+      return
+    }
+
+    // const peaks = content.getTaggedValues(8)
+    const finals = content.getTaggedValues(1)
+
+    this.name.appendChild(makeHeading('Value'))
+
+    // this.name.innerHTML = 'VALUE'this.low.appendChild(makeHeading('Low'))
     this.low.appendChild(makeHeading('Low'))
     this.measured.appendChild(makeHeading('Measured'))
     this.high.appendChild(makeHeading('High'))
