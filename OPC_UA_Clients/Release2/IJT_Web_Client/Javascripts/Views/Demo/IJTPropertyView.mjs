@@ -44,12 +44,9 @@ export default class IJTPropertyView {
       return
     }
 
-    // const peaks = content.getTaggedValues(8)
     const finals = content.getTaggedValues(1)
 
     this.name.appendChild(makeHeading('Value'))
-
-    // this.name.innerHTML = 'VALUE'this.low.appendChild(makeHeading('Low'))
     this.low.appendChild(makeHeading('Low'))
     this.measured.appendChild(makeHeading('Measured'))
     this.high.appendChild(makeHeading('High'))
@@ -81,20 +78,6 @@ export default class IJTPropertyView {
           line4.innerText = '-'
         }
         this.high.appendChild(line4)
-
-        /*
-        if (line1.innerText === 'ResultEvaluationCode:') {
-          line1.innerText = 'ResultStatus'
-          if (value === 0) {
-            value = 'OK'
-            line2.style.color = 'greed'
-          } else {
-            value = 'NOT OK'
-            line2.style.color = 'red'
-          }
-        } */
-        // line2.innerText = value // eslint-disable-line
-        // this.values.appendChild(line2)
       }
     }
   }

@@ -17,6 +17,7 @@ export class WebSocketManager {
     }
 
     this.websocket.onclose = function () {
+      console.log('WEBSOCKET closed')
       this.connection = false
     }
 
@@ -80,6 +81,8 @@ export class WebSocketManager {
       event.uniqueid = uniqueId
     }
     if (this.websocket.readyState !== this.websocket.OPEN) {
+      console.log('WEBSOCKET NOT READY! Trying to reestablich connection')
+      this.connection = false
       this.establishWebSocket(() => {
         this.websocket.send(JSON.stringify(event))
       })

@@ -35,7 +35,16 @@ export default class AssetGraphics extends BasicScreen {
       drawAssetWithExternals(asset.getRelations('association'), asset)
     }
 
-    const drawAssetWithExternals = (associations, containerNode) => {
+    function mySet (associations) {
+      const idMapping = {}
+      for (const ass of associations) {
+        idMapping[ass.NodeId.Identifier] = ass
+      }
+      return Object.values(idMapping)
+    }
+
+    const drawAssetWithExternals = (associations2, containerNode) => {
+      const associations = mySet(associations2)
       for (const external of externals) {
         for (const association of associations) {
           if (association.NodeId.Identifier === external.nodeId.Identifier) {
@@ -75,10 +84,13 @@ export default class AssetGraphics extends BasicScreen {
       drawAssetWithExternals(associations, controller) // Draw it
 
       for (const tool of assetObject.Tools) { // Draw the tool separately
+        const drawnTools = {}
         for (const association of associations) { // But only the tools assocoated to the above controller
-          if (association.NodeId.Identifier === tool.nodeId.Identifier) {
+          if (association.NodeId.Identifier === tool.nodeId.Identifier &&
+            !drawnTools[association.NodeId.Identifier]) {
             this.createTool(tool, controller)
             drawAssetRecursive(tool)
+            drawnTools[association.NodeId.Identifier] = true
           }
         }
       }

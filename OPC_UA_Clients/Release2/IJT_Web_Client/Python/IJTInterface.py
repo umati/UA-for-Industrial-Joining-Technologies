@@ -15,6 +15,10 @@ class IJTInterface:
 
     async def callConnection(self, data, func):
             endpoint = data["endpoint"]
+            print("--- CALLCONNECTION ")
+            print(endpoint)
+            print(self.connectionList)
+            print("--- CALLCONNECTION END")
             connection = self.connectionList[endpoint]
             methodRepr = getattr(connection, func)
             return await methodRepr(data)
@@ -58,6 +62,8 @@ class IJTInterface:
               returnValues = {}
 
           case _x:
+              print("Command")
+              print(data["command"])
               returnValues = await self.callConnection(data, _x)
        
         if (data.get("uniqueid")):

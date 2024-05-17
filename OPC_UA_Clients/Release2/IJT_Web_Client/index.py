@@ -6,8 +6,15 @@ import json
 
 from Python.IJTInterface import IJTInterface
 
+opcuaHandler = None
+
 async def handler(websocket):
-    opcuaHandler = IJTInterface()
+    global opcuaHandler
+    print('handler(websocket) being run')
+    if (opcuaHandler):
+        print("Reestablishing connection")
+    else:
+      opcuaHandler = IJTInterface()
     async for message in websocket:
         mess = json.loads(message)
         await opcuaHandler.handle(websocket, mess)

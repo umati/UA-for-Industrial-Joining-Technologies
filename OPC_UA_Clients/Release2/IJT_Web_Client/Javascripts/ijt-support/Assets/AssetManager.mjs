@@ -39,31 +39,36 @@ export class AssetManager {
       const promiseList = []
       const relations = node.getChildRelations('component')
       if (relations.length > 0) {
-        this.addressSpace.relationsToNodes(relations).then((nodes) => {
-          for (const childNode of nodes) {
-            const hasAddins = childNode.getChildRelations('hasAddin')
-            if (hasAddins.length > 0) {
+        this.addressSpace.relationsToNodes(relations).then((assetFolders) => {
+          for (const assetFolder of assetFolders) {
+            const components = assetFolder.getChildRelations('component')
+            if (components.length > 0) {
               // const nsMachinery = this.addressSpace.nsMachinery
-              const hasIdentification = hasAddins.filter(
+              const isMachine = components.filter(
                 x => ( // x.TypeDefinition.Identifier === '1012' || // Machine
                   x.BrowseName.Name === 'MachineryBuildingBlocks')) // Machinery Component
-              if (hasIdentification.length === 1) {
+              if (isMachine.length > 0) {
                 promiseList.push(new Promise((resolve, reject) => {
-                  resolve(childNode)
+                  resolve(assetFolder)
                 }))
+              } else {
+                promiseList.push(
+                  new Promise((resolve, reject) => {
+                    this.loadAllAssetsSupport(assetFolder).then((list) => {
+                      if (list && list.length > 0) {
+                        resolve([assetFolder.displayName, list])
+                      } else {
+                        resolve([assetFolder.displayName, list])
+                      }
+                    })
+                  })
+                )
               }
             } else {
               promiseList.push(
                 new Promise((resolve, reject) => {
-                  this.loadAllAssetsSupport(childNode).then((list) => {
-                    if (list && list.length > 0) {
-                      resolve([childNode.displayName, list])
-                    } else {
-                      resolve([childNode.displayName, list])
-                    }
-                  })
-                })
-              )
+                  resolve([assetFolder.displayName, []])
+                }))
             }
           }
           if (promiseList.length > 0) {

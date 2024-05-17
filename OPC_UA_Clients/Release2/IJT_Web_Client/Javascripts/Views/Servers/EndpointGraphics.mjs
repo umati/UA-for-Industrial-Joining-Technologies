@@ -3,7 +3,7 @@
  */
 import {
   AddressSpace,
-  // AssetManager,
+  AssetManager,
   MethodManager,
   EventManager,
   ResultManager,
@@ -17,7 +17,7 @@ import EventGraphics from 'views/Events/EventGraphics.mjs'
 import MethodGraphics from 'views/Methods/MethodGraphics.mjs'
 import USDemoSettings from 'views/Demo/USDemoSettings.mjs'
 import USDemo from 'views/Demo/USDemo.mjs'
-// import AssetGraphics from 'views/Assets/AssetGraphics.mjs'
+import AssetGraphics from 'views/Assets/AssetGraphics.mjs'
 import ConnectionGraphics from 'views/Connection/ConnectionGraphics.mjs'
 import ResultGraphics from 'views/ComplexResult/ResultGraphics.mjs'
 import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
@@ -62,9 +62,9 @@ export default class EndpointGraphics extends BasicScreen {
 
     const resultManager = new ResultManager(this.connectionManager, eventManager)
 
-    // const assets = new AssetManager(addressSpace, this.connectionManager)
-    // const asstetGraphics = new AssetGraphics(assets)
-    // tabGenerator.generateTab(asstetGraphics)
+    const assets = new AssetManager(addressSpace, this.connectionManager)
+    const asstetGraphics = new AssetGraphics(assets)
+    tabGenerator.generateTab(asstetGraphics)
 
     const traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
     tabGenerator.generateTab(traceGraphics)
