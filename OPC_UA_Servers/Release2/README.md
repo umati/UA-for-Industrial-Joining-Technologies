@@ -55,3 +55,5 @@ Refer to the following document for the usage of the reference server: **Usage_I
 1. The below properties are recommended to be used from ResultMetaData.AssociatedEntities which is the standardized encapsulation for all the identifiers.
 	StepId, PartId, ExternalRecipeId, InternalRecipeId, ProductId, ExternalConfigurationId, InternalConfigurationId, JobId.
 2. HasTransferableDataOnFile, ResultUri, FileFormat are NOT applicable for a Result generated from a joining system since Results are NOT reported as Files.
+
+2024-05-20: Minor issue fix related to duplicate asset references.
