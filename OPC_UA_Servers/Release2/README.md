@@ -57,3 +57,7 @@ Refer to the following document for the usage of the reference server: **Usage_I
 2. HasTransferableDataOnFile, ResultUri, FileFormat are NOT applicable for a Result generated from a joining system since Results are NOT reported as Files.
 
 2024-05-20: Minor issue fix related to duplicate asset references.
+
+2024-05-21: Few bug fixes as follows.
+1. Corrected the TypeDefinition of few Asset Variables from BaseDataVariableType to JoiningDataVariableType.
+2. Added PhysicalQuantity and EngineeringUnits property to CalbirationValue and SensorScale.
