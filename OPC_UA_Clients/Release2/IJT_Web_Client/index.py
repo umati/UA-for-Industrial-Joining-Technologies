@@ -10,7 +10,7 @@ opcuaHandler = None
 
 async def handler(websocket):
     global opcuaHandler
-    print('handler(websocket) being run')
+    print('Running handler(websocket)')
     if (opcuaHandler):
         print("Reestablishing connection")
     else:

@@ -40,7 +40,7 @@ class SubHandler():
         asyncio.run(self.threaded_websocket(arg))
 
     def event_notification(self, event):
-        print("EVENT")
+        print("EVENT RECEIVED")
         # Eventhandlers should be quick and non networked so sending the response
         # to the webpage needs to be done asyncronously via a separate thread
         thread = Thread(target = self.wrap_async_func, args = (str(serializeValue(event)), ))
@@ -49,12 +49,18 @@ class SubHandler():
 
 class Connection:
     """
-    This class encapsulates a connection to an OPC UA server using the
-    Industrial Joining Technique specification
+    This class encapsulates the actions that can be taken to communicate
+    to an OPC UA server using the Industrial Joining Technique specification
+    connect
+    terminate
+    subscribe
+    read
+    pathtoid
+    namespaces
+    methodcall
     """
 
     def __init__(self, server_url, websocket):
-        #self.connectionList = {}
         self.server_url = server_url
         self.websocket = websocket
         self.handle = 'handle'
@@ -123,16 +129,11 @@ class Connection:
           return { "exception" : "Subscribe exception: " + str(e) }
 
 
-   
     async def read(self, data):
         try:
           nodeId = data["nodeid"]
           lastReadState = 'READ_ENTER'
           print("READ: nodeID is: ", nodeId)
-          print("self")
-          print(self)
-          print("client")
-          print(self.client)
           node = self.client.get_node(nodeId)
           #print("READ: Objects node is: ")
           #print(node)
@@ -147,21 +148,15 @@ class Connection:
             attrIds.append(ua.AttributeIds[name])
           
           lastReadState = 'READ_ATTRIBUTES_SETUP'
-
-          print("node")
-          print(node)
-
           attributeReply = await node.read_attributes(attrIds)
           
           lastReadState = 'READ_ATTRIBUTES_READ'
-
           attributeValues = [reply.Value.Value for reply in attributeReply]
 
           zipped = list(zip(attrIdsStrings, attributeValues))
           serializedAttributes = serializeTuple(zipped)
 
           lastReadState = 'READ_SERIALIZED'
-
           relations = await node.get_references()
 
           value = {}
@@ -189,6 +184,10 @@ class Connection:
 
 
     async def pathtoid(self, data):
+        """
+        This is a support function that given a path (string)
+        returns the node id at that location
+        """
         try:
           print("PATHTOID")
           nodeId = data["nodeid"]
@@ -242,7 +241,6 @@ class Connection:
           
     async def methodcall(self, data):
        try:
-          print("METHODCALL: ")
           objectNode = data["objectnode"]
           methodNode = data["methodnode"]
           arguments = data["arguments"]
@@ -250,32 +248,23 @@ class Connection:
           method = self.client.get_node(IdObjectToString(methodNode)) # get the method node
           
           print("METHODCALL: " + IdObjectToString(objectNode))
-          #print(arguments[1])
-
+       
           attrList = []
           attrList.append(method)
-
-          print("1")
 
           for argument in arguments:
             value = argument["value"]
             if argument["dataType"] == 3029:
               inp = ua.JoiningProcessIdentificationDataType()
               arg0 = value[0] 
-              #print("METHODCALL [JoiningProcessIdentification]: ")
-              #print(arg0["value"])
               inp.JoiningProcessId = arg0["value"]
               arg1 = value[1]
-              #print(arg1["value"])
               inp.JoiningProcessOriginId = arg1["value"]
               arg2 = value[2]
-              #print(arg2["value"])
               inp.SelectionName = arg2["value"]
             else:
               inp = ua.Variant(value, ua.VariantType(argument["dataType"]))
             attrList.append(inp)  
-          
-          print("METHODCALL2: ")
 
           methodRepr = getattr(obj, "call_method")
           out = await methodRepr(*attrList) # call the method and get the output

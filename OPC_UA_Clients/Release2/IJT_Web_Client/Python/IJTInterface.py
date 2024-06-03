@@ -15,15 +15,9 @@ class IJTInterface:
 
     async def callConnection(self, data, func):
             endpoint = data["endpoint"]
-            #print("--- CALLCONNECTION ")
-            #print(endpoint)
-            #print(self.connectionList)
-            #print("--- CALLCONNECTION END")
             connection = self.connectionList[endpoint]
            
-            print("protocol.state ---------------------")
-            print(connection.client.uaclient.protocol.state)
-            print("-------------------")
+            #print("protocol.state: " + connection.client.uaclient.protocol.state)
             methodRepr = getattr(connection, func)
             try:
               return await methodRepr(data)
@@ -36,7 +30,7 @@ class IJTInterface:
         Handle websocket calls and distribute to OPC UA server
         """
         event = {}
-        print(data)
+        #print(data)
         
         match data["command"]:
           case "get connectionpoints":
@@ -71,8 +65,8 @@ class IJTInterface:
               returnValues = {}
 
           case _x:
-              print("Command")
-              print(data["command"])
+              #print("Command: " + _x)
+              #print(data["command"])
               returnValues = await self.callConnection(data, _x)
        
         if (data.get("uniqueid")):
