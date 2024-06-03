@@ -10,16 +10,16 @@ export class AddressSpace {
     this.newNodeSubscription = []
     this.status = []
 
-    this.socketHandler.namespacePromise().then((namespaces) => {
-      // console.log(namespaces)
-      this.handleNamespaces(namespaces.message)
-      this.addressSpaceSetup('namespaces')
-    })
-
     this.connectionManager.subscribe('connection', (setToTrue) => {
       if (setToTrue) {
         this.initiate()
       }
+
+      this.socketHandler.namespacePromise().then((namespaces) => {
+        // console.log(namespaces)
+        this.handleNamespaces(namespaces.message)
+        this.addressSpaceSetup('namespaces')
+      })
     })
   }
 

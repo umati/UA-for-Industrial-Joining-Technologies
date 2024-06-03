@@ -15,19 +15,28 @@ class IJTInterface:
 
     async def callConnection(self, data, func):
             endpoint = data["endpoint"]
-            print("--- CALLCONNECTION ")
-            print(endpoint)
-            print(self.connectionList)
-            print("--- CALLCONNECTION END")
+            #print("--- CALLCONNECTION ")
+            #print(endpoint)
+            #print(self.connectionList)
+            #print("--- CALLCONNECTION END")
             connection = self.connectionList[endpoint]
+           
+            print("protocol.state ---------------------")
+            print(connection.client.uaclient.protocol.state)
+            print("-------------------")
             methodRepr = getattr(connection, func)
-            return await methodRepr(data)
+            try:
+              return await methodRepr(data)
+            except Exception as e:
+              print("--- Exception in Methodcall callConnection IJT.Interface.py")
+              print("--- Exception:" + str(e))
 
     async def handle(self, websocket, data):
         """
         Handle websocket calls and distribute to OPC UA server
         """
         event = {}
+        print(data)
         
         match data["command"]:
           case "get connectionpoints":

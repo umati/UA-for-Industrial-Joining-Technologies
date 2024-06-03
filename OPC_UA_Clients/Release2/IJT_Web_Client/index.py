@@ -15,9 +15,14 @@ async def handler(websocket):
         print("Reestablishing connection")
     else:
       opcuaHandler = IJTInterface()
-    async for message in websocket:
+    try:
+      async for message in websocket:
         mess = json.loads(message)
         await opcuaHandler.handle(websocket, mess)
+    except Exception as e:
+        print("--- Exception in HANDLER ")
+        print("--- Exception:" + str(e))
+        
 
 async def main():
     async with websockets.serve(handler, "", 8001):

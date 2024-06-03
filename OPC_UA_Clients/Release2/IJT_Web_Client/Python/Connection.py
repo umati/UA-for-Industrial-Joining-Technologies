@@ -54,7 +54,7 @@ class Connection:
     """
 
     def __init__(self, server_url, websocket):
-        self.connectionList = {}
+        #self.connectionList = {}
         self.server_url = server_url
         self.websocket = websocket
         self.handle = 'handle'
@@ -120,14 +120,19 @@ class Connection:
         except Exception as e:
           print("--- Exception in SUBSCRIBE ", self.server_url)
           print("--- Exception:" + str(e))
-          return { "exception" : str(e) }
+          return { "exception" : "Subscribe exception: " + str(e) }
 
 
-          
+   
     async def read(self, data):
         try:
           nodeId = data["nodeid"]
+          lastReadState = 'READ_ENTER'
           print("READ: nodeID is: ", nodeId)
+          print("self")
+          print(self)
+          print("client")
+          print(self.client)
           node = self.client.get_node(nodeId)
           #print("READ: Objects node is: ")
           #print(node)
@@ -140,17 +145,32 @@ class Connection:
           attrIds = []
           for name in attrIdsStrings:
             attrIds.append(ua.AttributeIds[name])
+          
+          lastReadState = 'READ_ATTRIBUTES_SETUP'
+
+          print("node")
+          print(node)
+
           attributeReply = await node.read_attributes(attrIds)
+          
+          lastReadState = 'READ_ATTRIBUTES_READ'
+
           attributeValues = [reply.Value.Value for reply in attributeReply]
+
           zipped = list(zip(attrIdsStrings, attributeValues))
           serializedAttributes = serializeTuple(zipped)
+
+          lastReadState = 'READ_SERIALIZED'
 
           relations = await node.get_references()
 
           value = {}
           nodeClass = await node.read_node_class()
+          
           if (nodeClass == ua.NodeClass.Variable): 
             value = await node.get_value()
+
+          lastReadState = 'READ_SERIALIZED_VALUE_GENERATION'
 
           event = {
              "command" : "readresult",
@@ -163,11 +183,11 @@ class Connection:
           return event
 
         except Exception as e:
-          print("--- Exception in READ: ", IdObjectToString(nodeId))
+          print("--- Exception in READ: (" + lastReadState + "): ", IdObjectToString(nodeId) )
           print("--- Exception:" + str(e))
-          return { "exception" : str(e) }
+          return { "exception" : "Read Exception: (" + lastReadState + "): " + str(e) }
 
-          
+
     async def pathtoid(self, data):
         try:
           print("PATHTOID")
@@ -201,11 +221,12 @@ class Connection:
         except Exception as e:
           print("--- Exception in PATHTOID path ", path)
           print("--- Exception:" + str(e))
-          return { "exception" : str(e) }
+          return { "exception" : "PathToId Exception: " + str(e) }
 
 
     async def namespaces(self, data):
         try:
+          print("Reach namespaces")
           namespacesReply = await self.client.get_namespace_array()
           event = {
              "namespaces" : json.dumps(namespacesReply)
@@ -214,7 +235,7 @@ class Connection:
         except Exception as e:
           print("--- Exception in NAMESPACES ")
           print("--- Exception:" + str(e))
-          return { "exception" : str(e) }
+          return { "exception" : "Exception in Namespaces: " + str(e) }
         finally:
            pass
 
@@ -266,4 +287,4 @@ class Connection:
        except Exception as e:
           print("--- Exception in METHODCALL " + IdObjectToString(methodNode))
           print("--- Exception:" + str(e))
-          return { "exception" : str(e) }
+          return { "exception" : "Method call exception: " + str(e) }
