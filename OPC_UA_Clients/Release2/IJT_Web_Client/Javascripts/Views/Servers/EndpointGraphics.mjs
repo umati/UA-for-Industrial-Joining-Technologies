@@ -15,7 +15,7 @@ import TraceGraphics from 'views/Trace/TraceGraphics.mjs'
 import AddressSpaceGraphics from 'views/AddressSpace/AddressSpaceGraphics.mjs'
 import EventGraphics from 'views/Events/EventGraphics.mjs'
 import MethodGraphics from 'views/Methods/MethodGraphics.mjs'
-import USDemoSettings from 'views/Demo/USDemoSettings.mjs'
+import Settings from 'views/Servers/Settings.mjs'
 import USDemo from 'views/Demo/USDemo.mjs'
 import AssetGraphics from 'views/Assets/AssetGraphics.mjs'
 import ConnectionGraphics from 'views/Connection/ConnectionGraphics.mjs'
@@ -54,6 +54,9 @@ export default class EndpointGraphics extends BasicScreen {
     const connectionGraphics = new ConnectionGraphics(this.connectionManager)
     tabGenerator.generateTab(connectionGraphics, true)
 
+    const settings = new Settings(webSocketManager)
+    tabGenerator.generateTab(settings)
+
     const addressSpace = new AddressSpace(this.connectionManager)
     const addressSpaceGraphics = new AddressSpaceGraphics(addressSpace)
     tabGenerator.generateTab(addressSpaceGraphics, false)
@@ -75,10 +78,7 @@ export default class EndpointGraphics extends BasicScreen {
     const methodGraphics = new MethodGraphics(methodManager, addressSpace)
     tabGenerator.generateTab(methodGraphics)
 
-    const demoSettings = new USDemoSettings()
-    tabGenerator.generateTab(demoSettings)
-
-    const demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager, demoSettings)
+    const demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager, settings)
     tabGenerator.generateTab(demoGraphics)
 
     const resultGraphics = new ResultGraphics(resultManager)

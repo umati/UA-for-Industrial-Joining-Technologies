@@ -45,6 +45,14 @@ class IJTInterface:
             file = open('./Resources/connectionpoints.json', 'w+')
             json.dump(data, file)
             return 
+          case "get settings":
+             with open('./Resources/settings.json') as json_file:
+              returnValues = json.load(json_file)
+            
+          case "set settings":
+            file = open('./Resources/settings.json', 'w+')
+            json.dump(data, file)
+            return 
           case "connect to":
               print("SOCKET: Connect")
               endpoint = data["endpoint"]

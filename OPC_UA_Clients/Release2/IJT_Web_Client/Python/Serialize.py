@@ -38,7 +38,7 @@ def serializeValue(value):
             result = result + serializeValue(item)
         return result + "]"
     else:
-        return "\"" + str(value).replace('\n', 'XXX') + "\""
+        return "\"" + str(value).replace('\n', '\\n') + "\""
 
 def serializeClassInstance(obj):
     """
