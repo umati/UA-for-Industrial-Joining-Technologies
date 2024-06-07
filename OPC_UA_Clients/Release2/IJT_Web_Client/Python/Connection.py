@@ -133,7 +133,8 @@ class Connection:
         try:
           nodeId = data["nodeid"]
           lastReadState = 'READ_ENTER'
-          print("READ: nodeID is: ", nodeId)
+          #print("READ: nodeID is: ", nodeId)
+          print("READ: nodeID: ", nodeId[-70:])
           node = self.client.get_node(nodeId)
           #print("READ: Objects node is: ")
           #print(node)
@@ -189,11 +190,12 @@ class Connection:
         returns the node id at that location
         """
         try:
-          print("PATHTOID")
+          #print("PATHTOID")
           nodeId = data["nodeid"]
           path = json.loads(data["path"])
           node = self.client.get_node("ns="+nodeId["NamespaceIndex"]+";s="+nodeId["Identifier"])
 
+          print("PATHTOID: path is: ", path)
           # Create a relative path
           relative_path = ua.RelativePath()
           element = ua.RelativePathElement()
@@ -225,7 +227,7 @@ class Connection:
 
     async def namespaces(self, data):
         try:
-          print("Reach namespaces")
+          print("Call to get NAMESPACES")
           namespacesReply = await self.client.get_namespace_array()
           event = {
              "namespaces" : json.dumps(namespacesReply)

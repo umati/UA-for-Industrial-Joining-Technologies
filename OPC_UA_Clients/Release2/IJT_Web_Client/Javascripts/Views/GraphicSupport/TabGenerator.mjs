@@ -13,13 +13,29 @@ export default class TabGenerator {
     this.container = container
     this.identityString = identityString
     this.containerList = []
+
     this.tabBase = document.createElement('div')
-    this.container.appendChild(this.tabBase)
+    container.appendChild(this.tabBase)
     this.tabBase.classList.add('tabGeneratorBase')
+
+    // ---------------------------
+    const cont = document.createElement('div')
+    this.tabBase.appendChild(cont)
+    cont.classList.add('tabrow')
+
+    const left = document.createElement('div')
+    cont.appendChild(left)
+    left.classList.add('tableft')
+
+    this.rightInfo = document.createElement('div')
+    cont.appendChild(this.rightInfo)
+    this.rightInfo.classList.add('tabright')
+
+    // ---------------------------
 
     this.selector = document.createElement('div')
     this.selector.classList.add('tabSelect')
-    this.tabBase.appendChild(this.selector)
+    left.appendChild(this.selector)
     this.selector.resetButtons = function () {
       for (const item of this.childNodes) {
         if (item.reset) {
@@ -31,6 +47,10 @@ export default class TabGenerator {
     this.contentDiv = document.createElement('div')
     this.contentDiv.classList.add('tabContent')
     this.tabBase.appendChild(this.contentDiv)
+  }
+
+  setRightInfo (graphics) {
+    this.rightInfo.appendChild(graphics)
   }
 
   /**

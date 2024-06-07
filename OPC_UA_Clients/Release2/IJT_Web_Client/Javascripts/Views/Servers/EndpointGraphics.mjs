@@ -39,11 +39,13 @@ export default class EndpointGraphics extends BasicScreen {
 
   instantiate (endpointUrl, webSocketManager) {
     this.endpointUrl = endpointUrl
-    this.backGround.innerHTML = 'EndpointUrl: ' + endpointUrl
-
+    // this.backGround.innerHTML = 'EndpointUrl: ' + endpointUrl
     // Setting up tab handling and model handling
 
     const tabGenerator = new TabGenerator(this.backGround, 'TabSelector' + endpointUrl)
+    const urlDiv = document.createElement('div')
+    urlDiv.innerText = endpointUrl
+    tabGenerator.setRightInfo(urlDiv)
     const modelManager = new ModelManager()
 
     // Initiate the different tab handlers

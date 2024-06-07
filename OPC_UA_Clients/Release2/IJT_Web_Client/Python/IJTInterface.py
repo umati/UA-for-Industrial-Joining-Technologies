@@ -17,7 +17,11 @@ class IJTInterface:
             endpoint = data["endpoint"]
             connection = self.connectionList[endpoint]
            
-            #print("protocol.state: " + connection.client.uaclient.protocol.state)
+            print("protocol.state: " + connection.client.uaclient.protocol.state)
+            if (connection.client.uaclient.protocol.state != "open"):
+              print("Reconnecting. --------------------------------")
+              await connection.connect()
+
             methodRepr = getattr(connection, func)
             try:
               return await methodRepr(data)

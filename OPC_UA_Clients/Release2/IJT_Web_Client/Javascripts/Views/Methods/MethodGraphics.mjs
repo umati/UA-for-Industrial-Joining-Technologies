@@ -109,19 +109,66 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
       case 'Byte': // Change this to a number
         throw new Error('Byte is not implemented in MethodGraphics.mjs')
       case '3029':{ // JoiningProcessIdentification
-        const input1 = this.createInput('', area, null, 30)
+        const selectionArea = document.createElement('div')
+        area.appendChild(selectionArea)
+
+        const drop = this.createDropdown('Type', (x) => {
+
+        })
+
+        drop.classList.add('methodJoiningProcess')
+        drop.addOption('OriginId', 1)
+        drop.addOption('Specific Id', 0)
+        drop.addOption('Selection name', 2)
+
+        area.appendChild(drop)
+        const label = this.createLabel('Value')
+        label.classList.add('methodJoiningProcess')
+        area.appendChild(label)
+
+        const sel = this.createInput('', area, null, 30)
+        sel.dataType = arg.DataType
+        sel.title = 'Datatype: Id\n' + (arg?.Description?.Text ? arg.Description.Text : '')
+        sel.value = 0
+
+        return function () {
+          const value = []
+          for (let i = 0; i < 3; i++) {
+            if (parseInt(drop.select.value) === i) {
+              value.push({
+                value: sel.value,
+                type: '31918'
+              })
+            } else {
+              value.push({
+                value: '',
+                type: '31918'
+              })
+            }
+          }
+          return {
+            type: {
+              Identifier: '3029',
+              NamespaceIndex: '3'
+            },
+            structure: 'JoiningProcessIdentification',
+            value
+          }
+        }
+
+        /* const input1 = this.createInput('', area, null, 30)
         input1.dataType = arg.DataType
-        input1.title = 'Datatype: Id\n' + (arg?.Description?._text ? arg.Description._text : '')
+        input1.title = 'Datatype: Id\n' + (arg?.Description?.Text ? arg.Description.Text : '')
         input1.value = 0
 
         const input2 = this.createInput('', area, null, 30)
         input2.dataType = arg.DataType
-        input2.title = 'Datatype: Id\n' + (arg?.Description?._text ? arg.Description._text : '')
+        input2.title = 'Datatype: Id\n' + (arg?.Description?.Text ? arg.Description.Text : '')
         input2.value = 0
 
         const input3 = this.createInput('', area, null, 30)
         input3.dataType = arg.DataType
-        input3.title = 'Datatype: Id\n' + (arg?.Description?._text ? arg.Description._text : '')
+        input3.title = 'Datatype: Id\n' + (arg?.Description?.Text ? arg.Description.Text : '')
         input3.value = 0
         return function () {
           return {
@@ -142,12 +189,12 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
                 type: '31918'
               }]
           }
-        }
+        } */
       }
       case '3': { // Also byte. For the time being, treat it as an int
         const input = this.createInput('', area, null, 30)
         input.dataType = arg.DataType
-        input.title = 'Datatype: Number\n' + (arg?.Description?._text ? arg.Description._text : '')
+        input.title = 'Datatype: Number\n' + (arg?.Description?.Text ? arg.Description.Text : '')
         input.value = 0
         return function () {
           return { value: input.value, type: input.dataType }
@@ -158,7 +205,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
         const input = this.createInput('', area, null, 30)
 
         input.dataType = arg.DataType
-        input.title = 'Datatype: Number\n' + (arg?.Description?._text ? arg.Description._text : '')
+        input.title = 'Datatype: Number\n' + (arg?.Description?.Text ? arg.Description.Text : '')
         input.value = 0
         return function () {
           return { value: input.value, type: input.dataType }
@@ -168,7 +215,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
         const input = this.createInput('', area, null, 30)
 
         input.dataType = arg.DataType
-        input.title = 'Datatype: String\n' + (arg?.Description?._text ? arg.Description._text : '')
+        input.title = 'Datatype: String\n' + (arg?.Description?.Text ? arg.Description.Text : '')
         return function () {
           return { value: input.value, type: input.dataType }
         }
@@ -180,7 +227,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
         })
 
         input.dataType = arg.DataType
-        input.title = 'Datatype: Boolean\n' + (arg?.Description?._text ? arg.Description._text : '')
+        input.title = 'Datatype: Boolean\n' + (arg?.Description?.Text ? arg.Description.Text : '')
 
         area.appendChild(input)
 
