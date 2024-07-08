@@ -6,20 +6,22 @@ export default class IJTBaseModel {
 
     // Loop through the key-value-pairs and send them to the factory
     for (const [key, value] of Object.entries(parameters)) {
-      if (!value) {
-        this[key] = null
-      } else {
-        // console.log(`${key}: ${value}`);
-        if (Array === value.constructor) {
-          this[key] = []
-          for (const element of value) {
-            this[key].push(modelManager.factory(key, element, castMapping))
-          }
-        } else if (typeof value === 'object') {
-          // console.log('IJTBAseclass: ' + key)
-          this[key] = modelManager.factory(key, value, castMapping)
+      if (key !== 'pythonclass') {
+        if (!value) {
+          this[key] = null
         } else {
-          this[key] = value
+          // console.log(`${key}: ${value}`);
+          if (Array === value.constructor) {
+            this[key] = []
+            for (const element of value) {
+              this[key].push(modelManager.factory(key, element, castMapping))
+            }
+          } else if (typeof value === 'object') {
+            // console.log('IJTBAseclass: ' + key)
+            this[key] = modelManager.factory(key, value, castMapping)
+          } else {
+            this[key] = value
+          }
         }
       }
     }

@@ -7,11 +7,13 @@ import BasicScreen from '../GraphicSupport/BasicScreen.mjs' // Basic functionali
 export default class Settings extends BasicScreen {
   constructor (webSocketManager) {
     super('Settings', 'tighteningsystem')
+    this.loaded = false
+    this.resolvers = []
 
     this.webSocketManager = webSocketManager
-    this.productId = 'www.atlascopco.com/CABLE-B0000000-'
-    this.JoiningProcess1 = 'ProgramIndex_1'
-    this.JoiningProcess2 = 'ProgramIndex_2'
+    this.productId = '-'
+    this.JoiningProcess1 = '-'
+    this.JoiningProcess2 = '-'
 
     // Listen to the tree of possible connection points (Available OPC UA servers)
     this.webSocketManager.subscribe(null, 'get settings', (msg) => {
@@ -19,35 +21,43 @@ export default class Settings extends BasicScreen {
       this.productId = msg.productid
       this.JoiningProcess1 = msg.button1selection
       this.JoiningProcess2 = msg.button2selection
+      this.methodDefaults = msg.methoddefaults
 
-      this.container.innerHTML = ''
+      try {
+        this.container.innerHTML = ''
 
-      const labelElement = document.createElement('label')
-      labelElement.innerHTML = 'ProductId   '
-      this.container.appendChild(labelElement)
+        const labelElement = document.createElement('label')
+        labelElement.innerHTML = 'ProductId   '
+        this.container.appendChild(labelElement)
 
-      this.createInput(this.productId, this.container, (evt) => {
-        this.productId = evt.srcElement.value
-      }, '40')
-      this.container.appendChild(document.createElement('br'))
+        this.createInput(this.productId, this.container, (evt) => {
+          this.productId = evt.srcElement.value
+        }, '40')
+        this.container.appendChild(document.createElement('br'))
 
-      const labelElement2 = document.createElement('label')
-      labelElement2.innerHTML = 'Button 1 selection   '
-      this.container.appendChild(labelElement2)
+        const labelElement2 = document.createElement('label')
+        labelElement2.innerHTML = 'Button 1 selection   '
+        this.container.appendChild(labelElement2)
 
-      this.createInput(this.JoiningProcess1, this.container, (evt) => {
-        this.JoiningProcess1 = evt.srcElement.value
-        console.log(evt.srcElement.value)
-      }, '40')
-      this.container.appendChild(document.createElement('br'))
+        this.createInput(this.JoiningProcess1, this.container, (evt) => {
+          this.JoiningProcess1 = evt.srcElement.value
+          console.log(evt.srcElement.value)
+        }, '40')
+        this.container.appendChild(document.createElement('br'))
 
-      const labelElement3 = document.createElement('label')
-      labelElement3.innerHTML = 'Button 2 selection   '
-      this.container.appendChild(labelElement3)
+        const labelElement3 = document.createElement('label')
+        labelElement3.innerHTML = 'Button 2 selection   '
+        this.container.appendChild(labelElement3)
 
-      this.createInput(this.JoiningProcess2, this.container, (evt) => {
-        this.JoiningProcess2 = evt.srcElement.value
-      }, '40')
+        this.createInput(this.JoiningProcess2, this.container, (evt) => {
+          this.JoiningProcess2 = evt.srcElement.value
+        }, '40')
+      } finally {
+        this.loaded = true
+        for (const resolve of this.resolvers) {
+          resolve(this)
+        }
+      }
     })
 
     this.webSocketManager.send('get settings')
@@ -97,5 +107,16 @@ export default class Settings extends BasicScreen {
     })
 
     // this.container.innerHTML += '<p>ProductId'
+  }
+
+  settingPromise () {
+    // console.log('LOOKING FOR: '+nodeId+path)
+    return new Promise((resolve, reject) => {
+      if (this.loaded) {
+        resolve(this)
+      } else {
+        this.resolvers.push(resolve)
+      }
+    })
   }
 }

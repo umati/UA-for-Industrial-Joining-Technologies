@@ -33,9 +33,9 @@ export default class ControlMessageSplitScreen extends BasicScreen {
   }
 
   createArea (name) {
-    const simulateResultDiv = document.createElement('div')
-    simulateResultDiv.classList.add('methodDiv')
-    this.controlArea.appendChild(simulateResultDiv)
-    return simulateResultDiv
+    const newDiv = document.createElement('div')
+    newDiv.classList.add('methodDiv')
+    this.controlArea.appendChild(newDiv)
+    return newDiv
   }
 }

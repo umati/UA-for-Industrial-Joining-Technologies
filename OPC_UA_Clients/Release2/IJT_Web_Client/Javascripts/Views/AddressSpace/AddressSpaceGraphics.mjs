@@ -89,6 +89,8 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     buttonArea.nodeId = node.nodeId
     ReplaceOldButtonArea(context, buttonArea, node.nodeId)
 
+    // if (node.relations hasProperty, EnumStrings)
+
     if (!node.browseButton) {
       const browse = document.createElement('button')
       browse.classList.add('buttonAreaStyle')
@@ -172,6 +174,21 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     if (buttonArea.children.length > 1) {
       this.cleanse(buttonArea)
     } else {
+      const enumRelation = node.getNamedRelation('EnumStrings')
+
+      if (enumRelation) {
+        this.addressSpace.relationsToNodes([enumRelation]).then((enumNodeList)=> {
+          const nameList = enumNodeList[0].value
+          const index = parseInt(this.nodeValueToText(node.data.value))
+          const value = nameList[index]
+
+          const area = buttonArea.children[0]
+          area.innerText += ' = ' + value.Text + ' [' + index + ']'
+          buttonArea.appendChild(area)
+        })
+        return
+      }
+
       for (const relation of node.getChildRelations()) {
         switch (relation.referenceTypeName) {
           case 'hasTypeDefinition': // skip the boring FolderTypes

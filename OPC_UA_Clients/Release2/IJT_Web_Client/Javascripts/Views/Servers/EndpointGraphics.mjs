@@ -8,7 +8,8 @@ import {
   EventManager,
   ResultManager,
   ModelManager,
-  ConnectionManager
+  ConnectionManager,
+  EntityCache
 } from 'ijt-support/ijt-support.mjs'
 
 import TraceGraphics from 'views/Trace/TraceGraphics.mjs'
@@ -18,6 +19,7 @@ import MethodGraphics from 'views/Methods/MethodGraphics.mjs'
 import Settings from 'views/Servers/Settings.mjs'
 import USDemo from 'views/Demo/USDemo.mjs'
 import AssetGraphics from 'views/Assets/AssetGraphics.mjs'
+import EntityCacheView from 'views/Entities/Entities.mjs'
 import ConnectionGraphics from 'views/Connection/ConnectionGraphics.mjs'
 import ResultGraphics from 'views/ComplexResult/ResultGraphics.mjs'
 import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
@@ -74,8 +76,10 @@ export default class EndpointGraphics extends BasicScreen {
     const traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
     tabGenerator.generateTab(traceGraphics)
 
+    const entityCache = new EntityCache()
+
     const methodManager = new MethodManager(addressSpace)
-    const methodGraphics = new MethodGraphics(methodManager, addressSpace)
+    const methodGraphics = new MethodGraphics(methodManager, addressSpace, settings, entityCache)
     tabGenerator.generateTab(methodGraphics)
 
     const demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager, settings)
@@ -83,5 +87,8 @@ export default class EndpointGraphics extends BasicScreen {
 
     const resultGraphics = new ResultGraphics(resultManager)
     tabGenerator.generateTab(resultGraphics)
+
+    const entityCacheView = new EntityCacheView(entityCache)
+    tabGenerator.generateTab(entityCacheView)
   }
 }

@@ -34,12 +34,16 @@ class PartialNode {
     return this.data.attributes.NodeId
   }
 
+  get value () {
+    return this.data.value
+  }
+
   get nodeIdString () {
     let st = ';s='
     if (Number(this.data.attributes.NodeId.Identifier)) {
       st = ';i='
     }
-    return 'ns=' + this.data.attributes.NodeId.namespaceIndex + st + this.data.attributes.NodeId.Identifier
+    return 'ns=' + this.data.attributes.NodeId.NamespaceIndex + st + this.data.attributes.NodeId.Identifier
   }
 
   get nodeClass () {
@@ -61,7 +65,7 @@ class PartialNode {
 
   getNamedRelation (browseName) {
     return Object.values(this.data.relations).find(
-      x => browseName === x.browseName.name)
+      x => browseName === x.BrowseName.Name)
   }
 
   getRelations (type) {
