@@ -230,10 +230,12 @@ export default class BasicScreen {
           const selectionDiv = this.entityManager?.makeSelectableEntityView((x, entity) => {
             selectionArea.removeChild(selectionDiv)
             selectionArea.removeChild(selectionAreaBackground)
+            entityListDiv.classList.add('rows')
             entityList.push(entity)
             entityListDiv.innerHTML = ''
             for (const entity of entityList) {
               const entityArea = this.createLabel(entity.name + '(' + entity.entityId + ')')
+              entityArea.classList.add('indent')
               entityListDiv.appendChild(entityArea)
             }
           }, 'Select an identifier entity')

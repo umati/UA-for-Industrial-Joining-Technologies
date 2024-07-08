@@ -1,14 +1,10 @@
-import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScreen.mjs'
 import { EntityDataType, EntityTypes } from '../../ijt-support/Models/Entities/EntityDataType.mjs'
+import ControlSplitScreen from '../GraphicSupport/ControlSplitScreen.mjs'
 
-export default class EntityCacheView extends ControlMessageSplitScreen {
+export default class EntityCacheView extends ControlSplitScreen {
   constructor (entityManager) {
-    super('Identifiers', 'Entities', 'Values')
+    super('Identifiers', 'Identifier entities', 'Values')
     this.entityManager = entityManager
-
-    this.controlArea.innerHTML = 'AAAAA'
-
-    this.messageArea.innerHTML = 'BBBBB'
 
     this.setupSomeEntities()
 
@@ -21,8 +17,8 @@ export default class EntityCacheView extends ControlMessageSplitScreen {
 
   displayEntity (entity, view) {
     const identifier = document.createElement('div')
-    view.messageArea.innerHTML = ''
-    view.messageArea.appendChild(identifier)
+    view.views.innerHTML = ''
+    view.views.appendChild(identifier)
 
     const displayList = [
       { name: 'name', type: '12' },
@@ -61,15 +57,15 @@ export default class EntityCacheView extends ControlMessageSplitScreen {
     if (!entityCache) {
       entityCache = this.entityManager
     }
-    this.controlArea.innerHTML = ''
+    this.controls.innerHTML = ''
 
     const overview = entityCache.makeSelectableEntityView((x, y) => {
       this.displayEntity(y, this)
-    })
+    }, '')
 
-    this.controlArea.appendChild(overview)
+    this.controls.appendChild(overview)
 
-    this.createButton('New', this.controlArea, () => {
+    this.createButton('New', this.controls, () => {
       this.entityManager.addEntity(new EntityDataType(
         'NEW',
         '',
