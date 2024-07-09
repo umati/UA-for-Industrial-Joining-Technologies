@@ -177,7 +177,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
       const enumRelation = node.getNamedRelation('EnumStrings')
 
       if (enumRelation) {
-        this.addressSpace.relationsToNodes([enumRelation]).then((enumNodeList)=> {
+        this.addressSpace.relationsToNodes([enumRelation]).then((enumNodeList) => {
           const nameList = enumNodeList[0].value
           const index = parseInt(this.nodeValueToText(node.data.value))
           const value = nameList[index]

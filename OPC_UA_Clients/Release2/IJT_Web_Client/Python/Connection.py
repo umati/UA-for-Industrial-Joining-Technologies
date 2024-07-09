@@ -1,10 +1,7 @@
-
-
-
 from asyncua import Client, ua
-# from opcua.ua import EventFilter, SimpleAttributeOperand, ContentFilter, FilterOperator, ContentFilterElement
 import asyncio
 from Python.Serialize import serializeTuple, serializeValue
+from Python.CallStructure import createCallStructure
 import json
 from threading import Thread
 #from IPython import embed
@@ -255,23 +252,16 @@ class Connection:
           attrList.append(method)
 
           for argument in arguments:
-            value = argument["value"]
-            if argument["dataType"] == 3029:
-              inp = ua.JoiningProcessIdentificationDataType()
-              arg0 = value[0] 
-              inp.JoiningProcessId = arg0["value"]
-              arg1 = value[1]
-              inp.JoiningProcessOriginId = arg1["value"]
-              arg2 = value[2]
-              inp.SelectionName = arg2["value"]
-            else:
-              inp = ua.Variant(value, ua.VariantType(argument["dataType"]))
-            attrList.append(inp)  
+            input = createCallStructure(argument)
+            attrList.append(input)  
 
+          print(1)
           methodRepr = getattr(obj, "call_method")
+          print(2)
           out = await methodRepr(*attrList) # call the method and get the output
+          print(3)
 
-          #print(serializeValue(out))
+          print(serializeValue(out))
 
           return { "output" : serializeValue(out) }
        
