@@ -44,11 +44,13 @@ export default class EndpointGraphics extends BasicScreen {
     // this.backGround.innerHTML = 'EndpointUrl: ' + endpointUrl
     // Setting up tab handling and model handling
 
+    const entityCache = new EntityCache()
+
     const tabGenerator = new TabGenerator(this.backGround, 'TabSelector' + endpointUrl)
     const urlDiv = document.createElement('div')
     urlDiv.innerText = endpointUrl
     tabGenerator.setRightInfo(urlDiv)
-    const modelManager = new ModelManager()
+    const modelManager = new ModelManager(entityCache)
 
     // Initiate the different tab handlers
 
@@ -76,7 +78,6 @@ export default class EndpointGraphics extends BasicScreen {
     const traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
     tabGenerator.generateTab(traceGraphics)
 
-    const entityCache = new EntityCache()
 
     const methodManager = new MethodManager(addressSpace)
     const methodGraphics = new MethodGraphics(methodManager, addressSpace, settings, entityCache)

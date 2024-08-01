@@ -4,7 +4,7 @@ import IJTBaseModel from '../IJTBaseModel.mjs'
 export default class ResultMetaData extends IJTBaseModel {
   constructor (parameters, modelManager) {
     const castMapping = {
-      AssociatedEntities: 'AssociatedEntities',
+      AssociatedEntities: 'EntityDataType',
       ResultCounters: 'ResultCounters'
     }
 

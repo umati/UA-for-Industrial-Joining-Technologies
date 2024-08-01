@@ -11,20 +11,17 @@ import IJTPropertyView from './IJTPropertyView.mjs' // The machine properties vi
  */
 export default class USDemo extends BasicScreen {
   constructor (methodManager, resultManager, connectionManager, settings) {
-    super('Demo', 'tighteningsystem')
+    super('Demo', 'tighteningsystem') // Setting the name of the tab
     this.methodManager = methodManager
     this.resultManager = resultManager
     this.settings = settings
-    // this.productId = 'www.atlascopco.com/CABLE-B0000000-'
-    // this.JoiningProcess1 = 'ProgramIndex_1'
-    // this.JoiningProcess2 = 'ProgramIndex_2'
 
+    // Create display areas
     const displayArea = document.createElement('div')
-    // displayArea.classList.add('drawAssetBox')
     this.backGround.appendChild(displayArea)
-
     this.container = displayArea
 
+    // Wait until the methods have loaded
     connectionManager.subscribe('methods', (setToTrue) => {
       if (setToTrue) {
         this.activate()
@@ -42,10 +39,9 @@ export default class USDemo extends BasicScreen {
   /**
   * Run activate when normal setup is done.
   * This queries the methodmanager for the available methods in the
-  * given folders, and set up invokation buttons for all found methods
+  * given folders, and set up invokation buttons
   */
   activate () {
-    const selectJoiningProcess1 = this.methodManager.getMethod('SelectJoiningProcess')
     this.container.classList.add('demoRow')
 
     const buttonArea = document.createElement('div')
@@ -54,191 +50,20 @@ export default class USDemo extends BasicScreen {
     buttonArea.style.justifyContent = 'center'
     this.container.appendChild(buttonArea)
 
-    /*
+    // Handling of button 1 (calling select process)
     const button1 = document.createElement('button')
-    button1.innerText = 'Tigtening program 1'
+    button1.innerText = 'Select program 1'
     button1.classList.add('demoButton')
     buttonArea.appendChild(button1)
+    button1.addEventListener('click', this.selectJoiningProcess(this.settings.JoiningProcess1))
 
-    /*
-    button1.addEventListener('click', (edu) => {
-      if (!selectJoiningProcess1) {
-        return
-      }
-
-      const values = [
-        {
-          value: this.productId,
-          type: {
-            pythonclass: 'NodeId',
-            Identifier: '12',
-            NamespaceIndex: '0',
-            NodeIdType: 'NodeIdType.TwoByte'
-          }
-        },
-        {
-          type: {
-            Identifier: 3029,
-            NamespaceIndex: 3
-          },
-          value: [
-            {
-              value: '',
-              type: '31918'
-            }, {
-              value: '',
-              type: '31918'
-            }, {
-              value: this.JoiningProcess1,
-              type: '31918'
-            }]
-        }
-      ]
-
-      this.methodManager.call(selectJoiningProcess1, values).then(
-        (success) => {
-          console.log(JSON.stringify(success))
-        },
-        (fail) => {
-          console.log(JSON.stringify(fail))
-        }
-      )
-    })
-
-    const simulateSingleResult = this.methodManager.getMethod('SimulateSingleResult')
-
-    button1.innerText = 'SimulateSingleresult'
-    button1.addEventListener('click', (edu) => {
-      const values = [
-        {
-          value: '2',
-          type: {
-            pythonclass: 'NodeId',
-            Identifier: '7',
-            NamespaceIndex: '0',
-            NodeIdType: 'NodeIdType.TwoByte'
-          }
-        },
-        {
-          value: true,
-          type: {
-            pythonclass: 'NodeId',
-            Identifier: '1',
-            NamespaceIndex: '0',
-            NodeIdType: 'NodeIdType.TwoByte'
-          }
-        }
-      ]
-
-      this.methodManager.call(simulateSingleResult, values).then(
-        (success) => {
-          console.log(JSON.stringify(success))
-        },
-        (fail) => {
-          console.log(JSON.stringify(fail))
-        }
-      )
-    }) */
-
+    // Handling of button 2 (calling select process)
     const button2 = document.createElement('button')
-    button2.innerText = 'Select program 1'
+    button2.innerText = 'Select program 2'
     button2.classList.add('demoButton')
     buttonArea.appendChild(button2)
+    button2.addEventListener('click', this.selectJoiningProcess(this.settings.JoiningProcess2))
 
-    button2.addEventListener('click', (edu) => {
-      if (!selectJoiningProcess1) {
-        return
-      }
-
-      console.log(this.settings.productId)
-
-      const values = [
-        {
-          value: this.settings.productId,
-          type: {
-            pythonclass: 'NodeId',
-            Identifier: '12',
-            NamespaceIndex: '0',
-            NodeIdType: 'NodeIdType.TwoByte'
-          }
-        },
-        {
-          type: {
-            Identifier: 3029,
-            NamespaceIndex: 3
-          },
-          value: [
-            {
-              value: '',
-              type: '31918'
-            }, {
-              value: '',
-              type: '31918'
-            }, {
-              value: this.settings.JoiningProcess1,
-              type: '31918'
-            }]
-        }
-      ]
-
-      this.methodManager.call(selectJoiningProcess1, values).then(
-        (success) => {
-          console.log(JSON.stringify(success))
-        },
-        (fail) => {
-          console.log(JSON.stringify(fail))
-        }
-      )
-    })
-
-    const button3 = document.createElement('button')
-    button3.innerText = 'Select program 2'
-    button3.classList.add('demoButton')
-    buttonArea.appendChild(button3)
-
-    button3.addEventListener('click', (edu) => {
-      if (!selectJoiningProcess1) {
-        return
-      }
-
-      const values = [
-        {
-          value: this.settings.productId,
-          type: {
-            pythonclass: 'NodeId',
-            Identifier: '12',
-            NamespaceIndex: '0',
-            NodeIdType: 'NodeIdType.TwoByte'
-          }
-        },
-        {
-          type: {
-            Identifier: 3029,
-            NamespaceIndex: 3
-          },
-          value: [
-            {
-              value: '',
-              type: '31918'
-            }, {
-              value: '',
-              type: '31918'
-            }, {
-              value: this.settings.JoiningProcess2,
-              type: '31918'
-            }]
-        }
-      ]
-
-      this.methodManager.call(selectJoiningProcess1, values).then(
-        (success) => {
-          console.log(JSON.stringify(success))
-        },
-        (fail) => {
-          console.log(JSON.stringify(fail))
-        }
-      )
-    })
     const resultArea = document.createElement('div')
     resultArea.style.width = '80%'
     resultArea.classList.add('demoCol')
@@ -249,6 +74,7 @@ export default class USDemo extends BasicScreen {
     resultTopArea.classList.add('demoRow')
     resultArea.appendChild(resultTopArea)
 
+    // Set up the common parts of the result
     const infoArea = this.makeNamedArea('Common Result Data', 'demoMachine')
     // infoArea.style.border = '2px solid white'
     infoArea.style.height = '180px'
@@ -263,13 +89,12 @@ export default class USDemo extends BasicScreen {
       infoArea.contentArea,
       this.resultManager)
 
-    const tqAngleBoax = this.makeNamedArea('Tightening Result Data', 'demoMachine')
-    // tqAngleBoax.style.border = '2px solid black'
-    tqAngleBoax.style.height = '180px'
-    tqAngleBoax.style.width = '300px'
-    // tqAngleBoax.contentArea.innerText = 'FinalTorque: FinalAngle'
-    resultTopArea.appendChild(tqAngleBoax)
-    this.IJTpropertyView = new IJTPropertyView(tqAngleBoax.contentArea, this.resultManager)
+    // Set up the specific tightening related parameters of the reult
+    const tqAngleBox = this.makeNamedArea('Tightening Result Data', 'demoMachine')
+    tqAngleBox.style.height = '180px'
+    tqAngleBox.style.width = '300px'
+    resultTopArea.appendChild(tqAngleBox)
+    this.IJTpropertyView = new IJTPropertyView(tqAngleBox.contentArea, this.resultManager)
 
     const resultBottomArea = document.createElement('div')
     resultBottomArea.style.height = '50%'
@@ -295,6 +120,60 @@ export default class USDemo extends BasicScreen {
     this.zoomHandler = new ZoomHandler(this.traceDisplay)
     this.traceDisplay.activate()
   }
+
+  /**
+   * This function selects a tightening process on the tool
+   * @param {*} process The identity of the tightening program
+   * @returns Nothing
+   */
+  selectJoiningProcess (process) {
+    const selectJoiningProcessMethod = this.methodManager.getMethod('SelectJoiningProcess')
+    if (!selectJoiningProcessMethod) {
+      return
+    }
+
+    console.log(this.settings.productId)
+
+    const values = [
+      {
+        value: this.settings.productId,
+        type: {
+          pythonclass: 'NodeId',
+          Identifier: '12',
+          NamespaceIndex: '0',
+          NodeIdType: 'NodeIdType.TwoByte'
+        }
+      },
+      {
+        type: {
+          Identifier: 3029,
+          NamespaceIndex: 3
+        },
+        value: [
+          {
+            value: '',
+            type: '31918'
+          }, {
+            value: '',
+            type: '31918'
+          }, {
+            value: process, // This should be the selection name of the process
+            type: '31918'
+          }]
+      }
+    ]
+
+    this.methodManager.call(selectJoiningProcessMethod, values).then(
+      (success) => {
+        console.log(JSON.stringify(success))
+      },
+      (fail) => {
+        console.log(JSON.stringify(fail))
+      }
+    )
+  }
+
+  // THE METHODS BELOW THIS IS JUST TO SET UP ZOOMING, SCROLLING, ETC OF THE TRACE WINDOW
 
   /**
    * Mouse button up - switch of behaviour (select trace or start zoom)

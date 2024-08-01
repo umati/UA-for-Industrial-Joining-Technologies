@@ -3,7 +3,7 @@ import ControlSplitScreen from '../GraphicSupport/ControlSplitScreen.mjs'
 
 export default class EntityCacheView extends ControlSplitScreen {
   constructor (entityManager) {
-    super('Identifiers', 'Identifier entities', 'Values')
+    super('Entities', 'Identifier entities', 'Values')
     this.entityManager = entityManager
 
     this.setupSomeEntities()
@@ -21,12 +21,12 @@ export default class EntityCacheView extends ControlSplitScreen {
     view.views.appendChild(identifier)
 
     const displayList = [
-      { name: 'name', type: '12' },
-      { name: 'entityId', type: '12' },
-      { name: 'entityOriginId', type: '12' },
-      { name: 'isExternal', type: '1' },
-      { name: 'description', type: '12' },
-      { name: 'entityType', type: 'DropDown' }
+      { name: 'Name', type: '12' },
+      { name: 'EntityId', type: '12' },
+      { name: 'EntityOriginId', type: '12' },
+      { name: 'IsExternal', type: '1' },
+      { name: 'Description', type: '12' },
+      { name: 'EntityType', type: 'DropDown' }
     ]
 
     for (const display of displayList) {
@@ -66,40 +66,41 @@ export default class EntityCacheView extends ControlSplitScreen {
     this.controls.appendChild(overview)
 
     this.createButton('New', this.controls, () => {
-      this.entityManager.addEntity(new EntityDataType(
-        'NEW',
-        '',
-        '123456',
-        '123456',
-        false,
-        0))
+      this.entityManager.addEntity(new EntityDataType({
+        Name: 'NEW',
+        Description: '',
+        EntityId: '123456',
+        EntityOriginId: '123456',
+        IsExternal: false,
+        EntityType: 0
+      }))
     })
   }
 
   setupSomeEntities () {
-    this.entityManager.addEntity(new EntityDataType(
-      'VIN',
-      'This is the Vehicle Identifier Number of the current vehicle',
-      'ABCDid000011',
-      '-',
-      true,
-      Object.values(EntityTypes).findIndex((e) => e === 'vehicle')
-    ))
-    this.entityManager.addEntity(new EntityDataType(
-      'Marriage station',
-      'This is where the chassis and drive unit are joined together',
-      'STN125006',
-      '-',
-      true,
-      Object.values(EntityTypes).findIndex((e) => e === 'station')
-    ))
-    this.entityManager.addEntity(new EntityDataType(
-      'leftwheeljoint',
-      'This is an identifier for a joint on the blueprint',
-      '12324-23213-13-1231',
-      'leftwheeljointid01',
-      true,
-      Object.values(EntityTypes).findIndex((e) => e === 'joint')
-    ))
+    this.entityManager.addEntity(new EntityDataType({
+      Name: 'VIN',
+      Description: 'This is the Vehicle Identifier Number of the current vehicle',
+      EntityId: 'ABCDid000011',
+      EntityOriginId: '-',
+      IsExternal: true,
+      EntityType: Object.values(EntityTypes).findIndex((e) => e === 'vehicle')
+    }))
+    this.entityManager.addEntity(new EntityDataType({
+      Name: 'Marriage station',
+      Description: 'This is where the chassis and drive unit are joined together',
+      EntityId: 'STN125006',
+      EntityOriginId: '-',
+      IsExternal: true,
+      EntityType: Object.values(EntityTypes).findIndex((e) => e === 'station')
+    }))
+    this.entityManager.addEntity(new EntityDataType({
+      Name: 'leftwheeljoint',
+      Description: 'This is an identifier for a joint on the blueprint',
+      EntityId: 'JointABC123',
+      EntityOriginId: '12324-23213-13-1231',
+      IsExternal: true,
+      EntityType: Object.values(EntityTypes).findIndex((e) => e === 'joint')
+    }))
   }
 }

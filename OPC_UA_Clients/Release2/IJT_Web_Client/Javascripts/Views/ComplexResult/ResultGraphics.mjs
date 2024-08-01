@@ -4,7 +4,7 @@ import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
  */
 export default class ResultGraphics extends BasicScreen {
   constructor (resultManager) {
-    super('Result')
+    super('Consolidated Result')
     this.resultManager = resultManager
 
     this.displayedIdentity = 0

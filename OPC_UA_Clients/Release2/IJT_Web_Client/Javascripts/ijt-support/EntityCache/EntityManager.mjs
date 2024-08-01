@@ -16,11 +16,14 @@ export class EntityCache {
   }
 
   addEntity (entity) {
-    const currentList = this.cache[entity.entityType]
+    if (this.getEntityFromId(entity.EntityType, entity.EntityId)) {
+      return
+    }
+    const currentList = this.cache[entity.EntityType]
     if (currentList) {
       currentList.push(entity)
     } else {
-      this.cache[entity.entityType] = [entity]
+      this.cache[entity.EntityType] = [entity]
     }
     for (const callback of this.callbacks) {
       callback(this.cache, entity)
@@ -31,7 +34,7 @@ export class EntityCache {
     for (let t = 0; t < Object.values(this.cache).length; t++) {
       const key = Object.keys(this.cache)[t]
       const values = Object.values(this.cache)[t]
-      const filteredValues = values.filter((e) => { return e.entityId !== entity.entityId })
+      const filteredValues = values.filter((e) => { return e.EntityId !== entity.EntityId })
       this.cache[key] = filteredValues
     }
     for (const callback of this.callbacks) {
@@ -39,12 +42,14 @@ export class EntityCache {
     }
   }
 
-  getEntityFromId (id) {
-    for (const t of Object.values(this.cache)) {
-      const f = t.filter((e) => { return e.entityId === id })
-      if (f.length === 1) {
-        return f[0]
-      }
+  getEntityFromId (entityType, id) {
+    const t = this.cache[entityType]
+    if (!t) {
+      return
+    }
+    const f = t.filter((e) => { return e.EntityId === id })
+    if (f.length === 1) {
+      return f[0]
     }
   }
 
@@ -70,7 +75,7 @@ export class EntityCache {
           const identifier = document.createElement('div')
           identifier.classList.add('identifier')
           area.appendChild(identifier)
-          identifier.innerHTML = entity.name
+          identifier.innerHTML = entity.Name
           // identifier.entityData = entity
           identifier.entityDisplay = this.displayEntity
           // identifier.entityView = this

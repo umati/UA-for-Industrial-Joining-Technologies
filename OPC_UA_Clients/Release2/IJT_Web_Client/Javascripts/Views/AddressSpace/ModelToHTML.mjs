@@ -172,10 +172,18 @@ export default class ModelToHTML {
     return combined
   }
 
-  display (model, name = 'Response') {
+  /**
+ * this function takes a recieved object from the webclient and tries to create resonable HTML.
+ * NOTE: This is not meant to handle a true Model, just the JSON representation. Most often
+ * You start from the actual model instead of the JSON and use the toHTML() above instead.
+ * This function is only for when you want to show something before the model has been created.
+ * @param {} recievedObject a JSON representation of what was recieved
+ * @param {*} startText The first part of the row (likely the call type)
+ */
+  display (recievedObject, startText = 'Response') {
     let onScreen
-    if (typeof model === 'object') { // Handle a model
-      const onScreen = this.toHTML(model, true, name)
+    if (typeof recievedObject === 'object') { // Handle a model
+      const onScreen = this.toHTML(recievedObject, true, startText)
       if (onScreen.expandLong) {
         onScreen.expandLong()
       }
@@ -188,10 +196,39 @@ export default class ModelToHTML {
       onScreen.scrollIntoView()
     } else { // Handle a single value
       onScreen = document.createElement('li')
-      onScreen.innerHTML = name + ' ' + model
+
+      onScreen.innerHTML = startText + ' ' + this.prettyPrint(JSON.parse(recievedObject))
+
       this.messageArea.appendChild(onScreen)
       this.messageArea.scrollTo(0, this.messageArea.scrollHeight)
       onScreen.scrollIntoView()
+    }
+  }
+
+  prettyPrint (obj, indent = '&nbsp;&nbsp;&nbsp;') {
+    if (obj === '{}' || obj === null) {
+      return ''
+    } else if (typeof obj === 'string' || obj instanceof String) {
+      return obj
+    } else if (obj.length > 0) {
+      let result = '['
+      for (const member of obj) {
+        result += '<br>' + indent + this.prettyPrint(member, indent + '&nbsp;&nbsp;&nbsp;')
+      }
+      return result + ']'
+    } else if (obj.pythonclass === 'LocalizedText') {
+      return obj.Text
+    } else {
+      let typeOfClass = ''
+      let result = '<br>' + indent + '{'
+      for (const [key, value] of Object.entries(obj)) {
+        if (key === 'pythonclass') {
+          typeOfClass = value
+        } else {
+          result += '<br>' + indent + key + ': ' + this.prettyPrint(value, indent + '&nbsp;&nbsp;&nbsp;')
+        }
+      }
+      return '+' + typeOfClass + '+ ' + result + '<br>' + indent + '}'
     }
   }
 }

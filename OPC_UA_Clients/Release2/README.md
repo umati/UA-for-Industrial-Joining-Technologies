@@ -22,7 +22,7 @@ This application uses the open source OPC UA ASYNCUA Stack. The purpose of this 
 
      Python -m venv venv
 
-     venv/Scripts/activate.ps1
+     venv/Scripts/Activate.ps1
 5. **Install** the following python packages in the virtual environment:
 
      pip install --upgrade pip

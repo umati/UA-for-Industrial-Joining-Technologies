@@ -3,14 +3,17 @@
  * https://reference.opcfoundation.org/IJT/Base/v100/docs/10.10#Table211
  *
  */
-export class EntityDataType {
-  constructor (name, description, entityId, entityOriginId, isExternal, entityType) {
-    this.name = name
-    this.description = description
-    this.entityId = entityId
-    this.entityOriginId = entityOriginId
-    this.isExternal = isExternal
-    this.entityType = entityType
+
+import IJTBaseModel from '../IJTBaseModel.mjs'
+
+export class EntityDataType extends IJTBaseModel {
+  constructor (parameters, modelManager) {
+    // constructor (name, description, entityId, entityOriginId, isExternal, entityType) {
+    super(parameters, modelManager)
+
+    if (modelManager && modelManager.entityManager) {
+      modelManager.entityManager.addEntity(this)
+    }
   }
 }
 

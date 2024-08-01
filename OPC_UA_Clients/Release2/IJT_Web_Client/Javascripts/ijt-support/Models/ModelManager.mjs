@@ -18,16 +18,18 @@ import { LocalizationModel,
 import { TighteningTraceDataType, StepTraceDataType, TraceContentDataType, TraceValueDataType } from './Results/TighteningTraceDataType.mjs'
 import ResultMetaData from './Results/ResultMetaData.mjs'
 // import ResultContent from './ResultContent.mjs'
-import AssociatedEntities from './AssociatedEntities.mjs'
+// import AssociatedEntities from './AssociatedEntities.mjs'
 import ResultCounters from './Results/ResultCounters.mjs'
 import JoiningSystemEventModel from './Events/JoiningSystemEventModel.mjs'
+import { EntityDataType } from './Entities/EntityDataType.mjs' 
 import JoiningSystemResultReadyEvent from './Events/JoiningSystemResultReadyEventModel.mjs'
 import IJTBaseModel from './IJTBaseModel.mjs'
 
 /* eslint-disable */
 export class ModelManager {
-  constructor () {
+  constructor (entityManager) {
     this.resultSubscribeList = []
+    this.entityManager = entityManager
   }
 
   resultTypeNotification(result) {
