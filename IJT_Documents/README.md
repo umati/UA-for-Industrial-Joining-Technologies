@@ -1,3 +1,5 @@
+Contact Mohit Agarwal <mohit.agarwal@atlascopco.com> or Bernd Heitzmann <Bernd.Heitzmann@vdma.org> for any updates in the presentation.
+
 This directory contains the following documents:
 
 1. OPC_UA_IJT_Group_Presentation.pdf.
