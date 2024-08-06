@@ -21,7 +21,7 @@ function cleanParameters (parameters) {
 export default class JoiningSystemEventModel extends BaseEventModel {
   constructor (parameters, modelManager) {
     const castMapping = {
-      AssociatedEntities: 'AssociatedEntities'
+      AssociatedEntities: 'EntityDataType'
       // AssociatedEntities EventCode, EventText, Joiningtechnology ReportedValues
     }
 

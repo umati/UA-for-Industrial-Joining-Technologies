@@ -59,37 +59,38 @@ export default class EndpointGraphics extends BasicScreen {
     tabGenerator.generateTab(connectionGraphics, true)
 
     const settings = new Settings(webSocketManager)
-    tabGenerator.generateTab(settings)
 
     const addressSpace = new AddressSpace(this.connectionManager)
     const addressSpaceGraphics = new AddressSpaceGraphics(addressSpace)
-    tabGenerator.generateTab(addressSpaceGraphics, false)
 
     const eventManager = new EventManager(this.connectionManager, modelManager)
     const eventGraphics = new EventGraphics(eventManager)
-    tabGenerator.generateTab(eventGraphics, false)
 
     const resultManager = new ResultManager(this.connectionManager, eventManager)
 
     const assets = new AssetManager(addressSpace, this.connectionManager)
-    const asstetGraphics = new AssetGraphics(assets)
-    tabGenerator.generateTab(asstetGraphics)
+    const assetGraphics = new AssetGraphics(assets)
 
     const traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
-    tabGenerator.generateTab(traceGraphics)
-
 
     const methodManager = new MethodManager(addressSpace)
     const methodGraphics = new MethodGraphics(methodManager, addressSpace, settings, entityCache)
-    tabGenerator.generateTab(methodGraphics)
 
     const demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager, settings)
-    tabGenerator.generateTab(demoGraphics)
 
     const resultGraphics = new ResultGraphics(resultManager)
-    tabGenerator.generateTab(resultGraphics)
 
     const entityCacheView = new EntityCacheView(entityCache)
+
+    tabGenerator.generateTab(demoGraphics)
+    tabGenerator.generateTab(traceGraphics)
+    tabGenerator.generateTab(methodGraphics)
+    tabGenerator.generateTab(eventGraphics, false)
+
+    tabGenerator.generateTab(addressSpaceGraphics, false)
+    tabGenerator.generateTab(resultGraphics)
+    tabGenerator.generateTab(assetGraphics)
     tabGenerator.generateTab(entityCacheView)
+    tabGenerator.generateTab(settings)
   }
 }

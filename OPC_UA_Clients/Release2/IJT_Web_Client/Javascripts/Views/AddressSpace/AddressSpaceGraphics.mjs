@@ -23,6 +23,12 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     })
   }
 
+  initiate () {
+    console.log('opened')
+    // this.messages.scrollTo(0, this.messages.scrollHeight)
+    this.messageDisplay('')
+  }
+
   /**
    * initiateNodeTree creates the root of the nodetree on the left side of the screen
    */

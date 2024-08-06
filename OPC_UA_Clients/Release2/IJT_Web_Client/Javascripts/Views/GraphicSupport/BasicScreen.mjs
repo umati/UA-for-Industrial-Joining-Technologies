@@ -54,6 +54,7 @@ export default class BasicScreen {
   createInput (title, area, changeFunction, width = 90) {
     const newInput = document.createElement('input')
     newInput.classList.add('inputStyle')
+    newInput.classList.add('methodInput')
     newInput.style.width = width + '%'
     newInput.value = title
     newInput.spellcheck = false
@@ -78,6 +79,7 @@ export default class BasicScreen {
   createCheckbox (initialValue, onchange, name) {
     const x = document.createElement('INPUT')
     x.setAttribute('type', 'checkbox')
+    x.classList.add('myCheckBox')
     x.checked = initialValue
     x.onclick = function () {
       onchange(this.checked)
@@ -145,6 +147,7 @@ export default class BasicScreen {
    */
   createMethodInput (arg, area, defaultValue = '', callback) {
     const titleLabel = this.createLabel(arg.Name + '  ')
+    titleLabel.classList.add('methodLabel')
     area.appendChild(titleLabel)
 
     switch (arg.DataType.Identifier) {
@@ -171,23 +174,24 @@ export default class BasicScreen {
       }
       case '3029': { // JoiningProcessIdentification
         const selectionArea = document.createElement('div')
+        selectionArea.classList.add('methodInputRight')
         area.appendChild(selectionArea)
 
         const drop = this.createDropdown('Type', (x) => {
 
         })
 
-        drop.classList.add('methodJoiningProcess')
+        // drop.classList.add('methodJoiningProcess')
         drop.addOption('OriginId', 1)
         drop.addOption('Specific Id', 0)
         drop.addOption('Selection name', 2)
 
-        area.appendChild(drop)
+        selectionArea.appendChild(drop)
         const label = this.createLabel('Value')
-        label.classList.add('methodJoiningProcess')
-        area.appendChild(label)
+        // label.classList.add('methodJoiningProcess')
+        selectionArea.appendChild(label)
 
-        const sel = this.createInput('', area, callback, 30)
+        const sel = this.createInput('', selectionArea, callback, 55)
         sel.dataType = arg.DataType
         sel.title = 'Datatype: Id\n' + (arg?.Description?.Text ? arg.Description.Text : '')
         sel.value = 0
@@ -234,7 +238,7 @@ export default class BasicScreen {
             entityList.push(entity)
             entityListDiv.innerHTML = ''
             for (const entity of entityList) {
-              const entityArea = this.createLabel(entity.name + '(' + entity.entityId + ')')
+              const entityArea = this.createLabel(entity.Name + '(' + entity.EntityId + ')')
               entityArea.classList.add('indent')
               entityListDiv.appendChild(entityArea)
             }
@@ -273,7 +277,7 @@ export default class BasicScreen {
         }
       }
       case '3': { // Also byte. For the time being, treat it as an int
-        const input = this.createInput('', area, callback, 30)
+        const input = this.createInput('', area, callback, 45)
         input.dataType = arg.DataType
         input.title = 'Datatype: Number\n' + (arg?.Description?.Text ? arg.Description.Text : '')
         input.value = 0
@@ -283,7 +287,7 @@ export default class BasicScreen {
       }
       case '6': // Int32
       case '7': { // UInt32
-        const input = this.createInput('', area, callback, 30)
+        const input = this.createInput('', area, callback, 45)
 
         input.dataType = arg.DataType
         input.title = 'Datatype: Number\n' + (arg?.Description?.Text ? arg.Description.Text : '')
@@ -293,7 +297,7 @@ export default class BasicScreen {
         }
       }
       case '12': { // String
-        const input = this.createInput('', area, callback, 30)
+        const input = this.createInput('', area, callback, 45)
 
         input.dataType = arg.DataType
         input.value = defaultValue
@@ -328,7 +332,7 @@ export default class BasicScreen {
         }
       }
       default: {
-        const input = this.createInput('', area, callback, 30)
+        const input = this.createInput('', area, callback, 45)
 
         input.dataType = arg.DataType
         input.title = 'Datatype: ' + arg.DataType.Identifier + '\n' + (arg?.Description?._text ? arg.Description._text : '')
