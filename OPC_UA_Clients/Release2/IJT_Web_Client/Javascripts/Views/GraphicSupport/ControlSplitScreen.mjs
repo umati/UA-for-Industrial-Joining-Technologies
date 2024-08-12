@@ -27,11 +27,4 @@ export default class ControlSplitScreen extends BasicScreen {
     this.views.classList.add('doublecolumnright')
     this.viewArea.appendChild(this.views)
   }
-
-  createArea (name) {
-    const newDiv = document.createElement('div')
-    newDiv.classList.add('methodDiv')
-    this.controlArea.appendChild(newDiv)
-    return newDiv
-  }
 }

@@ -1,10 +1,12 @@
 import { EntityDataType, EntityTypes } from '../../ijt-support/Models/Entities/EntityDataType.mjs'
 import ControlSplitScreen from '../GraphicSupport/ControlSplitScreen.mjs'
+import MethodGUICreator from '../Methods/MethodGUICreator.mjs'
 
 export default class EntityCacheView extends ControlSplitScreen {
   constructor (entityManager) {
     super('Entities', 'Identifier entities', 'Values')
     this.entityManager = entityManager
+    this.methodGUICreator = new MethodGUICreator(this, null, entityManager, null)
 
     this.setupSomeEntities()
 
@@ -15,18 +17,23 @@ export default class EntityCacheView extends ControlSplitScreen {
     this.displayEntities()
   }
 
+  /**
+   * Display a specific Entity for editing
+   * @param {*} entity The entity that should be edited
+   * @param {*} view The background view object inheriting the BaseScreen functionality
+   */
   displayEntity (entity, view) {
     const identifier = document.createElement('div')
     view.views.innerHTML = ''
     view.views.appendChild(identifier)
 
     const displayList = [
-      { name: 'Name', type: '12' },
+      { name: 'EntityType', type: 'DropDown' },
       { name: 'EntityId', type: '12' },
+      { name: 'Name', type: '12' },
       { name: 'EntityOriginId', type: '12' },
       { name: 'IsExternal', type: '1' },
-      { name: 'Description', type: '12' },
-      { name: 'EntityType', type: 'DropDown' }
+      { name: 'Description', type: '12' }
     ]
 
     for (const display of displayList) {
@@ -42,7 +49,7 @@ export default class EntityCacheView extends ControlSplitScreen {
       area.classList.add('identifier')
       identifier.appendChild(area)
 
-      view.createMethodInput(arg, area, entity[display.name], function (newValue) {
+      this.methodGUICreator.createMethodInput(arg, area, entity[display.name], function (newValue) {
         entity[display.name] = newValue
         view.entityManager.updateEntity(entity)
       })
@@ -53,6 +60,10 @@ export default class EntityCacheView extends ControlSplitScreen {
     })
   }
 
+  /**
+   * Create a view of the cached entities for easy selection
+   * @param {*} entityCache an entity Chache object storing all recived or created entities
+   */
   displayEntities (entityCache) {
     if (!entityCache) {
       entityCache = this.entityManager
@@ -77,6 +88,9 @@ export default class EntityCacheView extends ControlSplitScreen {
     })
   }
 
+  /**
+  * Create some staring entities in the cache so the user has atleast something to choose from
+  */
   setupSomeEntities () {
     this.entityManager.addEntity(new EntityDataType({
       Name: 'VIN',

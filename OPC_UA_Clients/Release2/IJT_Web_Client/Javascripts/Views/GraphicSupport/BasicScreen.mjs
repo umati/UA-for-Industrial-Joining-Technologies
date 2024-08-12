@@ -12,6 +12,14 @@ export default class BasicScreen {
 
   activate () {}
 
+  changeViewLevel (newLevel) {}
+
+  createArea (name) {
+    const newDiv = document.createElement('div')
+    newDiv.classList.add('methodDiv')
+    return newDiv
+  }
+
   /**
    * Create a button containing named title, in area and call callback when pressed
    * @param {*} title the name on the btton
@@ -89,10 +97,12 @@ export default class BasicScreen {
 
   createDropdown (name, onchange) {
     const container = document.createElement('div')
-    const label = document.createElement('label')
-    label.innerHTML = name + '  '
+    if (name && name.length > 0) {
+      const label = document.createElement('label')
+      label.innerHTML = name + '  '
+      container.appendChild(label)
+    }
     container.select = document.createElement('select')
-    container.appendChild(label)
     container.appendChild(container.select)
 
     container.addOption = function (opt, key) {
@@ -137,210 +147,5 @@ export default class BasicScreen {
     namedArea.contentArea = contentArea
 
     return namedArea
-  }
-
-  /**
-   * Create an input field that helps in the invokation of a method
-   * @param {*} arg the argument that you want the data for
-   * @param {*} area the area where the input field should go
-   * @returns a function that tells the value of the input field
-   */
-  createMethodInput (arg, area, defaultValue = '', callback) {
-    const titleLabel = this.createLabel(arg.Name + '  ')
-    titleLabel.classList.add('methodLabel')
-    area.appendChild(titleLabel)
-
-    switch (arg.DataType.Identifier) {
-      case 'DropDown': { // DropDown
-        const drop = this.createDropdown('', (x) => {
-          if (callback) {
-            callback(x)
-          }
-        })
-
-        drop.classList.add('methodJoiningProcess')
-        for (let i = 0; i < Object.values(arg.Options).length; i++) {
-          const key = Object.keys(arg.Options)[i]
-          const value = Object.values(arg.Options)[i]
-          drop.addOption(value, key)
-        }
-
-        drop.select.selectedIndex = defaultValue
-
-        area.appendChild(drop)
-        return function () {
-          return { value: drop.value }
-        }
-      }
-      case '3029': { // JoiningProcessIdentification
-        const selectionArea = document.createElement('div')
-        selectionArea.classList.add('methodInputRight')
-        area.appendChild(selectionArea)
-
-        const drop = this.createDropdown('Type', (x) => {
-
-        })
-
-        // drop.classList.add('methodJoiningProcess')
-        drop.addOption('OriginId', 1)
-        drop.addOption('Specific Id', 0)
-        drop.addOption('Selection name', 2)
-
-        selectionArea.appendChild(drop)
-        const label = this.createLabel('Value')
-        // label.classList.add('methodJoiningProcess')
-        selectionArea.appendChild(label)
-
-        const sel = this.createInput('', selectionArea, callback, 55)
-        sel.dataType = arg.DataType
-        sel.title = 'Datatype: Id\n' + (arg?.Description?.Text ? arg.Description.Text : '')
-        sel.value = 0
-
-        return function () {
-          const value = []
-          for (let i = 0; i < 3; i++) {
-            if (parseInt(drop.select.value) === i) {
-              value.push({
-                value: sel.value,
-                type: '31918'
-              })
-            } else {
-              value.push({
-                value: '',
-                type: '31918'
-              })
-            }
-          }
-          return {
-            type: {
-              Identifier: '3029',
-              NamespaceIndex: '3'
-            },
-            structure: 'JoiningProcessIdentification',
-            value
-          }
-        }
-      }
-      case '3010': { // EntityDataType ***************************************************************
-        const selectionArea = document.createElement('div')
-        area.appendChild(selectionArea)
-
-        let entityList = []
-
-        const entityListDiv = document.createElement('div')
-        selectionArea.appendChild(entityListDiv)
-
-        this.createButton('Add identifier', selectionArea, () => {
-          const selectionDiv = this.entityManager?.makeSelectableEntityView((x, entity) => {
-            selectionArea.removeChild(selectionDiv)
-            selectionArea.removeChild(selectionAreaBackground)
-            entityListDiv.classList.add('rows')
-            entityList.push(entity)
-            entityListDiv.innerHTML = ''
-            for (const entity of entityList) {
-              const entityArea = this.createLabel(entity.Name + '(' + entity.EntityId + ')')
-              entityArea.classList.add('indent')
-              entityListDiv.appendChild(entityArea)
-            }
-          }, 'Select an identifier entity')
-          const selectionAreaBackground = document.createElement('div')
-          selectionAreaBackground.classList.add('idSelectDialogGrayBackground')
-          selectionArea.appendChild(selectionAreaBackground)
-          selectionDiv.classList.add('idSelectDialog')
-          selectionArea.appendChild(selectionDiv)
-        })
-
-        return function () {
-          const value = []
-          for (const entity of entityList) {
-            value.push({
-              value: {
-                Name: entity.name,
-                Description: entity.description,
-                EntityId: entity.entityId,
-                EntityOriginId: entity.entityOriginId,
-                IsExternal: entity.isExternal,
-                EntityType: entity.entityType
-              }
-            })
-          }
-          entityList = []
-          entityListDiv.innerText = ''
-          return {
-            type: {
-              Identifier: '3010',
-              NamespaceIndex: '3'
-            },
-            structure: 'EntityDataType',
-            value
-          }
-        }
-      }
-      case '3': { // Also byte. For the time being, treat it as an int
-        const input = this.createInput('', area, callback, 45)
-        input.dataType = arg.DataType
-        input.title = 'Datatype: Number\n' + (arg?.Description?.Text ? arg.Description.Text : '')
-        input.value = 0
-        return function () {
-          return { value: input.value, type: input.dataType }
-        }
-      }
-      case '6': // Int32
-      case '7': { // UInt32
-        const input = this.createInput('', area, callback, 45)
-
-        input.dataType = arg.DataType
-        input.title = 'Datatype: Number\n' + (arg?.Description?.Text ? arg.Description.Text : '')
-        input.value = defaultValue
-        return function () {
-          return { value: input.value, type: input.dataType }
-        }
-      }
-      case '12': { // String
-        const input = this.createInput('', area, callback, 45)
-
-        input.dataType = arg.DataType
-        input.value = defaultValue
-        input.title = 'Datatype: String\n' + (arg?.Description?.Text ? arg.Description.Text : '')
-        return function () {
-          return { value: input.value, type: input.dataType }
-        }
-      }
-      case '1': { // Boolean
-        let returnValue = false
-        if (defaultValue) {
-          returnValue = defaultValue
-        }
-        const input = this.createCheckbox(returnValue, (newValue) => {
-          returnValue = newValue
-          if (callback) {
-            callback(newValue)
-          }
-        })
-
-        input.dataType = arg.DataType
-        input.title = 'Datatype: Boolean\n' + (arg?.Description?.Text ? arg.Description.Text : '')
-
-        area.appendChild(input)
-
-        return function () {
-          if (returnValue) {
-            return { value: true, type: input.dataType }
-          } else {
-            return { value: false, type: input.dataType }
-          }
-        }
-      }
-      default: {
-        const input = this.createInput('', area, callback, 45)
-
-        input.dataType = arg.DataType
-        input.title = 'Datatype: ' + arg.DataType.Identifier + '\n' + (arg?.Description?._text ? arg.Description._text : '')
-
-        return function () {
-          return { value: input.value, type: input.dataType }
-        }
-      }
-    }
   }
 }

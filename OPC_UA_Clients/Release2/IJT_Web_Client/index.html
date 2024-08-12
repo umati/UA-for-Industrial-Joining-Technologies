@@ -36,10 +36,12 @@
   import ServerGraphics from 'views/Servers/ServerGraphics.mjs'
   import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
   import EndpointGraphics   from 'views/Servers/EndpointGraphics.mjs' 
+  import Settings from 'views/Servers/Settings.mjs'
 
 
     let connection = false
-    let tabGenerator
+    let topLevelTabs
+    let settings
 
     window.addEventListener('DOMContentLoaded', () => {
       // Initialize the UI. 
@@ -47,8 +49,38 @@
       baseDiv.classList.add('startScreen')
       document.body.appendChild(baseDiv)
 
-      tabGenerator = new TabGenerator(baseDiv, 'topLevelTabSelector')
-      tabGenerator.setSelectorBackground('topLevelSelectorBackground')
+      // Create the upper right dropdown 
+      topLevelTabs = new TabGenerator(baseDiv, 1000, settings)
+      topLevelTabs.setSelectorBackground('topLevelSelectorBackground')
+
+      const container = document.createElement('div')
+      const label = document.createElement('label')
+      label.innerHTML = 'View:  '
+      container.appendChild(label)
+    
+      container.select = document.createElement('select')
+      container.appendChild(container.select)
+
+      const viewLevels = [['Basic', 1], ['Simple', 2], ['Detailed', 3], ['Specialized', 4], ['Settings', 5]]
+
+      for (const optionData of viewLevels) {
+        const option = document.createElement('option')
+        option.value = optionData[1]
+        option.innerHTML = optionData[0]
+        container.select.appendChild(option)
+      }
+    
+      container.select.onchange = function (evt) {
+        if (this.value < 5) {
+          topLevelTabs.changeViewLevel(this.value)
+        } else {
+          topLevelTabs.forceContent (settings.backGround)
+          this.value = this.oldValue
+        }
+        this.oldValue = this.value
+      }
+
+      topLevelTabs.setRightInfo(container)
 
     })
 
@@ -57,9 +89,18 @@
      */
     function afterWebSocketConnect(webSocketManager) {
       const event = {}
+      settings = new Settings(webSocketManager)
+      settings.settingPromise().then(
+        (s) => {
+          topLevelTabs.getRightInfo().select.oldValue = topLevelTabs.getRightInfo().select.value
+          topLevelTabs.getRightInfo().select.value = s.initialViewLevel
+          topLevelTabs.getRightInfo().select.onchange()
+        }
+      )
 
-      const servers = new ServerGraphics(webSocketManager, tabGenerator)
-      tabGenerator.generateTab(servers)
+      const servers = new ServerGraphics(webSocketManager, topLevelTabs, settings)
+      topLevelTabs.generateTab(servers, 1)
+      topLevelTabs.changeViewLevel(1)
     }
 
     // Establish a websocket to the webserver
@@ -67,7 +108,7 @@
 
     // Ensure all connections are closed when leaving page or refreshing it
     window.onbeforeunload = function (event) {
-      tabGenerator.close()
+      topLevelTabs.close()
     }
 
   </script>

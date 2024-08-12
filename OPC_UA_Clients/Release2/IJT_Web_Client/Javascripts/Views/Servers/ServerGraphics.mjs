@@ -6,7 +6,7 @@ import EndpointGraphics from './EndpointGraphics.mjs'
  * and that easily can be added or removed as tabs. The list can be edited and saved to allow fast prototyping
  */
 export default class ServerGraphics extends BasicScreen {
-  constructor (webSocketManager, endpointTabGenerator) {
+  constructor (webSocketManager, endpointTabGenerator, settings) {
     super('+')
     this.webSocketManager = webSocketManager
     this.endpointTabGenerator = endpointTabGenerator
@@ -52,7 +52,7 @@ export default class ServerGraphics extends BasicScreen {
 
     // Listen to the tree of possible connection points (Available OPC UA servers)
     this.webSocketManager.subscribe(null, 'get connectionpoints', (msg) => {
-      this.connectionPoints(msg.connectionpoints, this.webSocketManager, this.endpointTabGenerator)
+      this.connectionPoints(msg.connectionpoints, this.webSocketManager, this.endpointTabGenerator, settings)
     })
 
     // Ask for the currently stored connectionpoints (Answer in 'connection points')
@@ -72,7 +72,7 @@ export default class ServerGraphics extends BasicScreen {
    * @param {*} socket the socket to use to call the 'connect to'
    * @param {*} endpointTabGenerator The class that manages the graphical representation of the tabs
    */
-  connectionPoints (msg, socket, endpointTabGenerator) {
+  connectionPoints (msg, socket, endpointTabGenerator, settings) {
     this.webSocketManager = socket
     function connect (point) {
       // document.getElementById('displayedServerName').innerText = point.name
@@ -80,7 +80,7 @@ export default class ServerGraphics extends BasicScreen {
     }
     this.rows.innerHTML = ''
     for (const point of msg) {
-      this.makeConnectionPointRow(point, socket, endpointTabGenerator)
+      this.makeConnectionPointRow(point, socket, endpointTabGenerator, settings)
       if (point.autoConnect && this.lastConnection !== point.address) { // Only automatically connect first time
         this.lastConnection = point.address
         connect(point)
@@ -95,9 +95,9 @@ export default class ServerGraphics extends BasicScreen {
    * @param {*} socket the Websocket representation
    * @param {*} endpointTabGenerator The class that manages the graphical representation of the tabs, so that a tab can be removed when disconnected
    */
-  makeConnectionPointRow (point, socket, endpointTabGenerator) {
+  makeConnectionPointRow (point, socket, endpointTabGenerator, settings) {
     function connect (point, endpointTabGenerator) {
-      const newConnection = new EndpointGraphics(point.name)
+      const newConnection = new EndpointGraphics(point.name, settings)
       newConnection.instantiate(point.address, socket)
       endpointTabGenerator.generateTab(newConnection, true)
     }

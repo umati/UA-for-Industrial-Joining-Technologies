@@ -1,8 +1,7 @@
 import BasicScreen from './BasicScreen.mjs'
 /**
- * Support class that creates the split screen
- * Use this.controlArea to add things to interact with
- * Use this.messageDisplay(msg) to desplay user feedback
+ * Support class that creates a single column screen screen
+ * Use this.singleArea to add things to interact with
  * Implement your own initiate() function to run code every time the tab is opened
  */
 export default class SingleScreen extends BasicScreen {
@@ -21,6 +20,10 @@ export default class SingleScreen extends BasicScreen {
     this.controlArea.appendChild(this.singleArea)
   }
 
+  /**
+   * Create an area on the screen and return its reference
+   * @returns a reference to the area created on the screen
+   */
   createArea (name) {
     const newDiv = document.createElement('div')
     newDiv.classList.add('methodDiv')

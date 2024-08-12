@@ -132,7 +132,7 @@ export default class USDemo extends BasicScreen {
       return
     }
 
-    console.log(this.settings.productId)
+    // console.log(this.settings.productId)
 
     const values = [
       {
@@ -165,7 +165,7 @@ export default class USDemo extends BasicScreen {
 
     this.methodManager.call(selectJoiningProcessMethod, values).then(
       (success) => {
-        console.log(JSON.stringify(success))
+        // console.log(JSON.stringify(success))
       },
       (fail) => {
         console.log(JSON.stringify(fail))

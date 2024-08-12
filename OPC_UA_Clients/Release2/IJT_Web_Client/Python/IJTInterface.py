@@ -46,9 +46,11 @@ class IJTInterface:
             json.dump(data, file)
             return 
           case "get settings":
-             with open('./Resources/settings.json') as json_file:
-              returnValues = json.load(json_file)
-            
+             try:
+              with open('./Resources/settings.json') as json_file:
+                returnValues = json.load(json_file)
+             except:
+              returnValues = "File not found (ABC)"
           case "set settings":
             file = open('./Resources/settings.json', 'w+')
             json.dump(data, file)

@@ -24,8 +24,6 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
   }
 
   initiate () {
-    console.log('opened')
-    // this.messages.scrollTo(0, this.messages.scrollHeight)
     this.messageDisplay('')
   }
 

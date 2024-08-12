@@ -6,14 +6,15 @@
  */
 
 export default class TabGenerator {
-  constructor (container, identityString = 'topLevel') {
+  constructor (container, currentViewLevel = 3, settings) {
     /**
-     * Set up the tabs x
+     * Set up the tabs
      */
     this.container = container
-    this.identityString = identityString
     this.containerList = []
+    this.viewLevel = -1
 
+    this.currentViewLevel = currentViewLevel
     this.tabBase = document.createElement('div')
     container.appendChild(this.tabBase)
     this.tabBase.classList.add('tabGeneratorBase')
@@ -49,8 +50,30 @@ export default class TabGenerator {
     this.tabBase.appendChild(this.contentDiv)
   }
 
+  /**
+   * Put something to the right of the tabs
+   * @param {*} graphics An THTM element
+   */
   setRightInfo (graphics) {
+    this.rightInfo.innerHTML = ''
     this.rightInfo.appendChild(graphics)
+  }
+
+  /**
+   * Returns the content tothe right of the tabs
+   * @returns the content tothe right of the tabs
+   */
+  getRightInfo () {
+    return this.rightInfo.children[0]
+  }
+
+  /**
+   * Force something into the area below the tabs
+   * @param {*} content An HTML element
+   */
+  forceContent (content) {
+    this.contentDiv.innerHTML = ''
+    this.contentDiv.appendChild(content)
   }
 
   /**
@@ -58,12 +81,34 @@ export default class TabGenerator {
    * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
    * @returns
    */
-  generateTab (content) {
-    this.containerList.push(new Tab(this.contentDiv, content, this.selector))
+  generateTab (content, viewLevel) {
+    this.containerList.push(new Tab(this.contentDiv, content, this.selector, viewLevel, this.currentViewLevel))
     // If it is the first, then show it
-    if (this.containerList.length === 1) {
-      this.containerList[0].select()
+    // if (this.containerList.length === 1) {
+    //  this.containerList[0].select()
+    // }
+  }
+
+  selectFirstVisible () {
+    for (const tab of this.containerList) {
+      if (tab.visible() && tab.selected) {
+        return
+      }
     }
+    for (const tab of this.containerList) {
+      if (tab.visible()) {
+        tab.select()
+        return
+      }
+    }
+  }
+
+  changeViewLevel (newLevel) {
+    this.currentViewLevel = newLevel
+    for (const tab of this.containerList) {
+      tab.changeViewLevel(newLevel)
+    }
+    this.selectFirstVisible()
   }
 
   /**
@@ -123,7 +168,7 @@ export default class TabGenerator {
   }
 
   setSelectorBackground (style) {
-    this.selector.classList.add(style)
+    this.container.classList.add(style)
   }
 }
 
@@ -133,10 +178,12 @@ class Tab {
    * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
    * @returns
    */
-  constructor (container, content, selectorArea) {
+  constructor (container, content, selectorArea, tabViewLevel, currentViewLevel) {
     this.container = container
     this.content = content
     this.selectorArea = selectorArea
+    this.tabViewLevel = tabViewLevel
+    this.selected = false
 
     this.button = document.createElement('input')
     this.button.type = 'button'
@@ -152,17 +199,33 @@ class Tab {
       this.container.appendChild(this.content.backGround)
       this.content.initiate()
       this.selectorArea.resetButtons()
+      this.selected = true
       this.button.style.backgroundColor = 'rgba(52, 63, 72, 0.9)'
       this.button.style.fontWeight = 'bold'
       this.button.style.borderBottom = '1px solid rgba(52, 63, 72, 0.9)'
     }
-    this.button.reset = function () {
-      this.style.backgroundColor = 'black'
-      this.style.fontWeight = 'normal'
-      this.style.borderBottom = '1px solid yellow'
+    this.button.reset = () => {
+      this.button.style.backgroundColor = 'black'
+      this.button.style.fontWeight = 'normal'
+      this.selected = false
+      this.button.style.borderBottom = '1px solid yellow'
     }
 
+    this.changeViewLevel(currentViewLevel)
     this.selectorArea.appendChild(this.button)
+  }
+
+  changeViewLevel (newLevel) {
+    if (newLevel < this.tabViewLevel) {
+      this.button.hidden = true
+    } else {
+      this.button.hidden = false
+    }
+    this.content.changeViewLevel(newLevel)
+  }
+
+  visible () {
+    return !this.button.hidden
   }
 
   /**

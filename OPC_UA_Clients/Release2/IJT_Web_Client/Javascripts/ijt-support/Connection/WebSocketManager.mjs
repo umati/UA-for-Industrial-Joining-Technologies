@@ -16,8 +16,8 @@ export class WebSocketManager {
       establishedCallback(this)
     }
 
-    this.websocket.onclose = function () {
-      console.log('WEBSOCKET closed')
+    this.websocket.onclose = function (msg) {
+      console.log('WEBSOCKET closed' + msg)
       this.connection = false
     }
 
