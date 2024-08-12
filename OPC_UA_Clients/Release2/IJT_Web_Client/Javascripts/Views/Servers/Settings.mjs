@@ -19,7 +19,7 @@ export default class Settings extends BasicScreen {
       productid: 'www.company.com/ProductABC123',
       button1selection: 'ProgramIndex_1',
       button2selection: 'ProgramIndex_2',
-      initialviewlevel: 1,
+      initialviewlevel: 3,
       command: 'set settings',
       endpoint: 'common'
     }

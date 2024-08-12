@@ -97,6 +97,6 @@ export default class EndpointGraphics extends BasicScreen {
     tabGenerator.generateTab(assetGraphics, 5)
     tabGenerator.generateTab(entityCacheView, 3)
 
-    tabGenerator.changeViewLevel(1)
+    tabGenerator.changeViewLevel(2)
   }
 }

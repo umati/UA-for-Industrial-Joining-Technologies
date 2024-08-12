@@ -14,6 +14,7 @@ export default class ConnectionGraphics extends ControlMessageSplitScreen {
 
   createStatus (trigger, name, initial) {
     const area = this.createArea('')
+    this.controls.appendChild(area)
     const connectionTitleLabel = this.createLabel(name + ': ')
     area.appendChild(connectionTitleLabel)
     const connectionLabel = this.createLabel(initial)
