@@ -132,8 +132,6 @@ export default class USDemo extends BasicScreen {
       return
     }
 
-    // console.log(this.settings.productId)
-
     const values = [
       {
         value: this.settings.productId,

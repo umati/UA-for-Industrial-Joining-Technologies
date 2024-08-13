@@ -1,3 +1,6 @@
+/**
+ * The purpose of this class is to display a GUI for filling in arguments and calling a method
+ */
 export default class MethodGUICreator {
   constructor (screen, methodManager, entityManager, settings) {
     this.methodManager = methodManager

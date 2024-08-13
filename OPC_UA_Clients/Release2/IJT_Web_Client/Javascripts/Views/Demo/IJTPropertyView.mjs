@@ -1,3 +1,6 @@
+/**
+ * A class that displays the most important tightening related values of a result
+ */
 export default class IJTPropertyView {
   constructor (context, resultManager) {
     this.background = document.createElement('div')
@@ -23,7 +26,10 @@ export default class IJTPropertyView {
   }
 
   /**
+   * Display some tightening specific values in a result.
    * Run everytime the tab is opened
+   * @param {*} result a result
+   * @returns Nothing
    */
   displayProps (result) {
     function makeHeading (text) {
@@ -44,7 +50,7 @@ export default class IJTPropertyView {
       return
     }
 
-    const finals = content.getTaggedValues(1)
+    const finals = content.getTaggedValues(1) // Get all reported values with ValueTag === 1 (Final)
 
     this.name.appendChild(makeHeading('Value'))
     this.low.appendChild(makeHeading('Low'))

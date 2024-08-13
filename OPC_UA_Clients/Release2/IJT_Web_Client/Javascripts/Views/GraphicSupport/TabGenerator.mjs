@@ -81,8 +81,10 @@ export default class TabGenerator {
    * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
    * @returns
    */
-  generateTab (content, viewLevel) {
-    this.containerList.push(new Tab(this.contentDiv, content, this.selector, viewLevel, this.currentViewLevel))
+  generateTab (content, viewLevel, selected) {
+    const tab = new Tab(this.contentDiv, content, this.selector, viewLevel, this.currentViewLevel)
+    tab.select()
+    this.containerList.push(tab)
     // If it is the first, then show it
     // if (this.containerList.length === 1) {
     //  this.containerList[0].select()

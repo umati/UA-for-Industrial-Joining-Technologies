@@ -1,9 +1,9 @@
-import BasicScreen from '../GraphicSupport/BasicScreen.mjs' // Basic functionality application code for the screen functionality
+import BasicScreen from './BasicScreen.mjs' // Basic functionality application code for the screen functionality
 
 /**
- * The purpose of this class is to generate an HTML representation of tightening selection and basic
- * display of a result for OPC UA Industrial Joining Technologies communication
- */
+ * The purpose of this class is to generate an GUI
+ * for editing settings used elsewhere in the app
+ **/
 export default class Settings extends BasicScreen {
   constructor (webSocketManager) {
     super('Settings', 'tighteningsystem')
@@ -68,11 +68,18 @@ export default class Settings extends BasicScreen {
     this.container = editArea
 
     this.createButton('Save', this.displayArea, () => {
-      this.settings.productid = this.productId
-      this.settings.button1selection = this.JoiningProcess1
-      this.settings.button2selection = this.JoiningProcess2
-      this.settings.initialviewlevel = this.initialViewLevel
-
+      if (this.productId) {
+        this.settings.productid = this.productId
+      }
+      if (this.JoiningProcess1) {
+        this.settings.button1selection = this.JoiningProcess1
+      }
+      if (this.JoiningProcess2) {
+        this.settings.button2selection = this.JoiningProcess2
+      }
+      if (this.initialViewLevel) {
+        this.settings.initialviewlevel = this.initialViewLevel
+      }
       this.webSocketManager.send('set settings', null, null, this.settings)
     })
 
@@ -85,11 +92,21 @@ export default class Settings extends BasicScreen {
     if (msg.productid || msg.initialviewlevel
     ) {
       this.settings = msg
-      this.productId = msg.productid
-      this.JoiningProcess1 = msg.button1selection
-      this.JoiningProcess2 = msg.button2selection
-      this.methodDefaults = msg.methoddefaults
-      this.initialViewLevel = msg.initialviewlevel
+      if (msg.productid) {
+        this.productId = msg.productid
+      }
+      if (msg.button1selection) {
+        this.JoiningProcess1 = msg.button1selection
+      }
+      if (msg.button2selection) {
+        this.JoiningProcess2 = msg.button2selection
+      }
+      if (msg.methoddefaults) {
+        this.methodDefaults = msg.methoddefaults
+      }
+      if (msg.initialviewlevel) {
+        this.initialViewLevel = msg.initialviewlevel
+      }
     }
 
     try {

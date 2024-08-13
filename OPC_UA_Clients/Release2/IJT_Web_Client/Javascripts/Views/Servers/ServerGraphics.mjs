@@ -1,5 +1,5 @@
 import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
-import EndpointGraphics from './EndpointGraphics.mjs'
+import EndpointGraphics from '../EndpointTab/EndpointGraphics.mjs'
 
 /**
  * The purpose of this class is to generate a webpage that shows a list of OPC UA servers that the user is interested in
@@ -99,7 +99,7 @@ export default class ServerGraphics extends BasicScreen {
     function connect (point, endpointTabGenerator) {
       const newConnection = new EndpointGraphics(point.name, settings)
       newConnection.instantiate(point.address, socket)
-      endpointTabGenerator.generateTab(newConnection, true)
+      endpointTabGenerator.generateTab(newConnection, 1, true)
     }
 
     function disconnect (point, endpointTabGenerator) {

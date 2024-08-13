@@ -35,8 +35,8 @@
 
   import ServerGraphics from 'views/Servers/ServerGraphics.mjs'
   import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
-  import EndpointGraphics   from 'views/Servers/EndpointGraphics.mjs' 
-  import Settings from 'views/Servers/Settings.mjs'
+  import EndpointGraphics   from 'views/EndpointTab/EndpointGraphics.mjs' 
+  import Settings from 'views/GraphicSupport/Settings.mjs'
 
 
     let connection = false
@@ -59,6 +59,7 @@
       container.appendChild(label)
     
       container.select = document.createElement('select')
+      container.select.classList.add('mainDropDown')
       container.appendChild(container.select)
 
       const viewLevels = [['Basic', 1], ['Simple', 2], ['Detailed', 3], ['Specialized', 4], ['Settings', 5]]

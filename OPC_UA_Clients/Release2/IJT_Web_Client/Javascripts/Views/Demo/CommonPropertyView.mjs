@@ -1,3 +1,7 @@
+/**
+ * A class that dispalays some common parts of a result
+ */
+
 export default class CommonPropertyView {
   constructor (propList, context, resultManager) {
     this.background = document.createElement('div')
@@ -17,7 +21,9 @@ export default class CommonPropertyView {
   }
 
   /**
-   * Run everytime the tab is opened
+   * Display some common parameters from a result. Run everytime the tab is opened, or a result is recieved
+   * @param {*} result a recieved result
+   * @param {*} propList a list of '.' separated paths to properties in a result
    */
   displayProps (result, propList) {
     this.keys.innerHTML = ''
@@ -43,9 +49,6 @@ export default class CommonPropertyView {
         line2.innerText = value // eslint-disable-line
         this.values.appendChild(line2)
       }
-
-      // const maxes = result.getTaggedValues(8)
-      // console.log(maxes)
     }
   }
 }
