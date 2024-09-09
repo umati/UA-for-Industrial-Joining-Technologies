@@ -61,3 +61,8 @@ Refer to the following document for the usage of the reference server: **Usage_I
 2024-05-21: Few bug fixes as follows.
 1. Corrected the TypeDefinition of few Asset Variables from BaseDataVariableType to JoiningDataVariableType.
 2. Added PhysicalQuantity and EngineeringUnits property to CalbirationValue and SensorScale.
+
+2024-09-09: Following changes.
+1. Added SimulateBulkResults method to simulate multiple single results.
+2. Fixed multiple warnings and errors.
+3. Minor bugs and optimizations.
