@@ -66,3 +66,8 @@ Refer to the following document for the usage of the reference server: **Usage_I
 1. Added SimulateBulkResults method to simulate multiple single results.
 2. Fixed multiple warnings and errors.
 3. Minor bugs and optimizations.
+
+2024-10-04: Following changes.
+1. Added an option to Simulate Results as References in both SimulateBatch_or_Sync_Result and SimulateJobResult Methods. This option will send each child result separately.
+2. Refactoring of Result Simulation Code with
+3. Minor issues and optimizations.
