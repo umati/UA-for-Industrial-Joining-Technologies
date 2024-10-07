@@ -4,6 +4,10 @@
 
 Refer to the following document for the usage of the reference server: **Usage_IJT_OPC_UA_Server_Simulator.pdf**.
 
+**How to download?**
+
+Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'Downlaod raw file'** button.
+
 **Change Log:**
 
 2023-12-05: Initial Version
