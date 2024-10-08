@@ -2,6 +2,7 @@ from asyncua import Client, ua
 import asyncio
 from Python.Serialize import serializeTuple, serializeValue
 from Python.CallStructure import createCallStructure
+from Python.EventHandler import EventHandler
 import json
 from threading import Thread
 #from IPython import embed
@@ -12,37 +13,6 @@ def IdObjectToString (inp):
     if isinstance(inp, int):
       return "ns="+inp["NamespaceIndex"]+";i="+inp["Identifier"]
     return "ns="+inp["NamespaceIndex"]+";s="+inp["Identifier"]
-   
-class SubHandler():
-    """
-    Subscription Handler. To receive events from server for a subscription
-    data_change and event methods are called directly from receiving thread.
-    Do not do expensive, slow or network operation there. 
-    threaded_websocket handles that via wrap_async_func
-    """
-    def __init__(self, websocket, server_url):
-        self.websocket = websocket
-        self.server_url = server_url
- 
-    async def threaded_websocket(self, arg): 
-        returnValue = {
-             "command" : "event",
-             "endpoint": self.server_url,
-             "data": arg,
-        }
-        await self.websocket.send(json.dumps(returnValue))
-
-
-    def wrap_async_func(self, arg):
-        asyncio.run(self.threaded_websocket(arg))
-
-    def event_notification(self, event):
-        print("EVENT RECEIVED")
-        # Eventhandlers should be quick and non networked so sending the response
-        # to the webpage needs to be done asyncronously via a separate thread
-        thread = Thread(target = self.wrap_async_func, args = (str(serializeValue(event)), ))
-        thread.start()
-
 
 class Connection:
     """
@@ -62,6 +32,7 @@ class Connection:
         self.websocket = websocket
         self.handle = 'handle'
         self.sub = 'sub'
+        self.subhandler = 0
 
 
     async def connect(self):
@@ -78,7 +49,8 @@ class Connection:
              "command" : "connection established",
              "endpoint": self.server_url,
           }
-          await self.websocket.send(json.dumps(event))
+          if (self.websocket):
+            await self.websocket.send(json.dumps(event))
           return event
 
         except Exception as e:
@@ -106,18 +78,26 @@ class Connection:
 
     async def subscribe(self, data):
         try:
-          print("SUBSCRIBE")
-          msclt= SubHandler(self.websocket, self.server_url) # Defined above
-
+          if not self.subhandler: # Default subscription handler
+              self.subhandler = EventHandler(self.websocket, self.server_url)
+         
           obj = await self.client.nodes.root.get_child(["0:Objects", "0:Server"])
 
           resultEvent = await self.client.nodes.root.get_child(["0:Types", "0:EventTypes", "0:BaseEventType", "7:ResultReadyEventType", "3:JoiningSystemResultReadyEventType"])
           joiningSystemEvent = await self.client.nodes.root.get_child(["0:Types", "0:EventTypes", "0:BaseEventType", "3:JoiningSystemEventType"])
           
           await self.client.load_data_type_definitions()
+
+          self.sub = await self.client.create_subscription(100, self.subhandler)
           
-          self.sub = await self.client.create_subscription(100, msclt)
-          self.handle = await self.sub.subscribe_events(obj, [resultEvent, joiningSystemEvent])
+          eventTypes = [] 
+          if not "eventype" in data or 'resultevent' in data["eventtype"]:
+            eventTypes.append(resultEvent)
+          if not "eventype" in data or 'joiningsystemevent' in data["eventtype"]:
+            eventTypes.append(joiningSystemEvent)
+
+          self.handle = await self.sub.subscribe_events(obj, eventTypes)
+
           return {}
 
         except Exception as e:
@@ -240,6 +220,7 @@ class Connection:
           
     async def methodcall(self, data):
        try:
+          print(data)
           objectNode = data["objectnode"]
           methodNode = data["methodnode"]
           arguments = data["arguments"]
@@ -255,14 +236,13 @@ class Connection:
             input = createCallStructure(argument)
             attrList.append(input)  
 
-          print(1)
+          print("attrList")
+          print(attrList)
+
           methodRepr = getattr(obj, "call_method")
-          print(2)
           out = await methodRepr(*attrList) # call the method and get the output
-          print(3)
 
-          print(serializeValue(out))
-
+          # print(serializeValue(out))
           return { "output" : serializeValue(out) }
        
        except Exception as e:

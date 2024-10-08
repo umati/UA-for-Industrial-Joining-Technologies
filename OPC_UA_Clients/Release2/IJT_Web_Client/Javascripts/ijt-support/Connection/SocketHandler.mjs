@@ -164,7 +164,7 @@ export class SocketHandler {
   registerMandatory (responseString, callback) {
     function applyAll (functionList, msg) {
       if (msg && msg.exception) {
-        throw new Error('Response exception: ' + msg.exception)
+        // throw new Error('Response exception: ' + msg.exception)
       }
       let returnValue
       for (const f of functionList) {

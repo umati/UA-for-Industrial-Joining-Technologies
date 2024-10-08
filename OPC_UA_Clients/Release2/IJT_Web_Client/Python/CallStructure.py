@@ -6,8 +6,12 @@ def createCallStructure(argument):
     """
 
     value = argument["value"]
+    print("value:")
     print(value)
     inp = 0
+
+    print("argument - datatype")
+    print(argument["dataType"])
 
     match argument["dataType"]:
       case 3029:
@@ -37,5 +41,5 @@ def createCallStructure(argument):
         print(inp.__dict__)
       case _:
         inp = ua.Variant(value, ua.VariantType(argument["dataType"]))
-    
+
     return inp
