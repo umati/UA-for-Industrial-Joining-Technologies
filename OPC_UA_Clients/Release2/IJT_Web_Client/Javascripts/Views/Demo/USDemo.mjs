@@ -55,14 +55,14 @@ export default class USDemo extends BasicScreen {
     button1.innerText = 'Select program 1'
     button1.classList.add('demoButton')
     buttonArea.appendChild(button1)
-    button1.addEventListener('click', this.selectJoiningProcess(this.settings.JoiningProcess1))
+    button1.addEventListener('click', () => this.selectJoiningProcess(this.settings.JoiningProcess1))
 
     // Handling of button 2 (calling select process)
     const button2 = document.createElement('button')
     button2.innerText = 'Select program 2'
     button2.classList.add('demoButton')
     buttonArea.appendChild(button2)
-    button2.addEventListener('click', this.selectJoiningProcess(this.settings.JoiningProcess2))
+    button2.addEventListener('click', () => this.selectJoiningProcess(this.settings.JoiningProcess2))
 
     const resultArea = document.createElement('div')
     resultArea.style.width = '80%'

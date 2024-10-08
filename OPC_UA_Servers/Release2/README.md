@@ -4,6 +4,10 @@
 
 Refer to the following document for the usage of the reference server: **Usage_IJT_OPC_UA_Server_Simulator.pdf**.
 
+**How to download?**
+
+Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'Downlaod raw file'** button.
+
 **Change Log:**
 
 2023-12-05: Initial Version
@@ -61,3 +65,15 @@ Refer to the following document for the usage of the reference server: **Usage_I
 2024-05-21: Few bug fixes as follows.
 1. Corrected the TypeDefinition of few Asset Variables from BaseDataVariableType to JoiningDataVariableType.
 2. Added PhysicalQuantity and EngineeringUnits property to CalbirationValue and SensorScale.
+
+2024-09-09: Following changes.
+1. Added SimulateBulkResults method to simulate multiple single results.
+2. Fixed multiple warnings and errors.
+3. Minor bugs and optimizations.
+
+2024-10-04: Following changes.
+1. Added an option to Simulate Results as References in both SimulateBatch_or_Sync_Result and SimulateJobResult Methods. This option will send each child result separately.
+2. Refactoring of Result Simulation Code with
+3. Minor issues and optimizations.
+
+2024-10-05: Fixed an issue in the order of Job Result when it the child results are sent as references.

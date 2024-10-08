@@ -228,6 +228,9 @@ class Connection:
           method = self.client.get_node(IdObjectToString(methodNode)) # get the method node
           
           print("METHODCALL: " + IdObjectToString(objectNode))
+          print('METHOD DATA..... STARTS....')
+          print(data)
+          print('METHOD DATA..... ENDS....')
        
           attrList = []
           attrList.append(method)
