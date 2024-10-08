@@ -220,7 +220,7 @@ class Connection:
           
     async def methodcall(self, data):
        try:
-          print(data)
+          # print(data)
           objectNode = data["objectnode"]
           methodNode = data["methodnode"]
           arguments = data["arguments"]
@@ -228,10 +228,7 @@ class Connection:
           method = self.client.get_node(IdObjectToString(methodNode)) # get the method node
           
           print("METHODCALL: " + IdObjectToString(objectNode))
-          print('METHOD DATA..... STARTS....')
-          print(data)
-          print('METHOD DATA..... ENDS....')
-       
+         
           attrList = []
           attrList.append(method)
 
@@ -239,8 +236,8 @@ class Connection:
             input = createCallStructure(argument)
             attrList.append(input)  
 
-          print("attrList")
-          print(attrList)
+          #print("attrList")
+          #print(attrList)
 
           methodRepr = getattr(obj, "call_method")
           out = await methodRepr(*attrList) # call the method and get the output

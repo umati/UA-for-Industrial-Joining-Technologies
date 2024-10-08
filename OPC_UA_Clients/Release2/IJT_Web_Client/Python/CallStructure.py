@@ -6,12 +6,12 @@ def createCallStructure(argument):
     """
 
     value = argument["value"]
-    print("value:")
-    print(value)
+    # print("value:")
+    # print(value)
     inp = 0
 
-    print("argument - datatype")
-    print(argument["dataType"])
+    # print("argument - datatype")
+    # print(argument["dataType"])
 
     match argument["dataType"]:
       case 3029:
@@ -38,7 +38,7 @@ def createCallStructure(argument):
           lst.append(entity)
         
         inp = ua.Variant(lst, ua.VariantType.ExtensionObject)
-        print(inp.__dict__)
+        # print(inp.__dict__)
       case _:
         inp = ua.Variant(value, ua.VariantType(argument["dataType"]))
 

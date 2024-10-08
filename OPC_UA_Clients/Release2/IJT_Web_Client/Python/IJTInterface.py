@@ -16,8 +16,8 @@ class IJTInterface:
     async def callConnection(self, data, func):
             endpoint = data["endpoint"]
             connection = self.connectionList[endpoint]
-           
-            print("protocol.state: " + connection.client.uaclient.protocol.state)
+            if connection.client.uaclient.protocol.state != 'open':
+              print("protocol.state: " + connection.client.uaclient.protocol.state)
             if (connection.client.uaclient.protocol.state != "open"):
               print("Reconnecting. --------------------------------")
               await connection.connect()
