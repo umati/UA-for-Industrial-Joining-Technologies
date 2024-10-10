@@ -45,4 +45,33 @@ export default class ResultDataType extends IJTBaseModel {
     }
     return 'No Time'
   }
+
+  get isReference () {
+    return !this.ResultMetaData.CreationTime
+  }
+
+  /**
+   * This function resolves all references to child results
+   * @param {*} resultManager an object tracking old results (must implement resultFromId())
+   * @returns false if this result is not fully recieved (including all subresults)
+   */
+  resolve (resultManager) {
+    if (this.isReference) {
+      const stored = resultManager.resultFromId(this.ResultMetaData.ResultId)
+      if (stored) {
+        Object.assign(this, stored) // We have a match. Copy in the data
+      } else {
+        return false // Im not loaded yet
+      }
+    }
+
+    // Go through all children and resolve them. If atleast one fails, I am still unresolved
+    let returnValue = true
+    for (const child of this.ResultContent) {
+      if (!child.resolve(resultManager)) {
+        returnValue = false // A child still lack a result
+      }
+    }
+    return returnValue
+  }
 }

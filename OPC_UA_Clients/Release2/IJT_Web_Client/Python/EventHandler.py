@@ -16,6 +16,7 @@ class EventHandler():
         self.server_url = server_url
  
     async def threaded_websocket(self, arg): 
+        print("EVENT RECEIVED22")
         returnValue = {
              "command" : "event",
              "endpoint": self.server_url,
@@ -29,6 +30,7 @@ class EventHandler():
 
     def event_notification(self, event):
         print("EVENT RECEIVED")
+        print(str(serializeValue(event)))
         # Eventhandlers should be quick and non networked so sending the response
         # to the webpage needs to be done asyncronously via a separate thread
         thread = Thread(target = self.wrap_async_func, args = (str(serializeValue(event)), ))

@@ -38,6 +38,11 @@ export default class IJTPropertyView {
       heading.innerText = text
       return heading
     }
+
+    if (result.ResultMetaData.Classification !== '1') {
+      return
+    }
+
     this.name.innerHTML = ''
     this.measured.innerHTML = ''
     this.high.innerHTML = ''

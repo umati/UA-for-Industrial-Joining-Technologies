@@ -93,8 +93,10 @@ class Connection:
           eventTypes = [] 
           if not "eventype" in data or 'resultevent' in data["eventtype"]:
             eventTypes.append(resultEvent)
+            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
           if not "eventype" in data or 'joiningsystemevent' in data["eventtype"]:
             eventTypes.append(joiningSystemEvent)
+            print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
 
           self.handle = await self.sub.subscribe_events(obj, eventTypes)
 

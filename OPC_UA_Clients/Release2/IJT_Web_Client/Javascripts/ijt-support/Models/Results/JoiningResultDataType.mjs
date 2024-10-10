@@ -32,4 +32,24 @@ export default class JoiningResultDataType extends IJTBaseModel {
     }
     return listOfValues
   }
+
+  get isReference () {
+    return this.ResultMetaData && !this.ResultMetaData.CreationTime
+  }
+
+  /**
+   * This function resolves all references to child results
+   * @param {*} resultManager an object tracking old results (must implement resultFromId())
+   * @returns true
+   */
+  resolve (resultManager) {
+    if (this.isReference) {
+      const stored = resultManager.resultFromId(this.ResultMetaData.ResultId)
+      if (stored) {
+        Object.assign(this, stored) // We have a match. Copy in the data
+      } else {
+        return false // Im not loaded yet
+      }
+    }
+  }
 }

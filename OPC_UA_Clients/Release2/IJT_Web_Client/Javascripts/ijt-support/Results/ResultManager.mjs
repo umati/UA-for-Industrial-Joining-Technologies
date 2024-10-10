@@ -3,7 +3,7 @@
  * query for them, in addition to a specialized subscription focusing on results
  */
 export class ResultManager {
-  constructor (connectionManager, eventManager) {
+  constructor (eventManager) {
     this.eventManager = eventManager
     this.eventManager.modelManager.subscribeSubResults((r) => {
       this.addResult(r)
@@ -11,6 +11,7 @@ export class ResultManager {
     this.results = {}
     this.subscribers = []
     this.resultUniqueCounter = 0
+    this.unresolved = []
     this.results = {
       0: [],
       1: [],
@@ -21,21 +22,54 @@ export class ResultManager {
   }
 
   /**
-   * Store all new result for later use and
-   * let all subscribers know its here
+   * Go through all results containing uresolved references and check if
+   * they can be resolved.
+   * If they can, then remove them from the list of unresolveds.
+   */
+  resolveOld () {
+    const cleanList = []
+    for (const oldUnresolved of this.unresolved) {
+      if (oldUnresolved.resolve(this)) {
+        cleanList.push(oldUnresolved)
+      }
+    }
+    this.unresolved.filter(item => !cleanList.includes(item))
+  }
+
+  handlePartial (stored, newResult) {
+    if (newResult.ResultMetaData.SequenceNumber &&
+      newResult.ResultMetaData.SequenceNumber >
+      stored.ResultMetaData.SequenceNumber) {
+      Object.assign(stored, newResult)
+      return true
+    }
+    return false
+  }
+
+  /**
+   * Store all new result for later use and let all subscribers know its here
    * @param {*} result the new result
    */
   addResult (result) {
-    this.results[result.id] = result
-    result.clientLatestRecievedTime = new Date().getTime()
+    const stored = this.resultFromId(result.ResultMetaData.ResultId)
 
-    let classification = 0
-    if (result.classification) {
-      classification = parseInt(result.classification)
+    if (stored) { // Old partial
+      this.handlePartial(stored, result)
+      this.unresolved.filter(item => item !== stored)
+    } else { // New result
+      let classification = 0
+      if (result.classification) {
+        classification = parseInt(result.classification)
+      }
+      result.uniqueCounter = this.resultUniqueCounter++
+      this.results[classification].push(result)
+      this.results[-1] = [result]
     }
-    result.uniqueCounter = this.resultUniqueCounter++
-    this.results[classification].push(result)
-    this.results[-1] = [result]
+
+    this.unresolved.push(result) // This result migh contain unresolved references
+    this.resolveOld() // resolve all unresolved references that can be resolved
+
+    result.clientLatestRecievedTime = new Date().getTime()
 
     for (const subscriber of this.subscribers) {
       subscriber(result)
