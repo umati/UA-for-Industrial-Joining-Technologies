@@ -16,7 +16,6 @@ class EventHandler():
         self.server_url = server_url
  
     async def threaded_websocket(self, arg): 
-        print("EVENT RECEIVED22")
         returnValue = {
              "command" : "event",
              "endpoint": self.server_url,
