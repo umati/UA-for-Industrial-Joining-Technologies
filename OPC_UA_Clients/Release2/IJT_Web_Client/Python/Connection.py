@@ -98,7 +98,7 @@ class Connection:
             eventTypes.append(joiningSystemEvent)
             print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
 
-          self.handle = await self.sub.subscribe_events(obj, eventTypes)
+          self.handle = await self.sub.subscribe_events(obj, eventTypes, queuesize=200)
 
           return {}
 
