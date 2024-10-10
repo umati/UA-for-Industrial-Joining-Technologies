@@ -29,6 +29,7 @@ class EventHandler():
 
     def event_notification(self, event):
         print("EVENT RECEIVED")
+        print(event.Message)
         # Eventhandlers should be quick and non networked so sending the response
         # to the webpage needs to be done asyncronously via a separate thread
         thread = Thread(target = self.wrap_async_func, args = (str(serializeValue(event)), ))

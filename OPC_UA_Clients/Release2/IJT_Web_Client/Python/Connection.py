@@ -96,7 +96,7 @@ class Connection:
           if not "eventype" in data or 'joiningsystemevent' in data["eventtype"]:
             eventTypes.append(joiningSystemEvent)
 
-          self.handle = await self.sub.subscribe_events(obj, eventTypes)
+          self.handle = await self.sub.subscribe_events(obj, eventTypes, queuesize=200)
 
           return {}
 
