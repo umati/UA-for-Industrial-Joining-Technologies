@@ -7,6 +7,8 @@ https://opcfoundation.org/markets-collaboration/IJT/
 
 https://vdma.org/viewer/-/v2article/render/88084510 
 
+**Detailed Modular Presentation:** https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/IJT_Documents 
+
 **IJT Joining Specification:** 
 
 https://reference.opcfoundation.org/nodesets?u=http://opcfoundation.org/UA/IJT/Base/
