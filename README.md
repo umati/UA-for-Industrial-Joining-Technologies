@@ -7,15 +7,16 @@ https://opcfoundation.org/markets-collaboration/IJT/
 
 https://vdma.org/viewer/-/v2article/render/88084510 
 
-**Detailed Modular Presentation:** https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/IJT_Documents 
+**Detailed Modular Presentation:** 
+https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/IJT_Documents 
 
 **IJT Joining Specification:** 
 
-https://reference.opcfoundation.org/nodesets?u=http://opcfoundation.org/UA/IJT/Base/
+https://reference.opcfoundation.org/IJT/Base/v100/docs/
 
 **IJT Tightening Specification:** 
 
-https://reference.opcfoundation.org/nodesets?u=http://opcfoundation.org/UA/IJT/Tightening/ 
+https://reference.opcfoundation.org/IJT/Tightening/v200/docs/
 
 The **Joining** **Specification** **(OPC 40450)** is the **Base** part for the joining technologies.
 
