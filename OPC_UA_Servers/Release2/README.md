@@ -77,3 +77,8 @@ Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'D
 3. Minor issues and optimizations.
 
 2024-10-05: Fixed an issue in the order of Job Result when it the child results are sent as references.
+
+2024-10-18: Following changes.
+1. Added version information for the simulator.
+2. Corrected tje content of Quality and Vision Results which are now sent as ResultReadyEvent instead of JoiningSystemResultReadyEvent.
+3. Minor bugs and optimizations.
