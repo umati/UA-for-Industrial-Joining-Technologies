@@ -53,3 +53,25 @@ def serializeClassInstance(obj):
             result = result + ","
             result = result + "\"" + key + "\"" + ":" + serializeValue(value)
     return result    
+
+
+def serializeFullEvent(value):
+    """
+    Serialize an value
+    """
+    # print(type(value).__name__)
+    if isInstanceOfClass(value):
+        return "{" + serializeClassInstance(value) + "}"
+    elif value == None:
+        return "null"
+    elif isinstance(value, list):
+        result = "[" 
+        first = True
+        for item in value:
+            if not first:
+                result = result + ","
+            first = False
+            result = result + serializeValue(item)
+        return result + "]"
+    else:
+        return "\"" + str(value).replace('\n', '\\n') + "\""

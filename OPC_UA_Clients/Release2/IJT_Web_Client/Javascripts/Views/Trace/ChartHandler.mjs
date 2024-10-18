@@ -39,28 +39,6 @@ export default class ChartManager {
       }
     })
 
-    /*
-    this.traceManager.traceInterface.canvasCoverLayer.addEventListener('mouseup', (evt) => {
-      const points = this.myChart.getElementsAtEventForMode(evt,
-        'nearest', { intersect: true }, true)
-
-      let resultId = null
-      let stepId = null
-      if (points.length) {
-        const firstPoint = points[0]
-        const dataset = this.myChart.data.datasets[firstPoint.datasetIndex]
-        resultId = dataset.resultId
-        stepId = dataset.stepId
-        // this.traceManager.clicked(dataset.resultId, dataset.stepId.value)
-      }
-
-      this.traceManager.onclick(
-        evt,
-        this.pixelToValue(evt),
-        resultId,
-        stepId)
-    }) */
-
     this.context.onmousedown = (evt) => {
       this.traceManager.onmousedown(evt, this.pixelToValue(evt))
     }
@@ -74,16 +52,6 @@ export default class ChartManager {
       evt.preventDefault()
       this.traceManager.onmousewheel(evt, this.pixelToValue(evt))
     })
-
-    /*
-    this.touchlistExtendWithCoordinates = (touches) => {
-      for (const touch of touches) {
-        // console.log('x :' + touch.clientX + ' y: ' + touch.clientY)
-        touch.coordinates = this.pixelToValue({ x: touch.clientX, y: touch.clientY })
-
-        console.log('x :' + touch.coordinates.x + ' y: ' + touch.coordinates.y)
-      }
-    } */
 
     this.context.addEventListener('touchstart', (evt) => {
       // console.log('x: ' + Math.round(evt.touches[0].clientY))

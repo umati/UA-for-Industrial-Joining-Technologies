@@ -13,7 +13,11 @@ export default class ResultDataType extends IJTBaseModel {
     }
 
     super(parameters, modelManager, castMapping)
-    // modelManager.resultTypeNotification(this)
+    this.rebuildState = {
+      claimed: false,
+      resolved: false,
+      partial: false
+    }
   }
 
   get id () {
@@ -29,7 +33,7 @@ export default class ResultDataType extends IJTBaseModel {
   }
 
   get isPartial () {
-    return this.ResultMetaData?.IsPartial
+    return this.ResultMetaData?.IsPartial === 'True'
   }
 
   get evaluation () {
@@ -50,28 +54,41 @@ export default class ResultDataType extends IJTBaseModel {
     return !this.ResultMetaData.CreationTime
   }
 
+  replaceReference (child, newChild, children) {
+    const index = children.indexOf(child)
+    children[index] = newChild
+  }
+
   /**
    * This function resolves all references to child results
    * @param {*} resultManager an object tracking old results (must implement resultFromId())
    * @returns false if this result is not fully recieved (including all subresults)
-   */
+   *
   resolve (resultManager) {
     if (this.isReference) {
       const stored = resultManager.resultFromId(this.ResultMetaData.ResultId)
       if (stored) {
-        Object.assign(this, stored) // We have a match. Copy in the data
+        stored.rebuildState.claimed = true // This could be purged now
+        return stored
       } else {
         return false // Im not loaded yet
       }
     }
 
     // Go through all children and resolve them. If atleast one fails, I am still unresolved
-    let returnValue = true
+    let returnValue = this
     for (const child of this.ResultContent) {
-      if (!child.resolve(resultManager)) {
+      const newChild = child.resolve(resultManager)
+      if (!newChild) {
         returnValue = false // A child still lack a result
+        this.rebuildState.resolved = false
+      } else {
+        this.replaceReference(child, newChild, this.ResultContent)
       }
     }
+    if (returnValue) {
+      this.rebuildState.resolved = true
+    }
     return returnValue
-  }
+  } */
 }

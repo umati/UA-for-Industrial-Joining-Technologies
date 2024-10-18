@@ -3,6 +3,7 @@ import asyncio
 from Python.Serialize import serializeTuple, serializeValue
 from Python.CallStructure import createCallStructure
 from Python.EventHandler import EventHandler
+from Python.ResultEventHandler import ResultEventHandler
 import json
 from threading import Thread
 #from IPython import embed
@@ -32,7 +33,8 @@ class Connection:
         self.websocket = websocket
         self.handle = 'handle'
         self.sub = 'sub'
-        self.subhandler = 0
+        self.eventhandler = 0
+        self.resulteventhandler = 0
 
 
     async def connect(self):
@@ -78,8 +80,11 @@ class Connection:
 
     async def subscribe(self, data):
         try:
-          if not self.subhandler: # Default subscription handler
-              self.subhandler = EventHandler(self.websocket, self.server_url)
+          if not self.eventhandler: # Default subscription handler
+              self.eventhandler = EventHandler(self.websocket, self.server_url)
+         
+          if not self.resulteventhandler: # Default subscription handler for result
+              self.resulteventhandler = ResultEventHandler(self.websocket, self.server_url)
          
           obj = await self.client.nodes.root.get_child(["0:Objects", "0:Server"])
 
@@ -88,17 +93,18 @@ class Connection:
           
           await self.client.load_data_type_definitions()
 
-          self.sub = await self.client.create_subscription(100, self.subhandler)
+          self.resultsub = await self.client.create_subscription(100, self.resulteventhandler)
           
-          eventTypes = [] 
           if not "eventype" in data or 'resultevent' in data["eventtype"]:
-            eventTypes.append(resultEvent)
+            self.subresult = await self.client.create_subscription(100, self.resulteventhandler)
+            self.handle = await self.subresult.subscribe_events(obj, [resultEvent], queuesize=200)
             print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
           if not "eventype" in data or 'joiningsystemevent' in data["eventtype"]:
-            eventTypes.append(joiningSystemEvent)
+            self.sub = await self.client.create_subscription(100, self.eventhandler)
+            self.handle = await self.sub.subscribe_events(obj, [joiningSystemEvent], queuesize=200)
             print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
 
-          self.handle = await self.sub.subscribe_events(obj, eventTypes, queuesize=200)
+          # self.handle = await self.sub.subscribe_events(obj, eventTypes, queuesize=200)
 
           return {}
 

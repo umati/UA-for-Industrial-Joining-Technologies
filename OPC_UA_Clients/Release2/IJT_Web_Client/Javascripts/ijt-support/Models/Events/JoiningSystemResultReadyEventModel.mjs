@@ -22,7 +22,7 @@ export default class JoiningSystemResultReadyEventModel extends BaseEventModel {
   constructor (parameters, modelManager) {
     const castMapping = {
       AssociatedEntities: 'EntityDataType',
-      Result: 'ResultDataModel'
+      Result: 'ResultDataType'
       // AssociatedEntities EventCode, EventText, Joiningtechnology ReportedValues
     }
 

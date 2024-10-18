@@ -8,7 +8,6 @@ export class ResultManager {
     this.eventManager.modelManager.subscribeSubResults((r) => {
       this.addResult(r)
     })
-    this.results = {}
     this.subscribers = []
     this.resultUniqueCounter = 0
     this.unresolved = []
@@ -19,6 +18,22 @@ export class ResultManager {
       3: [],
       4: []
     }
+    this.lastResult = null
+  }
+
+  getUnfinished () {
+    const returnList = []
+    for (const list of Object.values(this.results)) {
+      for (const res of list) {
+        if (!res.rebuildState.claimed ||
+            (!res.rebuildState.claimed &&
+              !res.rebuildState.partial &&
+              res.rebuildState.resolved)) {
+          returnList.push(res)
+        }
+      }
+    }
+    return returnList
   }
 
   /**
@@ -29,11 +44,13 @@ export class ResultManager {
   resolveOld () {
     const cleanList = []
     for (const oldUnresolved of this.unresolved) {
-      if (oldUnresolved.resolve(this)) {
+      if (this.resolve(oldUnresolved)) {
         cleanList.push(oldUnresolved)
       }
     }
-    this.unresolved.filter(item => !cleanList.includes(item))
+
+    this.unresolved = this.unresolved.filter(item =>
+      !cleanList.includes(item))
   }
 
   handlePartial (stored, newResult) {
@@ -51,11 +68,12 @@ export class ResultManager {
    * @param {*} result the new result
    */
   addResult (result) {
+    result.rebuildState.partial = result.ResultMetaData.IsPartial === 'True'
     const stored = this.resultFromId(result.ResultMetaData.ResultId)
 
     if (stored) { // Old partial
       this.handlePartial(stored, result)
-      this.unresolved.filter(item => item !== stored)
+      this.unresolved = this.unresolved.filter(item => item !== stored)
     } else { // New result
       let classification = 0
       if (result.classification) {
@@ -63,7 +81,7 @@ export class ResultManager {
       }
       result.uniqueCounter = this.resultUniqueCounter++
       this.results[classification].push(result)
-      this.results[-1] = [result]
+      this.lastResult = result
     }
 
     this.unresolved.push(result) // This result migh contain unresolved references
@@ -120,5 +138,38 @@ export class ResultManager {
    */
   getResultOfType (resultType) {
     return this.results[resultType]
+  }
+
+  /**
+   * This function resolves all references to child results
+   * @param {*} result the result to resolve
+   * @returns false if this result is not fully recieved (including all subresults)
+   */
+  resolve (result) {
+    if (result.isReference) {
+      const stored = this.resultFromId(result.ResultMetaData.ResultId)
+      if (stored) {
+        return stored
+      } else {
+        return false // Im not loaded yet
+      }
+    }
+
+    // Go through all children and resolve them. If atleast one fails, I am still unresolved
+    let returnValue = result
+    result.rebuildState.resolved = true // Start by assuming all subresults are resolved
+    if (result.ResultContent) {
+      for (const child of result.ResultContent) {
+        const newChild = this.resolve(child)
+        if (!newChild) {
+          returnValue = false // A child still lack a result
+          result.rebuildState.resolved = false
+        } else {
+          newChild.rebuildState.claimed = true // This (sub)result could be purged now
+          result.replaceReference(child, newChild, result.ResultContent)
+        }
+      }
+    }
+    return returnValue
   }
 }

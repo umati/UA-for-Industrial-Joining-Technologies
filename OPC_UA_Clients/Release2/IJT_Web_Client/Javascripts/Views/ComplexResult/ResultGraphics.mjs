@@ -9,7 +9,7 @@ export default class ResultGraphics extends BasicScreen {
 
     this.displayedIdentity = 0
     this.selectType = '-1'
-    this.selectResult = '-1'
+    this.selectResult = '-2'
     this.envelope = 'true'
     // Subscribe to new results
     resultManager.subscribe((result) => {
@@ -39,6 +39,7 @@ export default class ResultGraphics extends BasicScreen {
       this.selectResult = selection
       this.refreshDrawing2(selection)
     })
+    this.selectResultDropdown.addOption('Unresolved', -2)
     this.selectResultDropdown.addOption('Latest', -1)
     this.selectResultDropdown.classList.add('resultHeaderItem')
     this.header.appendChild(this.selectResultDropdown)
@@ -83,7 +84,7 @@ export default class ResultGraphics extends BasicScreen {
    * @param {*} enveloped should it be represented as enveloped boxes or hierarchical roots
    * @returns {*} a HTML representation of the parent-child relation
    */
-  makeRoot (parentBox, children, counter, size, state, enveloped) {
+  makeRoot (parentBox, children, counter, size, enveloped) {
     function makeSnibb (container, counter, length) {
       const row = document.createElement('div')
       row.classList.add('snibbRow')
@@ -163,6 +164,7 @@ export default class ResultGraphics extends BasicScreen {
    */
   changeResultList (selectedtype) {
     this.selectResultDropdown.clearOptions()
+    this.selectResultDropdown.addOption('Unresolved', -2)
     this.selectResultDropdown.addOption('Latest', -1)
     for (const a of this.resultManager.getResultOfType(parseInt(selectedtype))) {
       this.selectResultDropdown.addOption(a.name + ' [' + a.time.substring(11, 19) + '] ' + a.uniqueCounter, a.id)
@@ -177,39 +179,46 @@ export default class ResultGraphics extends BasicScreen {
    */
   refreshDrawing2 (id) {
     this.display.innerHTML = ''
-    let selection
-    if (this.selectType === -1) {
-      selection = this.resultManager.getLatest(-1)
+    let selection = []
+    if (this.selectResult === '-2') {
+      selection = this.resultManager.getUnfinished()
+    } else if (this.selectType === -1) {
+      selection = [this.resultManager.lastResult]
     } else if (this.selectResult === '-1') {
-      selection = this.resultManager.getLatest(this.selectType)
+      selection = [this.resultManager.getLatest(this.selectType)]
     } else {
-      selection = this.resultManager.resultFromId(id, this.selectType)
+      selection = [this.resultManager.resultFromId(id, this.selectType)]
     }
-    if (selection) {
-      const drawResult = this.drawResultBoxes2(selection)
-      if (this.envelope === 'true') {
-        this.appyClasses(drawResult.element, drawResult.style)
+    for (const result of selection) {
+      const drawResult = this.drawResultBoxes(result)
+      if (drawResult) {
+        if (this.envelope === 'true') {
+          this.appyClasses(drawResult.element, drawResult.style)
+        }
+        this.display.appendChild(drawResult.element)
       }
-      this.display.appendChild(drawResult.element)
     }
   }
 
   /**
-   * Description placeholder
+   * Draw the boxes of a result
    * @date 2/12/2024 - 7:22:10 PM
    *
    * @param {*} result the result you want to draw
    * @returns {*} An object containing the HTML element and a list of styles that can be applied to the container
    */
-  drawResultBoxes2 (result) {
-    function getSizeAndCounter (counterList) {
+  drawResultBoxes (result) {
+    function getSizeAndCounter (result) {
       const res = { size: 0, counter: 0 }
-      if (counterList) {
-        for (const c of counterList) {
-          if (c.CounterType === '2') {
-            res.size = c.CounterValue
-          } else if (c.CounterType === '3') {
-            res.counter = c.CounterValue
+      if (result.ResultMetaData && result.ResultMetaData.ResultCounters) {
+        const counterList = result.ResultMetaData.ResultCounters
+        if (counterList) {
+          for (const c of counterList) {
+            if (c.CounterType === '2') {
+              res.size = c.CounterValue
+            } else if (c.CounterType === '3') {
+              res.counter = c.CounterValue
+            }
           }
         }
       }
@@ -221,32 +230,46 @@ export default class ResultGraphics extends BasicScreen {
     }
     // const classification = result.ResultMetaData.Classification
     const top = document.createElement('div')
-    if (result.name) {
-      top.innerText = result.name
-    } else {
-      top.innerText = 'Id: ' + result.id
-    }
+    const children = []
 
-    const counterInfo = getSizeAndCounter(result.ResultMetaData.ResultCounters)
-
-    if (counterInfo.size > 0) {
-      top.innerText += ' [' + counterInfo.counter + '/' + counterInfo.size + ']'
-    }
-
+    const counterInfo = getSizeAndCounter(result)
     const style = this.getStyle(result)
+
+    if (result.isReference) {
+      top.innerText = 'Ref ID: ' + result.ResultMetaData.ResultId
+    } else if (!result.id) {
+      console.log('OTHER')
+      return
+    } else {
+      if (result.name) {
+        top.innerText = result.name
+      } else {
+        top.innerText = 'Id: ' + result.id
+      }
+
+      if (result.rebuildState) {
+        top.innerText += ' '
+        if (result.rebuildState.claimed) { top.innerText += 'C' }
+        if (result.rebuildState.resolved) { top.innerText += 'R' }
+        if (result.rebuildState.partial) { top.innerText += 'P' }
+      }
+
+      if (counterInfo.size > 0) {
+        top.innerText += ' [' + counterInfo.counter + '/' + counterInfo.size + ']'
+      }
+
+      const contentList = result.ResultContent
+
+      for (const content of contentList) {
+        const childBox = this.drawResultBoxes(content)
+        if (childBox) {
+          children.push(childBox)
+        }
+      }
+    }
 
     if (this.envelope !== 'true') {
       this.appyClasses(top, style)
-    }
-
-    const contentList = result.ResultContent
-    const children = []
-
-    for (const content of contentList) {
-      if (content.id) {
-        const childBox = this.drawResultBoxes2(content)
-        children.push(childBox)
-      }
     }
 
     return {
@@ -255,7 +278,6 @@ export default class ResultGraphics extends BasicScreen {
         children,
         counterInfo.counter,
         counterInfo.size,
-        result.ResultMetaData.ResultState,
         this.envelope === 'true'),
       style
     }
@@ -311,6 +333,11 @@ export default class ResultGraphics extends BasicScreen {
       default:
         style.push('resOther')
     }
+
+    if (result.isReference) {
+      style.push('resReference')
+    }
+
     return style
   }
 }

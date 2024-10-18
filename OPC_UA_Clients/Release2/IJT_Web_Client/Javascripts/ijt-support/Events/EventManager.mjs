@@ -7,6 +7,8 @@ export class EventManager {
     this.socketHandler = connectionManager.socketHandler
     this.callbacks = []
     this.modelManager = modelManager
+    this.queueing = false
+    this.queue = []
 
     connectionManager.subscribe('subscription', (setToTrue) => {
       if (setToTrue) {
@@ -26,7 +28,7 @@ export class EventManager {
       } else {
         console.log('Event lacking ConditionClassName received')
       }
-      this.receivedEvent(this.modelManager.createModelFromEvent(message))
+      this.receivedEvent(message)
     })
   }
 
@@ -53,7 +55,16 @@ export class EventManager {
     this.callbacks.push({ filter, callback, subscriberDetails })
   }
 
-  receivedEvent (eventModel) {
+  receivedEvent (message) {
+    if (this.queueing) {
+      this.queue.push(message)
+    } else {
+      this.makeCalls(message)
+    }
+  }
+
+  makeCalls (message) {
+    const eventModel = this.modelManager.createModelFromEvent(message)
     for (const item of this.callbacks) {
       if (item.filter && item.filter(eventModel)) {
         // console.log(`SUBSCRIPTION: ${item.subscriberDetails}`)
@@ -61,6 +72,25 @@ export class EventManager {
         item.callback(eventModel)
       }
     }
+  }
+
+  queueState (state) {
+    this.queueing = state
+  }
+
+  queueNext () {
+    if (this.queue.length > 0) {
+      return this.queue[0]
+    }
+  }
+
+  deQueue () {
+    if (this.queue.concat.length === 0) {
+      return 0
+    }
+    this.lastDequeuedElement = this.queue.shift()
+    this.makeCalls(this.lastDequeuedElement)
+    return this.queue.concat.length
   }
 
   reset () {

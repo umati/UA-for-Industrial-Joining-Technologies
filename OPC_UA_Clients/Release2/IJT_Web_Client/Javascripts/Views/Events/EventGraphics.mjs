@@ -9,6 +9,14 @@ export default class EventGraphics extends SingleScreen {
     super('Events', 'Events', 'Event content', 'subscribed')
     this.eventManager = eventManager
     this.modelToHTML = new ModelToHTML()
+    this.toggleQueueingState = false
+    this.hoverDiv = null
+
+    this.createButton('Toggle queueing', this.singleArea, () => {
+      this.toggleQueueingState = !this.toggleQueueingState
+      this.eventManager.queueState(this.toggleQueueingState)
+      this.hoveringStepButton(this.toggleQueueingState)
+    })
 
     this.singleArea.classList.add('messages')
 
@@ -43,5 +51,22 @@ export default class EventGraphics extends SingleScreen {
 
     const a = this.modelToHTML.toHTML(e, true, e.getEventName())
     header.appendChild(a)
+  }
+
+  hoveringStepButton (toggleQueueingState) {
+    this.hoverDiv = document.createElement('div')
+    this.hoverDiv.classList.add('eventqueuehoverdiv')
+    document.body.appendChild(this.hoverDiv)
+
+    this.createButton('Next event', this.hoverDiv, () => {
+      this.eventManager.deQueue()
+      this.queueInfo.innerHTML = ''
+      const text = 'Last: ' + this.eventManager.lastDequeuedElement.Message.Text +
+      ' Next: ' + this.eventManager.queueNext().Message.Text
+      this.queueInfo.innerText = text
+    })
+    this.queueInfo = document.createElement('div')
+    this.queueInfo.classList.add('eventInfo')
+    this.hoverDiv.appendChild(this.queueInfo)
   }
 }
