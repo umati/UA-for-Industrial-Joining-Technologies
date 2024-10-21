@@ -31,6 +31,6 @@ The purpose of the **VDMA OPC UA Industrial Joining Technologies (IJT)** Working
    * **Client:** OPC_UA_Clients/**Release1**/**NodeOPCUA_IJTClient**
      
 **Contact:**
-- For any **questions/feedback/issues** related to the above simulators, you can contact **mohit.agarwal@atlascopco.com**
+- For any **questions/feedback/issues** related to the above simulators, please contact **Mohit Agarwal mohit.agarwal@atlascopco.com** or **Bernd Heitzmann Bernd.Heitzmann@vdma.org**
 
 
