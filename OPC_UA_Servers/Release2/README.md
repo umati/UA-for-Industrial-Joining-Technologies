@@ -11,7 +11,7 @@ Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'D
 **Change Log:**
 
 **2024-10-25:** Following changes.
-1. Incrementing the ResultMetaData.SequenceNumber ONLY for Sequence Number of easier demonstration. The Batch/Job/Sync result will have the sequence number of the last tightening result. Sequence number is meant to be incremented for each tightening.
+1. The SequenceNumber is incremented ONLY for SINGLE Result of easier demonstration. The Batch/Job/Sync result will have the sequence number of the last tightening result.
 2. In SimulateBulkResults method, added an additional parameter to provide the time interval between each result.
 3. The Result Event Message will CONTAIN Classification:AssemblyType:Result:SequenceNumber information for quick readability and testing.
 4. Added the versioning in the Simulator for traceability. Updated the version of the Simulator to 1.2.0.
