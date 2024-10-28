@@ -31,7 +31,11 @@ class Connection:
     def __init__(self, server_url, websocket):
         self.server_url = server_url
         self.websocket = websocket
-        self.handle = 'handle'
+        self.handle1 = 'handle'
+        self.handle2 = 'handle'
+        self.handle3 = 'handle'
+        self.subresult1 = 'sub'
+        self.subresult2 = 'sub'
         self.sub = 'sub'
         self.eventhandler = 0
         self.resulteventhandler = 0
@@ -64,13 +68,29 @@ class Connection:
     async def terminate(self):
         server_url = self.server_url
         try:
-            if self.handle != 'handle':
-                await self.sub.unsubscribe(self.handle)
-                print("Unsubscribed")
+            if self.handle1 != 'handle':
+                await self.sub.unsubscribe(self.handle1)
+                print("Unsubscribed 1")
+
+            if self.handle2 != 'handle':
+                await self.sub.unsubscribe(self.handle2)
+                print("Unsubscribed 2")
+
+            if self.handle3 != 'handle':
+                await self.sub.unsubscribe(self.handle3)
+                print("Unsubscribed 3")
+
+            if self.subresult1 != 'sub' and self.client:
+                await self.client.delete_subscriptions([self.subresult1.subscription_id])
+                print("Deleted result subscription")
+
+            if self.subresult2 != 'sub' and self.client:
+                await self.client.delete_subscriptions([self.subresult2.subscription_id])
+                print("Deleted joining result subscription")
 
             if self.sub != 'sub' and self.client:
                 await self.client.delete_subscriptions([self.sub.subscription_id])
-                print("Deleted Subscription")
+                print("Deleted event subscription")
 
             await self.client.disconnect() # This currently generates an error if a subscription is running
 
@@ -88,21 +108,26 @@ class Connection:
          
           obj = await self.client.nodes.root.get_child(["0:Objects", "0:Server"])
 
-          resultEvent = await self.client.nodes.root.get_child(["0:Types", "0:EventTypes", "0:BaseEventType", "7:ResultReadyEventType", "3:JoiningSystemResultReadyEventType"])
+          resultEvent = await self.client.nodes.root.get_child(["0:Types", "0:EventTypes", "0:BaseEventType", "7:ResultReadyEventType"])
+          joiningResultEvent = await self.client.nodes.root.get_child(["0:Types", "0:EventTypes", "0:BaseEventType", "7:ResultReadyEventType", "3:JoiningSystemResultReadyEventType"])
           joiningSystemEvent = await self.client.nodes.root.get_child(["0:Types", "0:EventTypes", "0:BaseEventType", "3:JoiningSystemEventType"])
           
           await self.client.load_data_type_definitions()
 
-          self.resultsub = await self.client.create_subscription(100, self.resulteventhandler)
+          # self.resultsub = await self.client.create_subscription(100, self.resulteventhandler)
           
           if not "eventype" in data or 'resultevent' in data["eventtype"]:
-            self.subresult = await self.client.create_subscription(100, self.resulteventhandler)
-            self.handle = await self.subresult.subscribe_events(obj, [resultEvent], queuesize=200)
-            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            self.subresult1 = await self.client.create_subscription(100, self.resulteventhandler)
+            self.handle1 = await self.subresult1.subscribe_events(obj, [resultEvent], queuesize=200)
+         
+          #if not "eventype" in data or 'joiningResultEvent' in data["eventtype"]:
+            # self.subresult2 = await self.client.create_subscription(100, self.resulteventhandler)
+            # self.handle2 = await self.subresult1.subscribe_events(obj, [joiningResultEvent], queuesize=200)
+            #print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
+
           if not "eventype" in data or 'joiningsystemevent' in data["eventtype"]:
             self.sub = await self.client.create_subscription(100, self.eventhandler)
-            self.handle = await self.sub.subscribe_events(obj, [joiningSystemEvent], queuesize=200)
-            print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
+            self.handle3 = await self.sub.subscribe_events(obj, [joiningSystemEvent], queuesize=200)
 
           # self.handle = await self.sub.subscribe_events(obj, eventTypes, queuesize=200)
 

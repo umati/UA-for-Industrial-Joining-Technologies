@@ -10,7 +10,7 @@ export default class ResultGraphics extends BasicScreen {
     this.displayedIdentity = 0
     this.selectType = '-1'
     this.selectResult = '-2'
-    this.envelope = 'true'
+    this.envelope = 'false'
     // Subscribe to new results
     resultManager.subscribe((result) => {
       this.refreshDrawing2(result.id)
@@ -49,8 +49,9 @@ export default class ResultGraphics extends BasicScreen {
       this.envelope = selection
       this.refreshDrawing2(this.selectResult)
     })
-    this.dummyDropdown.addOption('Enveloped', true)
+
     this.dummyDropdown.addOption('Hierarchical', false)
+    this.dummyDropdown.addOption('Enveloped', true)
     this.dummyDropdown.classList.add('resultHeaderItem')
     this.header.appendChild(this.dummyDropdown)
 
@@ -195,7 +196,11 @@ export default class ResultGraphics extends BasicScreen {
         if (this.envelope === 'true') {
           this.appyClasses(drawResult.element, drawResult.style)
         }
-        this.display.appendChild(drawResult.element)
+
+        const complexWrapper = document.createElement('div')
+        complexWrapper.classList.add('complewrapper')
+        complexWrapper.appendChild(drawResult.element)
+        this.display.appendChild(complexWrapper)
       }
     }
   }
@@ -244,15 +249,20 @@ export default class ResultGraphics extends BasicScreen {
       if (result.name) {
         top.innerText = result.name
       } else {
-        top.innerText = 'Id: ' + result.id
+        if (result.ResultMetaData.CreationTime) {
+          top.innerText = 'Other: ' + result.id
+        } else {
+          top.innerText = 'Ref: ' + result.id
+        }
       }
 
+      /*
       if (result.rebuildState) {
         top.innerText += ' '
         if (result.rebuildState.claimed) { top.innerText += 'C' }
         if (result.rebuildState.resolved) { top.innerText += 'R' }
         if (result.rebuildState.partial) { top.innerText += 'P' }
-      }
+      } */
 
       if (counterInfo.size > 0) {
         top.innerText += ' [' + counterInfo.counter + '/' + counterInfo.size + ']'
@@ -260,10 +270,12 @@ export default class ResultGraphics extends BasicScreen {
 
       const contentList = result.ResultContent
 
-      for (const content of contentList) {
-        const childBox = this.drawResultBoxes(content)
-        if (childBox) {
-          children.push(childBox)
+      if (contentList) {
+        for (const content of contentList) {
+          const childBox = this.drawResultBoxes(content)
+          if (childBox) {
+            children.push(childBox)
+          }
         }
       }
     }
@@ -300,7 +312,7 @@ export default class ResultGraphics extends BasicScreen {
     if (!result.evaluation) {
       style.push('resNOK')
     } else {
-      style.push('resOK')
+      // style.push('resOK')
     }
 
     // Fade out the shadow on new results
@@ -317,25 +329,25 @@ export default class ResultGraphics extends BasicScreen {
       }
     }
 
-    switch (parseInt(result.classification)) {
-      case 1:
-        style.push('resTightening')
-        if (result.evaluation) {
-          style.push('resOK')
-        }
-        break
-      case 3:
-        style.push('resBatch')
-        break
-      case 4:
-        style.push('resJob')
-        break
-      default:
-        style.push('resOther')
-    }
-
     if (result.isReference) {
       style.push('resReference')
+    } else {
+      switch (parseInt(result.classification)) {
+        case 1:
+          style.push('resTightening')
+          if (!result.evaluation) {
+            style.push('resNOK')
+          }
+          break
+        case 3:
+          style.push('resBatch')
+          break
+        case 4:
+          style.push('resJob')
+          break
+        default:
+          style.push('resOther')
+      }
     }
 
     return style

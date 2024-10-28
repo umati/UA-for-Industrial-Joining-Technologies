@@ -52,18 +52,23 @@ export class ModelManager {
   factory (parameterName, content, castMapping) {
     if (typeof content === 'object' && Array !== content.constructor) {
 
+      console.log('Factory parameterName: ' + parameterName)
       if (content.dataType === 'ExtensionObject') {
         content = content.value
       }
       // If the model itself provides a typecasting, then use it
-      if (castMapping) {
+      
+      if ( castMapping) {
         for (const name of Object.entries(castMapping)) {
           if (parameterName.toLowerCase() === name[0].toLowerCase()) {
-            if ((content.ResultMetaData && content.ResultContent) || 
-                (content.Value?.ResultMetaData && content.Value?.ResultContent)) { // We got a result
-                const classification = content.ResultMetaData?.Classification ||
-                  content.Value?.ResultMetaData?.Classification
+            // console.log('Parameter to be cast: ' + name[0].toLowerCase())
+            const resultMetaData = content.ResultMetaData || content.Value?.ResultMetaData
+            // const resultMetaData = content.ResultMetaData || content.Value?.ResultMetaData
+            if (resultMetaData && resultMetaData.CreationTime) { // We got a result
+                const classification = resultMetaData.Classification 
                 let result
+                
+                // console.log('Classification number' + classification)
                 switch (classification) {
                   case "4": 
                     result= new JobDataModel(content, this)
@@ -80,6 +85,7 @@ export class ModelManager {
                  this.resultTypeNotification(result)
                  return result
             } else { // Some non-result data structure
+              // console.log('Factory selfcast: ' + name[1])
               return eval('new ' + name[1] + '(content,this)') // eslint-disable-line
             }
           }
@@ -87,8 +93,6 @@ export class ModelManager {
       }
       // Else, handle simple types
       if (content && content.Locale) {
-        // const a = {}
-        // a[parameterName] = content.text
         return new LocalizationModel(content, this)
       } else if (content && (
           content.pythonclass === 'NodeId' || 
@@ -123,6 +127,9 @@ export class ModelManager {
         model = new JoiningSystemEventModel(msg, this)
         break
       case ('1007'):
+        model = new JoiningSystemResultReadyEvent(msg, this)
+        break
+      case ('1002'): // Some non tightening related result
         model = new JoiningSystemResultReadyEvent(msg, this)
         break
       default:

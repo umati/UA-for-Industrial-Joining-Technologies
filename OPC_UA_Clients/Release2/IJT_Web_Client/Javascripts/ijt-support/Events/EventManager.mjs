@@ -85,12 +85,12 @@ export class EventManager {
   }
 
   deQueue () {
-    if (this.queue.concat.length === 0) {
+    if (this.queue.length === 0) {
       return 0
     }
     this.lastDequeuedElement = this.queue.shift()
     this.makeCalls(this.lastDequeuedElement)
-    return this.queue.concat.length
+    return this.queue.length
   }
 
   reset () {

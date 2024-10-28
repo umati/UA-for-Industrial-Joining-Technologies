@@ -49,6 +49,9 @@ export class ResultManager {
       }
     }
 
+    // Something is wrong here since the partial job results are not cleaned
+    // Or maybe it is just external results not counting???
+
     this.unresolved = this.unresolved.filter(item =>
       !cleanList.includes(item))
   }

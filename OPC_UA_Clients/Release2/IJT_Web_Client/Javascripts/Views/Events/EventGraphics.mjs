@@ -61,8 +61,11 @@ export default class EventGraphics extends SingleScreen {
     this.createButton('Next event', this.hoverDiv, () => {
       this.eventManager.deQueue()
       this.queueInfo.innerHTML = ''
-      const text = 'Last: ' + this.eventManager.lastDequeuedElement.Message.Text +
-      ' Next: ' + this.eventManager.queueNext().Message.Text
+      let text = 'Last: ' + this.eventManager.lastDequeuedElement.Message.Text
+      const next = this.eventManager.queueNext()
+      if (next) {
+        text += ' Next: ' + next.Message.Text
+      }
       this.queueInfo.innerText = text
     })
     this.queueInfo = document.createElement('div')
