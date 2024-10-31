@@ -54,22 +54,59 @@ export default class EventGraphics extends SingleScreen {
   }
 
   hoveringStepButton (toggleQueueingState) {
-    this.hoverDiv = document.createElement('div')
-    this.hoverDiv.classList.add('eventqueuehoverdiv')
-    document.body.appendChild(this.hoverDiv)
-
-    this.createButton('Next event', this.hoverDiv, () => {
-      this.eventManager.deQueue()
-      this.queueInfo.innerHTML = ''
-      let text = 'Last: ' + this.eventManager.lastDequeuedElement.Message.Text
-      const next = this.eventManager.queueNext()
-      if (next) {
-        text += ' Next: ' + next.Message.Text
+    function nameValueElement (name, value) {
+      const resultDiv = document.createElement('div')
+      resultDiv.classList.add('eventQueuePeeks')
+      const nameDiv = document.createElement('div')
+      resultDiv.appendChild(nameDiv)
+      const valDiv = document.createElement('div')
+      resultDiv.appendChild(valDiv)
+      nameDiv.innerText = name
+      if (value) {
+        if (value.Message) {
+          valDiv.innerText = value.Message.Text
+        } else {
+          valDiv.innerText = value
+        }
       }
-      this.queueInfo.innerText = text
-    })
-    this.queueInfo = document.createElement('div')
-    this.queueInfo.classList.add('eventInfo')
-    this.hoverDiv.appendChild(this.queueInfo)
+      return resultDiv
+    }
+
+    const queue = this.eventManager.queue
+    if (!this.hoverDiv) {
+      this.hoverDiv = document.createElement('div')
+      this.hoverDiv.classList.add('eventqueuehoverdiv')
+      document.body.appendChild(this.hoverDiv)
+
+      this.hoverDiv.innerText = 'Event queue'
+
+      this.createButton('Next event', this.hoverDiv, () => {
+        this.queueInfo.innerHTML = ''
+        this.queueInfo.appendChild(nameValueElement('Last', this.eventManager.dequeue()))
+        this.queueInfo.appendChild(nameValueElement('Next', queue.peek()))
+        this.queueInfo.appendChild(nameValueElement('Size', this.eventManager.queue.size()))
+      })
+
+      this.createButton('Scramble', this.hoverDiv, () => {
+        const array = this.eventManager.queue
+        let currentIndex = array.length
+
+        while (currentIndex !== 0) {
+          const randomIndex = Math.floor(Math.random() * currentIndex)
+          currentIndex--;
+
+          // And swap it with the current element.
+          [array[currentIndex], array[randomIndex]] = [
+            array[randomIndex], array[currentIndex]]
+        }
+      })
+
+      this.queueInfo = document.createElement('div')
+      this.queueInfo.classList.add('eventInfo')
+      this.hoverDiv.appendChild(this.queueInfo)
+    } else {
+      document.body.removeChild(this.hoverDiv)
+      this.hoverDiv = null
+    }
   }
 }

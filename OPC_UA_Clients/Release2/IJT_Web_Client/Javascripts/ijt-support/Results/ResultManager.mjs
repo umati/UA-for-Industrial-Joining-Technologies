@@ -60,7 +60,9 @@ export class ResultManager {
     if (newResult.ResultMetaData.SequenceNumber &&
       newResult.ResultMetaData.SequenceNumber >
       stored.ResultMetaData.SequenceNumber) {
+      const claimed = stored.rebuildState.claimed
       Object.assign(stored, newResult)
+      stored.rebuildState.claimed = claimed
       return true
     }
     return false

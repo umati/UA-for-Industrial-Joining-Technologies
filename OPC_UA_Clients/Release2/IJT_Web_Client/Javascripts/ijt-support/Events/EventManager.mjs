@@ -7,8 +7,7 @@ export class EventManager {
     this.socketHandler = connectionManager.socketHandler
     this.callbacks = []
     this.modelManager = modelManager
-    this.queueing = false
-    this.queue = []
+    this.queue = null
 
     connectionManager.subscribe('subscription', (setToTrue) => {
       if (setToTrue) {
@@ -56,8 +55,8 @@ export class EventManager {
   }
 
   receivedEvent (message) {
-    if (this.queueing) {
-      this.queue.push(message)
+    if (this.queue) {
+      this.queue.enqueue(message)
     } else {
       this.makeCalls(message)
     }
@@ -67,33 +66,55 @@ export class EventManager {
     const eventModel = this.modelManager.createModelFromEvent(message)
     for (const item of this.callbacks) {
       if (item.filter && item.filter(eventModel)) {
-        // console.log(`SUBSCRIPTION: ${item.subscriberDetails}`)
-        // EventModel.createModelFromEvent (msg)
         item.callback(eventModel)
       }
     }
+    return eventModel
   }
 
   queueState (state) {
-    this.queueing = state
-  }
-
-  queueNext () {
-    if (this.queue.length > 0) {
-      return this.queue[0]
+    if (state) {
+      this.queue = new Queue()
+    } else {
+      this.queue = null
     }
   }
 
-  deQueue () {
-    if (this.queue.length === 0) {
-      return 0
-    }
-    this.lastDequeuedElement = this.queue.shift()
-    this.makeCalls(this.lastDequeuedElement)
-    return this.queue.length
+  dequeue () {
+    return this.makeCalls(this.queue.dequeue())
   }
 
   reset () {
     this.callbacks = []
+  }
+}
+
+/**
+ * Trivial queue to help cache event messages for replayability
+ *
+ * @class Queue
+ * @typedef {Queue}
+ * @extends {Array}
+ */
+class Queue extends Array {
+  enqueue (val) {
+    this.push(val)
+    console.log('EventQueue size: ' + this.length)
+  }
+
+  dequeue () {
+    return this.shift()
+  }
+
+  peek () {
+    return this[0]
+  }
+
+  size () {
+    return this.length
+  }
+
+  isEmpty () {
+    return this.length === 0
   }
 }

@@ -37,8 +37,7 @@ class ResultEventHandler():
         asyncio.run(self.threaded_websocket(arg))
 
     def event_notification(self, event):
-        print("RESULT EVENT RECEIVED")
-        print(event.Message)
+        print("RESULT EVENT RECEIVED: " + event.Message.Text)
         
         event2 = Short(event.EventType, event.Result, event.Message)
 
