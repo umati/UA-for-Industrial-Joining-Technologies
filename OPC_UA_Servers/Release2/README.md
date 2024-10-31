@@ -10,6 +10,11 @@ Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'D
 
 **Change Log:**
 
+**2024-10-31:** Following changes.
+1. Added simulated data for GetJoiningProcessList method.
+2. Minor update while loading the NodeSet file where it takes the path relative the application.exe instead of ./
+3. Minor bugs and optimizations.
+
 **2024-10-25:** Following changes.
 1. The SequenceNumber is incremented ONLY for SINGLE Result of easier demonstration. The Batch/Job/Sync result will have the sequence number of the last tightening result.
 2. In SimulateBulkResults method, added an additional parameter to provide the time interval between each result.
