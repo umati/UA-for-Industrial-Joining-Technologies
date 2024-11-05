@@ -3,7 +3,7 @@ import asyncio
 from Python.Serialize import serializeTuple, serializeValue
 from Python.CallStructure import createCallStructure
 from Python.EventHandler import EventHandler
-from Python.ResultEventHandler import ResultEventHandler
+from Python.ResultEventHandler2 import ResultEventHandler
 import json
 from threading import Thread
 #from IPython import embed

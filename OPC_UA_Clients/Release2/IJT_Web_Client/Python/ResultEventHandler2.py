@@ -2,6 +2,7 @@
 import json
 from threading import Thread
 import asyncio
+import queue
 from Python.Serialize import serializeClassInstance, serializeValue
 
 class Short():
@@ -23,7 +24,23 @@ class ResultEventHandler():
     def __init__(self, websocket, server_url):
         self.websocket = websocket
         self.server_url = server_url
+        self.queue = queue.Queue()
+        print("xxxxxxxxxxx")
+        self.handleQueue()
  
+    async def handleQueue(self):
+      print("handleQueue")
+      item = self.queue.get()
+      if item is None:
+            thread = Thread(target=self.handleQueue)
+            thread.start()
+            return
+      print('----------------------- Processing 1')
+      await self.websocket.send(item) 
+      print('----------------------- Processing 2')
+      thread = Thread(target=self.handleQueue)
+      thread.start()
+
     async def threaded_websocket(self, tmp):
         stage = "1"
         try:
@@ -37,7 +54,7 @@ class ResultEventHandler():
           tmp2 = json.dumps(returnValue)
           stage = "3"
           print("start " + tmp.Message.Text)
-          await self.websocket.send(tmp2)
+          self.queue.put(tmp)
           stage = "4"
           print("end   " + tmp.Message.Text)
         except Exception as e:
