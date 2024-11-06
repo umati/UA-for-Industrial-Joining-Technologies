@@ -3,10 +3,8 @@ import asyncio
 from Python.Serialize import serializeTuple, serializeValue
 from Python.CallStructure import createCallStructure
 from Python.EventHandler import EventHandler
-from Python.ResultEventHandler2 import ResultEventHandler
+from Python.ResultEventHandler import ResultEventHandler
 import json
-from threading import Thread
-#from IPython import embed
 
 def IdObjectToString (inp):
     if isinstance(inp, str):
