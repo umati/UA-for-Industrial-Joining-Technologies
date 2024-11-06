@@ -5,7 +5,7 @@ import websockets
 import json
 from Python.Connection import Connection
 
-class IJTInterface:
+class IJTInterface: 
     """
     OPC UA interface to Industrial Joining Technique specification
     """
