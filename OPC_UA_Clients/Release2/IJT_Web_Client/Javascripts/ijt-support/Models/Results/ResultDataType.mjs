@@ -13,10 +13,12 @@ export default class ResultDataType extends IJTBaseModel {
     }
 
     super(parameters, modelManager, castMapping)
-    this.rebuildState = {
-      claimed: false,
-      resolved: false,
-      partial: false
+    this.ClientData = {
+      rebuildState: {
+        claimed: false,
+        resolved: false,
+        partial: false
+      }
     }
   }
 

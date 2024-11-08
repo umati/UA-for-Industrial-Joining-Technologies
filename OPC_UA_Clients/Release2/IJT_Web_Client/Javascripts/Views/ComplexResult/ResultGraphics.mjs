@@ -13,7 +13,7 @@ export default class ResultGraphics extends BasicScreen {
     this.envelope = 'false'
     // Subscribe to new results
     resultManager.subscribe((result) => {
-      this.refreshDrawing2(result.id)
+      this.refreshDrawing(result.id)
     })
 
     this.header = document.createElement('div')
@@ -24,7 +24,7 @@ export default class ResultGraphics extends BasicScreen {
     this.selectResultType = this.createDropdown('Select result type', (selection) => {
       this.selectType = parseInt(selection)
       this.changeResultList(selection)
-      this.refreshDrawing2(this.selectResult)
+      this.refreshDrawing(this.selectResult)
     })
     this.selectResultType.addOption('Latest', -1)
     this.selectResultType.addOption('Jobs', 4)
@@ -37,7 +37,7 @@ export default class ResultGraphics extends BasicScreen {
     // Result selection dropdown
     this.selectResultDropdown = this.createDropdown('Select result', (selection) => {
       this.selectResult = selection
-      this.refreshDrawing2(selection)
+      this.refreshDrawing(selection)
     })
     this.selectResultDropdown.addOption('Unresolved', -2)
     this.selectResultDropdown.addOption('Latest', -1)
@@ -47,7 +47,7 @@ export default class ResultGraphics extends BasicScreen {
     // display type dummy selection dropdown
     this.dummyDropdown = this.createDropdown('Display type', (selection) => {
       this.envelope = selection
-      this.refreshDrawing2(this.selectResult)
+      this.refreshDrawing(this.selectResult)
     })
 
     this.dummyDropdown.addOption('Hierarchical', false)
@@ -178,7 +178,7 @@ export default class ResultGraphics extends BasicScreen {
    *
    * @param {*} id the identity of what you want to draw
    */
-  refreshDrawing2 (id) {
+  refreshDrawing (id) {
     this.display.innerHTML = ''
     let selection = []
     if (this.selectResult === '-2') {
@@ -243,7 +243,7 @@ export default class ResultGraphics extends BasicScreen {
     if (result.isReference) {
       top.innerText = 'Ref ID: ' + result.ResultMetaData.ResultId
     } else if (!result.id) {
-      console.log('OTHER')
+      // console.log('OTHER')
       return
     } else {
       if (result.name) {
@@ -257,11 +257,11 @@ export default class ResultGraphics extends BasicScreen {
       }
 
       /*
-      if (result.rebuildState) {
+      if (result.ClientData.rebuildState) {
         top.innerText += ' '
-        if (result.rebuildState.claimed) { top.innerText += 'C' }
-        if (result.rebuildState.resolved) { top.innerText += 'R' }
-        if (result.rebuildState.partial) { top.innerText += 'P' }
+        if (result.ClientData.rebuildState.claimed) { top.innerText += 'C' }
+        if (result.ClientData.rebuildState.resolved) { top.innerText += 'R' }
+        if (result.ClientData.rebuildState.partial) { top.innerText += 'P' }
       } */
 
       if (counterInfo.size > 0) {

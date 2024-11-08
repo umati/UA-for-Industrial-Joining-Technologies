@@ -52,7 +52,7 @@ export class ModelManager {
   factory (parameterName, content, castMapping) {
     if (typeof content === 'object' && Array !== content.constructor) {
 
-      console.log('Factory parameterName: ' + parameterName)
+      // console.log('Factory parameterName: ' + parameterName)
       if (content.dataType === 'ExtensionObject') {
         content = content.value
       }

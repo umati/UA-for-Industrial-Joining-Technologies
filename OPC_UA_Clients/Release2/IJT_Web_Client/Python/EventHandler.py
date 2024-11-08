@@ -2,7 +2,7 @@
 import json
 from threading import Thread
 import asyncio
-from Python.Serialize import serializeTuple, serializeValue
+from Python.Serialize import serializeValue
 
 class EventHandler():
     """
@@ -22,7 +22,6 @@ class EventHandler():
              "data": arg,
         }
         await self.websocket.send(json.dumps(returnValue))
-
 
     def wrap_async_func(self, arg):
         asyncio.run(self.threaded_websocket(arg))

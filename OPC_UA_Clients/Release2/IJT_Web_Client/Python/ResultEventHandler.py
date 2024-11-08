@@ -7,10 +7,11 @@ class Short:
     """
     Support class to contain just the part of a result event that should be transferred to the webpage
     """
-    def __init__(self, eventType, result, message):
+    def __init__(self, eventType, result, message, id):
         self.EventType = eventType
         self.Result = result
         self.Message = message
+        self.EventId = id
 
 class ResultEventHandler:
     """
@@ -53,9 +54,9 @@ class ResultEventHandler:
             print("Exception: " + str(e))
 
     def event_notification(self, event):
-        print("RESULT EVENT RECEIVED: " + event.Message.Text)
-        
-        filteredEvent = Short(event.EventType, event.Result, event.Message)
+        idString = event.EventId.decode('utf-8')
+        print("RESULT EVENT RECEIVED + ["+ idString+"]: " + event.Message.Text )
+        filteredEvent = Short(event.EventType, event.Result, event.Message, idString)
 
         # Event handlers should be quick and non-networked so sending the response
         # to the webpage needs to be done asynchronously via a separate thread.

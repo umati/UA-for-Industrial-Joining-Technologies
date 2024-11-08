@@ -25,7 +25,9 @@ export class EventManager {
         }
         console.log('Subscribed event triggered: ' + evtName + ']')
       } else {
-        console.log('Event lacking ConditionClassName received')
+        if (!message.Result) {
+          console.log('Event lacking ConditionClassName received')
+        }
       }
       this.receivedEvent(message)
     })

@@ -29,5 +29,8 @@ export default class JoiningSystemResultReadyEventModel extends BaseEventModel {
     const cleansedParameters = cleanParameters(parameters)
 
     super(cleansedParameters, modelManager, castMapping)
+    if (!this.Result.ClientData) {
+      this.Result.ClientData = {}
+    }
   }
 }
