@@ -250,7 +250,11 @@ export default class ResultGraphics extends BasicScreen {
         top.innerText = result.name
       } else {
         if (result.ResultMetaData.CreationTime) {
-          top.innerText = 'Other: ' + result.id
+          if (result.ResultMetaData.ResultEvaluationDetails) {
+            top.innerText = result.ResultMetaData.ResultEvaluationDetails.Text
+          } else {
+            top.innerText = 'Other: ' + result.id
+          }
         } else {
           top.innerText = 'Ref: ' + result.id
         }
