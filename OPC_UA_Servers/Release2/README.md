@@ -10,6 +10,11 @@ Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'D
 
 **Change Log:**
 
+**2024-11-14:** Following changes.
+1. Correction of CounterType in JobResult from TOTOAL_JOINING_PROCESS_SIZE to OTHER.
+2. Test Logic for GetLatestResult
+3. Logging the input arguments receieved from SendIdentifiers Method
+
 **2024-10-31:** Following changes.
 1. Added simulated data for GetJoiningProcessList method.
 2. Minor update while loading the NodeSet file where it takes the path relative the application.exe instead of ./
