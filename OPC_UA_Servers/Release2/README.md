@@ -10,6 +10,11 @@ Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'D
 
 **Change Log:**
 
+**2025-02-13:** Following changes.
+1. Corrected the NamespaceIndex of the BrowseName for Results Folder.
+2. Corrected the TypeDefinition of MachineryBuildingBlocks Folder Node from FunctionalGroupType to FolderType. Similar corrections for some other Folder nodes.
+2. Minor bugs and optimizations.
+
 **2024-11-28:** Following changes.
 1. When Combined Results are sent, the data change elapsed time was faster than the minimum sampling interval. Due to this, the Result Variable in the address space was not receiving all the changes. Fixed this issue by checking the elapsed time is greater than minimum sampling interval supported by the server. This does not have any impact on the Result Events.
 2. Minor bugs and optimizations.
