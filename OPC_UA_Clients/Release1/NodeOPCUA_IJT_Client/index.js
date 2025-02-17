@@ -28,7 +28,7 @@ app.get('/', (req, res) => {
 })
 
 // This is to allow files to be accessible
-app.use(express.static(__dirname + '/'))
+app.use('/Javascript/Webpage', express.static(__dirname + '/Javascript/Webpage'))
 
 // This is to listen to the correct port
 http.listen(port, () => {
