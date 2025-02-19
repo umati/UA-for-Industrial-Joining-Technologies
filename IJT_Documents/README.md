@@ -8,6 +8,7 @@ This directory contains the following documents:
     **Note:** Use PDF Bookmarks for easier navigation to required sections. The presentation contains **various topics** as shown below:
 
 
-![image](https://github.com/umati/UA-for-Industrial-Joining-Technologies/assets/56719162/0977bacf-0e78-4e82-b021-c6eca4f26578)
+![image](https://github.com/user-attachments/assets/8ac34f59-14b2-4ae8-8827-b137bc4330c2)
+
 
 
