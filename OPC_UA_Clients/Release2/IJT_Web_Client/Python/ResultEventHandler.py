@@ -1,6 +1,7 @@
 import json
 import asyncio
 import websockets
+from datetime import datetime
 from Python.Serialize import serializeValue
 
 class Short:
@@ -54,8 +55,16 @@ class ResultEventHandler:
             print("Exception: " + str(e))
 
     def event_notification(self, event):
-        idString = event.EventId.decode('utf-8')
-        print("RESULT EVENT RECEIVED + ["+ idString+"]: " + event.Message.Text )
+        # Get the current date and time
+        now = datetime.now()
+
+        # Format the date and time with milliseconds
+        formatted_time = now.strftime("%Y-%m-%d %H:%M:%S.%f")
+        
+        idString = event.EventId.decode('utf-8')        
+
+        # Print the formatted date and time
+        print(formatted_time + " - RESULT EVENT RECEIVED + ["+ idString+"]: " + event.Message.Text )
         filteredEvent = Short(event.EventType, event.Result, event.Message, idString)
 
         # Event handlers should be quick and non-networked so sending the response
