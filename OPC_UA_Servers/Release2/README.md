@@ -10,6 +10,11 @@ Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'D
 
 **Change Log:**
 
+**2025-02-24:** Following changes.
+1. Fixed a crash issue which occurs in rare sceanrios due to Result variable updates.
+2. Removed GetLatestResult method implementation as it was a temporary implementation. It is NOT implemented in the Simulator. A new mechanism defined in the upcoming IJT Joining Specification will be implemented after the specification version is published.
+2. Added some minor log lines and Minor bugs and optimizations.
+
 **2025-02-13:** Following changes.
 1. Corrected the NamespaceIndex of the BrowseName for Results Folder.
 2. Corrected the TypeDefinition of MachineryBuildingBlocks Folder Node from FunctionalGroupType to FolderType. Similar corrections for some other Folder nodes.
