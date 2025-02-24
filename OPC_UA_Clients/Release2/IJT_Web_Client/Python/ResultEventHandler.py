@@ -59,12 +59,18 @@ class ResultEventHandler:
         now = datetime.now()
 
         # Format the date and time with milliseconds
-        formatted_time = now.strftime("%Y-%m-%d %H:%M:%S.%f")
+        formatted_client_time = now.strftime("%Y-%m-%d %H:%M:%S.%f")
+        serverTime = event.Time
+        formatted_server_time = serverTime.strftime("%Y-%m-%d %H:%M:%S.%f")
         
         idString = event.EventId.decode('utf-8')        
 
         # Print the formatted date and time
-        print(formatted_time + " - RESULT EVENT RECEIVED + ["+ idString+"]: " + event.Message.Text )
+        print("-----------------------------------------------")
+        print("Server Time of Event: " + formatted_server_time)
+        print("Client Time of Event: " + formatted_client_time)
+        print("RESULT EVENT RECEIVED + ["+ idString+"]: " + event.Message.Text )
+        print("-----------------------------------------------")
         filteredEvent = Short(event.EventType, event.Result, event.Message, idString)
 
         # Event handlers should be quick and non-networked so sending the response
