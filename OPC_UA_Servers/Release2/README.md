@@ -10,6 +10,11 @@ Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'D
 
 **Change Log:**
 
+**2025-03-16:** Following changes.
+1. Corrected the TighteningSystem.Identification.Description value data type.
+2. Corrected the Access Level of TighteningSystem.Identification.Location and Asset.Identification.Location from RO to RW.
+3. Minor bugs and optimizations.
+
 **2025-02-24:** Following changes.
 1. Fixed a crash issue which occurs in rare sceanrios due to Result variable updates.
 2. Removed GetLatestResult method implementation as it was a temporary implementation. It is NOT implemented in the Simulator. A new mechanism defined in the upcoming IJT Joining Specification will be implemented after the specification version is published.
