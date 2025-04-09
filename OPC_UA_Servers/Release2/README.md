@@ -10,6 +10,9 @@ Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'D
 
 **Change Log:**
 
+**2025-04-09:** Following changes.
+1. Minor bugs and optimizations.
+
 **2025-03-16:** Following changes.
 1. Corrected the TighteningSystem.Identification.Description value data type.
 2. Corrected the Access Level of TighteningSystem.Identification.Location and Asset.Identification.Location from RO to RW.
