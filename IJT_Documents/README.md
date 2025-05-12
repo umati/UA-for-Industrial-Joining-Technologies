@@ -8,7 +8,8 @@ This directory contains the following documents:
     **Note:** Use PDF Bookmarks for easier navigation to required sections. The presentation contains **various topics** as shown below:
 
 
-![image](https://github.com/user-attachments/assets/8ac34f59-14b2-4ae8-8827-b137bc4330c2)
+![image](https://github.com/user-attachments/assets/23ddd30c-a541-4239-8aed-9ea96c9819ab)
+
 
 
 
