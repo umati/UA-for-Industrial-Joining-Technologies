@@ -10,6 +10,10 @@ Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'D
 
 **Change Log:**
 
+**2025-05-21:** Following changes.
+1. Added option to Simulate Asset Identification Data from the following JSON file SimulatedData.json. This change is useful for changing the values for demonstrations.
+2. Minor bugs and optimizations.
+
 **2025-04-09:** Following changes.
 1. Minor update to the BrowseName of the Tightening System object.
 2. Minor bugs and optimizations.
