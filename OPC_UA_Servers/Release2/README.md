@@ -10,6 +10,13 @@ Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'D
 
 **Change Log:**
 
+**2025-05-28:** Following changes.
+1. Renamed the SimulatedData.json to simulated_data.json.
+2. Updated the logic of simulation to include JoiningSystem.Identification properties also from simulated_data.json.
+3. Added server_configuration.json to change default values for the Server Configuration data.
+4. Updated the version of the Simulator to 1.5.0 and relevant RC file.
+5. Minor bugs and optimizations.
+
 **2025-05-21:** Following changes.
 1. Added option to Simulate Asset Identification Data from the following JSON file SimulatedData.json. This change is useful for changing the values for demonstrations.
 2. Minor bugs and optimizations.
