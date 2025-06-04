@@ -27,20 +27,12 @@ This guide provides instructions to set up and run the project using the **`setu
 2. **Internet Connection**
    - Required to download Node.js MSI installer and install Python and JavaScript packages.
   
-## Project Files
-
-Ensure the following files are present in your project directory:
-
-1. `setup_project.py` (the setup script)
-2. `index.py` (the entry point for your Python server)
-3. `package.json` (JavaScript project configuration)
-
-## Installation Steps
+## Installation Steps - Option 1 - Automated Script
 
 Follow these steps to set up and run the project:
 
 1. **Clone the Repository**
-   - Clone the repository or download the source code to your local machine.
+   - Clone the repository or download the source code directory: **IJT_Web_Client** to your local machine.
 
 2. **Navigate to the Project Directory**
    - Open a terminal and navigate to the project directory: **IJT_Web_Client**.
@@ -48,7 +40,7 @@ Follow these steps to set up and run the project:
 3. **Run the Setup Script**
    - Execute the setup script by running **`python setup_project.py`**
    
-## Usage Instructions
+## Information
 
 Once the setup is complete, the script will **automatically** start both the Python server and the live server. Follow these steps to use the project:
 
@@ -61,22 +53,11 @@ Once the setup is complete, the script will **automatically** start both the Pyt
 3. **Stop the Servers**
    - To stop the servers, press `Ctrl+C` in the terminal where the script is running.
 
-## Troubleshooting
 
-If you encounter any issues during the setup or usage, consider the following:
-
-1. **Check Prerequisites**
-   - Ensure Python is installed and added to the system PATH.
-   - Verify your internet connection.
-
-2. **Review Error Messages**
-   - Check the terminal output for any error messages and follow the instructions provided.
-
-3. **Proxy Configuration**
-   - If you're behind a proxy, configure pip and npm to use the proxy settings.
-
-## Running manually without `setup_project.py`
+## Installation Steps - Option 2 - Manual Setup
 Use the following steps if the automated script **`setup_project.py`** do not work.
+
+**First Time Manual Setup**
 
 1. Fork or clone the repository.
 2. **Go to** OPCUA_Clients\Release2\IJT_Web_Client folder.
@@ -85,17 +66,17 @@ Use the following steps if the automated script **`setup_project.py`** do not wo
      Python -m venv venv
      venv/Scripts/Activate.ps1
 	 
-5. **Install** the following python packages in the virtual environment:
+4. **Install** the following python packages in the virtual environment:
 
      pip install --upgrade pip
      pip install websockets
      pip install asyncua
 
-6. **Install** the following javascript packages in the virtual environment:
+5. **Install** the following javascript packages in the virtual environment:
 
      npm install chart.js
 
-## How to run?
+**Manual Launch of the Client**
 
 1. **Open** the Python Virtual Environment:
 
