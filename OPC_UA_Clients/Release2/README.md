@@ -28,8 +28,7 @@ This guide provides instructions to set up and run the project using the **`setu
    - Required to download Node.js MSI installer and install Python and JavaScript packages.
   
 ## Installation Steps - Option 1 - Automated Script
-
-Follow these steps to set up and run the project:
+Follow the below steps to set up and run the project using the automated script:
 
 1. **Clone the Repository**
    - Clone the repository or download the source code directory: **IJT_Web_Client** to your local machine.
@@ -40,19 +39,15 @@ Follow these steps to set up and run the project:
 3. **Run the Setup Script**
    - Execute the setup script by running **`python setup_project.py`**
    
-## Information
-
+**Information**
 Once the setup is complete, the script will **automatically** start both the Python server and the live server. Follow these steps to use the project:
 
 1. **Access the Live Server**
    - The script will automatically open the live server URL in your default web browser.
-
 2. **Interact with the Python Server**
    - The Python server will be running in the background, ready to handle requests.
-
 3. **Stop the Servers**
    - To stop the servers, press `Ctrl+C` in the terminal where the script is running.
-
 
 ## Installation Steps - Option 2 - Manual Setup
 Use the following steps if the automated script **`setup_project.py`** do not work.
@@ -62,38 +57,28 @@ Use the following steps if the automated script **`setup_project.py`** do not wo
 1. Fork or clone the repository.
 2. **Go to** OPCUA_Clients\Release2\IJT_Web_Client folder.
 3. **Set up** Python virtual environment as per the following steps:
-
      Python -m venv venv
-     venv/Scripts/Activate.ps1
-	 
+     venv/Scripts/Activate.ps1	 
 4. **Install** the following python packages in the virtual environment:
-
      pip install --upgrade pip
      pip install websockets
      pip install asyncua
-
 5. **Install** the following javascript packages in the virtual environment:
-
      npm install chart.js
 
 **Manual Launch of the Client**
 
 1. **Open** the Python Virtual Environment:
-
      & "<Path>/IJT_Web_Client/venv/Scripts/Activate.ps1"
 3. **Start** Python Server using the following command inside the virtual environment:
-
      py index.py or python index.py
 4. **Launch** a new terminal from the working directory: **IJT_Web_Client**. Run the following command:
-   
-     **npx serve**
-    
+     **npx serve**    
 6. **Open** the URL listed after running the above command in the browser. The port number might be different which will be available in the terminal output. **Example:** `http://localhost:3000`
 7. **Start** using the client from the browser.
 8. **Note:** Any live-server or http-server can be used to publish the HTML content to the browser. npx serve is one of the possible options.
 
 ## OPC UA Server
-
 1. Use the following OPC UA IJT Demo Server to utilize the OPC UA Client: https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2
 
 
