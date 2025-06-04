@@ -1,45 +1,35 @@
 # NodeOPCUA_IJTClient
 
 ## Author
-
 Joakim Gustafsson
 Email: joakim.h.gustafsson@atlascopco.com
 
 ## Coordinator/Maintanence
-
 Mohit Agarwal
 Email: mohit.agarwal@atlascopco.com
 
 ## Overview
-
 This application uses the open source OPC UA Python ASYNCUA Stack. The purpose of this application is to consume the data from any OPC UA server based on the OPC UA Industrial Joining Technologies Companion Specifications.
 
-# Web Client Setup Guide
-
-This guide provides instructions to set up and run the project using the **`setup_project.py`** script. The script automates the setup of a Python virtual environment, installs required Python and JavaScript packages, and starts the necessary servers.
-
 ## Prerequisites
-
 1. **Python 3.7+**
    - Download and install Python from [https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/)
    - Ensure Python is added to the system PATH.
-
 2. **Internet Connection**
    - Required to download Node.js MSI installer and install Python and JavaScript packages.
   
 ## Installation Steps - Option 1 - Automated Script
-Follow the below steps to set up and run the project using the automated script:
+Follow the below steps to set up and run the project using the automated script. The script automates the setup of a Python virtual environment, installs required Python and JavaScript packages, and starts the necessary servers.
 
 1. **Clone the Repository**
    - Clone the repository or download the source code directory: **IJT_Web_Client** to your local machine.
-
 2. **Navigate to the Project Directory**
    - Open a terminal and navigate to the project directory: **IJT_Web_Client**.
-
 3. **Run the Setup Script**
    - Execute the setup script by running **`python setup_project.py`**
    
-**Information**
+**Information:**
+
 Once the setup is complete, the script will **automatically** start both the Python server and the live server. Follow these steps to use the project:
 
 1. **Access the Live Server**
@@ -47,7 +37,7 @@ Once the setup is complete, the script will **automatically** start both the Pyt
 2. **Interact with the Python Server**
    - The Python server will be running in the background, ready to handle requests.
 3. **Stop the Servers**
-   - To stop the servers, press `Ctrl+C` in the terminal where the script is running.
+   - To stop the servers, press **`Ctrl+C`** in the terminal where the script is running.
 
 ## Installation Steps - Option 2 - Manual Setup
 Use the following steps if the automated script **`setup_project.py`** do not work.
