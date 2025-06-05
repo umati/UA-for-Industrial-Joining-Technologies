@@ -3,70 +3,84 @@ import subprocess
 import sys
 import webbrowser
 
+def log(message):
+    print(f"[LOG] {message}")
+
 def run_command(command, cwd=None, shell=False):
-    """Run a system command and handle errors."""
     try:
         result = subprocess.run(command, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=shell)
-        print(result.stdout)
+        log(result.stdout)
         return result.stdout
     except subprocess.CalledProcessError as e:
-        print(f"Error: {e.stderr}")
+        log(f"Error: {e.stderr}")
         sys.exit(1)
 
-def create_virtualenv(venv_path):
-    """Create a virtual environment."""
-    if not os.path.exists(venv_path):
-        print("Creating virtual environment...")
+def create_virtualenv(venv_path, venv_python):
+    if not os.path.exists(venv_python):
+        log("Creating virtual environment...")
         run_command([sys.executable, "-m", "venv", venv_path])
     else:
-        print("Virtual environment already exists.")
+        log("Virtual environment already exists and is valid.")
 
 def install_python_packages(venv_python):
-    """Install required Python packages."""
-    print("Installing Python packages...")
+    log("Installing Python packages...")
     run_command([venv_python, "-m", "pip", "install", "--upgrade", "pip"])
-    run_command([venv_python, "-m", "pip", "install", "websockets", "asyncua"])
+    run_command([
+        venv_python, "-m", "pip", "install",
+        "--index-url", "https://pypi.org/simple",
+        "websockets", "asyncua"
+    ])
+    log("Python packages installed successfully.")
 
 def check_node():
-    """Check if Node.js is installed, and install it if not."""
+    log("Checking for Node.js...")
     try:
-        subprocess.run(["node", "--version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        print("Node.js is already installed.")
-    except subprocess.CalledProcessError:
-        print("Node.js is not installed. Installing Node.js...")
-
-        if os.name == "nt":
-            install_cmd = [
-                "powershell", "-Command",
-                "Invoke-WebRequest -Uri https://nodejs.org/dist/v22.16.0/node-v22.16.0-x64.msi -OutFile nodejs.msi; "
-                "Start-Process msiexec.exe -ArgumentList '/i nodejs.msi /quiet' -NoNewWindow -Wait; "
-                "Remove-Item nodejs.msi"
-            ]
-        else:
-            install_cmd = [
-                "bash", "-c",
-                "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs"
-            ]
-
-        try:
-            subprocess.run(install_cmd, check=True, shell=True)
-            print("Node.js installed successfully.")
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to install Node.js: {e}")
+        result = subprocess.run(
+            ["node", "--version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            shell=True,
+            timeout=10
+        )
+        if result.returncode != 0:
+            log("Node.js is not installed or not working correctly.")
             sys.exit(1)
+        log(f"Node.js version: {result.stdout.strip()}")
+    except subprocess.TimeoutExpired:
+        log("Node.js check timed out.")
+        sys.exit(1)
+    except Exception as e:
+        log(f"Unexpected error while checking Node.js: {e}")
+        sys.exit(1)
 
 def install_js_packages():
-    """Install required JavaScript packages using npm."""
-    print("Installing JavaScript packages...")
+    log("Installing JavaScript packages...")
     run_command(["npm", "install"], shell=True)
+    log("JavaScript packages installed successfully.")
 
 def start_servers(venv_python):
-    """Start the Python server and live server."""
-    print("Starting Python server...")
-    python_server = subprocess.Popen([venv_python, "index.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    log("Starting Python server...")
+    if not os.path.exists("index.py"):
+        log("Error: index.py not found.")
+        sys.exit(1)
 
-    print("Starting live server...")
-    live_server = subprocess.Popen(["npx", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
+    try:
+        python_server = subprocess.Popen([venv_python, "index.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        log("Python server started successfully.")
+    except Exception as e:
+        log(f"Failed to start Python server: {e}")
+        sys.exit(1)
+
+    log("Starting live server on port 3000...")
+    serve_cmd = "node_modules\\.bin\\serve" if os.name == "nt" else "./node_modules/.bin/serve"
+    try:
+        live_server = subprocess.Popen([serve_cmd, "-l", "3000"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
+        log("Live server started successfully.")
+    except Exception as e:
+        log(f"Failed to start live server: {e}")
+        python_server.terminate()
+        sys.exit(1)
 
     try:
         while True:
@@ -74,25 +88,32 @@ def start_servers(venv_python):
             if output == '' and live_server.poll() is not None:
                 break
             if output:
-                print(output.strip())
+                log(output.strip())
                 if "Local:" in output:
                     url = output.split()[-1]
-                    print(f"Opening {url} in the default web browser...")
-                    webbrowser.open(url)
+                    log(f"Live server is running at {url}")
+                    if not os.environ.get("IS_DOCKER"):
+                        log(f"Opening {url} in the default web browser...")
+                        webbrowser.open(url)
                     break
-
         python_server.wait()
         live_server.wait()
     except KeyboardInterrupt:
         python_server.terminate()
         live_server.terminate()
-        print("Servers terminated.")
+        log("Servers terminated.")
+    except Exception as e:
+        log(f"Error while running servers: {e}")
+        python_server.terminate()
+        live_server.terminate()
+        sys.exit(1)
 
 def main():
     venv_path = os.path.join(os.getcwd(), "venv")
     venv_python = os.path.join(venv_path, "Scripts", "python.exe") if os.name == "nt" else os.path.join(venv_path, "bin", "python")
 
-    create_virtualenv(venv_path)
+    log("Starting setup process...")
+    create_virtualenv(venv_path, venv_python)
     install_python_packages(venv_python)
     check_node()
     install_js_packages()
