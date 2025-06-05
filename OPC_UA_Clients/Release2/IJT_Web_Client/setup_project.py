@@ -2,6 +2,8 @@ import os
 import subprocess
 import sys
 import webbrowser
+import shutil
+import time
 
 def log(message):
     print(f"[LOG] {message}")
@@ -12,7 +14,9 @@ def run_command(command, cwd=None, shell=False):
         log(result.stdout)
         return result.stdout
     except subprocess.CalledProcessError as e:
-        log(f"Error: {e.stderr}")
+        log(f"Command failed: {' '.join(command)}")
+        log(f"STDOUT:\n{e.stdout}")
+        log(f"STDERR:\n{e.stderr}")
         sys.exit(1)
 
 def create_virtualenv(venv_path, venv_python):
@@ -33,7 +37,13 @@ def install_python_packages(venv_python):
     log("Python packages installed successfully.")
 
 def check_node():
-    log("Checking for Node.js...")
+    log("Checking for Node.js and npm...")
+    if shutil.which("node") is None:
+        log("Error: Node.js is not installed.")
+        sys.exit(1)
+    if shutil.which("npm") is None:
+        log("Error: npm is not installed.")
+        sys.exit(1)
     try:
         result = subprocess.run(
             ["node", "--version"],
@@ -44,7 +54,7 @@ def check_node():
             timeout=10
         )
         if result.returncode != 0:
-            log("Node.js is not installed or not working correctly.")
+            log("Node.js is not working correctly.")
             sys.exit(1)
         log(f"Node.js version: {result.stdout.strip()}")
     except subprocess.TimeoutExpired:
@@ -56,6 +66,9 @@ def check_node():
 
 def install_js_packages():
     log("Installing JavaScript packages...")
+    if not os.path.exists("package.json"):
+        log("Error: package.json not found.")
+        sys.exit(1)
     run_command(["npm", "install"], shell=True)
     log("JavaScript packages installed successfully.")
 
@@ -73,7 +86,10 @@ def start_servers(venv_python):
         sys.exit(1)
 
     log("Starting live server on port 3000...")
-    serve_cmd = "node_modules\\.bin\\serve" if os.name == "nt" else "./node_modules/.bin/serve"
+    serve_cmd = os.path.join("node_modules", ".bin", "serve")
+    if os.name == "nt":
+        serve_cmd = serve_cmd.replace("/", "\\")
+
     try:
         live_server = subprocess.Popen([serve_cmd, "-l", "3000"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
         log("Live server started successfully.")
@@ -81,6 +97,8 @@ def start_servers(venv_python):
         log(f"Failed to start live server: {e}")
         python_server.terminate()
         sys.exit(1)
+
+    time.sleep(1)  # Short delay before reading live server output
 
     try:
         while True:
