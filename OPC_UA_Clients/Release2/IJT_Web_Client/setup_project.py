@@ -4,6 +4,9 @@ import sys
 import webbrowser
 import shutil
 import time
+import atexit
+
+processes = []
 
 def log(message):
     print(f"[LOG] {message}")
@@ -11,10 +14,13 @@ def log(message):
 def run_command(command, cwd=None, shell=False):
     try:
         result = subprocess.run(command, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=shell)
-        log(result.stdout)
+        if result.stdout:
+            log(result.stdout.strip())
+        if result.stderr:
+            log(f"Warnings:\n{result.stderr.strip()}")
         return result.stdout
     except subprocess.CalledProcessError as e:
-        log(f"Command failed: {' '.join(command)}")
+        log(f"Command failed: {command if isinstance(command, str) else ' '.join(command)}")
         log(f"STDOUT:\n{e.stdout}")
         log(f"STDERR:\n{e.stderr}")
         sys.exit(1)
@@ -69,7 +75,9 @@ def install_js_packages():
     if not os.path.exists("package.json"):
         log("Error: package.json not found.")
         sys.exit(1)
-    run_command(["npm", "install"], shell=True)
+    log(f"Current working directory: {os.getcwd()}")
+    log(f"Files in directory: {os.listdir(os.getcwd())}")
+    run_command("npm install", shell=True)
     log("JavaScript packages installed successfully.")
 
 def start_servers(venv_python):
@@ -80,6 +88,7 @@ def start_servers(venv_python):
 
     try:
         python_server = subprocess.Popen([venv_python, "index.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        processes.append(python_server)
         log("Python server started successfully.")
     except Exception as e:
         log(f"Failed to start Python server: {e}")
@@ -92,13 +101,14 @@ def start_servers(venv_python):
 
     try:
         live_server = subprocess.Popen([serve_cmd, "-l", "3000"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
+        processes.append(live_server)
         log("Live server started successfully.")
     except Exception as e:
         log(f"Failed to start live server: {e}")
         python_server.terminate()
         sys.exit(1)
 
-    time.sleep(1)  # Short delay before reading live server output
+    time.sleep(1)
 
     try:
         while True:
@@ -117,14 +127,14 @@ def start_servers(venv_python):
         python_server.wait()
         live_server.wait()
     except KeyboardInterrupt:
-        python_server.terminate()
-        live_server.terminate()
-        log("Servers terminated.")
+        log("Keyboard interrupt received. Shutting down servers...")
     except Exception as e:
         log(f"Error while running servers: {e}")
-        python_server.terminate()
-        live_server.terminate()
-        sys.exit(1)
+    finally:
+        for p in processes:
+            if p and p.poll() is None:
+                p.terminate()
+                log("Terminated subprocess.")
 
 def main():
     venv_path = os.path.join(os.getcwd(), "venv")
@@ -138,4 +148,5 @@ def main():
     start_servers(venv_python)
 
 if __name__ == "__main__":
+    atexit.register(lambda: [p.terminate() for p in processes if p and p.poll() is None])
     main()
