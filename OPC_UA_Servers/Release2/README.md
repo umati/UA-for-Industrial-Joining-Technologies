@@ -1,15 +1,13 @@
-**Author:** Mohit Agarwal
+# OPC UA IJT Server Simulator
 
-**Email:** mohit.agarwal@atlascopco.com
-
-Refer to the following document for the usage of the reference server: **Usage_IJT_OPC_UA_Server_Simulator.pdf**.
-
-**How to download?**
-
-Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'Downlaod raw file'** button.
-
-**Change Log:**
-
+## Contact
+**Author:** Mohit Agarwal: mohit.agarwal@atlascopco.com
+## Usage
+- Refer to the following document for the usage of the reference server: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
+	- It is **supported** as a **Windows binary** or a **Docker image**. Refer to the detailed steps in the above document.
+## How to download?
+Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and **Click** on the **'Downlaod raw file'** button.
+## Change Log
 **2025-06-09:** Following changes.
 1. Added option to run the IJT Simulator as a Docker image.
 2. Updated the steps in Sections 3 and 4 of the following document: Usage_IJT_OPC_UA_Server_Simulator.pdf
