@@ -1,152 +1,98 @@
+#!/usr/bin/env python3
+
 import os
 import subprocess
 import sys
-import webbrowser
+import venv
 import shutil
-import time
-import atexit
-
-processes = []
+import urllib.request
+import zipfile
+import webbrowser
 
 def log(message):
     print(f"[LOG] {message}")
 
-def run_command(command, cwd=None, shell=False):
-    try:
-        result = subprocess.run(command, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=shell)
-        if result.stdout:
-            log(result.stdout.strip())
-        if result.stderr:
-            log(f"Warnings:\n{result.stderr.strip()}")
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        log(f"Command failed: {command if isinstance(command, str) else ' '.join(command)}")
-        log(f"STDOUT:\n{e.stdout}")
-        log(f"STDERR:\n{e.stderr}")
+def check_command_exists(command):
+    return shutil.which(command) is not None
+
+def check_python():
+    if not check_command_exists("python"):
+        log("Python is not installed. Please install Python and try again.")
         sys.exit(1)
 
-def create_virtualenv(venv_path, venv_python):
-    if not os.path.exists(venv_python):
+def create_virtualenv(env_dir="venv"):
+    if not os.path.exists(env_dir):
         log("Creating virtual environment...")
-        run_command([sys.executable, "-m", "venv", venv_path])
+        venv.create(env_dir, with_pip=True)
     else:
-        log("Virtual environment already exists and is valid.")
+        log("Virtual environment already exists.")
 
-def install_python_packages(venv_python):
+def download_and_extract_node(env_dir="venv"):
+    node_version = "v22.2.0"
+    node_filename = f"node-{node_version}-win-x64"
+    node_url = f"https://nodejs.org/dist/{node_version}/{node_filename}.zip"
+    node_zip_path = os.path.join(env_dir, "node.zip")
+    node_dir = os.path.join(env_dir, "node")
+
+    if not os.path.exists(os.path.join(node_dir, node_filename, "node.exe")):
+        log("Downloading Node.js...")
+        urllib.request.urlretrieve(node_url, node_zip_path)
+        log("Extracting Node.js...")
+        with zipfile.ZipFile(node_zip_path, 'r') as zip_ref:
+            zip_ref.extractall(node_dir)
+        os.remove(node_zip_path)
+    else:
+        log("Node.js already exists in the virtual environment.")
+
+def install_python_packages(env_dir="venv"):
+    python_path = os.path.join(env_dir, "Scripts" if os.name == "nt" else "bin", "python")
     log("Installing Python packages...")
-    run_command([venv_python, "-m", "pip", "install", "--upgrade", "pip"])
-    run_command([
-        venv_python, "-m", "pip", "install",
-        "--index-url", "https://pypi.org/simple",
-        "websockets", "asyncua"
-    ])
-    log("Python packages installed successfully.")
+    subprocess.check_call([python_path, "-m", "pip", "install", "--upgrade", "pip"])
+    subprocess.check_call([python_path, "-m", "pip", "install", "-r", "requirements.txt"])
 
-def check_node():
-    log("Checking for Node.js and npm...")
-    if shutil.which("node") is None:
-        log("Error: Node.js is not installed.")
-        sys.exit(1)
-    if shutil.which("npm") is None:
-        log("Error: npm is not installed.")
-        sys.exit(1)
-    try:
-        result = subprocess.run(
-            ["node", "--version"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            shell=True,
-            timeout=10
-        )
-        if result.returncode != 0:
-            log("Node.js is not working correctly.")
-            sys.exit(1)
-        log(f"Node.js version: {result.stdout.strip()}")
-    except subprocess.TimeoutExpired:
-        log("Node.js check timed out.")
-        sys.exit(1)
-    except Exception as e:
-        log(f"Unexpected error while checking Node.js: {e}")
-        sys.exit(1)
-
-def install_js_packages():
-    log("Installing JavaScript packages...")
+def install_js_packages(env_dir="venv"):
+    node_path = os.path.join(env_dir, "node", "node-v22.2.0-win-x64")
+    npm_path = os.path.join(node_path, "npm.cmd")
     if not os.path.exists("package.json"):
-        log("Error: package.json not found.")
+        log("package.json not found. Skipping npm install.")
+        return
+    if not os.path.exists(npm_path):
+        log(f"npm not found at {npm_path}. Please check Node.js extraction.")
         sys.exit(1)
-    log(f"Current working directory: {os.getcwd()}")
-    log(f"Files in directory: {os.listdir(os.getcwd())}")
-    run_command("npm install", shell=True)
-    log("JavaScript packages installed successfully.")
-
-def start_servers(venv_python):
-    log("Starting Python server...")
-    if not os.path.exists("index.py"):
-        log("Error: index.py not found.")
-        sys.exit(1)
-
+    log("Installing JavaScript packages using local npm...")
     try:
-        python_server = subprocess.Popen([venv_python, "index.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        processes.append(python_server)
-        log("Python server started successfully.")
-    except Exception as e:
-        log(f"Failed to start Python server: {e}")
+        if os.path.exists("package-lock.json"):
+            subprocess.check_call([npm_path, "ci"])
+        else:
+            subprocess.check_call([npm_path, "install"])
+    except subprocess.CalledProcessError as e:
+        log(f"Error during npm install: {e}")
         sys.exit(1)
 
-    log("Starting live server on port 3000...")
-    serve_cmd = os.path.join("node_modules", ".bin", "serve")
-    if os.name == "nt":
-        serve_cmd = serve_cmd.replace("/", "\\")
-
-    try:
-        live_server = subprocess.Popen([serve_cmd, "-l", "3000"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
-        processes.append(live_server)
-        log("Live server started successfully.")
-    except Exception as e:
-        log(f"Failed to start live server: {e}")
-        python_server.terminate()
+def start_live_server(env_dir="venv"):
+    node_path = os.path.join(env_dir, "node", "node-v22.2.0-win-x64")
+    npx_path = os.path.join(node_path, "npx.cmd")
+    if not os.path.exists(npx_path):
+        log(f"npx not found at {npx_path}. Please check Node.js extraction.")
         sys.exit(1)
+    log("Starting Live Server on http://localhost:3000 ...")
+    subprocess.Popen([npx_path, "serve", "-l", "3000"])
+    webbrowser.open("http://localhost:3000")
 
-    time.sleep(1)
-
-    try:
-        while True:
-            output = live_server.stdout.readline()
-            if output == '' and live_server.poll() is not None:
-                break
-            if output:
-                log(output.strip())
-                if "Local:" in output:
-                    url = output.split()[-1]
-                    log(f"Live server is running at {url}")
-                    if not os.environ.get("IS_DOCKER"):
-                        log(f"Opening {url} in the default web browser...")
-                        webbrowser.open(url)
-                    break
-        python_server.wait()
-        live_server.wait()
-    except KeyboardInterrupt:
-        log("Keyboard interrupt received. Shutting down servers...")
-    except Exception as e:
-        log(f"Error while running servers: {e}")
-    finally:
-        for p in processes:
-            if p and p.poll() is None:
-                p.terminate()
-                log("Terminated subprocess.")
+def run_index(env_dir="venv"):
+    python_path = os.path.join(env_dir, "Scripts" if os.name == "nt" else "bin", "python")
+    log("Starting index.py (WebSocket server)...")
+    subprocess.call([python_path, "index.py"])
 
 def main():
-    venv_path = os.path.join(os.getcwd(), "venv")
-    venv_python = os.path.join(venv_path, "Scripts", "python.exe") if os.name == "nt" else os.path.join(venv_path, "bin", "python")
-
-    log("Starting setup process...")
-    create_virtualenv(venv_path, venv_python)
-    install_python_packages(venv_python)
-    check_node()
+    log("Starting project setup...")
+    check_python()
+    create_virtualenv()
+    download_and_extract_node()
+    install_python_packages()
     install_js_packages()
-    start_servers(venv_python)
+    start_live_server()
+    run_index()
 
 if __name__ == "__main__":
-    atexit.register(lambda: [p.terminate() for p in processes if p and p.poll() is None])
     main()
