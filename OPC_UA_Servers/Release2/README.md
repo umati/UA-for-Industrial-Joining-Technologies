@@ -10,6 +10,10 @@ Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'D
 
 **Change Log:**
 
+**2025-06-09:** Following changes.
+1. Added option to run the IJT Simulator as a Docker image.
+2. Updated the steps in Sections 3 and 4 of the following document: Usage_IJT_OPC_UA_Server_Simulator.pdf
+
 **2025-05-28:** Following changes.
 1. Renamed the SimulatedData.json to simulated_data.json.
 2. Updated the logic of simulation to include JoiningSystem.Identification properties also from simulated_data.json.
