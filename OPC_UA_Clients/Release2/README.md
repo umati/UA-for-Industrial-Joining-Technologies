@@ -56,4 +56,4 @@
 5. **Start** using the client from the browser.
 
 ## OPC UA Server
-- Use the following **OPC UA IJT Server Simulator** to connect from the IJT Web Client: `https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2`
+- Use the following [**OPC UA IJT Server Simulator**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2) to connect from the **IJT Web Client**.
