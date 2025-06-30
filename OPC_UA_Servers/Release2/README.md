@@ -2,12 +2,28 @@
 
 ## Contact
 **Author:** Mohit Agarwal: mohit.agarwal@atlascopco.com
+
 ## Usage
-- Refer to the following document for the usage of the reference server: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
-	- It is **supported** as a **Windows binary** or a **Docker image**. Refer to the detailed steps in the above document.
-## How to download?
-Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and **Click** on the **'Downlaod raw file'** button.
-## Change Log
+### Download the OPC UA Server
+Download **'OPC_UA_IJT_Server_Simulator.zip'** by clicking on the **'Downlaod raw file'** button and **Extract** the zip file.
+
+### Windows 10 or Later
+#### Prerequisites
+- **Install** Windows SDK from the following link: [**Windows_SDK_Dowload**](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/)
+- **Install** Visual Studio 2022 Runtime from the following link: [**Redistributable: VC-Redist_Download**](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+#### Running the application
+- **Go** to the **OPC_UA_IJT_Server_Simulator** directory.
+- **Launch** the **binary** file (**`opcua_ijt_demo_application.exe`**). Ensure that it is Run as **Adminstrator** or at least **Read/Write** access to the directory.
+
+### Docker Image
+#### Running the application
+- **`docker build -t opcua_ijt_demo_application .`**
+- **`docker run --rm -p 40451:40451 opcua_ijt_demo_application`**
+
+### General Usage
+- Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
+
+# Change Log
 **2025-06-09:** Following changes.
 1. Added option to run the IJT Simulator as a Docker image.
 2. Updated the steps in Sections 3 and 4 of the following document: Usage_IJT_OPC_UA_Server_Simulator.pdf
