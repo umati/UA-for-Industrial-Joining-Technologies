@@ -6,12 +6,8 @@ import venv
 import shutil
 import logging
 import webbrowser
-import platform
+import socket
 from pathlib import Path
-from urllib.request import urlretrieve
-
-if platform.system() == "Windows":
-    import winreg
 
 try:
     from dotenv import load_dotenv
@@ -19,22 +15,51 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "python-dotenv"])
     from dotenv import load_dotenv
 
+# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] [%(levelname)s] %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[
-        logging.FileHandler("setup.log"),
+        logging.FileHandler("log.txt", mode='w'),
         logging.StreamHandler()
     ]
 )
 log = logging.getLogger()
 
-IS_WINDOWS = platform.system() == "Windows"
 VENV_DIR = Path("venv")
 
+def check_python_version():
+    if sys.version_info < (3, 8):
+        log.error("Python 3.8 or higher is required.")
+        sys.exit(1)
+
+def check_internet(host="8.8.8.8", port=53, timeout=3):
+    try:
+        socket.setdefaulttimeout(timeout)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
+        return True
+    except socket.error:
+        return False
+
+
 def get_python_path():
-    return VENV_DIR / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
+    if os.name == "nt":
+        return VENV_DIR / "Scripts" / "python.exe"
+    else:
+        return VENV_DIR / "bin" / "python"
+
+def get_npm_path():
+    if os.name == "nt":
+        return VENV_DIR / "Scripts" / "npm.cmd"
+    else:
+        return VENV_DIR / "bin" / "npm"
+
+def get_npx_path():
+    if os.name == "nt":
+        return VENV_DIR / "Scripts" / "npx.cmd"
+    else:
+        return VENV_DIR / "bin" / "npx"
 
 def create_virtualenv():
     if VENV_DIR.exists():
@@ -45,13 +70,11 @@ def create_virtualenv():
 def install_python_packages():
     python = get_python_path()
     log.info("Installing Python packages...")
-    subprocess.check_call([
-        python, "-m", "pip", "install", "--upgrade", "pip",
-        "requests", "python-dotenv", "nodeenv"
-    ])
+    subprocess.check_call([python, "-m", "pip", "install", "--upgrade", "pip"])
+    subprocess.check_call([python, "-m", "pip", "install", "requests", "python-dotenv", "nodeenv"])
     if Path("requirements.txt").exists():
         subprocess.check_call([python, "-m", "pip", "install", "-r", "requirements.txt"])
-    subprocess.call([python, "-m", "pip", "install", "websockets", "asyncua"])
+    subprocess.check_call([python, "-m", "pip", "install", "websockets", "asyncua"])
 
 def create_nodeenv():
     python = get_python_path()
@@ -63,14 +86,15 @@ def create_nodeenv():
     else:
         log.warning("Global Node.js not found. Falling back to nodeenv without -p.")
     subprocess.check_call(args)
-    npm = VENV_DIR / ("Scripts/npm.cmd" if IS_WINDOWS else "bin/npm")
-    npx = VENV_DIR / ("Scripts/npx.cmd" if IS_WINDOWS else "bin/npx")
+
+    npm = get_npm_path()
+    npx = get_npx_path()
     if not npm.exists() or not npx.exists():
         log.error("npm or npx not found in virtual environment. Node.js setup may have failed.")
         sys.exit(1)
 
 def install_js_packages():
-    npm = VENV_DIR / ("Scripts/npm.cmd" if IS_WINDOWS else "bin/npm")
+    npm = get_npm_path()
     if not npm.exists():
         log.error("npm not found. Node.js environment setup failed.")
         sys.exit(1)
@@ -81,7 +105,7 @@ def install_js_packages():
         subprocess.check_call([str(npm), "install"])
 
 def start_server():
-    npx = VENV_DIR / ("Scripts/npx.cmd" if IS_WINDOWS else "bin/npx")
+    npx = get_npx_path()
     if not npx.exists():
         log.error("npx not found. Please ensure Node.js is installed.")
         sys.exit(1)
@@ -111,6 +135,10 @@ def create_env_template():
 
 def main():
     log.info("Starting full project setup...")
+    check_python_version()
+    if not check_internet():
+        log.error("No internet connection. Please connect to the internet and try again.")
+        sys.exit(1)
     create_virtualenv()
     install_python_packages()
     create_nodeenv()
