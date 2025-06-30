@@ -42,24 +42,14 @@ def check_internet(host="8.8.8.8", port=53, timeout=3):
     except socket.error:
         return False
 
-
 def get_python_path():
-    if os.name == "nt":
-        return VENV_DIR / "Scripts" / "python.exe"
-    else:
-        return VENV_DIR / "bin" / "python"
+    return VENV_DIR / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
 def get_npm_path():
-    if os.name == "nt":
-        return VENV_DIR / "Scripts" / "npm.cmd"
-    else:
-        return VENV_DIR / "bin" / "npm"
+    return VENV_DIR / ("Scripts/npm.cmd" if os.name == "nt" else "bin/npm")
 
 def get_npx_path():
-    if os.name == "nt":
-        return VENV_DIR / "Scripts" / "npx.cmd"
-    else:
-        return VENV_DIR / "bin" / "npx"
+    return VENV_DIR / ("Scripts/npx.cmd" if os.name == "nt" else "bin/npx")
 
 def create_virtualenv():
     if VENV_DIR.exists():
@@ -85,7 +75,11 @@ def create_nodeenv():
         args.append("-p")
     else:
         log.warning("Global Node.js not found. Falling back to nodeenv without -p.")
-    subprocess.check_call(args)
+    try:
+        subprocess.check_call(args)
+    except subprocess.CalledProcessError:
+        log.error("Node.js environment setup failed. Please ensure nodeenv can download Node.js or install Node.js globally.")
+        sys.exit(1)
 
     npm = get_npm_path()
     npx = get_npx_path()
@@ -98,11 +92,20 @@ def install_js_packages():
     if not npm.exists():
         log.error("npm not found. Node.js environment setup failed.")
         sys.exit(1)
+
     log.info("Installing JavaScript packages...")
-    if Path("package-lock.json").exists():
-        subprocess.check_call([str(npm), "ci"])
-    else:
-        subprocess.check_call([str(npm), "install"])
+
+    try:
+        if Path("package-lock.json").exists():
+            log.info("Found package-lock.json. Running 'npm ci'...")
+            subprocess.check_call([str(npm), "ci"])
+        else:
+            log.warning("package-lock.json not found. Running 'npm install' instead...")
+            subprocess.check_call([str(npm), "install"])
+    except subprocess.CalledProcessError as e:
+        log.error("JavaScript package installation failed. Please check npm logs.")
+        log.error(f"Command failed: {e.cmd}")
+        sys.exit(1)
 
 def start_server():
     npx = get_npx_path()
