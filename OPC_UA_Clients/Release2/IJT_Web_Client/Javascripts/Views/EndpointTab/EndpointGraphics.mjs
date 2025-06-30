@@ -23,6 +23,7 @@ import ConnectionGraphics from 'views/Connection/ConnectionGraphics.mjs'
 import ResultGraphics from 'views/ComplexResult/ResultGraphics.mjs'
 import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
 import BasicScreen from 'views/GraphicSupport/BasicScreen.mjs'
+//import EnvelopeScreen from 'views/Envelope/EnvelopeGraphics.mjs'
 
 export default class EndpointGraphics extends BasicScreen {
   constructor (title, settings) {
@@ -86,6 +87,11 @@ export default class EndpointGraphics extends BasicScreen {
 
     const entityCacheView = new EntityCacheView(entityCache)
 
+    let envelopeScreen = null
+    if (this.settings.envelope) {
+      envelopeScreen = new EnvelopeScreen(this.connectionManager, resultManager, this.settings)
+    }
+
     tabGenerator.generateTab(connectionGraphics, 2)
     tabGenerator.generateTab(demoGraphics, 1)
     tabGenerator.generateTab(traceGraphics, 2)
@@ -96,6 +102,9 @@ export default class EndpointGraphics extends BasicScreen {
     tabGenerator.generateTab(resultGraphics, 4)
     tabGenerator.generateTab(assetGraphics, 5)
     tabGenerator.generateTab(entityCacheView, 3)
+    if (envelopeScreen) {
+      tabGenerator.generateTab(envelopeScreen, 3)
+    }
 
     tabGenerator.changeViewLevel(2)
   }

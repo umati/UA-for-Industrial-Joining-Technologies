@@ -1,5 +1,5 @@
 /**
- * Basclass for a HTML screen that interact with the tabGenerator to create the backGround and call initiate() everytime the tab is opened
+ * Baseclass for a HTML screen that interact with the tabGenerator to create the backGround and call initiate() everytime the tab is opened
  */
 export default class BasicScreen {
   constructor (title) {
@@ -18,6 +18,24 @@ export default class BasicScreen {
     const newDiv = document.createElement('div')
     newDiv.classList.add('methodDiv')
     return newDiv
+  }
+
+  addTitle (title, component) {
+    const area = document.createElement('div')
+    area.appendChild(this.createLabel(title))
+    area.appendChild(component)
+    return area
+  }
+
+  createTitledInput (title, input, component) {
+    const lineArea = this.createArea()
+    input.classList.add('methodInputRight')
+    const label = this.createLabel(title)
+    label.classList.add('methodLabel')
+    lineArea.appendChild(label)
+    lineArea.appendChild(input)
+    component.appendChild(lineArea)
+    return lineArea
   }
 
   /**
@@ -59,7 +77,7 @@ export default class BasicScreen {
    * @param {*} onchange this function is called when the value changed
    * @returns a function that tells the value of the input field
    */
-  createInput (title, area, changeFunction, width = 90) {
+  createInput (title, area, changeFunction, width = 45) {
     const newInput = document.createElement('input')
     newInput.classList.add('inputStyle')
     newInput.classList.add('methodInput')
@@ -73,9 +91,9 @@ export default class BasicScreen {
     }
     newInput.onkeyup = (x) => {
       if (changeFunction) {
-        if (x.key === 'Enter' || x.keyCode === 13) {
-          changeFunction(x.currentTarget.value)
-        }
+        // if (x.key === 'Enter' || x.keyCode === 13) {
+        changeFunction(x.currentTarget.value)
+        // }
       }
     }
     if (area) {
@@ -125,6 +143,38 @@ export default class BasicScreen {
     return container
   }
 
+  createDropdownFromImport (name, importList, importName, onchange) {
+    const area = document.createElement('div')
+    const parameterArea = document.createElement('div')
+
+    parameterArea.style.border = '1px dotted purple'
+
+    const dropDown = this.createDropdown(null, (cname) => {
+      parameterArea.innerHTML = ''
+      const dropdownObject = new importList[cname]()
+      // eval('new ' + importName + '.' + cname + '()') // eslint-disable-line
+      area.dropdownObject = dropdownObject
+      area.redraw = () => {
+        parameterArea.innerHTML = ''
+        dropdownObject.generateInputHTML(parameterArea, this)
+      }
+      const inp = dropdownObject.generateInputHTML(parameterArea, this)
+      parameterArea.appendChild(inp)
+      if (onchange) {
+        onchange(dropdownObject)
+      }
+    })
+
+    this.createTitledInput(name, dropDown, area)
+    area.appendChild(parameterArea)
+
+    for (const subclass of Object.values(importList)) {
+      dropDown.addOption(subclass.displayText, subclass.name)
+    }
+    dropDown.select.onchange()
+    return area
+  }
+
   /**
    * Create a screen area with a title
    * @param {*} text the title
@@ -147,5 +197,37 @@ export default class BasicScreen {
     namedArea.contentArea = contentArea
 
     return namedArea
+  }
+
+  makeSelectionList (title, context) {
+    const area = this.makeNamedArea(title, 'selectionArea')
+    context.appendChild(area)
+    return new SelectionList(title, area, this)
+  }
+}
+
+export class SelectionList {
+  constructor (title, area, screen) {
+    this.title = title
+    this.area = area
+    this.screen = screen
+    this.options = []
+  }
+
+  redraw () {
+    this.area.innerHTML = ''
+    for (const option of this.options) {
+      this.screen.createButton(option.name, this.area, option.onclick)
+    }
+  }
+
+  addOption (name, onclick, drag) { // option.name, option.onclick, option.drag
+    const option = {
+      name,
+      onclick,
+      drag
+    }
+    this.options.push(option)
+    this.redraw()
   }
 }

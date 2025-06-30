@@ -107,6 +107,9 @@ export default class Settings extends BasicScreen {
       if (msg.initialviewlevel) {
         this.initialViewLevel = msg.initialviewlevel
       }
+      if (msg.envelope) {
+        this.envelope = msg.envelope
+      }
     }
 
     try {
