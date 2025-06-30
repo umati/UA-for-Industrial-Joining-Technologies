@@ -88,7 +88,7 @@ export default class EndpointGraphics extends BasicScreen {
     const entityCacheView = new EntityCacheView(entityCache)
 
     let envelopeScreen = null
-    if (this.settings.envelope) {
+    if (this.settings.envelope !== '0') {
       envelopeScreen = new EnvelopeScreen(this.connectionManager, resultManager, this.settings)
     }
 
