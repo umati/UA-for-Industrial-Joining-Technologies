@@ -1,14 +1,55 @@
-**Author:** Mohit Agarwal
+# OPC UA IJT Server Simulator
 
-**Email:** mohit.agarwal@atlascopco.com
+## Contact
+**Author:** Mohit Agarwal: mohit.agarwal@atlascopco.com
+## Usage
+- Refer to the following document for the usage of the reference server: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
+	- It is **supported** as a **Windows binary** or a **Docker image**. Refer to the detailed steps in the above document.
+## How to download?
+Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and **Click** on the **'Downlaod raw file'** button.
+## Change Log
+**2025-06-09:** Following changes.
+1. Added option to run the IJT Simulator as a Docker image.
+2. Updated the steps in Sections 3 and 4 of the following document: Usage_IJT_OPC_UA_Server_Simulator.pdf
 
-Refer to the following document for the usage of the reference server: **Usage_IJT_OPC_UA_Server_Simulator.pdf**.
+**2025-05-28:** Following changes.
+1. Renamed the SimulatedData.json to simulated_data.json.
+2. Updated the logic of simulation to include JoiningSystem.Identification properties also from simulated_data.json.
+3. Added server_configuration.json to change default values for the Server Configuration data.
+4. Updated the version of the Simulator to 1.5.0 and relevant RC file.
+5. Minor bugs and optimizations.
 
-**How to download?**
+**2025-05-21:** Following changes.
+1. Added option to Simulate Asset Identification Data from the following JSON file SimulatedData.json. This change is useful for changing the values for demonstrations.
+2. Minor bugs and optimizations.
 
-Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and Cick on the **'Downlaod raw file'** button.
+**2025-04-09:** Following changes.
+1. Minor update to the BrowseName of the Tightening System object.
+2. Minor bugs and optimizations.
 
-**Change Log:**
+**2025-03-16:** Following changes.
+1. Corrected the TighteningSystem.Identification.Description value data type.
+2. Corrected the Access Level of TighteningSystem.Identification.Location and Asset.Identification.Location from RO to RW.
+3. Minor bugs and optimizations.
+
+**2025-02-24:** Following changes.
+1. Fixed a crash issue which occurs in rare sceanrios due to Result variable updates.
+2. Removed GetLatestResult method implementation as it was a temporary implementation. It is NOT implemented in the Simulator. A new mechanism defined in the upcoming IJT Joining Specification will be implemented after the specification version is published.
+2. Added some minor log lines and Minor bugs and optimizations.
+
+**2025-02-13:** Following changes.
+1. Corrected the NamespaceIndex of the BrowseName for Results Folder.
+2. Corrected the TypeDefinition of MachineryBuildingBlocks Folder Node from FunctionalGroupType to FolderType. Similar corrections for some other Folder nodes.
+2. Minor bugs and optimizations.
+
+**2024-11-28:** Following changes.
+1. When Combined Results are sent, the data change elapsed time was faster than the minimum sampling interval. Due to this, the Result Variable in the address space was not receiving all the changes. Fixed this issue by checking the elapsed time is greater than minimum sampling interval supported by the server. This does not have any impact on the Result Events.
+2. Minor bugs and optimizations.
+
+**2024-11-14:** Following changes.
+1. Correction of CounterType in JobResult from TOTOAL_JOINING_PROCESS_SIZE to OTHER.
+2. Test Logic for GetLatestResult
+3. Logging the input arguments receieved from SendIdentifiers Method
 
 **2024-10-31:** Following changes.
 1. Added simulated data for GetJoiningProcessList method.

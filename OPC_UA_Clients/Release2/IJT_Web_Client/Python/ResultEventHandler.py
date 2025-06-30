@@ -1,6 +1,8 @@
 import json
 import asyncio
 import websockets
+import pytz
+from datetime import datetime
 from Python.Serialize import serializeValue
 
 class Short:
@@ -54,8 +56,40 @@ class ResultEventHandler:
             print("Exception: " + str(e))
 
     def event_notification(self, event):
-        idString = event.EventId.decode('utf-8')
+        # Get the current date and time in local timezone
+        client_time = datetime.now()
+
+        # Convert client_time to UTC
+        local_timezone = pytz.timezone("Europe/Stockholm")  # Replace with your local timezone
+        local_time = local_timezone.localize(client_time)
+        utc_client_time = local_time.astimezone(pytz.utc)
+
+        # Ensure server_time is timezone-aware (assuming it's in UTC)
+        server_time = event.Time
+        if server_time.tzinfo is None:
+            server_time = pytz.utc.localize(server_time)
+
+        # Convert both server_time and client_time to the same local timezone
+        local_server_time = server_time.astimezone(local_timezone)
+        local_client_time = utc_client_time.astimezone(local_timezone)
+
+        # Format the times with milliseconds
+        formatted_server_time = local_server_time.strftime("%Y-%m-%d %H:%M:%S.%f")
+        formatted_client_time = local_client_time.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+        # Calculate the difference in milliseconds
+        time_difference = utc_client_time - server_time
+        difference_in_milliseconds = time_difference.total_seconds() * 1000
+        
+        idString = event.EventId.decode('utf-8')        
+
+        # Print the formatted date and time
+        print("-----------------------------------------------")
+        print(f"Server Time of Event : {formatted_server_time} (Local Time)")
+        print(f"Client Time of Event : {formatted_client_time} (Local Time)")
+        print(f"Time Gap             : {difference_in_milliseconds:.3f} ms")
         print("RESULT EVENT RECEIVED + ["+ idString+"]: " + event.Message.Text )
+        print("-----------------------------------------------")
         filteredEvent = Short(event.EventType, event.Result, event.Message, idString)
 
         # Event handlers should be quick and non-networked so sending the response
