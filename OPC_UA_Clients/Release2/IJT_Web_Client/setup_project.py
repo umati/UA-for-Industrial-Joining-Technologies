@@ -8,6 +8,10 @@ import logging
 import webbrowser
 import platform
 from pathlib import Path
+from urllib.request import urlretrieve
+
+if platform.system() == "Windows":
+    import winreg
 
 try:
     from dotenv import load_dotenv
@@ -41,15 +45,29 @@ def create_virtualenv():
 def install_python_packages():
     python = get_python_path()
     log.info("Installing Python packages...")
-    subprocess.check_call([python, "-m", "pip", "install", "--upgrade", "pip", "requests", "python-dotenv", "nodeenv"])
-    if(Path("requirements.txt")).exists():
+    subprocess.check_call([
+        python, "-m", "pip", "install", "--upgrade", "pip",
+        "requests", "python-dotenv", "nodeenv"
+    ])
+    if Path("requirements.txt").exists():
         subprocess.check_call([python, "-m", "pip", "install", "-r", "requirements.txt"])
     subprocess.call([python, "-m", "pip", "install", "websockets", "asyncua"])
 
 def create_nodeenv():
     python = get_python_path()
     log.info("Creating Node.js environment inside venv...")
-    subprocess.check_call([python, "-m", "nodeenv", "-p"])
+    has_global_node = shutil.which("node") is not None
+    args = [python, "-m", "nodeenv"]
+    if has_global_node:
+        args.append("-p")
+    else:
+        log.warning("Global Node.js not found. Falling back to nodeenv without -p.")
+    subprocess.check_call(args)
+    npm = VENV_DIR / ("Scripts/npm.cmd" if IS_WINDOWS else "bin/npm")
+    npx = VENV_DIR / ("Scripts/npx.cmd" if IS_WINDOWS else "bin/npx")
+    if not npm.exists() or not npx.exists():
+        log.error("npm or npx not found in virtual environment. Node.js setup may have failed.")
+        sys.exit(1)
 
 def install_js_packages():
     npm = VENV_DIR / ("Scripts/npm.cmd" if IS_WINDOWS else "bin/npm")
