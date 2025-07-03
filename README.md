@@ -15,15 +15,11 @@ The purpose of the **VDMA OPC UA Industrial Joining Technologies (IJT)** Working
    - **OPC 40450-1 Joining:** [**LINK**](https://reference.opcfoundation.org/IJT/Base/v100/docs/)
    - **OPC 40451-1 Tightening:** [**LINK**](https://reference.opcfoundation.org/IJT/Tightening/v200/docs/)
 
-## OPC UA Reference Implementation
-### Latest Version (Recommended)
-- OPC UA **Reference** Client and Server based on OPC **40450-1** UA CS for **Joining** Systems and OPC **40451-1** UA CS for **Tightening** Systems are available in the **following** location:
-   - **Server:** OPC_UA_Servers/**Release2**/**OPC_UA_IJT_Server_Simulator.zip** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2)
-   - **Client:** OPC_UA_Clients/**Release2**/**IJT_Web_Client** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2)
-### Older Version
-- OPC UA **Reference** Client and Server based on OPC **40451-1** UA CS for **Tightening** Systems **1.00.0** are available in the following location.
-   - **Server:** OPC_UA_Servers/**Release1**/**IJT_OPC_UA_Server_Simulator.zip**
-   - **Client:** OPC_UA_Clients/**Release1**/**NodeOPCUA_IJTClient**
+## OPC UA IJT Reference Implementation
+- OPC UA **IJT Reference Client** and **IJT Reference Server** are available in the **following** location:
+- **Server:** OPC_UA_Servers/**Release2**/**OPC_UA_IJT_Server_Simulator.zip** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2)
+- **Client:** OPC_UA_Clients/**Release2**/**IJT_Web_Client** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2)
+
      
 
       
