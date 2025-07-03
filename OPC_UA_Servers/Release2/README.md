@@ -7,6 +7,7 @@
 ### Common Steps
 - Download **OPC_UA_IJT_Server_Simulator.zip** by clicking on the **'Downlaod raw file'** button and **Extract** the zip file.
 - **Go** to the **OPC_UA_IJT_Server_Simulator** directory.
+- The **EndpointUrl** of the OPC UA Server would be: **opc.tcp://localhost:40451** or **opc.tcp://YourComputerName:40451**.
 
 ### Windows 10 or Later
 #### Prerequisites
