@@ -5,13 +5,12 @@
 
 ## Usage
 ### Common Steps
-- Download **'OPC_UA_IJT_Server_Simulator.zip'** by clicking on the **'Downlaod raw file'** button and **Extract** the zip file.
+- Download **OPC_UA_IJT_Server_Simulator.zip** by clicking on the **'Downlaod raw file'** button and **Extract** the zip file.
 - **Go** to the **OPC_UA_IJT_Server_Simulator** directory.
 
 ### Windows 10 or Later
 #### Prerequisites
-- **Install** Windows SDK from the following link: [**Windows_SDK_Dowload**](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/)
-- **Install** Visual Studio 2022 Runtime from the following link: [**Redistributable: VC-Redist_Download**](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+- **Install** [**Windows_SDK**](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) and Visual C++ Runtime [**VC-Redist**](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
 #### Running the application
 - **Launch** the **binary** file (**`opcua_ijt_demo_application.exe`**). Ensure that it is Run as **Adminstrator** or at least **Read/Write** access to the directory.
 
