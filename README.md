@@ -7,9 +7,9 @@ The purpose of the **VDMA OPC UA Industrial Joining Technologies (IJT)** Working
 
 ## OPC UA IJT Documentation
 ### Overview
-- **Modular Presentation:** [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/IJT_Documents)
-- **OPC Foundation IJT Page:** [**LINK**](https://opcfoundation.org/markets-collaboration/IJT/)
-- **VDMA IJT Page:** [**LINK**](https://vdma.org/viewer/-/v2article/render/88084510)
+- **IJT Group Presentation:** [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/IJT_Documents)
+- **OPC Foundation Page:** [**LINK**](https://opcfoundation.org/markets-collaboration/IJT/)
+- **VDMA Page:** [**LINK**](https://vdma.org/viewer/-/v2article/render/88084510)
 
 ### Specifications - Online Reference
    - **OPC 40450-1 Joining:** [**LINK**](https://reference.opcfoundation.org/IJT/Base/v100/docs/)
