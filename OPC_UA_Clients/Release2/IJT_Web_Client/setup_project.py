@@ -7,6 +7,7 @@ import shutil
 import logging
 import webbrowser
 import socket
+import argparse
 from pathlib import Path
 
 try:
@@ -60,17 +61,17 @@ def create_virtualenv():
 def install_python_packages():
     python = get_python_path()
     log.info("Installing Python packages...")
-    subprocess.check_call([python, "-m", "pip", "install", "--upgrade", "pip"])
-    subprocess.check_call([python, "-m", "pip", "install", "requests", "python-dotenv", "nodeenv"])
+    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip"])
+    subprocess.check_call([str(python), "-m", "pip", "install", "requests", "python-dotenv", "nodeenv"])
     if Path("requirements.txt").exists():
-        subprocess.check_call([python, "-m", "pip", "install", "-r", "requirements.txt"])
-    subprocess.check_call([python, "-m", "pip", "install", "websockets", "asyncua"])
+        subprocess.check_call([str(python), "-m", "pip", "install", "-r", "requirements.txt"])
+    subprocess.check_call([str(python), "-m", "pip", "install", "websockets", "asyncua"])
 
 def create_nodeenv():
     python = get_python_path()
     log.info("Creating Node.js environment inside venv...")
     has_global_node = shutil.which("node") is not None
-    args = [python, "-m", "nodeenv"]
+    args = [str(python), "-m", "nodeenv"]
     if has_global_node:
         args.append("-p")
     else:
@@ -80,7 +81,6 @@ def create_nodeenv():
     except subprocess.CalledProcessError:
         log.error("Node.js environment setup failed. Please ensure nodeenv can download Node.js or install Node.js globally.")
         sys.exit(1)
-
     npm = get_npm_path()
     npx = get_npx_path()
     if not npm.exists() or not npx.exists():
@@ -92,9 +92,7 @@ def install_js_packages():
     if not npm.exists():
         log.error("npm not found. Node.js environment setup failed.")
         sys.exit(1)
-
     log.info("Installing JavaScript packages...")
-
     try:
         if Path("package-lock.json").exists():
             log.info("Found package-lock.json. Running 'npm ci'...")
@@ -112,45 +110,92 @@ def start_server():
     if not npx.exists():
         log.error("npx not found. Please ensure Node.js is installed.")
         sys.exit(1)
-    log.info("Starting local server...")
-    subprocess.Popen([str(npx), "serve", "-l", "3000"])
-    webbrowser.open("http://localhost:3000")
+    
+    # Use HTTP_PORT for the static server, default to 3000
+    http_port = os.getenv("HTTP_PORT", "3000")
+    log.info(f"Starting local server on http://localhost:{http_port} ...")
+    
+    try:
+        subprocess.Popen([str(npx), "serve", "-l", http_port])
+        webbrowser.open(f"http://localhost:{http_port}")
+    except Exception as e:
+        log.error("Failed to start server or open browser.")
+        log.error(str(e))
 
 def run_index():
     python = get_python_path()
     if Path("index.py").exists():
-        subprocess.Popen([str(python), "index.py"])
+        try:
+            subprocess.Popen([str(python), "index.py"])
+        except Exception as e:
+            log.error("Failed to run index.py")
+            log.error(str(e))
     else:
         log.warning("index.py not found.")
 
 def create_env_template():
-    if not Path(".env").exists() and Path(".env.example").exists():
-        shutil.copy(".env.example", ".env")
-        log.info(".env file created from .env.example.")
-    elif not Path(".env.example").exists():
-        with open(".env.example", "w") as f:
-            f.write("# Environment Configuration Example\n\n")
-            f.write("# WebSocket Server Port\n")
-            f.write("# This is the port on which the WebSocket server will listen for incoming connections.\n")
-            f.write("# Default: 8001\n")
-            f.write("WS_PORT=8001\n")
-        log.info(".env.example created.")
+    if not Path(".env").exists():
+        if Path(".env.example").exists():
+            shutil.copy(".env.example", ".env")
+            log.info(".env file created from .env.example.")
+        else:
+            with open(".env.example", "w") as f:
+                f.write("# Environment Configuration Example\n\n")
+                f.write("# WebSocket Server Port\n")
+                f.write("# This is the port on which the WebSocket server will listen for incoming connections.\n")
+                f.write("# Default: 8001\n")
+                f.write("WS_PORT=8001\n")
+            log.info(".env.example created.")
+
+def is_runtime_ready():
+    python = get_python_path()
+    npm = get_npm_path()
+    npx = get_npx_path()
+    return VENV_DIR.exists() and python.exists() and npm.exists() and npx.exists()
 
 def main():
-    log.info("Starting full project setup...")
-    check_python_version()
-    if not check_internet():
-        log.error("No internet connection. Please connect to the internet and try again.")
-        sys.exit(1)
-    create_virtualenv()
-    install_python_packages()
-    create_nodeenv()
-    install_js_packages()
-    create_env_template()
-    load_dotenv()
-    start_server()
-    run_index()
-    log.info("Setup complete.")
+    parser = argparse.ArgumentParser(
+        description="Setup and run the IJT Web Client environment.",
+        epilog="""
+Default behavior:
+  If the environment is already set up (venv, npm, npx exist), the script runs in runtime-only mode.
+  Use --force_full to override and perform full setup regardless of environment state.
+""",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument(
+        '--force_full',
+        action='store_true',
+        help="Force full setup even if environment is already prepared"
+    )
+    args = parser.parse_args()
+
+    def is_runtime_ready():
+        python = get_python_path()
+        npm = get_npm_path()
+        npx = get_npx_path()
+        return VENV_DIR.exists() and python.exists() and npm.exists() and npx.exists()
+
+    if not args.force_full and is_runtime_ready():
+        log.info("Detected existing environment. Running runtime-only setup...")
+        load_dotenv()
+        start_server()
+        run_index()
+    else:
+        log.info("Starting full project setup...")
+        check_python_version()
+        if not check_internet():
+            log.error("No internet connection. Please connect to the internet and try again.")
+            sys.exit(1)
+        create_virtualenv()
+        install_python_packages()
+        create_nodeenv()
+        install_js_packages()
+        create_env_template()
+        load_dotenv()
+        start_server()
+        run_index()
+        log.info("Setup complete.")
 
 if __name__ == "__main__":
     main()
