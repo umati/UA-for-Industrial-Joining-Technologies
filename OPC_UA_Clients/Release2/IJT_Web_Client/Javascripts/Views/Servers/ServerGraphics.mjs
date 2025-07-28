@@ -11,8 +11,7 @@ export default class ServerGraphics extends BasicScreen {
     this.webSocketManager = webSocketManager
     this.endpointTabGenerator = endpointTabGenerator
 
-    const column = this.makeNamedArea('Servers', 'leftArea')
-    this.backGround.appendChild(column)
+    const column = this.makeNamedArea('Servers', 'leftArea', this.backGround)
 
     // The title row
     column.appendChild(this.makeServerRow(

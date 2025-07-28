@@ -11,6 +11,7 @@ const typeMapping = {
   48: { name: 'hasNotifier', color: 'black' },
   17603: { name: 'hasInterface', color: 'green' },
   17604: { name: 'hasAddin', color: 'brown', isHierarchical: true },
+  24136: { name: '???', color: 'red' },
   24137: { name: 'association', color: 'grey' }
 }
 

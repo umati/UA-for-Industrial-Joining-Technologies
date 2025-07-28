@@ -13,15 +13,13 @@ export default class ControlSplitScreen extends BasicScreen {
     columnSetter.classList.add('columns')
     this.backGround.appendChild(columnSetter)
 
-    this.controlArea = this.makeNamedArea(leftText, 'lefthalf')
-    columnSetter.appendChild(this.controlArea)
+    this.controlArea = this.makeNamedArea(leftText, 'lefthalf', columnSetter)
 
     this.controls = document.createElement('div')
     this.controls.classList.add('doublecolumnleft')
     this.controlArea.appendChild(this.controls)
 
-    this.viewArea = this.makeNamedArea(rightText, 'righthalf')
-    columnSetter.appendChild(this.viewArea)
+    this.viewArea = this.makeNamedArea(rightText, 'righthalf', columnSetter)
 
     this.views = document.createElement('div')
     this.views.classList.add('doublecolumnright')

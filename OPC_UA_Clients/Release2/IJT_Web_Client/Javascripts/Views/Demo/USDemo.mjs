@@ -75,26 +75,20 @@ export default class USDemo extends BasicScreen {
     resultArea.appendChild(resultTopArea)
 
     // Set up the common parts of the result
-    const infoArea = this.makeNamedArea('Common Result Data', 'demoMachine')
-    // infoArea.style.border = '2px solid white'
-    infoArea.style.height = '180px'
-    infoArea.style.width = '500px'
-    resultTopArea.appendChild(infoArea)
+    const infoArea = this.makeNamedArea('Common Result Data', 'demoMachine', resultTopArea)
+
     this.propertyView = new CommonPropertyView(
       ['result.ResultMetaData.Name',
         'result.ResultMetaData.ResultEvaluation',
         'result.ResultMetaData.CreationTime',
         'result.ResultMetaData.SequenceNumber',
         'result.ResultMetaData.ResultId'],
-      infoArea.contentArea,
+      infoArea,
       this.resultManager)
 
     // Set up the specific tightening related parameters of the reult
-    const tqAngleBox = this.makeNamedArea('Tightening Result Data', 'demoMachine')
-    tqAngleBox.style.height = '180px'
-    tqAngleBox.style.width = '300px'
-    resultTopArea.appendChild(tqAngleBox)
-    this.IJTpropertyView = new IJTPropertyView(tqAngleBox.contentArea, this.resultManager)
+    const tqAngleBox = this.makeNamedArea('Tightening Result Data', 'demoMachine', resultTopArea)
+    this.IJTpropertyView = new IJTPropertyView(tqAngleBox, this.resultManager)
 
     const resultBottomArea = document.createElement('div')
     resultBottomArea.style.height = '50%'

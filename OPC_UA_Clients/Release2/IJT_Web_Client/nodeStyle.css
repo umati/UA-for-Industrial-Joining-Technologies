@@ -416,6 +416,7 @@ ul,
   width: 49%;
   max-height: 97%;
   display: inline-block;
+  margin: 10px 0px 0px 10px;
   /* display: inline-block; */
 }
 
@@ -423,10 +424,10 @@ ul,
   width: 49%;
   max-height: 97%;
   display: inline-block;
+  margin: 10px 0px 0px 10px;
 }
 
 .traceList {
-  /*min-width: 500px;*/
   border-color: blue;
   border-style: solid;
   border-width: 2px;
@@ -435,26 +436,34 @@ ul,
 
 .envelopeleft {
   background: lightgray;
-  padding: 5px;
-  margin: 5px;
+  
   width: 98%;
-  overflow: scroll;
+  overflow: auto;
+}
+
+.envSelect {
+  width: 100%
 }
 
 .myInfoArea,
-.scrollableInfoArea {
+.scrollableInfoArea, .scrollSeparated {
   background: lightgray;
-  padding: 5px;
-  margin: 5px;
-  /* min-width: 380px; */
-  width: 98%;
-  /* height: 400px; */
 }
 
-.scrollableInfoArea {
-  overflow: scroll;
+
+.scrollableInfoArea, .scrollSeparated {
+  overflow: auto;
   height: 100vh;
-  margin: 5px;
+}
+
+.scrollSeparated {
+  padding: 5em;
+}
+
+
+.namedInfoArea {
+  background: transparent;
+  overflow: hidden;
 }
 
 .smallSettingArea {
@@ -986,11 +995,54 @@ html {
 .demoMachine {
   color: black;
   overflow: hidden;
+  height: 180px;
+  width: 500px;
+}
+
+.selectorArea {
+  color: black;
+  overflow: hidden;
+  width: 300px;
+  height: 305px;
+
 }
 
 .selectionArea {
   color: black;
   overflow: hidden;
+}
+
+.envelopeArea {
+  color: black;
+  overflow: hidden;
+  width: 30%;
+  margin: 0px 5px 0px 0px;
+  padding: 0px;
+  height: 100%;
+}
+
+.envdarken {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.drag-over {
+  background: darkgray;
+}
+
+.envpopup {
+  display:flex;
+  flex-direction: row;
+  position: fixed;
+  top: 10%;
+  left: 10%;
+  height: 40%;
+  right: 10%;
+  background: lightgray;
 }
 
 .demoHeading {
@@ -1003,8 +1055,7 @@ html {
 
 .buttonArea {
   margin: 0px 0px 0px 10px;
-  overflow:hidden;
-  width: 1000px
+  width: 95%
 }
 
 
@@ -1124,4 +1175,15 @@ html {
   margin: 10px -20px;
   padding: 10px;
   background: white;
+}
+
+
+.standardRow {
+  display:flex;
+  flex-direction: row;
+}
+
+.standardCol {
+  display:flex;
+  flex-direction: column;
 }

@@ -98,6 +98,7 @@ export default class TraceGraphics extends BasicScreen {
   setupEventListeners () {
     this.traceInterface.traceTypeSelect.addEventListener('click', (event) => {
       this.traceDisplay.decideTraceType(this.traceInterface.traceTypeSelect.options[this.traceInterface.traceTypeSelect.selectedIndex].value)
+      this.traceDisplay.update()
     }, false)
 
     this.traceInterface.absoluteSelect.addEventListener('click', (event) => {
@@ -113,6 +114,7 @@ export default class TraceGraphics extends BasicScreen {
     this.traceInterface.setTraceSelectEventListener((event) => {
       this.traceDisplay.selectTrace(this.traceDisplay.findTrace(event.currentTarget.resultId))
       this.selectedStep = null
+      this.traceDisplay.update()
     })
 
     this.traceInterface.setStepSelectEventListener((event) => {
@@ -120,6 +122,7 @@ export default class TraceGraphics extends BasicScreen {
       this.traceDisplay.selectStep(event.currentTarget.stepId)
       // this.traceDisplay.resetZoom()
       this.traceDisplay.zoom(this.traceDisplay.selectedTrace, this.traceDisplay.selectedStep)
+      this.traceDisplay.update()
     })
 
     this.traceInterface.clearSteps()
@@ -127,18 +130,22 @@ export default class TraceGraphics extends BasicScreen {
     this.traceInterface.alignButton.addEventListener('click', (event) => {
       this.align(this.traceDisplay.selectedTrace, this.traceDisplay.selectedStep)
       this.alignStep = this.selectStep
+      this.traceDisplay.update()
     }, false)
 
     this.traceInterface.valueShower.addEventListener('click', (event) => {
       this.traceDisplay.showPoints(this.traceInterface.valueShower.options[this.traceInterface.valueShower.selectedIndex].value)
+      this.traceDisplay.update()
     }, false)
 
     this.traceInterface.limitShower.addEventListener('click', (event) => {
       this.traceDisplay.showLimits(this.traceInterface.limitShower.options[this.traceInterface.limitShower.selectedIndex].value)
+      this.traceDisplay.update()
     }, false)
 
     this.traceInterface.deleteButton.addEventListener('click', (event) => {
       this.deleteSelected()
+      this.update()
     }, false)
   }
 }

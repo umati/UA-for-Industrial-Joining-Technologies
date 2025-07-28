@@ -57,7 +57,7 @@ export default class TighteningDataType extends ResultDataType {
     }
     for (const stepTrace of stepTraces) {
       for (const c of stepTrace.StepTraceContent) {
-        pointList[c.Name] = [...pointList[c.Name], ...c.Values]
+        pointList[c.Name] = [...pointList[c.Name], ...c.Values.map(parseFloat)]
       }
       for (let index = 0; index < stepTrace.StepTraceContent[0].Values.length; index++) {
         pointList['TIME TRACE'].push(index * parseFloat(stepTrace.SamplingInterval) + parseFloat(stepTrace.StartTimeOffset))

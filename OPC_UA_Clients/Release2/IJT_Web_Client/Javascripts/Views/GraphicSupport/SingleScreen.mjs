@@ -12,8 +12,7 @@ export default class SingleScreen extends BasicScreen {
     columnSetter.classList.add('columns')
     this.backGround.appendChild(columnSetter)
 
-    this.controlArea = this.makeNamedArea(leftText, 'lefthalf')
-    columnSetter.appendChild(this.controlArea)
+    this.controlArea = this.makeNamedArea(leftText, 'lefthalf', columnSetter)
 
     this.singleArea = document.createElement('div')
     this.singleArea.classList.add('doublecolumnleft')

@@ -76,14 +76,22 @@ export default class TabGenerator {
     this.contentDiv.appendChild(content)
   }
 
+  cascadingInitiate () {
+     if (this.currentSelected) {
+      this.currentSelected.initiate()
+    }
+  }
+
   /**
    * generateTab creates a new tab and returns its HTML element
    * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
    * @returns
    */
   generateTab (content, viewLevel, selected) {
-    const tab = new Tab(this.contentDiv, content, this.selector, viewLevel, this.currentViewLevel)
-    tab.select()
+    const tab = new Tab(this.contentDiv, content, this.selector, viewLevel, this.currentViewLevel, this)
+    if (selected) {
+      tab.select()
+    }
     this.containerList.push(tab)
     // If it is the first, then show it
     // if (this.containerList.length === 1) {
@@ -180,11 +188,12 @@ class Tab {
    * @param {Object} content The graphical representation of the content, preferably a descendent of the BasicScreen class
    * @returns
    */
-  constructor (container, content, selectorArea, tabViewLevel, currentViewLevel) {
+  constructor (container, content, selectorArea, tabViewLevel, currentViewLevel, tabGenerator) {
     this.container = container
     this.content = content
     this.selectorArea = selectorArea
     this.tabViewLevel = tabViewLevel
+    this.tabGenerator = tabGenerator
     this.selected = false
 
     this.button = document.createElement('input')
@@ -205,6 +214,7 @@ class Tab {
       this.button.style.backgroundColor = 'rgba(52, 63, 72, 0.9)'
       this.button.style.fontWeight = 'bold'
       this.button.style.borderBottom = '1px solid rgba(52, 63, 72, 0.9)'
+      this.tabGenerator.currentSelected = content
     }
     this.button.reset = () => {
       this.button.style.backgroundColor = 'black'

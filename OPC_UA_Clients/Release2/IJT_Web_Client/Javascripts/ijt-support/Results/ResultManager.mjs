@@ -94,7 +94,12 @@ export class ResultManager {
     result.clientLatestRecievedTime = new Date().getTime()
 
     for (const subscriber of this.subscribers) {
-      subscriber(result)
+      try {
+        subscriber(result)
+      }
+      catch(err) {
+        console.log(err)
+      }
     }
   }
 

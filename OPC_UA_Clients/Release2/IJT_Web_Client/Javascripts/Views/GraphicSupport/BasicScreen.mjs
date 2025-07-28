@@ -55,6 +55,10 @@ export default class BasicScreen {
     newButton.onclick = () => {
       newButton.callback(newButton)
     }
+    newButton.moveTo = (location) => {
+      // newButton.parentElement.removeChild(newButton)
+      location.appendChild(newButton)
+    }
     if (area) {
       area.appendChild(newButton)
     }
@@ -121,6 +125,7 @@ export default class BasicScreen {
       container.appendChild(label)
     }
     container.select = document.createElement('select')
+    container.select.classList.add('envSelect')
     container.appendChild(container.select)
 
     container.addOption = function (opt, key) {
@@ -143,35 +148,30 @@ export default class BasicScreen {
     return container
   }
 
-  createDropdownFromImport (name, importList, importName, onchange) {
+  createDropdownFromImport (name, importList, onchange) {
     const area = document.createElement('div')
-    const parameterArea = document.createElement('div')
+    // const parameterArea = document.createElement('div')
+    // area.appendChild(parameterArea)
 
-    parameterArea.style.border = '1px dotted purple'
+    // parameterArea.style.border = '1px dotted purple'
 
     const dropDown = this.createDropdown(null, (cname) => {
-      parameterArea.innerHTML = ''
-      const dropdownObject = new importList[cname]()
-      // eval('new ' + importName + '.' + cname + '()') // eslint-disable-line
-      area.dropdownObject = dropdownObject
-      area.redraw = () => {
-        parameterArea.innerHTML = ''
-        dropdownObject.generateInputHTML(parameterArea, this)
-      }
-      const inp = dropdownObject.generateInputHTML(parameterArea, this)
-      parameterArea.appendChild(inp)
+      const newSelection = new importList[cname]()
+
       if (onchange) {
-        onchange(dropdownObject)
+        onchange(newSelection)
       }
     })
 
+    area.selectFromDropDown = (selected) => { // Use this to preselect
+      dropDown.select.value = selected
+    }
+
     this.createTitledInput(name, dropDown, area)
-    area.appendChild(parameterArea)
 
     for (const subclass of Object.values(importList)) {
       dropDown.addOption(subclass.displayText, subclass.name)
     }
-    dropDown.select.onchange()
     return area
   }
 
@@ -181,10 +181,10 @@ export default class BasicScreen {
    * @param {*} style the css style
    * @returns the new area where to put things
    */
-  makeNamedArea (text, style) {
+  makeNamedArea (text, style, area) {
     const namedArea = document.createElement('div')
-    namedArea.classList.add(style)
     namedArea.classList.add('scrollableInfoArea')
+    namedArea.classList.add(style)
 
     const header = document.createElement('div')
     header.classList.add('myHeader')
@@ -193,15 +193,19 @@ export default class BasicScreen {
 
     const contentArea = document.createElement('div')
     contentArea.classList.add('tightUL')
+    contentArea.classList.add('standardCol')
     namedArea.appendChild(contentArea)
     namedArea.contentArea = contentArea
 
+    if (area) {
+      area.appendChild(namedArea)
+      return contentArea
+    }
     return namedArea
   }
 
   makeSelectionList (title, context) {
-    const area = this.makeNamedArea(title, 'selectionArea')
-    context.appendChild(area)
+    const area = this.makeNamedArea(title, 'selectionArea', context)
     return new SelectionList(title, area, this)
   }
 }

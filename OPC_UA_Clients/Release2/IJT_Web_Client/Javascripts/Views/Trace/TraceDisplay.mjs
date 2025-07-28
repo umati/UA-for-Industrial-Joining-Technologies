@@ -84,6 +84,8 @@ export default class TraceDisplay {
     this.chartManager.update()
   }
 
+
+
   /**
    * Main function for generating a new graphical representation of a trace
    * @date 2/23/2024 - 6:19:47 PM
@@ -117,6 +119,7 @@ export default class TraceDisplay {
     }
     // Select it
     this.selectTrace(newResultandTrace)
+    this.update()
   }
 
   handleOldTraces (refreshCallback) {
@@ -187,7 +190,7 @@ export default class TraceDisplay {
 
     // trace.highLight()
     this.refreshAllData()
-    this.chartManager.update()
+    // this.chartManager.update()
   }
 
   alignByIndex (trace, index) { // Temp solution until programStepId is correct in simulator
@@ -247,9 +250,7 @@ export default class TraceDisplay {
     }
     if (this.allTraces.length > 0) {
       this.selectTrace(this.allTraces[this.allTraces.length - 1])
-    } else {
-      this.chartManager.update()
-    }
+    } 
   }
 
   // //////////////////////////// Selection support ////////////////////////////////
@@ -267,7 +268,6 @@ export default class TraceDisplay {
     if (this.traceInterface) {
       this.traceInterface.selectTrace(trace.resultId)
     }
-    this.chartManager.update()
   }
 
   deselectTrace () {
@@ -280,7 +280,6 @@ export default class TraceDisplay {
     }
     this.selectedTrace.deselect()
     this.selectedTrace = null
-    this.chartManager.update()
   }
 
   selectStep (selectedStep) {
@@ -297,7 +296,6 @@ export default class TraceDisplay {
         step.deselect()
       }
     }
-    this.chartManager.update()
   }
 
   showPoints (value) {
@@ -366,5 +364,56 @@ export default class TraceDisplay {
     } else {
       this.selectStep(stepId.value)
     }
+    this.chartManager.update()
   }
+
+  createGraphicalLimit (limit) {
+    limit.limitGraphic = new GraphicalLimit(this.chartManager, limit)
+    return limit.limitGraphic
+  }
+}
+
+class GraphicalLimit {
+  constructor (chartManager, limit) { 
+    this.chartManager = chartManager
+    this.glimit = this.chartManager.newLimit('red', 'rgba(135, 135, 241, 0.5)', 'start')
+    this.update(limit);
+  }
+
+  update(limit) {
+    const dataList = []
+    for (let x = limit.range.start; 
+        x <= limit.range.end; 
+        x += (limit.range.end - limit.range.start) / 100) {
+      dataList.push({
+        x,
+        y: limit.polynomial.value(x-limit.range.offset)
+      })
+    }
+    this.glimit.data = dataList
+
+    if (limit.check.constructor.name == 'OverLimit') {
+      this.glimit.fill = 'end'
+    } else if (limit.check.constructor.name == 'UnderLimit') {
+      this.glimit.fill = 'start'
+    } else {
+      this.glimit.fill = false
+    }
+
+    this.chartManager.update()
+  }
+
+  pixelToValue (pos) {
+    return this.chartManager.pixelToValue(pos)
+  }
+
+  valueToPixel (pos) {
+    /* console.log(this.chartManager.valueToPixel({ x: 150, y: 1}))
+    // console.log(this.chartManager.pixelToValue({ x: 250, y: 500}))
+    setTimeout(() => {
+      console.log(this.chartManager.valueToPixel({ x: 150, y: 1}))
+    }, 2000) */
+    return this.chartManager.valueToPixel(pos)
+  }
+
 }
