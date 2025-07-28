@@ -19,10 +19,8 @@
 ### Steps
 
 1. **Run the Setup Script:** Execute the setup script by running **`python setup_project.py`**
-      - **Information:** Once the setup is complete, the script will **automatically** start both the Python server and the live server. Follow these steps to use the project:
-        - **Access the Live Server:** The script will automatically open the live server URL in your default web browser.
-        - **Interact with the Python Server:** The Python server will be running in the background, ready to handle requests.
-        - **Stop the Servers:** To stop the servers, press **`Ctrl+C`** in the terminal where the script is running.
+      - **Information:** Once the setup is complete, the script will **automatically** start the Browser.
+      - **Force Full Setup:** To **overwrite** full setup **after** the **first** time setup, run **`python setup_project.py --force_full`**.
 
 ## IJT Web Client - Option 2 - Docker Setup Guide
 ### Prerequisites

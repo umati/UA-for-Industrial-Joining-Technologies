@@ -2,12 +2,37 @@
 
 ## Contact
 **Author:** Mohit Agarwal: mohit.agarwal@atlascopco.com
+
 ## Usage
-- Refer to the following document for the usage of the reference server: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
-	- It is **supported** as a **Windows binary** or a **Docker image**. Refer to the detailed steps in the above document.
-## How to download?
-Click on the ZIP file **'OPC_UA_IJT_Server_Simulator.zip'** and **Click** on the **'Downlaod raw file'** button.
-## Change Log
+### Common Steps
+- Download **OPC_UA_IJT_Server_Simulator.zip** by clicking on the **'Downlaod raw file'** button and **Extract** the zip file.
+- **Go** to the **OPC_UA_IJT_Server_Simulator** directory.
+- The **EndpointUrl** of the OPC UA Server would be: **opc.tcp://localhost:40451** or **opc.tcp://YourComputerName:40451**.
+
+### Windows 10 or Later
+#### Prerequisites
+- **Install** [**Windows_SDK**](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) and Visual C++ Runtime [**VC-Redist**](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+#### Running the application
+- **Launch** the **binary** file (**`opcua_ijt_demo_application.exe`**). Ensure that it is Run as **Adminstrator** or at least **Read/Write** access to the directory.
+
+### Docker Image
+#### Build the docker
+- **`docker build -t opcua_ijt_demo_application .`**
+#### Running the application
+- **`docker run --rm -p 40451:40451 opcua_ijt_demo_application`**
+- or
+- **`docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=127.0.0.1 opcua_ijt_demo_application`**
+	- The Hostname or IP Address of the Host where the docker is deployed can be passed using OPCUA_HOSTNAME flag.
+
+### General Usage
+- Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
+
+# Change Log
+**2025-07-04:** Following changes.
+1. Creating a default Single Result upon start-up for easier testing.
+2. Updated Docker logic to log the correct EndpointUrl while running as Docker.
+3. Minor optimizations.
+
 **2025-06-09:** Following changes.
 1. Added option to run the IJT Simulator as a Docker image.
 2. Updated the steps in Sections 3 and 4 of the following document: Usage_IJT_OPC_UA_Server_Simulator.pdf
