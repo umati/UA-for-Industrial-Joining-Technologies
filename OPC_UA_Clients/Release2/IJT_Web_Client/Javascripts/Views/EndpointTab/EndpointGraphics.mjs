@@ -23,7 +23,7 @@ import ConnectionGraphics from 'views/Connection/ConnectionGraphics.mjs'
 import ResultGraphics from 'views/ComplexResult/ResultGraphics.mjs'
 import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
 import BasicScreen from 'views/GraphicSupport/BasicScreen.mjs'
-import EnvelopeScreen from 'views/Envelope/EnvelopeGraphics.mjs'
+// import EnvelopeScreen from 'views/Envelope/EnvelopeGraphics.mjs'
 
 export default class EndpointGraphics extends BasicScreen {
   constructor (title, settings) {
