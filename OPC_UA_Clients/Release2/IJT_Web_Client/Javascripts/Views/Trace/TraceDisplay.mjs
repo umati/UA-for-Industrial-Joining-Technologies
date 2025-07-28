@@ -84,8 +84,6 @@ export default class TraceDisplay {
     this.chartManager.update()
   }
 
-
-
   /**
    * Main function for generating a new graphical representation of a trace
    * @date 2/23/2024 - 6:19:47 PM
@@ -250,7 +248,7 @@ export default class TraceDisplay {
     }
     if (this.allTraces.length > 0) {
       this.selectTrace(this.allTraces[this.allTraces.length - 1])
-    } 
+    }
   }
 
   // //////////////////////////// Selection support ////////////////////////////////
@@ -374,27 +372,27 @@ export default class TraceDisplay {
 }
 
 class GraphicalLimit {
-  constructor (chartManager, limit) { 
+  constructor (chartManager, limit) {
     this.chartManager = chartManager
     this.glimit = this.chartManager.newLimit('red', 'rgba(135, 135, 241, 0.5)', 'start')
-    this.update(limit);
+    this.update(limit)
   }
 
-  update(limit) {
+  update (limit) {
     const dataList = []
-    for (let x = limit.range.start; 
-        x <= limit.range.end; 
-        x += (limit.range.end - limit.range.start) / 100) {
+    for (let x = limit.range.start;
+      x <= limit.range.end;
+      x += (limit.range.end - limit.range.start) / 100) {
       dataList.push({
         x,
-        y: limit.polynomial.value(x-limit.range.offset)
+        y: limit.polynomial.value(x - limit.range.offset)
       })
     }
     this.glimit.data = dataList
 
-    if (limit.check.constructor.name == 'OverLimit') {
+    if (limit.check.constructor.name === 'OverLimit') {
       this.glimit.fill = 'end'
-    } else if (limit.check.constructor.name == 'UnderLimit') {
+    } else if (limit.check.constructor.name === 'UnderLimit') {
       this.glimit.fill = 'start'
     } else {
       this.glimit.fill = false
@@ -415,5 +413,4 @@ class GraphicalLimit {
     }, 2000) */
     return this.chartManager.valueToPixel(pos)
   }
-
 }

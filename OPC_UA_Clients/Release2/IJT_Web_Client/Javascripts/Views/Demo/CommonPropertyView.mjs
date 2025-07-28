@@ -46,7 +46,7 @@ export default class CommonPropertyView {
             line2.style.color = 'red'
           }
         }
-        line2.innerText = value // eslint-disable-line
+        line2.innerText = value
         this.values.appendChild(line2)
       }
     }

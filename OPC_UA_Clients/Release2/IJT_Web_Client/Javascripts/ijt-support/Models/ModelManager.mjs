@@ -86,7 +86,7 @@ export class ModelManager {
                  return result
             } else { // Some non-result data structure
               // console.log('Factory selfcast: ' + name[1])
-              return eval('new ' + name[1] + '(content,this)') // eslint-disable-line
+              return eval('new ' + name[1] + '(content,this)')  
             }
           }
         }

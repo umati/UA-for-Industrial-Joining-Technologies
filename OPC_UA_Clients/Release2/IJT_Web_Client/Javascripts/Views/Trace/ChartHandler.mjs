@@ -27,9 +27,9 @@ export default class ChartManager {
         },
         animation: {
           duration: 200,
-          onComplete: function() {
-                console.log('YYY Chart rendering is complete!');
-                // Add your custom logic here
+          onComplete: function () {
+            console.log('YYY Chart rendering is complete!')
+            // Add your custom logic here
           }
         },
         scales: {
@@ -100,8 +100,7 @@ export default class ChartManager {
    * @param {*} value a graph position object containing an x and a y value
    * @returns {{ x: any; y: any; }} a pixel position on the canvas
    */
-  valueToPixel (value) 
-  {
+  valueToPixel (value) {
     this.dummy++
     const axis = this.myChart.scales
     return {
@@ -269,8 +268,8 @@ export default class ChartManager {
     }
   }
 
-  newLimit(borderColour, areaColour, startOrEnd) {
-    let upperLimit = {
+  newLimit (borderColour, areaColour, startOrEnd) {
+    const upperLimit = {
       borderColor: borderColour,
       borderWidth: 1,
       fill: startOrEnd,
@@ -279,10 +278,10 @@ export default class ChartManager {
       pointBorderColor: 'transparent',
       pointBackgroundColor: 'transparent',
       data: []
-    };
+    }
 
-    this.myChart.data.datasets.push(upperLimit);
-    const upperDataCurve = this.myChart.data.datasets[this.myChart.data.datasets.length - 1];
+    this.myChart.data.datasets.push(upperLimit)
+    const upperDataCurve = this.myChart.data.datasets[this.myChart.data.datasets.length - 1]
     return upperDataCurve
   }
 }

@@ -63,7 +63,7 @@ export class WebSocketManager {
     const callerObject = this.subscribers(endpoint)
     if (callerObject) {
       callerObject.type = null
-      alert('unsubscribe is not implemented')
+      console.warn('unsubscribe is not implemented')
     }
   }
 

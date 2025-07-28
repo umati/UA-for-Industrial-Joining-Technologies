@@ -96,8 +96,7 @@ export class ResultManager {
     for (const subscriber of this.subscribers) {
       try {
         subscriber(result)
-      }
-      catch(err) {
+      } catch (err) {
         console.log(err)
       }
     }

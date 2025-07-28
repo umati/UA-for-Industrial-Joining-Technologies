@@ -188,7 +188,7 @@ export class AddressSpace {
             resolve(returnValue)
           },
           (error) => {
-            alert(error)
+            console.error(error)
           })
       })
     }
@@ -295,7 +295,7 @@ export class AddressSpace {
           resolve(response.node)
         },
         (error) => {
-          alert(error)
+          console.error(error)
         })
     })
   }

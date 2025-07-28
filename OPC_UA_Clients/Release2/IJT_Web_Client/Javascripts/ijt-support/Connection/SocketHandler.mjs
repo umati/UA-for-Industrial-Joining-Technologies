@@ -129,7 +129,7 @@ export class SocketHandler {
       return nodeId
     } else {
       let st = ';s='
-      // eslint-disable-next-line no-unused-expressions
+
       if (Number(nodeId.Identifier)) {
         st = ';i='
       }
