@@ -57,9 +57,9 @@ async def main():
         log.error("Invalid WS_PORT environment variable. Falling back to 8001.")
         port = 8001
 
-    # ✅ websockets.serve(handler, host, port) — no path argument needed
     websocket_server = await websockets.serve(handler, "localhost", port)
     log.info(f"WebSocket server running on ws://localhost:{port}")
+    log.info("Server setup complete. Awaiting connections...")
 
     loop = asyncio.get_running_loop()
 
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        log.info("Server stopped by user.")
+        log.info("Server stopped by user (KeyboardInterrupt).")
         asyncio.run(shutdown())
     except Exception:
         log.error("Unhandled exception:")

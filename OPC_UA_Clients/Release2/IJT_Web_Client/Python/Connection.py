@@ -182,7 +182,7 @@ class Connection:
         try:
             nodeId = data["nodeid"]
             lastReadState = "READ_ENTER"
-            logging.error(f"READ: nodeID: {nodeId[-70:]}")
+            #logging.info(f"READ: nodeID: {nodeId[-70:]}")
             node = self.client.get_node(nodeId)
 
             attrIdsStrings = [
@@ -248,7 +248,7 @@ class Connection:
                 "ns=" + nodeId["NamespaceIndex"] + ";s=" + nodeId["Identifier"]
             )
 
-            logging.info("PATHTOID: path is: ", path)
+            #logging.info("PATHTOID: path is: ", path)
             # Create a relative path
             relative_path = ua.RelativePath()
             element = ua.RelativePathElement()
