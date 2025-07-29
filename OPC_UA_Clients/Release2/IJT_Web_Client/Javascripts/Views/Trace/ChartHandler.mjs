@@ -25,7 +25,7 @@ export default class ChartManager {
       }
     }
 
-    // Register the plugin
+    // eslint-disable-next-line no-undef
     Chart.register(customPlugin)
 
     this.myChart = new Chart(context, { // eslint-disable-line

@@ -58,7 +58,6 @@ export default class EndpointGraphics extends BasicScreen {
       })
 
     // Setting up tab handling and model handling
-
     const entityCache = new EntityCache()
 
     const tabGenerator = new TabGenerator(this.backGround, 3) // XXXXXXX
