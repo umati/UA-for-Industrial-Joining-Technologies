@@ -2,9 +2,9 @@ import json
 import asyncio
 import websockets
 import pytz
+import logging
 from datetime import datetime
 from Python.Serialize import serializeValue  # Ensure this module is available
-
 
 class Short:
     """
@@ -53,10 +53,10 @@ class ResultEventHandler:
             try:
                 await self.websocket.send(item)
             except websockets.exceptions.ConnectionClosedOK:
-                print("WebSocket connection closed normally.")
+                logging.info("WebSocket connection closed normally.")
                 break
             except Exception as e:
-                print(f"Error sending message: {e}")
+                logging.error(f"Error sending message: {e}")
 
     async def shutdown(self):
         await self.queue.put(None)
@@ -71,7 +71,7 @@ class ResultEventHandler:
             }
             await self.queue.put(json.dumps(returnValue))
         except Exception as e:
-            print("Exception: " + str(e))
+            logging.error("Exception: " + str(e))
 
     def event_notification(self, event):
         # Get the current date and time in local timezone
@@ -98,15 +98,15 @@ class ResultEventHandler:
         time_difference = utc_client_time - server_time
         difference_in_milliseconds = time_difference.total_seconds() * 1000
 
-        idString = event.EventId.decode("utf-8")
+        idString = event.EventId.decode("utf-8", errors="replace")
 
         # Print the formatted date and time
-        print("-----------------------------------------------")
-        print(f"Server Time of Event : {formatted_server_time} (Local Time)")
-        print(f"Client Time of Event : {formatted_client_time} (Local Time)")
-        print(f"Time Gap             : {difference_in_milliseconds:.3f} ms")
-        print("RESULT EVENT RECEIVED + [" + idString + "]: " + event.Message.Text)
-        print("-----------------------------------------------")
+        logging.info("-----------------------------------------------")
+        logging.info(f"Server Time of Event : {formatted_server_time} (Local Time)")
+        logging.info(f"Client Time of Event : {formatted_client_time} (Local Time)")
+        logging.info(f"Time Gap             : {difference_in_milliseconds:.3f} ms")
+        logging.info("RESULT EVENT RECEIVED + [" + idString + "]: " + event.Message.Text)
+        logging.info("-----------------------------------------------")
 
         filteredEvent = Short(event.EventType, event.Result, event.Message, idString)
 
@@ -114,4 +114,4 @@ class ResultEventHandler:
         # to the webpage needs to be done asynchronously via a separate thread.
         # Therefore we ensure we send JUST the result part (and the eventType for identification, and the message)
 
-        asyncio.create_task(self.process_event(filteredEvent))
+        asyncio.run_coroutine_threadsafe(self.process_event(filteredEvent), self.loop)

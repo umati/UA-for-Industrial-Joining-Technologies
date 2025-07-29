@@ -1,11 +1,15 @@
-def isInstanceOfClass(cls):
+from typing import Any
+import logging
+
+
+def isInstanceOfClass(cls: Any) -> bool:
     """
     The best I could find to detect that something is an instance of a user defined class
     """
     return str(type(cls)).startswith("<class") and hasattr(cls, "__weakref__")
 
 
-def serializeTuple(listOfTuples):
+def serializeTuple(listOfTuples: list[tuple[str, Any]]) -> str:
     """
     Serialize a special zipped list of key - values
     """
@@ -19,11 +23,11 @@ def serializeTuple(listOfTuples):
     return result + "}"
 
 
-def serializeValue(value):
+def serializeValue(value: Any) -> str:
     """
     Serialize an value
     """
-    # print(type(value).__name__)
+    # logging.info(type(value).__name__)
     if isInstanceOfClass(value):
         return "{" + serializeClassInstance(value) + "}"
     elif value == None:
@@ -41,26 +45,26 @@ def serializeValue(value):
         return '"' + str(value).replace("\n", "\\n") + '"'
 
 
-def serializeClassInstance(obj):
+def serializeClassInstance(obj: Any) -> str:
     """
     Serialize an instance of a class (or something implementing __dict___)
     """
     result = '"pythonclass":"' + type(obj).__name__ + '"'
-    # print(type(obj).__name__)
+    # logging.info(type(obj).__name__)
     dict = obj.__dict__
     for key, value in dict.items():
-        # print(type(value).__name__)
+        # logging.info(type(value).__name__)
         if key != "_freeze":
             result = result + ","
             result = result + '"' + key + '"' + ":" + serializeValue(value)
     return result
 
 
-def serializeFullEvent(value):
+def serializeFullEvent(value: Any) -> str:
     """
     Serialize an value
     """
-    # print(type(value).__name__)
+    # logging.info(type(value).__name__)
     if isInstanceOfClass(value):
         return "{" + serializeClassInstance(value) + "}"
     elif value == None:

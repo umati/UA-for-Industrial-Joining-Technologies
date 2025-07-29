@@ -6,6 +6,7 @@ import json
 import logging
 import traceback
 import os
+from typing import Optional
 from dotenv import load_dotenv
 from Python.IJTInterface import IJTInterface
 
@@ -16,9 +17,9 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 log = logging.getLogger(__name__)
 
-opcuaHandler = None
+opcuaHandler: Optional[IJTInterface] = None
 
-async def handler(websocket):
+async def handler(websocket: websockets.WebSocketServerProtocol) -> None:
     global opcuaHandler
     client_ip = websocket.remote_address[0]
     log.info(f"Client connected: {client_ip}")
@@ -34,12 +35,17 @@ async def handler(websocket):
             await opcuaHandler.handle(websocket, mess)
     except websockets.exceptions.ConnectionClosed:
         log.info(f"Client disconnected: {client_ip}")
-    except Exception as e:
+    except Exception:
         log.error("Exception in handler:")
         log.error(traceback.format_exc())
 
-async def main():
-    port = int(os.getenv("WS_PORT", 8001))
+async def main() -> None:
+    try:
+        port = int(os.getenv("WS_PORT", 8001))
+    except ValueError:
+        log.error("Invalid WS_PORT environment variable. Falling back to 8001.")
+        port = 8001
+
     async with websockets.serve(handler, "localhost", port):
         log.info(f"WebSocket server running on ws://localhost:{port}")
         await asyncio.Future()  # Run forever
@@ -49,6 +55,14 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         log.info("Server stopped by user.")
-    except Exception as e:
+        # Optional: Graceful shutdown of OPC UA connections
+        if opcuaHandler:
+            try:
+                for conn in opcuaHandler.connectionList.values():
+                    if conn:
+                        asyncio.run(conn.terminate())
+            except Exception:
+                log.warning("Error during shutdown of OPC UA connections.")
+    except Exception:
         log.error("Unhandled exception:")
         log.error(traceback.format_exc())

@@ -1,8 +1,8 @@
 import json
 import asyncio
+import logging
 from threading import Thread
 from Python.Serialize import serializeValue
-
 
 class EventHandler:
     """
@@ -33,8 +33,8 @@ class EventHandler:
         loop.create_task(self.threaded_websocket(arg))
 
     def event_notification(self, event):
-        print("EVENT RECEIVED")
-        print(event.Message)
+        logging.info("EVENT RECEIVED")
+        logging.info(event.Message)
         # Eventhandlers should be quick and non networked so sending the response
         # to the webpage needs to be done asyncronously via a separate thread
         thread = Thread(target=self.wrap_async_func, args=(str(serializeValue(event)),))

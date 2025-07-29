@@ -5,6 +5,7 @@ from Python.CallStructure import createCallStructure
 from Python.EventHandler import EventHandler
 from Python.ResultEventHandler import ResultEventHandler
 import json
+import logging
 
 
 def IdObjectToString(inp):
@@ -55,8 +56,8 @@ class Connection:
                 await self.websocket.send(json.dumps(event))
             return event
         except Exception as e:
-            print("--- Exception in CONNECT ", self.server_url)
-            print("--- Exception:" + str(e))
+            logging.error("--- Exception in CONNECT ", self.server_url)
+            logging.error("--- Exception:" + str(e))
             return {"exception": str(e)}
 
     async def terminate(self):
@@ -65,41 +66,41 @@ class Connection:
                 try:
                     await self.subresult1.unsubscribe(self.handle1)
                 except Exception as e:
-                    print(f"Error unsubscribing handle1: {e}")
+                    logging.error(f"Error unsubscribing handle1: {e}")
                 try:
                     await self.client.delete_subscriptions(
                         [self.subresult1.subscription_id]
                     )
                 except Exception as e:
-                    print(f"Error deleting subresult1: {e}")
+                    logging.error(f"Error deleting subresult1: {e}")
 
             if self.subresult2 != "sub":
                 try:
                     await self.subresult2.unsubscribe(self.handle2)
                 except Exception as e:
-                    print(f"Error unsubscribing handle2: {e}")
+                    logging.error(f"Error unsubscribing handle2: {e}")
                 try:
                     await self.client.delete_subscriptions(
                         [self.subresult2.subscription_id]
                     )
                 except Exception as e:
-                    print(f"Error deleting subresult2: {e}")
+                    logging.error(f"Error deleting subresult2: {e}")
 
             if self.sub != "sub":
                 try:
                     await self.sub.unsubscribe(self.handle3)
                 except Exception as e:
-                    print(f"Error unsubscribing handle3: {e}")
+                    logging.error(f"Error unsubscribing handle3: {e}")
                 try:
                     await self.client.delete_subscriptions([self.sub.subscription_id])
                 except Exception as e:
-                    print(f"Error deleting sub: {e}")
+                    logging.error(f"Error deleting sub: {e}")
 
             await self.client.disconnect()
         except Exception as e:
-            print(f"General error during termination: {e}")
+            logging.error(f"General error during termination: {e}")
         finally:
-            print(f"TERMINATE: Connection to {self.server_url} disconnected")
+            logging.error(f"TERMINATE: Connection to {self.server_url} disconnected")
 
     async def subscribe(self, data):
         try:
@@ -173,15 +174,15 @@ class Connection:
             return {}
 
         except Exception as e:
-            print(f"--- Exception in SUBSCRIBE {self.server_url}")
-            print(f"--- Exception: {e}")
+            logging.error(f"--- Exception in SUBSCRIBE {self.server_url}")
+            logging.error(f"--- Exception: {e}")
             return {"exception": f"Subscribe exception: {e}"}
 
     async def read(self, data):
         try:
             nodeId = data["nodeid"]
             lastReadState = "READ_ENTER"
-            print("READ: nodeID: ", nodeId[-70:])
+            logging.error(f"READ: nodeID: {nodeId[-70:]}")
             node = self.client.get_node(nodeId)
 
             attrIdsStrings = [
@@ -228,11 +229,10 @@ class Connection:
             return event
 
         except Exception as e:
-            print(
-                "--- Exception in READ: (" + lastReadState + "): ",
-                IdObjectToString(nodeId),
+            logging.error(
+                f"--- Exception in READ: ({lastReadState}): {IdObjectToString(nodeId)}"
             )
-            print("--- Exception:" + str(e))
+            logging.error("--- Exception:" + str(e))
             return {"exception": "Read Exception: (" + lastReadState + "): " + str(e)}
 
     async def pathtoid(self, data):
@@ -241,14 +241,14 @@ class Connection:
         returns the node id at that location
         """
         try:
-            # print("PATHTOID")
+            # logging.info("PATHTOID")
             nodeId = data["nodeid"]
             path = json.loads(data["path"])
             node = self.client.get_node(
                 "ns=" + nodeId["NamespaceIndex"] + ";s=" + nodeId["Identifier"]
             )
 
-            print("PATHTOID: path is: ", path)
+            logging.info("PATHTOID: path is: ", path)
             # Create a relative path
             relative_path = ua.RelativePath()
             element = ua.RelativePathElement()
@@ -275,26 +275,26 @@ class Connection:
             return event
 
         except Exception as e:
-            print("--- Exception in PATHTOID path ", path)
-            print("--- Exception:" + str(e))
+            logging.error("--- Exception in PATHTOID path ", path)
+            logging.error("--- Exception:" + str(e))
             return {"exception": "PathToId Exception: " + str(e)}
 
     async def namespaces(self, data):
         try:
-            print("Call to get NAMESPACES")
+            logging.error("Call to get NAMESPACES")
             namespacesReply = await self.client.get_namespace_array()
             event = {"namespaces": json.dumps(namespacesReply)}
             return event
         except Exception as e:
-            print("--- Exception in NAMESPACES ")
-            print("--- Exception:" + str(e))
+            logging.error("--- Exception in NAMESPACES ")
+            logging.error("--- Exception:" + str(e))
             return {"exception": "Exception in Namespaces: " + str(e)}
         finally:
             pass
 
     async def methodcall(self, data):
         try:
-            # print(data)
+            # logging.info(data)
             objectNode = data["objectnode"]
             methodNode = data["methodnode"]
             arguments = data["arguments"]
@@ -305,7 +305,7 @@ class Connection:
                 IdObjectToString(methodNode)
             )  # get the method node
 
-            print("METHODCALL: " + IdObjectToString(objectNode))
+            logging.info("METHODCALL: " + IdObjectToString(objectNode))
 
             attrList = []
             attrList.append(method)
@@ -314,16 +314,16 @@ class Connection:
                 input = createCallStructure(argument)
                 attrList.append(input)
 
-            # print("attrList")
-            # print(attrList)
+            # logging.info("attrList")
+            # logging.info(attrList)
 
             methodRepr = getattr(obj, "call_method")
             out = await methodRepr(*attrList)  # call the method and get the output
 
-            # print(serializeValue(out))
+            # logging.info(serializeValue(out))
             return {"output": serializeValue(out)}
 
         except Exception as e:
-            print("--- Exception in METHODCALL " + IdObjectToString(methodNode))
-            print("--- Exception:" + str(e))
+            logging.error("--- Exception in METHODCALL " + IdObjectToString(methodNode))
+            logging.error("--- Exception:" + str(e))
             return {"exception": "Method call exception: " + str(e)}
