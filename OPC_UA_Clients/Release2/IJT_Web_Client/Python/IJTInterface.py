@@ -81,9 +81,7 @@ class IJTInterface:
             elif command == "connect to":
                 logging.info("SOCKET: Connect")
                 if endpoint in self.connectionList:
-                    logging.info(
-                        "Endpoint was already connected. Closing down old connection."
-                    )
+                    logging.info("Endpoint was already connected. Closing down old connection.")
                     await self.connectionList[endpoint].terminate()
                     self.connectionList[endpoint] = None
 
@@ -117,3 +115,17 @@ class IJTInterface:
         event["data"] = returnValues
 
         await websocket.send(json.dumps(event))
+
+    async def disconnect(self):
+        """
+        Gracefully disconnect all active OPC UA connections.
+        """
+        logging.info("Disconnecting all OPC UA connections...")
+        for endpoint, connection in self.connectionList.items():
+            if connection:
+                try:
+                    await connection.terminate()
+                    logging.info(f"Disconnected from {endpoint}")
+                except Exception as e:
+                    logging.warning(f"Error disconnecting from {endpoint}: {e}")
+        self.connectionList.clear()
