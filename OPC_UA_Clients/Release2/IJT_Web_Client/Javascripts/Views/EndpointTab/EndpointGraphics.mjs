@@ -48,12 +48,12 @@ export default class EndpointGraphics extends BasicScreen {
     this.endpointUrl = endpointUrl
 
     // Dynamic load
-    import("views/Envelope/EnvelopeGraphics.mjs")
+    import('views/Envelope/EnvelopeGraphics.mjs')
       .then((EnvelopeScreen) => {
-        const envelopeScreen = new EnvelopeScreen.default(this.connectionManager, resultManager, this.settings)
+        const envelopeScreen = new EnvelopeScreen.Envelope(this.connectionManager, resultManager, this.settings)
         tabGenerator.generateTab(envelopeScreen, 3, true)
       })
-      .catch(error => {
+      .catch(() => {
         console.log('No (optional) envelope code found.')
       })
 
