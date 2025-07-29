@@ -365,24 +365,24 @@ export default class TraceDisplay {
     this.chartManager.update()
   }
 
-  createGraphicalLimit (limit) {
-    limit.limitGraphic = new GraphicalLimit(this.chartManager, limit)
+  createGraphicalLimit (limit, callback) {
+    limit.limitGraphic = new GraphicalLimit(this, limit, callback)
     return limit.limitGraphic
   }
 }
 
 class GraphicalLimit {
-  constructor (chartManager, limit) {
-    this.chartManager = chartManager
+  constructor (traceDisplay, limit, afterUpdateCallback) {
+    this.traceDisplay = traceDisplay
+    this.chartManager = traceDisplay.chartManager
     this.glimit = this.chartManager.newLimit('red', 'rgba(135, 135, 241, 0.5)', 'start')
+    this.chartManager.afterUpdateSubscribe(afterUpdateCallback)
     this.update(limit)
   }
 
   update (limit) {
     const dataList = []
-    for (let x = limit.range.start;
-      x <= limit.range.end;
-      x += (limit.range.end - limit.range.start) / 100) {
+    for (let x = limit.range.start; x <= limit.range.end; x += (limit.range.end - limit.range.start) / 100) {
       dataList.push({
         x,
         y: limit.polynomial.value(x - limit.range.offset)
@@ -406,11 +406,6 @@ class GraphicalLimit {
   }
 
   valueToPixel (pos) {
-    /* console.log(this.chartManager.valueToPixel({ x: 150, y: 1}))
-    // console.log(this.chartManager.pixelToValue({ x: 250, y: 500}))
-    setTimeout(() => {
-      console.log(this.chartManager.valueToPixel({ x: 150, y: 1}))
-    }, 2000) */
     return this.chartManager.valueToPixel(pos)
   }
 }

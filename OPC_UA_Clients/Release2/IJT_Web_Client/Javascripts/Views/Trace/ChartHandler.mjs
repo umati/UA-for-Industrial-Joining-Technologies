@@ -8,10 +8,26 @@ export default class ChartManager {
   constructor (traceManager, context) {
     this.traceManager = traceManager
     this.context = context
-    this.traceManager = traceManager
     this.lastTimeZoom = window.performance.now()
     this.pressed = null
     this.dummy = 0
+
+    const self = this
+
+    const customPlugin = {
+      id: 'customPlugin',
+      afterUpdate (chart) {
+        for (const callback of chart.afterUpdateCallbacks) {
+          if (callback) {
+            callback(self)
+          }
+        }
+      }
+    }
+
+    // Register the plugin
+    Chart.register(customPlugin)
+
     this.myChart = new Chart(context, { // eslint-disable-line
       type: 'line',
       data: {
@@ -23,27 +39,38 @@ export default class ChartManager {
         plugins: {
           legend: {
             display: false
-          }
+          },
+          customPlugin: true // Enable the custom plugin
         },
         animation: {
           duration: 200,
-          onComplete: function () {
-            console.log('YYY Chart rendering is complete!')
-            // Add your custom logic here
-          }
         },
         scales: {
           y: {
             type: 'linear'
           },
           x: {
-            type: 'linear'
+            type: 'linear',
+            /* ticks: {
+              callback: (value, index, ticks) => {
+                console.log('XXX Chart rendering is complete!');
+                console.log(this.valueToPixel({ x: 250, y: 5}))
+              },
+            afterUpdate: {
+              callback: () => {
+                 console.log('YYY Chart rendering is complete!');
+              }
+            */
           }
         }
       }
-    })
+    }
+    )
+
+    this.myChart.afterUpdateCallbacks = []
 
     this.context.onmousedown = (evt) => {
+      console.log(this.pixelToValue(evt))
       this.traceManager.onmousedown(evt, this.pixelToValue(evt))
     }
 
@@ -283,5 +310,9 @@ export default class ChartManager {
     this.myChart.data.datasets.push(upperLimit)
     const upperDataCurve = this.myChart.data.datasets[this.myChart.data.datasets.length - 1]
     return upperDataCurve
+  }
+
+  afterUpdateSubscribe (callback) {
+    this.myChart.afterUpdateCallbacks.push(callback)
   }
 }
