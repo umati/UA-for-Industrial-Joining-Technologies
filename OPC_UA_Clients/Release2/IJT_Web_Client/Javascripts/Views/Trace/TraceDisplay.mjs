@@ -7,7 +7,7 @@ import ChartManager from './ChartHandler.mjs'
  * Little to none OPC UA relevant logic happens here
  */
 export default class TraceDisplay {
-  constructor (dimensions, resultManager, traceManager, container) {
+  constructor (dimensions, resultManager, traceManager, container, debugSourceText) {
     this.traceInterface = traceManager.traceInterface
     this.traceManager = traceManager
     this.xDimensionName = dimensions[0]
@@ -37,7 +37,7 @@ export default class TraceDisplay {
     this.canvas.setAttribute('id', 'myChart')
     this.canvasCoverLayer.appendChild(this.canvas)
 
-    this.chartManager = new ChartManager(traceManager, this.canvas)
+    this.chartManager = new ChartManager(traceManager, this.canvas, debugSourceText)
 
     this.canvasCoverLayer.addEventListener('mouseup', (evt) => {
       const points = this.chartManager.myChart.getElementsAtEventForMode(evt,

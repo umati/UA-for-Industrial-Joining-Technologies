@@ -109,7 +109,7 @@ export default class USDemo extends BasicScreen {
     //
 
     this.traceInterface = new TraceInterface(resultBottomArea, this.settings)
-    this.traceDisplay = new TraceDisplay(['angle', 'torque'], this.resultManager, this, field)
+    this.traceDisplay = new TraceDisplay(['angle', 'torque'], this.resultManager, this, field, 'US Demo')
 
     this.zoomHandler = new ZoomHandler(this.traceDisplay)
     this.traceDisplay.activate()

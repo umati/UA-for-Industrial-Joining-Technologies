@@ -11,7 +11,7 @@ export default class TraceGraphics extends BasicScreen {
   constructor (dimensions, addressSpace, resultManager) {
     super('Traces')
     this.traceInterface = new ButtonTraceInterface(this.backGround)
-    this.traceDisplay = new TraceDisplay(dimensions, resultManager, this, this.traceInterface.traceArea)
+    this.traceDisplay = new TraceDisplay(dimensions, resultManager, this, this.traceInterface.traceArea, 'Main trace tab')
 
     this.zoomHandler = new ZoomHandler(this.traceDisplay)
 

@@ -5,28 +5,27 @@ import Graphic from './Graphic.mjs'
  * make it possible to exchange chart component with minimal effort
  */
 export default class ChartManager {
-  constructor (traceManager, context) {
+  constructor (traceManager, context, debugSourceText) {
     this.traceManager = traceManager
     this.context = context
+    this.debugSourceText = debugSourceText
     this.lastTimeZoom = window.performance.now()
     this.pressed = null
     this.dummy = 0
-
-    const self = this
 
     const customPlugin = {
       id: 'customPlugin',
       afterUpdate (chart) {
         for (const callback of chart.afterUpdateCallbacks) {
           if (callback) {
-            callback(self)
+            callback(this.context)
           }
         }
       }
     }
+    customPlugin.context = this
 
     // eslint-disable-next-line no-undef
-    Chart.register(customPlugin)
 
     this.myChart = new Chart(context, { // eslint-disable-line
       type: 'line',
@@ -63,9 +62,12 @@ export default class ChartManager {
             */
           }
         }
-      }
+      },
+      plugins: [customPlugin]
     }
     )
+
+    // this.myChart.options.plugins.push(customPlugin)
 
     this.myChart.afterUpdateCallbacks = []
 
