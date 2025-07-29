@@ -1,14 +1,13 @@
-
-
 def isInstanceOfClass(cls):
     """
     The best I could find to detect that something is an instance of a user defined class
     """
-    return str(type(cls)).startswith("<class") and hasattr(cls, '__weakref__')
+    return str(type(cls)).startswith("<class") and hasattr(cls, "__weakref__")
+
 
 def serializeTuple(listOfTuples):
     """
-    Serialize a special zipped list of key - values 
+    Serialize a special zipped list of key - values
     """
     result = "{"
     first = True
@@ -16,8 +15,9 @@ def serializeTuple(listOfTuples):
         if not first:
             result = result + ","
         first = False
-        result = result + "\"" + pair[0] + "\":" + serializeValue(pair[1])
+        result = result + '"' + pair[0] + '":' + serializeValue(pair[1])
     return result + "}"
+
 
 def serializeValue(value):
     """
@@ -29,7 +29,7 @@ def serializeValue(value):
     elif value == None:
         return "null"
     elif isinstance(value, list):
-        result = "[" 
+        result = "["
         first = True
         for item in value:
             if not first:
@@ -38,21 +38,22 @@ def serializeValue(value):
             result = result + serializeValue(item)
         return result + "]"
     else:
-        return "\"" + str(value).replace('\n', '\\n') + "\""
+        return '"' + str(value).replace("\n", "\\n") + '"'
+
 
 def serializeClassInstance(obj):
     """
     Serialize an instance of a class (or something implementing __dict___)
     """
-    result = "\"pythonclass\":\"" + type(obj).__name__ + "\""
+    result = '"pythonclass":"' + type(obj).__name__ + '"'
     # print(type(obj).__name__)
     dict = obj.__dict__
     for key, value in dict.items():
         # print(type(value).__name__)
-        if key!="_freeze":
+        if key != "_freeze":
             result = result + ","
-            result = result + "\"" + key + "\"" + ":" + serializeValue(value)
-    return result    
+            result = result + '"' + key + '"' + ":" + serializeValue(value)
+    return result
 
 
 def serializeFullEvent(value):
@@ -65,7 +66,7 @@ def serializeFullEvent(value):
     elif value == None:
         return "null"
     elif isinstance(value, list):
-        result = "[" 
+        result = "["
         first = True
         for item in value:
             if not first:
@@ -74,4 +75,4 @@ def serializeFullEvent(value):
             result = result + serializeValue(item)
         return result + "]"
     else:
-        return "\"" + str(value).replace('\n', '\\n') + "\""
+        return '"' + str(value).replace("\n", "\\n") + '"'
