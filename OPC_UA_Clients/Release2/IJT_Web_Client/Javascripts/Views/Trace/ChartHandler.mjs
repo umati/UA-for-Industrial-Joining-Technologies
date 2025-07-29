@@ -129,7 +129,10 @@ export default class ChartManager {
    */
   valueToPixel (value) {
     this.dummy++
-    const axis = this.myChart.scales
+    const axis = this.myChart?.scales
+    if (!axis || axis.x === undefined) {
+      return
+    }
     return {
       x: axis.x.getPixelForValue(value.x),
       y: axis.y.getPixelForValue(value.y)

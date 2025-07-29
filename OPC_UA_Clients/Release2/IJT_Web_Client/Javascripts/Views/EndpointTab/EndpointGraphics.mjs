@@ -23,7 +23,6 @@ import ConnectionGraphics from 'views/Connection/ConnectionGraphics.mjs'
 import ResultGraphics from 'views/ComplexResult/ResultGraphics.mjs'
 import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
 import BasicScreen from 'views/GraphicSupport/BasicScreen.mjs'
-// import EnvelopeScreen from 'views/Envelope/EnvelopeGraphics.mjs'
 
 export default class EndpointGraphics extends BasicScreen {
   constructor (title, settings) {
@@ -47,6 +46,16 @@ export default class EndpointGraphics extends BasicScreen {
 
   instantiate (endpointUrl, webSocketManager) {
     this.endpointUrl = endpointUrl
+
+    // Dynamic load
+    import("views/Envelope/EnvelopeGraphics.mjs")
+      .then((EnvelopeScreen) => {
+        const envelopeScreen = new EnvelopeScreen.default(this.connectionManager, resultManager, this.settings)
+        tabGenerator.generateTab(envelopeScreen, 3, true)
+      })
+      .catch(error => {
+        console.log('No (optional) envelope code found.')
+      })
 
     // Setting up tab handling and model handling
 
@@ -87,11 +96,6 @@ export default class EndpointGraphics extends BasicScreen {
 
     const entityCacheView = new EntityCacheView(entityCache)
 
-    let envelopeScreen = null
-    if (this.settings.envelope !== '0') {
-      envelopeScreen = new EnvelopeScreen(this.connectionManager, resultManager, this.settings)
-    }
-
     tabGenerator.changeViewLevel(2)
 
     tabGenerator.generateTab(connectionGraphics, 2)
@@ -104,8 +108,5 @@ export default class EndpointGraphics extends BasicScreen {
     tabGenerator.generateTab(resultGraphics, 4)
     tabGenerator.generateTab(assetGraphics, 5)
     tabGenerator.generateTab(entityCacheView, 3)
-    if (envelopeScreen) {
-      tabGenerator.generateTab(envelopeScreen, 3, true)
-    }
   }
 }
