@@ -8,6 +8,7 @@ import logging
 import webbrowser
 import socket
 import argparse
+import json
 from pathlib import Path
 
 try:
@@ -86,35 +87,59 @@ def create_nodeenv():
     if not npm.exists() or not npx.exists():
         log.error("npm or npx not found in virtual environment. Node.js setup may have failed.")
         sys.exit(1)
+def validate_package_json():
+    package_json_path = Path("package.json")
+    if not package_json_path.exists():
+        log.error("package.json not found.")
+        sys.exit(1)
+    try:
+        with open(package_json_path, "r", encoding="utf-8") as f:
+            json.load(f)
+        log.info("package.json is valid.")
+    except json.JSONDecodeError as e:
+        log.error(f"Invalid package.json: {e}")
+        sys.exit(1)
 
 def install_js_packages():
     npm = get_npm_path()
     if not npm.exists():
         log.error("npm not found. Node.js environment setup failed.")
         sys.exit(1)
+
+    validate_package_json()
+
     log.info("Installing JavaScript packages...")
     try:
         if Path("package-lock.json").exists():
             log.info("Found package-lock.json. Running 'npm ci'...")
             subprocess.check_call([str(npm), "ci"])
         else:
-            log.warning("package-lock.json not found. Running 'npm install' instead...")
-            subprocess.check_call([str(npm), "install"])
+            log.warning("package-lock.json not found. Running 'npm install' with --legacy-peer-deps...")
+            subprocess.check_call([str(npm), "install", "--legacy-peer-deps"])
     except subprocess.CalledProcessError as e:
         log.error("JavaScript package installation failed. Please check npm logs.")
         log.error(f"Command failed: {e.cmd}")
         sys.exit(1)
+
+    # Log installed versions
+    try:
+        eslint_version = subprocess.check_output([str(npm), "list", "eslint", "--depth=0"]).decode()
+        neostandard_version = subprocess.check_output([str(npm), "list", "neostandard", "--depth=0"]).decode()
+        log.info("Installed ESLint version:\n" + eslint_version)
+        log.info("Installed neostandard version:\n" + neostandard_version)
+    except subprocess.CalledProcessError as e:
+        log.warning("Failed to retrieve installed package versions.")
+        log.warning(str(e))
 
 def start_server():
     npx = get_npx_path()
     if not npx.exists():
         log.error("npx not found. Please ensure Node.js is installed.")
         sys.exit(1)
-    
-    # Use HTTP_PORT for the static server, default to 3000
+
     http_port = os.getenv("HTTP_PORT", "3000")
     log.info(f"Starting local server on http://localhost:{http_port} ...")
-    
+
     try:
         subprocess.Popen([str(npx), "serve", "-l", http_port])
         webbrowser.open(f"http://localhost:{http_port}")
@@ -169,12 +194,6 @@ Default behavior:
         help="Force full setup even if environment is already prepared"
     )
     args = parser.parse_args()
-
-    def is_runtime_ready():
-        python = get_python_path()
-        npm = get_npm_path()
-        npx = get_npx_path()
-        return VENV_DIR.exists() and python.exists() and npm.exists() and npx.exists()
 
     if not args.force_full and is_runtime_ready():
         log.info("Detected existing environment. Running runtime-only setup...")
