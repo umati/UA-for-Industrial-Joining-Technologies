@@ -25,8 +25,8 @@ export default class TraceDisplay {
     this.plugins = {
       autocolors: false,
       annotation: {
-        annotations: {}
-      }
+        annotations: {},
+      },
     }
 
     this.canvasCoverLayer = document.createElement('div')
@@ -385,7 +385,7 @@ class GraphicalLimit {
     for (let x = limit.range.start; x <= limit.range.end; x += (limit.range.end - limit.range.start) / 100) {
       dataList.push({
         x,
-        y: limit.polynomial.value(x - limit.range.offset)
+        y: limit.polynomial.value(x - limit.range.offset),
       })
     }
     this.glimit.data = dataList

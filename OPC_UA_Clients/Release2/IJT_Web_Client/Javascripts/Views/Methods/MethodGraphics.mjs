@@ -39,8 +39,9 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
         { namespaceindex: this.addressSpace.nsIJT, identifier: 'MethodSet' }],
       [{ namespaceindex: this.addressSpace.nsIJT, identifier: 'JoiningProcessManagement' }],
       [{ namespaceindex: this.addressSpace.nsIJT, identifier: 'JointManagement' }],
+      [{ namespaceindex: this.addressSpace.nsMachineryResult, identifier: 'ResultManagement' }],
       [{ namespaceindex: this.addressSpace.nsTighteningServer, identifier: 'Simulations' },
-        { namespaceindex: this.addressSpace.nsTighteningServer, identifier: 'SimulateEventsAndConditions' }]
+        { namespaceindex: this.addressSpace.nsTighteningServer, identifier: 'SimulateEventsAndConditions' }],
     ]
 
     this.methodManager.setupMethodsInFolders(methodFolders).then(() => {

@@ -133,26 +133,26 @@ export default class USDemo extends BasicScreen {
           pythonclass: 'NodeId',
           Identifier: '12',
           NamespaceIndex: '0',
-          NodeIdType: 'NodeIdType.TwoByte'
-        }
+          NodeIdType: 'NodeIdType.TwoByte',
+        },
       },
       {
         type: {
           Identifier: 3029,
-          NamespaceIndex: 3
+          NamespaceIndex: 3,
         },
         value: [
           {
             value: '',
-            type: '31918'
+            type: '31918',
           }, {
             value: '',
-            type: '31918'
+            type: '31918',
           }, {
             value: process, // This should be the selection name of the process
-            type: '31918'
-          }]
-      }
+            type: '31918',
+          }],
+      },
     ]
 
     this.methodManager.call(selectJoiningProcessMethod, values).then(

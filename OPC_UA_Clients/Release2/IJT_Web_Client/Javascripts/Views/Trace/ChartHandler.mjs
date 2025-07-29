@@ -21,49 +21,37 @@ export default class ChartManager {
             callback(this.context)
           }
         }
-      }
+      },
     }
     customPlugin.context = this
-
-    // eslint-disable-next-line no-undef
 
     this.myChart = new Chart(context, { // eslint-disable-line
       type: 'line',
       data: {
-        datasets: []
+        datasets: [],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: {
-            display: false
+            display: false,
           },
-          customPlugin: true // Enable the custom plugin
+          customPlugin: true, // Enable the custom plugin
         },
         animation: {
           duration: 200,
         },
         scales: {
           y: {
-            type: 'linear'
+            type: 'linear',
           },
           x: {
             type: 'linear',
-            /* ticks: {
-              callback: (value, index, ticks) => {
-                console.log('XXX Chart rendering is complete!');
-                console.log(this.valueToPixel({ x: 250, y: 5}))
-              },
-            afterUpdate: {
-              callback: () => {
-                 console.log('YYY Chart rendering is complete!');
-              }
-            */
-          }
-        }
+          },
+        },
       },
-      plugins: [customPlugin]
+      plugins: [customPlugin],
     }
     )
 
@@ -117,7 +105,7 @@ export default class ChartManager {
     const offsets = this.context.getBoundingClientRect()
     return {
       x: offsets.left + this.myChart.chartArea.left,
-      y: offsets.top + this.myChart.chartArea.top
+      y: offsets.top + this.myChart.chartArea.top,
     }
   }
 
@@ -137,7 +125,7 @@ export default class ChartManager {
     }
     return {
       x: axis.x.getPixelForValue(value.x),
-      y: axis.y.getPixelForValue(value.y)
+      y: axis.y.getPixelForValue(value.y),
     }
   }
 
@@ -154,7 +142,7 @@ export default class ChartManager {
     const canvasPosition = this.canvasPixelPosition(pos)
     return {
       x: this.myChart.scales?.x?.getValueForPixel(canvasPosition.x),
-      y: this.myChart.scales?.y?.getValueForPixel(canvasPosition.y)
+      y: this.myChart.scales?.y?.getValueForPixel(canvasPosition.y),
     }
   }
 
@@ -222,7 +210,7 @@ export default class ChartManager {
       left: this.myChart.scales.x.min,
       right: this.myChart.scales.x.max,
       top: this.myChart.scales.y.min,
-      bottom: this.myChart.scales.y.max
+      bottom: this.myChart.scales.y.max,
     }
   }
 
@@ -309,7 +297,7 @@ export default class ChartManager {
       backgroundColor: areaColour,
       pointBorderColor: 'transparent',
       pointBackgroundColor: 'transparent',
-      data: []
+      data: [],
     }
 
     this.myChart.data.datasets.push(upperLimit)

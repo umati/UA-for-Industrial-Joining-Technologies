@@ -9,7 +9,7 @@ export default neostandard({
       traceHandler: 'readonly',
       stepHandler: 'readonly',
       polynomialObject: 'readonly',
-      degree: 'readonly'
-    }
-  }
+      degree: 'readonly',
+    },
+  },
 })
