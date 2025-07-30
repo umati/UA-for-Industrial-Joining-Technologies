@@ -14,27 +14,28 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv
 except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "python-dotenv"])
+    subprocess.check_call(
+        [sys.executable, "-m", "pip", "install", "--user", "python-dotenv"]
+    )
     from dotenv import load_dotenv
 
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
-    format='[%(asctime)s] [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[
-        logging.FileHandler("log.txt", mode='w'),
-        logging.StreamHandler()
-    ]
+    format="[%(asctime)s] [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.FileHandler("log.txt", mode="w"), logging.StreamHandler()],
 )
 log = logging.getLogger()
 
 VENV_DIR = Path("venv")
 
+
 def check_python_version():
     if sys.version_info < (3, 8):
         log.error("Python 3.8 or higher is required.")
         sys.exit(1)
+
 
 def check_internet(host="8.8.8.8", port=53, timeout=3):
     try:
@@ -44,14 +45,18 @@ def check_internet(host="8.8.8.8", port=53, timeout=3):
     except socket.error:
         return False
 
+
 def get_python_path():
     return VENV_DIR / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
 
 def get_npm_path():
     return VENV_DIR / ("Scripts/npm.cmd" if os.name == "nt" else "bin/npm")
 
+
 def get_npx_path():
     return VENV_DIR / ("Scripts/npx.cmd" if os.name == "nt" else "bin/npx")
+
 
 def create_virtualenv():
     if VENV_DIR.exists():
@@ -59,14 +64,22 @@ def create_virtualenv():
     log.info("Creating virtual environment...")
     venv.create(VENV_DIR, with_pip=True)
 
+
 def install_python_packages():
     python = get_python_path()
     log.info("Installing Python packages...")
     subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip"])
-    subprocess.check_call([str(python), "-m", "pip", "install", "requests", "python-dotenv", "nodeenv"])
+    subprocess.check_call(
+        [str(python), "-m", "pip", "install", "requests", "python-dotenv", "nodeenv"]
+    )
     if Path("requirements.txt").exists():
-        subprocess.check_call([str(python), "-m", "pip", "install", "-r", "requirements.txt"])
-    subprocess.check_call([str(python), "-m", "pip", "install", "websockets", "asyncua"])
+        subprocess.check_call(
+            [str(python), "-m", "pip", "install", "-r", "requirements.txt"]
+        )
+    subprocess.check_call(
+        [str(python), "-m", "pip", "install", "websockets", "asyncua"]
+    )
+
 
 def create_nodeenv():
     python = get_python_path()
@@ -80,13 +93,19 @@ def create_nodeenv():
     try:
         subprocess.check_call(args)
     except subprocess.CalledProcessError:
-        log.error("Node.js environment setup failed. Please ensure nodeenv can download Node.js or install Node.js globally.")
+        log.error(
+            "Node.js environment setup failed. Please ensure nodeenv can download Node.js or install Node.js globally."
+        )
         sys.exit(1)
     npm = get_npm_path()
     npx = get_npx_path()
     if not npm.exists() or not npx.exists():
-        log.error("npm or npx not found in virtual environment. Node.js setup may have failed.")
+        log.error(
+            "npm or npx not found in virtual environment. Node.js setup may have failed."
+        )
         sys.exit(1)
+
+
 def validate_package_json():
     package_json_path = Path("package.json")
     if not package_json_path.exists():
@@ -99,6 +118,7 @@ def validate_package_json():
     except json.JSONDecodeError as e:
         log.error(f"Invalid package.json: {e}")
         sys.exit(1)
+
 
 def install_js_packages():
     npm = get_npm_path()
@@ -114,7 +134,9 @@ def install_js_packages():
             log.info("Found package-lock.json. Running 'npm ci'...")
             subprocess.check_call([str(npm), "ci"])
         else:
-            log.warning("package-lock.json not found. Running 'npm install' with --legacy-peer-deps...")
+            log.warning(
+                "package-lock.json not found. Running 'npm install' with --legacy-peer-deps..."
+            )
             subprocess.check_call([str(npm), "install", "--legacy-peer-deps"])
     except subprocess.CalledProcessError as e:
         log.error("JavaScript package installation failed. Please check npm logs.")
@@ -123,13 +145,18 @@ def install_js_packages():
 
     # Log installed versions
     try:
-        eslint_version = subprocess.check_output([str(npm), "list", "eslint", "--depth=0"]).decode()
-        neostandard_version = subprocess.check_output([str(npm), "list", "neostandard", "--depth=0"]).decode()
+        eslint_version = subprocess.check_output(
+            [str(npm), "list", "eslint", "--depth=0"]
+        ).decode()
+        neostandard_version = subprocess.check_output(
+            [str(npm), "list", "neostandard", "--depth=0"]
+        ).decode()
         log.info("Installed ESLint version:\n" + eslint_version)
         log.info("Installed neostandard version:\n" + neostandard_version)
     except subprocess.CalledProcessError as e:
         log.warning("Failed to retrieve installed package versions.")
         log.warning(str(e))
+
 
 def start_server():
     npx = get_npx_path()
@@ -147,6 +174,7 @@ def start_server():
         log.error("Failed to start server or open browser.")
         log.error(str(e))
 
+
 def run_index():
     python = get_python_path()
     if Path("index.py").exists():
@@ -158,6 +186,7 @@ def run_index():
     else:
         log.warning("index.py not found.")
 
+
 def create_env_template():
     if not Path(".env").exists():
         if Path(".env.example").exists():
@@ -167,16 +196,20 @@ def create_env_template():
             with open(".env.example", "w") as f:
                 f.write("# Environment Configuration Example\n\n")
                 f.write("# WebSocket Server Port\n")
-                f.write("# This is the port on which the WebSocket server will listen for incoming connections.\n")
+                f.write(
+                    "# This is the port on which the WebSocket server will listen for incoming connections.\n"
+                )
                 f.write("# Default: 8001\n")
                 f.write("WS_PORT=8001\n")
             log.info(".env.example created.")
+
 
 def is_runtime_ready():
     python = get_python_path()
     npm = get_npm_path()
     npx = get_npx_path()
     return VENV_DIR.exists() and python.exists() and npm.exists() and npx.exists()
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -186,12 +219,12 @@ Default behavior:
   If the environment is already set up (venv, npm, npx exist), the script runs in runtime-only mode.
   Use --force_full to override and perform full setup regardless of environment state.
 """,
-        formatter_class=argparse.RawTextHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
-        '--force_full',
-        action='store_true',
-        help="Force full setup even if environment is already prepared"
+        "--force_full",
+        action="store_true",
+        help="Force full setup even if environment is already prepared",
     )
     args = parser.parse_args()
 
@@ -204,7 +237,9 @@ Default behavior:
         log.info("Starting full project setup...")
         check_python_version()
         if not check_internet():
-            log.error("No internet connection. Please connect to the internet and try again.")
+            log.error(
+                "No internet connection. Please connect to the internet and try again."
+            )
             sys.exit(1)
         create_virtualenv()
         install_python_packages()
@@ -215,6 +250,7 @@ Default behavior:
         start_server()
         run_index()
         log.info("Setup complete.")
+
 
 if __name__ == "__main__":
     main()

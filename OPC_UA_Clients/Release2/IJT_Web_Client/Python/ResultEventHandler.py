@@ -2,9 +2,10 @@ import json
 import asyncio
 import websockets
 import pytz
-import logging
 from datetime import datetime
 from Python.Serialize import serializeValue  # Ensure this module is available
+from Python.IJTLogger import ijt_logger
+
 
 class Short:
     """
@@ -53,10 +54,10 @@ class ResultEventHandler:
             try:
                 await self.websocket.send(item)
             except websockets.exceptions.ConnectionClosedOK:
-                logging.info("WebSocket connection closed normally.")
+                ijt_logger.info("WebSocket connection closed normally.")
                 break
             except Exception as e:
-                logging.error(f"Error sending message: {e}")
+                ijt_logger.error(f"Error sending message: {e}")
 
     async def shutdown(self):
         await self.queue.put(None)
@@ -71,7 +72,7 @@ class ResultEventHandler:
             }
             await self.queue.put(json.dumps(returnValue))
         except Exception as e:
-            logging.error("Exception: " + str(e))
+            ijt_logger.error("Exception: " + str(e))
 
     def event_notification(self, event):
         # Get the current date and time in local timezone
@@ -101,12 +102,14 @@ class ResultEventHandler:
         idString = event.EventId.decode("utf-8", errors="replace")
 
         # Print the formatted date and time
-        logging.info("-----------------------------------------------")
-        logging.info(f"Server Time of Event : {formatted_server_time} (Local Time)")
-        logging.info(f"Client Time of Event : {formatted_client_time} (Local Time)")
-        logging.info(f"Time Gap             : {difference_in_milliseconds:.3f} ms")
-        logging.info("RESULT EVENT RECEIVED + [" + idString + "]: " + event.Message.Text)
-        logging.info("-----------------------------------------------")
+        ijt_logger.info("-----------------------------------------------")
+        ijt_logger.info(f"Server Time of Event : {formatted_server_time} (Local Time)")
+        ijt_logger.info(f"Client Time of Event : {formatted_client_time} (Local Time)")
+        ijt_logger.info(f"Time Gap             : {difference_in_milliseconds:.3f} ms")
+        ijt_logger.info(
+            "RESULT EVENT RECEIVED + [" + idString + "]: " + event.Message.Text
+        )
+        ijt_logger.info("-----------------------------------------------")
 
         filteredEvent = Short(event.EventType, event.Result, event.Message, idString)
 

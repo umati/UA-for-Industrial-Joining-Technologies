@@ -2,7 +2,7 @@ __all__ = ["IJTInterface"]
 
 import asyncio
 import json
-import logging
+from Python.IJTLogger import ijt_logger
 from Python.Connection import Connection
 
 
@@ -19,40 +19,40 @@ class IJTInterface:
         connection = self.connectionList.get(endpoint)
 
         if not connection:
-            logging.info(
-                f"IJTInterface.py - callConnection - No connection found for endpoint: {endpoint}"
+            ijt_logger.info(
+                f"callConnection - No connection found for endpoint: {endpoint}"
             )
             return {"exception": f"No connection found for endpoint: {endpoint}"}
 
         try:
             if connection.client.uaclient.protocol.state != "open":
-                logging.info(
-                    f"IJTInterface.py - callConnection - protocol.state: {connection.client.uaclient.protocol.state}"
+                ijt_logger.info(
+                    f"callConnection - protocol.state: {connection.client.uaclient.protocol.state}"
                 )
-                logging.info("IJTInterface.py - callConnection - Reconnecting...")
+                ijt_logger.info("callConnection - Reconnecting...")
                 await connection.connect()
         except Exception as e:
-            logging.error(
-                f"IJTInterface.py - callConnection - Error checking or reconnecting client: {e}"
+            ijt_logger.error(
+                f"callConnection - Error checking or reconnecting client: {e}"
             )
             return {"exception": str(e)}
 
-        #logging.info(f"IJTInterface.py - callConnection - Calling method: {func} on connection: {connection}")
-        #logging.info(f"IJTInterface.py - callConnection - Available methods: {dir(connection)}")
+        # ijt_logger.info(f"callConnection - Calling method: {func} on connection: {connection}")
+        # ijt_logger.info(f"callConnection - Available methods: {dir(connection)}")
 
         try:
             methodRepr = getattr(connection, func)
         except AttributeError:
-            logging.error(
-                f"IJTInterface.py - callConnection - Method '{func}' not found in Connection object."
+            ijt_logger.error(
+                f"callConnection - Method '{func}' not found in Connection object."
             )
             return {"exception": f"Method '{func}' not found"}
 
         try:
             return await methodRepr(data)
         except Exception as e:
-            logging.error("IJTInterface.py - callConnection - Exception in Methodcall")
-            logging.error(f"IJTInterface.py - callConnection - Exception: {e}")
+            ijt_logger.error("callConnection - Exception in Methodcall")
+            ijt_logger.error(f"callConnection - Exception: {e}")
             return {"exception": str(e)}
 
     async def handle(self, websocket, data):
@@ -88,17 +88,17 @@ class IJTInterface:
                 return
 
             elif command == "connect to":
-                logging.info("IJTInterface.py - handle - SOCKET: Connect")
+                ijt_logger.info("handle - SOCKET: Connect")
                 if endpoint in self.connectionList:
-                    logging.info(
-                        "IJTInterface.py - handle - Endpoint was already connected. Closing down old connection."
+                    ijt_logger.info(
+                        "handle - Endpoint was already connected. Closing down old connection."
                     )
                     if self.connectionList[endpoint] is not None:
                         try:
                             await self.connectionList[endpoint].terminate()
                         except Exception as e:
-                            logging.warning(
-                                f"IJTInterface.py - handle - Error terminating old connection: {e}"
+                            ijt_logger.warning(
+                                f"handle - Error terminating old connection: {e}"
                             )
                     self.connectionList[endpoint] = None
 
@@ -107,18 +107,18 @@ class IJTInterface:
                     self.connectionList[endpoint] = connection
                     returnValues = await connection.connect()
                 except Exception as e:
-                    logging.error("IJTInterface.py - handle - Exception in Connect")
-                    logging.error(f"IJTInterface.py - handle - Exception: {e}")
+                    ijt_logger.error("handle - Exception in Connect")
+                    ijt_logger.error(f"handle - Exception: {e}")
                     returnValues = {"exception": str(e)}
 
             elif command == "terminate connection":
-                logging.info("IJTInterface.py - handle - SOCKET: terminate")
+                ijt_logger.info("handle - SOCKET: terminate")
                 if endpoint in self.connectionList and self.connectionList[endpoint]:
                     try:
                         await self.connectionList[endpoint].terminate()
                     except Exception as e:
-                        logging.warning(
-                            f"IJTInterface.py - handle - Error terminating connection: {e}"
+                        ijt_logger.warning(
+                            f"handle - Error terminating connection: {e}"
                         )
                     self.connectionList[endpoint] = None
                 returnValues = {}
@@ -127,7 +127,7 @@ class IJTInterface:
                 returnValues = await self.callConnection(data, command)
 
         except Exception as e:
-            logging.error(f"IJTInterface.py - handle - Exception in handle: {e}")
+            ijt_logger.error(f"handle - Exception in handle: {e}")
             returnValues = {"exception": str(e)}
 
         if data.get("uniqueid"):
@@ -142,19 +142,15 @@ class IJTInterface:
         """
         Gracefully disconnect all active OPC UA connections.
         """
-        logging.info(
-            "IJTInterface.py - disconnect - Disconnecting all OPC UA connections..."
-        )
+        ijt_logger.info("disconnect - Disconnecting all OPC UA connections...")
         for endpoint, connection in list(self.connectionList.items()):
             if connection:
                 try:
                     await connection.terminate()
-                    logging.info(
-                        f"IJTInterface.py - disconnect - Disconnected from {endpoint}"
-                    )
+                    ijt_logger.info(f"disconnect - Disconnected from {endpoint}")
                 except Exception as e:
-                    logging.warning(
-                        f"IJTInterface.py - disconnect - Error disconnecting from {endpoint}: {e}"
+                    ijt_logger.warning(
+                        f"disconnect - Error disconnecting from {endpoint}: {e}"
                     )
             self.connectionList[endpoint] = None
         self.connectionList.clear()
@@ -164,12 +160,8 @@ class IJTInterface:
         Optional fallback cleanup if object is garbage collected.
         """
         if self.connectionList:
-            logging.warning(
-                "IJTInterface.py - __del__ - Cleanup triggered via destructor."
-            )
+            ijt_logger.warning("__del__ - Cleanup triggered via destructor.")
             try:
                 asyncio.create_task(self.disconnect())
             except Exception as e:
-                logging.warning(
-                    f"IJTInterface.py - __del__ - Exception during cleanup: {e}"
-                )
+                ijt_logger.warning(f"__del__ - Exception during cleanup: {e}")
