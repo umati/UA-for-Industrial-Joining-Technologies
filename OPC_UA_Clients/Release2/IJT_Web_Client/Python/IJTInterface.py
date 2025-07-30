@@ -5,6 +5,7 @@ import json
 import logging
 from Python.Connection import Connection
 
+
 class IJTInterface:
     """
     OPC UA interface to Industrial Joining Technique specification
@@ -18,16 +19,22 @@ class IJTInterface:
         connection = self.connectionList.get(endpoint)
 
         if not connection:
-            logging.info(f"IJTInterface.py - callConnection - No connection found for endpoint: {endpoint}")
+            logging.info(
+                f"IJTInterface.py - callConnection - No connection found for endpoint: {endpoint}"
+            )
             return {"exception": f"No connection found for endpoint: {endpoint}"}
 
         try:
             if connection.client.uaclient.protocol.state != "open":
-                logging.info(f"IJTInterface.py - callConnection - protocol.state: {connection.client.uaclient.protocol.state}")
+                logging.info(
+                    f"IJTInterface.py - callConnection - protocol.state: {connection.client.uaclient.protocol.state}"
+                )
                 logging.info("IJTInterface.py - callConnection - Reconnecting...")
                 await connection.connect()
         except Exception as e:
-            logging.error(f"IJTInterface.py - callConnection - Error checking or reconnecting client: {e}")
+            logging.error(
+                f"IJTInterface.py - callConnection - Error checking or reconnecting client: {e}"
+            )
             return {"exception": str(e)}
 
         #logging.info(f"IJTInterface.py - callConnection - Calling method: {func} on connection: {connection}")
@@ -36,7 +43,9 @@ class IJTInterface:
         try:
             methodRepr = getattr(connection, func)
         except AttributeError:
-            logging.error(f"IJTInterface.py - callConnection - Method '{func}' not found in Connection object.")
+            logging.error(
+                f"IJTInterface.py - callConnection - Method '{func}' not found in Connection object."
+            )
             return {"exception": f"Method '{func}' not found"}
 
         try:
@@ -81,9 +90,16 @@ class IJTInterface:
             elif command == "connect to":
                 logging.info("IJTInterface.py - handle - SOCKET: Connect")
                 if endpoint in self.connectionList:
-                    logging.info("IJTInterface.py - handle - Endpoint was already connected. Closing down old connection.")
+                    logging.info(
+                        "IJTInterface.py - handle - Endpoint was already connected. Closing down old connection."
+                    )
                     if self.connectionList[endpoint] is not None:
-                        await self.connectionList[endpoint].terminate()
+                        try:
+                            await self.connectionList[endpoint].terminate()
+                        except Exception as e:
+                            logging.warning(
+                                f"IJTInterface.py - handle - Error terminating old connection: {e}"
+                            )
                     self.connectionList[endpoint] = None
 
                 try:
@@ -98,7 +114,12 @@ class IJTInterface:
             elif command == "terminate connection":
                 logging.info("IJTInterface.py - handle - SOCKET: terminate")
                 if endpoint in self.connectionList and self.connectionList[endpoint]:
-                    await self.connectionList[endpoint].terminate()
+                    try:
+                        await self.connectionList[endpoint].terminate()
+                    except Exception as e:
+                        logging.warning(
+                            f"IJTInterface.py - handle - Error terminating connection: {e}"
+                        )
                     self.connectionList[endpoint] = None
                 returnValues = {}
 
@@ -121,12 +142,34 @@ class IJTInterface:
         """
         Gracefully disconnect all active OPC UA connections.
         """
-        logging.info("IJTInterface.py - disconnect - Disconnecting all OPC UA connections...")
-        for endpoint, connection in self.connectionList.items():
+        logging.info(
+            "IJTInterface.py - disconnect - Disconnecting all OPC UA connections..."
+        )
+        for endpoint, connection in list(self.connectionList.items()):
             if connection:
                 try:
                     await connection.terminate()
-                    logging.info(f"IJTInterface.py - disconnect - Disconnected from {endpoint}")
+                    logging.info(
+                        f"IJTInterface.py - disconnect - Disconnected from {endpoint}"
+                    )
                 except Exception as e:
-                    logging.warning(f"IJTInterface.py - disconnect - Error disconnecting from {endpoint}: {e}")
+                    logging.warning(
+                        f"IJTInterface.py - disconnect - Error disconnecting from {endpoint}: {e}"
+                    )
+            self.connectionList[endpoint] = None
         self.connectionList.clear()
+
+    def __del__(self):
+        """
+        Optional fallback cleanup if object is garbage collected.
+        """
+        if self.connectionList:
+            logging.warning(
+                "IJTInterface.py - __del__ - Cleanup triggered via destructor."
+            )
+            try:
+                asyncio.create_task(self.disconnect())
+            except Exception as e:
+                logging.warning(
+                    f"IJTInterface.py - __del__ - Exception during cleanup: {e}"
+                )

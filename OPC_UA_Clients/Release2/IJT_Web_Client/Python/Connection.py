@@ -44,6 +44,10 @@ class Connection:
     async def connect(self):
         self.client = Client(self.server_url)
         try:
+            self.client.name = "IJT Web Client"
+            self.client.description = "IJT Web Client for OPC UA"
+            self.client.application_uri = "urn:freeopcua:ijt:web:client"
+            self.client.product_uri = "urn:freeopcua:ijt:web:client"
             await self.client.connect()
             await self.client.load_type_definitions()
             # Client has a few methods to get proxy to UA nodes that should always be in address space such as Root or Objects

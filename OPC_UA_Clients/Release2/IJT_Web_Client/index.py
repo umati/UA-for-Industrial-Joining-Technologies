@@ -15,13 +15,14 @@ from Python.IJTInterface import IJTInterface
 load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
 opcuaHandler: Optional[IJTInterface] = None
 websocket_server = None
 
-# ✅ For websockets >= 11.0: handler takes only one argument
+
+# For websockets >= 11.0: handler takes only one argument
 async def handler(websocket):
     global opcuaHandler
     client_ip = websocket.remote_address[0]
@@ -40,6 +41,7 @@ async def handler(websocket):
         log.error("Exception in handler:")
         log.error(traceback.format_exc())
 
+
 async def shutdown():
     log.info("Shutting down gracefully...")
     if websocket_server:
@@ -48,6 +50,7 @@ async def shutdown():
     if opcuaHandler:
         await opcuaHandler.disconnect()
     log.info("Shutdown complete.")
+
 
 async def main():
     global websocket_server
@@ -68,9 +71,16 @@ async def main():
             try:
                 loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown()))
             except NotImplementedError:
-                log.warning(f"Signal handling not supported for {sig} on this platform.")
+                log.warning(
+                    f"Signal handling not supported for {sig} on this platform."
+                )
 
-    await asyncio.Future()  # Run forever
+    try:
+        await asyncio.Future()  # Run forever
+    finally:
+        log.warning("main() exiting — attempting shutdown cleanup.")
+        await shutdown()
+
 
 if __name__ == "__main__":
     try:
@@ -81,3 +91,4 @@ if __name__ == "__main__":
     except Exception:
         log.error("Unhandled exception:")
         log.error(traceback.format_exc())
+        asyncio.run(shutdown())
