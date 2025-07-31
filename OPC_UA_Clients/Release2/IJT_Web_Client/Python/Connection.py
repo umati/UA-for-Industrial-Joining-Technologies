@@ -33,14 +33,12 @@ class Connection:
     def __init__(self, server_url, websocket):
         self.server_url = server_url
         self.websocket = websocket
-        self.handle1 = "handle"
-        self.handle2 = "handle"
-        self.handle3 = "handle"
-        self.subresult1 = "sub"
-        self.subresult2 = "sub"
-        self.sub = "sub"
-        self.eventhandler = 0
-        self.resulteventhandler = 0
+        self.handleResultEvent = "handle"
+        self.handleJoiningEvent = "handle"
+        self.subResultEvent = "sub"
+        self.subJoiningEvent = "sub"
+        self.handlerJoiningEvent = 0
+        self.handlerResultEvent = 0
 
     async def connect(self):
         self.client = Client(self.server_url)
@@ -70,41 +68,47 @@ class Connection:
 
     async def terminate(self):
         try:
-            if self.subresult1 != "sub":
+            # Unsubscribe and delete subResultEvent
+            if self.subResultEvent != "sub":
                 try:
-                    await self.subresult1.unsubscribe(self.handle1)
+                    ijt_logger.info("Attempting to unsubscribe handleResultEvent")
+                    await self.subResultEvent.unsubscribe(self.handleResultEvent)
                 except Exception as e:
-                    ijt_logger.error(f"Error unsubscribing handle1: {e}")
-                try:
-                    await self.client.delete_subscriptions(
-                        [self.subresult1.subscription_id]
+                    ijt_logger.warning(
+                        f"Unsubscribe failed (possibly already disconnected): {e}"
                     )
-                except Exception as e:
-                    ijt_logger.error(f"Error deleting subresult1: {e}")
-
-            if self.subresult2 != "sub":
                 try:
-                    await self.subresult2.unsubscribe(self.handle2)
+                    if hasattr(self.subResultEvent, "subscription_id"):
+                        await self.client.delete_subscriptions(
+                            [self.subResultEvent.subscription_id]
+                        )
                 except Exception as e:
-                    ijt_logger.error(f"Error unsubscribing handle2: {e}")
-                try:
-                    await self.client.delete_subscriptions(
-                        [self.subresult2.subscription_id]
+                    ijt_logger.warning(
+                        f"Delete subscription failed (possibly already disconnected): {e}"
                     )
-                except Exception as e:
-                    ijt_logger.error(f"Error deleting subresult2: {e}")
 
-            if self.sub != "sub":
+            # Unsubscribe and delete subJoiningEvent
+            if self.subJoiningEvent != "sub":
                 try:
-                    await self.sub.unsubscribe(self.handle3)
+                    ijt_logger.info("Attempting to unsubscribe handleJoiningEvent")
+                    await self.subJoiningEvent.unsubscribe(self.handleJoiningEvent)
                 except Exception as e:
-                    ijt_logger.error(f"Error unsubscribing handle3: {e}")
+                    ijt_logger.warning(
+                        f"Unsubscribe failed (possibly already disconnected): {e}"
+                    )
                 try:
-                    await self.client.delete_subscriptions([self.sub.subscription_id])
+                    if hasattr(self.subJoiningEvent, "subscription_id"):
+                        await self.client.delete_subscriptions(
+                            [self.subJoiningEvent.subscription_id]
+                        )
                 except Exception as e:
-                    ijt_logger.error(f"Error deleting sub: {e}")
+                    ijt_logger.warning(
+                        f"Delete subscription failed (possibly already disconnected): {e}"
+                    )
 
+            # Disconnect client
             await self.client.disconnect()
+
         except Exception as e:
             ijt_logger.error(f"General error during termination: {e}")
         finally:
@@ -112,10 +116,10 @@ class Connection:
 
     async def subscribe(self, data):
         try:
-            self.eventhandler = self.eventhandler or EventHandler(
+            self.handlerJoiningEvent = self.handlerJoiningEvent or EventHandler(
                 self.websocket, self.server_url
             )
-            self.resulteventhandler = self.resulteventhandler or ResultEventHandler(
+            self.handlerResultEvent = self.handlerResultEvent or ResultEventHandler(
                 self.websocket, self.server_url
             )
 
@@ -127,6 +131,7 @@ class Connection:
             )
 
             obj_node = await self.client.nodes.root.get_child(["0:Objects", "0:Server"])
+
             result_event_node = await self.client.nodes.root.get_child(
                 [
                     "0:Types",
@@ -135,6 +140,7 @@ class Connection:
                     f"{ns_machinery_result}:ResultReadyEventType",
                 ]
             )
+
             joining_result_event_node = await self.client.nodes.root.get_child(
                 [
                     "0:Types",
@@ -144,6 +150,7 @@ class Connection:
                     f"{ns_joining_base}:JoiningSystemResultReadyEventType",
                 ]
             )
+
             joining_system_event_node = await self.client.nodes.root.get_child(
                 [
                     "0:Types",
@@ -155,29 +162,37 @@ class Connection:
 
             await self.client.load_data_type_definitions()
 
-            event_type = data.get("eventtype", "").lower()
+            event_type = data.get("eventtype", "").lower().strip()
 
-            if not event_type or "resultevent" in event_type:
-                self.subresult1 = await self.client.create_subscription(
-                    100, self.resulteventhandler
-                )
-                self.handle1 = await self.subresult1.subscribe_events(
-                    obj_node, [result_event_node], queuesize=200
-                )
+            # Unified subscription for both result events
+            if (
+                not event_type
+                or "resultevent" in event_type
+                or "joiningresultevent" in event_type
+            ):
+                if self.subResultEvent == "sub":
+                    self.subResultEvent = await self.client.create_subscription(
+                        100, self.handlerResultEvent
+                    )
+                    self.handleResultEvents = (
+                        await self.subResultEvent.subscribe_events(
+                            obj_node,
+                            [result_event_node, joining_result_event_node],
+                            queuesize=200,
+                        )
+                    )
 
-            if not event_type or "joiningresultevent" in event_type:
-                self.subresult2 = await self.client.create_subscription(
-                    100, self.resulteventhandler
-                )
-                self.handle2 = await self.subresult2.subscribe_events(
-                    obj_node, [joining_result_event_node], queuesize=200
-                )
-
+            # Separate subscription for joining system event
             if not event_type or "joiningsystemevent" in event_type:
-                self.sub = await self.client.create_subscription(100, self.eventhandler)
-                self.handle3 = await self.sub.subscribe_events(
-                    obj_node, [joining_system_event_node], queuesize=200
-                )
+                if self.subJoiningEvent == "sub":
+                    self.subJoiningEvent = await self.client.create_subscription(
+                        100, self.handlerJoiningEvent
+                    )
+                    self.handleJoiningEvents = (
+                        await self.subJoiningEvent.subscribe_events(
+                            obj_node, [joining_system_event_node], queuesize=200
+                        )
+                    )
 
             return {}
 
@@ -289,7 +304,6 @@ class Connection:
 
     async def namespaces(self, data):
         try:
-            ijt_logger.error("Call to get NAMESPACES")
             namespacesReply = await self.client.get_namespace_array()
             event = {"namespaces": json.dumps(namespacesReply)}
             return event
