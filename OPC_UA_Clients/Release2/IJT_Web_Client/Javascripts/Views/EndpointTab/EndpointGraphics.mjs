@@ -54,7 +54,7 @@ export default class EndpointGraphics extends BasicScreen {
         tabGenerator.generateTab(envelopeScreen, 3, true)
       })
       .catch((err) => {
-        console.log('No (optional) envelope code found: ' + err)
+        console.log(err)
       })
 
     // Setting up tab handling and model handling
