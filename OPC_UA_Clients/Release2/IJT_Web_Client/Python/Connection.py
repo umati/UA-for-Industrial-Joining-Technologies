@@ -62,8 +62,8 @@ class Connection:
                 await self.websocket.send(json.dumps(event))
             return event
         except Exception as e:
-            ijt_logger.error("--- Exception in CONNECT ", self.server_url)
-            ijt_logger.error("--- Exception:" + str(e))
+            ijt_logger.error("Exception in Connect ", self.server_url)
+            ijt_logger.error("Exception:" + str(e))
             return {"exception": str(e)}
 
     async def terminate(self):
@@ -112,7 +112,7 @@ class Connection:
         except Exception as e:
             ijt_logger.error(f"General error during termination: {e}")
         finally:
-            ijt_logger.error(f"TERMINATE: Connection to {self.server_url} disconnected")
+            ijt_logger.error(f"Terminate: Connection to {self.server_url} disconnected")
 
     async def subscribe(self, data):
         try:
@@ -197,8 +197,8 @@ class Connection:
             return {}
 
         except Exception as e:
-            ijt_logger.error(f"--- Exception in SUBSCRIBE {self.server_url}")
-            ijt_logger.error(f"--- Exception: {e}")
+            ijt_logger.error(f"Exception in Subscribe {self.server_url}")
+            ijt_logger.error(f"Exception: {e}")
             return {"exception": f"Subscribe exception: {e}"}
 
     async def read(self, data):
@@ -253,9 +253,9 @@ class Connection:
 
         except Exception as e:
             ijt_logger.error(
-                f"--- Exception in READ: ({lastReadState}): {IdObjectToString(nodeId)}"
+                f"Exception in Read: ({lastReadState}): {IdObjectToString(nodeId)}"
             )
-            ijt_logger.error("--- Exception:" + str(e))
+            ijt_logger.error("Exception:" + str(e))
             return {"exception": "Read Exception: (" + lastReadState + "): " + str(e)}
 
     async def pathtoid(self, data):
@@ -298,8 +298,8 @@ class Connection:
             return event
 
         except Exception as e:
-            ijt_logger.error("--- Exception in PATHTOID path ", path)
-            ijt_logger.error("--- Exception:" + str(e))
+            ijt_logger.error("Exception in PathToId path ", path)
+            ijt_logger.error("Exception:" + str(e))
             return {"exception": "PathToId Exception: " + str(e)}
 
     async def namespaces(self, data):
@@ -308,8 +308,8 @@ class Connection:
             event = {"namespaces": json.dumps(namespacesReply)}
             return event
         except Exception as e:
-            ijt_logger.error("--- Exception in NAMESPACES ")
-            ijt_logger.error("--- Exception:" + str(e))
+            ijt_logger.error("Exception in Namespaces ")
+            ijt_logger.error("Exception:" + str(e))
             return {"exception": "Exception in Namespaces: " + str(e)}
         finally:
             pass
@@ -327,7 +327,7 @@ class Connection:
                 IdObjectToString(methodNode)
             )  # get the method node
 
-            ijt_logger.info("METHODCALL: " + IdObjectToString(objectNode))
+            ijt_logger.info("MethodCall: " + IdObjectToString(objectNode))
 
             attrList = []
             attrList.append(method)
@@ -346,8 +346,6 @@ class Connection:
             return {"output": serializeValue(out)}
 
         except Exception as e:
-            ijt_logger.error(
-                "--- Exception in METHODCALL " + IdObjectToString(methodNode)
-            )
-            ijt_logger.error("--- Exception:" + str(e))
+            ijt_logger.error("Exception in MethodCall " + IdObjectToString(methodNode))
+            ijt_logger.error("Exception:" + str(e))
             return {"exception": "Method call exception: " + str(e)}
