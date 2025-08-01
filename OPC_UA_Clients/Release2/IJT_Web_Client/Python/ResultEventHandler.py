@@ -14,10 +14,6 @@ def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:
 
 
 class Short:
-    """
-    Support class to contain just the part of a result event that should be transferred to the webpage
-    """
-
     def __init__(self, eventType, result, message, id):
         self.EventType = eventType
         self.Result = result
@@ -34,13 +30,6 @@ class Short:
 
 
 class ResultEventHandler:
-    """
-    Subscription Handler. To receive events from server for a subscription.
-    data_change and event methods are called directly from receiving thread.
-    Do not do expensive, slow or network operation there.
-    threaded_websocket handles that via wrap_async_func
-    """
-
     def __init__(self, websocket, server_url):
         self.websocket = websocket
         self.server_url = server_url
@@ -81,7 +70,10 @@ class ResultEventHandler:
             ijt_logger.error("Exception: " + str(e))
 
     async def event_notification(self, event):
-        event_id = await ResultEventHandler.log_event_details(event, self.server_url)
+        client_received_time = datetime.utcnow().replace(tzinfo=pytz.utc)
+        event_id = await ResultEventHandler.log_event_details(
+            event, self.server_url, client_received_time
+        )
         filtered_event = Short(event.EventType, event.Result, event.Message, event_id)
         asyncio.run_coroutine_threadsafe(self.process_event(filtered_event), self.loop)
 
@@ -99,12 +91,16 @@ class ResultEventHandler:
             return None
 
     @staticmethod
-    async def log_event_details(event, server_url: str) -> str:
+    async def log_event_details(
+        event, server_url: str, client_received_time: datetime
+    ) -> str:
         server_time = await ResultEventHandler.read_server_time(server_url)
         event_time = event.Time
         event_id = event.EventId.decode("utf-8", errors="replace")
 
-        timing = await ResultEventHandler.calculate_event_latency(event_time)
+        timing = ResultEventHandler.calculate_event_latency(
+            event_time, client_received_time
+        )
 
         formatted_event_time = format_local_time(timing["utc_event_time"])
         formatted_client_time = format_local_time(timing["utc_client_time"])
@@ -114,33 +110,38 @@ class ResultEventHandler:
 
         ijt_logger.info("-" * 80)
         ijt_logger.info(f"RESULT EVENT RECEIVED               : {event.Message.Text}")
-        ijt_logger.info(f"Client Time                         : {formatted_client_time}")
+        ijt_logger.info(
+            f"Client Time                         : {formatted_client_time}"
+        )
         ijt_logger.info(f"Event Generated Time                : {formatted_event_time}")
-        ijt_logger.info(f"Latency (Event → Client)            : {abs(timing['event_gap_ms']):.3f} ms")
+        ijt_logger.info(
+            f"Latency (Event → Client)            : {abs(timing['event_gap_ms']):.3f} ms"
+        )
 
         if server_time:
-            server_gap_ms = (timing["utc_client_time"] - server_time).total_seconds() * 1000
+            server_gap_ms = (
+                timing["utc_client_time"] - server_time
+            ).total_seconds() * 1000
             drift_relation = "slower" if server_gap_ms < 0 else "faster"
-            ijt_logger.info(f"Clock Drift (Client - Server)       : {abs(server_gap_ms):.3f} ms (Client is {drift_relation})")
-            ijt_logger.info(f"Server Time                         : {formatted_server_time}")
+            ijt_logger.info(
+                f"Clock Drift (Client - Server)       : {abs(server_gap_ms):.3f} ms (Client is {drift_relation})"
+            )
+            ijt_logger.info(
+                f"Server Time                         : {formatted_server_time}"
+            )
         else:
             ijt_logger.info("Server Time                         : Unavailable")
 
         ijt_logger.info("-" * 80)
-
-
         return event_id
 
     @staticmethod
-    async def calculate_event_latency(
-        event_time: datetime, timezone: str = "Europe/Stockholm"
-    ) -> Dict:
-        utc_client_time = datetime.utcnow().replace(tzinfo=pytz.utc)
+    def calculate_event_latency(event_time: datetime, client_time: datetime) -> Dict:
         if event_time.tzinfo is None:
             event_time = pytz.utc.localize(event_time)
-        event_gap_ms = (utc_client_time - event_time).total_seconds() * 1000
+        event_gap_ms = (client_time - event_time).total_seconds() * 1000
         return {
-            "utc_client_time": utc_client_time,
+            "utc_client_time": client_time,
             "utc_event_time": event_time,
             "event_gap_ms": event_gap_ms,
         }
