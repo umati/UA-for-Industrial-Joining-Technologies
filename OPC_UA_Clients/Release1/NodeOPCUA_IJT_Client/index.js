@@ -33,14 +33,14 @@ const homepageLimiter = rateLimit({
 
 // ----------------------------- Static Files -----------------------------
 // Serve only .html, .css, .js files from current directory
-app.use(express.static(__dirname, {
+app.use(express.static(path.join(__dirname, 'public'), {
   index: false,
   extensions: ['html', 'css', 'js']
 }));
 
 // ----------------------------- Webserver -----------------------------
 app.get('/', homepageLimiter, (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 http.listen(port, () => {
