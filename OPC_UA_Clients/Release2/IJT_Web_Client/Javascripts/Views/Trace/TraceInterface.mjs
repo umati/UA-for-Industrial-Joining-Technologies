@@ -63,31 +63,6 @@ export class ButtonTraceInterface extends TraceInterface {
     this.selectTraceEventHandler = evtHandler
   }
 
-  /*
-  zoomBoxDraw (pos1, pos2, offset) {
-    if (!pos1 || !pos2) {
-      if (this.zoomBox) {
-        this.canvasCoverLayer.removeChild(this.zoomBox)
-        this.zoomBox = null
-      }
-      return
-    }
-    if (!this.zoomBox) {
-      this.zoomBox = document.createElement('div')
-      this.zoomBox.classList.add('zoomwindow')
-      this.canvasCoverLayer.appendChild(this.zoomBox)
-    }
-    const left = Math.min(pos1.clientX, pos2.clientX)
-    const right = Math.max(pos1.clientX, pos2.clientX)
-    const top = Math.min(pos1.clientY, pos2.clientY)
-    const bottom = Math.max(pos1.clientY, pos2.clientY)
-
-    this.zoomBox.style.left = left - offset.x + 'px'
-    this.zoomBox.style.top = top - offset.y + 'px'
-    this.zoomBox.style.width = right - left + 'px'
-    this.zoomBox.style.height = bottom - top + 'px'
-  } */
-
   updateTracesInGUI (allTraces) {
     this.traceDiv.innerHTML = ''
     for (const trace of allTraces) {
@@ -181,7 +156,8 @@ export class ButtonTraceInterface extends TraceInterface {
     }
 
     const backGround = document.createElement('div')
-    backGround.classList.add('myInfoArea')
+    backGround.classList.add('mainDropDown')
+    backGround.classList.add('bigTraceMargin')
     container.appendChild(backGround)
 
     const title = document.createElement('div')
@@ -198,6 +174,7 @@ export class ButtonTraceInterface extends TraceInterface {
 
     const trace = document.createElement('div')
     trace.classList.add('myInfoArea')
+    trace.classList.add('fillWidth')
     interfaceArea.appendChild(trace)
 
     createHeader(trace, 'Traces')

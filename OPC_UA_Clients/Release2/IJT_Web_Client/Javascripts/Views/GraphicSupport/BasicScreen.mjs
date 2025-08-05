@@ -53,7 +53,7 @@ export default class BasicScreen {
     newButton.innerHTML = title
 
     newButton.onclick = () => {
-      newButton.callback(newButton)
+      newButton.callback(newButton, this)
     }
     newButton.moveTo = (location) => {
       // newButton.parentElement.removeChild(newButton)
