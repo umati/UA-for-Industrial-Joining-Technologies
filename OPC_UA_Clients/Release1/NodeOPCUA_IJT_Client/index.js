@@ -1,41 +1,52 @@
-import express from 'express'
-import httpTemp from 'http'
-import { Server } from 'socket.io'
-import { URL } from 'url'
+import express from 'express';
+import httpTemp from 'http';
+import { Server } from 'socket.io';
+import { URL } from 'url';
+import path from 'path';
+import rateLimit from 'express-rate-limit';
 
 import {
   AttributeIds,
   OPCUAClient
-} from 'node-opcua'
+} from 'node-opcua';
 
-import { NodeOPCUAInterface } from './Javascripts/ijt-support/Client/NodeOPCUAInterface.mjs'
+import { NodeOPCUAInterface } from './Javascripts/ijt-support/Client/NodeOPCUAInterface.mjs';
 
-const app = express()
-const http = httpTemp.Server(app)
-const io = new Server(http)
-const port = process.env.PORT || 3000
-const __dirnameUndecoded = new URL('.', import.meta.url).pathname
-const __dirname = decodeURI(__dirnameUndecoded).substring(1)
+const app = express();
+const http = httpTemp.Server(app);
+const io = new Server(http);
+const port = process.env.PORT || 3000;
 
-console.log('Home directory (__dirname): ' + __dirname)
+// ----------------------------- Path Setup -----------------------------
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-app.use(express.static(__dirname + './Javascript/Webpage'))
+console.log('Home directory (__dirname): ' + __dirname);
 
-// ----------------------------------------------------------------- Webserver --------------------------------------------------------
-// This is for exposing the htlm page
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/index.html')
-})
+// ----------------------------- Rate Limiting -----------------------------
+const homepageLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  message: 'Too many requests from this IP, please try again later.'
+});
 
-// This is to allow files to be accessible
-app.use('/Javascript/Webpage', express.static(__dirname + '/Javascript/Webpage'))
+// ----------------------------- Static Files -----------------------------
+// Serve only .html, .css, .js files from current directory
+app.use(express.static(path.join(__dirname, 'public'), {
+  index: false,
+  extensions: ['html', 'css', 'js']
+}));
 
-// This is to listen to the correct port
+// ----------------------------- Webserver -----------------------------
+app.get('/', homepageLimiter, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 http.listen(port, () => {
-  console.log(`Socket.IO server running at http://localhost:${port}/`)
-})
+  console.log(`Socket.IO server running at http://localhost:${port}`);
+});
 
-// ----------------------------------------------------------------- SocketIO --------------------------------------------------------
-// Set up Websockets so the web page and the node.js application can communicate
-const nodeOPCUAInterface = new NodeOPCUAInterface(io, AttributeIds, OPCUAClient)
-nodeOPCUAInterface.setupSocketIO(OPCUAClient)
+// ----------------------------- SocketIO -----------------------------
+const nodeOPCUAInterface = new NodeOPCUAInterface(io, AttributeIds, OPCUAClient);
+nodeOPCUAInterface.setupSocketIO(OPCUAClient);
