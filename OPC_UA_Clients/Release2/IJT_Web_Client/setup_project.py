@@ -97,7 +97,14 @@ def get_npx_path():
 
 def create_virtualenv():
     if VENV_DIR.exists():
-        shutil.rmtree(VENV_DIR)
+        try:
+            shutil.rmtree(VENV_DIR)
+        except PermissionError as e:
+            log.error(f"Failed to delete virtual environment: {e}")
+            log.error(
+                "Please ensure no Python processes are using the virtual environment."
+            )
+            sys.exit(1)
     log.info("Creating virtual environment...")
     venv.create(VENV_DIR, with_pip=True)
 
