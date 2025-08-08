@@ -9,6 +9,7 @@ import webbrowser
 import socket
 import argparse
 import json
+import time
 from pathlib import Path
 
 try:
@@ -29,6 +30,42 @@ logging.basicConfig(
 log = logging.getLogger()
 
 VENV_DIR = Path("venv")
+
+
+def get_environment_age_days():
+    try:
+        if VENV_DIR.exists():
+            creation_time = os.path.getmtime(VENV_DIR)
+            age_days = (time.time() - creation_time) / (60 * 60 * 24)
+            return age_days
+    except Exception as e:
+        log.warning("Could not determine environment age: " + str(e))
+    return None
+
+
+SETUP_TIMESTAMP_FILE = Path(".setup_timestamp")
+
+
+def get_last_setup_age_days():
+    """Returns the number of days since the last setup based on the timestamp file."""
+    try:
+        if SETUP_TIMESTAMP_FILE.exists():
+            with open(SETUP_TIMESTAMP_FILE, "r") as f:
+                timestamp = float(f.read().strip())
+            age_days = (time.time() - timestamp) / (60 * 60 * 24)
+            return age_days
+    except Exception as e:
+        log.warning(f"Could not read setup timestamp file: {e}")
+    return None
+
+
+def update_setup_timestamp():
+    """Updates the setup timestamp file with the current time."""
+    try:
+        with open(SETUP_TIMESTAMP_FILE, "w") as f:
+            f.write(str(time.time()))
+    except Exception as e:
+        log.warning(f"Could not update setup timestamp file: {e}")
 
 
 def check_python_version():
@@ -60,7 +97,14 @@ def get_npx_path():
 
 def create_virtualenv():
     if VENV_DIR.exists():
-        shutil.rmtree(VENV_DIR)
+        try:
+            shutil.rmtree(VENV_DIR)
+        except PermissionError as e:
+            log.error(f"Failed to delete virtual environment: {e}")
+            log.error(
+                "Please ensure no Python processes are using the virtual environment."
+            )
+            sys.exit(1)
     log.info("Creating virtual environment...")
     venv.create(VENV_DIR, with_pip=True)
 
@@ -208,7 +252,36 @@ def is_runtime_ready():
     python = get_python_path()
     npm = get_npm_path()
     npx = get_npx_path()
-    return VENV_DIR.exists() and python.exists() and npm.exists() and npx.exists()
+
+    if not (VENV_DIR.exists() and python.exists() and npm.exists() and npx.exists()):
+        return False
+
+    env_max_age = int(
+        os.getenv("ENV_MAX_AGE_DAYS", "14")
+    )  # Default to 14 days if not set
+
+    # Prefer setup timestamp if available
+    age_days = get_last_setup_age_days()
+    source = ".setup_timestamp"
+
+    # Fallback to venv modification time if timestamp is missing
+    if age_days is None:
+        age_days = get_environment_age_days()
+        source = "venv directory"
+
+    if age_days is not None:
+        log.info(
+            f"Environment was last set up {int(age_days)} days ago (based on {source}). "
+            f"It will be refreshed after {env_max_age} days."
+        )
+        if age_days > env_max_age:
+            log.info(
+                f"Environment is {int(age_days)} days old (threshold: {env_max_age}). "
+                "Triggering full setup for updates."
+            )
+            return False
+
+    return True
 
 
 def main():
@@ -250,6 +323,7 @@ Default behavior:
         start_server()
         run_index()
         log.info("Setup complete.")
+        update_setup_timestamp()
 
 
 if __name__ == "__main__":
