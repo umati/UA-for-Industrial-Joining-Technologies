@@ -382,7 +382,9 @@ class GraphicalLimit {
 
   update (limit) {
     const dataList = []
-    for (let x = limit.range.start; x <= limit.range.end; x += (limit.range.end - limit.range.start) / 100) {
+    const start = Math.min(limit.range.start, limit.range.end)
+    const end = Math.max(limit.range.start, limit.range.end)
+    for (let x = start; x <= end; x += (end - start) / 100) {
       dataList.push({
         x,
         y: limit.polynomial.value(x - limit.range.offset),
@@ -396,6 +398,12 @@ class GraphicalLimit {
       this.glimit.fill = 'start'
     } else {
       this.glimit.fill = false
+    }
+
+    if (limit.range.start < limit.range.end) {
+      this.glimit.borderColor = 'red'
+    } else {
+      this.glimit.borderColor = 'blue'
     }
 
     this.chartManager.update()

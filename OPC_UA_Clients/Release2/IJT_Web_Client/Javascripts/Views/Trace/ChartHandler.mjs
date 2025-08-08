@@ -60,7 +60,7 @@ export default class ChartManager {
     this.myChart.afterUpdateCallbacks = []
 
     this.context.onmousedown = (evt) => {
-      console.log(this.pixelToValue(evt))
+      // console.log(this.pixelToValue(evt))
       this.traceManager.onmousedown(evt, this.pixelToValue(evt))
     }
 
