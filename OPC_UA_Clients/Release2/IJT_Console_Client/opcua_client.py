@@ -80,9 +80,19 @@ class OPCUAEventClient:
     async def cleanup(self):
         try:
             if self.subscription:
-                await self.subscription.delete()
-                ijt_log.info("Subscription deleted.")
-            await self.client.disconnect()
-            ijt_log.info("Disconnected from OPC UA server.")
+                try:
+                    await self.subscription.delete()
+                    ijt_log.info("Subscription deleted.")
+                except Exception as sub_err:
+                    ijt_log.warning(f"Failed to delete subscription: {sub_err}")
+                self.subscription = None
+
+            if self.client:
+                try:
+                    await self.client.disconnect()
+                    ijt_log.info("Disconnected from OPC UA server.")
+                except Exception as dis_err:
+                    ijt_log.warning(f"Failed to disconnect client: {dis_err}")
+                self.client = None
         except Exception as e:
             ijt_log.error(f"Cleanup error: {e}")
