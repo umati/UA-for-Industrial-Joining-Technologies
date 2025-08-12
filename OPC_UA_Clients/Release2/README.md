@@ -55,11 +55,3 @@
 
 ## OPC UA Server
 - Use the following [**OPC UA IJT Server Simulator**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2) to connect from the **IJT Web Client**.
-
-# IJT Console Client
-## Prerequisites
--  **Python:** Download and install Python from the official website. Ensure Python is added to the system PATH.
--  **Internet Connection**
-
-## Run the application
-- **Run the Setup Script:** Execute the setup script by running **`python setup_client.py`**
