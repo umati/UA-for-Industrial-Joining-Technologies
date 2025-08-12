@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 import shutil
 import importlib.util
+import argparse
+import re
 
 # Setup logging
 logging.basicConfig(
@@ -23,6 +25,7 @@ PYTHON_EXECUTABLE = VENV_DIR / (
     "Scripts/python.exe" if os.name == "nt" else "bin/python"
 )
 REQUIRED_PACKAGES = ["asyncua", "pytz"]
+URL_PATTERN = r"opc\.tcp://[a-zA-Z0-9\.\-]+:\d+"
 
 
 def check_python_version():
@@ -55,7 +58,7 @@ def check_packages():
         log.info("All required packages are already installed.")
 
 
-def run_client():
+def run_client(url_arg=None):
     main_file = Path("main.py")
     if not main_file.exists():
         log.error("main.py not found in the current directory.")
@@ -63,7 +66,10 @@ def run_client():
 
     log.info("Starting OPC UA client...")
     try:
-        subprocess.call([str(PYTHON_EXECUTABLE), str(main_file)])
+        cmd = [str(PYTHON_EXECUTABLE), str(main_file)]
+        if url_arg:
+            cmd.append(f"--url={url_arg}")
+        subprocess.call(cmd)
     except KeyboardInterrupt:
         log.info("Client interrupted by user (Ctrl+C).")
     except Exception as e:
@@ -72,16 +78,20 @@ def run_client():
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--url", type=str, help="OPC UA server URL")
+    args = parser.parse_args()
+    url_arg = args.url if args.url and re.match(URL_PATTERN, args.url) else None
+
     force = "--force" in sys.argv
     check_python_version()
-
     if force and VENV_DIR.exists():
         log.info("Force setup enabled. Removing existing virtual environment...")
         shutil.rmtree(VENV_DIR)
 
     create_virtualenv()
     check_packages()
-    run_client()
+    run_client(url_arg)
 
 
 if __name__ == "__main__":
