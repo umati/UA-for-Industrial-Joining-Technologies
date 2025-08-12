@@ -14,20 +14,37 @@ class OPCUAEventClient:
         self.handler = ResultEventHandler(server_url)
 
     async def connect(self):
-        try:
-            computer_name = socket.getfqdn()
+        computer_name = socket.getfqdn()
 
+        self.client.name = f"urn:{computer_name}:IJT:ConsoleClient"
+        self.client.description = f"urn:{computer_name}:IJT:ConsoleClient"
+        self.client.application_uri = f"urn:{computer_name}:IJT:ConsoleClient"
+        self.client.product_uri = f"urn:IJT:ConsoleClient"
+
+        try:
+            await self.client.connect()
+            await self.client.load_type_definitions()
+            ijt_log.info(f"Connected to OPC UA server at {self.server_url}")
+        except Exception as e:
+            ijt_log.warning(f"Initial connection failed: {e}")
+            ijt_log.info("Attempting to connect again using original Server URL...")
+
+            # Reinitialize client with original server_url
+            self.client = Client(self.server_url)
             self.client.name = f"urn:{computer_name}:IJT:ConsoleClient"
             self.client.description = f"urn:{computer_name}:IJT:ConsoleClient"
             self.client.application_uri = f"urn:{computer_name}:IJT:ConsoleClient"
             self.client.product_uri = f"urn:IJT:ConsoleClient"
 
-            await self.client.connect()
-            await self.client.load_type_definitions()
-            ijt_log.info(f"Connected to OPC UA server at {self.server_url}")
-        except Exception as e:
-            ijt_log.error(f"Connection failed: {e}")
-            raise
+            try:
+                await self.client.connect()
+                await self.client.load_type_definitions()
+                ijt_log.info(
+                    f"Connected to OPC UA server via failover at {self.server_url}"
+                )
+            except Exception as e2:
+                ijt_log.error(f"Failover connection also failed: {e2}")
+                raise
 
     async def subscribe_to_events(self):
         try:
