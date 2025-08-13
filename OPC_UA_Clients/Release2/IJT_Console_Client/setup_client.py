@@ -6,7 +6,6 @@ import venv
 import logging
 from pathlib import Path
 import shutil
-import importlib.util
 import argparse
 import re
 
@@ -34,6 +33,14 @@ def check_python_version():
         sys.exit(1)
 
 
+def find_python_executable():
+    python_exec = shutil.which("python3") or shutil.which("python")
+    if not python_exec:
+        log.error("Python is not installed or not found in PATH.")
+        sys.exit(1)
+    return python_exec
+
+
 def create_virtualenv():
     if not VENV_DIR.exists():
         log.info("Creating virtual environment...")
@@ -42,20 +49,15 @@ def create_virtualenv():
         log.info("Virtual environment already exists.")
 
 
-def is_package_installed(package_name):
-    return importlib.util.find_spec(package_name) is not None
-
-
-def check_packages():
-    missing = [pkg for pkg in REQUIRED_PACKAGES if not is_package_installed(pkg)]
-    if missing:
-        log.warning(f"Missing packages: {missing}")
-        log.warning(
-            "Please install them manually or ensure your proxy allows pip access."
+def install_and_upgrade_packages():
+    log.info("Upgrading pip and installing required packages...")
+    subprocess.check_call(
+        [str(PYTHON_EXECUTABLE), "-m", "pip", "install", "--upgrade", "pip"]
+    )
+    for package in REQUIRED_PACKAGES:
+        subprocess.check_call(
+            [str(PYTHON_EXECUTABLE), "-m", "pip", "install", "--upgrade", package]
         )
-        sys.exit(1)
-    else:
-        log.info("All required packages are already installed.")
 
 
 def run_client(url_arg=None):
@@ -80,17 +82,21 @@ def run_client(url_arg=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", type=str, help="OPC UA server URL")
+    parser.add_argument(
+        "--force", action="store_true", help="Force recreate virtual environment"
+    )
     args = parser.parse_args()
+
     url_arg = args.url if args.url and re.match(URL_PATTERN, args.url) else None
 
-    force = "--force" in sys.argv
     check_python_version()
-    if force and VENV_DIR.exists():
+
+    if args.force and VENV_DIR.exists():
         log.info("Force setup enabled. Removing existing virtual environment...")
         shutil.rmtree(VENV_DIR)
 
     create_virtualenv()
-    check_packages()
+    install_and_upgrade_packages()
     run_client(url_arg)
 
 
