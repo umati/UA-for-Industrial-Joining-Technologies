@@ -16,6 +16,7 @@
 2. **Navigate to the Project Directory:** Open a terminal and navigate to the project directory: **`IJT_Console_Client`**.
 
 ## Run the client application
+- **Note:** On Linux, the command should be **python3** instead of **python**.
 ### Option 1
 - **Update** the **SERVER_URL** in **`client_config.py`** to the OPC UA Server EndpointUrl.
 - **Run** the following command **`python setup_client.py`**.
