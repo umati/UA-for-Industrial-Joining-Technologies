@@ -20,10 +20,10 @@ formatter = MillisecondFormatter(
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 
-ijt_logger = logging.getLogger("IJTLogger")
-ijt_logger.setLevel(logging.INFO)
-ijt_logger.addHandler(handler)
-ijt_logger.propagate = False
+ijt_log = logging.getLogger("IJTLogger")
+ijt_log.setLevel(logging.INFO)
+ijt_log.addHandler(handler)
+ijt_log.propagate = False
 
 # Reduce verbosity of external libraries
 logging.getLogger("asyncua").setLevel(logging.ERROR)

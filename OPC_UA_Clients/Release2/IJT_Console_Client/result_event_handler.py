@@ -3,7 +3,7 @@ import pytz
 from datetime import datetime
 from typing import Dict
 from ijt_logger import ijt_log
-from utils import format_local_time, calculate_event_latency, log_event_details
+from utils import log_event_details
 
 
 class Short:

@@ -2,7 +2,7 @@ import pytz
 from datetime import datetime
 from typing import Optional, Dict
 from asyncua import Client, ua
-from ijt_logger import ijt_log
+from Python.IJTLogger import ijt_log
 
 
 def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:

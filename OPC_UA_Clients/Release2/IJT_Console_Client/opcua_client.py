@@ -1,4 +1,5 @@
 import asyncio
+from asyncua.ua.uaerrors import UaError
 from asyncua import Client
 from result_event_handler import ResultEventHandler
 from ijt_logger import ijt_log
@@ -74,6 +75,8 @@ class OPCUAEventClient:
                 await asyncio.sleep(1)
         except asyncio.CancelledError:
             ijt_log.info("Run loop cancelled.")
+        except Exception as e:
+            ijt_log.warning(f"Unexpected error in run loop: {e}")
         finally:
             await self.cleanup()
 
@@ -87,10 +90,15 @@ class OPCUAEventClient:
                     ijt_log.warning(f"Failed to delete subscription: {sub_err}")
                 self.subscription = None
 
+            # Add a short delay before disconnecting
+            await asyncio.sleep(0.5)
+
             if self.client:
                 try:
                     await self.client.disconnect()
                     ijt_log.info("Disconnected from OPC UA server.")
+                except UaError as ua_err:
+                    ijt_log.warning(f"UaError during disconnect: {ua_err}")
                 except Exception as dis_err:
                     ijt_log.warning(f"Failed to disconnect client: {dis_err}")
                 self.client = None

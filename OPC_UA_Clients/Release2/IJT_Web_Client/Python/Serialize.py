@@ -1,5 +1,5 @@
 from typing import Any
-from Python.IJTLogger import ijt_logger
+from Python.IJTLogger import ijt_log
 
 
 def isInstanceOfClass(cls: Any) -> bool:
@@ -27,7 +27,7 @@ def serializeValue(value: Any) -> str:
     """
     Serialize an value
     """
-    # ijt_logger.info(type(value).__name__)
+    # ijt_log.info(type(value).__name__)
     if isInstanceOfClass(value):
         return "{" + serializeClassInstance(value) + "}"
     elif value == None:
@@ -50,10 +50,10 @@ def serializeClassInstance(obj: Any) -> str:
     Serialize an instance of a class (or something implementing __dict___)
     """
     result = '"pythonclass":"' + type(obj).__name__ + '"'
-    # ijt_logger.info(type(obj).__name__)
+    # ijt_log.info(type(obj).__name__)
     dict = obj.__dict__
     for key, value in dict.items():
-        # ijt_logger.info(type(value).__name__)
+        # ijt_log.info(type(value).__name__)
         if key != "_freeze":
             result = result + ","
             result = result + '"' + key + '"' + ":" + serializeValue(value)
@@ -64,7 +64,7 @@ def serializeFullEvent(value: Any) -> str:
     """
     Serialize an value
     """
-    # ijt_logger.info(type(value).__name__)
+    # ijt_log.info(type(value).__name__)
     if isInstanceOfClass(value):
         return "{" + serializeClassInstance(value) + "}"
     elif value == None:
