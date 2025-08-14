@@ -39,7 +39,7 @@ class ResultEventHandler:
         )
 
     async def event_notification(self, event):
-        client_received_time = datetime.utcnow().replace(tzinfo=pytz.utc)
+        client_received_time = datetime.now(pytz.utc)
         try:
             event_id = await log_event_details(
                 event, self.client, self.server_url, client_received_time

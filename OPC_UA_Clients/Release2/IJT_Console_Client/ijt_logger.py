@@ -20,7 +20,7 @@ formatter = MillisecondFormatter(
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 
-ijt_log = logging.getLogger("ClientLogger")
+ijt_log = logging.getLogger("ijt_logger")
 ijt_log.setLevel(logging.INFO)
 ijt_log.addHandler(handler)
 ijt_log.propagate = False

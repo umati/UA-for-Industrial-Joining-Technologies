@@ -54,7 +54,6 @@ async def log_event_details(
     formatted_server_time = (
         format_local_time(server_time) if server_time else "Unavailable"
     )
-    # ijt_log.info(f"GOT Server Time")
     formatted_start_time = (
         format_local_time(start_time) if start_time else "Unavailable"
     )
@@ -81,14 +80,3 @@ async def log_event_details(
         )
     ijt_log.info("-" * 80)
     return event_id
-
-
-def calculate_event_latency(event_time: datetime, client_time: datetime) -> Dict:
-    if event_time.tzinfo is None:
-        event_time = pytz.utc.localize(event_time)
-    event_gap_ms = (client_time - event_time).total_seconds() * 1000
-    return {
-        "utc_client_time": client_time,
-        "utc_event_time": event_time,
-        "event_gap_ms": event_gap_ms,
-    }

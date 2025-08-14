@@ -10,22 +10,21 @@ def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:
     return dt.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
-async def read_server_time(endpoint: str) -> Optional[datetime]:
+async def read_server_time(client: Client) -> Optional[datetime]:
     try:
-        async with Client(endpoint) as client:
-            node = client.get_node(ua.NodeId(2258, 0))  # ServerStatus.CurrentTime
-            value = await node.read_value()
-            return value
+        node = client.get_node(ua.NodeId(2258, 0))  # ServerStatus.CurrentTime
+        value = await node.read_value()
+        return value
     except Exception as e:
         ijt_log.warning(f"{'Server Time Read Failed':<40} : {e}")
         return None
 
 
 async def log_event_details(
-    event, server_url: str, client_received_time: datetime
+    event, client: Client, server_url: str, client_received_time: datetime
 ) -> str:
     # ijt_log.info(f"Getting Server Time")
-    server_time = await read_server_time(server_url)
+    server_time = await read_server_time(client)
 
     event_time = event.Time
     event_id = event.EventId.decode("utf-8", errors="replace")
@@ -55,7 +54,6 @@ async def log_event_details(
     formatted_server_time = (
         format_local_time(server_time) if server_time else "Unavailable"
     )
-    # ijt_log.info(f"GOT Server Time")
     formatted_start_time = (
         format_local_time(start_time) if start_time else "Unavailable"
     )
@@ -82,14 +80,3 @@ async def log_event_details(
         )
     ijt_log.info("-" * 80)
     return event_id
-
-
-def calculate_event_latency(event_time: datetime, client_time: datetime) -> Dict:
-    if event_time.tzinfo is None:
-        event_time = pytz.utc.localize(event_time)
-    event_gap_ms = (client_time - event_time).total_seconds() * 1000
-    return {
-        "utc_client_time": client_time,
-        "utc_event_time": event_time,
-        "event_gap_ms": event_gap_ms,
-    }

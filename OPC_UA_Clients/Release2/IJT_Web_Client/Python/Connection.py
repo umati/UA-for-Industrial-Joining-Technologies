@@ -120,7 +120,7 @@ class Connection:
                 self.websocket, self.server_url
             )
             self.handlerResultEvent = self.handlerResultEvent or ResultEventHandler(
-                self.websocket, self.server_url
+                self.websocket, self.server_url, self.client
             )
 
             ns_machinery_result = await self.client.get_namespace_index(
