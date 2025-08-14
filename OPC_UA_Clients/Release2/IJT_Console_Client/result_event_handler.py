@@ -2,8 +2,10 @@ import asyncio
 import pytz
 from datetime import datetime
 from typing import Dict
+from pathlib import Path
 from ijt_logger import ijt_log
 from utils import log_event_details
+from serialize import serializeFullEvent
 
 
 class Short:
@@ -37,6 +39,25 @@ class ResultEventHandler:
         ijt_log.info(
             f"Event processed: Message={getattr(event.Message, 'Text', 'N/A')}"
         )
+        # Below logic writes the Result content to a file in result_logs/latest_result.json.
+        # This logic can be used to parse the Result and use it accordingly.
+        try:
+            await self.log_result_to_file(event)
+        except Exception as e:
+            ijt_log.error(f"Failed to log Result to file: {e}")
+
+    async def log_result_to_file(self, event: Short):
+        try:
+            json_str = serializeFullEvent(event.Result)
+
+            log_dir = Path("result_logs")
+            log_dir.mkdir(exist_ok=True)
+            log_file = log_dir / "latest_result.json"
+            log_file.write_text(json_str, encoding="utf-8")
+
+            ijt_log.info(f"Latest event Result logged to {log_file}")
+        except Exception as e:
+            ijt_log.error(f"Error during serialization: {e}")
 
     async def event_notification(self, event):
         client_received_time = datetime.now(pytz.utc)
