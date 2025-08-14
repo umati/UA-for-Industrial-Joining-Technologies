@@ -23,8 +23,9 @@ class Short:
 
 
 class ResultEventHandler:
-    def __init__(self, server_url):
+    def __init__(self, server_url, client):
         self.server_url = server_url
+        self.client = client
         try:
             self.loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -41,7 +42,7 @@ class ResultEventHandler:
         client_received_time = datetime.utcnow().replace(tzinfo=pytz.utc)
         try:
             event_id = await log_event_details(
-                event, self.server_url, client_received_time
+                event, self.client, self.server_url, client_received_time
             )
             filtered_event = Short(
                 event.EventType, event.Result, event.Message, event_id

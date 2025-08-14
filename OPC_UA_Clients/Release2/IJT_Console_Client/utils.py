@@ -10,22 +10,21 @@ def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:
     return dt.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
-async def read_server_time(endpoint: str) -> Optional[datetime]:
+async def read_server_time(client: Client) -> Optional[datetime]:
     try:
-        async with Client(endpoint) as client:
-            node = client.get_node(ua.NodeId(2258, 0))  # ServerStatus.CurrentTime
-            value = await node.read_value()
-            return value
+        node = client.get_node(ua.NodeId(2258, 0))  # ServerStatus.CurrentTime
+        value = await node.read_value()
+        return value
     except Exception as e:
         ijt_log.warning(f"{'Server Time Read Failed':<40} : {e}")
         return None
 
 
 async def log_event_details(
-    event, server_url: str, client_received_time: datetime
+    event, client: Client, server_url: str, client_received_time: datetime
 ) -> str:
     # ijt_log.info(f"Getting Server Time")
-    server_time = await read_server_time(server_url)
+    server_time = await read_server_time(client)
 
     event_time = event.Time
     event_id = event.EventId.decode("utf-8", errors="replace")

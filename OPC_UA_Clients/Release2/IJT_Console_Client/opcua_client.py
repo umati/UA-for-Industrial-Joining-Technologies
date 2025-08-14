@@ -12,7 +12,7 @@ class OPCUAEventClient:
         self.server_url = server_url
         self.client = Client(server_url)
         self.subscription = None
-        self.handler = ResultEventHandler(server_url)
+        self.handler = ResultEventHandler(server_url, self.client)
 
     async def connect(self):
         computer_name = socket.getfqdn()
