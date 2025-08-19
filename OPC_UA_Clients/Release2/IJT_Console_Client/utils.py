@@ -23,7 +23,7 @@ async def read_server_time(client: Client) -> Optional[datetime]:
 async def log_event_details(
     event, client: Client, server_url: str, client_received_time: datetime
 ) -> str:
-    # ijt_log.info(f"Getting Server Time")
+    ijt_log.debug(f"Reading 'ServerStatus.CurrentTime' property.")
     server_time = await read_server_time(client)
 
     event_time = event.Time
@@ -38,6 +38,10 @@ async def log_event_details(
         getattr(getattr(event.Result, "ResultMetaData", None), "ProcessingTimes", None),
         "EndTime",
         None,
+    )
+
+    creation_time = getattr(
+        getattr(event.Result, "ResultMetaData", None), "CreationTime", None
     )
 
     if end_time and end_time.tzinfo is None:
@@ -58,6 +62,10 @@ async def log_event_details(
         format_local_time(start_time) if start_time else "Unavailable"
     )
     formatted_end_time = format_local_time(end_time) if end_time else "Unavailable"
+    formatted_creation_time = (
+        format_local_time(creation_time) if creation_time else "Unavailable"
+    )
+
     message = getattr(event.Message, "Text", "Unavailable")
 
     label_width = 40
@@ -67,9 +75,15 @@ async def log_event_details(
         f"{'1. StartTime of Tightening':<{label_width}} : {formatted_start_time}"
     )
     ijt_log.info(f"{'2. EndTime of Tightening':<{label_width}} : {formatted_end_time}")
-    ijt_log.info(f"{'3. Event Generated Time':<{label_width}} : {formatted_event_time}")
-    ijt_log.info(f"{'4. Client Time':<{label_width}} : {formatted_client_time}")
-    # ijt_log.info(f"{'5. Server Time':<{label_width}} : {formatted_server_time}")
+    ijt_log.info(
+        f"{'3. Result Creation Time':<{label_width}} : {formatted_creation_time}"
+    )
+    ijt_log.info(
+        f"{'4. Result Event Generated Time':<{label_width}} : {formatted_event_time}"
+    )
+    ijt_log.info(f"{'5. Client Time':<{label_width}} : {formatted_client_time}")
+    ijt_log.info(f"{'6. Server Time':<{label_width}} : {formatted_server_time}")
+
     if latency_ms is not None:
         ijt_log.info(
             f"{'*** Turn around Time (EndTime → Client)':<{label_width}} : {abs(latency_ms):.3f} ms"
