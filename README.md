@@ -16,9 +16,13 @@ The purpose of the **VDMA OPC UA Industrial Joining Technologies (IJT)** Working
    - **OPC 40451-1 Tightening:** [**LINK**](https://reference.opcfoundation.org/IJT/Tightening/v200/docs/)
 
 ## OPC UA IJT Reference Implementation
-- OPC UA **IJT Reference Client** and **IJT Reference Server** are available in the **following** location:
-- **Server:** OPC_UA_Servers/**Release2**/**OPC_UA_IJT_Server_Simulator.zip** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2)
-- **Client:** OPC_UA_Clients/**Release2**/**IJT_Web_Client** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2)
+- OPC UA **IJT Reference Clients** and **IJT Reference Servers** are available in the **following** location:
+- **Server:**
+   - **IJT Server Simulator:** OPC_UA_Servers/**Release2**/**OPC_UA_IJT_Server_Simulator.zip** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2)
+- **Clients:** [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2)
+   - **IJT Web Client:** OPC_UA_Clients/**Release2**/**IJT_Web_Client** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2/IJT_Web_Client)
+   - **IJT Console Client:** OPC_UA_Clients/**Release2**/**IJT_Console_Client** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2/IJT_Console_Client)
+
 
      
 
