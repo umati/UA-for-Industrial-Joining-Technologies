@@ -28,6 +28,15 @@
 - Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
 
 # Change Log
+**2025-10-05:** Following Key Changes.
+1. IJT CS New Versions are published. The newer versions are OPC 40450-1 CS for **Joining 1.01.0** and OPC 40451-1 CS for **Tightening 2.00.1**.
+2. **Updated** the IJT Server Simulator with the Released NodeSet files.
+3. Removed **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** as the primary simulator is updated.
+4. The latest simulator consists of multiple features and enhancements as given below:
+	- Added **50+ event simulations** in the existing **SimulateEvents** method.
+	- Added simulation logic for **GetResultById, GetLatestResult and RequestResults** methods. **RequestResults**.
+	- Multiple bugs and optimizations.
+
 **2025-09-09:** Following changes.
 1. Added 50+ event simulations in the existing **SimulateEvents** method.
 2. Added simulation logic for **GetResultById, GetLatestResult and RequestResults** methods. **RequestResults** is **visible only when new 1.01 NodeSet** files are available.
