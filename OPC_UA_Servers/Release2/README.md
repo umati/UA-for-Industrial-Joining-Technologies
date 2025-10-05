@@ -29,12 +29,13 @@
 
 # Change Log
 **2025-10-05:** Following Key Changes.
-1. IJT CS New Versions are published. The newer versions are OPC 40450-1 CS for **Joining 1.01.0** and OPC 40451-1 CS for **Tightening 2.00.1**.
-2. **Updated** the IJT Server Simulator with the Released NodeSet files.
+1. IJT CS **New Versions** are **published**. The newer versions are OPC 40450-1 CS for **Joining 1.01.0** and OPC 40451-1 CS for **Tightening 2.00.1**.
+2. **Updated** the IJT Server Simulator with the **Released** **NodeSet** files.
 3. Removed **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** as the primary simulator is updated.
-4. The latest simulator consists of multiple features and enhancements as given below:
+4. The **latest** simulator **consists** of **multiple** features and **enhancements** as given below:
 	- Added **50+ event simulations** in the existing **SimulateEvents** method.
-	- Added simulation logic for **GetResultById, GetLatestResult and RequestResults** methods. **RequestResults**.
+	- **Added** simulation logic for **GetResultById, GetLatestResult and RequestResults** methods. **RequestResults**.
+ 	- **RequestResults** method is useful for **getting** **Historical** **Results** using **Subscription** instead of **polling** each Result.
 	- Multiple bugs and optimizations.
 
 **2025-09-09:** Following changes.
