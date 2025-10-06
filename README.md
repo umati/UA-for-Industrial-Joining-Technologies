@@ -3,7 +3,7 @@ The purpose of the **VDMA OPC UA Industrial Joining Technologies (IJT)** Working
 
 # Contact
 - **Mohit Agarwal mohit.agarwal@atlascopco.com**             
-- **Bernd Heitzmann Bernd.Heitzmann@vdma.org**
+- **Bernd Heitzmann bernd.heitzmann@vdma.eu**
 
 ## OPC UA IJT Documentation
 ### Overview
