@@ -29,20 +29,19 @@
 
 # Change Log
 **2025-10-06:** Following Key Changes.
-1. IJT CS **New Versions** are **published**. The **newer** versions are OPC 40450-1 CS for **Joining 1.01.0** and OPC 40451-1 CS for **Tightening 2.00.1**.
+1. The **new versions** of IJT CS OPC **40450-1** CS for **Joining 1.01.0** and OPC **40451-1** CS for **Tightening 2.00.1** are **published**.
 2. **Updated** the IJT Server Simulator with the **Released** **NodeSet** files.
-3. Removed **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** as the **primary simulator** is updated with the released version.
+3. **Removed** the DRAFT **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** since the **primary simulator** is **updated** with the **released** version.
 4. The **latest** simulator **consists** of **multiple features and enhancements** as given below:
-	- Added **50+ event simulations** in the existing **SimulateEvents** method.
+	- **Added** **50+ event simulations** in the existing **SimulateEvents** method.
 	- **Added** simulation logic for **GetResultById, GetLatestResult and RequestResults** methods.	
  	- **RequestResults** method is useful for **getting Historical Results** using **Subscription** instead of **polling** each Result.
-	- Added Engineering Units for relevant data with valid values.
+	- **Added** Engineering Units for relevant data with valid values.
 	- Multiple bugs and optimizations.
-5. Updated **Usage_IJT_OPC_UA_Server_Simulator.pdf** based on the latest changes.
+5. **Updated** **Usage_IJT_OPC_UA_Server_Simulator.pdf** based on the latest changes.
 
 **2025-09-09:** Following changes.
-1. Added 50+ event simulations in the existing **SimulateEvents** method.
-2. Added simulation logic for **GetResultById, GetLatestResult and RequestResults** methods. **RequestResults** is **visible only when new 1.01 NodeSet** files are available.
+1. Added **DRAFT** simulation logic for **GetResultById, GetLatestResult and RequestResults** methods. **RequestResults** is **visible only when new 1.01 NodeSet** files are available.
 3. Multiple bugs and optimizations.
 
 **2025-08-05:** Uploaded **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** which is based on OPC 40450-1 **v1.01.0** which will be released soon. Once it is released, it will be merged with **OPC_UA_IJT_Server_Simulator.zip**.
