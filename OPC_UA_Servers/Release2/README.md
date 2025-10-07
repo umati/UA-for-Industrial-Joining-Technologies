@@ -37,6 +37,7 @@
 	- **Added** simulation logic for **GetResultById, GetLatestResult and RequestResults** methods.	
  	- **RequestResults** method is useful for **getting Historical Results** using **Subscription** instead of **polling** each Result.
 	- **Added** Engineering Units for relevant data with valid values.
+	- **Updated** simulation of **SYNC** Result to be reported as **parallel** operation when sent as references compared to **BATCH** Result where partial results are sent **sequentially**.
 	- Multiple bugs and optimizations.
 5. **Updated** **Usage_IJT_OPC_UA_Server_Simulator.pdf** based on the latest changes.
 
