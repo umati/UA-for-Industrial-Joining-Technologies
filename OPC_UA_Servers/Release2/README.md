@@ -29,11 +29,11 @@
 
 # Change Log
 **2025-10-10:** Following Key Changes.
-1. Added 'SendSimulatedBulkResults' Method to send bulk results without recreating them.
-2. Added 'SimulateBulkEvents' method for additional scenarios related to bulk events reported.
-3. Added 'UpdateResultVariables' flag in the 'SimulateBulkResults' method to allow users to only generate Result Events in bulk simulation.
+1. **Added** '**SendSimulatedBulkResults**' Method to **send** bulk results **without** **recreating**.
+2. **Added** '**SimulateBulkEvents**' method for **additional** scenarios related to bulk events reported.
+3. **Added** '**UpdateResultVariables**' flag in the '**SimulateBulkResults**' method to allow users to **only** generate Result Events in bulk simulation.
 4. **Updated** **Usage_IJT_OPC_UA_Server_Simulator.pdf** based on the latest changes.
-5. Multiple refactoring and optimizations.
+5. **Multiple** refactoring and **optimizations**.
 
 **2025-10-06:** Following Key Changes.
 1. The **new versions** of IJT CS OPC **40450-1** CS for **Joining 1.01.0** and OPC **40451-1** CS for **Tightening 2.00.1** are **published**.
