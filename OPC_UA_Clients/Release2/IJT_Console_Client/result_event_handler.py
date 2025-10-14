@@ -1,4 +1,5 @@
 import asyncio
+from sys import exception
 import pytz
 from datetime import datetime
 from typing import Dict
@@ -6,6 +7,7 @@ from pathlib import Path
 from ijt_logger import ijt_log
 from utils import log_event_details
 from serialize import serializeFullEvent
+from client_config import ENABLE_RESULT_FILE_LOGGING
 
 
 class Short:
@@ -41,10 +43,11 @@ class ResultEventHandler:
         )
         # Below logic writes the Result content to a file in result_logs/latest_result.json.
         # This logic can be used to parse the Result and use it accordingly.
-        try:
-            await self.log_result_to_file(event)
-        except Exception as e:
-            ijt_log.error(f"Failed to log Result to file: {e}")
+        if ENABLE_RESULT_FILE_LOGGING:
+            try:
+                await self.log_result_to_file(event)
+            except Exception as e:
+                ijt_log.error(f"failed to log result to file: {e}")
 
     async def log_result_to_file(self, event: Short):
         try:
