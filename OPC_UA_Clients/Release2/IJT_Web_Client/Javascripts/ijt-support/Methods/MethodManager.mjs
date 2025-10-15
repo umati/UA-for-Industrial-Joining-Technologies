@@ -1,5 +1,5 @@
 export class MethodManager {
-  constructor (addressSpace) {
+  constructor(addressSpace) {
     this.addressSpace = addressSpace
   }
 
@@ -8,7 +8,7 @@ export class MethodManager {
    * @param {*} methodFolders a list of folders that should be searched for methods
    * @returns a Promise to load the methods in the list
    */
-  setupMethodsInFolders (methodFolders) {
+  setupMethodsInFolders(methodFolders) {
     return new Promise((resolve, reject) => {
       const methodPromises = []
 
@@ -33,7 +33,7 @@ export class MethodManager {
    * @param {*} folderPath the path to the folder. Remember to add the namespace number
    * @returns a Promise to setup all methods in a folder
    */
-  addressFolder (folderPath) {
+  addressFolder(folderPath) {
     if (!folderPath || folderPath === '') {
       return this.folderPromise(this.tighteningSystemNode) // Automatically add all methods in the top folder (if path is empty)
     } else {
@@ -52,7 +52,7 @@ export class MethodManager {
    * @param {*} folderNode the node that contains methods
    * @returns  a Promise to setup all methods in a folder
    */
-  folderPromise (folderNode) {
+  folderPromise(folderNode) {
     return new Promise((resolve, reject) => {
       const methodPromises = []
       const relations = folderNode.getChildRelations('component')
@@ -77,29 +77,44 @@ export class MethodManager {
    * @param {*} methodNode
    * @returns a promise to load and setup the method data
    */
-  setupMethod (methodNode) {
+  setupMethod(methodNode) {
     return new Promise((resolve, reject) => {
       const allProperties = methodNode.getChildRelations('hasProperty')
-      let inputArguments = allProperties.find(
+      const inputArguments = allProperties.find(
         x => x.BrowseName.Name === 'InputArguments')
-      if (!inputArguments) {
-        inputArguments = []
-      }
-      this.addressSpace.relationsToNodes([inputArguments]).then((inputArgumentsNode) => {
-        const simplifiedArguments = []
-        for (const arg of inputArgumentsNode) {
-          // console.log(arg)
-          for (const argContent of arg.data.attributes.Value) {
-            if (argContent) {
-              // argContent.typeName = this.addressSpace.dataTypeEnumeration[argContent.dataType.split('=').pop()]
-              simplifiedArguments.push(argContent)
-            } else {
-              console.log('Method arguments could not be found: ' + arg?.data?.value)
+      if (inputArguments) {
+        this.addressSpace.relationsToNodes([inputArguments]).then((inputArgumentsNode) => {
+          const simplifiedArguments = []
+          for (const arg of inputArgumentsNode) {
+            // console.log(arg)
+            for (const argContent of arg.data.attributes.Value) {
+              if (argContent) {
+                // argContent.typeName = this.addressSpace.dataTypeEnumeration[argContent.dataType.split('=').pop()]
+                simplifiedArguments.push(argContent)
+              } else {
+                console.log('Method arguments could not be found: ' + arg?.data?.value)
+              }
             }
           }
-        }
-        resolve({ methodNode, arguments: simplifiedArguments })
-      })
+          resolve({ methodNode, arguments: simplifiedArguments })
+        })
+      } else {
+        this.addressSpace.relationsToNodes([]).then((inputArgumentsNode) => {
+          const simplifiedArguments = []
+          for (const arg of inputArgumentsNode) {
+            // console.log(arg)
+            for (const argContent of arg.data.attributes.Value) {
+              if (argContent) {
+                // argContent.typeName = this.addressSpace.dataTypeEnumeration[argContent.dataType.split('=').pop()]
+                simplifiedArguments.push(argContent)
+              } else {
+                console.log('Method arguments could not be found: ' + arg?.data?.value)
+              }
+            }
+          }
+          resolve({ methodNode, arguments: simplifiedArguments })
+        })
+      }
     })
   }
 
@@ -107,7 +122,7 @@ export class MethodManager {
    * Return a list of Method names
    * @returns
    */
-  getMethodNames () {
+  getMethodNames() {
     return Object.keys(this.methodObject)
   }
 
@@ -116,7 +131,7 @@ export class MethodManager {
    * @param {*} name the name of the method
    * @returns
    */
-  getMethod (name) {
+  getMethod(name) {
     return this.methodObject[name]
   }
 
@@ -125,7 +140,7 @@ export class MethodManager {
    * @param {*} methodNode the method Node
    * @param {*} inputs the argument data
    */
-  call (methodData, inputs) {
+  call(methodData, inputs) {
     return new Promise((resolve, reject) => {
       const inputArguments = []
       for (const row of inputs) {
