@@ -1,6 +1,9 @@
+import re
 import asyncio
-from sys import exception
+import traceback
 import pytz
+import aiofiles
+from sys import exception
 from datetime import datetime
 from typing import Dict
 from pathlib import Path
@@ -49,18 +52,27 @@ class ResultEventHandler:
             except Exception as e:
                 ijt_log.error(f"failed to log result to file: {e}")
 
-    async def log_result_to_file(self, event: Short):
+    async def log_result_to_file(self, event):
         try:
             json_str = serializeFullEvent(event.Result)
 
             log_dir = Path("result_logs")
             log_dir.mkdir(exist_ok=True)
-            log_file = log_dir / "latest_result.json"
-            log_file.write_text(json_str, encoding="utf-8")
 
-            ijt_log.info(f"Latest event Result logged to {log_file}")
+            safe_message = re.sub(
+                r"[^\w\-_\. ]", "_", str(event.Message.Text).replace(":", "_")
+            )
+            temp_file = log_dir / f"{safe_message}.tmp"
+            final_file = log_dir / f"{safe_message}.json"
+
+            async with aiofiles.open(temp_file, mode="w", encoding="utf-8") as f:
+                await f.write(json_str)
+
+            temp_file.rename(final_file)
+            ijt_log.info(f"Event Result logged to {final_file}")
         except Exception as e:
             ijt_log.error(f"Error during serialization: {e}")
+            ijt_log.error(traceback.format_exc())
 
     async def event_notification(self, event):
         client_received_time = datetime.now(pytz.utc)
@@ -76,3 +88,4 @@ class ResultEventHandler:
             )
         except Exception as e:
             ijt_log.error(f"Error handling event notification: {e}")
+            ijt_log.error(traceback.format_exc())

@@ -1,6 +1,7 @@
 import asyncio
 import argparse
 import re
+import traceback
 from opcua_client import OPCUAEventClient
 from client_config import SERVER_URL as DEFAULT_SERVER_URL
 from ijt_logger import ijt_log
@@ -16,7 +17,9 @@ async def main():
         args.url if args.url and re.match(URL_PATTERN, args.url) else DEFAULT_SERVER_URL
     )
 
+    ijt_log.info(f"Using OPC UA server URL: {server_url}")
     client = OPCUAEventClient(server_url)
+
     try:
         await client.connect()
         await client.subscribe_to_events()
@@ -25,6 +28,7 @@ async def main():
         ijt_log.info("Run loop cancelled by user.")
     except Exception as e:
         ijt_log.error(f"Unhandled exception in main: {e}")
+        ijt_log.error(traceback.format_exc())
     finally:
         await client.cleanup()
 
