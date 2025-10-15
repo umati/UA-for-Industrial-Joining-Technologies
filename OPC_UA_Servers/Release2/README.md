@@ -28,6 +28,9 @@
 - Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
 
 # Change Log
+**2025-10-15:** Following Key Changes.
+1. **Updated** '**SimulateSingleResult**' Method with input **"0 - SIMPLE RESULT"** to send **empty ResultContent instead of NULL**.
+
 **2025-10-10:** Following Key Changes.
 1. **Added** '**SendSimulatedBulkResults**' Method to **send** bulk results **without** **recreating**.
 2. **Added** '**SimulateBulkEvents**' method for **additional** scenarios related to bulk events reported.
