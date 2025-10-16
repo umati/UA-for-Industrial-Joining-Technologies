@@ -18,6 +18,7 @@ class IJTInterface:
         endpoint = data["endpoint"]
         connection = self.connectionList.get(endpoint)
 
+
         if not connection:
             ijt_log.info(f"No connection found for endpoint: {endpoint}")
             return {"exception": f"No connection found for endpoint: {endpoint}"}
@@ -40,7 +41,7 @@ class IJTInterface:
             methodRepr = getattr(connection, func)
         except AttributeError:
             ijt_log.error(f"Method '{func}' not found in Connection object.")
-            return {"xception": f"Method '{func}' not found"}
+            return {"exception": f"Method '{func}' not found"}
 
         try:
             return await methodRepr(data)
@@ -146,12 +147,4 @@ class IJTInterface:
         self.connectionList.clear()
 
     def __del__(self):
-        """
-        Optional fallback cleanup if object is garbage collected.
-        """
-        if self.connectionList:
-            ijt_log.warning("Cleanup triggered via destructor.")
-            try:
-                asyncio.create_task(self.disconnect())
-            except Exception as e:
-                ijt_log.warning(f"Exception during cleanup: {e}")
+        ijt_log.warning("Destructor called — async cleanup should be handled externally.")

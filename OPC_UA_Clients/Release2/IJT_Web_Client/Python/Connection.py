@@ -1,12 +1,13 @@
-from asyncua import Client, ua
 import asyncio
+import json
+import socket
+from asyncua import Client, ua
 from Python.Serialize import serializeTuple, serializeValue
 from Python.CallStructure import createCallStructure
 from Python.EventHandler import EventHandler
 from Python.ResultEventHandler import ResultEventHandler
 from Python.IJTLogger import ijt_log
-import json
-import socket
+from asyncua.ua.uaerrors import UaError
 
 
 def IdObjectToString(inp):
@@ -42,29 +43,29 @@ class Connection:
 
     async def connect(self):
         self.client = Client(self.server_url)
-        try:
-            computer_name = socket.getfqdn()
-
-            self.client.name = f"urn:{computer_name}:IJT:WebClient"
-            self.client.description = f"urn:{computer_name}:IJT:WebClient"
-            self.client.application_uri = f"urn:{computer_name}:IJT:WebClient"
-            self.client.product_uri = f"urn:IJT:WebClient"
-
-            await self.client.connect()
-            await self.client.load_type_definitions()
-            # Client has a few methods to get proxy to UA nodes that should always be in address space such as Root or Objects
-            self.root = self.client.get_root_node()
-            event = {
-                "command": "connection established",
-                "endpoint": self.server_url,
-            }
-            if self.websocket:
-                await self.websocket.send(json.dumps(event))
-            return event
-        except Exception as e:
-            ijt_log.error("Exception in Connect ", self.server_url)
-            ijt_log.error("Exception:" + str(e))
-            return {"exception": str(e)}
+        retries = 3
+        delay = 2
+        for attempt in range(retries):
+            try:
+                computer_name = socket.getfqdn()
+                self.client.name = f"urn:{computer_name}:IJT:WebClient"
+                self.client.description = f"urn:{computer_name}:IJT:WebClient"
+                self.client.application_uri = f"urn:{computer_name}:IJT:WebClient"
+                self.client.product_uri = f"urn:IJT:WebClient"
+                await self.client.connect()
+                await self.client.load_type_definitions()
+                self.root = self.client.get_root_node()
+                event = {
+                    "command": "connection established",
+                    "endpoint": self.server_url,
+                }
+                if self.websocket:
+                    await self.websocket.send(json.dumps(event))
+                return event
+            except Exception as e:
+                ijt_log.error(f"Connect attempt {attempt+1} failed: {e}")
+                await asyncio.sleep(delay)
+        return {"exception": f"Failed to connect after {retries} attempts"}
 
     async def terminate(self):
         try:
@@ -74,18 +75,14 @@ class Connection:
                     ijt_log.info("Attempting to unsubscribe handleResultEvent")
                     await self.subResultEvent.unsubscribe(self.handleResultEvent)
                 except Exception as e:
-                    ijt_log.warning(
-                        f"Unsubscribe failed (possibly already disconnected): {e}"
-                    )
+                    ijt_log.warning(f"Unsubscribe failed: {e}")
                 try:
                     if hasattr(self.subResultEvent, "subscription_id"):
                         await self.client.delete_subscriptions(
                             [self.subResultEvent.subscription_id]
                         )
                 except Exception as e:
-                    ijt_log.warning(
-                        f"Delete subscription failed (possibly already disconnected): {e}"
-                    )
+                    ijt_log.warning(f"Delete subscription failed: {e}")
 
             # Unsubscribe and delete subJoiningEvent
             if self.subJoiningEvent != "sub":
@@ -93,26 +90,26 @@ class Connection:
                     ijt_log.info("Attempting to unsubscribe handleJoiningEvent")
                     await self.subJoiningEvent.unsubscribe(self.handleJoiningEvent)
                 except Exception as e:
-                    ijt_log.warning(
-                        f"Unsubscribe failed (possibly already disconnected): {e}"
-                    )
+                    ijt_log.warning(f"Unsubscribe failed: {e}")
                 try:
                     if hasattr(self.subJoiningEvent, "subscription_id"):
                         await self.client.delete_subscriptions(
                             [self.subJoiningEvent.subscription_id]
                         )
                 except Exception as e:
-                    ijt_log.warning(
-                        f"Delete subscription failed (possibly already disconnected): {e}"
-                    )
+                    ijt_log.warning(f"Delete subscription failed: {e}")
 
-            # Disconnect client
+            # Allow time for server to respond
+            await asyncio.sleep(0.5)
+
+            # Disconnect client last
             await self.client.disconnect()
+            ijt_log.info(f"Disconnected from {self.server_url}")
 
         except Exception as e:
             ijt_log.error(f"General error during termination: {e}")
         finally:
-            ijt_log.error(f"Terminate: Connection to {self.server_url} disconnected")
+            ijt_log.error(f"Terminate: Connection to {self.server_url} cleaned up")
 
     async def subscribe(self, data):
         try:
