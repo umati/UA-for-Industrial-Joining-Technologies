@@ -25,6 +25,92 @@ export default class ChartManager {
     }
     customPlugin.context = this
 
+    const arrowPlugin = {
+      id: 'arrowPlugin',
+      afterDatasetDraw (chart, args, options) {
+        // Get the last two points of the dataset
+        const ctx = chart.ctx
+
+        const dataset = chart.data.datasets[args.index]
+        if (!dataset.envelopeMetaData || dataset.envelopeMetaData.type !== 'envelope') {
+          return
+        }
+        const direction = dataset.envelopeMetaData.direction
+        const data = dataset.data
+
+        const left = {
+          edge: data[0],
+          edgeClose: data[1],
+        }
+
+        const right = {
+          edge: data[data.length - 1],
+          edgeClose: data[data.length - 2],
+        }
+
+        let start = left
+        let end = right
+
+        if (direction !== 1) {
+          start = right
+          end = left
+        }
+
+        const lastPoint = data[data.length - 1]
+        const secondLastPoint = data[data.length - 2]
+
+        const firstPoint = data[0]
+        const secondFirstPoint = data[1]
+
+        if (lastPoint && secondLastPoint) {
+          const x1 = chart.scales.x.getPixelForValue(end.edgeClose.x)
+          const y1 = chart.scales.y.getPixelForValue(end.edgeClose.y)
+          const x2 = chart.scales.x.getPixelForValue(end.edge.x)
+          const y2 = chart.scales.y.getPixelForValue(end.edge.y)
+
+          // Draw the arrow
+          const arrowLength = 20
+          const angle = Math.atan2(y2 - y1, x2 - x1)
+
+          ctx.save()
+          ctx.beginPath()
+          ctx.moveTo(x2, y2)
+          ctx.lineTo(x2 - arrowLength * Math.cos(angle - Math.PI / 6), y2 - arrowLength * Math.sin(angle - Math.PI / 6))
+          ctx.moveTo(x2, y2)
+          ctx.lineTo(x2 - arrowLength * Math.cos(angle + Math.PI / 6), y2 - arrowLength * Math.sin(angle + Math.PI / 6))
+          ctx.strokeStyle = options.color || 'red'
+          ctx.lineWidth = options.lineWidth || 2
+          ctx.stroke()
+          ctx.restore()
+        }
+
+        if (firstPoint && secondFirstPoint) {
+          const x1 = chart.scales.x.getPixelForValue(start.edgeClose.x)
+          const y1 = chart.scales.y.getPixelForValue(start.edgeClose.y)
+          const x2 = chart.scales.x.getPixelForValue(start.edge.x)
+          const y2 = chart.scales.y.getPixelForValue(start.edge.y)
+
+          // Draw the arrow
+          const arrowLength = 10
+          const angle = Math.atan2(y2 - y1, x2 - x1)
+
+          ctx.save()
+          ctx.beginPath()
+          ctx.moveTo(x2, y2)
+          ctx.lineTo(x2 - arrowLength * Math.cos(angle - Math.PI / 2),
+            y2 - arrowLength * Math.sin(angle - Math.PI / 2))
+          ctx.moveTo(x2, y2)
+          ctx.lineTo(x2 - arrowLength * Math.cos(angle + Math.PI / 2),
+            y2 - arrowLength * Math.sin(angle + Math.PI / 2))
+          ctx.strokeStyle = options.color || 'red'
+          ctx.lineWidth = options.lineWidth || 2
+          ctx.stroke()
+          ctx.restore()
+        }
+      }
+    }
+    // arrowPlugin.context = this
+
     this.myChart = new Chart(context, { // eslint-disable-line
       type: 'line',
       data: {
@@ -37,7 +123,8 @@ export default class ChartManager {
           legend: {
             display: false,
           },
-          customPlugin: true, // Enable the custom plugin
+          customPlugin: true,
+          arrowPlugin: true,
         },
         animation: {
           duration: 200,
@@ -51,7 +138,7 @@ export default class ChartManager {
           },
         },
       },
-      plugins: [customPlugin],
+      plugins: [customPlugin, arrowPlugin],
     }
     )
 
@@ -289,7 +376,7 @@ export default class ChartManager {
   }
 
   newLimit (borderColour, areaColour, startOrEnd) {
-    const upperLimit = {
+    const limitDataSet = {
       borderColor: borderColour,
       borderWidth: 1,
       fill: startOrEnd,
@@ -298,11 +385,14 @@ export default class ChartManager {
       pointBorderColor: 'transparent',
       pointBackgroundColor: 'transparent',
       data: [],
+      envelopeMetaData: {
+        type: 'envelope',
+        direction: 1,
+      }
     }
 
-    this.myChart.data.datasets.push(upperLimit)
-    const upperDataCurve = this.myChart.data.datasets[this.myChart.data.datasets.length - 1]
-    return upperDataCurve
+    this.myChart.data.datasets.push(limitDataSet)
+    return this.myChart.data.datasets[this.myChart.data.datasets.length - 1]
   }
 
   afterUpdateSubscribe (callback) {

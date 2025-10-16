@@ -382,6 +382,13 @@ class GraphicalLimit {
 
   update (limit) {
     const dataList = []
+    if (limit.range.start > limit.range.end) {
+      this.glimit.envelopeMetaData.direction = -1
+      this.glimit.borderColor = 'red'
+    } else {
+      this.glimit.envelopeMetaData.direction = 1
+      this.glimit.borderColor = 'red'
+    }
     const start = Math.min(limit.range.start, limit.range.end)
     const end = Math.max(limit.range.start, limit.range.end)
     for (let x = start; x <= end; x += (end - start) / 100) {
@@ -398,12 +405,6 @@ class GraphicalLimit {
       this.glimit.fill = 'start'
     } else {
       this.glimit.fill = false
-    }
-
-    if (limit.range.start < limit.range.end) {
-      this.glimit.borderColor = 'red'
-    } else {
-      this.glimit.borderColor = 'blue'
     }
 
     this.chartManager.update()
