@@ -1,5 +1,5 @@
 from typing import Any
-from Python.IJTLogger import ijt_log
+from ijt_logger import ijt_log
 
 
 def isInstanceOfClass(cls: Any) -> bool:

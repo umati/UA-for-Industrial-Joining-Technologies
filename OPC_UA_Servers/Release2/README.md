@@ -28,6 +28,34 @@
 - Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
 
 # Change Log
+**2025-10-15:** Following Key Changes.
+1. **Updated** '**SimulateSingleResult**' Method with input **"0 - SIMPLE RESULT"** to send **empty ResultContent instead of NULL**.
+
+**2025-10-10:** Following Key Changes.
+1. **Added** '**SendSimulatedBulkResults**' Method to **send** bulk results **without** **recreating**.
+2. **Added** '**SimulateBulkEvents**' method for **additional** scenarios related to bulk events reported.
+3. **Added** '**UpdateResultVariables**' flag in the '**SimulateBulkResults**' method to allow users to **only** generate Result Events in bulk simulation.
+4. **Added** additional logging and **enabled two-way references** for **Combined Results sent as references**.
+5. **Updated** **Usage_IJT_OPC_UA_Server_Simulator.pdf** based on the latest changes.
+6. **Multiple** refactoring and **optimizations**.
+
+**2025-10-06:** Following Key Changes.
+1. The **new versions** of IJT CS OPC **40450-1** CS for **Joining 1.01.0** and OPC **40451-1** CS for **Tightening 2.00.1** are **published**.
+2. **Updated** the IJT Server Simulator with the **Released** **NodeSet** files.
+3. **Removed** the DRAFT **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** since the **primary simulator** is **updated** with the **released** version.
+4. The **latest** simulator **consists** of **multiple features and enhancements** as given below:
+	- **Added** **50+ event simulations** in the existing **SimulateEvents** method.
+	- **Added** simulation logic for **GetResultById, GetLatestResult and RequestResults** methods.	
+ 	- **RequestResults** method is useful for **getting Historical Results** using **Subscription** instead of **polling** each Result.
+	- **Added** Engineering Units for relevant data with valid values.
+	- **Updated** simulation of **SYNC** Result to be reported as **parallel** operation when sent as references compared to **BATCH** Result where partial results are sent **sequentially**.
+	- Multiple bugs and optimizations.
+5. **Updated** **Usage_IJT_OPC_UA_Server_Simulator.pdf** based on the latest changes.
+
+**2025-09-09:** Following changes.
+1. Added **DRAFT** simulation logic for **GetResultById, GetLatestResult and RequestResults** methods. **RequestResults** is **visible only when new 1.01 NodeSet** files are available.
+3. Multiple bugs and optimizations.
+
 **2025-08-05:** Uploaded **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** which is based on OPC 40450-1 **v1.01.0** which will be released soon. Once it is released, it will be merged with **OPC_UA_IJT_Server_Simulator.zip**.
    
 **2025-07-04:** Following changes.

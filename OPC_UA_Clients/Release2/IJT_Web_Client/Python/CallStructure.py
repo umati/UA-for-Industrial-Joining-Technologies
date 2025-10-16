@@ -1,6 +1,6 @@
 from asyncua import ua
 from typing import Any
-from Python.IJTLogger import ijt_logger
+from Python.IJTLogger import ijt_log
 
 
 def createCallStructure(argument: dict[str, Any]) -> Any:
@@ -9,12 +9,12 @@ def createCallStructure(argument: dict[str, Any]) -> Any:
     """
 
     value = argument["value"]
-    # ijt_logger.info("value:")
-    # ijt_logger.info(value)
+    # ijt_log.info("value:")
+    # ijt_log.info(value)
     inp = 0
 
-    # ijt_logger.info("argument - datatype")
-    # ijt_logger.info(argument["dataType"])
+    # ijt_log.info("argument - datatype")
+    # ijt_log.info(argument["dataType"])
 
     match argument["dataType"]:
         case 3029:
@@ -41,7 +41,7 @@ def createCallStructure(argument: dict[str, Any]) -> Any:
                 lst.append(entity)
 
             inp = ua.Variant(lst, ua.VariantType.ExtensionObject)
-            # ijt_logger.info(inp.__dict__)
+            # ijt_log.info(inp.__dict__)
         case _:
             inp = ua.Variant(value, ua.VariantType(argument["dataType"]))
 

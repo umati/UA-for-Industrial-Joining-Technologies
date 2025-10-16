@@ -4,7 +4,7 @@ from Python.Serialize import serializeTuple, serializeValue
 from Python.CallStructure import createCallStructure
 from Python.EventHandler import EventHandler
 from Python.ResultEventHandler import ResultEventHandler
-from Python.IJTLogger import ijt_logger
+from Python.IJTLogger import ijt_log
 import json
 import socket
 
@@ -62,8 +62,8 @@ class Connection:
                 await self.websocket.send(json.dumps(event))
             return event
         except Exception as e:
-            ijt_logger.error("Exception in Connect ", self.server_url)
-            ijt_logger.error("Exception:" + str(e))
+            ijt_log.error("Exception in Connect ", self.server_url)
+            ijt_log.error("Exception:" + str(e))
             return {"exception": str(e)}
 
     async def terminate(self):
@@ -71,10 +71,10 @@ class Connection:
             # Unsubscribe and delete subResultEvent
             if self.subResultEvent != "sub":
                 try:
-                    ijt_logger.info("Attempting to unsubscribe handleResultEvent")
+                    ijt_log.info("Attempting to unsubscribe handleResultEvent")
                     await self.subResultEvent.unsubscribe(self.handleResultEvent)
                 except Exception as e:
-                    ijt_logger.warning(
+                    ijt_log.warning(
                         f"Unsubscribe failed (possibly already disconnected): {e}"
                     )
                 try:
@@ -83,17 +83,17 @@ class Connection:
                             [self.subResultEvent.subscription_id]
                         )
                 except Exception as e:
-                    ijt_logger.warning(
+                    ijt_log.warning(
                         f"Delete subscription failed (possibly already disconnected): {e}"
                     )
 
             # Unsubscribe and delete subJoiningEvent
             if self.subJoiningEvent != "sub":
                 try:
-                    ijt_logger.info("Attempting to unsubscribe handleJoiningEvent")
+                    ijt_log.info("Attempting to unsubscribe handleJoiningEvent")
                     await self.subJoiningEvent.unsubscribe(self.handleJoiningEvent)
                 except Exception as e:
-                    ijt_logger.warning(
+                    ijt_log.warning(
                         f"Unsubscribe failed (possibly already disconnected): {e}"
                     )
                 try:
@@ -102,7 +102,7 @@ class Connection:
                             [self.subJoiningEvent.subscription_id]
                         )
                 except Exception as e:
-                    ijt_logger.warning(
+                    ijt_log.warning(
                         f"Delete subscription failed (possibly already disconnected): {e}"
                     )
 
@@ -110,9 +110,9 @@ class Connection:
             await self.client.disconnect()
 
         except Exception as e:
-            ijt_logger.error(f"General error during termination: {e}")
+            ijt_log.error(f"General error during termination: {e}")
         finally:
-            ijt_logger.error(f"Terminate: Connection to {self.server_url} disconnected")
+            ijt_log.error(f"Terminate: Connection to {self.server_url} disconnected")
 
     async def subscribe(self, data):
         try:
@@ -120,7 +120,7 @@ class Connection:
                 self.websocket, self.server_url
             )
             self.handlerResultEvent = self.handlerResultEvent or ResultEventHandler(
-                self.websocket, self.server_url
+                self.websocket, self.server_url, self.client
             )
 
             ns_machinery_result = await self.client.get_namespace_index(
@@ -197,15 +197,15 @@ class Connection:
             return {}
 
         except Exception as e:
-            ijt_logger.error(f"Exception in Subscribe {self.server_url}")
-            ijt_logger.error(f"Exception: {e}")
+            ijt_log.error(f"Exception in Subscribe {self.server_url}")
+            ijt_log.error(f"Exception: {e}")
             return {"exception": f"Subscribe exception: {e}"}
 
     async def read(self, data):
         try:
             nodeId = data["nodeid"]
             lastReadState = "READ_ENTER"
-            # ijt_logger.info(f"READ: nodeID: {nodeId[-70:]}")
+            # ijt_log.info(f"READ: nodeID: {nodeId[-70:]}")
             node = self.client.get_node(nodeId)
 
             attrIdsStrings = [
@@ -252,10 +252,10 @@ class Connection:
             return event
 
         except Exception as e:
-            ijt_logger.error(
+            ijt_log.error(
                 f"Exception in Read: ({lastReadState}): {IdObjectToString(nodeId)}"
             )
-            ijt_logger.error("Exception:" + str(e))
+            ijt_log.error("Exception:" + str(e))
             return {"exception": "Read Exception: (" + lastReadState + "): " + str(e)}
 
     async def pathtoid(self, data):
@@ -264,14 +264,14 @@ class Connection:
         returns the node id at that location
         """
         try:
-            # ijt_logger.info("PATHTOID")
+            # ijt_log.info("PATHTOID")
             nodeId = data["nodeid"]
             path = json.loads(data["path"])
             node = self.client.get_node(
                 "ns=" + nodeId["NamespaceIndex"] + ";s=" + nodeId["Identifier"]
             )
 
-            # ijt_logger.info("PATHTOID: path is: ", path)
+            # ijt_log.info("PATHTOID: path is: ", path)
             # Create a relative path
             relative_path = ua.RelativePath()
             element = ua.RelativePathElement()
@@ -298,8 +298,8 @@ class Connection:
             return event
 
         except Exception as e:
-            ijt_logger.error("Exception in PathToId path ", path)
-            ijt_logger.error("Exception:" + str(e))
+            ijt_log.error("Exception in PathToId path ", path)
+            ijt_log.error("Exception:" + str(e))
             return {"exception": "PathToId Exception: " + str(e)}
 
     async def namespaces(self, data):
@@ -308,15 +308,15 @@ class Connection:
             event = {"namespaces": json.dumps(namespacesReply)}
             return event
         except Exception as e:
-            ijt_logger.error("Exception in Namespaces ")
-            ijt_logger.error("Exception:" + str(e))
+            ijt_log.error("Exception in Namespaces ")
+            ijt_log.error("Exception:" + str(e))
             return {"exception": "Exception in Namespaces: " + str(e)}
         finally:
             pass
 
     async def methodcall(self, data):
         try:
-            # ijt_logger.info(data)
+            # ijt_log.info(data)
             objectNode = data["objectnode"]
             methodNode = data["methodnode"]
             arguments = data["arguments"]
@@ -327,7 +327,7 @@ class Connection:
                 IdObjectToString(methodNode)
             )  # get the method node
 
-            ijt_logger.info("MethodCall: " + IdObjectToString(objectNode))
+            ijt_log.info("MethodCall: " + IdObjectToString(objectNode))
 
             attrList = []
             attrList.append(method)
@@ -336,16 +336,16 @@ class Connection:
                 input = createCallStructure(argument)
                 attrList.append(input)
 
-            # ijt_logger.info("attrList")
-            # ijt_logger.info(attrList)
+            # ijt_log.info("attrList")
+            # ijt_log.info(attrList)
 
             methodRepr = getattr(obj, "call_method")
             out = await methodRepr(*attrList)  # call the method and get the output
 
-            # ijt_logger.info(serializeValue(out))
+            # ijt_log.info(serializeValue(out))
             return {"output": serializeValue(out)}
 
         except Exception as e:
-            ijt_logger.error("Exception in MethodCall " + IdObjectToString(methodNode))
-            ijt_logger.error("Exception:" + str(e))
+            ijt_log.error("Exception in MethodCall " + IdObjectToString(methodNode))
+            ijt_log.error("Exception:" + str(e))
             return {"exception": "Method call exception: " + str(e)}
