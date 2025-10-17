@@ -80,3 +80,64 @@ async def log_event_details(
         )
     ijt_log.info("-" * 80)
     return event_id
+
+
+def log_joining_system_event(self):
+    ijt_log.info("----- Parsed JoiningSystemEvent -----")
+    ijt_log.info(f"EventType: {self.EventType}")
+    ijt_log.info(f"EventId: {self.EventId}")
+    ijt_log.info(f"Message: {self.Message}")
+    ijt_log.info(f"SourceName: {self.SourceName}")
+    ijt_log.info(f"SourceNode: {self.SourceNode}")
+    ijt_log.info(f"Severity: {self.Severity}")
+    ijt_log.info(f"Time: {self.Time}")
+    ijt_log.info(f"ReceiveTime: {self.ReceiveTime}")
+    ijt_log.info(f"LocalTime: {self.LocalTime}")
+    ijt_log.info(f"ConditionClassId: {self.ConditionClassId}")
+    ijt_log.info(f"ConditionClassName: {self.ConditionClassName}")
+    ijt_log.info(f"ConditionSubClassId: {self.ConditionSubClassId}")
+    ijt_log.info(f"ConditionSubClassName: {self.ConditionSubClassName}")
+    ijt_log.info(f"EventCode: {self.EventCode}")
+    ijt_log.info(f"EventText: {self.EventText}")
+    ijt_log.info(f"JoiningTechnology: {self.JoiningTechnology}")
+
+    # AssociatedEntities
+    if isinstance(self.AssociatedEntities, list) and self.AssociatedEntities:
+        ijt_log.info("--- AssociatedEntities ---")
+        for entity in self.AssociatedEntities:
+            try:
+                ijt_log.info(
+                    f"Entity Name: {getattr(entity, 'Name', '')}, "
+                    f"Description: {getattr(entity, 'Description', '')}, "
+                    f"EntityId: {getattr(entity, 'EntityId', '')}, "
+                    f"EntityType: {getattr(entity, 'EntityType', '')}, "
+                    f"IsExternal: {getattr(entity, 'IsExternal', '')}"
+                )
+            except Exception as e:
+                ijt_log.warning(f"Error logging entity: {e}")
+    else:
+        ijt_log.info(f"AssociatedEntities: {self.AssociatedEntities}")
+
+    # ReportedValues
+    if isinstance(self.ReportedValues, list) and self.ReportedValues:
+        ijt_log.info("--- ReportedValues ---")
+        for rv in self.ReportedValues:
+            try:
+                eu = getattr(rv, "EngineeringUnits", None)
+                eu_display = getattr(eu, "DisplayName", "")
+                eu_desc = getattr(eu, "Description", "")
+                ijt_log.info(
+                    f"ReportedValue Name: {getattr(rv, 'Name', '')}, "
+                    f"Current: {getattr(getattr(rv, 'CurrentValue', None), 'Value', '')}, "
+                    f"Previous: {getattr(getattr(rv, 'PreviousValue', None), 'Value', '')}, "
+                    f"PhysicalQuantity: {getattr(rv, 'PhysicalQuantity', '')}, "
+                    f"LowLimit: {getattr(rv, 'LowLimit', '')}, "
+                    f"HighLimit: {getattr(rv, 'HighLimit', '')}, "
+                    f"Units: {eu_display}, Description: {eu_desc}"
+                )
+            except Exception as e:
+                ijt_log.warning(f"Error logging reported value: {e}")
+    else:
+        ijt_log.info(f"ReportedValues: {self.ReportedValues}")
+
+    ijt_log.info("--------------------------------------")

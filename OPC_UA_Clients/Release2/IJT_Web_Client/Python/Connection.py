@@ -69,43 +69,44 @@ class Connection:
 
     async def terminate(self):
         try:
-            # Unsubscribe and delete subResultEvent
-            if self.subResultEvent != "sub":
-                try:
-                    ijt_log.info("Attempting to unsubscribe handleResultEvent")
-                    await self.subResultEvent.unsubscribe(self.handleResultEvent)
-                except Exception as e:
-                    ijt_log.warning(f"Unsubscribe failed: {e}")
-                try:
-                    if hasattr(self.subResultEvent, "subscription_id"):
-                        await self.client.delete_subscriptions(
-                            [self.subResultEvent.subscription_id]
-                        )
-                except Exception as e:
-                    ijt_log.warning(f"Delete subscription failed: {e}")
+            if self.client and self.client.session:
+                # Unsubscribe and delete subResultEvent
+                if self.subResultEvent != "sub":
+                    try:
+                        ijt_log.info("Attempting to unsubscribe handleResultEvent")
+                        await self.subResultEvent.unsubscribe(self.handleResultEvent)
+                    except Exception as e:
+                        ijt_log.warning(f"Unsubscribe failed: {e}")
+                    try:
+                        if hasattr(self.subResultEvent, "subscription_id"):
+                            await self.client.delete_subscriptions(
+                                [self.subResultEvent.subscription_id]
+                            )
+                    except Exception as e:
+                        ijt_log.warning(f"Delete subscription failed: {e}")
 
-            # Unsubscribe and delete subJoiningEvent
-            if self.subJoiningEvent != "sub":
-                try:
-                    ijt_log.info("Attempting to unsubscribe handleJoiningEvent")
-                    await self.subJoiningEvent.unsubscribe(self.handleJoiningEvent)
-                except Exception as e:
-                    ijt_log.warning(f"Unsubscribe failed: {e}")
-                try:
-                    if hasattr(self.subJoiningEvent, "subscription_id"):
-                        await self.client.delete_subscriptions(
-                            [self.subJoiningEvent.subscription_id]
-                        )
-                except Exception as e:
-                    ijt_log.warning(f"Delete subscription failed: {e}")
+                # Unsubscribe and delete subJoiningEvent
+                if self.subJoiningEvent != "sub":
+                    try:
+                        ijt_log.info("Attempting to unsubscribe handleJoiningEvent")
+                        await self.subJoiningEvent.unsubscribe(self.handleJoiningEvent)
+                    except Exception as e:
+                        ijt_log.warning(f"Unsubscribe failed: {e}")
+                    try:
+                        if hasattr(self.subJoiningEvent, "subscription_id"):
+                            await self.client.delete_subscriptions(
+                                [self.subJoiningEvent.subscription_id]
+                            )
+                    except Exception as e:
+                        ijt_log.warning(f"Delete subscription failed: {e}")
 
-            # Allow time for server to respond
-            await asyncio.sleep(0.5)
-
-            # Disconnect client last
-            await self.client.disconnect()
-            ijt_log.info(f"Disconnected from {self.server_url}")
-
+                await asyncio.sleep(0.5)
+                await self.client.disconnect()
+                ijt_log.info(f"Disconnected from {self.server_url}")
+            else:
+                ijt_log.warning(
+                    "Client session not active. Skipping termination steps."
+                )
         except Exception as e:
             ijt_log.error(f"General error during termination: {e}")
         finally:
@@ -114,7 +115,7 @@ class Connection:
     async def subscribe(self, data):
         try:
             self.handlerJoiningEvent = self.handlerJoiningEvent or EventHandler(
-                self.websocket, self.server_url
+                self.websocket, self.server_url, self.client
             )
             self.handlerResultEvent = self.handlerResultEvent or ResultEventHandler(
                 self.websocket, self.server_url, self.client
