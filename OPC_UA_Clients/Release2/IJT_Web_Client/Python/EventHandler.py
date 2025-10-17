@@ -95,6 +95,7 @@ class EventHandler:
                 break
             ijt_log.info(f"EventHandler: Got item from queue: {item}")
             try:
+                ijt_log.info(f"EventHandler: Sending item over WebSocket: {item}")
                 await self.websocket.send(item)
             except websockets.exceptions.ConnectionClosedOK:
                 ijt_log.info("WebSocket connection closed normally.")
