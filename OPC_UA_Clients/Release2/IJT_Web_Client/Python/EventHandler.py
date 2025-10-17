@@ -40,3 +40,6 @@ class EventHandler:
         # to the webpage needs to be done asyncronously via a separate thread
         thread = Thread(target=self.wrap_async_func, args=(str(serializeValue(event)),))
         thread.start()
+
+    def shutdown(self):
+        ijt_log.info("EventHandler shutdown called — no active thread cleanup needed.")

@@ -73,3 +73,7 @@ class ResultEventHandler:
         )
         filtered_event = Short(event.EventType, event.Result, event.Message, event_id)
         asyncio.run_coroutine_threadsafe(self.process_event(filtered_event), self.loop)
+
+    async def close(self):
+        await self.shutdown()
+        ijt_log.info("ResultEventHandler closed.")

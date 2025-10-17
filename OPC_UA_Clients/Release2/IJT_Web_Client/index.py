@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from Python.IJTInterface import IJTInterface
 from Python.IJTLogger import ijt_log
 
+
 # Load environment variables
 load_dotenv()
 
@@ -18,15 +19,13 @@ opcuaHandler: Optional[IJTInterface] = None
 websocket_server = None
 
 
-# For websockets >= 11.0: handler takes only one argument
+# WebSocket handler
 async def handler(websocket):
     global opcuaHandler
     client_ip = websocket.remote_address[0]
     ijt_log.info(f"Client connected: {client_ip}")
-
     if opcuaHandler is None:
         opcuaHandler = IJTInterface()
-
     try:
         async for message in websocket:
             mess = json.loads(message)
@@ -38,16 +37,19 @@ async def handler(websocket):
         ijt_log.error(traceback.format_exc())
 
 
+# Graceful shutdown
 async def shutdown():
     ijt_log.info("Shutting down gracefully...")
+    if opcuaHandler:
+        await opcuaHandler.disconnect()
     if websocket_server:
         websocket_server.close()
         await websocket_server.wait_closed()
-    if opcuaHandler:
-        await opcuaHandler.disconnect()
+
     ijt_log.info("Shutdown complete.")
 
 
+# Main entry
 async def main():
     global websocket_server
     try:
@@ -62,6 +64,7 @@ async def main():
 
     loop = asyncio.get_running_loop()
 
+    # Signal handling for graceful shutdown
     if platform.system() != "Windows":
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
@@ -70,6 +73,13 @@ async def main():
                 ijt_log.warning(
                     f"Signal handling not supported for {sig} on this platform."
                 )
+    else:
+        # Windows fallback: listen for shutdown via a background task
+        async def windows_shutdown_monitor():
+            while True:
+                await asyncio.sleep(1)
+
+        asyncio.create_task(windows_shutdown_monitor())
 
     try:
         await asyncio.Future()  # Run forever
@@ -78,6 +88,7 @@ async def main():
         await shutdown()
 
 
+# Entry point
 if __name__ == "__main__":
     try:
         asyncio.run(main())
