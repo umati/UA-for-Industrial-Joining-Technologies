@@ -40,28 +40,36 @@ export default class MethodGUICreator {
     const titleLabel = this.screen.createLabel(methodNode.displayName)
     area.appendChild(titleLabel)
 
-    let defaults
-    if (this.settings?.methodDefaults) {
-      defaults = this.settings.methodDefaults[methodData.methodNode.nodeIdString]
-    }
+    try {
+      let defaults
+      if (this.settings?.methodDefaults) {
+        defaults = this.settings.methodDefaults[methodData.methodNode.nodeIdString]
+      }
 
-    // Setting up argument windows
-    const listOfValuegrabbers = []
-    for (let index = 0; index < methodData.arguments.length; index++) {
-      const arg = methodData.arguments[index]
-      const lineArea = this.screen.createArea()
-      lineArea.classList.add('methodRowDistance')
-      area.appendChild(lineArea)
-      listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, defaults?.arguments[index]))
-    }
+      // Setting up argument windows
+      const listOfValuegrabbers = []
+      for (let index = 0; index < methodData.arguments.length; index++) {
+        const arg = methodData.arguments[index]
+        const lineArea = this.screen.createArea()
+        lineArea.classList.add('methodRowDistance')
+        area.appendChild(lineArea)
+        listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, defaults?.arguments[index]))
+      }
 
-    // Create the actual button for the call
-    const button = this.screen.createButton('Call', area, buttonPress)
+      // Create the actual button for the call
+      const button = this.screen.createButton('Call', area, buttonPress)
 
-    button.listOfValuegrabbers = listOfValuegrabbers
+      button.listOfValuegrabbers = listOfValuegrabbers
 
-    if (defaults?.autocall) {
-      buttonPress(button)
+      if (defaults?.autocall) {
+        buttonPress(button)
+      }
+    } catch (error) {
+      area.classList.add('errorBackground')
+      const errorArea = this.screen.createArea()
+      errorArea.innerText = error.name + ' : ' + error.message
+      console.log(error.name + ' : ' + error.message)
+      area.appendChild(errorArea)
     }
     return area
   }
