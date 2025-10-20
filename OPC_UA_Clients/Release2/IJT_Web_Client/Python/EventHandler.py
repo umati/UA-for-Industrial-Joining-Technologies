@@ -1,6 +1,7 @@
 import asyncio
 import websockets
 import pytz
+import traceback
 from datetime import datetime
 from threading import Thread
 from asyncua import ua
@@ -16,13 +17,13 @@ class Short:
             if isinstance(event.EventId, bytes)
             else str(event.EventId)
         )
-        self.Message = str(event.Message)
+        self.Message = getattr(event, "Message", None)
         self.SourceName = str(getattr(event, "SourceName", None))
         self.SourceNode = self.nodeid_to_str(getattr(event, "SourceNode", None))
         self.Severity = str(getattr(event, "Severity", None))
-        self.Time = str(getattr(event, "Time", None))
-        self.ReceiveTime = str(getattr(event, "ReceiveTime", None))
-        self.LocalTime = str(getattr(event, "LocalTime", None))
+        self.Time = getattr(event, "Time", None)
+        self.ReceiveTime = getattr(event, "ReceiveTime", None)
+        self.LocalTime = getattr(event, "LocalTime", None)
 
         self.ConditionClassId = self.nodeid_to_str(
             getattr(event, "ConditionClassId", None)
@@ -86,6 +87,25 @@ class EventHandler:
         thread.start()
         asyncio.run_coroutine_threadsafe(self.handleQueue(), self.loop)
 
+    async def process_event(self, short_event: Short):
+        try:
+            ijt_log.info("EventHandler: Processing event")
+            summary = f"[{short_event.EventId}] {short_event.Message}"
+            await self.queue.put(summary)
+        except Exception as e:
+            ijt_log.error(f"Error handling process_event: {e}")
+            ijt_log.error(traceback.format_exc())
+
+    async def event_notification(self, event):
+        try:
+            ijt_log.info("EventHandler: Event notification")
+            short_event = Short(event)
+            await log_joining_system_event(short_event)
+            asyncio.run_coroutine_threadsafe(self.process_event(short_event), self.loop)
+        except Exception as e:
+            ijt_log.error(f"Error handling event notification: {e}")
+            ijt_log.error(traceback.format_exc())
+
     async def handleQueue(self):
         ijt_log.info("EventHandler: Starting handleQueue")
         while True:
@@ -105,20 +125,6 @@ class EventHandler:
 
     async def shutdown(self):
         await self.queue.put(None)
-
-    async def process_event(self, short_event: Short):
-        ijt_log.info("EventHandler: Processing event")
-        try:
-            summary = f"[{short_event.EventId}] {short_event.Message}"
-            await self.queue.put(summary)
-        except Exception as e:
-            ijt_log.error("Exception: " + str(e))
-
-    async def event_notification(self, event):
-        ijt_log.info("EventHandler: Event notification")
-        short_event = Short(event)
-        log_joining_system_event(short_event)
-        asyncio.run_coroutine_threadsafe(self.process_event(short_event), self.loop)
 
     async def close(self):
         await self.shutdown()

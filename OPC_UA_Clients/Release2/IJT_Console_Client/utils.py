@@ -1,8 +1,14 @@
 import pytz
+import traceback
+import aiofiles
+import re
 from datetime import datetime
 from typing import Optional, Dict
 from asyncua import Client, ua
+from pathlib import Path
 from ijt_logger import ijt_log
+from serialize import serializeFullEvent
+from client_config import ENABLE_RESULT_FILE_LOGGING
 
 
 def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:
@@ -20,7 +26,7 @@ async def read_server_time(client: Client) -> Optional[datetime]:
         return None
 
 
-async def log_event_details(
+async def log_result_event_details(
     event, client: Client, server_url: str, client_received_time: datetime
 ) -> str:
     ijt_log.debug(f"Reading 'ServerStatus.CurrentTime' property.")
@@ -94,3 +100,127 @@ async def log_event_details(
         )
     ijt_log.info("-" * 80)
     return event_id
+
+
+async def log_joining_system_event(event):
+    label_width = 40
+    ijt_log.info("-" * 80)
+    message_text = getattr(event.Message, "Text", "Unavailable")
+    ijt_log.info(f"{'JOINING SYSTEM EVENT':<40} : {message_text}")
+    ijt_log.info("-" * 80)
+
+    def log_field(label, value):
+        ijt_log.info(f"{label:<{label_width}} : {value}")
+
+    log_field("EventType", event.EventType)
+    log_field("EventId", event.EventId)
+    log_field("Message", event.Message)
+    log_field("SourceName", event.SourceName)
+    log_field("SourceNode", event.SourceNode)
+    log_field("Severity", event.Severity)
+    log_field("Time", format_local_time(event.Time) if event.Time else "Unavailable")
+    log_field(
+        "ReceiveTime",
+        format_local_time(event.ReceiveTime) if event.ReceiveTime else "Unavailable",
+    )
+    if event.LocalTime:
+        offset = getattr(event.LocalTime, "Offset", "Unavailable")
+        dst = getattr(event.LocalTime, "DaylightSavingInOffset", "Unavailable")
+        log_field("LocalTime.Offset", offset)
+        log_field("LocalTime.DaylightSavingInOffset", dst)
+    else:
+        log_field("LocalTime", "Unavailable")
+    log_field("ConditionClassId", event.ConditionClassId)
+    log_field("ConditionClassName", event.ConditionClassName)
+    log_field("ConditionSubClassId", event.ConditionSubClassId)
+    log_field("ConditionSubClassName", event.ConditionSubClassName)
+    log_field("EventCode", event.EventCode)
+    log_field("EventText", event.EventText)
+    log_field("JoiningTechnology", event.JoiningTechnology)
+
+    # AssociatedEntities
+    if isinstance(event.AssociatedEntities, list) and event.AssociatedEntities:
+        ijt_log.info(f"{'AssociatedEntities':<{label_width}} :")
+        for entity in event.AssociatedEntities:
+            try:
+                ijt_log.info(
+                    f"{'  Entity Name':<{label_width}} : {getattr(entity, 'Name', '')}"
+                )
+                ijt_log.info(
+                    f"{'  Description':<{label_width}} : {getattr(entity, 'Description', '')}"
+                )
+                ijt_log.info(
+                    f"{'  EntityId':<{label_width}} : {getattr(entity, 'EntityId', '')}"
+                )
+                ijt_log.info(
+                    f"{'  EntityType':<{label_width}} : {getattr(entity, 'EntityType', '')}"
+                )
+                ijt_log.info(
+                    f"{'  IsExternal':<{label_width}} : {getattr(entity, 'IsExternal', '')}"
+                )
+            except Exception as e:
+                ijt_log.warning(f"{'Error logging entity':<{label_width}} : {e}")
+    else:
+        log_field("AssociatedEntities", event.AssociatedEntities)
+
+    # ReportedValues
+    if isinstance(event.ReportedValues, list) and event.ReportedValues:
+        ijt_log.info(f"{'ReportedValues':<{label_width}} :")
+        for rv in event.ReportedValues:
+            try:
+                eu = getattr(rv, "EngineeringUnits", None)
+                eu_display = getattr(eu, "DisplayName", "")
+                eu_desc = getattr(eu, "Description", "")
+                ijt_log.info(f"{'  Name':<{label_width}} : {getattr(rv, 'Name', '')}")
+                ijt_log.info(
+                    f"{'  Current':<{label_width}} : {getattr(getattr(rv, 'CurrentValue', None), 'Value', '')}"
+                )
+                ijt_log.info(
+                    f"{'  Previous':<{label_width}} : {getattr(getattr(rv, 'PreviousValue', None), 'Value', '')}"
+                )
+                ijt_log.info(
+                    f"{'  PhysicalQuantity':<{label_width}} : {getattr(rv, 'PhysicalQuantity', '')}"
+                )
+                ijt_log.info(
+                    f"{'  LowLimit':<{label_width}} : {getattr(rv, 'LowLimit', '')}"
+                )
+                ijt_log.info(
+                    f"{'  HighLimit':<{label_width}} : {getattr(rv, 'HighLimit', '')}"
+                )
+                ijt_log.info(f"{'  Units':<{label_width}} : {eu_display}")
+                ijt_log.info(f"{'  Description':<{label_width}} : {eu_desc}")
+            except Exception as e:
+                ijt_log.warning(
+                    f"{'Error logging reported value':<{label_width}} : {e}"
+                )
+    else:
+        log_field("ReportedValues", event.ReportedValues)
+
+    ijt_log.info("-" * 80)
+
+
+async def log_result_to_file(event):
+
+    # Below logic writes the Result content to a file in result_logs/latest_result.json.
+    # This logic can be used to parse the Result and use it accordingly.
+    if ENABLE_RESULT_FILE_LOGGING:
+        try:
+            json_str = serializeFullEvent(event.Result)
+
+            log_dir = Path("result_logs")
+            log_dir.mkdir(exist_ok=True)
+
+            safe_message = re.sub(
+                r"[^\w\-_\. ]", "_", str(event.Message.Text).replace(":", "_")
+            )
+            temp_file = log_dir / f"{safe_message}.tmp"
+            final_file = log_dir / f"{safe_message}.json"
+
+            async with aiofiles.open(temp_file, mode="w", encoding="utf-8") as f:
+                await f.write(json_str)
+
+            temp_file.rename(final_file)
+            ijt_log.info(f"Event Result logged to {final_file}")
+        except Exception as e:
+            ijt_log.error(f"failed to log result to file: {e}")
+            ijt_log.error(traceback.format_exc())
