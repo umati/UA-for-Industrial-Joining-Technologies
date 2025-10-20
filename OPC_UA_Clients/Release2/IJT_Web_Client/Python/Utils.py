@@ -7,6 +7,9 @@ from typing import Optional, Dict
 from asyncua import Client, ua
 from pathlib import Path
 from Python.IJTLogger import ijt_log
+from Python.Serialize import serializeFullEvent
+
+ENABLE_RESULT_FILE_LOGGING = False  # Set to True to enable result file logging
 
 
 def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:
