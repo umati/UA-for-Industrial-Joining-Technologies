@@ -1,6 +1,7 @@
 from typing import Any
 from Python.IJTLogger import ijt_log
-from Python.Lib import datetime
+from datetime import datetime as std_datetime
+from Python.Lib import datetime as custom_datetime
 
 
 def isInstanceOfClass(cls: Any) -> bool:
@@ -70,7 +71,7 @@ def serializeFullEvent(value: Any) -> Any:
         return [serializeFullEvent(item) for item in value]
     elif isinstance(value, dict):
         return {k: serializeFullEvent(v) for k, v in value.items()}
-    elif isinstance(value, datetime):
+    elif isinstance(value, std_datetime):
         return value.isoformat()
     elif isinstance(value, (str, int, float, bool)):
         return value

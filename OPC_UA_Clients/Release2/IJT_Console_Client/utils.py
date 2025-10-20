@@ -103,7 +103,7 @@ async def log_result_event_details(
 
 
 async def log_joining_system_event(event):
-    label_width = 40
+    label_width = 35
     ijt_log.info("-" * 80)
     message_text = getattr(event.Message, "Text", "Unavailable")
     ijt_log.info(f"{'JOINING SYSTEM EVENT':<40} : {message_text}")
@@ -111,6 +111,28 @@ async def log_joining_system_event(event):
 
     def log_field(label, value):
         ijt_log.info(f"{label:<{label_width}} : {value}")
+
+    def log_entity(entity, label_width):
+        log_field("  Entity Name", getattr(entity, "Name", ""))
+        log_field("  Description", getattr(entity, "Description", ""))
+        log_field("  EntityId", getattr(entity, "EntityId", ""))
+        log_field("  EntityType", getattr(entity, "EntityType", ""))
+        log_field("  IsExternal", getattr(entity, "IsExternal", ""))
+
+    def log_reported_value(rv, label_width):
+        eu = getattr(rv, "EngineeringUnits", None)
+        eu_display = getattr(eu, "DisplayName", "")
+        eu_desc = getattr(eu, "Description", "")
+        log_field("  Name", getattr(rv, "Name", ""))
+        log_field("  Current", getattr(getattr(rv, "CurrentValue", None), "Value", ""))
+        log_field(
+            "  Previous", getattr(getattr(rv, "PreviousValue", None), "Value", "")
+        )
+        log_field("  PhysicalQuantity", getattr(rv, "PhysicalQuantity", ""))
+        log_field("  LowLimit", getattr(rv, "LowLimit", ""))
+        log_field("  HighLimit", getattr(rv, "HighLimit", ""))
+        log_field("  Units", eu_display)
+        log_field("  Description", eu_desc)
 
     log_field("EventType", event.EventType)
     log_field("EventId", event.EventId)
@@ -143,56 +165,19 @@ async def log_joining_system_event(event):
         ijt_log.info(f"{'AssociatedEntities':<{label_width}} :")
         for entity in event.AssociatedEntities:
             try:
-                ijt_log.info(
-                    f"{'  Entity Name':<{label_width}} : {getattr(entity, 'Name', '')}"
-                )
-                ijt_log.info(
-                    f"{'  Description':<{label_width}} : {getattr(entity, 'Description', '')}"
-                )
-                ijt_log.info(
-                    f"{'  EntityId':<{label_width}} : {getattr(entity, 'EntityId', '')}"
-                )
-                ijt_log.info(
-                    f"{'  EntityType':<{label_width}} : {getattr(entity, 'EntityType', '')}"
-                )
-                ijt_log.info(
-                    f"{'  IsExternal':<{label_width}} : {getattr(entity, 'IsExternal', '')}"
-                )
+                log_entity(entity, label_width)
             except Exception as e:
-                ijt_log.warning(f"{'Error logging entity':<{label_width}} : {e}")
+                log_field("Error logging entity", e)
     else:
         log_field("AssociatedEntities", event.AssociatedEntities)
 
     # ReportedValues
     if isinstance(event.ReportedValues, list) and event.ReportedValues:
-        ijt_log.info(f"{'ReportedValues':<{label_width}} :")
         for rv in event.ReportedValues:
             try:
-                eu = getattr(rv, "EngineeringUnits", None)
-                eu_display = getattr(eu, "DisplayName", "")
-                eu_desc = getattr(eu, "Description", "")
-                ijt_log.info(f"{'  Name':<{label_width}} : {getattr(rv, 'Name', '')}")
-                ijt_log.info(
-                    f"{'  Current':<{label_width}} : {getattr(getattr(rv, 'CurrentValue', None), 'Value', '')}"
-                )
-                ijt_log.info(
-                    f"{'  Previous':<{label_width}} : {getattr(getattr(rv, 'PreviousValue', None), 'Value', '')}"
-                )
-                ijt_log.info(
-                    f"{'  PhysicalQuantity':<{label_width}} : {getattr(rv, 'PhysicalQuantity', '')}"
-                )
-                ijt_log.info(
-                    f"{'  LowLimit':<{label_width}} : {getattr(rv, 'LowLimit', '')}"
-                )
-                ijt_log.info(
-                    f"{'  HighLimit':<{label_width}} : {getattr(rv, 'HighLimit', '')}"
-                )
-                ijt_log.info(f"{'  Units':<{label_width}} : {eu_display}")
-                ijt_log.info(f"{'  Description':<{label_width}} : {eu_desc}")
+                log_reported_value(rv, label_width)
             except Exception as e:
-                ijt_log.warning(
-                    f"{'Error logging reported value':<{label_width}} : {e}"
-                )
+                log_field("Error logging reported value", e)
     else:
         log_field("ReportedValues", event.ReportedValues)
 

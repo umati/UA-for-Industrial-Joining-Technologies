@@ -1,4 +1,5 @@
 import asyncio
+import json
 import pytz
 import traceback
 from datetime import datetime
@@ -6,6 +7,7 @@ from threading import Thread
 from asyncua import ua
 from ijt_logger import ijt_log
 from utils import log_joining_system_event
+from serialize import serializeFullEvent
 
 
 class Short:
@@ -89,8 +91,7 @@ class EventHandler:
     async def process_event(self, short_event: Short):
         try:
             ijt_log.info("EventHandler: Processing event")
-            summary = f"[{short_event.EventId}] {short_event.Message}"
-            await self.queue.put(summary)
+            await self.queue.put(short_event)
         except Exception as e:
             ijt_log.error(f"Error handling process_event: {e}")
             ijt_log.error(traceback.format_exc())
@@ -114,13 +115,20 @@ class EventHandler:
                 break
             ijt_log.info(f"EventHandler: Got item from queue: {item}")
             try:
-                ijt_log.info(f"EventHandler: Sending item over WebSocket: {item}")
-                await self.websocket.send(item)
+                serialized_event = serializeFullEvent(item)
+                json_payload = json.dumps(serialized_event)
+                ijt_log.info(f"EventHandler: Sending serialized event over WebSocket")
+                await self.websocket.send(json_payload)
             except websockets.exceptions.ConnectionClosedOK:
                 ijt_log.info("WebSocket connection closed normally.")
                 break
             except Exception as e:
                 ijt_log.error(f"Error sending message: {e}")
+                ijt_log.error(traceback.format_exc())
+                await self.websocket.close()
+                break
+            finally:
+                self.queue.task_done()
 
     async def shutdown(self):
         await self.queue.put(None)
