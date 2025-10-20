@@ -69,7 +69,7 @@ class Connection:
 
     async def terminate(self):
         try:
-            if self.client and self.client.session:
+            if self.client and getattr(self.client, "_connected", False):
                 # Unsubscribe and delete subResultEvent
                 if self.subResultEvent != "sub":
                     try:
@@ -84,6 +84,7 @@ class Connection:
                             )
                     except Exception as e:
                         ijt_log.warning(f"Delete subscription failed: {e}")
+                    self.subResultEvent = "sub"
 
                 # Unsubscribe and delete subJoiningEvent
                 if self.subJoiningEvent != "sub":
@@ -99,18 +100,17 @@ class Connection:
                             )
                     except Exception as e:
                         ijt_log.warning(f"Delete subscription failed: {e}")
+                    self.subJoiningEvent = "sub"
 
                 await asyncio.sleep(0.5)
                 await self.client.disconnect()
                 ijt_log.info(f"Disconnected from {self.server_url}")
             else:
-                ijt_log.warning(
-                    "Client session not active. Skipping termination steps."
-                )
+                ijt_log.warning("Client not connected. Skipping termination steps.")
         except Exception as e:
             ijt_log.error(f"General error during termination: {e}")
         finally:
-            ijt_log.error(f"Terminate: Connection to {self.server_url} cleaned up")
+            ijt_log.info(f"Terminate: Connection to {self.server_url} cleaned up")
 
     async def subscribe(self, data):
         try:
@@ -129,7 +129,6 @@ class Connection:
             )
 
             obj_node = await self.client.nodes.root.get_child(["0:Objects", "0:Server"])
-
             result_event_node = await self.client.nodes.root.get_child(
                 [
                     "0:Types",
@@ -138,7 +137,6 @@ class Connection:
                     f"{ns_machinery_result}:ResultReadyEventType",
                 ]
             )
-
             joining_result_event_node = await self.client.nodes.root.get_child(
                 [
                     "0:Types",
@@ -148,7 +146,6 @@ class Connection:
                     f"{ns_joining_base}:JoiningSystemResultReadyEventType",
                 ]
             )
-
             joining_system_event_node = await self.client.nodes.root.get_child(
                 [
                     "0:Types",
@@ -172,13 +169,11 @@ class Connection:
                     self.subResultEvent = await self.client.create_subscription(
                         100, self.handlerResultEvent
                     )
-                    self.handleResultEvents = (
-                        await self.subResultEvent.subscribe_events(
-                            obj_node,
-                            [result_event_node, joining_result_event_node],
-                            queuesize=200,
-                        )
-                    )
+                self.handleResultEvents = await self.subResultEvent.subscribe_events(
+                    obj_node,
+                    [result_event_node, joining_result_event_node],
+                    queuesize=200,
+                )
 
             # Separate subscription for joining system event
             if not event_type or "joiningsystemevent" in event_type:
@@ -186,14 +181,11 @@ class Connection:
                     self.subJoiningEvent = await self.client.create_subscription(
                         100, self.handlerJoiningEvent
                     )
-                    self.handleJoiningEvents = (
-                        await self.subJoiningEvent.subscribe_events(
-                            obj_node, [joining_system_event_node], queuesize=200
-                        )
-                    )
+                self.handleJoiningEvents = await self.subJoiningEvent.subscribe_events(
+                    obj_node, [joining_system_event_node], queuesize=200
+                )
 
             return {}
-
         except Exception as e:
             ijt_log.error(f"Exception in Subscribe {self.server_url}")
             ijt_log.error(f"Exception: {e}")

@@ -5,6 +5,7 @@ from pathlib import Path
 from asyncua.ua.uaerrors import UaError
 from asyncua import Client
 from result_event_handler import ResultEventHandler
+from event_handler import EventHandler
 from ijt_logger import ijt_log
 from event_types import get_event_types
 
@@ -13,8 +14,10 @@ class OPCUAEventClient:
     def __init__(self, server_url):
         self.server_url = server_url
         self.client = Client(server_url)
-        self.subscription = None
-        self.handler = ResultEventHandler(server_url, self.client)
+        self.sub_result_event = None
+        self.sub_joining_event = None
+        self.handler_result_event = ResultEventHandler(server_url, self.client)
+        self.handler_joining_event = EventHandler(None, server_url, self.client)
 
     def setup_client_metadata(self):
         computer_name = socket.getfqdn()
@@ -93,19 +96,63 @@ class OPCUAEventClient:
         try:
             root = self.client.get_root_node()
             server_node = await root.get_child(["0:Objects", "0:Server"])
-            result_event_type, joining_event_type = await get_event_types(
-                self.client, root
+
+            ns_machinery_result = await self.client.get_namespace_index(
+                "http://opcfoundation.org/UA/Machinery/Result/"
+            )
+            ns_joining_base = await self.client.get_namespace_index(
+                "http://opcfoundation.org/UA/IJT/Base/"
             )
 
-            self.subscription = await self.client.create_subscription(100, self.handler)
-            await self.subscription.subscribe_events(
+            result_event_node = await self.client.nodes.root.get_child(
+                [
+                    "0:Types",
+                    "0:EventTypes",
+                    "0:BaseEventType",
+                    f"{ns_machinery_result}:ResultReadyEventType",
+                ]
+            )
+            joining_result_event_node = await self.client.nodes.root.get_child(
+                [
+                    "0:Types",
+                    "0:EventTypes",
+                    "0:BaseEventType",
+                    f"{ns_machinery_result}:ResultReadyEventType",
+                    f"{ns_joining_base}:JoiningSystemResultReadyEventType",
+                ]
+            )
+            joining_system_event_node = await self.client.nodes.root.get_child(
+                [
+                    "0:Types",
+                    "0:EventTypes",
+                    "0:BaseEventType",
+                    f"{ns_joining_base}:JoiningSystemEventType",
+                ]
+            )
+
+            await self.client.load_data_type_definitions()
+
+            # Subscribe to Result and Joining Result Events
+            if self.sub_result_event is None:
+                self.sub_result_event = await self.client.create_subscription(
+                    100, self.handler_result_event
+                )
+            await self.sub_result_event.subscribe_events(
                 server_node,
-                [result_event_type, joining_event_type],
+                [result_event_node, joining_result_event_node],
                 queuesize=200,
             )
-            ijt_log.info(
-                "Subscribed to ResultReadyEventType and JoiningSystemResultReadyEventType."
+
+            # Subscribe to Joining System Events
+            if self.sub_joining_event is None:
+                self.sub_joining_event = await self.client.create_subscription(
+                    100, self.handler_joining_event
+                )
+            await self.sub_joining_event.subscribe_events(
+                server_node, [joining_system_event_node], queuesize=200
             )
+
+            ijt_log.info("Subscribed to all relevant event types.")
         except Exception as e:
             ijt_log.error(f"Subscription failed: {e}")
             await self.cleanup()
@@ -125,18 +172,26 @@ class OPCUAEventClient:
 
     async def cleanup(self):
         try:
-            if self.subscription:
-                try:
-                    await self.subscription.delete()
-                    ijt_log.info("Subscription deleted.")
-                except Exception as sub_err:
-                    ijt_log.warning(f"Failed to delete subscription: {sub_err}")
-                    ijt_log.error(traceback.format_exc())
-                self.subscription = None
+            for sub, name in [
+                (self.sub_result_event, "ResultEvent"),
+                (self.sub_joining_event, "JoiningEvent"),
+            ]:
+                if sub:
+                    try:
+                        await sub.delete()
+                        ijt_log.info(f"{name} subscription deleted.")
+                    except Exception as sub_err:
+                        ijt_log.warning(
+                            f"Failed to delete {name} subscription: {sub_err}"
+                        )
+                        ijt_log.error(traceback.format_exc())
 
-            await asyncio.sleep(0.5)  # short delay before disconnect
+            self.sub_result_event = None
+            self.sub_joining_event = None
 
-            if self.client:
+            await asyncio.sleep(0.5)
+
+            if self.client and getattr(self.client, "_connected", False):
                 try:
                     await self.client.disconnect()
                     ijt_log.info("Disconnected from OPC UA server.")
@@ -146,7 +201,10 @@ class OPCUAEventClient:
                 except Exception as dis_err:
                     ijt_log.warning(f"Failed to disconnect client: {dis_err}")
                     ijt_log.error(traceback.format_exc())
-                self.client = None
+                finally:
+                    self.client = None
+            else:
+                ijt_log.warning("Client not connected. Skipping disconnect.")
         except Exception as e:
             ijt_log.error(f"Cleanup error: {e}")
             ijt_log.error(traceback.format_exc())
