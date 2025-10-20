@@ -1,5 +1,6 @@
 from typing import Any
 from Python.IJTLogger import ijt_log
+from Python.Lib import datetime
 
 
 def isInstanceOfClass(cls: Any) -> bool:
@@ -60,23 +61,27 @@ def serializeClassInstance(obj: Any) -> str:
     return result
 
 
-def serializeFullEvent(value: Any) -> str:
-    """
-    Serialize an value
-    """
-    # ijt_log.info(type(value).__name__)
+def serializeFullEvent(value: Any) -> Any:
     if isInstanceOfClass(value):
-        return "{" + serializeClassInstance(value) + "}"
-    elif value == None:
-        return "null"
+        return serializeClassInstanceAsDict(value)
+    elif value is None:
+        return None
     elif isinstance(value, list):
-        result = "["
-        first = True
-        for item in value:
-            if not first:
-                result = result + ","
-            first = False
-            result = result + serializeValue(item)
-        return result + "]"
+        return [serializeFullEvent(item) for item in value]
+    elif isinstance(value, dict):
+        return {k: serializeFullEvent(v) for k, v in value.items()}
+    elif isinstance(value, datetime):
+        return value.isoformat()
+    elif isinstance(value, (str, int, float, bool)):
+        return value
     else:
-        return '"' + str(value).replace("\n", "\\n") + '"'
+        return str(value)
+
+
+def serializeClassInstanceAsDict(obj: Any) -> dict:
+    result = {"pythonclass": type(obj).__name__}
+    dict_obj = obj.__dict__
+    for key, value in dict_obj.items():
+        if key != "_freeze":
+            result[key] = serializeFullEvent(value)
+    return result
