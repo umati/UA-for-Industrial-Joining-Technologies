@@ -94,7 +94,13 @@ class EventHandler:
                 break
             try:
                 serialized_event = serializeFullEvent(item)
-                json_payload = json.dumps(serialized_event)
+                returnValue = {
+                    "command": "event",
+                    "endpoint": self.server_url,
+                    "data": serialized_event,
+                }
+
+                json_payload = json.dumps(returnValue)
                 await self.websocket.send(json_payload)
             except websockets.exceptions.ConnectionClosedOK:
                 ijt_log.info("WebSocket connection closed normally.")
