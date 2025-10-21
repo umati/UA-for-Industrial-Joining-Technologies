@@ -174,6 +174,7 @@ async def log_joining_system_event(event):
 
     # ReportedValues
     if isinstance(event.ReportedValues, list) and event.ReportedValues:
+        ijt_log.info(f"{'ReportedValues':<{label_width}} :")
         for rv in event.ReportedValues:
             try:
                 log_reported_value(rv, label_width)

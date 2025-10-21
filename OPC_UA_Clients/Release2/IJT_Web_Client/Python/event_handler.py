@@ -57,7 +57,14 @@ class Short:
     def nodeid_to_str(self, nodeid):
         try:
             if isinstance(nodeid, ua.NodeId):
-                return f"ns={nodeid.NamespaceIndex};{nodeid.NodeIdType.name.lower()}={nodeid.Identifier}"
+                if nodeid.NodeIdType == ua.NodeIdType.Numeric:
+                    return f"ns={nodeid.NamespaceIndex};i={nodeid.Identifier}"
+                elif nodeid.NodeIdType == ua.NodeIdType.String:
+                    return f"ns={nodeid.NamespaceIndex};s={nodeid.Identifier}"
+                elif nodeid.NodeIdType == ua.NodeIdType.Guid:
+                    return f"ns={nodeid.NamespaceIndex};g={nodeid.Identifier}"
+                elif nodeid.NodeIdType == ua.NodeIdType.ByteString:
+                    return f"ns={nodeid.NamespaceIndex};b={nodeid.Identifier}"
         except Exception:
             pass
         return str(nodeid)
