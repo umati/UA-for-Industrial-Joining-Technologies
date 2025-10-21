@@ -56,7 +56,14 @@ class Short:
     def nodeid_to_str(self, nodeid):
         try:
             if isinstance(nodeid, ua.NodeId):
-                return f"ns={nodeid.NamespaceIndex};{nodeid.NodeIdType.name.lower()}={nodeid.Identifier}"
+                if nodeid.NodeIdType == ua.NodeIdType.Numeric:
+                    return f"ns={nodeid.NamespaceIndex};i={nodeid.Identifier}"
+                elif nodeid.NodeIdType == ua.NodeIdType.String:
+                    return f"ns={nodeid.NamespaceIndex};s={nodeid.Identifier}"
+                elif nodeid.NodeIdType == ua.NodeIdType.Guid:
+                    return f"ns={nodeid.NamespaceIndex};g={nodeid.Identifier}"
+                elif nodeid.NodeIdType == ua.NodeIdType.ByteString:
+                    return f"ns={nodeid.NamespaceIndex};b={nodeid.Identifier}"
         except Exception:
             pass
         return str(nodeid)
@@ -105,17 +112,13 @@ class EventHandler:
             ijt_log.error(traceback.format_exc())
 
     async def handleQueue(self):
-        ijt_log.info("EventHandler: Starting handleQueue")
         while True:
-            ijt_log.info("EventHandler: Waiting for queue item...")
             item = await self.queue.get()
             if item is None:
                 break
-            ijt_log.info(f"EventHandler: Got item from queue: {item}")
             try:
                 serialized_event = serializeFullEvent(item)
                 json_payload = json.dumps(serialized_event)
-                ijt_log.info(f"EventHandler: Sending serialized event over WebSocket")
                 await self.websocket.send(json_payload)
             except websockets.exceptions.ConnectionClosedOK:
                 ijt_log.info("WebSocket connection closed normally.")
