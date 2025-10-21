@@ -2,8 +2,8 @@ __all__ = ["IJTInterface"]
 
 import asyncio
 import json
-from Python.IJTLogger import ijt_log
-from Python.Connection import Connection
+from Python.ijt_logger import ijt_log
+from Python.connection import Connection
 
 
 class IJTInterface:
@@ -17,7 +17,6 @@ class IJTInterface:
     async def callConnection(self, data, func):
         endpoint = data["endpoint"]
         connection = self.connectionList.get(endpoint)
-
 
         if not connection:
             ijt_log.info(f"No connection found for endpoint: {endpoint}")
@@ -147,4 +146,6 @@ class IJTInterface:
         self.connectionList.clear()
 
     def __del__(self):
-        ijt_log.warning("Destructor called — async cleanup should be handled externally.")
+        ijt_log.warning(
+            "Destructor called — async cleanup should be handled externally."
+        )

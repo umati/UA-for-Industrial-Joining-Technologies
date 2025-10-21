@@ -4,7 +4,7 @@ import sys
 
 sys.path.append("..")
 
-from Python.Connection import Connection
+from Python.connection import Connection
 from Pytest.TestSubscriptionHandler import SubHandler, combinedNameFilter
 
 # Make sure you are in the venv

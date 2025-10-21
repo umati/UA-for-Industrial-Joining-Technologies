@@ -2,11 +2,11 @@ import asyncio
 import json
 import socket
 from asyncua import Client, ua
-from Python.Serialize import serializeTuple, serializeValue
-from Python.CallStructure import createCallStructure
-from Python.EventHandler import EventHandler
-from Python.ResultEventHandler import ResultEventHandler
-from Python.IJTLogger import ijt_log
+from Python.serialize import serializeTuple, serializeValue
+from Python.call_structure import createCallStructure
+from Python.event_handler import EventHandler
+from Python.result_event_handler import ResultEventHandler
+from Python.ijt_logger import ijt_log
 from asyncua.ua.uaerrors import UaError
 
 

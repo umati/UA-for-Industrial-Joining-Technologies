@@ -1,5 +1,5 @@
 from typing import Any
-from Python.IJTLogger import ijt_log
+from Python.ijt_logger import ijt_log
 from datetime import datetime as std_datetime
 from Python.Lib import datetime as custom_datetime
 

@@ -1,6 +1,6 @@
 from asyncua import ua
 from typing import Any
-from Python.IJTLogger import ijt_log
+from Python.ijt_logger import ijt_log
 
 
 def createCallStructure(argument: dict[str, Any]) -> Any:

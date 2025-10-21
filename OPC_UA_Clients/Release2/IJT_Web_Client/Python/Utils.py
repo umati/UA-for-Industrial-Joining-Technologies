@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import Optional, Dict
 from asyncua import Client, ua
 from pathlib import Path
-from Python.IJTLogger import ijt_log
-from Python.Serialize import serializeFullEvent
+from Python.ijt_logger import ijt_log
+from Python.serialize import serializeFullEvent
 
 ENABLE_RESULT_FILE_LOGGING = False  # Set to True to enable result file logging
 

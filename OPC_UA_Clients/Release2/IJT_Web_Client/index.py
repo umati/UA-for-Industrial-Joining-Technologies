@@ -8,8 +8,8 @@ import signal
 import platform
 from typing import Optional
 from dotenv import load_dotenv
-from Python.IJTInterface import IJTInterface
-from Python.IJTLogger import ijt_log
+from Python.ijt_interface import IJTInterface
+from Python.ijt_logger import ijt_log
 
 
 # Load environment variables
