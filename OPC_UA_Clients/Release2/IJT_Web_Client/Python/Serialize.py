@@ -1,7 +1,7 @@
 from typing import Any
 from Python.ijt_logger import ijt_log
 from datetime import datetime as std_datetime
-from Python.Lib import datetime as custom_datetime
+from Lib import datetime as custom_datetime
 
 
 def isInstanceOfClass(cls: Any) -> bool:
