@@ -242,14 +242,17 @@ def nodeid_to_str(nodeid: ua.NodeId) -> str:
     try:
         if isinstance(nodeid, ua.NodeId):
             nodeid_type = nodeid.NodeIdType
+            identifier = nodeid.Identifier
+            ns = nodeid.NamespaceIndex
+
             if nodeid_type == ua.NodeIdType.Numeric:
-                return f"ns={nodeid.NamespaceIndex};i={nodeid.Identifier}"
+                return f"ns={ns};i={identifier}"
             elif nodeid_type == ua.NodeIdType.String:
-                return f"ns={nodeid.NamespaceIndex};s={nodeid.Identifier}"
+                return f"ns={ns};s={identifier}"
             elif nodeid_type == ua.NodeIdType.Guid:
-                return f"ns={nodeid.NamespaceIndex};g={nodeid.Identifier}"
+                return f"ns={ns};g={identifier}"
             elif nodeid_type == ua.NodeIdType.Opaque:
-                return f"ns={nodeid.NamespaceIndex};b={nodeid.Identifier}"
+                return f"ns={ns};b={identifier}"
     except Exception:
         pass
     return str(nodeid)
@@ -267,11 +270,7 @@ def localizedtext_to_str(lt: ua.LocalizedText) -> str:
 def format_list_for_logging(
     label: str, items: list[str], label_width: int = 35
 ) -> list[str]:
-    lines = []
-    if not items:
-        lines.append(f"{label:<{label_width}} : []")
-    else:
-        lines.append(f"{label:<{label_width}} :")
-        for item in items:
-            lines.append(f"{'':<{label_width}}   {item}")
+    lines = [f"{label:<{label_width}} :"]
+    for item in items:
+        lines.append(f"{'':<{label_width}}   {item}")
     return lines
