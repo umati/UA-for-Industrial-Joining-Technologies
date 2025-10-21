@@ -5,7 +5,7 @@ import traceback
 from threading import Thread
 from asyncua import ua
 from Python.ijt_logger import ijt_log
-from Python.utils import log_joining_system_event
+from Python.utils import log_joining_system_event, nodeid_to_str, localizedtext_to_str
 from Python.serialize_data import serializeFullEvent
 
 
@@ -19,31 +19,29 @@ class Short:
         )
         self.Message = getattr(event, "Message", None)
         self.SourceName = str(getattr(event, "SourceName", None))
-        self.SourceNode = self.nodeid_to_str(getattr(event, "SourceNode", None))
+        self.SourceNode = nodeid_to_str(getattr(event, "SourceNode", None))
         self.Severity = str(getattr(event, "Severity", None))
         self.Time = getattr(event, "Time", None)
         self.ReceiveTime = getattr(event, "ReceiveTime", None)
         self.LocalTime = getattr(event, "LocalTime", None)
 
-        self.ConditionClassId = self.nodeid_to_str(
-            getattr(event, "ConditionClassId", None)
-        )
-        self.ConditionClassName = self.localizedtext_to_str(
+        self.ConditionClassId = nodeid_to_str(getattr(event, "ConditionClassId", None))
+        self.ConditionClassName = localizedtext_to_str(
             getattr(event, "ConditionClassName", None)
         )
         self.ConditionSubClassId = [
-            self.nodeid_to_str(nid) for nid in getattr(event, "ConditionSubClassId", [])
+            nodeid_to_str(nid) for nid in getattr(event, "ConditionSubClassId", [])
         ]
         self.ConditionSubClassName = [
-            self.localizedtext_to_str(lt)
+            localizedtext_to_str(lt)
             for lt in getattr(event, "ConditionSubClassName", [])
         ]
 
         self.EventCode = getattr(event, "JoiningSystemEventContent/EventCode", None)
-        self.EventText = self.localizedtext_to_str(
+        self.EventText = localizedtext_to_str(
             getattr(event, "JoiningSystemEventContent/EventText", None)
         )
-        self.JoiningTechnology = self.localizedtext_to_str(
+        self.JoiningTechnology = localizedtext_to_str(
             getattr(event, "JoiningSystemEventContent/JoiningTechnology", None)
         )
         self.AssociatedEntities = getattr(
@@ -53,29 +51,6 @@ class Short:
         self.ReportedValues = getattr(
             event, "JoiningSystemEventContent/ReportedValues", []
         )
-
-    def nodeid_to_str(self, nodeid):
-        try:
-            if isinstance(nodeid, ua.NodeId):
-                if nodeid.NodeIdType == ua.NodeIdType.Numeric:
-                    return f"ns={nodeid.NamespaceIndex};i={nodeid.Identifier}"
-                elif nodeid.NodeIdType == ua.NodeIdType.String:
-                    return f"ns={nodeid.NamespaceIndex};s={nodeid.Identifier}"
-                elif nodeid.NodeIdType == ua.NodeIdType.Guid:
-                    return f"ns={nodeid.NamespaceIndex};g={nodeid.Identifier}"
-                elif nodeid.NodeIdType == ua.NodeIdType.ByteString:
-                    return f"ns={nodeid.NamespaceIndex};b={nodeid.Identifier}"
-        except Exception:
-            pass
-        return str(nodeid)
-
-    def localizedtext_to_str(self, lt):
-        try:
-            if isinstance(lt, ua.LocalizedText):
-                return lt.Text
-        except Exception:
-            pass
-        return str(lt)
 
 
 class EventHandler:
