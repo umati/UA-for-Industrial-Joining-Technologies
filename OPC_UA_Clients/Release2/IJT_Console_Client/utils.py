@@ -7,7 +7,7 @@ from typing import Optional, Dict
 from asyncua import Client, ua
 from pathlib import Path
 from ijt_logger import ijt_log
-from serialize import serializeFullEvent
+from serialize_data import serializeFullEvent
 from client_config import ENABLE_RESULT_FILE_LOGGING
 
 

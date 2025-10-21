@@ -5,7 +5,7 @@ import pytz
 import traceback
 from datetime import datetime
 from typing import Optional, Dict
-from Python.serialize import serializeValue
+from Python.serialize_data import serializeValue
 from Python.ijt_logger import ijt_log
 from Python.utils import log_result_event_details
 

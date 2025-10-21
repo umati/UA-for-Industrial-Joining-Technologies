@@ -13,6 +13,7 @@ class IJTInterface:
 
     def __init__(self):
         self.connectionList = {}
+        self.disconnected = False
 
     async def callConnection(self, data, func):
         endpoint = data["endpoint"]
@@ -28,6 +29,7 @@ class IJTInterface:
                     f"protocol.state: {connection.client.uaclient.protocol.state}"
                 )
                 ijt_log.info("Reconnecting...")
+                self.disconnected = False
                 await connection.connect()
         except Exception as e:
             ijt_log.error(f"Error checking or reconnecting client: {e}")
@@ -90,6 +92,7 @@ class IJTInterface:
                     if self.connectionList[endpoint] is not None:
                         try:
                             await self.connectionList[endpoint].terminate()
+                            await asyncio.sleep(0.5)  # Small delay to allow cleanup
                         except Exception as e:
                             ijt_log.warning(f"Error terminating old connection: {e}")
                     self.connectionList[endpoint] = None
@@ -108,6 +111,7 @@ class IJTInterface:
                 if endpoint in self.connectionList and self.connectionList[endpoint]:
                     try:
                         await self.connectionList[endpoint].terminate()
+                        await asyncio.sleep(0.5)  # Small delay to allow cleanup
                     except Exception as e:
                         ijt_log.warning(f"Error terminating connection: {e}")
                     self.connectionList[endpoint] = None
@@ -132,11 +136,16 @@ class IJTInterface:
         """
         Gracefully disconnect all active OPC UA connections.
         """
+        if self.disconnected:
+            return
+
+        self.disconnected = True
         ijt_log.info("disconnect - Disconnecting all OPC UA connections...")
         for endpoint, connection in list(self.connectionList.items()):
             if connection:
                 try:
                     await connection.terminate()
+                    await asyncio.sleep(0.5)  # Small delay to allow cleanup
                     ijt_log.info(f"disconnect - Disconnected from {endpoint}")
                 except Exception as e:
                     ijt_log.warning(

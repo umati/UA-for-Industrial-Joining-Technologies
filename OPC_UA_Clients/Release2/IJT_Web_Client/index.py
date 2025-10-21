@@ -24,8 +24,10 @@ async def handler(websocket):
     global opcuaHandler
     client_ip = websocket.remote_address[0]
     ijt_log.info(f"Client connected: {client_ip}")
+
     if opcuaHandler is None:
         opcuaHandler = IJTInterface()
+
     try:
         async for message in websocket:
             mess = json.loads(message)
@@ -35,6 +37,10 @@ async def handler(websocket):
     except Exception:
         ijt_log.error("Exception in handler:")
         ijt_log.error(traceback.format_exc())
+    finally:
+        ijt_log.info(f"Cleaning up for client: {client_ip}")
+        if opcuaHandler:
+            await opcuaHandler.disconnect()
 
 
 # Graceful shutdown
@@ -64,7 +70,6 @@ async def main():
 
     loop = asyncio.get_running_loop()
 
-    # Signal handling for graceful shutdown
     if platform.system() != "Windows":
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
@@ -74,10 +79,14 @@ async def main():
                     f"Signal handling not supported for {sig} on this platform."
                 )
     else:
-        # Windows fallback: listen for shutdown via a background task
+        # Windows fallback: monitor for shutdown via a dummy task
         async def windows_shutdown_monitor():
-            while True:
-                await asyncio.sleep(1)
+            try:
+                while True:
+                    await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                ijt_log.info("Windows shutdown monitor cancelled.")
+                await shutdown()
 
         asyncio.create_task(windows_shutdown_monitor())
 

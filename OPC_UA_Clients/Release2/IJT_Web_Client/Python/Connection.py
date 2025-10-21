@@ -2,7 +2,7 @@ import asyncio
 import json
 import socket
 from asyncua import Client, ua
-from Python.serialize import serializeTuple, serializeValue
+from Python.serialize_data import serializeTuple, serializeValue
 from Python.call_structure import createCallStructure
 from Python.event_handler import EventHandler
 from Python.result_event_handler import ResultEventHandler
@@ -34,6 +34,7 @@ class Connection:
     def __init__(self, server_url, websocket):
         self.server_url = server_url
         self.websocket = websocket
+        self.terminated = False
         self.handleResultEvent = "handle"
         self.handleJoiningEvent = "handle"
         self.subResultEvent = "sub"
@@ -42,6 +43,7 @@ class Connection:
         self.handlerResultEvent = 0
 
     async def connect(self):
+        self.terminated = False
         self.client = Client(self.server_url)
         retries = 3
         delay = 2
@@ -69,44 +71,63 @@ class Connection:
 
     async def terminate(self):
         try:
-            if self.client and getattr(self.client, "_connected", False):
-                # Unsubscribe and delete subResultEvent
-                if self.subResultEvent != "sub":
-                    try:
-                        ijt_log.info("Attempting to unsubscribe handleResultEvent")
-                        await self.subResultEvent.unsubscribe(self.handleResultEvent)
-                    except Exception as e:
-                        ijt_log.warning(f"Unsubscribe failed: {e}")
-                    try:
-                        if hasattr(self.subResultEvent, "subscription_id"):
-                            await self.client.delete_subscriptions(
-                                [self.subResultEvent.subscription_id]
-                            )
-                    except Exception as e:
-                        ijt_log.warning(f"Delete subscription failed: {e}")
-                    self.subResultEvent = "sub"
+            if self.terminated:
+                return
+            self.terminated = True
 
-                # Unsubscribe and delete subJoiningEvent
-                if self.subJoiningEvent != "sub":
-                    try:
-                        ijt_log.info("Attempting to unsubscribe handleJoiningEvent")
-                        await self.subJoiningEvent.unsubscribe(self.handleJoiningEvent)
-                    except Exception as e:
-                        ijt_log.warning(f"Unsubscribe failed: {e}")
-                    try:
-                        if hasattr(self.subJoiningEvent, "subscription_id"):
-                            await self.client.delete_subscriptions(
-                                [self.subJoiningEvent.subscription_id]
-                            )
-                    except Exception as e:
-                        ijt_log.warning(f"Delete subscription failed: {e}")
-                    self.subJoiningEvent = "sub"
+            if self.client:
+                session_id = getattr(self.client.session, "session_id", None)
+                ijt_log.info(f"Session ID before disconnect: {session_id}")
 
-                await asyncio.sleep(0.5)
-                await self.client.disconnect()
-                ijt_log.info(f"Disconnected from {self.server_url}")
+                if self.client.uaclient.protocol.state == "open":
+                    # Unsubscribe and delete subResultEvent
+                    if self.subResultEvent != "sub":
+                        try:
+                            ijt_log.info("Attempting to unsubscribe handleResultEvent")
+                            await self.subResultEvent.unsubscribe(self.handleResultEvent)
+                        except Exception as e:
+                            ijt_log.warning(f"Unsubscribe failed: {e}")
+                        try:
+                            if hasattr(self.subResultEvent, "subscription_id"):
+                                await self.client.delete_subscriptions([self.subResultEvent.subscription_id])
+                        except Exception as e:
+                            ijt_log.warning(f"Delete subscription failed: {e}")
+                        self.subResultEvent = "sub"
+
+                    # Unsubscribe and delete subJoiningEvent
+                    if self.subJoiningEvent != "sub":
+                        try:
+                            ijt_log.info("Attempting to unsubscribe handleJoiningEvent")
+                            await self.subJoiningEvent.unsubscribe(self.handleJoiningEvent)
+                        except Exception as e:
+                            ijt_log.warning(f"Unsubscribe failed: {e}")
+                        try:
+                            if hasattr(self.subJoiningEvent, "subscription_id"):
+                                await self.client.delete_subscriptions([self.subJoiningEvent.subscription_id])
+                        except Exception as e:
+                            ijt_log.warning(f"Delete subscription failed: {e}")
+                        self.subJoiningEvent = "sub"
+
+                    await asyncio.sleep(0.5)
+
+                    try:
+                        await asyncio.wait_for(self.client.disconnect(), timeout=2)
+                    except asyncio.TimeoutError:
+                        ijt_log.warning("Disconnect timed out.")
+
+                    # Force session close if still open
+                    if self.client.session:
+                        try:
+                            await self.client.session.close()
+                            ijt_log.info("Session forcibly closed.")
+                        except Exception as e:
+                            ijt_log.warning(f"Session close failed: {e}")
+
+                    ijt_log.info(f"Disconnected from {self.server_url}")
+                else:
+                    ijt_log.warning("Client protocol state not open. Skipping disconnect.")
             else:
-                ijt_log.warning("Client not connected. Skipping termination steps.")
+                ijt_log.warning("Client is None. Skipping termination.")
         except Exception as e:
             ijt_log.error(f"General error during termination: {e}")
         finally:

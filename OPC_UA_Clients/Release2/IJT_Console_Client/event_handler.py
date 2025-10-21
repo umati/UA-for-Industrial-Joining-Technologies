@@ -1,13 +1,11 @@
 import asyncio
 import json
-import pytz
 import traceback
-from datetime import datetime
 from threading import Thread
 from asyncua import ua
 from ijt_logger import ijt_log
 from utils import log_joining_system_event
-from serialize import serializeFullEvent
+from serialize_data import serializeFullEvent
 
 
 class Short:

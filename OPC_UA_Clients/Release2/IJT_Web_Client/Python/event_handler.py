@@ -1,14 +1,12 @@
 import asyncio
 import websockets
 import json
-import pytz
 import traceback
-from datetime import datetime
 from threading import Thread
 from asyncua import ua
 from Python.ijt_logger import ijt_log
 from Python.utils import log_joining_system_event
-from Python.serialize import serializeFullEvent
+from Python.serialize_data import serializeFullEvent
 
 
 class Short:
@@ -108,17 +106,13 @@ class EventHandler:
             ijt_log.error(traceback.format_exc())
 
     async def handleQueue(self):
-        ijt_log.info("EventHandler: Starting handleQueue")
         while True:
-            ijt_log.info("EventHandler: Waiting for queue item...")
             item = await self.queue.get()
             if item is None:
                 break
-            ijt_log.info(f"EventHandler: Got item from queue: {item}")
             try:
                 serialized_event = serializeFullEvent(item)
                 json_payload = json.dumps(serialized_event)
-                ijt_log.info(f"EventHandler: Sending serialized event over WebSocket")
                 await self.websocket.send(json_payload)
             except websockets.exceptions.ConnectionClosedOK:
                 ijt_log.info("WebSocket connection closed normally.")
