@@ -92,7 +92,7 @@ export default class TraceDisplay {
    * @returns {string} possible error message
    */
   createNewTrace (model) {
-    if (model?.ResultMetaData.Classification !== '1') { // Only for single traces
+    if (parseInt(model?.ResultMetaData.Classification) !== 1) { // Only for single traces
       return 'Only traces for single results'
     }
 
