@@ -3,7 +3,7 @@
  */
 
 export default class CommonPropertyView {
-  constructor(propList, context, resultManager) {
+  constructor (propList, context, resultManager) {
     this.background = document.createElement('div')
     this.background.classList.add('demoRow')
     this.keys = document.createElement('div')
@@ -25,7 +25,7 @@ export default class CommonPropertyView {
    * @param {*} result a recieved result
    * @param {*} propList a list of '.' separated paths to properties in a result
    */
-  displayProps(result, propList) {
+  displayProps (result, propList) {
     this.keys.innerHTML = ''
     this.values.innerHTML = ''
     if (result) {
