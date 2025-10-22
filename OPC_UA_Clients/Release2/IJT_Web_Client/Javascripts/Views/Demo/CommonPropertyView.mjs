@@ -38,7 +38,7 @@ export default class CommonPropertyView {
         let value = eval(p) // eslint-disable-line
         if (line1.innerText === 'ResultEvaluation:') {
           line1.innerText = 'ResultStatus:'
-          if (value === '1' || value === 1) {
+          if (parseInt(value) === 1) {
             value = 'OK'
             line2.style.color = 'green'
           } else {
