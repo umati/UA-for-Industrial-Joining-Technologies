@@ -19,7 +19,7 @@ export class SocketHandler {
     this.registerMandatory('methodcall')
     this.registerMandatory('namespaces')
     this.registerMandatory('event', (a, b, c) => {
-      // console.log(JSON.parse(a))
+      console.log('Do this for all events !!!!')
     })
   }
 

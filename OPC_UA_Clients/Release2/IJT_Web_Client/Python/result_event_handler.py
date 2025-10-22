@@ -5,7 +5,7 @@ import pytz
 import traceback
 from datetime import datetime
 from typing import Optional, Dict
-from Python.serialize_data import serializeValue
+from Python.serialize_data import serializeValue, serializeFullEvent
 from Python.ijt_logger import ijt_log
 from Python.utils import log_result_event_details
 
@@ -17,6 +17,7 @@ class Short:
         self.Message = message
         self.EventId = id
 
+""""
     def to_dict(self) -> Dict:
         return {
             "EventType": self.EventType,
@@ -24,6 +25,7 @@ class Short:
             "Message": self.Message,
             "EventId": self.EventId,
         }
+        """
 
 
 class ResultEventHandler:
@@ -43,7 +45,7 @@ class ResultEventHandler:
 
     async def process_event(self, tmp):
         try:
-            arg = str(serializeValue(tmp))
+            arg = serializeFullEvent(tmp)
             returnValue = {
                 "command": "event",
                 "endpoint": self.server_url,
