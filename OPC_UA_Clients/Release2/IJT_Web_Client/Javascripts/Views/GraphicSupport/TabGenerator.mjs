@@ -77,7 +77,7 @@ export default class TabGenerator {
   }
 
   cascadingInitiate () {
-     if (this.currentSelected) {
+    if (this.currentSelected) {
       this.currentSelected.initiate()
     }
   }

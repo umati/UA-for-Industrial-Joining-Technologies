@@ -50,8 +50,12 @@ export default class EndpointGraphics extends BasicScreen {
     // Dynamic load
     import('../Envelope/EnvelopeGraphics.mjs')
       .then((EnvelopeScreen) => {
-        const envelopeScreen = new EnvelopeScreen.Envelope(this.connectionManager, resultManager, this.settings)
-        tabGenerator.generateTab(envelopeScreen, 3, true)
+        try {
+          const envelopeScreen = new EnvelopeScreen.Envelope(this.connectionManager, resultManager, this.settings)
+          tabGenerator.generateTab(envelopeScreen, 3, true)
+        } catch (error) {
+          console.log(error)
+        }
       })
       .catch((err) => {
         console.log(err)
@@ -81,31 +85,71 @@ export default class EndpointGraphics extends BasicScreen {
 
     const resultManager = new ResultManager(eventManager)
 
-    const assets = new AssetManager(addressSpace, this.connectionManager)
-    const assetGraphics = new AssetGraphics(assets)
+    // Asset view is not critical
+    let assetGraphics = null
+    try {
+      const assets = new AssetManager(addressSpace, this.connectionManager)
+      assetGraphics = new AssetGraphics(assets)
+    } catch (error) {
+      console.log(error)
+    }
 
-    const traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
+    // Trace view is not critical
+    let traceGraphics = null
+    try {
+      traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
+    } catch (error) {
+      console.log(error)
+    }
 
     const methodManager = new MethodManager(addressSpace)
     const methodGraphics = new MethodGraphics(methodManager, addressSpace, this.settings, entityCache)
 
-    const demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager, this.settings)
+    // Demo view is not critical
+    let demoGraphics = null
+    try {
+      demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager, this.settings)
+    } catch (error) {
+      console.log(error)
+    }
 
-    const resultGraphics = new ResultGraphics(resultManager)
+    // Consolidated view is not critical
+    let resultGraphics = null
+    try {
+      resultGraphics = new ResultGraphics(resultManager)
+    } catch (error) {
+      console.log(error)
+    }
 
-    const entityCacheView = new EntityCacheView(entityCache)
+    // Entity view is not critical
+    let entityCacheView = null
+    try {
+      entityCacheView = new EntityCacheView(entityCache)
+    } catch (error) {
+      console.log(error)
+    }
 
     tabGenerator.changeViewLevel(2)
 
     tabGenerator.generateTab(connectionGraphics, 2)
-    tabGenerator.generateTab(demoGraphics, 1)
-    tabGenerator.generateTab(traceGraphics, 2)
+    if (demoGraphics) {
+      tabGenerator.generateTab(demoGraphics, 1)
+    }
+    if (traceGraphics) {
+      tabGenerator.generateTab(traceGraphics, 2)
+    }
     tabGenerator.generateTab(methodGraphics, 2)
     tabGenerator.generateTab(eventGraphics, 2, false)
 
     tabGenerator.generateTab(addressSpaceGraphics, 3, false)
-    tabGenerator.generateTab(resultGraphics, 4)
-    tabGenerator.generateTab(assetGraphics, 5)
-    tabGenerator.generateTab(entityCacheView, 3)
+    if (resultGraphics) {
+      tabGenerator.generateTab(resultGraphics, 4)
+    }
+    if (assetGraphics) {
+      tabGenerator.generateTab(assetGraphics, 5)
+    }
+    if (entityCacheView) {
+      tabGenerator.generateTab(entityCacheView, 3)
+    }
   }
 }
