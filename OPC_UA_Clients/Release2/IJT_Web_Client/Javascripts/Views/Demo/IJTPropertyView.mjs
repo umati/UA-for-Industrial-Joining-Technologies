@@ -39,7 +39,7 @@ export default class IJTPropertyView {
       return heading
     }
 
-    if (result.ResultMetaData.Classification !== '1') {
+    if (parseInt(result.ResultMetaData.Classification) !== 1) {
       return
     }
 
