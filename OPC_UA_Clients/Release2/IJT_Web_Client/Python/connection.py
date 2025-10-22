@@ -1,139 +1,148 @@
 import asyncio
 import json
 import socket
+from typing import Any, Dict
+
 from asyncua import Client, ua
+from asyncua.ua.uaerrors import UaError
+
 from Python.serialize_data import serializeTuple, serializeValue
 from Python.call_structure import createCallStructure
 from Python.event_handler import EventHandler
 from Python.result_event_handler import ResultEventHandler
 from Python.ijt_logger import ijt_log
-from asyncua.ua.uaerrors import UaError
 
 
-def IdObjectToString(inp):
+def IdObjectToString(inp: Any) -> str:
     if isinstance(inp, str):
         return inp
     if isinstance(inp, int):
-        return "ns=" + inp["NamespaceIndex"] + ";i=" + inp["Identifier"]
-    return "ns=" + inp["NamespaceIndex"] + ";s=" + inp["Identifier"]
+        return f"ns={inp['NamespaceIndex']};i={inp['Identifier']}"
+    return f"ns={inp['NamespaceIndex']};s={inp['Identifier']}"
 
 
 class Connection:
     """
     This class encapsulates the actions that can be taken to communicate
-    to an OPC UA server using the Industrial Joining Technique specification
-    connect
-    terminate
-    subscribe
-    read
-    pathtoid
-    namespaces
-    methodcall
+    to an OPC UA server using the Industrial Joining Technique specification.
     """
 
-    def __init__(self, server_url, websocket):
+    def __init__(self, server_url: str, websocket: Any) -> None:
         self.server_url = server_url
         self.websocket = websocket
         self.terminated = False
+
         self.handleResultEvent = "handle"
         self.handleJoiningEvent = "handle"
         self.subResultEvent = "sub"
         self.subJoiningEvent = "sub"
-        self.handlerJoiningEvent = 0
-        self.handlerResultEvent = 0
 
-    async def connect(self):
+        self.handlerJoiningEvent = None
+        self.handlerResultEvent = None
+
+    async def connect(self) -> Dict[str, Any]:
         self.terminated = False
         self.client = Client(self.server_url)
+
         retries = 3
         delay = 2
+
         for attempt in range(retries):
             try:
                 computer_name = socket.getfqdn()
                 self.client.name = f"urn:{computer_name}:IJT:WebClient"
                 self.client.description = f"urn:{computer_name}:IJT:WebClient"
                 self.client.application_uri = f"urn:{computer_name}:IJT:WebClient"
-                self.client.product_uri = f"urn:IJT:WebClient"
+                self.client.product_uri = "urn:IJT:WebClient"
+
                 await self.client.connect()
                 await self.client.load_type_definitions()
                 self.root = self.client.get_root_node()
+
                 event = {
                     "command": "connection established",
                     "endpoint": self.server_url,
                 }
+
                 if self.websocket:
                     await self.websocket.send(json.dumps(event))
+
                 return event
             except Exception as e:
                 ijt_log.error(f"Connect attempt {attempt+1} failed: {e}")
                 await asyncio.sleep(delay)
+
         return {"exception": f"Failed to connect after {retries} attempts"}
 
-    async def terminate(self):
+    async def terminate(self) -> None:
         try:
             if self.terminated:
                 return
             self.terminated = True
 
-            if self.client:
-                session_id = getattr(self.client.session, "session_id", None)
-                ijt_log.info(f"Session ID before disconnect: {session_id}")
+            if not hasattr(self, "client") or not self.client:
+                ijt_log.warning("Client is None. Skipping termination.")
+                return
 
-                if self.client.uaclient.protocol.state == "open":
-                    # Unsubscribe and delete subResultEvent
-                    if self.subResultEvent != "sub":
-                        try:
-                            ijt_log.info("Attempting to unsubscribe handleResultEvent")
-                            await self.subResultEvent.unsubscribe(self.handleResultEvent)
-                        except Exception as e:
-                            ijt_log.warning(f"Unsubscribe failed: {e}")
-                        try:
-                            if hasattr(self.subResultEvent, "subscription_id"):
-                                await self.client.delete_subscriptions([self.subResultEvent.subscription_id])
-                        except Exception as e:
-                            ijt_log.warning(f"Delete subscription failed: {e}")
-                        self.subResultEvent = "sub"
+            session_id = getattr(self.client.session, "session_id", None)
+            ijt_log.info(f"Session ID before disconnect: {session_id}")
 
-                    # Unsubscribe and delete subJoiningEvent
-                    if self.subJoiningEvent != "sub":
-                        try:
-                            ijt_log.info("Attempting to unsubscribe handleJoiningEvent")
-                            await self.subJoiningEvent.unsubscribe(self.handleJoiningEvent)
-                        except Exception as e:
-                            ijt_log.warning(f"Unsubscribe failed: {e}")
-                        try:
-                            if hasattr(self.subJoiningEvent, "subscription_id"):
-                                await self.client.delete_subscriptions([self.subJoiningEvent.subscription_id])
-                        except Exception as e:
-                            ijt_log.warning(f"Delete subscription failed: {e}")
-                        self.subJoiningEvent = "sub"
+            if self.client.uaclient.protocol.state == "open":
+                await self._unsubscribe_and_cleanup()
+                await asyncio.sleep(0.5)
 
-                    await asyncio.sleep(0.5)
-
-                    try:
-                        await asyncio.wait_for(self.client.disconnect(), timeout=2)
-                    except asyncio.TimeoutError:
-                        ijt_log.warning("Disconnect timed out.")
-
-                    # Force session close if still open
+                try:
+                    await asyncio.wait_for(self.client.disconnect(), timeout=2)
+                except asyncio.TimeoutError:
+                    ijt_log.warning("Disconnect timed out.")
                     if self.client.session:
                         try:
                             await self.client.session.close()
                             ijt_log.info("Session forcibly closed.")
                         except Exception as e:
                             ijt_log.warning(f"Session close failed: {e}")
-
-                    ijt_log.info(f"Disconnected from {self.server_url}")
-                else:
-                    ijt_log.warning("Client protocol state not open. Skipping disconnect.")
+                ijt_log.info(f"Disconnected from {self.server_url}")
             else:
-                ijt_log.warning("Client is None. Skipping termination.")
+                ijt_log.warning("Client protocol state not open. Skipping disconnect.")
         except Exception as e:
             ijt_log.error(f"General error during termination: {e}")
         finally:
             ijt_log.info(f"Terminate: Connection to {self.server_url} cleaned up")
 
-    async def subscribe(self, data):
+    async def _unsubscribe_and_cleanup(self) -> None:
+        # Result Event
+        if self.subResultEvent != "sub":
+            try:
+                ijt_log.info("Attempting to unsubscribe handleResultEvent")
+                await self.subResultEvent.unsubscribe(self.handleResultEvent)
+            except Exception as e:
+                ijt_log.warning(f"Unsubscribe failed: {e}")
+            try:
+                if hasattr(self.subResultEvent, "subscription_id"):
+                    await self.client.delete_subscriptions(
+                        [self.subResultEvent.subscription_id]
+                    )
+            except Exception as e:
+                ijt_log.warning(f"Delete subscription failed: {e}")
+            self.subResultEvent = "sub"
+
+        # Joining Event
+        if self.subJoiningEvent != "sub":
+            try:
+                ijt_log.info("Attempting to unsubscribe handleJoiningEvent")
+                await self.subJoiningEvent.unsubscribe(self.handleJoiningEvent)
+            except Exception as e:
+                ijt_log.warning(f"Unsubscribe failed: {e}")
+            try:
+                if hasattr(self.subJoiningEvent, "subscription_id"):
+                    await self.client.delete_subscriptions(
+                        [self.subJoiningEvent.subscription_id]
+                    )
+            except Exception as e:
+                ijt_log.warning(f"Delete subscription failed: {e}")
+            self.subJoiningEvent = "sub"
+
+    async def subscribe(self, data: dict) -> Dict[str, Any]:
         try:
             self.handlerJoiningEvent = self.handlerJoiningEvent or EventHandler(
                 self.websocket, self.server_url, self.client
@@ -180,7 +189,6 @@ class Connection:
 
             event_type = data.get("eventtype", "").lower().strip()
 
-            # Unified subscription for both result events
             if (
                 not event_type
                 or "resultevent" in event_type
@@ -190,21 +198,24 @@ class Connection:
                     self.subResultEvent = await self.client.create_subscription(
                         100, self.handlerResultEvent
                     )
-                self.handleResultEvents = await self.subResultEvent.subscribe_events(
-                    obj_node,
-                    [result_event_node, joining_result_event_node],
-                    queuesize=200,
-                )
+                    self.handleResultEvents = (
+                        await self.subResultEvent.subscribe_events(
+                            obj_node,
+                            [result_event_node, joining_result_event_node],
+                            queuesize=200,
+                        )
+                    )
 
-            # Separate subscription for joining system event
             if not event_type or "joiningsystemevent" in event_type:
                 if self.subJoiningEvent == "sub":
                     self.subJoiningEvent = await self.client.create_subscription(
                         100, self.handlerJoiningEvent
                     )
-                self.handleJoiningEvents = await self.subJoiningEvent.subscribe_events(
-                    obj_node, [joining_system_event_node], queuesize=200
-                )
+                    self.handleJoiningEvents = (
+                        await self.subJoiningEvent.subscribe_events(
+                            obj_node, [joining_system_event_node], queuesize=200
+                        )
+                    )
 
             return {}
         except Exception as e:
@@ -212,11 +223,11 @@ class Connection:
             ijt_log.error(f"Exception: {e}")
             return {"exception": f"Subscribe exception: {e}"}
 
-    async def read(self, data):
+    async def read(self, data: dict) -> Dict[str, Any]:
+        nodeId = data.get("nodeid")
+        lastReadState = "READ_ENTER"
+
         try:
-            nodeId = data["nodeid"]
-            lastReadState = "READ_ENTER"
-            # ijt_log.info(f"READ: nodeID: {nodeId[-70:]}")
             node = self.client.get_node(nodeId)
 
             attrIdsStrings = [
@@ -237,22 +248,22 @@ class Connection:
 
             lastReadState = "READ_ATTRIBUTES_SETUP"
             attributeReply = await node.read_attributes(attrIds)
-            lastReadState = "READ_ATTRIBUTES_READ"
 
+            lastReadState = "READ_ATTRIBUTES_READ"
             attributeValues = [reply.Value.Value for reply in attributeReply]
             zipped = list(zip(attrIdsStrings, attributeValues))
             serializedAttributes = serializeTuple(zipped)
 
             lastReadState = "READ_SERIALIZED"
             relations = await node.get_references()
-            value = {}
 
+            value = {}
             nodeClass = await node.read_node_class()
             if nodeClass == ua.NodeClass.Variable:
                 value = await node.get_value()
+                lastReadState = "READ_SERIALIZED_VALUE_GENERATION"
 
-            lastReadState = "READ_SERIALIZED_VALUE_GENERATION"
-            event = {
+            return {
                 "command": "readresult",
                 "endpoint": self.server_url,
                 "attributes": serializedAttributes,
@@ -260,103 +271,75 @@ class Connection:
                 "value": serializeValue(value),
                 "nodeid": nodeId,
             }
-            return event
-
         except Exception as e:
             ijt_log.error(
-                f"Exception in Read: ({lastReadState}): {IdObjectToString(nodeId)}"
+                f"Exception in Read ({lastReadState}): {IdObjectToString(nodeId)}"
             )
-            ijt_log.error("Exception:" + str(e))
-            return {"exception": "Read Exception: (" + lastReadState + "): " + str(e)}
+            ijt_log.error("Exception: " + str(e))
+            return {"exception": f"Read Exception ({lastReadState}): {str(e)}"}
 
-    async def pathtoid(self, data):
-        """
-        This is a support function that given a path (string)
-        returns the node id at that location
-        """
+    async def pathtoid(self, data: dict) -> Dict[str, Any]:
         try:
-            # ijt_log.info("PATHTOID")
             nodeId = data["nodeid"]
             path = json.loads(data["path"])
+
             node = self.client.get_node(
-                "ns=" + nodeId["NamespaceIndex"] + ";s=" + nodeId["Identifier"]
+                f"ns={nodeId['NamespaceIndex']};s={nodeId['Identifier']}"
             )
 
-            # ijt_log.info("PATHTOID: path is: ", path)
-            # Create a relative path
             relative_path = ua.RelativePath()
-            element = ua.RelativePathElement()
             for step in path:
                 element = ua.RelativePathElement()
                 element.IsInverse = False
                 element.IncludeSubtypes = False
                 element.TargetName = ua.QualifiedName(
-                    step.get("identifier"), step.get("namespaceindex")
+                    step["identifier"], step["namespaceindex"]
                 )
                 relative_path.Elements.append(element)
 
-            # Create a browse path with the starting node and the relative path
             browse_path = ua.BrowsePath()
             browse_path.StartingNode = node.nodeid
             browse_path.RelativePath = relative_path
 
-            # Send the TranslateBrowsePathsToNodeIds request
             result = await self.client.uaclient.translate_browsepaths_to_nodeids(
                 [browse_path]
             )
-
-            event = {"nodeid": serializeValue(result[0].Targets[0].TargetId)}
-            return event
-
+            return {"nodeid": serializeValue(result[0].Targets[0].TargetId)}
         except Exception as e:
-            ijt_log.error("Exception in PathToId path ", path)
-            ijt_log.error("Exception:" + str(e))
+            ijt_log.error("Exception in PathToId path")
+            ijt_log.error("Exception: " + str(e))
             return {"exception": "PathToId Exception: " + str(e)}
 
-    async def namespaces(self, data):
+    async def namespaces(self, data: dict) -> Dict[str, Any]:
         try:
             namespacesReply = await self.client.get_namespace_array()
-            event = {"namespaces": json.dumps(namespacesReply)}
-            return event
+            return {"namespaces": json.dumps(namespacesReply)}
         except Exception as e:
-            ijt_log.error("Exception in Namespaces ")
-            ijt_log.error("Exception:" + str(e))
+            ijt_log.error("Exception in Namespaces")
+            ijt_log.error("Exception: " + str(e))
             return {"exception": "Exception in Namespaces: " + str(e)}
-        finally:
-            pass
 
-    async def methodcall(self, data):
+    async def methodcall(self, data: dict) -> Dict[str, Any]:
         try:
-            # ijt_log.info(data)
             objectNode = data["objectnode"]
             methodNode = data["methodnode"]
             arguments = data["arguments"]
-            obj = self.client.get_node(
-                IdObjectToString(objectNode)
-            )  # get the parent object node
-            method = self.client.get_node(
-                IdObjectToString(methodNode)
-            )  # get the method node
+
+            obj = self.client.get_node(IdObjectToString(objectNode))
+            method = self.client.get_node(IdObjectToString(methodNode))
 
             ijt_log.info("MethodCall: " + IdObjectToString(objectNode))
 
-            attrList = []
-            attrList.append(method)
-
+            attrList = [method]
             for argument in arguments:
                 input = createCallStructure(argument)
                 attrList.append(input)
 
-            # ijt_log.info("attrList")
-            # ijt_log.info(attrList)
-
             methodRepr = getattr(obj, "call_method")
-            out = await methodRepr(*attrList)  # call the method and get the output
+            out = await methodRepr(*attrList)
 
-            # ijt_log.info(serializeValue(out))
             return {"output": serializeValue(out)}
-
         except Exception as e:
             ijt_log.error("Exception in MethodCall " + IdObjectToString(methodNode))
-            ijt_log.error("Exception:" + str(e))
+            ijt_log.error("Exception: " + str(e))
             return {"exception": "Method call exception: " + str(e)}
