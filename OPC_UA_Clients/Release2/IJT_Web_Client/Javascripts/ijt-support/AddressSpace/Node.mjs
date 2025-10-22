@@ -97,12 +97,12 @@ class PartialNode {
  * @returns a node
  */
 export function NodeFactory (data) {
-  switch (data.attributes.NodeClass) {
-    case '1':
+  switch (parseInt(data.attributes.NodeClass)) {
+    case 1:
       return new ObjectNode(data)
-    case '2':
+    case 2:
       return new VariableNode(data)
-    case '4':
+    case 4:
       return new MethodNode(data)
     default:
       return new ObjectNode(data)
