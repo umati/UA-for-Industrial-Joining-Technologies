@@ -17,11 +17,11 @@ export class EventManager {
 
     // Listen to subscribed events messages
     this.socketHandler.registerMandatory('event', (msg, context) => {
-      const message = JSON.parse(msg)
+      const message = msg
       if (message.ConditionClassName) {
-        let evtName = message.ConditionClassName.Text + ' [ '
+        let evtName = message.ConditionClassName + ' [ '
         for (const subclass of message.ConditionSubClassName) {
-          evtName += subclass.Text
+          evtName += subclass + ', '
         }
         console.log('Subscribed event triggered: ' + evtName + ']')
       } else {

@@ -4,9 +4,9 @@ import IJTBaseModel from '../IJTBaseModel.mjs'
 export default class BaseEventType extends IJTBaseModel {
   getEventName () {
     if (this.ConditionClassName) {
-      let evtName = this.ConditionClassName.Text + ' [ '
+      let evtName = this.ConditionClassName + ' [ '
       for (const subclass of this.ConditionSubClassName) {
-        evtName += subclass.Text + ' '
+        evtName += subclass + ' '
       }
       return evtName + ']'
     } else if (this.Result) {

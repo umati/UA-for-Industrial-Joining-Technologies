@@ -69,14 +69,14 @@ export class ModelManager {
                 let result
                 
                 // console.log('Classification number' + classification)
-                switch (classification) {
-                  case "4": 
+                switch (parseInt(classification)) {
+                  case 4: 
                     result= new JobDataModel(content, this)
                     break
-                  case "3": 
+                  case 3: 
                     result = new BatchDataModel(content, this)
                     break
-                  case "1": 
+                  case 1: 
                     result = new TighteningDataType(content, this)
                     break
                   default:
@@ -122,14 +122,14 @@ export class ModelManager {
    */
   createModelFromEvent (msg) {
     let model
-    switch (msg.EventType.Identifier) {
-      case ('1006'):
+    switch (parseInt(msg.EventType.Identifier)) {
+      case (1006):
         model = new JoiningSystemEventModel(msg, this)
         break
-      case ('1007'):
+      case (1007):
         model = new JoiningSystemResultReadyEvent(msg, this)
         break
-      case ('1002'): // Some non tightening related result
+      case (1002): // Some non tightening related result
         model = new JoiningSystemResultReadyEvent(msg, this)
         break
       default:

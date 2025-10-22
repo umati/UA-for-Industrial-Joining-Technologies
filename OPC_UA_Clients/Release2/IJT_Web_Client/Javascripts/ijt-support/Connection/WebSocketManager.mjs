@@ -24,7 +24,7 @@ export class WebSocketManager {
     this.websocket.addEventListener('message', ({ data }) => {
       const event = JSON.parse(data)
 
-      console.log('Recieved event command: ' + event.command)
+      console.log('Recieved message of type: ' + event.command)
       const command = event.command
       const endpoint = event.endpoint
 
