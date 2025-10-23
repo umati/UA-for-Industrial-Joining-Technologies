@@ -117,9 +117,9 @@ export default class MethodGUICreator {
 
         const drop = this.screen.createDropdown('Type', (x) => {
 
-        })
+        }, 'dropJoiningProcess')
 
-        // drop.classList.add('methodJoiningProcess')
+        // drop.classList.add('dropJoiningProcess')
         drop.addOption('OriginId', 1)
         drop.addOption('Specific Id', 0)
         drop.addOption('Selection name', 2)
@@ -218,7 +218,7 @@ export default class MethodGUICreator {
         const input = this.screen.createInput('', area, callback, 45)
         input.dataType = arg.DataType
         input.title = 'Datatype: Number\n' + (arg?.Description?.Text ? arg.Description.Text : '')
-        input.value = 0
+        input.value = defaultValue
         return function () {
           return { value: input.value, type: input.dataType }
         }

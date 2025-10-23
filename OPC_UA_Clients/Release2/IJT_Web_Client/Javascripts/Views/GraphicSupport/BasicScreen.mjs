@@ -117,7 +117,7 @@ export default class BasicScreen {
     return x
   }
 
-  createDropdown (name, onchange) {
+  createDropdown (name, onchange, style) {
     const container = document.createElement('div')
     if (name && name.length > 0) {
       const label = document.createElement('label')
@@ -125,7 +125,11 @@ export default class BasicScreen {
       container.appendChild(label)
     }
     container.select = document.createElement('select')
-    container.select.classList.add('envSelect')
+    if (style) {
+      container.select.classList.add(style)
+    } else {
+      container.select.classList.add('envSelect')
+    }
     container.appendChild(container.select)
 
     container.addOption = function (opt, key) {
