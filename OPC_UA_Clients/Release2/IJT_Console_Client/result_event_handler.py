@@ -1,20 +1,20 @@
 import asyncio
 import traceback
 import pytz
-from sys import exception
 from datetime import datetime
 from typing import Dict
+from dataclasses import dataclass
+
 from ijt_logger import ijt_log
-from utils import log_result_to_file
-from utils import log_result_event_details
+from utils import log_result_to_file, log_result_event_details
 
 
-class Short:
-    def __init__(self, eventType, result, message, id):
-        self.EventType = eventType
-        self.Result = result
-        self.Message = message
-        self.EventId = id
+@dataclass
+class ShortResultEvent:
+    EventType: str
+    Result: dict
+    Message: str
+    EventId: str
 
     def to_dict(self) -> Dict:
         return {
@@ -36,14 +36,13 @@ class ResultEventHandler:
             asyncio.set_event_loop(self.loop)
         ijt_log.info("ResultEventHandler initialized.")
 
-    async def process_event(self, event: Short):
+    async def process_event(self, event: ShortResultEvent):
         try:
-            ijt_log.info(
-                f"Event processed: Message={getattr(event.Message, 'Text', 'N/A')}"
-            )
+            ijt_log.info(f"Processing Result Event: {event.Message}")
             await log_result_to_file(event)
         except Exception as e:
             ijt_log.error("Exception: " + str(e))
+            ijt_log.error(traceback.format_exc())
 
     async def event_notification(self, event):
         try:
@@ -51,8 +50,11 @@ class ResultEventHandler:
             event_id = await log_result_event_details(
                 event, self.client, self.server_url, client_received_time
             )
-            filtered_event = Short(
-                event.EventType, event.Result, event.Message, event_id
+            filtered_event = ShortResultEvent(
+                EventType=str(event.EventType),
+                Result=event.Result,
+                Message=getattr(event.Message, "Text", "N/A"),
+                EventId=event_id,
             )
             asyncio.run_coroutine_threadsafe(
                 self.process_event(filtered_event), self.loop

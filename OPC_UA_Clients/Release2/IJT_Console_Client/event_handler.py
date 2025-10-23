@@ -1,55 +1,36 @@
 import asyncio
-import json
 import traceback
+import orjson
 from threading import Thread
+from dataclasses import dataclass
+from typing import List, Any
+
 from asyncua import ua
 from ijt_logger import ijt_log
 from utils import log_joining_system_event, nodeid_to_str, localizedtext_to_str
-from serialize_data import serializeFullEvent
+from serialize_data import serialize_full_event
 
 
-class Short:
-    def __init__(self, event):
-        self.EventType = event.EventType
-        self.EventId = (
-            event.EventId.decode("utf-8", errors="replace")
-            if isinstance(event.EventId, bytes)
-            else str(event.EventId)
-        )
-        self.Message = getattr(event, "Message", None)
-        self.SourceName = str(getattr(event, "SourceName", None))
-        self.SourceNode = nodeid_to_str(getattr(event, "SourceNode", None))
-        self.Severity = str(getattr(event, "Severity", None))
-        self.Time = getattr(event, "Time", None)
-        self.ReceiveTime = getattr(event, "ReceiveTime", None)
-        self.LocalTime = getattr(event, "LocalTime", None)
-
-        self.ConditionClassId = nodeid_to_str(getattr(event, "ConditionClassId", None))
-        self.ConditionClassName = localizedtext_to_str(
-            getattr(event, "ConditionClassName", None)
-        )
-        self.ConditionSubClassId = [
-            nodeid_to_str(nid) for nid in getattr(event, "ConditionSubClassId", [])
-        ]
-        self.ConditionSubClassName = [
-            localizedtext_to_str(lt)
-            for lt in getattr(event, "ConditionSubClassName", [])
-        ]
-
-        self.EventCode = getattr(event, "JoiningSystemEventContent/EventCode", None)
-        self.EventText = localizedtext_to_str(
-            getattr(event, "JoiningSystemEventContent/EventText", None)
-        )
-        self.JoiningTechnology = localizedtext_to_str(
-            getattr(event, "JoiningSystemEventContent/JoiningTechnology", None)
-        )
-        self.AssociatedEntities = getattr(
-            event, "JoiningSystemEventContent/AssociatedEntities", []
-        )
-
-        self.ReportedValues = getattr(
-            event, "JoiningSystemEventContent/ReportedValues", []
-        )
+@dataclass
+class ShortJoiningEvent:
+    EventType: ua.NodeId
+    EventId: str
+    Message: ua.LocalizedText
+    SourceName: str
+    SourceNode: str
+    Severity: int
+    Time: Any
+    ReceiveTime: Any
+    LocalTime: ua.TimeZoneDataType
+    ConditionClassId: ua.NodeId
+    ConditionClassName: ua.LocalizedText
+    ConditionSubClassId: List[ua.NodeId]
+    ConditionSubClassName: List[ua.LocalizedText]
+    EventCode: Any
+    EventText: str
+    JoiningTechnology: str
+    AssociatedEntities: List[Any]
+    ReportedValues: List[Any]
 
 
 class EventHandler:
@@ -66,42 +47,77 @@ class EventHandler:
 
         thread = Thread(target=start_loop, daemon=True)
         thread.start()
-        asyncio.run_coroutine_threadsafe(self.handleQueue(), self.loop)
 
-    async def process_event(self, short_event: Short):
-        try:
-            ijt_log.info("EventHandler: Processing event")
-            await self.queue.put(short_event)
-        except Exception as e:
-            ijt_log.error(f"Error handling process_event: {e}")
-            ijt_log.error(traceback.format_exc())
+        asyncio.run_coroutine_threadsafe(self.handle_queue(), self.loop)
 
     async def event_notification(self, event):
         try:
             ijt_log.info("EventHandler: Event notification")
-            short_event = Short(event)
+
+            short_event = ShortJoiningEvent(
+                EventType=event.EventType,
+                EventId=(
+                    event.EventId.decode("utf-8", errors="replace")
+                    if isinstance(event.EventId, bytes)
+                    else str(event.EventId)
+                ),
+                Message=getattr(event, "Message", None),
+                SourceName=str(getattr(event, "SourceName", "")),
+                SourceNode=nodeid_to_str(getattr(event, "SourceNode", None)),
+                Severity=int(getattr(event, "Severity", 0)),
+                Time=getattr(event, "Time", None),
+                ReceiveTime=getattr(event, "ReceiveTime", None),
+                LocalTime=getattr(event, "LocalTime", None),
+                ConditionClassId=getattr(event, "ConditionClassId", None),
+                ConditionClassName=getattr(event, "ConditionClassName", None),
+                ConditionSubClassId=getattr(event, "ConditionSubClassId", []),
+                ConditionSubClassName=getattr(event, "ConditionSubClassName", []),
+                EventCode=getattr(event, "JoiningSystemEventContent/EventCode", None),
+                EventText=localizedtext_to_str(
+                    getattr(event, "JoiningSystemEventContent/EventText", None)
+                ),
+                JoiningTechnology=localizedtext_to_str(
+                    getattr(event, "JoiningSystemEventContent/JoiningTechnology", None)
+                ),
+                AssociatedEntities=getattr(
+                    event, "JoiningSystemEventContent/AssociatedEntities", []
+                ),
+                ReportedValues=getattr(
+                    event, "JoiningSystemEventContent/ReportedValues", []
+                ),
+            )
+
             await log_joining_system_event(short_event)
-            asyncio.run_coroutine_threadsafe(self.process_event(short_event), self.loop)
+            await self.queue.put(short_event)
+
         except Exception as e:
             ijt_log.error(f"Error handling event notification: {e}")
             ijt_log.error(traceback.format_exc())
 
-    async def handleQueue(self):
+    async def handle_queue(self):
         while True:
             item = await self.queue.get()
             if item is None:
                 break
             try:
-                serialized_event = serializeFullEvent(item)
-                json_payload = json.dumps(serialized_event)
-                await self.websocket.send(json_payload)
-            except websockets.exceptions.ConnectionClosedOK:
-                ijt_log.info("WebSocket connection closed normally.")
-                break
+                serialized_event = serialize_full_event(item)
+                json_payload = orjson.dumps(serialized_event).decode("utf-8")
+
+                if self.websocket:
+                    await self.websocket.send(json_payload)
+                else:
+                    ijt_log.debug(
+                        "WebSocket is None, skipping send. Event processed locally."
+                    )
+
             except Exception as e:
                 ijt_log.error(f"Error sending message: {e}")
                 ijt_log.error(traceback.format_exc())
-                await self.websocket.close()
+                if self.websocket:
+                    try:
+                        await self.websocket.close()
+                    except Exception:
+                        pass
                 break
             finally:
                 self.queue.task_done()
