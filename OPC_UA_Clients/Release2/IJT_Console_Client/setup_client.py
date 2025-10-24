@@ -23,27 +23,17 @@ VENV_DIR = Path("venv")
 PYTHON_EXECUTABLE = VENV_DIR / (
     "Scripts/python.exe" if os.name == "nt" else "bin/python"
 )
-REQUIRED_PACKAGES = ["asyncua", "pytz", "aiofiles", "orjson"]
-
 URL_PATTERN = r"opc\.tcp://[a-zA-Z0-9\.\-]+:\d+"
+DEFAULT_PACKAGES = ["asyncua", "pytz", "aiofiles", "orjson"]
 
 
 def check_python_version():
-    required_version = (3, 8)
     current_version = sys.version_info[:2]
-    if current_version < required_version:
-        log.error(
-            f"Python {required_version[0]}.{required_version[1]} or higher is required. Found {current_version[0]}.{current_version[1]}"
-        )
+    if current_version >= (3, 14):
+        log.warning("Python 3.14+ detected. Some packages may not be fully compatible.")
+    elif current_version < (3, 8):
+        log.error("Python 3.8 or higher is required.")
         sys.exit(1)
-
-
-def find_python_executable():
-    python_exec = shutil.which("python3") or shutil.which("python")
-    if not python_exec:
-        log.error("Python is not installed or not found in PATH.")
-        sys.exit(1)
-    return python_exec
 
 
 def create_virtualenv():
@@ -58,19 +48,32 @@ def create_virtualenv():
         sys.exit(1)
 
 
-def install_and_upgrade_packages():
-    log.info("Upgrading pip and installing required packages...")
-    try:
+def install_packages():
+    log.info("Upgrading pip...")
+    subprocess.check_call(
+        [str(PYTHON_EXECUTABLE), "-m", "pip", "install", "--upgrade", "pip"]
+    )
+
+    requirements_file = Path("requirements.txt")
+    if requirements_file.exists():
+        log.info("Installing packages from requirements.txt...")
         subprocess.check_call(
-            [str(PYTHON_EXECUTABLE), "-m", "pip", "install", "--upgrade", "pip"]
+            [
+                str(PYTHON_EXECUTABLE),
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "-r",
+                str(requirements_file),
+            ]
         )
-        for package in REQUIRED_PACKAGES:
+    else:
+        log.info("requirements.txt not found. Installing default packages...")
+        for package in DEFAULT_PACKAGES:
             subprocess.check_call(
                 [str(PYTHON_EXECUTABLE), "-m", "pip", "install", "--upgrade", package]
             )
-    except subprocess.CalledProcessError as e:
-        log.error(f"Package installation failed: {e}")
-        sys.exit(1)
 
 
 def validate_url(url: str) -> str:
@@ -87,16 +90,10 @@ def run_client(url_arg=None):
         sys.exit(1)
 
     log.info("Starting OPC UA client...")
-    try:
-        cmd = [str(PYTHON_EXECUTABLE), str(main_file)]
-        if url_arg:
-            cmd.append(f"--url={url_arg}")
-        subprocess.call(cmd)
-    except KeyboardInterrupt:
-        log.info("Client interrupted by user (Ctrl+C).")
-    except Exception as e:
-        log.error(f"Failed to run client: {e}")
-        sys.exit(1)
+    cmd = [str(PYTHON_EXECUTABLE), str(main_file)]
+    if url_arg:
+        cmd.append(f"--url={url_arg}")
+    subprocess.call(cmd)
 
 
 def main():
@@ -126,7 +123,7 @@ def main():
         shutil.rmtree(VENV_DIR)
 
     create_virtualenv()
-    install_and_upgrade_packages()
+    install_packages()
     run_client(url_arg)
 
 
