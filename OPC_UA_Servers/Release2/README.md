@@ -32,6 +32,8 @@
 **2025-10-25:** Following Key Changes.
 1. **Updated** Result Simulation to include **Final values** in **JoiningResult.OverallResultValues**
 2. **Added** additional entities in **ResultMetaData.AssociatedEntities**.
+3. **Updated** Asset Simulation to set the **ProductInstanceUri as ManufacturerUri/GUID**.
+4. **Multiple** refactoring and **optimizations**.
 
 **2025-10-15:** Following Key Changes.
 1. **Updated** '**SimulateSingleResult**' Method with input **"0 - SIMPLE RESULT"** to send **empty ResultContent instead of NULL**.
