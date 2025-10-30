@@ -17,6 +17,7 @@ import AddressSpaceGraphics from 'views/AddressSpace/AddressSpaceGraphics.mjs'
 import EventGraphics from 'views/Events/EventGraphics.mjs'
 import MethodGraphics from 'views/Methods/MethodGraphics.mjs'
 import USDemo from 'views/Demo/USDemo.mjs'
+import JointDemo from 'views/Demo/JointDemo.mjs'
 import AssetGraphics from 'views/Assets/AssetGraphics.mjs'
 import EntityCacheView from 'views/Entities/Entities.mjs'
 import ConnectionGraphics from 'views/Connection/ConnectionGraphics.mjs'
@@ -105,10 +106,18 @@ export default class EndpointGraphics extends BasicScreen {
     const methodManager = new MethodManager(addressSpace)
     const methodGraphics = new MethodGraphics(methodManager, addressSpace, this.settings, entityCache)
 
-    // Demo view is not critical
+    // USDemo view is not critical
     let demoGraphics = null
     try {
       demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager, this.settings)
+    } catch (error) {
+      console.log(error)
+    }
+
+    // JointDemo view is not critical
+    let jointDemoGraphics = null
+    try {
+      jointDemoGraphics = new JointDemo(methodManager, resultManager, this.connectionManager, this.settings)
     } catch (error) {
       console.log(error)
     }
@@ -135,6 +144,10 @@ export default class EndpointGraphics extends BasicScreen {
     if (demoGraphics) {
       tabGenerator.generateTab(demoGraphics, 1)
     }
+    if (jointDemoGraphics) {
+      tabGenerator.generateTab(jointDemoGraphics, 1)
+    }
+
     if (traceGraphics) {
       tabGenerator.generateTab(traceGraphics, 2)
     }
