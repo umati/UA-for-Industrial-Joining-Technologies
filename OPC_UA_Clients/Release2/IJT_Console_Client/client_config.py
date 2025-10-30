@@ -1,2 +1,10 @@
-SERVER_URL = "opc.tcp://10.46.19.106:40451"  # Replace with actual server URL
-ENABLE_RESULT_FILE_LOGGING = False  # Set to True to enable result logging
+import re
+
+# Regex pattern for validating OPC UA URLs
+URL_PATTERN = re.compile(r"opc\.tcp://[a-zA-Z0-9\.\-]+:\d+")
+
+# Default OPC UA server URL (used if --url is not provided)
+SERVER_URL = "opc.tcp://10.46.19.106:40451"
+
+# Enable result file logging (project-level constant)
+ENABLE_RESULT_FILE_LOGGING = True

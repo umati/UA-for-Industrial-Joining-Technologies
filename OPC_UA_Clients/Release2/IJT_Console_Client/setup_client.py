@@ -23,41 +23,64 @@ VENV_DIR = Path("venv")
 PYTHON_EXECUTABLE = VENV_DIR / (
     "Scripts/python.exe" if os.name == "nt" else "bin/python"
 )
-REQUIRED_PACKAGES = ["asyncua", "pytz"]
 URL_PATTERN = r"opc\.tcp://[a-zA-Z0-9\.\-]+:\d+"
+DEFAULT_PACKAGES = ["asyncua", "pytz", "aiofiles", "orjson"]
 
 
 def check_python_version():
-    if sys.version_info < (3, 8):
+    current_version = sys.version_info[:2]
+    if current_version >= (3, 14):
+        log.warning("Python 3.14+ detected. Some packages may not be fully compatible.")
+    elif current_version < (3, 8):
         log.error("Python 3.8 or higher is required.")
         sys.exit(1)
 
 
-def find_python_executable():
-    python_exec = shutil.which("python3") or shutil.which("python")
-    if not python_exec:
-        log.error("Python is not installed or not found in PATH.")
-        sys.exit(1)
-    return python_exec
-
-
 def create_virtualenv():
-    if not VENV_DIR.exists():
-        log.info("Creating virtual environment...")
-        venv.create(VENV_DIR, with_pip=True)
-    else:
-        log.info("Virtual environment already exists.")
+    try:
+        if not VENV_DIR.exists():
+            log.info("Creating virtual environment...")
+            venv.create(VENV_DIR, with_pip=True)
+        else:
+            log.info("Virtual environment already exists.")
+    except Exception as e:
+        log.error(f"Failed to create virtual environment: {e}")
+        sys.exit(1)
 
 
-def install_and_upgrade_packages():
-    log.info("Upgrading pip and installing required packages...")
+def install_packages():
+    log.info("Upgrading pip...")
     subprocess.check_call(
         [str(PYTHON_EXECUTABLE), "-m", "pip", "install", "--upgrade", "pip"]
     )
-    for package in REQUIRED_PACKAGES:
+
+    requirements_file = Path("requirements.txt")
+    if requirements_file.exists():
+        log.info("Installing packages from requirements.txt...")
         subprocess.check_call(
-            [str(PYTHON_EXECUTABLE), "-m", "pip", "install", "--upgrade", package]
+            [
+                str(PYTHON_EXECUTABLE),
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "-r",
+                str(requirements_file),
+            ]
         )
+    else:
+        log.info("requirements.txt not found. Installing default packages...")
+        for package in DEFAULT_PACKAGES:
+            subprocess.check_call(
+                [str(PYTHON_EXECUTABLE), "-m", "pip", "install", "--upgrade", package]
+            )
+
+
+def validate_url(url: str) -> str:
+    if url and re.match(URL_PATTERN, url):
+        return url
+    log.warning("Invalid or missing OPC UA URL. Using default.")
+    return None
 
 
 def run_client(url_arg=None):
@@ -67,16 +90,10 @@ def run_client(url_arg=None):
         sys.exit(1)
 
     log.info("Starting OPC UA client...")
-    try:
-        cmd = [str(PYTHON_EXECUTABLE), str(main_file)]
-        if url_arg:
-            cmd.append(f"--url={url_arg}")
-        subprocess.call(cmd)
-    except KeyboardInterrupt:
-        log.info("Client interrupted by user (Ctrl+C).")
-    except Exception as e:
-        log.error(f"Failed to run client: {e}")
-        sys.exit(1)
+    cmd = [str(PYTHON_EXECUTABLE), str(main_file)]
+    if url_arg:
+        cmd.append(f"--url={url_arg}")
+    subprocess.call(cmd)
 
 
 def main():
@@ -85,18 +102,28 @@ def main():
     parser.add_argument(
         "--force", action="store_true", help="Force recreate virtual environment"
     )
+    parser.add_argument(
+        "--clean", action="store_true", help="Remove virtual environment and exit"
+    )
     args = parser.parse_args()
 
-    url_arg = args.url if args.url and re.match(URL_PATTERN, args.url) else None
-
+    url_arg = validate_url(args.url)
     check_python_version()
+
+    if args.clean:
+        if VENV_DIR.exists():
+            log.info("Cleaning up virtual environment...")
+            shutil.rmtree(VENV_DIR)
+        else:
+            log.info("No virtual environment found to clean.")
+        sys.exit(0)
 
     if args.force and VENV_DIR.exists():
         log.info("Force setup enabled. Removing existing virtual environment...")
         shutil.rmtree(VENV_DIR)
 
     create_virtualenv()
-    install_and_upgrade_packages()
+    install_packages()
     run_client(url_arg)
 
 

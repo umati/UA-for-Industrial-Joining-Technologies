@@ -319,27 +319,143 @@ class Connection:
             ijt_log.error("Exception: " + str(e))
             return {"exception": "Exception in Namespaces: " + str(e)}
 
-    async def methodcall(self, data: dict) -> Dict[str, Any]:
+    def map_nodeid_to_varianttype(self, nodeid: int) -> ua.VariantType:
+        mapping = {
+            1: ua.VariantType.Boolean,
+            2: ua.VariantType.SByte,
+            3: ua.VariantType.Byte,
+            4: ua.VariantType.Int16,
+            5: ua.VariantType.UInt16,
+            6: ua.VariantType.Int32,
+            7: ua.VariantType.UInt32,
+            8: ua.VariantType.Int64,
+            9: ua.VariantType.UInt64,
+            10: ua.VariantType.Float,
+            11: ua.VariantType.Double,
+            12: ua.VariantType.String,
+            13: ua.VariantType.DateTime,
+            31918: ua.VariantType.String,  # TrimmedString
+        }
+        return mapping.get(nodeid, ua.VariantType.String)
+
+    async def methodcall(self, data: dict) -> dict:
+        objectNode = data.get("objectnode")
+        methodNode = data.get("methodnode")
+        arguments = data.get("arguments", [])
+
         try:
-            objectNode = data["objectnode"]
-            methodNode = data["methodnode"]
-            arguments = data["arguments"]
+            obj_id = f"ns={objectNode['NamespaceIndex']};s={objectNode['Identifier']}"
+            method_id = (
+                f"ns={methodNode['NamespaceIndex']};s={methodNode['Identifier']}"
+            )
 
-            obj = self.client.get_node(IdObjectToString(objectNode))
-            method = self.client.get_node(IdObjectToString(methodNode))
+            ijt_log.info(f"[methodcall] ObjectNode: {obj_id}")
+            ijt_log.info(f"[methodcall] MethodNode: {method_id}")
+            ijt_log.info(f"[methodcall] Arguments: {json.dumps(arguments)}")
 
-            ijt_log.info("MethodCall: " + IdObjectToString(objectNode))
+            obj = self.client.get_node(obj_id)
+            method = self.client.get_node(method_id)
 
-            attrList = [method]
-            for argument in arguments:
-                input = createCallStructure(argument)
-                attrList.append(input)
+            input_args_node = await method.get_child("0:InputArguments")
+            expected_args = await input_args_node.get_value()
 
-            methodRepr = getattr(obj, "call_method")
-            out = await methodRepr(*attrList)
+            if len(arguments) != len(expected_args):
+                ijt_log.warning(
+                    f"[methodcall] Argument count mismatch: expected {len(expected_args)}, got {len(arguments)}"
+                )
 
+            input_args = []
+            for i, arg in enumerate(arguments):
+                try:
+                    expected_type_node = expected_args[i].DataType
+                    value = arg["value"]
+
+                    ijt_log.info(
+                        f"[methodcall] Argument {i+1} expected type NodeId: {expected_type_node}"
+                    )
+                    ijt_log.info(
+                        f"[methodcall] Argument {i+1} Identifier type: {type(expected_type_node.Identifier)}"
+                    )
+
+                    variant_type = (
+                        self.map_nodeid_to_varianttype(arg["dataType"])
+                        or ua.VariantType.String
+                    )
+
+                    # Sanitize None for strings
+                    if value is None and variant_type == ua.VariantType.String:
+                        value = ""
+
+                    # Optional: warn on empty strings
+                    if (
+                        isinstance(value, str)
+                        and value.strip() == ""
+                        and variant_type == ua.VariantType.String
+                    ):
+                        ijt_log.warning(
+                            f"[methodcall] Argument {i+1} is empty string — server may reject it."
+                        )
+
+                    # Handle arrays
+                    if isinstance(value, list):
+                        if variant_type == ua.VariantType.String:
+                            input_args.append(
+                                ua.Variant(value, variant_type, is_array=True)
+                            )
+                            ijt_log.info(
+                                f"[methodcall] Argument {i+1} mapped to Array of {variant_type.name} with value {value}"
+                            )
+                        elif all(isinstance(v, ua.ExtensionObject) for v in value):
+                            input_args.append(
+                                ua.Variant(
+                                    value, ua.VariantType.ExtensionObject, is_array=True
+                                )
+                            )
+                            ijt_log.info(
+                                f"[methodcall] Argument {i+1} mapped to Array of ExtensionObjects"
+                            )
+                        else:
+                            input_args.append(
+                                ua.Variant(value, variant_type, is_array=True)
+                            )
+                            ijt_log.info(
+                                f"[methodcall] Argument {i+1} mapped to Array of {variant_type.name}"
+                            )
+                    else:
+                        # Type correction logic
+                        if isinstance(value, str) and value.isdigit():
+                            value = int(value)
+                        elif isinstance(value, int) and variant_type in [
+                            ua.VariantType.UInt32,
+                            ua.VariantType.UInt64,
+                        ]:
+                            value = abs(value)
+                        elif isinstance(value, float) and variant_type not in [
+                            ua.VariantType.Float,
+                            ua.VariantType.Double,
+                        ]:
+                            variant_type = ua.VariantType.Double
+                        elif isinstance(value, bool):
+                            pass
+
+                        input_args.append(ua.Variant(value, variant_type))
+                        ijt_log.info(
+                            f"[methodcall] Argument {i+1} mapped to {variant_type.name} with value {value}"
+                        )
+                except Exception as map_err:
+                    ijt_log.warning(
+                        f"[methodcall] Failed to map argument {i+1}, fallback to original type: {map_err}"
+                    )
+                    input_args.append(createCallStructure(arg))
+
+            ijt_log.info("[methodcall] Calling method on object...")
+            out = await obj.call_method(method, *input_args)
+            ijt_log.info(f"[methodcall] Method output: {serializeValue(out)}")
             return {"output": serializeValue(out)}
+
+        except ua.UaError as ua_err:
+            ijt_log.error(f"[methodcall] UAError: {ua_err}")
+            return {"exception": f"OPC UA error: {ua_err}"}
         except Exception as e:
-            ijt_log.error("Exception in MethodCall " + IdObjectToString(methodNode))
-            ijt_log.error("Exception: " + str(e))
-            return {"exception": "Method call exception: " + str(e)}
+            ijt_log.error(f"[methodcall] General Exception: {e}")
+            return {"exception": f"Method call exception: {e}"}

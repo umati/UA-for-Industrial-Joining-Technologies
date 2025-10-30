@@ -28,6 +28,18 @@
 - Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
 
 # Change Log
+**2025-10-28:** Following Key Changes.
+1. **Added** support **Joint Management MVP**.
+	- **Added** the following methods **SendJoint, GetJoint, GetJointList, SelectJoint, DeleteJoint**.
+2. **Fixed** few issues in the simulation of Job Results
+3. **Multiple** refactoring and **optimizations**.
+
+**2025-10-25:** Following Key Changes.
+1. **Updated** Result Simulation to include **Final values** in **JoiningResult.OverallResultValues**
+2. **Added** additional entities in **ResultMetaData.AssociatedEntities**.
+3. **Updated** Asset Simulation to set the **ProductInstanceUri as ManufacturerUri/GUID**.
+4. **Multiple** refactoring and **optimizations**.
+
 **2025-10-15:** Following Key Changes.
 1. **Updated** '**SimulateSingleResult**' Method with input **"0 - SIMPLE RESULT"** to send **empty ResultContent instead of NULL**.
 

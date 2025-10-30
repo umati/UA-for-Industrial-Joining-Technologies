@@ -1,5 +1,5 @@
 # Use official Node.js image with Python pre-installed
-FROM node:22-slim
+FROM node:24-slim
 
 # Install Python and required tools
 RUN apt-get update && apt-get install -y --no-install-recommends \

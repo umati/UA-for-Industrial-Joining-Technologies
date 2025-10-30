@@ -1,6 +1,7 @@
 import asyncio
 import traceback
 import socket
+import time
 from pathlib import Path
 from asyncua.ua.uaerrors import UaError
 from asyncua import Client
@@ -10,7 +11,7 @@ from ijt_logger import ijt_log
 from event_types import get_event_types
 
 
-class OPCUAEventClient:
+class OPCUAClient:
     def __init__(self, server_url):
         self.server_url = server_url
         self.client = Client(server_url)
@@ -27,108 +28,41 @@ class OPCUAEventClient:
         self.client.product_uri = "urn:IJT:ConsoleClient"
 
     async def connect(self):
-        # Clear old log files
         await self.clear_old_logs()
+        self.setup_client_metadata()
 
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
             try:
-                self.setup_client_metadata()
+                start_time = time.time()
                 await self.client.connect()
                 await self.client.load_type_definitions()
-                ijt_log.info(f"Connected to OPC UA server at {self.server_url}")
+                duration = time.time() - start_time
+                ijt_log.info(
+                    f"Connected to OPC UA server at {self.server_url} in {duration:.2f}s"
+                )
                 return
             except Exception as e:
                 ijt_log.warning(f"Connection attempt {attempt} failed: {e}")
                 ijt_log.error(traceback.format_exc())
-
                 if attempt < max_attempts:
-                    backoff = 2**attempt
+                    backoff = min(2**attempt, 10)
                     ijt_log.info(f"Retrying in {backoff} seconds...")
                     await asyncio.sleep(backoff)
                 else:
-                    ijt_log.info("Attempting failover connection...")
-
-                    # Reinitialize client with original server_url
-                    self.client = Client(self.server_url)
-                    self.setup_client_metadata()
-
-                    try:
-                        await self.client.connect()
-                        await self.client.load_type_definitions()
-                        ijt_log.info(
-                            f"Connected to OPC UA server via failover at {self.server_url}"
-                        )
-                        return
-                    except Exception as e2:
-                        ijt_log.error(f"Failover connection also failed: {e2}")
-                        ijt_log.error(traceback.format_exc())
-                        raise
-
-        # Clear old log files
-        await self.clear_old_logs()
-        self.setup_client_metadata()
-
-        try:
-            await self.client.connect()
-            await self.client.load_type_definitions()
-            ijt_log.info(f"Connected to OPC UA server at {self.server_url}")
-        except Exception as e:
-            ijt_log.warning(f"Initial connection failed: {e}")
-            ijt_log.info("Attempting to connect again using original Server URL...")
-
-            # Reinitialize client with original server_url
-            self.client = Client(self.server_url)
-            self.setup_client_metadata()
-
-            try:
-                await self.client.connect()
-                await self.client.load_type_definitions()
-                ijt_log.info(
-                    f"Connected to OPC UA server via failover at {self.server_url}"
-                )
-            except Exception as e2:
-                ijt_log.error(f"Failover connection also failed: {e2}")
-                ijt_log.error(traceback.format_exc())
-                raise
+                    ijt_log.error("All connection attempts failed.")
+                    raise
 
     async def subscribe_to_events(self):
         try:
             root = self.client.get_root_node()
             server_node = await root.get_child(["0:Objects", "0:Server"])
 
-            ns_machinery_result = await self.client.get_namespace_index(
-                "http://opcfoundation.org/UA/Machinery/Result/"
-            )
-            ns_joining_base = await self.client.get_namespace_index(
-                "http://opcfoundation.org/UA/IJT/Base/"
-            )
-
-            result_event_node = await self.client.nodes.root.get_child(
-                [
-                    "0:Types",
-                    "0:EventTypes",
-                    "0:BaseEventType",
-                    f"{ns_machinery_result}:ResultReadyEventType",
-                ]
-            )
-            joining_result_event_node = await self.client.nodes.root.get_child(
-                [
-                    "0:Types",
-                    "0:EventTypes",
-                    "0:BaseEventType",
-                    f"{ns_machinery_result}:ResultReadyEventType",
-                    f"{ns_joining_base}:JoiningSystemResultReadyEventType",
-                ]
-            )
-            joining_system_event_node = await self.client.nodes.root.get_child(
-                [
-                    "0:Types",
-                    "0:EventTypes",
-                    "0:BaseEventType",
-                    f"{ns_joining_base}:JoiningSystemEventType",
-                ]
-            )
+            (
+                result_event_node,
+                joining_result_event_node,
+                joining_system_event_node,
+            ) = await get_event_types(self.client, root)
 
             await self.client.load_data_type_definitions()
 
@@ -137,24 +71,27 @@ class OPCUAEventClient:
                 self.sub_result_event = await self.client.create_subscription(
                     100, self.handler_result_event
                 )
-            await self.sub_result_event.subscribe_events(
-                server_node,
-                [result_event_node, joining_result_event_node],
-                queuesize=200,
-            )
+                await self.sub_result_event.subscribe_events(
+                    server_node,
+                    [result_event_node, joining_result_event_node],
+                    queuesize=200,
+                )
 
             # Subscribe to Joining System Events
             if self.sub_joining_event is None:
                 self.sub_joining_event = await self.client.create_subscription(
                     100, self.handler_joining_event
                 )
-            await self.sub_joining_event.subscribe_events(
-                server_node, [joining_system_event_node], queuesize=200
-            )
+                await self.sub_joining_event.subscribe_events(
+                    server_node,
+                    [joining_system_event_node],
+                    queuesize=200,
+                )
 
             ijt_log.info("Subscribed to all relevant event types.")
         except Exception as e:
             ijt_log.error(f"Subscription failed: {e}")
+            ijt_log.error(traceback.format_exc())
             await self.cleanup()
             raise
 
@@ -191,20 +128,23 @@ class OPCUAEventClient:
 
             await asyncio.sleep(0.5)
 
-            if self.client and getattr(self.client, "_connected", False):
+            if self.client is not None:
                 try:
                     await self.client.disconnect()
                     ijt_log.info("Disconnected from OPC UA server.")
                 except UaError as ua_err:
-                    ijt_log.warning(f"UaError during disconnect: {ua_err}")
-                    ijt_log.error(traceback.format_exc())
+                    if "No request found" in str(ua_err):
+                        ijt_log.warning("Late server response ignored during shutdown.")
+                    else:
+                        ijt_log.warning(f"UaError during disconnect: {ua_err}")
+                        ijt_log.error(traceback.format_exc())
                 except Exception as dis_err:
                     ijt_log.warning(f"Failed to disconnect client: {dis_err}")
                     ijt_log.error(traceback.format_exc())
                 finally:
                     self.client = None
             else:
-                ijt_log.warning("Client not connected. Skipping disconnect.")
+                ijt_log.info("Client already cleaned up or not initialized.")
         except Exception as e:
             ijt_log.error(f"Cleanup error: {e}")
             ijt_log.error(traceback.format_exc())

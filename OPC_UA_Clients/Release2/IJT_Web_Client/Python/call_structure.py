@@ -43,6 +43,27 @@ def createCallStructure(argument: dict[str, Any]) -> Any:
             inp = ua.Variant(lst, ua.VariantType.ExtensionObject)
             # ijt_log.info(inp.__dict__)
         case _:
-            inp = ua.Variant(value, ua.VariantType(argument["dataType"]))
+            ijt_log.warning(
+                f"[createCallStructure] Unknown dataType: {argument['dataType']}, using generic Variant"
+            )
+
+            # fallback mapping
+            mapping = {
+                1: ua.VariantType.Boolean,
+                3: ua.VariantType.Byte,
+                4: ua.VariantType.Float,
+                5: ua.VariantType.Double,
+                7: ua.VariantType.Int32,
+                8: ua.VariantType.Int64,
+                9: ua.VariantType.UInt64,
+                10: ua.VariantType.Byte,
+                11: ua.VariantType.UInt32,
+                12: ua.VariantType.String,
+                13: ua.VariantType.String,
+                31918: ua.VariantType.String,  # TrimmedString
+            }
+
+            variant_type = mapping.get(argument["dataType"], ua.VariantType.String)
+            inp = ua.Variant(value, variant_type)
 
     return inp
