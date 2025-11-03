@@ -1,6 +1,3 @@
-import { TraceInterface } from '../Trace/TraceInterface.mjs' // Buttons and other standard graphical elements
-import ZoomHandler from '../Trace/ZoomHandler.mjs' // Handling different types of zoom
-import TraceDisplay from '../Trace/TraceDisplay.mjs' // The trace area
 import BasicScreen from '../GraphicSupport/BasicScreen.mjs' // Basic functionality application code for the screen functionality
 import CommonPropertyView from './CommonPropertyView.mjs' // The machine properties view
 import IJTPropertyView from './IJTPropertyView.mjs' // The machine properties view
@@ -46,31 +43,35 @@ export default class JointDemo extends BasicScreen {
 
     const img = document.createElement('img')
 
-    // Set the image source and attributes
-    img.src = './Resources/truck.jpg'
-    img.alt = 'A blueprint of a truck'
-    img.width = 300 // Set width (optional)
-
-    // Append the image to the body or any other element
-    this.container.appendChild(img)
-
     const buttonArea = document.createElement('div')
     buttonArea.style.width = '20%'
     buttonArea.classList.add('demoCol')
     buttonArea.style.justifyContent = 'center'
     this.container.appendChild(buttonArea)
 
+    // Set the image source and attributes
+    img.src = './Resources/truck.jpg'
+    img.alt = 'A blueprint of a truck'
+    img.width = 600 // Set width (optional)
+
+    // Append the image to the body or any other element
+    buttonArea.appendChild(img)
+
     // Handling of button 1 (calling select process)
     const button1 = document.createElement('button')
     button1.innerText = 'Select joint 1'
-    button1.classList.add('demoButton')
+    button1.classList.add('demoButtonFree')
+    button1.style.left = '45px'
+    button1.style.top = '100px'
     buttonArea.appendChild(button1)
     button1.addEventListener('click', () => this.selectJoiningProcess(this.settings.JoiningProcess1))
 
     // Handling of button 2 (calling select process)
     const button2 = document.createElement('button')
     button2.innerText = 'Select joint 2'
-    button2.classList.add('demoButton')
+    button2.classList.add('demoButtonFree')
+    button2.style.left = '360px'
+    button2.style.top = '420px'
     buttonArea.appendChild(button2)
     button2.addEventListener('click', () => this.selectJoiningProcess(this.settings.JoiningProcess2))
 
