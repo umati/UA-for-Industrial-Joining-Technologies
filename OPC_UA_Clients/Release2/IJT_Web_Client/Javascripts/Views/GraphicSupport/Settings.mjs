@@ -14,11 +14,15 @@ export default class Settings extends BasicScreen {
     this.productId = '-'
     this.JoiningProcess1 = '-'
     this.JoiningProcess2 = '-'
+    this.Joint1 = '-'
+    this.Joint2 = '-'
 
     this.settings = { // default values
       productid: 'www.company.com/ProductABC123',
       button1selection: 'ProgramIndex_1',
       button2selection: 'ProgramIndex_2',
+      joint1: 'joint_1',
+      joint2: 'joint_2',
       initialviewlevel: 3,
       command: 'set settings',
       endpoint: 'common'
@@ -74,6 +78,12 @@ export default class Settings extends BasicScreen {
       if (this.JoiningProcess1) {
         this.settings.button1selection = this.JoiningProcess1
       }
+      if (this.Joint1) {
+        this.settings.button1joint = this.Joint1
+      }
+      if (this.Joint2) {
+        this.settings.button2joint = this.Joint2
+      }
       if (this.JoiningProcess2) {
         this.settings.button2selection = this.JoiningProcess2
       }
@@ -100,6 +110,12 @@ export default class Settings extends BasicScreen {
       }
       if (msg.button2selection) {
         this.JoiningProcess2 = msg.button2selection
+      }
+      if (msg.button1joint) {
+        this.Joint1 = msg.button1joint
+      }
+      if (msg.button2joint) {
+        this.Joint2 = msg.button2joint
       }
       if (msg.methoddefaults) {
         this.methodDefaults = msg.methoddefaults
@@ -140,6 +156,24 @@ export default class Settings extends BasicScreen {
 
       this.createInput(this.JoiningProcess2, this.container, (evt) => {
         this.JoiningProcess2 = evt
+      }, '40')
+      this.container.appendChild(document.createElement('br'))
+
+      const labelElement31 = document.createElement('label')
+      labelElement31.innerHTML = 'Joint 1 identity   '
+      this.container.appendChild(labelElement31)
+
+      this.createInput(this.Joint1, this.container, (evt) => {
+        this.Joint1 = evt
+      }, '40')
+      this.container.appendChild(document.createElement('br'))
+
+      const labelElement32 = document.createElement('label')
+      labelElement32.innerHTML = 'Joint 2 identity   '
+      this.container.appendChild(labelElement32)
+
+      this.createInput(this.Joint2, this.container, (evt) => {
+        this.Joint2 = evt
       }, '40')
       this.container.appendChild(document.createElement('br'))
 

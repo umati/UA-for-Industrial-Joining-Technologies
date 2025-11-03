@@ -64,7 +64,7 @@ export default class JointDemo extends BasicScreen {
     button1.style.left = '45px'
     button1.style.top = '100px'
     buttonArea.appendChild(button1)
-    button1.addEventListener('click', () => this.selectJoiningProcess(this.settings.JoiningProcess1))
+    button1.addEventListener('click', () => this.selectJoint(this.settings.Joint1))
 
     // Handling of button 2 (calling select process)
     const button2 = document.createElement('button')
@@ -73,7 +73,7 @@ export default class JointDemo extends BasicScreen {
     button2.style.left = '360px'
     button2.style.top = '420px'
     buttonArea.appendChild(button2)
-    button2.addEventListener('click', () => this.selectJoiningProcess(this.settings.JoiningProcess2))
+    button2.addEventListener('click', () => this.selectJoint(this.settings.Joint2))
 
     const resultArea = document.createElement('div')
     resultArea.style.width = '80%'
@@ -152,6 +152,51 @@ export default class JointDemo extends BasicScreen {
     ]
 
     this.methodManager.call(selectJoiningProcessMethod, values).then(
+      (success) => {
+        // console.log(JSON.stringify(success))
+      },
+      (fail) => {
+        console.log(JSON.stringify(fail))
+      }
+    )
+  }
+
+  /**
+   * This function selects a tightening process on the tool
+   * @param {*} process The identity of the tightening program
+   * @returns Nothing
+   */
+  selectJoint (jointName) {
+    const selectJointMethod = this.methodManager.getMethod('SelectJoint')
+    if (!selectJointMethod) {
+      return
+    }
+
+    const values = [
+      {
+        value: this.settings.productId,
+        type: {
+          pythonclass: 'NodeId',
+          Identifier: '12',
+          NamespaceIndex: '0',
+          NodeIdType: 'NodeIdType.TwoByte',
+        },
+      },
+      {
+        type: {
+          Identifier: '31918',
+        },
+        value: jointName,
+      },
+      {
+        type: {
+          Identifier: '31918',
+        },
+        value: '',
+      },
+    ]
+
+    this.methodManager.call(selectJointMethod, values).then(
       (success) => {
         // console.log(JSON.stringify(success))
       },

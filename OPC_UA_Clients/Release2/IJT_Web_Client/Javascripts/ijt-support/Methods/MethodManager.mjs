@@ -1,5 +1,5 @@
 export class MethodManager {
-  constructor(addressSpace) {
+  constructor (addressSpace) {
     this.addressSpace = addressSpace
   }
 
@@ -8,7 +8,7 @@ export class MethodManager {
    * @param {*} methodFolders a list of folders that should be searched for methods
    * @returns a Promise to load the methods in the list
    */
-  setupMethodsInFolders(methodFolders) {
+  setupMethodsInFolders (methodFolders) {
     return new Promise((resolve, reject) => {
       const methodPromises = []
 
@@ -33,7 +33,7 @@ export class MethodManager {
    * @param {*} folderPath the path to the folder. Remember to add the namespace number
    * @returns a Promise to setup all methods in a folder
    */
-  addressFolder(folderPath) {
+  addressFolder (folderPath) {
     if (!folderPath || folderPath === '') {
       return this.folderPromise(this.tighteningSystemNode) // Automatically add all methods in the top folder (if path is empty)
     } else {
@@ -52,7 +52,7 @@ export class MethodManager {
    * @param {*} folderNode the node that contains methods
    * @returns  a Promise to setup all methods in a folder
    */
-  folderPromise(folderNode) {
+  folderPromise (folderNode) {
     return new Promise((resolve, reject) => {
       const methodPromises = []
       const relations = folderNode.getChildRelations('component')
@@ -77,7 +77,7 @@ export class MethodManager {
    * @param {*} methodNode
    * @returns a promise to load and setup the method data
    */
-  setupMethod(methodNode) {
+  setupMethod (methodNode) {
     return new Promise((resolve, reject) => {
       const allProperties = methodNode.getChildRelations('hasProperty')
       const inputArguments = allProperties.find(
@@ -122,7 +122,7 @@ export class MethodManager {
    * Return a list of Method names
    * @returns
    */
-  getMethodNames() {
+  getMethodNames () {
     return Object.keys(this.methodObject)
   }
 
@@ -131,7 +131,7 @@ export class MethodManager {
    * @param {*} name the name of the method
    * @returns
    */
-  getMethod(name) {
+  getMethod (name) {
     return this.methodObject[name]
   }
 
@@ -140,7 +140,7 @@ export class MethodManager {
    * @param {*} methodNode the method Node
    * @param {*} inputs the argument data
    */
-  call(methodData, inputs) {
+  call (methodData, inputs) {
     return new Promise((resolve, reject) => {
       const inputArguments = []
       for (const row of inputs) {
@@ -154,7 +154,6 @@ export class MethodManager {
           case 7: // UInt32
           case 8: // Int64
           case 9: // UInt64
-          case 12: // UInt64
           case 3: // Byte
           case 10: // Byte
           case 11: // UInt32
