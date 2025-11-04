@@ -57,7 +57,7 @@ export default class JointDemo extends BasicScreen {
     // Append the image to the body or any other element
     buttonArea.appendChild(img)
 
-    // Handling of button 1 (calling select process)
+    // Handling of button 1 (calling select joint 1)
     const button1 = document.createElement('button')
     button1.innerText = 'Select joint 1'
     button1.classList.add('demoButtonFree')
@@ -66,7 +66,7 @@ export default class JointDemo extends BasicScreen {
     buttonArea.appendChild(button1)
     button1.addEventListener('click', () => this.selectJoint(this.settings.Joint1))
 
-    // Handling of button 2 (calling select process)
+    // Handling of button 2 (calling select joint 2)
     const button2 = document.createElement('button')
     button2.innerText = 'Select joint 2'
     button2.classList.add('demoButtonFree')
@@ -74,6 +74,15 @@ export default class JointDemo extends BasicScreen {
     button2.style.top = '420px'
     buttonArea.appendChild(button2)
     button2.addEventListener('click', () => this.selectJoint(this.settings.Joint2))
+
+    // Handling of button 2 (calling select joint 2)
+    const button3 = document.createElement('button')
+    button3.innerText = 'Simulate tightening'
+    button3.classList.add('demoButtonFree')
+    button3.style.left = '760px'
+    button3.style.top = '420px'
+    buttonArea.appendChild(button3)
+    button3.addEventListener('click', () => this.simulateTightening())
 
     const resultArea = document.createElement('div')
     resultArea.style.width = '80%'
@@ -117,8 +126,8 @@ export default class JointDemo extends BasicScreen {
    * @param {*} process The identity of the tightening program
    * @returns Nothing
    */
-  selectJoiningProcess (process) {
-    const selectJoiningProcessMethod = this.methodManager.getMethod('SelectJoiningProcess')
+  simulateTightening () {
+    const selectJoiningProcessMethod = this.methodManager.getMethod('StartSelectedJoining')
     if (!selectJoiningProcessMethod) {
       return
     }
@@ -135,20 +144,9 @@ export default class JointDemo extends BasicScreen {
       },
       {
         type: {
-          Identifier: 3029,
-          NamespaceIndex: 3,
+          Identifier: '1',
         },
-        value: [
-          {
-            value: '',
-            type: '31918',
-          }, {
-            value: '',
-            type: '31918',
-          }, {
-            value: process, // This should be the selection name of the process
-            type: '31918',
-          }],
+        value: false,
       },
     ]
 
