@@ -9,6 +9,7 @@
 
 ## Prerequisites
 -  **Python:** Download and install Python from the official website. Ensure Python is added to the system PATH.
+    - Recommended Python **3.12** as of now. Python 3.14 may **not** work. 
 -  **Internet Connection**
 
 ## General Steps
