@@ -9,6 +9,7 @@
 </head>
 
 <body>
+
   <script type="importmap">
     {
       "imports": {
@@ -17,26 +18,26 @@
       }
     }
     </script>
-
+  <script src="config.js"></script>
   <script type='module'>
 
-  import {
-    AddressSpace,
-    AssetManager,
-    MethodManager,
-    EventManager,
-    ResultManager,
-    ModelManager,
-    SocketHandler,
-    WebSocketManager
-  } from 'ijt-support/ijt-support.mjs'
+    import {
+      AddressSpace,
+      AssetManager,
+      MethodManager,
+      EventManager,
+      ResultManager,
+      ModelManager,
+      SocketHandler,
+      WebSocketManager
+    } from 'ijt-support/ijt-support.mjs'
 
-  // import { WebSocketManager } from 'ijt-support/Connection/WebSocketManager.mjs'
+    // import { WebSocketManager } from 'ijt-support/Connection/WebSocketManager.mjs'
 
-  import ServerGraphics from 'views/Servers/ServerGraphics.mjs'
-  import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
-  import EndpointGraphics   from 'views/EndpointTab/EndpointGraphics.mjs' 
-  import Settings from 'views/GraphicSupport/Settings.mjs'
+    import ServerGraphics from 'views/Servers/ServerGraphics.mjs'
+    import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
+    import EndpointGraphics from 'views/EndpointTab/EndpointGraphics.mjs'
+    import Settings from 'views/GraphicSupport/Settings.mjs'
 
 
     let connection = false
@@ -57,7 +58,7 @@
       const label = document.createElement('label')
       label.innerHTML = 'View:  '
       container.appendChild(label)
-    
+
       container.select = document.createElement('select')
       container.select.classList.add('mainDropDown')
       container.appendChild(container.select)
@@ -70,12 +71,12 @@
         option.innerHTML = optionData[0]
         container.select.appendChild(option)
       }
-    
+
       container.select.onchange = function (evt) {
         if (this.value < 5) {
           topLevelTabs.changeViewLevel(this.value)
         } else {
-          topLevelTabs.forceContent (settings.backGround)
+          topLevelTabs.forceContent(settings.backGround)
           this.value = this.oldValue
         }
         this.oldValue = this.value
@@ -105,7 +106,7 @@
     }
 
     // Establish a websocket to the webserver
-    const webSocketManager = new WebSocketManager(afterWebSocketConnect)
+    const webSocketManager = new WebSocketManager(afterWebSocketConnect, window.APP_CONFIG.getWebSocketUrl())
 
     // Ensure all connections are closed when leaving page or refreshing it
     window.onbeforeunload = function (event) {

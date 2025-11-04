@@ -126,29 +126,37 @@ def install_python_packages():
 
 
 def create_nodeenv():
-    import requests
+    # Auto-install requests if missing
+    try:
+        import requests
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
+        import requests
 
     python = get_python_path()
     log.info("Creating Node.js environment inside venv...")
 
-    # Try to fetch latest stable Node.js version
-    try:
-        response = requests.get("https://nodejs.org/dist/index.json", timeout=10)
-        versions = response.json()
-        for version in versions:
-            if version.get("lts"):
-                latest_node_version = version["version"].lstrip("v")
-                break
-        else:
+    has_global_node = shutil.which("node") is not None
+    if has_global_node:
+        log.info("Global Node.js installation detected. Skipping online version fetch.")
+        latest_node_version = None  # Not needed
+    else:
+        # Try to fetch latest stable Node.js version
+        try:
+            response = requests.get("https://nodejs.org/dist/index.json", timeout=10)
+            versions = response.json()
+            for version in versions:
+                if version.get("lts"):
+                    latest_node_version = version["version"].lstrip("v")
+                    break
+            else:
+                latest_node_version = "18.17.1"
+        except Exception as e:
+            log.warning(f"Failed to fetch latest Node.js version: {e}")
             latest_node_version = "18.17.1"
-    except Exception as e:
-        log.warning(f"Failed to fetch latest Node.js version: {e}")
-        latest_node_version = "18.17.1"
 
     # Allow override via .env
-    node_version = os.getenv("NODE_VERSION", latest_node_version)
-
-    has_global_node = shutil.which("node") is not None
+    node_version = os.getenv("NODE_VERSION", latest_node_version or "18.17.1")
 
     if has_global_node:
         args = [str(python), "-m", "nodeenv", "-p"]
@@ -241,11 +249,15 @@ def start_server():
         sys.exit(1)
 
     http_port = os.getenv("HTTP_PORT", "3000")
-    log.info(f"Starting local server on http://localhost:{http_port} ...")
+    browser_host = os.getenv("WS_HOST") or socket.gethostbyname(socket.gethostname())
+    browser_url = f"http://{browser_host}:{http_port}"
+
+    log.info(f"Starting local server on {browser_url} ...")
 
     try:
-        subprocess.Popen([str(npx), "serve", "-l", http_port])
-        webbrowser.open(f"http://localhost:{http_port}")
+        # Only pass port to serve
+        subprocess.Popen([str(npx), "serve", "--listen", http_port])
+        webbrowser.open(browser_url)
     except Exception as e:
         log.error("Failed to start server or open browser.")
         log.error(str(e))
