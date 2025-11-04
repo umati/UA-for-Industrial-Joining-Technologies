@@ -24,7 +24,7 @@ export class WebSocketManager {
     this.websocket.addEventListener('message', ({ data }) => {
       const event = JSON.parse(data)
 
-      console.log('Recieved message of type: ' + event.command)
+      console.log('Received message of type: ' + event.command)
       const command = event.command
       const endpoint = event.endpoint
 
@@ -60,9 +60,11 @@ export class WebSocketManager {
   }
 
   unsubscribe (endpoint, type, callback) {
-    const callerObject = this.subscribers(endpoint)
+    const callerObject = this.subscribers[endpoint]
     if (callerObject) {
-      callerObject.type = null
+      if (callerObject[type]) {
+        callerObject[type] = callerObject[type].filter(cb => cb !== callback)
+      }
       console.warn('unsubscribe is not implemented')
     }
   }

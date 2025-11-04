@@ -19,11 +19,11 @@ export default class Settings extends BasicScreen {
 
     this.settings = { // default values
       productid: 'www.company.com/ProductABC123',
-      button1selection: 'ProgramIndex_1',
-      button2selection: 'ProgramIndex_2',
+      button1selection: 'SourceTightening_Identifier_1',
+      button2selection: 'SourceTightening_Identifier_2',
       joint1: 'joint_1',
       joint2: 'joint_2',
-      initialviewlevel: 3,
+      initialviewlevel: 4,
       command: 'set settings',
       endpoint: 'common'
     }

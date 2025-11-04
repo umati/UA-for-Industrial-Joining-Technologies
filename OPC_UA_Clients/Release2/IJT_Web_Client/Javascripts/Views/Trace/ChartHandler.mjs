@@ -1,3 +1,4 @@
+/* global Chart */
 import '../../../node_modules/chart.js/dist/chart.umd.js'
 import Graphic from './Graphic.mjs'
 /**
@@ -5,7 +6,8 @@ import Graphic from './Graphic.mjs'
  * make it possible to exchange chart component with minimal effort
  */
 export default class ChartManager {
-  constructor (traceManager, context, debugSourceText) {
+  constructor(traceManager, context, debugSourceText) {
+    this.afterUpdateCallbacks = []
     this.traceManager = traceManager
     this.context = context
     this.debugSourceText = debugSourceText
@@ -15,19 +17,22 @@ export default class ChartManager {
 
     const customPlugin = {
       id: 'customPlugin',
-      afterUpdate (chart) {
-        for (const callback of chart.afterUpdateCallbacks) {
-          if (callback) {
-            callback(this.context)
+      afterUpdate(chart) {
+        const callbacks = chart.config.options.plugins.customPluginContext?.afterUpdateCallbacks
+        if (Array.isArray(callbacks)) {
+          for (const callback of callbacks) {
+            if (callback) {
+              callback(chart)
+            }
           }
         }
-      },
+      }
     }
     customPlugin.context = this
 
     const arrowPlugin = {
       id: 'arrowPlugin',
-      afterDatasetDraw (chart, args, options) {
+      afterDatasetDraw(chart, args, options) {
         // Get the last two points of the dataset
         const ctx = chart.ctx
 
@@ -111,7 +116,7 @@ export default class ChartManager {
     }
     // arrowPlugin.context = this
 
-    this.myChart = new Chart(context, { // eslint-disable-line
+    this.myChart = new Chart(context, {
       type: 'line',
       data: {
         datasets: [],
@@ -125,6 +130,7 @@ export default class ChartManager {
           },
           customPlugin: true,
           arrowPlugin: true,
+          customPluginContext: this,
         },
         animation: {
           duration: 200,
@@ -139,8 +145,7 @@ export default class ChartManager {
         },
       },
       plugins: [customPlugin, arrowPlugin],
-    }
-    )
+    })
 
     // this.myChart.options.plugins.push(customPlugin)
 
@@ -188,7 +193,7 @@ export default class ChartManager {
     })
   }
 
-  getTouchOffset () {
+  getTouchOffset() {
     const offsets = this.context.getBoundingClientRect()
     return {
       x: offsets.left + this.myChart.chartArea.left,
@@ -204,7 +209,7 @@ export default class ChartManager {
    * @param {*} value a graph position object containing an x and a y value
    * @returns {{ x: any; y: any; }} a pixel position on the canvas
    */
-  valueToPixel (value) {
+  valueToPixel(value) {
     this.dummy++
     const axis = this.myChart?.scales
     if (!axis || axis.x === undefined) {
@@ -224,7 +229,7 @@ export default class ChartManager {
    * @param {*} pos a pixel position on the canvas
    * @returns {{ x: any; y: any; }}  a graph position object
    */
-  pixelToValue (pos) {
+  pixelToValue(pos) {
     this.dummy++
     const canvasPosition = this.canvasPixelPosition(pos)
     return {
@@ -233,7 +238,7 @@ export default class ChartManager {
     }
   }
 
-  canvasPixelPosition (pos) {
+  canvasPixelPosition(pos) {
     return Chart.helpers.getRelativePosition(pos, this.myChart) // eslint-disable-line
   }
 
@@ -244,7 +249,7 @@ export default class ChartManager {
    * @param {*} coord1 one corner position
    * @param {*} coord2 the other corner position
    */
-  zoom (coord1, coord2) {
+  zoom(coord1, coord2) {
     const minX = Math.min(coord1.x, coord2.x)
     const maxX = Math.max(coord1.x, coord2.x)
     const minY = Math.min(coord1.y, coord2.y)
@@ -275,7 +280,7 @@ export default class ChartManager {
    * reset zoom
    * @date 3/14/2024 - 11:06:11 AM
    */
-  resetZoom () {
+  resetZoom() {
     const ticks = this.myChart.config.options.scales.x
     ticks.min = null
     ticks.max = null
@@ -292,7 +297,7 @@ export default class ChartManager {
    *
    * @returns {{ xmin: any; xmax: any; ymin: any; ymax: any; }}
    */
-  getZoom () {
+  getZoom() {
     return {
       left: this.myChart.scales.x.min,
       right: this.myChart.scales.x.max,
@@ -301,14 +306,14 @@ export default class ChartManager {
     }
   }
 
-  getWindowDimensions () {
+  getWindowDimensions() {
     return this.myChart.chartArea
   }
 
   /**
    * Enforce the graph to redraw itself
    */
-  update () {
+  update() {
     this.myChart.update()
   }
 
@@ -317,7 +322,7 @@ export default class ChartManager {
    * @param {*} name
    * @returns
    */
-  createGraphic (name, resultId, stepId, color) {
+  createGraphic(name, resultId, stepId, color) {
     const graphic = new Graphic(name, resultId, stepId, color)
     this.myChart.data.datasets.push(graphic.mainDataset)
 
@@ -334,7 +339,7 @@ export default class ChartManager {
    * @param {*} color the intended color
    * @param {*} graphic the graphic representation of the step
    */
-  createStepValue (value, points, color, graphic) {
+  createStepValue(value, points, color, graphic) {
     const datasets = graphic.createStepValue(value, points, color)
 
     this.myChart.data.datasets.push(datasets.valueDataset)
@@ -346,7 +351,7 @@ export default class ChartManager {
    *  Remove some of the datasets from the drawing area
    * @param {*} selectedDataSets
    */
-  filterOut (selectedDataSets) {
+  filterOut(selectedDataSets) {
     this.myChart.data.datasets = this.myChart.data.datasets.filter((e) => {
       return selectedDataSets.indexOf(e) < 0
     })
@@ -356,7 +361,7 @@ export default class ChartManager {
    *  Remove some of the datasets from the drawing area
    * @param {*} selectedDataSets
    */
-  filterOutGraphic (graphic) {
+  filterOutGraphic(graphic) {
     this.filterOut([graphic.mainDataset, graphic.highlightDataset])
     for (const value of Object.values(graphic.datasetMapping)) {
       this.filterOut([value.valueDataset, value.targetDataset, value.limitsDataset])
@@ -367,7 +372,7 @@ export default class ChartManager {
    * Pushes this part of the graph in front of the other graphs
    * @param {*} datasets
    */
-  putInFront (datasets) {
+  putInFront(datasets) {
     this.filterOut(datasets)
 
     for (const ds of datasets) {
@@ -375,7 +380,7 @@ export default class ChartManager {
     }
   }
 
-  newLimit (borderColour, areaColour, startOrEnd) {
+  newLimit(borderColour, areaColour, startOrEnd) {
     const limitDataSet = {
       borderColor: borderColour,
       borderWidth: 1,
@@ -395,7 +400,7 @@ export default class ChartManager {
     return this.myChart.data.datasets[this.myChart.data.datasets.length - 1]
   }
 
-  afterUpdateSubscribe (callback) {
-    this.myChart.afterUpdateCallbacks.push(callback)
+  afterUpdateSubscribe(callback) {
+    this.afterUpdateCallbacks.push(callback)
   }
 }
