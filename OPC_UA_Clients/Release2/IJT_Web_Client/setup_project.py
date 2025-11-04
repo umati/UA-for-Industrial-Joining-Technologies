@@ -126,14 +126,39 @@ def install_python_packages():
 
 
 def create_nodeenv():
+    import requests
+
     python = get_python_path()
     log.info("Creating Node.js environment inside venv...")
+
+    # Try to fetch latest stable Node.js version
+    try:
+        response = requests.get("https://nodejs.org/dist/index.json", timeout=10)
+        versions = response.json()
+        for version in versions:
+            if version.get("lts"):
+                latest_node_version = version["version"].lstrip("v")
+                break
+        else:
+            latest_node_version = "18.17.1"
+    except Exception as e:
+        log.warning(f"Failed to fetch latest Node.js version: {e}")
+        latest_node_version = "18.17.1"
+
+    # Allow override via .env
+    node_version = os.getenv("NODE_VERSION", latest_node_version)
+
     has_global_node = shutil.which("node") is not None
-    args = [str(python), "-m", "nodeenv"]
+
     if has_global_node:
-        args.append("-p")
+        args = [str(python), "-m", "nodeenv", "-p"]
+        log.info("Using global Node.js installation.")
     else:
-        log.warning("Global Node.js not found. Falling back to nodeenv without -p.")
+        log.warning(
+            f"Global Node.js not found. Installing Node.js {node_version} via nodeenv."
+        )
+        args = [str(python), "-m", "nodeenv", "--node=" + node_version]
+
     try:
         subprocess.check_call(args)
     except subprocess.CalledProcessError:
@@ -141,11 +166,18 @@ def create_nodeenv():
             "Node.js environment setup failed. Please ensure nodeenv can download Node.js or install Node.js globally."
         )
         sys.exit(1)
+
+    node = VENV_DIR / ("Scripts/node.exe" if os.name == "nt" else "bin/node")
     npm = get_npm_path()
     npx = get_npx_path()
-    if not npm.exists() or not npx.exists():
+
+    log.info(f"Using Node.js from: {node}")
+    log.info(f"Using npm from: {npm}")
+    log.info(f"Using npx from: {npx}")
+
+    if not node.exists() or not npm.exists() or not npx.exists():
         log.error(
-            "npm or npx not found in virtual environment. Node.js setup may have failed."
+            "node, npm or npx not found in virtual environment. Node.js setup may have failed."
         )
         sys.exit(1)
 
