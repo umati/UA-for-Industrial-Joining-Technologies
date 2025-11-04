@@ -93,7 +93,8 @@ export default class JointDemo extends BasicScreen {
         'result.ResultMetaData.ResultEvaluation',
         'result.ResultMetaData.CreationTime',
         'result.ResultMetaData.SequenceNumber',
-        'result.ResultMetaData.ResultId'],
+        'result.ResultMetaData.ResultId',
+        'result.ResultMetaData.ProgramId'],
       infoArea,
       this.resultManager)
 

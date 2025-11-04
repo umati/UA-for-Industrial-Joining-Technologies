@@ -45,6 +45,14 @@ export default class CommonPropertyView {
             value = 'NOT OK'
             line2.style.color = 'red'
           }
+        } else if (line1.innerText === 'ProgramId:') {
+          line1.innerText = 'Program Name:'
+          line2.innerText = '-'
+          for (const associatedEntity of result.ResultMetaData.AssociatedEntities) {
+            if (parseInt(associatedEntity.EntityType) === 27) {
+              value = associatedEntity.Description
+            }
+          }
         }
         line2.innerText = value
         this.values.appendChild(line2)
