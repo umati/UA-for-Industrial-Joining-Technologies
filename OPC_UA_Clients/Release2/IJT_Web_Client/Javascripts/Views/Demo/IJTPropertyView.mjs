@@ -90,6 +90,10 @@ export default class IJTPropertyView {
         }
         this.high.appendChild(line4)
       }
+    } else {
+      const line1 = document.createElement('div')
+      line1.innerText = 'No FINAL values found'
+      this.name.appendChild(line1)
     }
   }
 }
