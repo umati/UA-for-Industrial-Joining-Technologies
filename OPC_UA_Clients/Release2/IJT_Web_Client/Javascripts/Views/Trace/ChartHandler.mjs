@@ -16,9 +16,11 @@ export default class ChartManager {
     const customPlugin = {
       id: 'customPlugin',
       afterUpdate (chart) {
-        for (const callback of chart.afterUpdateCallbacks) {
-          if (callback) {
-            callback(this.context)
+        if (chart && chart.afterUpdateCallbacks) {
+          for (const callback of chart.afterUpdateCallbacks) {
+            if (callback) {
+              callback(this.context)
+            }
           }
         }
       },
