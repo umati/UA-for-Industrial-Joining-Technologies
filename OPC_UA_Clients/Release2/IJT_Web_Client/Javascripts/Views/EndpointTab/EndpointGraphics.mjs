@@ -53,7 +53,7 @@ export default class EndpointGraphics extends BasicScreen {
       .then((EnvelopeScreen) => {
         try {
           const envelopeScreen = new EnvelopeScreen.Envelope(this.connectionManager, resultManager, this.settings)
-          tabGenerator.generateTab(envelopeScreen, 3, true)
+          tabGenerator.generateTab(envelopeScreen, 3, false)
         } catch (error) {
           console.log(error)
         }
@@ -145,7 +145,7 @@ export default class EndpointGraphics extends BasicScreen {
       tabGenerator.generateTab(demoGraphics, 1)
     }
     if (jointDemoGraphics) {
-      tabGenerator.generateTab(jointDemoGraphics, 1)
+      tabGenerator.generateTab(jointDemoGraphics, 1, true)
     }
 
     if (traceGraphics) {
