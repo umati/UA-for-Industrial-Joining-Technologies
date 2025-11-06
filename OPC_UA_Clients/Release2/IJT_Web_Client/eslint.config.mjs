@@ -1,5 +1,3 @@
-import neostandard from 'neostandard'
-
 export default neostandard({
   languageOptions: {
     globals: {
@@ -10,6 +8,10 @@ export default neostandard({
       stepHandler: 'readonly',
       polynomialObject: 'readonly',
       degree: 'readonly',
-    },
+      Chart: 'readonly'
+    }
   },
+  rules: {
+    'space-before-function-paren': ['error', 'always']
+  }
 })

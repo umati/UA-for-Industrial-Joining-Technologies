@@ -3,46 +3,45 @@
  * via a websocket
  */
 export class WebSocketManager {
-  constructor (establishedCallback) {
-    this.subscribers = {}
-    this.establishWebSocket(establishedCallback)
+  constructor(establishedCallback, websocketUrl) {
+    this.subscribers = {};
+    this.establishWebSocket(establishedCallback, websocketUrl);
   }
 
-  establishWebSocket (establishedCallback) {
-    this.websocket = new WebSocket('ws://localhost:8001/')
+  establishWebSocket(establishedCallback, websocketUrl) {
+    const url = websocketUrl || 'ws://localhost:8001/';
+    this.websocket = new WebSocket(url);
+
     this.websocket.onopen = () => {
-      console.log('Websocket connected from web page')
-      this.connection = true
-      establishedCallback(this)
-    }
+      console.log('WebSocket connected from web page');
+      this.connection = true;
+      establishedCallback(this);
+    };
 
     this.websocket.onclose = function (msg) {
-      console.log('WEBSOCKET closed' + msg)
-      this.connection = false
-    }
+      console.log('WebSocket closed: ' + msg);
+      this.connection = false;
+    };
 
     this.websocket.addEventListener('message', ({ data }) => {
-      const event = JSON.parse(data)
-
-      console.log('Recieved message of type: ' + event.command)
-      const command = event.command
-      const endpoint = event.endpoint
-
-      const endpointSubscribes = this.subscribers[endpoint]
-
-      if (endpointSubscribes) {
-        if (endpointSubscribes[command]) {
-          for (const subscription of endpointSubscribes[command]) {
-            if (subscription) {
-              subscription(event.data, event.uniqueid)
-            }
+      const event = JSON.parse(data);
+      console.log('Received message of type: ' + event.command);
+      const command = event.command;
+      const endpoint = event.endpoint;
+      const endpointSubscribes = this.subscribers[endpoint];
+      if (endpointSubscribes && endpointSubscribes[command]) {
+        for (const subscription of endpointSubscribes[command]) {
+          if (subscription) {
+            subscription(event.data, event.uniqueid);
           }
         }
       }
-    })
+    });
   }
 
-  subscribe (endpoint, type, callback) {
+
+
+  subscribe(endpoint, type, callback) {
     if (!endpoint) {
       endpoint = 'common'
     }
@@ -59,15 +58,17 @@ export class WebSocketManager {
     }
   }
 
-  unsubscribe (endpoint, type, callback) {
-    const callerObject = this.subscribers(endpoint)
+  unsubscribe(endpoint, type, callback) {
+    const callerObject = this.subscribers[endpoint]
     if (callerObject) {
-      callerObject.type = null
+      if (callerObject[type]) {
+        callerObject[type] = callerObject[type].filter(cb => cb !== callback)
+      }
       console.warn('unsubscribe is not implemented')
     }
   }
 
-  send (command, endpoint, uniqueId, event) {
+  send(command, endpoint, uniqueId, event) {
     if (!event) {
       event = {}
     }

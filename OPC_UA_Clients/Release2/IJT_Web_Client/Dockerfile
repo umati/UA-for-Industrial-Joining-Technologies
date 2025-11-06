@@ -1,11 +1,10 @@
-# Use official Node.js image with Python pre-installed
-FROM node:24-slim
+# Use a minimal Python base image
+FROM python:3.14-slim
 
-# Install Python and required tools
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-venv curl && \
-    ln -s /usr/bin/python3 /usr/bin/python && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    curl git build-essential \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -15,18 +14,14 @@ ENV PYTHONUNBUFFERED=1 \
 # Set working directory
 WORKDIR /app
 
-# Copy package files and install JS dependencies
-COPY package*.json ./
-RUN npm install
-
-# Copy the rest of the application
+# Copy project files
 COPY . .
 
-# Ensure permissions (optional, useful in CI/CD or Linux host environments)
+# Ensure setup script is executable
 RUN chmod +x setup_project.py
 
-# Expose ports for live server and WebSocket server
+# Expose ports for HTTP and WebSocket servers
 EXPOSE 3000 8001
 
-# Run the setup script (handles Python venv and servers)
-CMD ["python3", "setup_project.py"]
+# Run the setup script with full setup
+CMD ["python", "setup_project.py", "--force_full"]

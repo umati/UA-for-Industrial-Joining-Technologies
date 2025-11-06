@@ -49,13 +49,13 @@ export default class JointDemo extends BasicScreen {
     const img = document.createElement('img')
 
     // Set the image source and attributes
-    img.src = './Resources/truck.jpg'
+    img.src = './Resources/blueprint.jpg'
     img.alt = 'A blueprint of a truck'
     img.width = 500 // Set width (optional)
 
-    // Append the image to the body or any other element
     buttonArea.appendChild(img)
 
+    /*
     const img2 = document.createElement('img')
     img2.src = './Resources/jointspart.jpg'
     img2.alt = 'A blueprint of a truck'
@@ -63,6 +63,7 @@ export default class JointDemo extends BasicScreen {
 
     // Append the image to the body or any other element
     buttonArea.appendChild(img2)
+    */
 
     // Handling of button 1 (calling select joint 1)
     const button1 = document.createElement('button')

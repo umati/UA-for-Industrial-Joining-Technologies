@@ -6,6 +6,9 @@ import traceback
 import os
 import signal
 import platform
+import socket
+import socket
+import time
 from typing import Optional
 from dotenv import load_dotenv
 from Python.ijt_interface import IJTInterface
@@ -64,8 +67,13 @@ async def main():
         ijt_log.error("Invalid WS_PORT environment variable. Falling back to 8001.")
         port = 8001
 
-    websocket_server = await websockets.serve(handler, "localhost", port)
-    ijt_log.info(f"WebSocket server running on ws://localhost:{port}")
+    host = os.getenv("WS_HOST") or socket.gethostbyname(socket.gethostname())
+    start_time = time.time()
+    websocket_server = await websockets.serve(handler, host, port)
+    elapsed = time.time() - start_time
+    ijt_log.info(
+        f"WebSocket server running on ws://{host}:{port} (bound in {elapsed:.2f} seconds)"
+    )
     ijt_log.info("Server setup complete. Awaiting connections...")
 
     loop = asyncio.get_running_loop()
