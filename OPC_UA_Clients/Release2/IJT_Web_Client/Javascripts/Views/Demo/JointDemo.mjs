@@ -41,21 +41,28 @@ export default class JointDemo extends BasicScreen {
   activate () {
     this.container.classList.add('demoCol')
 
-    const img = document.createElement('img')
-
     const buttonArea = document.createElement('div')
     buttonArea.style.width = '20%'
-    buttonArea.classList.add('demoCol')
-    buttonArea.style.justifyContent = 'center'
+    buttonArea.classList.add('demoRow')
     this.container.appendChild(buttonArea)
+
+    const img = document.createElement('img')
 
     // Set the image source and attributes
     img.src = './Resources/truck.jpg'
     img.alt = 'A blueprint of a truck'
-    img.width = 600 // Set width (optional)
+    img.width = 500 // Set width (optional)
 
     // Append the image to the body or any other element
     buttonArea.appendChild(img)
+
+    const img2 = document.createElement('img')
+    img2.src = './Resources/jointspart.jpg'
+    img2.alt = 'A blueprint of a truck'
+    img2.width = 350 // Set width (optional)
+
+    // Append the image to the body or any other element
+    buttonArea.appendChild(img2)
 
     // Handling of button 1 (calling select joint 1)
     const button1 = document.createElement('button')
