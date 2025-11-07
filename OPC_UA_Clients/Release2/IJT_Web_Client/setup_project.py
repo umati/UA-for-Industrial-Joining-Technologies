@@ -13,12 +13,23 @@ import time
 from pathlib import Path
 
 try:
-    from dotenv import load_dotenv
+    from packaging import version
 except ImportError:
     subprocess.check_call(
-        [sys.executable, "-m", "pip", "install", "--user", "python-dotenv"]
+        [sys.executable, "-m", "pip", "install", "--user", "packaging"]
     )
+    from packaging import version
+
+try:
     from dotenv import load_dotenv
+except ImportError:
+    if os.getenv("IS_DOCKER") == "true":
+        print("⚠️ Skipping dotenv import check inside Docker.")
+    else:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--user", "python-dotenv"]
+        )
+        from dotenv import load_dotenv
 
 # Setup logging
 logging.basicConfig(
@@ -84,18 +95,36 @@ def check_internet(host="8.8.8.8", port=53, timeout=3):
 
 
 def get_python_path():
+    if os.getenv("IS_DOCKER") == "true":
+        return Path(sys.executable)  # Use system Python inside Docker
     return VENV_DIR / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
 
 def get_npm_path():
-    return VENV_DIR / ("Scripts/npm.cmd" if os.name == "nt" else "bin/npm")
+    return shutil.which("npm") or VENV_DIR / (
+        "Scripts/npm.cmd" if os.name == "nt" else "bin/npm"
+    )
 
 
 def get_npx_path():
-    return VENV_DIR / ("Scripts/npx.cmd" if os.name == "nt" else "bin/npx")
+    return shutil.which("npx") or VENV_DIR / (
+        "Scripts/npx.cmd" if os.name == "nt" else "bin/npx"
+    )
+
+
+def get_node_version():
+    try:
+        output = subprocess.check_output(["node", "-v"], text=True).strip()
+        return output.lstrip("v")
+    except Exception as e:
+        log.error(f"Failed to get Node.js version: {e}")
+        return None
 
 
 def create_virtualenv():
+    if os.getenv("IS_DOCKER") == "true":
+        log.info("Skipping virtualenv creation inside Docker.")
+        return
     if VENV_DIR.exists():
         try:
             shutil.rmtree(VENV_DIR)
@@ -107,87 +136,115 @@ def create_virtualenv():
             sys.exit(1)
     log.info("Creating virtual environment...")
     venv.create(VENV_DIR, with_pip=True)
+    # Ensure pip is available
+    python = get_python_path()
+    try:
+        subprocess.check_call([str(python), "-m", "ensurepip"])
+    except Exception as e:
+        log.warning(f"Failed to ensure pip in virtualenv: {e}")
 
 
 def install_python_packages():
     python = get_python_path()
+    log.info(f"Using Python executable: {python}")
     log.info("Installing Python packages...")
-    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip"])
-    subprocess.check_call(
-        [str(python), "-m", "pip", "install", "requests", "python-dotenv", "nodeenv"]
-    )
-    if Path("requirements.txt").exists():
-        subprocess.check_call(
-            [str(python), "-m", "pip", "install", "-r", "requirements.txt"]
+    core_packages = [
+        "requests",
+        "python-dotenv",
+        "nodeenv",
+        "websockets",
+        "asyncua",
+        "packaging",
+    ]
+    try:
+        if os.getenv("IS_DOCKER") == "true":
+            log.info("Installing Python packages using sys.executable inside Docker...")
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "--upgrade", "pip"]
+            )
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install"] + core_packages
+            )
+        else:
+            subprocess.check_call(
+                [str(python), "-m", "pip", "install", "--upgrade", "pip"]
+            )
+            subprocess.check_call([str(python), "-m", "pip", "install"] + core_packages)
+    except subprocess.CalledProcessError as e:
+        log.error("❌ Failed to install core Python packages.")
+        log.error(f"Command failed: {e.cmd}")
+        sys.exit(1)
+
+    # Optionally install from requirements.txt
+    req_file = Path("requirements.txt")
+    if req_file.exists():
+        log.info("Installing additional packages from requirements.txt...")
+        try:
+            if os.getenv("IS_DOCKER") == "true":
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", "-r", str(req_file)]
+                )
+            else:
+                subprocess.check_call(
+                    [str(python), "-m", "pip", "install", "-r", str(req_file)]
+                )
+        except subprocess.CalledProcessError as e:
+            log.error("❌ Failed to install packages from requirements.txt.")
+            log.error(f"Command failed: {e.cmd}")
+            sys.exit(1)
+    else:
+        log.warning(
+            "requirements.txt not found. Skipping additional package installation."
         )
-    subprocess.check_call(
-        [str(python), "-m", "pip", "install", "websockets", "asyncua"]
-    )
 
 
 def create_nodeenv():
-    # Auto-install requests if missing
-    try:
-        import requests
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
-        import requests
+    log.info("Creating Node.js environment...")
 
-    python = get_python_path()
-    log.info("Creating Node.js environment inside venv...")
+    # Sanity check: verify Node.js tools are available
+    log.info("Checking Node.js installation...")
+    node_path = shutil.which("node")
+    npm_path = shutil.which("npm")
+    npx_path = shutil.which("npx")
 
-    has_global_node = shutil.which("node") is not None
-    if has_global_node:
-        log.info("Global Node.js installation detected. Skipping online version fetch.")
-        latest_node_version = None  # Not needed
-    else:
-        # Try to fetch latest stable Node.js version
-        try:
-            response = requests.get("https://nodejs.org/dist/index.json", timeout=10)
-            versions = response.json()
-            for version in versions:
-                if version.get("lts"):
-                    latest_node_version = version["version"].lstrip("v")
-                    break
-            else:
-                latest_node_version = "18.17.1"
-        except Exception as e:
-            log.warning(f"Failed to fetch latest Node.js version: {e}")
-            latest_node_version = "18.17.1"
-
-    # Allow override via .env
-    node_version = os.getenv("NODE_VERSION", latest_node_version or "18.17.1")
-
-    if has_global_node:
-        args = [str(python), "-m", "nodeenv", "-p"]
-        log.info("Using global Node.js installation.")
-    else:
-        log.warning(
-            f"Global Node.js not found. Installing Node.js {node_version} via nodeenv."
-        )
-        args = [str(python), "-m", "nodeenv", "--node=" + node_version]
-
-    try:
-        subprocess.check_call(args)
-    except subprocess.CalledProcessError:
+    if not node_path or not npm_path or not npx_path:
+        missing = []
+        if not node_path:
+            missing.append("node")
+        if not npm_path:
+            missing.append("npm")
+        if not npx_path:
+            missing.append("npx")
+        log.error(f"Missing global tools: {', '.join(missing)}")
         log.error(
-            "Node.js environment setup failed. Please ensure nodeenv can download Node.js or install Node.js globally."
+            "Please install Node.js with npm and npx, or ensure they are in your system PATH."
         )
         sys.exit(1)
 
-    node = VENV_DIR / ("Scripts/node.exe" if os.name == "nt" else "bin/node")
-    npm = get_npm_path()
-    npx = get_npx_path()
+    try:
+        subprocess.check_call([node_path, "-v"])
+        subprocess.check_call([npm_path, "-v"])
+        subprocess.check_call([npx_path, "--version"])
+    except Exception as e:
+        log.error("Node.js tools are not functioning correctly.")
+        log.error(str(e))
+        sys.exit(1)
 
-    log.info(f"Using Node.js from: {node}")
-    log.info(f"Using npm from: {npm}")
-    log.info(f"Using npx from: {npx}")
+    node_ver = get_node_version()
+    required_node_version = os.getenv("NODE_VERSION", "24.11.0")
 
-    if not node.exists() or not npm.exists() or not npx.exists():
+    log.info("Global Node.js installation detected. Skipping nodeenv setup.")
+    log.info(f"Using Node.js from: {node_path}")
+    log.info(f"Using npm from: {npm_path}")
+    log.info(f"Using npx from: {npx_path}")
+
+    if node_ver and version.parse(node_ver) < version.parse(required_node_version):
         log.error(
-            "node, npm or npx not found in virtual environment. Node.js setup may have failed."
+            f"❌ Node.js version {node_ver} is older than required {required_node_version}. Please upgrade Node.js."
         )
         sys.exit(1)
+    else:
+        log.info(f"Node.js version {node_ver} meets the minimum requirement.")
 
 
 def validate_package_json():
@@ -206,7 +263,7 @@ def validate_package_json():
 
 def install_js_packages():
     npm = get_npm_path()
-    if not npm.exists():
+    if not npm or not Path(npm).exists():
         log.error("npm not found. Node.js environment setup failed.")
         sys.exit(1)
 
@@ -244,7 +301,7 @@ def install_js_packages():
 
 def start_server():
     npx = get_npx_path()
-    if not npx.exists():
+    if not Path(npx).exists():
         log.error("npx not found. Please ensure Node.js is installed.")
         sys.exit(1)
 
@@ -257,7 +314,10 @@ def start_server():
     try:
         # Only pass port to serve
         subprocess.Popen([str(npx), "serve", "--listen", http_port])
-        webbrowser.open(browser_url)
+        if os.getenv("IS_DOCKER") != "true":
+            webbrowser.open(browser_url)
+        else:
+            log.info("Skipping browser launch inside Docker.")
     except Exception as e:
         log.error("Failed to start server or open browser.")
         log.error(str(e))
@@ -297,7 +357,12 @@ def is_runtime_ready():
     npm = get_npm_path()
     npx = get_npx_path()
 
-    if not (VENV_DIR.exists() and python.exists() and npm.exists() and npx.exists()):
+    if not (
+        VENV_DIR.exists()
+        and python.exists()
+        and Path(npm).exists()
+        and Path(npx).exists()
+    ):
         return False
 
     env_max_age = int(
@@ -358,7 +423,8 @@ Default behavior:
                 "No internet connection. Please connect to the internet and try again."
             )
             sys.exit(1)
-        create_virtualenv()
+        if os.getenv("IS_DOCKER") != "true":
+            create_virtualenv()
         install_python_packages()
         create_nodeenv()
         install_js_packages()

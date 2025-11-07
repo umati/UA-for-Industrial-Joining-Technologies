@@ -1,8 +1,8 @@
-version: '3.8'
+version: "3.8"
 
 services:
   ijt_web_client:
-    image: python:3.14-slim
+    image: ijt_web_client
     container_name: ijt_web_client
     working_dir: /app
     volumes:
@@ -11,7 +11,7 @@ services:
       - "3000:3000"
       - "8001:8001"
     environment:
-      - IS_DOCKER=true
-      - PYTHONUNBUFFERED=1
+      IS_DOCKER: "true"
+      PYTHONUNBUFFERED: "1"
     command: ["python", "setup_project.py", "--force_full"]
     restart: unless-stopped
