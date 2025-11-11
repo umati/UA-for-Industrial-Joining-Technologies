@@ -88,14 +88,13 @@ class IJTInterface:
 
     async def handleConnectTo(self, endpoint: str, websocket) -> dict:
         ijt_log.info("SOCKET: Connect")
-        if endpoint in self.connectionList:
+        if endpoint in self.connectionList and self.connectionList[endpoint]:
             ijt_log.info("Endpoint was already connected. Closing down old connection.")
-            if self.connectionList[endpoint] is not None:
-                try:
-                    await self.connectionList[endpoint].terminate()
-                    await asyncio.sleep(0.5)
-                except Exception as e:
-                    ijt_log.warning(f"Error terminating old connection: {e}")
+            try:
+                await self.connectionList[endpoint].terminate()
+                await asyncio.sleep(1)  # Give server time to release session
+            except Exception as e:
+                ijt_log.warning(f"Error terminating old connection: {e}")
             self.connectionList[endpoint] = None
 
         try:
@@ -110,11 +109,7 @@ class IJTInterface:
     async def handleTerminateConnection(self, endpoint: str) -> dict:
         ijt_log.info("SOCKET: terminate")
         if endpoint in self.connectionList and self.connectionList[endpoint]:
-            try:
-                await self.connectionList[endpoint].terminate()
-                await asyncio.sleep(0.5)
-            except Exception as e:
-                ijt_log.warning(f"Error terminating connection: {e}")
+            await self._safe_terminate(endpoint, self.connectionList[endpoint])
             self.connectionList[endpoint] = None
         return {}
 
@@ -158,20 +153,22 @@ class IJTInterface:
         self.disconnected = True
         ijt_log.info("disconnect - Disconnecting all OPC UA connections...")
 
+        tasks = []
         for endpoint, connection in list(self.connectionList.items()):
             if connection:
-                try:
-                    await connection.terminate()
-                    await asyncio.sleep(0.5)
-                    ijt_log.info(f"disconnect - Disconnected from {endpoint}")
-                except Exception as e:
-                    ijt_log.warning(
-                        f"disconnect - Error disconnecting from {endpoint}: {e}"
-                    )
-                finally:
-                    self.connectionList[endpoint] = None
+                tasks.append(self._safe_terminate(endpoint, connection))
 
+        await asyncio.gather(*tasks, return_exceptions=True)
         self.connectionList.clear()
+        ijt_log.info("disconnect - All connections cleaned up.")
+
+    async def _safe_terminate(self, endpoint: str, connection) -> None:
+        try:
+            await connection.terminate()
+            await asyncio.sleep(0.5)
+            ijt_log.info(f"disconnect - Disconnected from {endpoint}")
+        except Exception as e:
+            ijt_log.warning(f"disconnect - Error disconnecting from {endpoint}: {e}")
 
     def __del__(self) -> None:
         ijt_log.warning(

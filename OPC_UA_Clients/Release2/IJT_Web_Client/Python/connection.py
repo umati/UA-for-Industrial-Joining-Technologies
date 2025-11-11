@@ -84,30 +84,47 @@ class Connection:
                 ijt_log.warning("Client is None. Skipping termination.")
                 return
 
-            session_id = getattr(self.client.session, "session_id", None)
-            ijt_log.info(f"Session ID before disconnect: {session_id}")
+            ijt_log.info(
+                f"Protocol state before disconnect: {getattr(self.client.uaclient.protocol, 'state', 'unknown')}"
+            )
 
-            if self.client.uaclient.protocol.state == "open":
-                await self._unsubscribe_and_cleanup()
-                await asyncio.sleep(0.5)
+            # Unsubscribe and cleanup first
+            await self._unsubscribe_and_cleanup()
+            await asyncio.sleep(0.5)
 
-                try:
-                    await asyncio.wait_for(self.client.disconnect(), timeout=2)
-                except asyncio.TimeoutError:
-                    ijt_log.warning("Disconnect timed out.")
-                    if self.client.session:
-                        try:
-                            await self.client.session.close()
-                            ijt_log.info("Session forcibly closed.")
-                        except Exception as e:
-                            ijt_log.warning(f"Session close failed: {e}")
-                ijt_log.info(f"Disconnected from {self.server_url}")
-            else:
-                ijt_log.warning("Client protocol state not open. Skipping disconnect.")
+            # Cancel pending requests gracefully before disconnect
+            try:
+                if hasattr(self.client, "uaclient") and hasattr(
+                    self.client.uaclient, "_callbackmap"
+                ):
+                    self.client.uaclient._callbackmap.clear()
+                    ijt_log.info("Cleared pending OPC UA callbacks before disconnect.")
+            except Exception as e:
+                ijt_log.warning(f"Failed to clear pending callbacks: {e}")
+
+            # Disconnect client safely
+            try:
+                await asyncio.wait_for(self.client.disconnect(), timeout=2)
+                ijt_log.info("Client disconnected successfully.")
+            except asyncio.TimeoutError:
+                ijt_log.warning("Disconnect timed out.")
+            except Exception as e:
+                ijt_log.warning(f"Disconnect failed: {e}")
+
+            # Shutdown event handlers
+            if self.handlerJoiningEvent:
+                await self.handlerJoiningEvent.close()
+            if self.handlerResultEvent:
+                await self.handlerResultEvent.close()
+
+            ijt_log.info(f"Disconnected from {self.server_url}")
+
         except Exception as e:
             ijt_log.error(f"General error during termination: {e}")
         finally:
             ijt_log.info(f"Terminate: Connection to {self.server_url} cleaned up")
+
+        ijt_log.info("Disconnect completed — late OPC UA messages ignored.")
 
     async def _unsubscribe_and_cleanup(self) -> None:
         # Result Event
@@ -116,14 +133,14 @@ class Connection:
                 ijt_log.info("Attempting to unsubscribe handleResultEvent")
                 await self.subResultEvent.unsubscribe(self.handleResultEvent)
             except Exception as e:
-                ijt_log.warning(f"Unsubscribe failed: {e}")
+                ijt_log.warning(f"Unsubscribe failed (ResultEvent): {e}")
             try:
                 if hasattr(self.subResultEvent, "subscription_id"):
                     await self.client.delete_subscriptions(
                         [self.subResultEvent.subscription_id]
                     )
             except Exception as e:
-                ijt_log.warning(f"Delete subscription failed: {e}")
+                ijt_log.warning(f"Delete subscription failed (ResultEvent): {e}")
             self.subResultEvent = "sub"
 
         # Joining Event
@@ -132,14 +149,14 @@ class Connection:
                 ijt_log.info("Attempting to unsubscribe handleJoiningEvent")
                 await self.subJoiningEvent.unsubscribe(self.handleJoiningEvent)
             except Exception as e:
-                ijt_log.warning(f"Unsubscribe failed: {e}")
+                ijt_log.warning(f"Unsubscribe failed (JoiningEvent): {e}")
             try:
                 if hasattr(self.subJoiningEvent, "subscription_id"):
                     await self.client.delete_subscriptions(
                         [self.subJoiningEvent.subscription_id]
                     )
             except Exception as e:
-                ijt_log.warning(f"Delete subscription failed: {e}")
+                ijt_log.warning(f"Delete subscription failed (JoiningEvent): {e}")
             self.subJoiningEvent = "sub"
 
     async def subscribe(self, data: dict) -> Dict[str, Any]:

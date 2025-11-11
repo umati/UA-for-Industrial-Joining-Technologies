@@ -118,4 +118,6 @@ class EventHandler:
 
     async def close(self):
         await self.shutdown()
+        if self.loop.is_running():
+            self.loop.call_soon_threadsafe(self.loop.stop)
         ijt_log.info("EventHandler closed.")
