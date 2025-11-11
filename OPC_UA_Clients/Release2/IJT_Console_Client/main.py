@@ -3,7 +3,6 @@ import argparse
 import re
 import traceback
 import os
-import sys
 
 from opcua_client import OPCUAClient
 from client_config import SERVER_URL as DEFAULT_SERVER_URL
@@ -58,6 +57,9 @@ def main():
         loop.run_until_complete(task)
     except KeyboardInterrupt:
         ijt_log.info("KeyboardInterrupt received. Cancelling tasks...")
+        ijt_log.info(
+            "Shutdown initiated. Late OPC UA responses may appear in logs but are safe to ignore."
+        )
         task.cancel()
         try:
             loop.run_until_complete(task)
