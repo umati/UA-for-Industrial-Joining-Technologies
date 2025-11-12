@@ -1,5 +1,4 @@
-version: "3.8"
-
+version: '3.8'
 services:
   ijt_web_client:
     image: ijt_web_client
@@ -7,11 +6,21 @@ services:
     working_dir: /app
     volumes:
       - .:/app
+      - node_modules:/app/node_modules
     ports:
       - "3000:3000"
       - "8001:8001"
     environment:
       IS_DOCKER: "true"
       PYTHONUNBUFFERED: "1"
-    command: ["python", "setup_project.py", "--force_full"]
+    command: >
+      sh -c "npm ci || npm install --legacy-peer-deps && python setup_project.py --force_full && tail -f /dev/null"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  node_modules:

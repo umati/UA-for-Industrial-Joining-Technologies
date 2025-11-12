@@ -313,7 +313,7 @@ def start_server():
 
     try:
         # Only pass port to serve
-        subprocess.Popen([str(npx), "serve", "--listen", http_port])
+        subprocess.Popen([str(npx), "serve", "--listen", f"tcp://0.0.0.0:{http_port}"])
         if os.getenv("IS_DOCKER") != "true":
             webbrowser.open(browser_url)
         else:

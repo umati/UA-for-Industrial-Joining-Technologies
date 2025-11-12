@@ -67,7 +67,7 @@ async def main():
         ijt_log.error("Invalid WS_PORT environment variable. Falling back to 8001.")
         port = 8001
 
-    host = os.getenv("WS_HOST") or socket.gethostbyname(socket.gethostname())
+    host = "0.0.0.0"
     start_time = time.time()
     websocket_server = await websockets.serve(handler, host, port)
     elapsed = time.time() - start_time
