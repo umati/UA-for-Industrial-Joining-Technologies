@@ -26,7 +26,7 @@
    ```
 
 ## IJT Web Client - Option 2 - Docker Setup Guide
-
+- **Note:** Use **python3** on **Linux** instead of **python**
 - **Automated Docker Setup:**
   ```bash
   python run_setup.py
