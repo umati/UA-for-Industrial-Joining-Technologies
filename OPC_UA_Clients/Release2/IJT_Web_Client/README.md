@@ -34,7 +34,7 @@
 - **Manual Docker Setup:**
     - **Build the Docker Image:**
       ```bash
-      docker build -t ijt_web_client
+      docker build -t ijt_web_client .
       ```
     - **Run the Container:**
       ```bash
