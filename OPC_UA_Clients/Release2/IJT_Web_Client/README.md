@@ -27,11 +27,11 @@
 
 ## IJT Web Client - Option 2 - Docker Setup Guide
 
-- **Automated Docker Script:**
+- **Automated Docker Setup:**
   ```bash
   python run_setup.py
   ```
-- **Docker Setup:**
+- **Manual Docker Setup:**
     - **Build the Docker Image:**
       ```bash
       docker build -t ijt_web_client
