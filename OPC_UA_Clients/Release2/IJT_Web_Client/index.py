@@ -71,8 +71,14 @@ async def main():
     start_time = time.time()
     websocket_server = await websockets.serve(handler, host, port)
     elapsed = time.time() - start_time
+
     ijt_log.info(
-        f"WebSocket server running on ws://{host}:{port} (bound in {elapsed:.2f} seconds)"
+        "\n========================================"
+        "\n ✅ WebSocket server started successfully!"
+        f"\n Local Access:   ws://localhost:{port}"
+        f"\n Remote Access:  Use your server IP"
+        f"\n Bound in {elapsed:.2f} seconds"
+        "\n========================================"
     )
     ijt_log.info("Server setup complete. Awaiting connections...")
 

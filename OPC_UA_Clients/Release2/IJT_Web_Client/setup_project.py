@@ -299,7 +299,7 @@ def install_js_packages():
         log.warning(str(e))
 
 
-def start_server():
+def start_server(args):
     npx = get_npx_path()
     if not Path(npx).exists():
         log.error("npx not found. Please ensure Node.js is installed.")
@@ -312,8 +312,22 @@ def start_server():
     log.info(f"Starting local server on {browser_url} ...")
 
     try:
-        # Only pass port to serve
-        subprocess.Popen([str(npx), "serve", "--listen", f"tcp://0.0.0.0:{http_port}"])
+        # Base command
+        cmd = [
+            str(npx),
+            "serve",
+            "--listen",
+            f"tcp://0.0.0.0:{http_port}",
+            "--no-clipboard",  # Avoid extra clipboard messages
+        ]
+
+        # Suppress request logs if silent mode is enabled
+        if args.silent:
+            cmd.append("--no-request-logging")
+
+        subprocess.Popen(cmd)
+
+        # Open browser only if not running inside Docker
         if os.getenv("IS_DOCKER") != "true":
             webbrowser.open(browser_url)
         else:
@@ -396,24 +410,34 @@ def is_runtime_ready():
 def main():
     parser = argparse.ArgumentParser(
         description="Setup and run the IJT Web Client environment.",
-        epilog="""
-Default behavior:
-  If the environment is already set up (venv, npm, npx exist), the script runs in runtime-only mode.
-  Use --force_full to override and perform full setup regardless of environment state.
+        epilog="""Default behavior:
+ If the environment is already set up (venv, npm, npx exist), the script runs in runtime-only mode.
+ Use --force_full to override and perform full setup regardless of environment state.
 """,
         formatter_class=argparse.RawTextHelpFormatter,
     )
+
     parser.add_argument(
         "--force_full",
         action="store_true",
         help="Force full setup even if environment is already prepared",
     )
+
+    parser.add_argument(
+        "--silent",
+        action="store_true",
+        help="Suppress info logs and only show warnings/errors",
+    )
+
     args = parser.parse_args()
+
+    log_level = logging.WARNING if args.silent else logging.INFO
+    logging.getLogger().setLevel(log_level)
 
     if not args.force_full and is_runtime_ready():
         log.info("Detected existing environment. Running runtime-only setup...")
         load_dotenv()
-        start_server()
+        start_server(args)
         run_index()
     else:
         log.info("Starting full project setup...")
@@ -425,12 +449,12 @@ Default behavior:
             sys.exit(1)
         if os.getenv("IS_DOCKER") != "true":
             create_virtualenv()
-        install_python_packages()
-        create_nodeenv()
-        install_js_packages()
-        create_env_template()
+            install_python_packages()
+            create_nodeenv()
+            install_js_packages()
+            create_env_template()
         load_dotenv()
-        start_server()
+        start_server(args)
         run_index()
         log.info("Setup complete.")
         update_setup_timestamp()
