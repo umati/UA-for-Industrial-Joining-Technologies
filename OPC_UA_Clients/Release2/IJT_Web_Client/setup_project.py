@@ -315,6 +315,7 @@ def start_server(args):
         # Base command
         cmd = [
             str(npx),
+            "--yes",
             "serve",
             "--listen",
             f"tcp://0.0.0.0:{http_port}",
