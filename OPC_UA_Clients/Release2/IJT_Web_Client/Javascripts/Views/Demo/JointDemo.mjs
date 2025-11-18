@@ -127,8 +127,8 @@ export default class JointDemo extends BasicScreen {
     const img = document.createElement('img')
 
     // Set the image source and attributes
-    img.src = './Resources/blueprint.jpg'
-    img.alt = 'A blueprint of a truck'
+    img.src = './Resources/digital_twin.jpg'
+    img.alt = 'A digital twin of a truck'
     img.width = 700 // Set width (optional)
 
     MESArea.appendChild(img)
