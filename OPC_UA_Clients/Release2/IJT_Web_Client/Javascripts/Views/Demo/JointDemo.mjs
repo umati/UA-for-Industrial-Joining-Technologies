@@ -129,7 +129,8 @@ export default class JointDemo extends BasicScreen {
     // Set the image source and attributes
     img.src = './Resources/digital_twin.jpg'
     img.alt = 'A digital twin of a truck'
-    img.width = 700 // Set width (optional)
+    img.height = 360 // Set width (optional)
+    //img.width = 700 // Set width (optional)
 
     MESArea.appendChild(img)
 
