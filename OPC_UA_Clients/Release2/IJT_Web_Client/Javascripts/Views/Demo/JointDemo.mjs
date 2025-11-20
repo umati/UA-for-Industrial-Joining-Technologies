@@ -45,26 +45,19 @@ export default class JointDemo extends BasicScreen {
 
     const MESArea = document.createElement('div')
     MESArea.classList.add('demoRow')
-    this.container.appendChild(MESArea)
+    //this.container.appendChild(MESArea)
     MESArea.style.position = 'relative'
 
+    const digTwinArea = this.makeNamedArea('Digital twin', 'demoTwin',  this.container)
 
-    /*
-    const img2 = document.createElement('img')
-    img2.src = './Resources/jointspart.jpg'
-    img2.alt = 'A blueprint of a truck'
-    img2.width = 350 // Set width (optional)
-
-    // Append the image to the body or any other element
-    buttonArea.appendChild(img2)
-    */
+    digTwinArea.appendChild(MESArea)
 
     // Handling of button 1 (calling select joint 1)
     const button1 = document.createElement('button')
     button1.innerText = 'Select joint 1'
     button1.classList.add('demoButtonFree')
-    button1.style.left = '410px'
-    button1.style.top = '17px'
+    button1.style.left = '35px'
+    button1.style.top = '45px'
     button1.title = 
     `Joint data
     Joint Id: joint_1
@@ -91,8 +84,8 @@ export default class JointDemo extends BasicScreen {
     const button2 = document.createElement('button')
     button2.innerText = 'Select joint 2'
     button2.classList.add('demoButtonFree')
-    button2.style.left = '560px'
-    button2.style.top = '160px'
+    button2.style.left = '420px'
+    button2.style.top = '65px'
     
     button2.title = 
     `Joint data
@@ -119,8 +112,8 @@ export default class JointDemo extends BasicScreen {
     const button3 = document.createElement('button')
     button3.innerText = 'Simulate tightening'
     button3.classList.add('demoButtonFree')
-    button3.style.left = '520px'
-    button3.style.top = '360px'
+    button3.style.right = '10px'
+    button3.style.top = '300px'
     MESArea.appendChild(button3)
     button3.addEventListener('click', () => this.simulateTightening())
 
@@ -129,8 +122,8 @@ export default class JointDemo extends BasicScreen {
     // Set the image source and attributes
     img.src = './Resources/digital_twin.jpg'
     img.alt = 'A digital twin of a truck'
-    img.height = 360 // Set width (optional)
-    //img.width = 700 // Set width (optional)
+    img.height = 360 // Set height (optional)
+    img.width = 490 // Set width (optional)
 
     MESArea.appendChild(img)
 

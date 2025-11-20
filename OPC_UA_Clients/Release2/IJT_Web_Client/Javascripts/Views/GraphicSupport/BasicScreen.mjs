@@ -188,7 +188,9 @@ export default class BasicScreen {
   makeNamedArea (text, style, area) {
     const namedArea = document.createElement('div')
     namedArea.classList.add('scrollableInfoArea')
-    namedArea.classList.add(style)
+    if (style) {
+      namedArea.classList.add(style)
+    }
 
     const header = document.createElement('div')
     header.classList.add('myHeader')
