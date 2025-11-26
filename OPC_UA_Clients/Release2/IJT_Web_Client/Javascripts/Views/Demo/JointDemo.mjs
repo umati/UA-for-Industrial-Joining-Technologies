@@ -48,7 +48,7 @@ export default class JointDemo extends BasicScreen {
     //this.container.appendChild(MESArea)
     MESArea.style.position = 'relative'
 
-    const digTwinArea = this.makeNamedArea('Digital twin', 'demoTwin',  this.container)
+    const digTwinArea = this.makeNamedArea('Digital shadow', 'demoTwin',  this.container)
 
     digTwinArea.appendChild(MESArea)
 
