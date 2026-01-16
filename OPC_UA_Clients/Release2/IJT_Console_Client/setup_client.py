@@ -53,7 +53,6 @@ def install_packages():
     subprocess.check_call(
         [str(PYTHON_EXECUTABLE), "-m", "pip", "install", "--upgrade", "pip"]
     )
-
     requirements_file = Path("requirements.txt")
     if requirements_file.exists():
         log.info("Installing packages from requirements.txt...")
@@ -83,7 +82,10 @@ def validate_url(url: str) -> str:
     return None
 
 
-def run_client(url_arg=None):
+def run_client(url_arg=None, passthrough=None):
+    """
+    Forward execution to main.py in the same venv.
+    """
     main_file = Path("main.py")
     if not main_file.exists():
         log.error("main.py not found in the current directory.")
@@ -91,8 +93,15 @@ def run_client(url_arg=None):
 
     log.info("Starting OPC UA client...")
     cmd = [str(PYTHON_EXECUTABLE), str(main_file)]
+
+    # Forward URL if provided (normal behavior without methods)
     if url_arg:
         cmd.append(f"--url={url_arg}")
+
+    # Forward any other args
+    if passthrough:
+        cmd.extend(passthrough)
+
     subprocess.call(cmd)
 
 
@@ -105,7 +114,9 @@ def main():
     parser.add_argument(
         "--clean", action="store_true", help="Remove virtual environment and exit"
     )
-    args = parser.parse_args()
+
+    # Capture unknown args so we can forward them transparently to main.py if needed
+    args, unknown = parser.parse_known_args()
 
     url_arg = validate_url(args.url)
     check_python_version()
@@ -124,7 +135,16 @@ def main():
 
     create_virtualenv()
     install_packages()
-    run_client(url_arg)
+
+    # If --url was provided, run the client.
+    # Otherwise, just finish setup.
+    if url_arg:
+        run_client(url_arg, passthrough=unknown)
+    else:
+        log.info("Setup complete. Activate venv and run:")
+        log.info(f"  source {VENV_DIR}/bin/activate")
+        log.info("Then start the client:")
+        log.info("  python main.py --url opc.tcp://<ip>:<port>")
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from result_event_handler import ResultEventHandler
 from event_handler import EventHandler
 from ijt_logger import ijt_log
 from event_types import get_event_types
+from method_caller import OPCUAMethodCaller
 
 
 class OPCUAClient:
@@ -19,6 +20,7 @@ class OPCUAClient:
         self.sub_joining_event = None
         self.handler_result_event = ResultEventHandler(server_url, self.client)
         self.handler_joining_event = EventHandler(None, server_url, self.client)
+        self.methods = OPCUAMethodCaller(self.client)
 
     def setup_client_metadata(self):
         computer_name = socket.getfqdn()
