@@ -28,6 +28,9 @@
 - Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
 
 # Change Log
+**2026-02-06:** Following Changes.
+1. **Added** appropriate logs when the binary path is too long on Windows.
+
 **2025-12-05:** Following Changes.
 1. **Updated** event simulation to support multiple events with different combinations.
 2. **Multiple** refactoring and **optimizations**.
