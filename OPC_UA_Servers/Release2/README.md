@@ -11,7 +11,7 @@
 
 ### Windows 10 or Later
 #### Prerequisites
-- **Install** [**Windows_SDK**](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) and Visual C++ Runtime [**VC-Redist**](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+- **Install** Visual C++ Runtime [**VC-Redist**](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
 #### Running the application
 - **Launch** the **binary** file (**`opcua_ijt_demo_application.exe`**). Ensure that it is Run as **Adminstrator** or at least **Read/Write** access to the directory.
 
