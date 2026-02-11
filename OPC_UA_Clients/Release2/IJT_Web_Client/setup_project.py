@@ -13,14 +13,6 @@ import time
 from pathlib import Path
 
 try:
-    from packaging import version
-except ImportError:
-    subprocess.check_call(
-        [sys.executable, "-m", "pip", "install", "--user", "packaging"]
-    )
-    from packaging import version
-
-try:
     from dotenv import load_dotenv
 except ImportError:
     if os.getenv("IS_DOCKER") == "true":
@@ -41,6 +33,7 @@ logging.basicConfig(
 log = logging.getLogger()
 
 VENV_DIR = Path("venv")
+SETUP_TIMESTAMP_FILE = Path(".setup_timestamp")
 
 
 def get_environment_age_days():
@@ -52,9 +45,6 @@ def get_environment_age_days():
     except Exception as e:
         log.warning("Could not determine environment age: " + str(e))
     return None
-
-
-SETUP_TIMESTAMP_FILE = Path(".setup_timestamp")
 
 
 def get_last_setup_age_days():
@@ -237,6 +227,24 @@ def create_nodeenv():
     log.info(f"Using Node.js from: {node_path}")
     log.info(f"Using npm from: {npm_path}")
     log.info(f"Using npx from: {npx_path}")
+
+
+    try:
+        from packaging import version
+    except Exception:
+        log.warning(
+            "`packaging` not available yet; attempting to install it into the active Python environment..."
+        )
+        py = (
+            get_python_path()
+        )  # in Docker this returns sys.executable; otherwise venv python
+        try:
+            subprocess.check_call([str(py), "-m", "pip", "install", "packaging"])
+            from packaging import version
+        except Exception as e:
+            log.error("Failed to import or install `packaging` for version comparison.")
+            log.error(str(e))
+            sys.exit(1)
 
     if node_ver and version.parse(node_ver) < version.parse(required_node_version):
         log.error(
