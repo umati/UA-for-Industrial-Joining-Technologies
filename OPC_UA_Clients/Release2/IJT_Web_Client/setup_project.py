@@ -231,13 +231,33 @@ def _update_setup_timestamp():
         log.warning("Could not update setup timestamp: %s", e)
 
 
+def _resolve_python_executable(latest_cmd):
+    """
+    Resolve the absolute path to the interpreter behind latest_cmd.
+    Example: latest_cmd == ["py", "-3.13"]  -> returns "C:\\...\\python.exe"
+             latest_cmd == ["python3.16"]   -> returns "/usr/bin/python3.16"
+    """
+    try:
+        exe = subprocess.check_output(
+            latest_cmd + ["-c", "import sys; print(sys.executable)"],
+            text=True
+        ).strip()
+        if not exe:
+            raise RuntimeError("Could not resolve target python executable.")
+        return exe
+    except Exception as e:
+        log.error("Failed to resolve Python executable from %s: %s", " ".join(latest_cmd), e)
+        sys.exit(1)
+
 # ---------------------------------------------------------------------------
 # Python: Create venv with newest interpreter
 # ---------------------------------------------------------------------------
 def _create_virtualenv(latest_cmd):
     """
-    Create venv with the newest Python (as selected above).
-    In Docker, skip venv (use system Python).
+    Create venv with the newest Python interpreter.
+    - Resolves the real python.exe (or python3.x) behind 'latest_cmd'
+    - Calls that interpreter directly for ' -m venv '
+    - Gives clear guidance if creation fails (Store / broken association cases)
     """
     if os.getenv("IS_DOCKER") == "true":
         log.info("Docker detected: skipping virtualenv creation.")
@@ -248,18 +268,29 @@ def _create_virtualenv(latest_cmd):
             shutil.rmtree(VENV_DIR)
         except PermissionError as e:
             log.error("Failed to delete existing virtualenv: %s", e)
-            log.error(
-                "Please ensure no Python processes are using the virtual environment."
-            )
+            log.error("Please close any processes using the 'venv' and retry.")
             sys.exit(1)
 
-    log.info("Creating virtual environment with interpreter: %s", " ".join(latest_cmd))
-    subprocess.check_call(latest_cmd + ["-m", "venv", str(VENV_DIR)])
+    target_exe = _resolve_python_executable(latest_cmd)
+    log.info("Creating virtual environment with interpreter: %s", target_exe)
 
-    # Ensure pip inside venv
+    try:
+        subprocess.check_call([target_exe, "-m", "venv", str(VENV_DIR)])
+    except subprocess.CalledProcessError as e:
+        log.error("Venv creation failed with %s", e)
+        log.error(
+            "This can happen on Windows when the 'py' launcher points to a Store/stub install "
+            "or a conflicting association. Please install Python from python.org or the Microsoft Store, "
+            "ensure the 'py' launcher is installed, and that 'py -0' lists your interpreter correctly."
+        )
+        log.error("Tip: run  py -0  to list Pythons; the one with '*' is the default. "
+                  "You can also try:  py -3.13 -c \"import sys; print(sys.executable)\"")
+        sys.exit(1)
+
+    # Ensure pip inside the new venv
     py = _python_in_venv()
     try:
-        subprocess.check_call([str(py), "-m", "ensurepip"])
+        subprocess.check_call([str(py), "-m", "ensurepip", "--upgrade"])
     except Exception as e:
         log.warning("Failed to ensure pip in virtualenv: %s", e)
 
@@ -564,7 +595,39 @@ def main():
         sys.exit(1)
 
     latest_cmd, latest_ver = _find_latest_python_executable()
-    log.info("Newest Python detected: %s", latest_ver)
+    # --- REQUIRE PYTHON 3.14 OR NEWER -----------------------------------------
+    try:
+        major, minor = map(int, latest_ver.split("."))
+    except Exception:
+        log.error("Could not parse detected Python version: %s", latest_ver)
+        sys.exit(1)
+
+    log.info("Newest Python detected on this system: %s", latest_ver)
+
+    if (major, minor) < (3, 14):
+        log.error(
+            "\n"
+            "=====================================================================\n"
+            "  PYTHON 3.14 OR NEWER IS REQUIRED FOR THIS IJT WEB CLIENT\n"
+            "=====================================================================\n"
+            "Your system only has Python %s installed.\n\n"
+            "Please install Python 3.14, 3.15, or newer from:\n"
+            "  https://www.python.org/downloads/\n\n"
+            "WINDOWS USERS:\n"
+            "  1. Install Python 3.14+ using the official installer.\n"
+            "  2. Ensure the 'py' launcher is installed.\n"
+            "  3. Verify using:\n"
+            "         py -0\n"
+            "     You must see something like:\n"
+            "         -3.14-64  *\n"
+            "     (the * indicates your latest default Python)\n\n"
+            "After installing Python 3.14+, re-run:\n"
+            "     python setup_project.py --force_full\n"
+            "=====================================================================\n"
+            , latest_ver
+        )
+        sys.exit(1)
+# --------------------------------------------------------------------------
 
     if os.getenv("IS_DOCKER") != "true":
         _create_virtualenv(latest_cmd)
