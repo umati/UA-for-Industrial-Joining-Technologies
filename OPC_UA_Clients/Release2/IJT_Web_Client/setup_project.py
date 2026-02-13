@@ -228,7 +228,6 @@ def create_nodeenv():
     log.info(f"Using npm from: {npm_path}")
     log.info(f"Using npx from: {npx_path}")
 
-
     try:
         from packaging import version
     except Exception:
@@ -328,6 +327,7 @@ def start_server(args):
             "--listen",
             f"tcp://0.0.0.0:{http_port}",
             "--no-clipboard",  # Avoid extra clipboard messages
+            "--no-request-logging",  # Always suppress HTTP request logs from `serve`
         ]
 
         # Suppress request logs if silent mode is enabled
