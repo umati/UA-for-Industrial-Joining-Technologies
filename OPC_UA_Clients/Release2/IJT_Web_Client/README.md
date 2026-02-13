@@ -11,7 +11,7 @@
 ## Prerequisites
 -  **Internet Connection**
 -  **Download** the project directory: **`IJT_Web_Client`** and launch a terminial from the project directory.
--  **Install** **Python** and **Node.js** from the **official** **websites** and **add** the installation directories to the system **PATH**.
+-  **Install** **Python 3.14 or higher** and **latest Node.js** from the **official** **websites** and **add** the installation directories to the system **PATH**.
 - Ensure that Docker is installed and running **for** Docker Option.
   
 ## IJT Web Client - Option 1 - Automated Local Setup Script Guide
