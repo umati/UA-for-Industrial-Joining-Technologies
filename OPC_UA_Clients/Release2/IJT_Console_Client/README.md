@@ -10,7 +10,7 @@
 ## Prerequisites
 -  **Internet Connection**
 -  **Download** the project directory: **`IJT_Console_Client`** and launch a terminial from the project directory.
--  **Install** **Python** from the **official** **website** and **add** the installation directory to the system **PATH**.
+-  **Install** **Python 3.14 or higher** from the **official** **website** and **add** the installation directory to the system **PATH**.
 
 ## Run the client application
 - **Note:** On Linux, the command should be **python3** instead of **python**.
