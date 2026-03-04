@@ -30,7 +30,9 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Constants & Paths
 # ---------------------------------------------------------------------------
-VENV_DIR = Path("venv")
+IS_DOCKER = os.getenv("IS_DOCKER") == "true"
+# Use an in-container venv path to avoid Windows bind-mount conflicts
+VENV_DIR = Path("/opt/ijt_venv") if IS_DOCKER else Path("venv")
 SETUP_TIMESTAMP_FILE = Path(".setup_timestamp")
 IS_WINDOWS = os.name == "nt"
 
@@ -172,8 +174,8 @@ def _get_python_path() -> Path:
     """
     Inside Docker, use system python. Otherwise use venv python.
     """
-    if os.getenv("IS_DOCKER") == "true":
-        return Path(sys.executable)
+    # if os.getenv("IS_DOCKER") == "true":
+    #     return Path(sys.executable)
     return _python_in_venv()
 
 
@@ -239,15 +241,17 @@ def _resolve_python_executable(latest_cmd):
     """
     try:
         exe = subprocess.check_output(
-            latest_cmd + ["-c", "import sys; print(sys.executable)"],
-            text=True
+            latest_cmd + ["-c", "import sys; print(sys.executable)"], text=True
         ).strip()
         if not exe:
             raise RuntimeError("Could not resolve target python executable.")
         return exe
     except Exception as e:
-        log.error("Failed to resolve Python executable from %s: %s", " ".join(latest_cmd), e)
+        log.error(
+            "Failed to resolve Python executable from %s: %s", " ".join(latest_cmd), e
+        )
         sys.exit(1)
+
 
 # ---------------------------------------------------------------------------
 # Python: Create venv with newest interpreter
@@ -259,17 +263,25 @@ def _create_virtualenv(latest_cmd):
     - Calls that interpreter directly for ' -m venv '
     - Gives clear guidance if creation fails (Store / broken association cases)
     """
-    if os.getenv("IS_DOCKER") == "true":
-        log.info("Docker detected: skipping virtualenv creation.")
-        return
+    # if os.getenv("IS_DOCKER") == "true":
+    #     log.info("Docker detected: skipping virtualenv creation.")
+    #     return
 
+    # Remove only the selected venv dir (in Docker this is /opt/ijt_venv, not your bind-mount)
     if VENV_DIR.exists():
+
+        def _on_rm_error(func, path, exc_info):
+            try:
+                os.chmod(path, 0o700)
+                func(path)
+            except Exception:
+                # As a last resort, leave the file in place and continue
+                log.warning("Could not remove %s; continuing.", path)
+
         try:
-            shutil.rmtree(VENV_DIR)
-        except PermissionError as e:
-            log.error("Failed to delete existing virtualenv: %s", e)
-            log.error("Please close any processes using the 'venv' and retry.")
-            sys.exit(1)
+            shutil.rmtree(VENV_DIR, onerror=_on_rm_error)
+        except Exception as e:
+            log.warning("Non-fatal: could not fully remove %s: %s", VENV_DIR, e)
 
     target_exe = _resolve_python_executable(latest_cmd)
     log.info("Creating virtual environment with interpreter: %s", target_exe)
@@ -283,8 +295,10 @@ def _create_virtualenv(latest_cmd):
             "or a conflicting association. Please install Python from python.org or the Microsoft Store, "
             "ensure the 'py' launcher is installed, and that 'py -0' lists your interpreter correctly."
         )
-        log.error("Tip: run  py -0  to list Pythons; the one with '*' is the default. "
-                  "You can also try:  py -3.13 -c \"import sys; print(sys.executable)\"")
+        log.error(
+            "Tip: run  py -0  to list Pythons; the one with '*' is the default. "
+            'You can also try:  py -3.13 -c "import sys; print(sys.executable)"'
+        )
         sys.exit(1)
 
     # Ensure pip inside the new venv
@@ -623,15 +637,15 @@ def main():
             "     (the * indicates your latest default Python)\n\n"
             "After installing Python 3.14+, re-run:\n"
             "     python setup_project.py --force_full\n"
-            "=====================================================================\n"
-            , latest_ver
+            "=====================================================================\n",
+            latest_ver,
         )
         sys.exit(1)
-# --------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
-    if os.getenv("IS_DOCKER") != "true":
-        _create_virtualenv(latest_cmd)
-        _install_python_packages()
+    # if os.getenv("IS_DOCKER") != "true":
+    _create_virtualenv(latest_cmd)
+    _install_python_packages()
 
     _create_nodeenv()
     _install_js_packages()
