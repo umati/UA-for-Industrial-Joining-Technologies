@@ -73,7 +73,7 @@ The base class exposes convenience getters used widely by UI:
 - `name` -> `ResultMetaData.Name`
 - `classification` -> `ResultMetaData.Classification`
 - `isPartial` -> `ResultMetaData.IsPartial === 'True'`
-- `evaluation` -> true when evaluation is `ResultEvaluationEnum.OK`
+- `evaluation` -> true when calling evaluation() on the result
 - `time` -> end time from processing times (or fallback text)
 - `isReference` -> true when metadata has no `CreationTime`
 

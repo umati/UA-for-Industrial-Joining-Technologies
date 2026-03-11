@@ -24,6 +24,7 @@ import EntityCacheView from 'views/Entities/Entities.mjs'
 import JointGraphics from 'views/Joints/JointGraphics.mjs'
 import ConnectionGraphics from 'views/Connection/ConnectionGraphics.mjs'
 import ResultGraphics from 'views/ComplexResult/ResultGraphics.mjs'
+import OkRateGraphics from 'views/OkRate/OkRateGraphics.mjs'
 import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
 import BasicScreen from 'views/GraphicSupport/BasicScreen.mjs'
 
@@ -133,6 +134,14 @@ export default class EndpointGraphics extends BasicScreen {
       console.log(error)
     }
 
+    // OK rate view is not critical
+    let okRateGraphics = null
+    try {
+      okRateGraphics = new OkRateGraphics(resultManager, methodManager, addressSpace)
+    } catch (error) {
+      console.log(error)
+    }
+
     // Entity view is not critical
     let entityCacheView = null
     try {
@@ -168,6 +177,9 @@ export default class EndpointGraphics extends BasicScreen {
     tabGenerator.generateTab(addressSpaceGraphics, 3, false)
     if (resultGraphics) {
       tabGenerator.generateTab(resultGraphics, 4)
+    }
+    if (okRateGraphics) {
+      tabGenerator.generateTab(okRateGraphics, 4)
     }
     if (assetGraphics) {
       tabGenerator.generateTab(assetGraphics, 5)

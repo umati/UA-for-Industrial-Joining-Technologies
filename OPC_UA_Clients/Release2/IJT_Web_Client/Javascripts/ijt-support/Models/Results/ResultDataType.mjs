@@ -39,7 +39,8 @@ export default class ResultDataType extends IJTBaseModel {
   }
 
   get evaluation () {
-    if (this.ResultMetaData?.ResultEvaluation === 'ResultEvaluationEnum.OK') {
+    if ((this.ResultMetaData?.ResultEvaluation === 'ResultEvaluationEnum.OK') ||
+        (this.ResultMetaData?.ResultEvaluation === 1)) {
       return true
     }
     return false

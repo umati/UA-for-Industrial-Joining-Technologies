@@ -77,7 +77,7 @@ export default class IJTPropertyView {
 
         const line3 = document.createElement('div')
         line3.innerText = final.MeasuredValue
-        if (final.ResultEvaluation !== 'ResultEvaluationEnum.OK') {
+        if (final.evaluation()) {
           line1.color = 'red'
         }
         this.measured.appendChild(line3)
