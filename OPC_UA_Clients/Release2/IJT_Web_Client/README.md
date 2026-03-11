@@ -5,10 +5,9 @@
 - **Coordinator:** Mohit Agarwal: mohit.agarwal@atlascopco.com
 
 ## Overview
-- This is a reference OPC UA Client application to demonstrate the usage of getting data from the OPC UA Server based on the OPC UA Industrial Joining Technologies (IJT). It uses the following modules.
+- This is a **reference** OPC UA Client application to **demonstrate** the **usage** of getting data from the **OPC UA Server** based on the **OPC UA Industrial Joining Technologies (IJT)**. It has the following modules.
   - Python backend using `opcua-asyncio` and WebSockets.
   - Node.js frontend for visualizing and interacting with IJT OPC UA data.
-  - Reference OPC UA client for the Industrial Joining Technologies (IJT) companion specification.
 
 ## Prerequisites
 -  **Internet Connection**
