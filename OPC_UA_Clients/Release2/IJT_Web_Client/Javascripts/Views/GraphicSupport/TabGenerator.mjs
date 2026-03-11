@@ -56,7 +56,9 @@ export default class TabGenerator {
    */
   setRightInfo (graphics) {
     this.rightInfo.innerHTML = ''
-    this.rightInfo.appendChild(graphics)
+    if (graphics) {
+      this.rightInfo.appendChild(graphics)
+    }
   }
 
   /**
@@ -64,7 +66,7 @@ export default class TabGenerator {
    * @returns the content tothe right of the tabs
    */
   getRightInfo () {
-    return this.rightInfo.children[0]
+    return this.rightInfo.children[0] || null
   }
 
   /**
@@ -73,12 +75,22 @@ export default class TabGenerator {
    */
   forceContent (content) {
     this.contentDiv.innerHTML = ''
-    this.contentDiv.appendChild(content)
+    if (content) {
+      this.contentDiv.appendChild(content)
+    }
   }
 
   cascadingInitiate () {
     if (this.currentSelected) {
-      this.currentSelected.initiate()
+      try {
+        this.currentSelected.initiate()
+      } catch (error) {
+        this.displayError({
+          context: 'cascadingInitiate',
+          message: 'Failed to initialize current tab content.',
+          error
+        })
+      }
     }
   }
 
@@ -88,6 +100,13 @@ export default class TabGenerator {
    * @returns
    */
   generateTab (content, viewLevel, selected) {
+    if (!content || !content.backGround) {
+      this.displayError({
+        context: 'generateTab',
+        message: 'Tried to generate a tab without valid content.'
+      })
+      return
+    }
     const tab = new Tab(this.contentDiv, content, this.selector, viewLevel, this.currentViewLevel, this)
     if (selected) {
       tab.select()
@@ -137,37 +156,46 @@ export default class TabGenerator {
 
       return true
     }
+    const normalizedMessageInput = typeof messageInput === 'string'
+      ? { context: 'UI', message: messageInput }
+      : (messageInput || { context: 'UI', message: 'Unknown error' })
     let message
-    const context = messageInput.context
+    const context = normalizedMessageInput.context || 'UI'
 
     const contentDiv = document.createElement('div')
     contentDiv.classList.add('errorTab')
+    if (!this.container || !this.container.appendChild) {
+      console.error('displayError without valid container:', normalizedMessageInput)
+      return
+    }
     this.container.appendChild(contentDiv)
     const titleDiv = document.createElement('div')
     const innerDiv = document.createElement('div')
     titleDiv.innerText = `OPC UA communication failure in '${context}' function\n\n`
-    innerDiv.innerText = `${messageInput.message}\n\n`
+    innerDiv.innerText = `${normalizedMessageInput.message || 'Unknown error'}\n\n`
 
-    if (!isEmpty(messageInput.error)) {
-      if (typeof messageInput.error === 'string' || messageInput.error instanceof String) {
-        message = messageInput.error
+    if (!isEmpty(normalizedMessageInput.error)) {
+      if (typeof normalizedMessageInput.error === 'string' || normalizedMessageInput.error instanceof String) {
+        message = normalizedMessageInput.error
       } else {
-        message = 'OBJECT:' + JSON.stringify(messageInput.error)
+        message = 'OBJECT:' + JSON.stringify(normalizedMessageInput.error)
       }
-      innerDiv.innerText = `${messageInput.message}\n\n ${message}`
+      innerDiv.innerText = `${normalizedMessageInput.message || 'Unknown error'}\n\n ${message}`
     }
 
     contentDiv.appendChild(titleDiv)
     contentDiv.appendChild(innerDiv)
     window.setTimeout(() => {
-      this.container.removeChild(contentDiv)
+      if (contentDiv.parentNode === this.container) {
+        this.container.removeChild(contentDiv)
+      }
     }, 15000)
   }
 
   close (point) {
     let removeItem
     for (const tab of this.containerList) {
-      if (!point || point.name === tab.content.title) {
+      if (!point || point.name === tab?.content?.title) {
         tab.close()
         removeItem = tab
       }
@@ -178,7 +206,9 @@ export default class TabGenerator {
   }
 
   setSelectorBackground (style) {
-    this.container.classList.add(style)
+    if (style) {
+      this.container.classList.add(style)
+    }
   }
 }
 
@@ -198,20 +228,32 @@ class Tab {
 
     this.button = document.createElement('input')
     this.button.type = 'button'
-    this.button.value = content.title
+    this.button.value = content.title || 'Untitled'
     this.button.classList.add('tabButton')
 
     this.button.aaID = Math.random(1000)
-    this.button.aaNAME = content.title
+    this.button.aaNAME = content.title || 'Untitled'
     this.button.onclick = () => {
-      this.container.innerHTML = ''
-
-      this.container.appendChild(this.content.backGround)
-      this.content.initiate()
-      this.selectorArea.resetButtons()
-      this.selected = true
-      this.button.classList.add('is-selected')
-      this.tabGenerator.currentSelected = content
+      try {
+        this.container.innerHTML = ''
+        if (!this.content || !this.content.backGround) {
+          throw new Error('Tab content has no backGround node')
+        }
+        this.container.appendChild(this.content.backGround)
+        if (typeof this.content.initiate === 'function') {
+          this.content.initiate()
+        }
+        this.selectorArea.resetButtons()
+        this.selected = true
+        this.button.classList.add('is-selected')
+        this.tabGenerator.currentSelected = content
+      } catch (error) {
+        this.tabGenerator.displayError({
+          context: 'Tab.select',
+          message: `Failed to open tab '${this.button.value}'.`,
+          error
+        })
+      }
     }
     this.button.reset = () => {
       this.button.classList.remove('is-selected')
@@ -228,7 +270,9 @@ class Tab {
     } else {
       this.button.hidden = false
     }
-    this.content.changeViewLevel(newLevel)
+    if (this.content && typeof this.content.changeViewLevel === 'function') {
+      this.content.changeViewLevel(newLevel)
+    }
   }
 
   visible () {
@@ -239,14 +283,18 @@ class Tab {
    * In this case, selecting an area is exactly the same as pressing the tab button on the top
    */
   select () {
-    this.button.onclick()
+    if (this.button && typeof this.button.onclick === 'function') {
+      this.button.onclick()
+    }
   }
 
   /**
    * When closing this area, make sure to close the connections and such things
    */
   close () {
-    this.selectorArea.removeChild(this.button)
+    if (this.selectorArea && this.button && this.button.parentNode === this.selectorArea) {
+      this.selectorArea.removeChild(this.button)
+    }
     if (this.content && this.content.close) {
       this.content.close()
     }

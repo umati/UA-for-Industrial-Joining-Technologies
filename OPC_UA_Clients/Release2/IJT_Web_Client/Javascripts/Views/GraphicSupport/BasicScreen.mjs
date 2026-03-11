@@ -50,14 +50,28 @@ export default class BasicScreen {
     newButton.callback = callback
     newButton.classList.add('myButton')
 
-    newButton.innerHTML = title
+    newButton.textContent = title || 'Action'
 
-    newButton.onclick = () => {
-      newButton.callback(newButton, this)
+    newButton.onclick = async () => {
+      if (newButton.disabled) {
+        return
+      }
+      newButton.disabled = true
+      try {
+        if (typeof newButton.callback === 'function') {
+          await newButton.callback(newButton, this)
+        }
+      } catch (error) {
+        console.error('Button callback failed:', error)
+      } finally {
+        // Small debounce to avoid accidental double-activations.
+        window.setTimeout(() => { newButton.disabled = false }, 150)
+      }
     }
     newButton.moveTo = (location) => {
-      // newButton.parentElement.removeChild(newButton)
-      location.appendChild(newButton)
+      if (location && location.appendChild) {
+        location.appendChild(newButton)
+      }
     }
     if (area) {
       area.appendChild(newButton)
@@ -69,7 +83,7 @@ export default class BasicScreen {
   createLabel (text) {
     const a = document.createElement('label')
     a.classList.add('labelStyle')
-    a.innerHTML = text
+    a.textContent = text || ''
     delete a.textprediction
     return a
   }
@@ -85,19 +99,26 @@ export default class BasicScreen {
     const newInput = document.createElement('input')
     newInput.classList.add('inputStyle')
     newInput.classList.add('methodInput')
-    newInput.style.width = width + '%'
-    newInput.value = title
+    const parsedWidth = Number(width)
+    newInput.style.width = (Number.isFinite(parsedWidth) ? parsedWidth : 45) + '%'
+    newInput.value = title || ''
     newInput.spellcheck = false
     newInput.onchange = (x) => {
       if (changeFunction) {
-        changeFunction(x.currentTarget.value)
+        try {
+          changeFunction(x.currentTarget.value)
+        } catch (error) {
+          console.error('Input onchange failed:', error)
+        }
       }
     }
     newInput.onkeyup = (x) => {
       if (changeFunction) {
-        // if (x.key === 'Enter' || x.keyCode === 13) {
-        changeFunction(x.currentTarget.value)
-        // }
+        try {
+          changeFunction(x.currentTarget.value)
+        } catch (error) {
+          console.error('Input onkeyup failed:', error)
+        }
       }
     }
     if (area) {
@@ -112,7 +133,9 @@ export default class BasicScreen {
     x.classList.add('myCheckBox')
     x.checked = initialValue
     x.onclick = function () {
-      onchange(this.checked)
+      if (typeof onchange === 'function') {
+        onchange(this.checked)
+      }
     }
     return x
   }
@@ -135,7 +158,7 @@ export default class BasicScreen {
     container.addOption = function (opt, key) {
       const option = document.createElement('option')
       option.value = key
-      option.innerHTML = opt
+      option.textContent = opt == null ? '' : String(opt)
       this.select.appendChild(option)
     }
 
@@ -147,7 +170,9 @@ export default class BasicScreen {
     }
 
     container.select.onchange = function () {
-      onchange(this.value)
+      if (typeof onchange === 'function') {
+        onchange(this.value)
+      }
     }
     return container
   }
@@ -194,7 +219,7 @@ export default class BasicScreen {
 
     const header = document.createElement('div')
     header.classList.add('myHeader')
-    header.innerText = text
+    header.innerText = text || ''
     namedArea.appendChild(header)
 
     const contentArea = document.createElement('div')
@@ -225,6 +250,9 @@ export class SelectionList {
   }
 
   redraw () {
+    if (!this.area) {
+      return
+    }
     this.area.innerHTML = ''
     for (const option of this.options) {
       this.screen.createButton(option.name, this.area, option.onclick)
@@ -233,7 +261,7 @@ export class SelectionList {
 
   addOption (name, onclick, drag) { // option.name, option.onclick, option.drag
     const option = {
-      name,
+      name: name || 'Option',
       onclick,
       drag
     }
