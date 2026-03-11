@@ -27,9 +27,10 @@ import IJTBaseModel from './IJTBaseModel.mjs'
 
 /* eslint-disable */
 export class ModelManager {
-  constructor (entityManager) {
+  constructor (entityManager, jointManager) {
     this.resultSubscribeList = []
     this.entityManager = entityManager
+    this.jointManager = jointManager
   }
 
   resultTypeNotification(result) {

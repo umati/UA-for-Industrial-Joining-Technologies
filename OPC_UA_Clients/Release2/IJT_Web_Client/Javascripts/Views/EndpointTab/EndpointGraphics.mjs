@@ -9,7 +9,8 @@ import {
   ResultManager,
   ModelManager,
   ConnectionManager,
-  EntityCache
+  EntityCache,
+  JointManager
 } from 'ijt-support/ijt-support.mjs'
 
 import TraceGraphics from 'views/Trace/TraceGraphics.mjs'
@@ -20,6 +21,7 @@ import USDemo from 'views/Demo/USDemo.mjs'
 import JointDemo from 'views/Demo/JointDemo.mjs'
 import AssetGraphics from 'views/Assets/AssetGraphics.mjs'
 import EntityCacheView from 'views/Entities/Entities.mjs'
+import JointGraphics from 'views/Joints/JointGraphics.mjs'
 import ConnectionGraphics from 'views/Connection/ConnectionGraphics.mjs'
 import ResultGraphics from 'views/ComplexResult/ResultGraphics.mjs'
 import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
@@ -64,6 +66,7 @@ export default class EndpointGraphics extends BasicScreen {
 
     // Setting up tab handling and model handling
     const entityCache = new EntityCache()
+    const jointManager = new JointManager()
 
     const tabGenerator = new TabGenerator(this.backGround, 3) // XXXXXXX
     this.tabGenerator = tabGenerator
@@ -71,7 +74,7 @@ export default class EndpointGraphics extends BasicScreen {
     urlDiv.innerText = endpointUrl
     tabGenerator.setRightInfo(urlDiv)
 
-    const modelManager = new ModelManager(entityCache)
+    const modelManager = new ModelManager(entityCache, jointManager)
 
     // Initiate the different tab handlers
 
@@ -138,6 +141,14 @@ export default class EndpointGraphics extends BasicScreen {
       console.log(error)
     }
 
+    // Entity view is not critical
+    let jointGraphics = null
+    try {
+      jointGraphics = new JointGraphics(jointManager)
+    } catch (error) {
+      console.log(error)
+    }
+
     tabGenerator.changeViewLevel(2)
 
     tabGenerator.generateTab(connectionGraphics, 2)
@@ -163,6 +174,9 @@ export default class EndpointGraphics extends BasicScreen {
     }
     if (entityCacheView) {
       tabGenerator.generateTab(entityCacheView, 3)
+    }
+    if (jointGraphics) {
+      tabGenerator.generateTab(jointGraphics, 3)
     }
   }
 }

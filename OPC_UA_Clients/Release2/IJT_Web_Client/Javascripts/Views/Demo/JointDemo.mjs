@@ -1,6 +1,5 @@
 import BasicScreen from '../GraphicSupport/BasicScreen.mjs' // Basic functionality application code for the screen functionality
 import CommonPropertyView from './CommonPropertyView.mjs' // The machine properties view
-import IJTPropertyView from './IJTPropertyView.mjs' // The machine properties view
 
 /**
  * The purpose of this class is to generate an HTML representation of tightening selection and basic
@@ -17,13 +16,13 @@ export default class JointDemo extends BasicScreen {
     const displayArea = document.createElement('div')
     this.backGround.appendChild(displayArea)
     this.container = displayArea
-    
+
     this.activate()
 
     // Wait until the methods have loaded
     connectionManager.subscribe('methods', (setToTrue) => {
       if (setToTrue) {
-   //     this.activate()
+        //     this.activate()
       }
     })
   }
@@ -45,10 +44,10 @@ export default class JointDemo extends BasicScreen {
 
     const MESArea = document.createElement('div')
     MESArea.classList.add('demoRow')
-    //this.container.appendChild(MESArea)
+    // this.container.appendChild(MESArea)
     MESArea.style.position = 'relative'
 
-    const digTwinArea = this.makeNamedArea('Digital shadow', 'demoTwin',  this.container)
+    const digTwinArea = this.makeNamedArea('Digital shadow', 'demoTwin', this.container)
 
     digTwinArea.appendChild(MESArea)
 
@@ -58,7 +57,7 @@ export default class JointDemo extends BasicScreen {
     button1.classList.add('demoButtonFree')
     button1.style.left = '35px'
     button1.style.top = '45px'
-    button1.title = 
+    button1.title =
     `Joint data
     Joint Id: joint_1
     Joint name: Engine front top joint
@@ -86,8 +85,8 @@ export default class JointDemo extends BasicScreen {
     button2.classList.add('demoButtonFree')
     button2.style.left = '420px'
     button2.style.top = '65px'
-    
-    button2.title = 
+
+    button2.title =
     `Joint data
     Joint Id: joint_2
     Joint name: Engine back nut joint
@@ -151,8 +150,8 @@ export default class JointDemo extends BasicScreen {
       this.resultManager)
 
     // Set up the specific tightening related parameters of the reult
-    //const tqAngleBox = this.makeNamedArea('Tightening Result Data', 'demoMachine', resultTopArea)
-    //this.IJTpropertyView = new IJTPropertyView(tqAngleBox, this.resultManager)
+    // const tqAngleBox = this.makeNamedArea('Tightening Result Data', 'demoMachine', resultTopArea)
+    // this.IJTpropertyView = new IJTPropertyView(tqAngleBox, this.resultManager)
 
     const resultBottomArea = document.createElement('div')
     resultBottomArea.style.height = '50%'

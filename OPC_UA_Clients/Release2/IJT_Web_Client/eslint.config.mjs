@@ -1,4 +1,10 @@
+import neostandard from 'neostandard'
+
 export default neostandard({
+  ignores: [
+    'node_modules/**',
+    'venv/**'
+  ],
   languageOptions: {
     globals: {
       alert: 'readonly',
