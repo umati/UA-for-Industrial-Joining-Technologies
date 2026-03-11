@@ -7,6 +7,8 @@ export default class OkRateGraphics extends SingleScreen {
     this.methodManager = methodManager
     this.addressSpace = addressSpace
     this.simulateMethodData = null
+    this.okCounter = 0
+    this.nokCounter = 0
 
     this.singleArea.classList.add('okRateView')
 
@@ -48,6 +50,9 @@ export default class OkRateGraphics extends SingleScreen {
     this.simulateNokButton = this.createButton('Simulate NOT OK result', this.actionsRow, async () => {
       await this.invokeSingleResultSimulation(3, 'NOT OK', false)
     })
+    this.clearButton = this.createButton('Clear counters', this.actionsRow, () => {
+      this.clearCounters()
+    })
 
     this.actionStatusLabel = document.createElement('div')
     this.actionStatusLabel.classList.add('okRateUpdate')
@@ -60,18 +65,18 @@ export default class OkRateGraphics extends SingleScreen {
     this.singleArea.appendChild(this.actionStatusLabel)
     this.singleArea.appendChild(this.lastUpdateLabel)
 
-    this.resultManager.subscribe(() => {
-      this.refreshStats()
+    this.resultManager.subscribe((result) => {
+      this.handleIncomingResult(result)
     })
   }
 
   initiate () {
-    this.refreshStats()
+    this.updateDisplay()
   }
 
   activate (state) {
     if (state) {
-      this.refreshStats()
+      this.updateDisplay()
       this.ensureSimulateMethod().catch((error) => {
         this.actionStatusLabel.innerText = 'Method setup failed: ' + (error?.message || error)
       })
@@ -86,24 +91,23 @@ export default class OkRateGraphics extends SingleScreen {
     return result.evaluation === true
   }
 
-  refreshStats () {
-    let total = 0
-    let ok = 0
-
-    const groupedResults = this.resultManager?.results || {}
-    for (const group of Object.values(groupedResults)) {
-      for (const result of group) {
-        if (!result || !result.ResultMetaData) {
-          continue
-        }
-        total += 1
-        if (this.isOkResult(result)) {
-          ok += 1
-        }
-      }
+  handleIncomingResult (result) {
+    if (!result || !result.ResultMetaData) {
+      return
     }
 
-    const nok = Math.max(0, total - ok)
+    if (this.isOkResult(result)) {
+      this.okCounter += 1
+    } else {
+      this.nokCounter += 1
+    }
+    this.updateDisplay()
+  }
+
+  updateDisplay () {
+    const ok = this.okCounter
+    const nok = this.nokCounter
+    const total = ok + nok
     const rate = total > 0 ? (ok / total) * 100 : 0
     this.rateValue.innerText = rate.toFixed(1) + '%'
     this.rateValue.classList.toggle('is-good', rate >= 95)
@@ -113,6 +117,14 @@ export default class OkRateGraphics extends SingleScreen {
     this.okCountLabel.innerText = 'OK: ' + ok
     this.totalCountLabel.innerText = 'Total: ' + total
     this.nokCountLabel.innerText = 'Not OK: ' + nok
+    this.lastUpdateLabel.innerText = 'Last update: ' + new Date().toLocaleTimeString()
+  }
+
+  clearCounters () {
+    this.okCounter = 0
+    this.nokCounter = 0
+    this.updateDisplay()
+    this.actionStatusLabel.innerText = 'Counters cleared'
     this.lastUpdateLabel.innerText = 'Last update: ' + new Date().toLocaleTimeString()
   }
 
