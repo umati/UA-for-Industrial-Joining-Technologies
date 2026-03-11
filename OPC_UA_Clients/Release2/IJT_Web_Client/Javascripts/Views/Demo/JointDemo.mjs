@@ -43,9 +43,8 @@ export default class JointDemo extends BasicScreen {
     this.container.classList.add('demoCol')
 
     const MESArea = document.createElement('div')
-    MESArea.classList.add('demoRow')
+    MESArea.classList.add('demoRow', 'demoRelativeArea')
     // this.container.appendChild(MESArea)
-    MESArea.style.position = 'relative'
 
     const digTwinArea = this.makeNamedArea('Digital shadow', 'demoTwin', this.container)
 
@@ -54,9 +53,7 @@ export default class JointDemo extends BasicScreen {
     // Handling of button 1 (calling select joint 1)
     const button1 = document.createElement('button')
     button1.innerText = 'Select joint 1'
-    button1.classList.add('demoButtonFree')
-    button1.style.left = '35px'
-    button1.style.top = '45px'
+    button1.classList.add('demoButtonFree', 'demoActionSelectJoint1')
     button1.title =
     `Joint data
     Joint Id: joint_1
@@ -82,9 +79,7 @@ export default class JointDemo extends BasicScreen {
     // Handling of button 2 (calling select joint 2)
     const button2 = document.createElement('button')
     button2.innerText = 'Select joint 2'
-    button2.classList.add('demoButtonFree')
-    button2.style.left = '420px'
-    button2.style.top = '65px'
+    button2.classList.add('demoButtonFree', 'demoActionSelectJoint2')
 
     button2.title =
     `Joint data
@@ -110,9 +105,7 @@ export default class JointDemo extends BasicScreen {
     // Handling of button 2 (calling select joint 2)
     const button3 = document.createElement('button')
     button3.innerText = 'Simulate tightening'
-    button3.classList.add('demoButtonFree')
-    button3.style.right = '10px'
-    button3.style.top = '300px'
+    button3.classList.add('demoButtonFree', 'demoActionSimulateTightening')
     MESArea.appendChild(button3)
     button3.addEventListener('click', () => this.simulateTightening())
 
@@ -127,13 +120,11 @@ export default class JointDemo extends BasicScreen {
     MESArea.appendChild(img)
 
     const resultArea = document.createElement('div')
-    resultArea.style.width = '80%'
-    resultArea.classList.add('demoCol')
+    resultArea.classList.add('demoCol', 'demoMainArea')
     this.container.appendChild(resultArea)
 
     const resultTopArea = document.createElement('div')
-    resultTopArea.style.height = '200px'
-    resultTopArea.classList.add('demoRow')
+    resultTopArea.classList.add('demoRow', 'demoTopPane')
     resultArea.appendChild(resultTopArea)
 
     // Set up the common parts of the result
@@ -154,8 +145,7 @@ export default class JointDemo extends BasicScreen {
     // this.IJTpropertyView = new IJTPropertyView(tqAngleBox, this.resultManager)
 
     const resultBottomArea = document.createElement('div')
-    resultBottomArea.style.height = '50%'
-    resultBottomArea.style.margin = '5px'
+    resultBottomArea.classList.add('demoBottomPane')
     resultArea.appendChild(resultBottomArea)
 
     const backGround = document.createElement('div')

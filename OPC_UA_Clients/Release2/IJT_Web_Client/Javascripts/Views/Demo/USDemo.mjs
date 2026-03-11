@@ -45,9 +45,7 @@ export default class USDemo extends BasicScreen {
     this.container.classList.add('demoRow')
 
     const buttonArea = document.createElement('div')
-    buttonArea.style.width = '20%'
-    buttonArea.classList.add('demoCol')
-    buttonArea.style.justifyContent = 'center'
+    buttonArea.classList.add('demoCol', 'demoSidebar')
     this.container.appendChild(buttonArea)
 
     // Handling of button 1 (calling select process)
@@ -65,13 +63,11 @@ export default class USDemo extends BasicScreen {
     button2.addEventListener('click', () => this.selectJoiningProcess(this.settings.JoiningProcess2))
 
     const resultArea = document.createElement('div')
-    resultArea.style.width = '80%'
-    resultArea.classList.add('demoCol')
+    resultArea.classList.add('demoCol', 'demoMainArea')
     this.container.appendChild(resultArea)
 
     const resultTopArea = document.createElement('div')
-    resultTopArea.style.height = '200px'
-    resultTopArea.classList.add('demoRow')
+    resultTopArea.classList.add('demoRow', 'demoTopPane')
     resultArea.appendChild(resultTopArea)
 
     // Set up the common parts of the result
@@ -91,8 +87,7 @@ export default class USDemo extends BasicScreen {
     this.IJTpropertyView = new IJTPropertyView(tqAngleBox, this.resultManager)
 
     const resultBottomArea = document.createElement('div')
-    resultBottomArea.style.height = '50%'
-    resultBottomArea.style.margin = '5px'
+    resultBottomArea.classList.add('demoBottomPane')
     resultArea.appendChild(resultBottomArea)
 
     const backGround = document.createElement('div')

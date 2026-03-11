@@ -201,7 +201,6 @@ class Tab {
     this.button.value = content.title
     this.button.classList.add('tabButton')
 
-    this.button.style.color = 'yellow'
     this.button.aaID = Math.random(1000)
     this.button.aaNAME = content.title
     this.button.onclick = () => {
@@ -211,16 +210,12 @@ class Tab {
       this.content.initiate()
       this.selectorArea.resetButtons()
       this.selected = true
-      this.button.style.backgroundColor = 'rgba(52, 63, 72, 0.9)'
-      this.button.style.fontWeight = 'bold'
-      this.button.style.borderBottom = '1px solid rgba(52, 63, 72, 0.9)'
+      this.button.classList.add('is-selected')
       this.tabGenerator.currentSelected = content
     }
     this.button.reset = () => {
-      this.button.style.backgroundColor = 'black'
-      this.button.style.fontWeight = 'normal'
+      this.button.classList.remove('is-selected')
       this.selected = false
-      this.button.style.borderBottom = '1px solid yellow'
     }
 
     this.changeViewLevel(currentViewLevel)

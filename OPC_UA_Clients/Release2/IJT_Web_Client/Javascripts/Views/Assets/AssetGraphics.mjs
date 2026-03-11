@@ -114,17 +114,15 @@ export default class AssetGraphics extends BasicScreen {
     this.container.appendChild(mainbox)
 
     const leftbox = document.createElement('div')
-    leftbox.classList.add('assetArea')
+    leftbox.classList.add('assetArea', 'assetAreaFullHeight')
     leftbox.innerText = ''
     leftbox.style.right = (100 - rightPercent) + '%'
-    leftbox.style.height = '100%'
     mainbox.appendChild(leftbox)
 
     const rightbox = document.createElement('div')
-    rightbox.classList.add('assetArea')
+    rightbox.classList.add('assetArea', 'assetAreaFullHeight')
     rightbox.innerText = 'Tools'
     rightbox.style.left = rightPercent + '%'
-    rightbox.style.height = '100%'
     mainbox.appendChild(rightbox)
     node.assetGraphicData.tools = rightbox
     rightbox.assetInternals = []
@@ -149,21 +147,14 @@ export default class AssetGraphics extends BasicScreen {
       node.assetGraphicData = {}
     }
     const asset = document.createElement('div')
-    asset.classList.add('assetArea')
+    asset.classList.add('assetArea', 'assetMainBox')
     asset.innerText = node.displayName
-    asset.style.backgroundColor = 'brown'
-    asset.style.left = '10%'
-    asset.style.right = '10%'
-    asset.style.top = '5%'
-    asset.style.height = '40%'
     container.appendChild(asset)
     node.assetGraphicData.internals = asset
     asset.assetInternals = []
 
     const externals = document.createElement('div')
-    externals.classList.add('assetArea')
-    externals.style.top = '50%'
-    externals.style.height = '50%'
+    externals.classList.add('assetArea', 'assetExternalArea')
     container.appendChild(externals)
     node.assetGraphicData.externals = externals
     externals.assetInternals = []
@@ -172,10 +163,8 @@ export default class AssetGraphics extends BasicScreen {
 
   addHorizontal (node, container) {
     const mainbox = document.createElement('div')
-    mainbox.classList.add('assetBox')
+    mainbox.classList.add('assetBox', 'assetHorizontalBox')
     mainbox.innerText = node.displayName
-    mainbox.style.top = '60%'
-    mainbox.style.bottom = '10%'
     container.appendChild(mainbox)
     container.assetInternals.push(mainbox)
     const width = 100 / container.assetInternals.length
@@ -189,9 +178,7 @@ export default class AssetGraphics extends BasicScreen {
 
   addVertical (node, container) {
     const mainbox = document.createElement('div')
-    mainbox.classList.add('assetBox')
-    mainbox.style.left = '10%'
-    mainbox.style.right = '10%'
+    mainbox.classList.add('assetBox', 'assetVerticalBox')
     container.appendChild(mainbox)
     container.assetInternals.push(mainbox)
     const height = 100 / container.assetInternals.length

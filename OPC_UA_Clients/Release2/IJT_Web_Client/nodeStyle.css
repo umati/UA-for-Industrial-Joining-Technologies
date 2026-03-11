@@ -1,3 +1,15 @@
+/* =========================================================
+   Base + Theme
+   ========================================================= */
+:root {
+  --ui-bg-primary: #000;
+  --ui-bg-panel: rgba(52, 63, 72, 0.9);
+  --ui-bg-panel-alt: rgba(62, 73, 82, 0.9);
+  --ui-bg-light: lightgray;
+  --ui-accent: #fcdf07;
+  --ui-text-main: yellow;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -40,11 +52,7 @@ body {
   color: #fff;
 }
 
-.doublecolumnleft {
-  list-style-type: none;
-  padding: 0;
-}
-
+.doublecolumnleft,
 .doublecolumnright {
   list-style-type: none;
   padding: 0;
@@ -60,7 +68,7 @@ body {
   border: 0px solid transparent;
   border-radius: 0px;
   margin: 0px 0px;
-  background-color: rgba(52, 63, 72, 0.9);
+  background-color: var(--ui-bg-panel);
   color: yellow;
   padding: 0px 0px 0px 2px;
 }
@@ -70,14 +78,7 @@ canvas {
 }
 
 .messages>li:nth-child(odd) {
-  background-color: rgba(62, 73, 82, 0.9);
-}
-
-.treeDiv {
-  position: relative;
-  padding: 0px 0px 0px 10px;
-  margin: 0px;
-  /* border:1px solid green; */
+  background-color: var(--ui-bg-panel-alt);
 }
 
 @keyframes errorfade {
@@ -96,11 +97,14 @@ canvas {
 
 .startScreen {
   height: 100vh;
-  background-color: rgba(52, 63, 72, 0.9);
+  background-color: var(--ui-bg-panel);
   width: 100%;
   /*overflow:hidden;*/
 }
 
+/* =========================================================
+   Tab Layout
+   ========================================================= */
 .zoomwindow {
   position: absolute;
   pointer-events: none;
@@ -109,24 +113,25 @@ canvas {
   top: 50px;
   height: 150px;
   background-color: rgba(0, 255, 0, 0.3);
-  border: 1px solid green
+  border: 1px solid green;
 }
 
 .tabGeneratorBase {
-  /* display: flex; */
+  display: flex;
   flex-direction: column;
-  height:100%;
-  width:100%
+  height: 100%;
+  width: 100%;
 }
 
 .basescreen {
+  display: flex;
   flex-direction: column;
   /* default value; can be omitted */
   justify-content: space-between;
   font-weight: lighter;
   color: yellow;
   height: 100%;
-  width:100%;
+  width: 100%;
 }
 
 .columns {
@@ -148,7 +153,7 @@ canvas {
 }
 
 .topLevelSelectorBackground {
-  background-color: black;
+  background-color: var(--ui-bg-primary);
 }
 
 .labelStyle {
@@ -156,12 +161,19 @@ canvas {
 }
 
 .tabButton {
-  background-color: black;
-  color: gray;
+  background-color: var(--ui-bg-primary);
+  color: var(--ui-text-main);
   padding: 5px;
-  border: 1px solid yellow;
+  border: 1px solid var(--ui-text-main);
   border-top-left-radius: 5px;
   border-top-right-radius: 5px;
+  border-bottom: 1px solid var(--ui-text-main);
+}
+
+.tabButton.is-selected {
+  background-color: var(--ui-bg-panel);
+  font-weight: bold;
+  border-bottom: 1px solid var(--ui-bg-panel);
 }
 
 .tabButton:hover {
@@ -172,25 +184,21 @@ canvas {
 .tabButton:active {
   background: lightgray;
   transition: background-color 100ms linear;
-  color: black
+  color: black;
 }
 
 .tabContent {
-  display:flex;
-  background-color: rgba(52, 63, 72, 0.9);
+  display: flex;
+  background-color: var(--ui-bg-panel);
   color: yellow;
   /* overflow: hidden; */
   border-top: 1px solid yellow;
   width: 99%;
-  height:95%
+  height: 95%;
   /* height: 92vh; */
   /* margin: 0;
   padding: 0;
   /* vertical-align: bottom; */
-}
-
-.underlined {
-  text-decoration: underline;
 }
 
 .errorTab {
@@ -214,21 +222,16 @@ canvas {
   /* border-bottom: 1px solid rgba(52, 63, 72, 0.9); */
 }
 
-.methodInputStyle {
-  width: 50%;
-  display: inline
-}
-
 .methodJoiningProcess {
   padding-left: 20px;
 }
 
 .dropJoiningProcess {
-  width: 80%
+  width: 80%;
 }
 
 .buttonAreaStyle {
-  display: block
+  display: block;
 }
 
 .tightUL {
@@ -251,31 +254,13 @@ canvas {
   text-decoration-line: underline;
 }
 
-.updownpointer {
-  cursor: n-resize;
-}
-
 .pointer {
   cursor: pointer;
 }
 
-.selectpointer {
-  cursor: pointer;
-}
-
-.myLabel {
-  color: black;
-  margin: 5px;
-}
-
-.myLabelWidth {
-  width: 40%;
-  display: inline-block;
-}
-
 .inputStyle {
   width: 50%;
-  display: inline
+  display: inline;
 }
 
 .myButton {
@@ -285,11 +270,11 @@ canvas {
 }
 
 .methodBorder {
-  border: 1px solid black
+  border: 1px solid black;
 }
 
 .methodRowDistance {
-  padding: 0px 5px
+  padding: 0px 5px;
 }
 
 .myButton:hover {
@@ -318,12 +303,6 @@ canvas {
 }
 
 
-
-.ogbutton:active {
-  background-color: #000000;
-  border: 1px yellow solid;
-  color: black;
-}
 
 .myButtonSelected {
   background: yellow;
@@ -362,48 +341,9 @@ canvas {
   padding: 3px;
 }
 
-.arrayLine {
-  border-left: 2px solid blue;
-  border-bottom: 2px solid blue;
-  margin: 2px;
-}
-
-.objectLine {
-  border-left: 10px solid green;
-  margin: 2px;
-}
-
 /* Remove default bullets */
-ul,
-#myUL {
+ul {
   list-style-type: none;
-}
-
-/* Remove margins and padding from the parent ul */
-#myUL {
-  margin: 0;
-  padding: 0;
-}
-
-/* Style the caret/arrow */
-.caret {
-  cursor: pointer;
-  -webkit-user-select: none;
-  user-select: none;
-  /* Prevent text selection */
-}
-
-/* Create the caret/arrow with a unicode, and style it */
-.caret::before {
-  content: '\25B6';
-  color: black;
-  display: inline-block;
-  margin-right: 6px;
-}
-
-/* Rotate the caret/arrow icon when clicked on (using JavaScript) */
-.caret-down::before {
-  transform: rotate(90deg);
 }
 
 /* Hide the nested list */
@@ -435,33 +375,30 @@ ul,
   border-color: blue;
   border-style: solid;
   border-width: 2px;
-  border-radius: 5;
+  border-radius: 5px;
 }
 
 .envelopeleft {
-  background: lightgray;
-  
+  background: var(--ui-bg-light);
   width: 98%;
   overflow: auto;
 }
 
 .envSelect {
-  width: 100%
+  width: 100%;
 }
 
 .myInfoArea,
-.scrollableInfoArea, .scrollSeparated {
-  background: lightgray;
+.scrollableInfoArea,
+.scrollSeparated {
+  background: var(--ui-bg-light);
 }
 
 
-.scrollableInfoArea, .scrollSeparated {
+.scrollableInfoArea,
+.scrollSeparated {
   overflow: auto;
   height: 100vh;
-}
-
-.scrollSeparated {
-  padding: 5em;
 }
 
 .scrollFull {
@@ -478,7 +415,7 @@ ul,
 .smallSettingArea {
   margin: 5px;
   min-width: 180px;
-  width: 50%
+  width: 50%;
 }
 
 .limitDragbox {
@@ -544,7 +481,7 @@ html {
 .tabrow {
   display: flex;
   flex-direction: row;
-  width:98%; 
+  width: 98%;
   color: yellow;
 }
 
@@ -557,13 +494,9 @@ html {
   align-self: center;
 }
 
-.topRow {
-  background-color: #000000;
-}
-
 .tab {
-  float:left;
-  border:1px solid purple
+  float: left;
+  border: 1px solid purple;
 }
 
 
@@ -574,19 +507,19 @@ html {
   position: relative;
   text-align: left;
   margin: 10px 15px 5px 15px;
-  background-color: rgba(52, 63, 72, 0.9);
+  background-color: var(--ui-bg-panel);
 }
 
 .tabs>li {
   float: left;
   display: block;
-  border-top: solid #FCDF07 3px;
-  border-left: solid #FCDF07 3px;
-  border-right-style: solid #FCDF07 3px;
+  border-top: solid var(--ui-accent) 3px;
+  border-left: solid var(--ui-accent) 3px;
+  border-right-style: solid var(--ui-accent) 3px;
   border-radius: 10px 10px 0px 0px;
-  color: #FCDF07;
+  color: var(--ui-accent);
   padding: 15px;
-  background-color: rgba(52, 63, 72, 0.9);
+  background-color: var(--ui-bg-panel);
 }
 
 .tabs input[type='radio'] {
@@ -600,45 +533,10 @@ html {
   font-weight: 500;
 }
 
-.tabs [id^='tab']:checked~[id^='tab-content'] {
-  display: block;
-}
-
-.tab-content {
-  border-top: 3px #FCDF07 solid;
-  background-color: rgba(52, 63, 72, 1.0);
-  z-index: 2;
-  display: none;
-  overflow: hidden;
-  font-size: 17px;
-  line-height: 25px;
-  padding: 5px;
-  position: fixed;
-  top: 60px;
-  left: 0px;
-  right: 0px;
-  bottom: 0px;
-  background: 'pink';
-}
-
-.connectedServer {
-  position: fixed;
-  top: 5px;
-  right: 5px;
-  width: 150px;
-  border: 1px #FCDF07 solid;
-  color: #FCDF07;
-  background-color: rgba(52, 63, 72, 0.9);
-}
-
-.connectedServerName {
-  display: block;
-}
-
 .traceArea {
   overflow: hidden;
   height: 100%;
-  position:relative; 
+  position: relative;
 }
 
 #myChart {
@@ -702,15 +600,6 @@ html {
   /* background-color: green; */
 }
 
-.canvasBox {
-  border: 2px solid orange;
-  position: fixed;
-  top: 200px;
-  left: 200px;
-  right: 200px;
-  bottom: 200px;
-}
-
 .assetArea {
   position: absolute;
   top:0%;
@@ -727,26 +616,12 @@ html {
   word-wrap: break-word;
 }
 
-.controllerBox {
-  background-color: green;
-  position: absolute;
-}
-
-.controllerBox {
-  height: 100px;
-}
-
-.toolBox {
-  background-color: blue;
-  position: absolute;
-}
-
 .offColor {
-  color:IndianRed;
+  color: IndianRed;
 }
 
 .onColor {
-  color:green;
+  color: green;
 }
 
 .drawResultBox {
@@ -900,24 +775,6 @@ html {
 }
 
 
-.resBatchStacking {
-  display:flex;
-  flex-direction: row;
-  justify-content: center;
-  align-items: center;
-}
-
-.resJobStacking {
-  display:flex;
-  flex-direction: column;
-}
-
-
-.resOtherStacking {
-  display:flex;
-  flex-direction: column;
-}
-
 .resultHeader {
   height: 20px;
   border: 1px solid IndianRed;
@@ -1011,26 +868,52 @@ html {
 
 
 .demoRow {
-  display:flex;
+  display: flex;
   flex-direction: row;
   /*justify-content: center;
   align-items: center;*/
-  height:97%;
+  height: 97%;
   margin: 5px;
 }
 
 .demoCol {
-  display:flex;
+  display: flex;
   flex-direction: column;
-  height:97%;
+  height: 97%;
   margin: 5px;
 }
 
+.demoRelativeArea {
+  position: relative;
+}
+
+.demoSidebar {
+  width: 20%;
+  justify-content: center;
+}
+
+.demoMainArea {
+  width: 80%;
+}
+
+.demoTopPane {
+  height: 200px;
+}
+
+.demoBottomPane {
+  height: 50%;
+  margin: 5px;
+}
+
+.demoWarningText {
+  color: red;
+}
+
 .demoButton {
-  background-color: black;
-  color: yellow;
+  background-color: var(--ui-bg-primary);
+  color: var(--ui-text-main);
   padding: 5px;
-  border: 1px solid yellow;
+  border: 1px solid var(--ui-text-main);
   border-radius: 5px;
   margin: 10px;
 }
@@ -1043,14 +926,14 @@ html {
 .demoButton:active {
   background: lightgray;
   transition: background-color 100ms linear;
-  color: black
+  color: black;
 }
 
 .demoButtonFree {
-  background-color: black;
-  color: yellow;
+  background-color: var(--ui-bg-primary);
+  color: var(--ui-text-main);
   padding: 5px;
-  border: 1px solid yellow;
+  border: 1px solid var(--ui-text-main);
   border-radius: 5px;
   margin: 10px;
   height: 30px;
@@ -1063,10 +946,25 @@ html {
   transition: background-color 100ms linear;
 }
 
-.demoButton:active {
+.demoButtonFree:active {
   background: lightgray;
   transition: background-color 100ms linear;
-  color: black
+  color: black;
+}
+
+.demoActionSelectJoint1 {
+  left: 35px;
+  top: 45px;
+}
+
+.demoActionSelectJoint2 {
+  left: 420px;
+  top: 65px;
+}
+
+.demoActionSimulateTightening {
+  right: 10px;
+  top: 300px;
 }
 
 .demoMachine {
@@ -1081,7 +979,7 @@ html {
   overflow: visible;
   height: 400px;
   width: 500px;
-  margin: 10px
+  margin: 10px;
 }
 
 .selectorArea {
@@ -1145,41 +1043,24 @@ html {
 }
 
 .demosettingArea {
-  margin: 5px
+  margin: 5px;
 }
 
 .buttonArea {
   margin: 0px 0px 0px 10px;
-  width: 95%
+  width: 95%;
 }
 
 
 .treeButtonPlace {
   margin: -5px 0px -5px -5px;
   color: black;
-  overflow:hidden;
+  overflow: hidden;
 }
 
 .treeButton {
   display: inline;
-  overflow:hidden;
-}
-
-.buttonFont {
-  appearance: auto;
-  text-rendering: auto;
-  letter-spacing: normal;
-  word-spacing: normal;
-  line-height: normal;
-  text-transform: none;
-  text-indent: 0px;
-  text-shadow: none;
-  text-align: center;
-  cursor: default;
-  box-sizing: border-box;
-  margin: 0em;
-  padding-block: 1px;
-  padding-inline: 6px;
+  overflow: hidden;
 }
 
 .identifierType {
@@ -1259,7 +1140,7 @@ html {
   min-height: 62px;
   background-color: black;
   border: 1px solid yellow;
-  color:yellow;
+  color: yellow;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -1281,13 +1162,87 @@ html {
   background: white;
 }
 
+/* =========================================================
+   Demo + Envelope Views
+   ========================================================= */
 
 .standardRow {
-  display:flex;
+  display: flex;
   flex-direction: row;
 }
 
 .standardCol {
-  display:flex;
+  display: flex;
   flex-direction: column;
+}
+
+.limitsTopArea {
+  height: 320px;
+  width: 100%;
+}
+
+.limitsConfigArea {
+  width: 100%;
+  height: 305px;
+}
+
+.limitsBottomArea {
+  height: 60%;
+  margin: 5px;
+}
+
+.limitsTraceField {
+  height: 95%;
+}
+
+.fullHeight {
+  height: 100%;
+}
+
+.selectionPopupColumn {
+  width: 30%;
+  justify-content: center;
+}
+
+.selectionPopupList {
+  height: 180px;
+}
+
+.selectionPopupCloseButton {
+  height: 20px;
+}
+
+.assetAreaFullHeight {
+  height: 100%;
+}
+
+.assetMainBox {
+  background-color: brown;
+  left: 10%;
+  right: 10%;
+  top: 5%;
+  height: 40%;
+}
+
+.assetExternalArea {
+  top: 50%;
+  height: 50%;
+}
+
+.assetHorizontalBox {
+  top: 60%;
+  bottom: 10%;
+}
+
+.assetVerticalBox {
+  left: 10%;
+  right: 10%;
+}
+
+/* =========================================================
+   End
+   ========================================================= */
+
+.envelopeScreen {
+  border: 1px solid green;
 }
