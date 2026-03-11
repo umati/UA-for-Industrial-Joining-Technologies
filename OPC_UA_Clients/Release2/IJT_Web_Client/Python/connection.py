@@ -42,7 +42,38 @@ class Connection:
 
     async def connect(self) -> Dict[str, Any]:
         self.terminated = False
-        self.client = Client(self.server_url)
+
+        import os
+        import inspect
+
+        # --- Docker-aware URL rewrite (keep this if you added it elsewhere) ---
+        server_url = self.server_url
+        if os.getenv("IS_DOCKER") == "true" and server_url:
+            if "://127.0.0.1" in server_url or "://localhost" in server_url:
+                ijt_log.info("[Docker] Rewriting server_url to host.docker.internal")
+                server_url = server_url.replace(
+                    "://127.0.0.1", "://host.docker.internal"
+                )
+                server_url = server_url.replace(
+                    "://localhost", "://host.docker.internal"
+                )
+
+        # Create the client with a reasonable timeout
+        self.client = Client(server_url, timeout=10000)  # 10s
+
+        # --- Security policy: await if your asyncua version returns a coroutine ---
+        try:
+            maybe_coro = self.client.set_security_string(
+                "None"
+            )  # use None if server allows it
+            if inspect.isawaitable(maybe_coro):
+                await maybe_coro
+        except Exception:
+            # If your server requires secure policy, replace with e.g.:
+            # maybe_coro = self.client.set_security_string("Basic256Sha256,Sign")  # or SignAndEncrypt
+            # if inspect.isawaitable(maybe_coro):
+            #     await maybe_coro
+            pass
 
         retries = 3
         delay = 2
@@ -56,6 +87,10 @@ class Connection:
                 self.client.product_uri = "urn:IJT:WebClient"
 
                 await self.client.connect()
+
+                # Small wait to avoid races right after SecureChannel/Session creation
+                await asyncio.sleep(0.1)
+
                 await self.client.load_type_definitions()
                 self.root = self.client.get_root_node()
 

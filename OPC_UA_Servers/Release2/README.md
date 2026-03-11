@@ -11,7 +11,7 @@
 
 ### Windows 10 or Later
 #### Prerequisites
-- **Install** [**Windows_SDK**](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) and Visual C++ Runtime [**VC-Redist**](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+- **Install** Visual C++ Runtime [**VC-Redist**](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
 #### Running the application
 - **Launch** the **binary** file (**`opcua_ijt_demo_application.exe`**). Ensure that it is Run as **Adminstrator** or at least **Read/Write** access to the directory.
 
@@ -28,6 +28,13 @@
 - Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
 
 # Change Log
+**2026-02-06:** Following Changes.
+1. **Added** appropriate logs when the binary path is too long on Windows.
+
+**2025-12-05:** Following Changes.
+1. **Updated** event simulation to support multiple events with different combinations.
+2. **Multiple** refactoring and **optimizations**.
+
 **2025-10-28:** Following Key Changes.
 1. **Added** support **Joint Management MVP**.
 	- **Added** the following methods **SendJoint, GetJoint, GetJointList, SelectJoint, DeleteJoint**.

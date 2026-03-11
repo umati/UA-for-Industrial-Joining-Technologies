@@ -5,8 +5,32 @@ import re
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 from asyncua import Client, ua
+from asyncua.ua import String
 from pathlib import Path
-import orjson
+
+# ---- START: robust JSON import (fallback if orjson is missing) ----
+try:
+    import orjson  # fast path
+
+    def _to_json_bytes(obj) -> bytes:
+        return orjson.dumps(obj)
+
+    def _to_json_str(obj) -> str:
+        return orjson.dumps(obj).decode("utf-8")
+
+except Exception:
+    import json  # fallback
+
+    def _to_json_bytes(obj) -> bytes:
+        return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8"
+        )
+
+    def _to_json_str(obj) -> str:
+        return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+
+
+# ---- END: robust JSON import ----
 
 from ijt_logger import ijt_log
 from serialize_data import serialize_full_event
@@ -37,6 +61,20 @@ async def read_server_time(client: Client) -> Optional[datetime]:
         return await node.read_value()
     except Exception as e:
         ijt_log.warning(f"{'Server Time Read Failed':<40} : {e}")
+        return None
+
+
+async def read_tool_identifier(client: Client) -> Optional[String]:
+    try:
+        node = client.get_node(
+            ua.NodeId(
+                "TighteningSystem/AssetManagement/Assets/Tools/TighteningTool/Identification/ProductInstanceUri",
+                1,
+            )
+        )  # ns=1;s=TighteningSystem/AssetManagement/Assets/Tools/TighteningTool/Identification/ProductInstanceUri
+        return await node.read_value()
+    except Exception as e:
+        ijt_log.warning(f"{'Tool Identifier Read Failed':<40} : {e}")
         return None
 
 
