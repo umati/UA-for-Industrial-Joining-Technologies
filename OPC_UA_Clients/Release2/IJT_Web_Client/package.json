@@ -1,35 +1,42 @@
 {
-  "name": "opc-ua-ijt-client",
-  "version": "1.0.0",
-  "description": "IJT client",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "start": "npx serve",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint . --config eslint.config.mjs",
-    "lint:fix": "eslint . --fix --config eslint.config.mjs"
-  },
-  "author": "Joakim Gustafsson <joakim.gustafsson@atlascopco.com>",
-  "license": "ISC",
-  "dependencies": {
-    "chart.js": "^4.5.1",
-    "mathjs": "^15.0.0"
-  },
-  "devDependencies": {
-    "@eslint/js": "^8.57.1",
-    "eslint": "^8.57.1",
-    "eslint-config-standard": "^17.1.0",
-    "eslint-plugin-import": "^2.32.0",
-    "eslint-plugin-n": "^16.6.2",
-    "eslint-plugin-promise": "^6.6.0",
-    "globals": "^17.0.0",
-    "serve": "^14.2.5"
-  },
-  "engines": {
-    "node": ">=22.16.0"
-  },
-  "overrides": {
-    "compression": "1.8.1"
-  }
+    "name":  "opc-ua-ijt-client",
+    "version":  "1.0.0",
+    "description":  "IJT client",
+    "main":  "index.js",
+    "type":  "module",
+    "scripts":  {
+                    "start":  "npx serve",
+                    "test":  "npm run test:unit:js",
+                    "test:unit:python":  "python -m pytest tests/python/unit -q",
+                    "test:integration:python":  "python -m pytest tests/python/integration -q -m integration",
+                    "test:unit:js":  "vitest run",
+                    "test:e2e":  "playwright test",
+                    "test:all":  "npm run test:unit:python && npm run test:integration:python && npm run test:unit:js",
+                    "lint":  "eslint . --config eslint.config.mjs",
+                    "lint:fix":  "eslint . --fix --config eslint.config.mjs"
+                },
+    "author":  "Joakim Gustafsson \u003cjoakim.gustafsson@atlascopco.com\u003e",
+    "license":  "ISC",
+    "dependencies":  {
+                         "chart.js":  "^4.5.1",
+                         "mathjs":  "^15.0.0"
+                     },
+    "devDependencies":  {
+                            "@eslint/js":  "^8.57.1",
+                            "eslint":  "^8.57.1",
+                            "eslint-config-standard":  "^17.1.0",
+                            "eslint-plugin-import":  "^2.32.0",
+                            "eslint-plugin-n":  "^16.6.2",
+                            "eslint-plugin-promise":  "^6.6.0",
+                            "globals":  "^17.0.0",
+                            "serve":  "^14.2.5",
+                            "vitest":  "^2.1.9",
+                            "@playwright/test":  "^1.54.2"
+                        },
+    "engines":  {
+                    "node":  "\u003e=22.16.0"
+                },
+    "overrides":  {
+                      "compression":  "1.8.1"
+                  }
 }

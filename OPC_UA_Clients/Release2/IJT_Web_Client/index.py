@@ -13,6 +13,10 @@ from typing import Optional
 from dotenv import load_dotenv
 from Python.ijt_interface import IJTInterface
 from Python.ijt_logger import ijt_log
+try:
+    from websockets.exceptions import ConnectionClosed
+except Exception:
+    from websockets import ConnectionClosed
 
 
 # Load environment variables
@@ -35,7 +39,7 @@ async def handler(websocket):
         async for message in websocket:
             mess = json.loads(message)
             await opcuaHandler.handle(websocket, mess)
-    except websockets.exceptions.ConnectionClosed:
+    except ConnectionClosed:
         ijt_log.info(f"Client disconnected: {client_ip}")
     except Exception:
         ijt_log.error("Exception in handler:")

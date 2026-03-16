@@ -28,6 +28,7 @@ Definition of done:
 - Do not change Docker setup unless explicitly requested.
 - Prefer minimal, targeted edits over broad rewrites.
 - If runtime behavior might change, explain assumptions and impact.
+- Always ask questions if uncertain, never guess. 
 
 # Common Agent Tasks
 - Fix lint errors and keep behavior unchanged.
