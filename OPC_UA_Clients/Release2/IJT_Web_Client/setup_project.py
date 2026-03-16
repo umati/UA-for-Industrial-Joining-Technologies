@@ -14,6 +14,11 @@ import zipfile
 from pathlib import Path
 from urllib.parse import urlparse
 
+STATE_DIR = Path(".state")
+LOGS_DIR = Path("logs")
+STATE_DIR.mkdir(parents=True, exist_ok=True)
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def _detect_repo_root(start_dir: Path) -> Path:
     """
@@ -35,7 +40,7 @@ logging.basicConfig(
     format="[%(asctime)s] [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
-        logging.FileHandler("log.txt", mode="w", encoding="utf-8"),
+        logging.FileHandler(LOGS_DIR / "setup.log", mode="w", encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )
@@ -47,7 +52,7 @@ log = logging.getLogger(__name__)
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 # Use an in-container venv path to avoid Windows bind-mount conflicts
 VENV_DIR = Path("/opt/ijt_venv") if IS_DOCKER else Path("venv")
-SETUP_TIMESTAMP_FILE = Path(".setup_timestamp")
+SETUP_TIMESTAMP_FILE = STATE_DIR / "setup_timestamp"
 IS_WINDOWS = os.name == "nt"
 PROJECT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = _detect_repo_root(PROJECT_DIR)

@@ -32,7 +32,8 @@ run_and_check() {
   fi
 }
 
-run_and_check "non-integration tests" python run_tests.py
-run_and_check "integration tests" python run_tests.py --integration
+run_and_check "non-integration tests" python scripts/run_tests.py
+run_and_check "integration tests" python scripts/run_tests.py --integration
 
 echo "[pre-push] All required tests passed. Push allowed."
+

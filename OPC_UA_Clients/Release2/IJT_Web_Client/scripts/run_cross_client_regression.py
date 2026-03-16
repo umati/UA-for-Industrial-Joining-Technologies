@@ -4,8 +4,13 @@ import asyncio
 import json
 import os
 import socket
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from tests.shared_opcua.adapters import adapters_from_env, discover_simulation_methods, make_adapter
 
@@ -105,7 +110,7 @@ def main() -> int:
         "--console-dir",
         default=os.getenv(
             "OPCUA_CONSOLE_CLIENT_DIR",
-            str((Path(__file__).resolve().parent / ".." / "IJT_Console_Client").resolve()),
+            str((Path(__file__).resolve().parents[2] / "IJT_Console_Client").resolve()),
         ),
     )
     parser.add_argument("--adapters", default=",".join(adapters_from_env()))
@@ -131,3 +136,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+

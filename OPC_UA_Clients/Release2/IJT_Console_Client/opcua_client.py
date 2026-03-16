@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import traceback
 import socket
 import time
@@ -10,6 +11,10 @@ from event_handler import EventHandler
 from ijt_logger import ijt_log
 from event_types import get_event_types
 from method_caller import OPCUAMethodCaller
+
+# Reduce asyncua late-response noise during shutdown windows.
+logging.getLogger("asyncua").setLevel(logging.CRITICAL)
+logging.getLogger("asyncua.client.ua_client").setLevel(logging.CRITICAL)
 
 
 class OPCUAClient:

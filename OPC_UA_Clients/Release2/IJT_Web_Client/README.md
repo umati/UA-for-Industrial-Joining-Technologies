@@ -1,4 +1,4 @@
-# IJT Web Client
+﻿# IJT Web Client
 
 ## Contact
 - **Author:** Joakim Gustafsson: joakim.h.gustafsson@atlascopco.com
@@ -38,7 +38,7 @@
 - **Note:** Use **python3** on **Linux** instead of **python**
 - **Automated Docker Setup:**
   ```bash
-  python run_setup.py
+  python run_docker_setup.py
   ```
 - **Manual Docker Setup:**
     - **Build the Docker Image:**
@@ -61,10 +61,16 @@
   ```
 - Run backend regression tests (mocked/unit style):
   ```bash
-  python run_tests.py
+  python scripts/run_tests.py
   ```
 - Run integration tests against a live OPC UA server:
   ```bash
   set OPCUA_TEST_ENDPOINT=opc.tcp://<host>:<port>
-  python run_tests.py --integration
+  python scripts/run_tests.py --integration
   ```
+
+## Project Layout
+- Root user entrypoints remain stable: setup_project.py and run_docker_setup.py.
+- Additional operational documentation lives in docs/.
+- Script implementations are organized under scripts/.
+

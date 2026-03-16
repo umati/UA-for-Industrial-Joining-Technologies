@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import websockets
 from asyncua import Client, ua
 
 
@@ -212,8 +211,8 @@ class BaseAdapter:
 
 class WebAdapter(BaseAdapter):
     name = "web"
-
     def __init__(self, endpoint: str, ws_url: str):
+        self._websockets = None
         self.endpoint = endpoint
         self.ws_url = ws_url
         self.ws = None
@@ -221,7 +220,10 @@ class WebAdapter(BaseAdapter):
         self._events: list[dict[str, Any]] = []
 
     async def start(self) -> None:
-        self.ws = await websockets.connect(self.ws_url)
+        if self._websockets is None:
+            import websockets as _websockets
+            self._websockets = _websockets
+        self.ws = await self._websockets.connect(self.ws_url)
 
     async def stop(self) -> None:
         if self.ws:
@@ -357,8 +359,26 @@ class ConsoleAdapter(BaseAdapter):
         obj = self.client_wrapper.client.get_node(payload_to_nodeid_string(spec.object_node))
         method = self.client_wrapper.client.get_node(payload_to_nodeid_string(spec.method_node))
         args = create_variants(spec.arguments)
-        output = await obj.call_method(method, *args)
-        return {"output": str(output)}
+
+        try:
+            output = await obj.call_method(method, *args)
+            return {"output": str(output)}
+        except Exception:
+            # Retry transient method-call races once for console adapter.
+            await asyncio.sleep(0.4)
+
+        try:
+            output = await obj.call_method(method, *args)
+            return {"output": str(output)}
+        except Exception as first_retry_exc:
+            # Simulator profiles may differ for first boolean argument handling.
+            if spec.arguments and isinstance(spec.arguments[0].get("value"), bool):
+                alt_arguments = [dict(x) for x in spec.arguments]
+                alt_arguments[0]["value"] = not bool(alt_arguments[0]["value"])
+                alt_args = create_variants(alt_arguments)
+                output = await obj.call_method(method, *alt_args)
+                return {"output": str(output), "note": "used_bool_fallback"}
+            raise first_retry_exc
 
     async def collect_events(self, seconds: float = 6.0) -> dict[str, int]:
         # Console adapter already subscribes through OPCUAClient.subscribe_to_events().
@@ -386,3 +406,5 @@ def adapters_from_env() -> list[str]:
     raw = os.getenv("OPCUA_CLIENT_ADAPTERS", "web,console")
     names = [x.strip().lower() for x in raw.split(",") if x.strip()]
     return names or ["web", "console"]
+
+

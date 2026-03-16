@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import socket
 import subprocess
 import sys
-import socket
 from pathlib import Path
 from urllib.parse import urlparse
 
 IS_WINDOWS = sys.platform.startswith("win")
-VENV_PYTHON = Path("venv") / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
-REQUIREMENTS_DEV = Path("requirements-dev.txt")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+VENV_PYTHON = PROJECT_ROOT / "venv" / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
+REQUIREMENTS_DEV = PROJECT_ROOT / "requirements-dev.txt"
 
 
 def _endpoint_reachable(endpoint: str, timeout: float = 1.0) -> bool:
@@ -70,7 +71,7 @@ def main() -> int:
             )
             return 1
 
-    cmd = [str(VENV_PYTHON), "-m", "pytest", "tests", "-m", marker]
+    cmd = [str(VENV_PYTHON), "-m", "pytest", str(PROJECT_ROOT / "tests"), "-m", marker]
     print("Running:", " ".join(cmd))
     return subprocess.call(cmd)
 
