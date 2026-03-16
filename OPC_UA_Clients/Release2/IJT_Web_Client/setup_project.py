@@ -89,6 +89,20 @@ def _find_latest_python_executable():
         latest = sorted(
             versions, key=lambda s: tuple(map(int, s.split("."))), reverse=True
         )[0]
+        # Prefer a concrete interpreter path to avoid WindowsApps launcher shims
+        # that can appear in `py -0` output but are not directly executable.
+        major, minor = latest.split(".")
+        local_appdata = os.getenv("LOCALAPPDATA")
+        if local_appdata:
+            direct_py = (
+                Path(local_appdata)
+                / "Programs"
+                / "Python"
+                / f"Python{major}{minor}"
+                / "python.exe"
+            )
+            if direct_py.exists():
+                return ([str(direct_py)], latest)
         return (["py", f"-{latest}"], latest)
     else:
         # Probe newer to older (extend upper bound periodically, harmless if missing)
