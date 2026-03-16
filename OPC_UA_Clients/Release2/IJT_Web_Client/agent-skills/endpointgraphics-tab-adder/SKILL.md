@@ -1,11 +1,18 @@
 ---
 name: endpointgraphics-tab-adder
-description: Add or update a UI tab in EndpointGraphics for IJT Web Client, including manager-backed data flow from `Javascripts/ijt-support` (existing or new manager), new view creation under `Javascripts/Views/FeatureName/`, and tab wiring in `Javascripts/Views/EndpointTab/EndpointGraphics.mjs`.
+description: Add or update a UI tab in EndpointGraphics for IJT Web Client using manager-backed data flow from `Javascripts/ijt-support`, a view under `Javascripts/Views/FeatureName/`, and tab wiring in `Javascripts/Views/EndpointTab/EndpointGraphics.mjs`.
 ---
 
 # EndpointGraphics Tab Adder
 
 Implement tab additions in `Javascripts/Views/EndpointTab/EndpointGraphics.mjs` using the project's manager-plus-view architecture.
+
+## Key Principles
+
+1. Reuse existing managers from `Javascripts/ijt-support` first.
+2. Add a new manager only when no existing manager fits.
+3. Keep view logic in the view and transport/subscription logic in managers.
+4. Preserve existing initialization order and guard patterns.
 
 ## Workflow
 
@@ -113,7 +120,7 @@ Use nearby existing tabs as the source of truth when uncertain.
 4. Do not access raw socket logic directly from the view.
 5. Do not remove existing guards unless explicitly requested.
 6. Keep dynamic import blocks (like `Envelope`) intact unless the request targets them.
-7. Prefer minimal diffs and preserve current naming/style conventions.
+7. Prefer minimal diffs and preserve existing naming/style conventions.
 
 ## Completion Checklist
 

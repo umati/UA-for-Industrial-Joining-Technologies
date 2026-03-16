@@ -1,52 +1,17 @@
 ---
 name: associated-entities-interpreter
-description: Interpret `ResultMetaData.AssociatedEntities` in IJT results using `EntityDataType` and the canonical `EntityTypes` mapping. Use when requests ask to explain associated entities, classify entity types, or validate entity links in result payloads.
+description: Interpret `ResultMetaData.AssociatedEntities` in IJT results using `EntityDataType` and `EntityTypes`. Use when requests ask to explain associated entities, classify entity types, or validate entity links in result payloads.
 ---
 
 # Associated Entities Interpreter
 
-Interpret associated entities in results using project source-of-truth model files.
-Use the following clarifications of the most important entity types to understand the purpose of an entity type
-  2: 'asset', This is a reference to a physical asset
-  3: 'controller', This is a reference to a controller asset
-  4: 'tool', this is a reference to a tool asset
-  5: 'servo', this is a reference to a servo asset
-  6: 'memory_device', this is a reference to a memory device asset
-  7: 'sensor',
-  8: 'cable',
-  9: 'battery',
-  10: 'power_supply',
-  11: 'feeder',
-  12: 'accessory',
-  13: 'sub_component', this is a reference to a subcomponent asset of an asset
-  14: 'software', this is a reference to a specific software asset
-  15: 'result', this is a reference to a result from a device that executed an action
-  16: 'event', this is an event reference
-  17: 'error',
-  18: 'system', this is a reference to the system 
-  19: 'log', this is a reference to a specific log file
-  20: 'vehicle', this is a reference to a vehicle, often called the VIN number of a car
-  21: 'product',
-  22: 'part', this is a reference to a specific part in a product
-  23: 'joint', this references a joint on a product that describes where several parts are joined together and the program that is supposed to be run in order to execute the joining. 
-  24: 'model',
-  25: 'order',
-  26: 'joining_process', this is a reference to a program that was executed to create a joining, this can for example be referencing the tightening program (often called PSET), or a batch program or a job program
-  27: 'program',
-  28: 'job', this is a reference to a job joining process using batches or single joining processes 
-  29: 'batch', this is a reference to a batch joining process used to tell the controller to make several tightening using he same program
-  30: 'recipe',
-  31: 'task',
-  32: 'process',
-  33: 'configuration',
-  34: 'socket',
-  35: 'channel',
-  36: 'station',
-  37: 'production_line',
-  38: 'location', this is a reference to a specific location
-  39: 'user', this is a reference to the user of the tool or device, often a human, but theoretically a robot
-  40: 'parent', this is a reference to a parent entity. A single tightening result might for example be referencing the batch result as the parent
-  41: 'virtual_station', this reference an abstraction in a physical controller that encaptulates the configuration and execution of a single handheld tool or a fixtured system using several spindles
+Interpret associated entities in result payloads using project source-of-truth model files.
+
+## Key Principles
+
+1. Treat `EntityDataType.EntityTypes` as the canonical source for `EntityType` labels.
+2. Keep both raw and mapped type values in output.
+3. Do not infer missing values or mutate payloads when the request is interpretation only.
 
 ## Source-of-Truth Files
 
@@ -54,11 +19,39 @@ Use the following clarifications of the most important entity types to understan
 - `Javascripts/ijt-support/Models/Entities/EntityDataType.mjs`
 - `Javascripts/ijt-support/Models/Results/ResultDataType.mjs`
 
+## Entity Type Clarifications
+
+Use these clarifications for common IJT semantics when explaining mapped types:
+
+- `2` (`asset`): reference to a physical asset.
+- `3` (`controller`): reference to a controller asset.
+- `4` (`tool`): reference to a tool asset.
+- `5` (`servo`): reference to a servo asset.
+- `6` (`memory_device`): reference to a memory device asset.
+- `13` (`sub_component`): subcomponent of another asset.
+- `14` (`software`): specific software asset.
+- `15` (`result`): result produced by an executed action.
+- `16` (`event`): event reference.
+- `18` (`system`): system-level reference.
+- `19` (`log`): specific log file reference.
+- `20` (`vehicle`): vehicle reference (often VIN-level identity).
+- `22` (`part`): specific part in a product.
+- `23` (`joint`): product joint that describes the joining location and associated joining program.
+- `26` (`joining_process`): program executed for a joining action (for example tightening program/PSET, batch, or job).
+- `28` (`job`): job joining process, using single or batch joining processes.
+- `29` (`batch`): batch joining process for repeated executions.
+- `38` (`location`): specific location reference.
+- `39` (`user`): operator/user identity (human or automated actor).
+- `40` (`parent`): parent relationship (for example, a tightening result referencing its batch result).
+- `41` (`virtual_station`): controller abstraction encapsulating configuration/execution for a handheld tool or fixtured multi-spindle system.
+
 ## Workflow
 
-1. Read `ResultMetaData.mjs` to confirm `AssociatedEntities` is cast as `EntityDataType`.
-2. Read `EntityDataType.mjs` to resolve entity fields and `EntityTypes` numeric-to-name mapping.
-3. For each entry in `ResultMetaData.AssociatedEntities`, extract:
+1. Read `ResultMetaData.mjs` and confirm `AssociatedEntities` is cast as `EntityDataType`.
+2. Read `EntityDataType.mjs` and resolve:
+   - entity fields
+   - `EntityTypes` numeric-to-name mapping
+3. For each item in `ResultMetaData.AssociatedEntities`, extract:
    - `Name`
    - `EntityId`
    - `EntityOriginId`
@@ -66,7 +59,9 @@ Use the following clarifications of the most important entity types to understan
    - `EntityType`
 4. Convert `EntityType` using `EntityTypes[EntityType]`.
 5. If mapping key is missing, label as `unknown(<value>)` and keep the raw numeric value.
-6. Present a compact interpretation table and a short summary of what entities the result is linked to.
+6. Present:
+   - a compact per-entity interpretation
+   - a short plain-language summary of what the result is linked to
 
 ## Output Format
 

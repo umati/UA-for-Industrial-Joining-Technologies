@@ -6,14 +6,23 @@ description: Invoke or wire the SimulateSingleResult OPC UA method in IJT Web Cl
 # SimulateSingleResult Caller
 
 Implement consistent `SimulateSingleResult` invocation using existing method infrastructure in `MethodGraphics`, `MethodGUICreator`, `MethodManager`, and `Resources/settings.json`.
-The first argument can have the following values:
-0 for a simple OK result
-1 for a single step OK result
-2 for a multistep OK result
-3 for a multistep NOK, not OK result
-4 for multiple steps NOK result with "trigger lost" flag set
-The default should be 1, but if it is supposed to be a not OK result, 3 should be set
-The second argument is a boalean determining if traces should be included in the result. The default value should be not to include traces 
+
+## Input Arguments
+
+Use this interpretation for the first input argument (result scenario):
+
+- `0`: simple OK result
+- `1`: single-step OK result (default)
+- `2`: multi-step OK result
+- `3`: multi-step NOK result
+- `4`: multi-step NOK result with trigger-lost flag set
+
+The second input argument is a boolean for including traces:
+
+- `false` (default): do not include traces
+- `true`: include traces
+
+Prefer scenario `1` for default behavior. Use `3` when a NOK default is explicitly needed.
 
 ## Workflow
 
@@ -50,7 +59,7 @@ Edit this block in `Resources/settings.json`:
 
 ```json
 "ns=1;s=TighteningSystem/Simulations/SimulateResults/SimulateSingleResult": {
-  "arguments": [2, true],
+  "arguments": [1, false],
   "autocall": false
 }
 ```
