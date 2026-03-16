@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 import argparse
 import shutil
 import subprocess
@@ -23,9 +23,14 @@ def docker_running() -> bool:
     if not docker_available():
         return False
     try:
-        run_command(["docker", "info"], check=True)
-        return True
-    except subprocess.CalledProcessError:
+        result = subprocess.run(
+            ["docker", "info"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return result.returncode == 0
+    except Exception:
         return False
 
 

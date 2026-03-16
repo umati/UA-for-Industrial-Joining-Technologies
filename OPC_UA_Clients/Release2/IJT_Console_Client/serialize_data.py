@@ -1,35 +1,69 @@
-from typing import Any
 from datetime import datetime as std_datetime
-import orjson
+from typing import Any
+
 from ijt_logger import ijt_log
+
+try:
+    import orjson
+except Exception:
+    orjson = None
+
+
+def _json_dumps(obj: Any) -> str:
+    if orjson is not None:
+        return orjson.dumps(obj).decode("utf-8")
+
+    import json
+
+    return json.dumps(obj, ensure_ascii=False)
 
 
 def is_instance_of_user_class(obj: Any) -> bool:
-    return str(type(obj)).startswith("<class") and hasattr(obj, "__weakref__")
+    return str(type(obj)).startswith("<class") and (
+        hasattr(obj, "__weakref__") or hasattr(obj, "__dict__")
+    )
 
 
 def serialize_value(value: Any) -> Any:
     if is_instance_of_user_class(value):
         return serialize_class_instance_as_dict(value)
-    elif value is None:
+    if value is None:
         return None
-    elif isinstance(value, list):
-        return [serialize_value(item) for item in value]
-    elif isinstance(value, dict):
+    if isinstance(value, dict):
         return {k: serialize_value(v) for k, v in value.items()}
-    elif isinstance(value, std_datetime):
+    if isinstance(value, list):
+        return [serialize_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [serialize_value(item) for item in value]
+    if isinstance(value, std_datetime):
         return value.isoformat()
-    elif isinstance(value, (str, int, float, bool)):
+    if isinstance(value, (str, int, float, bool)):
         return value
-    else:
-        return str(value)
+    if hasattr(value, "__slots__"):
+        result = {"pythonclass": type(value).__name__}
+        for slot in getattr(value, "__slots__", []):
+            try:
+                result[slot] = serialize_value(getattr(value, slot))
+            except Exception:
+                continue
+        if len(result) > 1:
+            return result
+    return str(value)
 
 
 def serialize_class_instance_as_dict(obj: Any) -> dict:
     result = {"pythonclass": type(obj).__name__}
-    for key, value in obj.__dict__.items():
-        if key != "_freeze":
-            result[key] = serialize_value(value)
+    if hasattr(obj, "__dict__"):
+        for key, value in obj.__dict__.items():
+            if key != "_freeze":
+                result[key] = serialize_value(value)
+    elif hasattr(obj, "__slots__"):
+        for slot in getattr(obj, "__slots__", []):
+            try:
+                if slot != "_freeze":
+                    result[slot] = serialize_value(getattr(obj, slot))
+            except Exception:
+                continue
     return result
 
 
@@ -40,7 +74,24 @@ def serialize_full_event(value: Any) -> Any:
 def serialize_tuple(list_of_tuples: list[tuple[str, Any]]) -> str:
     try:
         data = {key: serialize_value(val) for key, val in list_of_tuples}
-        return orjson.dumps(data).decode("utf-8")
-    except Exception as e:
-        ijt_log.error(f"Failed to serialize tuple: {e}")
+        return _json_dumps(data)
+    except Exception as exc:
+        ijt_log.error(f"Failed to serialize tuple: {exc}")
         return "{}"
+
+
+# Compatibility aliases to keep both naming styles usable across clients.
+def serializeValue(value: Any) -> str:
+    return _json_dumps(serialize_value(value))
+
+
+def serializeTuple(listOfTuples: list[tuple[str, Any]]) -> str:
+    return serialize_tuple(listOfTuples)
+
+
+def serializeFullEvent(value: Any) -> Any:
+    return serialize_full_event(value)
+
+
+def serializeClassInstanceAsDict(obj: Any) -> dict:
+    return serialize_class_instance_as_dict(obj)

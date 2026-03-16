@@ -10,7 +10,9 @@ import json
 import time
 import shlex
 import re
+import zipfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -34,6 +36,14 @@ IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 VENV_DIR = Path("/opt/ijt_venv") if IS_DOCKER else Path("venv")
 SETUP_TIMESTAMP_FILE = Path(".setup_timestamp")
 IS_WINDOWS = os.name == "nt"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SIMULATOR_DIR = (
+    REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
+)
+SIMULATOR_ZIP = (
+    REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
+)
+SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
 
 
 def _run_command(cmd: list[str], check: bool = True, capture_output: bool = False):
@@ -232,6 +242,99 @@ def _is_port_in_use(host: str, port: int, timeout: float = 0.5) -> bool:
         return sock.connect_ex((host, port)) == 0
     finally:
         sock.close()
+
+
+def _parse_endpoint_host_port(endpoint: str) -> tuple[str, int]:
+    parsed = urlparse(endpoint)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 40451
+    return host, port
+
+
+def _is_endpoint_reachable(endpoint: str, timeout: float = 1.0) -> bool:
+    host, port = _parse_endpoint_host_port(endpoint)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        return sock.connect_ex((host, port)) == 0
+    finally:
+        sock.close()
+
+
+def _is_simulator_process_running() -> bool:
+    if not IS_WINDOWS:
+        return False
+    try:
+        output = subprocess.check_output(
+            ["tasklist", "/FI", f"IMAGENAME eq {SIMULATOR_EXE_NAME}"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        return SIMULATOR_EXE_NAME.lower() in output.lower()
+    except Exception:
+        return False
+
+
+def _extract_simulator_zip_if_needed() -> None:
+    if SIMULATOR_DIR.exists() or not SIMULATOR_ZIP.exists():
+        return
+    try:
+        log.info("Extracting OPC UA simulator from ZIP: %s", SIMULATOR_ZIP)
+        with zipfile.ZipFile(SIMULATOR_ZIP, "r") as zf:
+            zf.extractall(SIMULATOR_ZIP.parent)
+    except Exception as e:
+        log.warning("Failed to extract simulator ZIP '%s': %s", SIMULATOR_ZIP, e)
+
+
+def _find_simulator_executable() -> Path | None:
+    if not SIMULATOR_DIR.exists():
+        return None
+    direct = SIMULATOR_DIR / SIMULATOR_EXE_NAME
+    if direct.exists():
+        return direct
+    matches = list(SIMULATOR_DIR.rglob(SIMULATOR_EXE_NAME))
+    return matches[0] if matches else None
+
+
+def _ensure_opc_server_running(
+    endpoint: str, *, allow_launch: bool, context: str
+) -> bool:
+    if _is_endpoint_reachable(endpoint):
+        return True
+
+    if allow_launch and not IS_DOCKER:
+        _extract_simulator_zip_if_needed()
+        exe = _find_simulator_executable()
+        if exe:
+            if _is_simulator_process_running():
+                log.info(
+                    "OPC UA simulator is already running. Reusing existing process."
+                )
+            else:
+                try:
+                    log.info("Launching OPC UA simulator in separate terminal: %s", exe)
+                    popen_kwargs = {"cwd": str(exe.parent)}
+                    if IS_WINDOWS:
+                        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+                    subprocess.Popen([str(exe)], **popen_kwargs)
+                    time.sleep(2.0)
+                except Exception as e:
+                    log.warning("Failed to launch OPC UA simulator '%s': %s", exe, e)
+    elif allow_launch and IS_DOCKER:
+        log.info(
+            "Docker mode detected (IS_DOCKER=true). Skipping local OPC UA simulator launch."
+        )
+
+    if _is_endpoint_reachable(endpoint):
+        return True
+
+    log.warning(
+        "%s: No OPC UA server is running on %s. "
+        "If your server is in a separate download/folder, start it manually before running tests.",
+        context,
+        endpoint,
+    )
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +594,8 @@ def _validate_package_json():
         log.error("package.json not found.")
         sys.exit(1)
     try:
-        with open(package_json_path, "r", encoding="utf-8") as f:
+        # utf-8-sig tolerates accidental BOM and keeps parsing stable on Windows editors.
+        with open(package_json_path, "r", encoding="utf-8-sig") as f:
             json.load(f)
         log.info("package.json is valid.")
     except json.JSONDecodeError as e:
@@ -623,6 +727,29 @@ def _load_dotenv_if_available() -> None:
 def _run_tests_in_venv(integration: bool = False) -> None:
     python = _get_python_path()
     marker = "integration" if integration else "not integration"
+    endpoint = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
+    _ensure_opc_server_running(
+        endpoint,
+        allow_launch=True,
+        context="Test pre-check",
+    )
+    try:
+        _run_command([str(python), "-c", "import pytest, pytest_asyncio"])
+    except Exception:
+        req_dev = Path("requirements-dev.txt")
+        if req_dev.exists():
+            log.info(
+                "Test dependencies missing in venv. Installing from %s ...",
+                req_dev,
+            )
+            _run_command(
+                [str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_dev)]
+            )
+        else:
+            log.error(
+                "pytest is unavailable in venv and requirements-dev.txt is missing."
+            )
+            raise
     log.info("Running pytest via venv interpreter (%s), marker: %s", python, marker)
     _run_command([str(python), "-m", "pytest", "tests", "-m", marker])
 
@@ -734,6 +861,12 @@ def main():
         if args.run_tests or args.integration_tests:
             _run_tests_in_venv(integration=args.integration_tests)
             return
+        endpoint = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
+        _ensure_opc_server_running(
+            endpoint,
+            allow_launch=True,
+            context="Startup pre-check",
+        )
         _start_server(args)
         _run_index()
         return
@@ -762,6 +895,12 @@ def main():
     if args.run_tests or args.integration_tests:
         _run_tests_in_venv(integration=args.integration_tests)
         return
+    endpoint = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
+    _ensure_opc_server_running(
+        endpoint,
+        allow_launch=True,
+        context="Startup pre-check",
+    )
     _start_server(args)
     _run_index()
     _update_setup_timestamp()

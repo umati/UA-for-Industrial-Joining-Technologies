@@ -2,7 +2,7 @@ import pytz
 import traceback
 import aiofiles
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any
 from asyncua import Client, ua
 from asyncua.ua import String
@@ -11,23 +11,25 @@ from pathlib import Path
 # ---- START: robust JSON import (fallback if orjson is missing) ----
 try:
     import orjson  # fast path
-
-    def _to_json_bytes(obj) -> bytes:
-        return orjson.dumps(obj)
-
-    def _to_json_str(obj) -> str:
-        return orjson.dumps(obj).decode("utf-8")
-
 except Exception:
-    import json  # fallback
+    orjson = None
 
-    def _to_json_bytes(obj) -> bytes:
-        return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode(
-            "utf-8"
-        )
 
-    def _to_json_str(obj) -> str:
-        return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+def _to_json_str(obj) -> str:
+    if orjson is not None:
+        try:
+            return orjson.dumps(obj).decode("utf-8")
+        except Exception:
+            pass
+
+    import json
+
+    # ensure_ascii=True avoids unicode surrogate encoding crashes in noisy payloads
+    return json.dumps(obj, ensure_ascii=True, separators=(",", ":"), default=str)
+
+
+def _to_json_bytes(obj) -> bytes:
+    return _to_json_str(obj).encode("utf-8")
 
 
 # ---- END: robust JSON import ----
@@ -140,13 +142,13 @@ async def log_result_event_details(
 
         if latency_ms is not None:
             log_field(
-                "*** Turn around Time (EndTime → Client)",
+                "*** Turn around Time (EndTime -> Client)",
                 f"{abs(latency_ms):.3f} ms",
                 label_width,
             )
         else:
             log_field(
-                "*** Turn around Time (EndTime → Client)", "Unavailable", label_width
+                "*** Turn around Time (EndTime -> Client)", "Unavailable", label_width
             )
 
         log_separator(label_width)
@@ -309,7 +311,7 @@ async def log_result_to_file(event):
     if ENABLE_RESULT_FILE_LOGGING:
         try:
             json_data = serialize_full_event(event.Result)
-            json_str = orjson.dumps(json_data).decode("utf-8")
+            json_str = _to_json_str(json_data)
 
             log_dir = Path("result_logs")
             log_dir.mkdir(exist_ok=True)
@@ -317,7 +319,7 @@ async def log_result_to_file(event):
             safe_message = re.sub(
                 r"[^\w\-_\. ]", "_", str(event.Message).replace(":", "_")
             )
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
             event_id = getattr(event, "EventId", "unknown")
 
             filename = f"{safe_message}_{event_id}_{timestamp}.json"
