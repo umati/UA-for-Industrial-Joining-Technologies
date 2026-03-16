@@ -327,7 +327,10 @@ class ConsoleAdapter(BaseAdapter):
         if str(self.console_dir) not in sys.path:
             sys.path.insert(0, str(self.console_dir))
 
-        module = importlib.import_module("opcua_client")
+        try:
+            module = importlib.import_module("opcua_client")
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(f"Console adapter dependency missing: {exc.name}") from exc
         self.client_wrapper = module.OPCUAClient(self.endpoint)
 
     async def stop(self) -> None:

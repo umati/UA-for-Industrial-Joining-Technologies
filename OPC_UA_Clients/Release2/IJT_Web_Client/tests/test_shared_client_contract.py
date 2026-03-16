@@ -1,5 +1,8 @@
+import contextlib
 import os
+import socket
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 
@@ -14,6 +17,20 @@ def opcua_endpoint() -> str:
     endpoint = os.getenv("OPCUA_TEST_ENDPOINT")
     if not endpoint:
         pytest.skip("Set OPCUA_TEST_ENDPOINT to run shared cross-client contract tests.")
+
+    parsed = urlparse(endpoint)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 40451
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(1.0)
+    try:
+        if sock.connect_ex((host, port)) != 0:
+            pytest.skip(
+                f"OPC UA endpoint {endpoint} is not reachable. Start the simulator/server and rerun."
+            )
+    finally:
+        sock.close()
+
     return endpoint
 
 
@@ -42,7 +59,20 @@ async def test_shared_client_contract(adapter_name: str, opcua_endpoint: str, ws
     wanted = ["SimulateSingleResult", "SimulateJobResult", "SimulateEvents"]
 
     try:
-        await adapter.start()
+        try:
+            await adapter.start()
+        except Exception as exc:
+            msg = str(exc).lower()
+            if adapter_name == "web":
+                pytest.skip(
+                    f"Web adapter websocket is unavailable/misconfigured at {ws_url}: {exc}"
+                )
+            if adapter_name == "console" and "console adapter dependency missing" in msg:
+                pytest.skip(
+                    "Console adapter dependency missing in active venv "
+                    f"({exc}). Install console deps or use console venv."
+                )
+            raise
 
         connected = await adapter.connect()
         assert "exception" not in str(connected).lower(), f"{adapter_name} connect failed: {connected}"
@@ -73,7 +103,7 @@ async def test_shared_client_contract(adapter_name: str, opcua_endpoint: str, ws
         assert events.get("total", 0) >= 0
 
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await adapter.terminate()
-        finally:
+        with contextlib.suppress(Exception):
             await adapter.stop()

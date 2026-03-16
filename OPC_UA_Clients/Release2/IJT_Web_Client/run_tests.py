@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 IS_WINDOWS = sys.platform.startswith("win")
 VENV_PYTHON = Path("venv") / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
+REQUIREMENTS_DEV = Path("requirements-dev.txt")
 
 
 def _endpoint_reachable(endpoint: str, timeout: float = 1.0) -> bool:
@@ -47,6 +48,28 @@ def main() -> int:
             "If clients and simulator are in separate folders/downloads, start the server before running tests.",
             file=sys.stderr,
         )
+
+    try:
+        subprocess.check_call([str(VENV_PYTHON), "-c", "import pytest, pytest_asyncio"])
+    except subprocess.CalledProcessError:
+        if not REQUIREMENTS_DEV.exists():
+            print(
+                "[ERROR] pytest is missing and requirements-dev.txt was not found.",
+                file=sys.stderr,
+            )
+            return 1
+        print("Installing missing test dependencies from requirements-dev.txt ...")
+        try:
+            subprocess.check_call(
+                [str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", "-r", str(REQUIREMENTS_DEV)]
+            )
+        except subprocess.CalledProcessError:
+            print(
+                "[ERROR] Failed to install test dependencies. Check network access or run setup_project.py --force_full.",
+                file=sys.stderr,
+            )
+            return 1
+
     cmd = [str(VENV_PYTHON), "-m", "pytest", "tests", "-m", marker]
     print("Running:", " ".join(cmd))
     return subprocess.call(cmd)

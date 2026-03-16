@@ -14,6 +14,19 @@ import zipfile
 from pathlib import Path
 from urllib.parse import urlparse
 
+
+def _detect_repo_root(start_dir: Path) -> Path:
+    """
+    Find monorepo root by looking for both OPC_UA_Clients and OPC_UA_Servers.
+    Falls back to start_dir when running from standalone/container layouts.
+    """
+    for candidate in [start_dir] + list(start_dir.parents):
+        if (candidate / "OPC_UA_Clients").exists() and (
+            candidate / "OPC_UA_Servers"
+        ).exists():
+            return candidate
+    return start_dir
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -36,7 +49,8 @@ IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 VENV_DIR = Path("/opt/ijt_venv") if IS_DOCKER else Path("venv")
 SETUP_TIMESTAMP_FILE = Path(".setup_timestamp")
 IS_WINDOWS = os.name == "nt"
-REPO_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = _detect_repo_root(PROJECT_DIR)
 SIMULATOR_DIR = (
     REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
 )
