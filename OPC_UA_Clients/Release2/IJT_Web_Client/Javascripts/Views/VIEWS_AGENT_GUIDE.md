@@ -28,7 +28,7 @@ Tabs are managed by `GraphicSupport/TabGenerator.mjs`.
 - `EndpointTab/`:
   endpoint-specific tab composition.
 - `AddressSpace/`:
-  browse/read visualizations.
+  browse/read visualization of the address space
 - `Methods/`:
   method invocation UI.
 - `Trace/`:
@@ -38,7 +38,7 @@ Tabs are managed by `GraphicSupport/TabGenerator.mjs`.
 - `Demo/`:
   demo screens for joint/program/result usage.
 - `ComplexResult/`:
-  hierarchical/enveloped result rendering.
+  hierarchical/enveloped result rendering of batches and jobs.
 - `Assets/`, `Entities/`, `Joints/`:
   domain-focused editing and visualization screens.
 - `GraphicSupport/`:
