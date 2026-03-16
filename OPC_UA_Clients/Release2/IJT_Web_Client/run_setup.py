@@ -1,76 +1,90 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 import argparse
+import shutil
 import subprocess
 import sys
-import shutil
-import os
+from pathlib import Path
 
 CONTAINER_NAME = "ijt_web_client"
 IMAGE_NAME = "ijt_web_client"
-PORTS = ["3000:3000", "8001:8001"]
-SETUP_SCRIPT = "setup_project.py"
+SETUP_SCRIPT = Path("setup_project.py")
 
-def run_command(cmd, shell=False, check=True):
-    print(f"Running: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
-    result = subprocess.run(cmd, shell=shell)
-    if check and result.returncode != 0:
-        print(f"❌ Command failed: {cmd}")
-        sys.exit(result.returncode)
 
-def docker_available():
+def run_command(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
+    print("Running:", " ".join(cmd))
+    return subprocess.run(cmd, check=check)
+
+
+def docker_available() -> bool:
     return shutil.which("docker") is not None
 
-def docker_running():
+
+def docker_running() -> bool:
+    if not docker_available():
+        return False
     try:
-        subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        run_command(["docker", "info"], check=True)
         return True
     except subprocess.CalledProcessError:
         return False
 
-def get_local_python():
-    return "venv\\Scripts\\python.exe" if os.name == "nt" else "venv/bin/python"
 
-def run_docker(setup_args):
-    print("🛑 Stopping and removing existing container...")
-    subprocess.run(["docker", "stop", CONTAINER_NAME], stderr=subprocess.DEVNULL)
-    subprocess.run(["docker", "rm", CONTAINER_NAME], stderr=subprocess.DEVNULL)
+def detect_compose_cmd() -> list[str]:
+    if shutil.which("docker-compose"):
+        return ["docker-compose"]
+    return ["docker", "compose"]
 
-    print("🗑️ Removing existing Docker image...")
-    subprocess.run(["docker", "rmi", IMAGE_NAME], stderr=subprocess.DEVNULL)
 
-    print("🔨 Performing full Docker cleanup...")
-    subprocess.run(['docker-compose', 'down', '-v'], check=False)
-    subprocess.run(['docker', 'image', 'prune', '-f'], check=False)
-    subprocess.run(['docker', 'volume', 'prune', '-f'], check=False)
+def run_docker(setup_args: list[str]) -> None:
+    compose_cmd = detect_compose_cmd()
 
-    print("🔨 Rebuilding Docker image (no cache)...")
+    print("Stopping/removing existing container if present...")
+    run_command(["docker", "stop", CONTAINER_NAME], check=False)
+    run_command(["docker", "rm", CONTAINER_NAME], check=False)
+
+    print("Removing existing image if present...")
+    run_command(["docker", "rmi", IMAGE_NAME], check=False)
+
+    print("Cleaning stale docker resources...")
+    run_command(compose_cmd + ["down", "-v"], check=False)
+    run_command(["docker", "image", "prune", "-f"], check=False)
+    run_command(["docker", "volume", "prune", "-f"], check=False)
+
+    print("Building docker image...")
     run_command(["docker", "build", "--no-cache", "-t", IMAGE_NAME, "."])
 
-    print("🚀 Starting container...")
-    run_command(["docker-compose", "up", "-d"])
+    print("Starting docker compose stack...")
+    run_command(compose_cmd + ["up", "-d"])
 
-    print("📄 Following Docker logs...")
-    subprocess.run(["docker", "logs", "-f", CONTAINER_NAME])
+    print("Streaming container logs...")
+    run_command(["docker", "logs", "-f", CONTAINER_NAME], check=False)
 
-def run_local(setup_args):
-    print("🐍 Running setup_project.py locally...")
-    local_python = get_local_python()
-    if not os.path.exists(SETUP_SCRIPT):
-        print("❌ setup_project.py not found in local directory.")
-        sys.exit(1)
-    run_command([local_python, SETUP_SCRIPT] + setup_args)
 
-def main():
+def run_local(setup_args: list[str]) -> None:
+    if not SETUP_SCRIPT.exists():
+        raise FileNotFoundError(f"{SETUP_SCRIPT} not found in current directory")
+
+    print("Running local setup script...")
+    run_command([sys.executable, str(SETUP_SCRIPT)] + setup_args)
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(description="Run setup for IJT Web Client")
-    parser.add_argument("--setup-args", nargs=argparse.REMAINDER, help="Arguments to pass to setup_project.py")
+    parser.add_argument(
+        "--setup-args",
+        nargs=argparse.REMAINDER,
+        help="Arguments passed through to setup_project.py",
+    )
     args = parser.parse_args()
-    setup_args = ['--force_full']
 
-    if docker_available() and docker_running():
+    setup_args = args.setup_args if args.setup_args else ["--force_full"]
+
+    if docker_running():
         run_docker(setup_args)
     else:
-        print("⚠️ Docker not available or not running. Falling back to local setup.")
+        print("Docker unavailable/not running. Falling back to local setup.")
         run_local(setup_args)
+
 
 if __name__ == "__main__":
     main()

@@ -23,6 +23,13 @@ export class AddressSpace {
     })
   }
 
+  parseMaybeJson (value) {
+    if (typeof value === 'string' || value instanceof String) {
+      return JSON.parse(value.replace(/\n|\t/g, ''))
+    }
+    return value
+  }
+
   /**
    * Sets up root and the Object folder and find a Tightening System
    */
@@ -93,7 +100,7 @@ export class AddressSpace {
     return new Promise((resolve, reject) => {
       this.socketHandler.methodCall(locationId, methodNode, args).then(
         (result) => {
-          resolve(JSON.parse(result.message.output))
+          resolve(this.parseMaybeJson(result.message.output))
         },
         (error) => {
           reject(error)
@@ -176,9 +183,9 @@ export class AddressSpace {
       return new Promise((resolve) => {
         this.socketHandler.readPromise(nodeId, 'DisplayName, NodeClass').then(
           (response) => {
-            const attributes = JSON.parse(response.message.attributes.replace(/\n|\t/g, ''))
-            const relations = JSON.parse(response.message.relations)
-            const value = JSON.parse(response.message.value)
+            const attributes = this.parseMaybeJson(response.message.attributes)
+            const relations = this.parseMaybeJson(response.message.relations)
+            const value = this.parseMaybeJson(response.message.value)
             const returnValue = {
               nodeid: response.message.nodeid,
               attributes,
@@ -212,7 +219,7 @@ export class AddressSpace {
    * @param {*} namespaces is the data sent bu the OPC UA client
    */
   handleNamespaces (namespaceMessage) {
-    const namespaces = JSON.parse(namespaceMessage.namespaces)
+    const namespaces = this.parseMaybeJson(namespaceMessage.namespaces)
     this.OPCUA = namespaces.indexOf('http://opcfoundation.org/UA/')
     this.nsIJT = namespaces.indexOf('http://opcfoundation.org/UA/IJT/Base/')
     this.nsTightening = namespaces.indexOf('http://opcfoundation.org/UA/IJT/Tightening/')
@@ -240,7 +247,7 @@ export class AddressSpace {
       this.addressSpacePromise().then((tgtSystem) => {
         this.socketHandler.pathtoidPromise(tgtSystem.nodeId, path).then(
           (msg) => { // Path node found
-            this.findOrLoadNode(JSON.parse(msg.message.nodeid)).then(
+            this.findOrLoadNode(this.parseMaybeJson(msg.message.nodeid)).then(
               (node) => {
                 resolve(node)
               },

@@ -48,22 +48,29 @@ export default class EndpointGraphics extends BasicScreen {
     this.tabGenerator.changeViewLevel(newLevel)
   }
 
+  async loadOptionalEnvelopeTab (tabGenerator, resultManager) {
+    const modulePath = '/Javascripts/Views/Envelope/EnvelopeGraphics.mjs'
+    try {
+      const probe = await fetch(modulePath, { method: 'GET', cache: 'no-store' })
+      if (!probe.ok) {
+        return
+      }
+      const EnvelopeScreen = await import('../Envelope/EnvelopeGraphics.mjs')
+      if (EnvelopeScreen?.Envelope) {
+        const envelopeScreen = new EnvelopeScreen.Envelope(
+          this.connectionManager,
+          resultManager,
+          this.settings
+        )
+        tabGenerator.generateTab(envelopeScreen, 3, false)
+      }
+    } catch (error) {
+      // Envelope view is optional. Skip quietly if unavailable.
+    }
+  }
+
   instantiate (endpointUrl, webSocketManager) {
     this.endpointUrl = endpointUrl
-
-    // Dynamic load
-    import('../Envelope/EnvelopeGraphics.mjs')
-      .then((EnvelopeScreen) => {
-        try {
-          const envelopeScreen = new EnvelopeScreen.Envelope(this.connectionManager, resultManager, this.settings)
-          tabGenerator.generateTab(envelopeScreen, 3, false)
-        } catch (error) {
-          console.log(error)
-        }
-      })
-      .catch((err) => {
-        console.log(err)
-      })
 
     // Setting up tab handling and model handling
     const entityCache = new EntityCache()
@@ -89,6 +96,9 @@ export default class EndpointGraphics extends BasicScreen {
     const eventGraphics = new EventGraphics(eventManager)
 
     const resultManager = new ResultManager(eventManager)
+
+    // Optional local-only tab: load if module exists, otherwise skip silently.
+    this.loadOptionalEnvelopeTab(tabGenerator, resultManager)
 
     // Asset view is not critical
     let assetGraphics = null

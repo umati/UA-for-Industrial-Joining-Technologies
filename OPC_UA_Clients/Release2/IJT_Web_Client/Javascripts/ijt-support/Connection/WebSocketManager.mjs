@@ -1,15 +1,17 @@
 /**
- * The purpose of this class is to handle the connection between the web page and the web server
- * via a websocket
+ * Handle browser <-> backend websocket communication.
  */
 export class WebSocketManager {
   constructor (establishedCallback, websocketUrl) {
     this.subscribers = {}
-    this.establishWebSocket(establishedCallback, websocketUrl)
+    this.connection = false
+    this.websocketUrl = websocketUrl || 'ws://localhost:8001/'
+    this.establishedCallback = establishedCallback
+    this.establishWebSocket(this.establishedCallback, this.websocketUrl)
   }
 
   establishWebSocket (establishedCallback, websocketUrl) {
-    const url = websocketUrl || 'ws://localhost:8001/'
+    const url = websocketUrl || this.websocketUrl
     this.websocket = new WebSocket(url)
 
     this.websocket.onopen = () => {
@@ -18,21 +20,41 @@ export class WebSocketManager {
       establishedCallback(this)
     }
 
-    this.websocket.onclose = function (msg) {
+    this.websocket.onclose = (msg) => {
       console.log('WebSocket closed: ' + msg)
       this.connection = false
     }
 
+    this.websocket.onerror = (err) => {
+      console.error('WebSocket error', err)
+      this.connection = false
+    }
+
     this.websocket.addEventListener('message', ({ data }) => {
-      const event = JSON.parse(data)
-      console.log('Received message of type: ' + event.command)
+      let event
+      try {
+        event = JSON.parse(data)
+      } catch (error) {
+        console.error('Invalid websocket payload:', error)
+        return
+      }
+
+      if (!event || !event.command) {
+        console.warn('Ignoring websocket payload without command')
+        return
+      }
+
       const command = event.command
       const endpoint = event.endpoint
       const endpointSubscribes = this.subscribers[endpoint]
       if (endpointSubscribes && endpointSubscribes[command]) {
         for (const subscription of endpointSubscribes[command]) {
           if (subscription) {
-            subscription(event.data, event.uniqueid)
+            try {
+              subscription(event.data, event.uniqueid)
+            } catch (error) {
+              console.error('Subscriber callback failed:', error)
+            }
           }
         }
       }
@@ -58,11 +80,8 @@ export class WebSocketManager {
 
   unsubscribe (endpoint, type, callback) {
     const callerObject = this.subscribers[endpoint]
-    if (callerObject) {
-      if (callerObject[type]) {
-        callerObject[type] = callerObject[type].filter(cb => cb !== callback)
-      }
-      console.warn('unsubscribe is not implemented')
+    if (callerObject && callerObject[type]) {
+      callerObject[type] = callerObject[type].filter(cb => cb !== callback)
     }
   }
 
@@ -71,22 +90,20 @@ export class WebSocketManager {
       event = {}
     }
     event.command = command
-    if (endpoint) {
-      event.endpoint = endpoint
-    } else {
-      event.endpoint = 'common'
-    }
+    event.endpoint = endpoint || 'common'
     if (uniqueId) {
       event.uniqueid = uniqueId
     }
-    if (this.websocket.readyState !== this.websocket.OPEN) {
-      console.log('WEBSOCKET NOT READY! Trying to reestablich connection')
+
+    if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
+      console.log('Websocket not ready. Re-establishing connection before send.')
       this.connection = false
       this.establishWebSocket(() => {
         this.websocket.send(JSON.stringify(event))
-      })
+      }, this.websocketUrl)
       return
     }
+
     this.websocket.send(JSON.stringify(event))
   }
 }

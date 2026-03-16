@@ -1,7 +1,6 @@
 import os
 import sys
 import subprocess
-import venv
 import shutil
 import logging
 import webbrowser
@@ -35,6 +34,15 @@ IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 VENV_DIR = Path("/opt/ijt_venv") if IS_DOCKER else Path("venv")
 SETUP_TIMESTAMP_FILE = Path(".setup_timestamp")
 IS_WINDOWS = os.name == "nt"
+
+
+def _run_command(cmd: list[str], check: bool = True, capture_output: bool = False):
+    if capture_output:
+        return subprocess.check_output(cmd, text=True).strip()
+    if check:
+        subprocess.check_call(cmd)
+        return None
+    return subprocess.run(cmd, check=False)
 
 
 def _semver_tuple(ver: str):
@@ -83,27 +91,48 @@ def _find_latest_python_executable():
     """
     if IS_WINDOWS:
         versions = _list_pythons_windows()
-        if not versions:
-            log.error("No Python 3.x found by the Windows 'py' launcher.")
-            sys.exit(1)
-        latest = sorted(
-            versions, key=lambda s: tuple(map(int, s.split("."))), reverse=True
-        )[0]
-        # Prefer a concrete interpreter path to avoid WindowsApps launcher shims
-        # that can appear in `py -0` output but are not directly executable.
-        major, minor = latest.split(".")
-        local_appdata = os.getenv("LOCALAPPDATA")
-        if local_appdata:
-            direct_py = (
-                Path(local_appdata)
-                / "Programs"
-                / "Python"
-                / f"Python{major}{minor}"
-                / "python.exe"
+        candidates: list[tuple[tuple[int, int], list[str], str]] = []
+
+        for version in versions:
+            try:
+                major, minor = map(int, version.split("."))
+                candidates.append(((major, minor), ["py", f"-{version}"], version))
+            except Exception:
+                continue
+
+        # Also include the currently running interpreter to avoid downgrading when
+        # 'py -0' is stale/misconfigured compared to PATH python.
+        current_ver = f"{sys.version_info[0]}.{sys.version_info[1]}"
+        candidates.append(
+            (
+                (sys.version_info[0], sys.version_info[1]),
+                [sys.executable],
+                current_ver,
             )
-            if direct_py.exists():
-                return ([str(direct_py)], latest)
-        return (["py", f"-{latest}"], latest)
+        )
+
+        if not candidates:
+            log.error("No Python 3.x interpreter candidates found on this system.")
+            sys.exit(1)
+
+        _, cmd, version = max(candidates, key=lambda row: row[0])
+        if cmd and cmd[0] == "py":
+            try:
+                major, minor = version.split(".")
+                local_appdata = os.getenv("LOCALAPPDATA")
+                if local_appdata:
+                    direct_py = (
+                        Path(local_appdata)
+                        / "Programs"
+                        / "Python"
+                        / f"Python{major}{minor}"
+                        / "python.exe"
+                    )
+                    if direct_py.exists():
+                        return ([str(direct_py)], version)
+            except Exception:
+                pass
+        return (cmd, version)
     else:
         # Probe newer to older (extend upper bound periodically, harmless if missing)
         for minor in range(20, 9, -1):  # 3.20 down to 3.10
@@ -161,16 +190,48 @@ def _relaunch_under_latest_python():
     os.execvp(cmd[0], cmd)
 
 
+def _require_python_314_or_newer(version_string: str | None = None) -> None:
+    if version_string:
+        try:
+            major, minor = map(int, version_string.split("."))
+        except Exception:
+            major, minor = sys.version_info[0], sys.version_info[1]
+    else:
+        major, minor = sys.version_info[0], sys.version_info[1]
+
+    if (major, minor) < (3, 14):
+        log.error(
+            "Python 3.14 or newer is required. Current interpreter: %s.%s",
+            major,
+            minor,
+        )
+        sys.exit(1)
+
+
 # ---------------------------------------------------------------------------
 # Utility: Internet availability
 # ---------------------------------------------------------------------------
 def _check_internet(host="8.8.8.8", port=53, timeout=3):
+    sock = None
     try:
         socket.setdefaulttimeout(timeout)
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((host, port))
         return True
     except socket.error:
         return False
+    finally:
+        if sock:
+            sock.close()
+
+
+def _is_port_in_use(host: str, port: int, timeout: float = 0.5) -> bool:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        return sock.connect_ex((host, port)) == 0
+    finally:
+        sock.close()
 
 
 # ---------------------------------------------------------------------------
@@ -197,15 +258,11 @@ def _get_python_path() -> Path:
 # Node / npm / npx helpers
 # ---------------------------------------------------------------------------
 def _get_npm_path():
-    return shutil.which("npm") or VENV_DIR / (
-        "Scripts/npm.cmd" if IS_WINDOWS else "bin/npm"
-    )
+    return shutil.which("npm")
 
 
 def _get_npx_path():
-    return shutil.which("npx") or VENV_DIR / (
-        "Scripts/npx.cmd" if IS_WINDOWS else "bin/npx"
-    )
+    return shutil.which("npx")
 
 
 def _get_node_version():
@@ -412,7 +469,7 @@ def _create_nodeenv():
         sys.exit(1)
 
     node_ver = _get_node_version() or "0.0.0"
-    required_node_ver = os.getenv("NODE_VERSION", "24.11.0")
+    required_node_ver = os.getenv("NODE_VERSION", "24.0.0")
 
     if _semver_tuple(node_ver) < _semver_tuple(required_node_ver):
         log.error(
@@ -444,7 +501,7 @@ def _validate_package_json():
 
 def _install_js_packages():
     npm = _get_npm_path()
-    if not npm or not Path(npm).exists():
+    if not npm:
         log.error("npm not found. Node.js environment setup failed.")
         sys.exit(1)
 
@@ -454,12 +511,12 @@ def _install_js_packages():
     try:
         if Path("package-lock.json").exists():
             log.info("Found package-lock.json. Running 'npm ci'...")
-            subprocess.check_call([str(npm), "ci"])
+            _run_command([str(npm), "ci"])
         else:
             log.warning(
                 "package-lock.json not found. Running 'npm install' with --legacy-peer-deps..."
             )
-            subprocess.check_call([str(npm), "install", "--legacy-peer-deps"])
+            _run_command([str(npm), "install", "--legacy-peer-deps"])
     except subprocess.CalledProcessError as e:
         log.error("JavaScript package installation failed. Command failed: %s", e.cmd)
         sys.exit(1)
@@ -467,11 +524,11 @@ def _install_js_packages():
     # Log a couple of versions to assist troubleshooting
     try:
         eslint_version = subprocess.check_output(
-            [str(npm), "list", "eslint", "--depth=0"]
-        ).decode()
+            [str(npm), "list", "eslint", "--depth=0"], text=True
+        )
         neostandard_version = subprocess.check_output(
-            [str(npm), "list", "neostandard", "--depth=0"]
-        ).decode()
+            [str(npm), "list", "neostandard", "--depth=0"], text=True
+        )
         log.info("Installed ESLint version:\n%s", eslint_version)
         log.info("Installed neostandard version:\n%s", neostandard_version)
     except subprocess.CalledProcessError as e:
@@ -483,11 +540,25 @@ def _install_js_packages():
 # ---------------------------------------------------------------------------
 def _start_server(args):
     npx = _get_npx_path()
-    if not Path(npx).exists():
+    if not npx:
         log.error("npx not found. Please ensure Node.js is installed.")
         sys.exit(1)
 
     http_port = os.getenv("HTTP_PORT", "3000")
+    try:
+        port_num = int(http_port)
+    except ValueError:
+        log.error("Invalid HTTP_PORT '%s'. Falling back to 3000.", http_port)
+        port_num = 3000
+        http_port = "3000"
+
+    if _is_port_in_use("127.0.0.1", port_num):
+        log.info(
+            "HTTP port %s is already in use. Skipping frontend start (assumed already running).",
+            http_port,
+        )
+        return
+
     browser_host = os.getenv("WS_HOST") or socket.gethostbyname(socket.gethostname())
     browser_url = f"http://{browser_host}:{http_port}"
 
@@ -518,6 +589,19 @@ def _start_server(args):
 
 def _run_index():
     python = _get_python_path()
+    try:
+        ws_port = int(os.getenv("WS_PORT", "8001"))
+    except ValueError:
+        log.error("Invalid WS_PORT value. Falling back to 8001.")
+        ws_port = 8001
+
+    if _is_port_in_use("127.0.0.1", ws_port):
+        log.info(
+            "WebSocket port %s is already in use. Skipping backend start (assumed already running).",
+            ws_port,
+        )
+        return
+
     if Path("index.py").exists():
         try:
             subprocess.Popen([str(python), "index.py"])
@@ -525,6 +609,22 @@ def _run_index():
             log.error("Failed to run index.py: %s", e)
     else:
         log.warning("index.py not found.")
+
+
+def _load_dotenv_if_available() -> None:
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except Exception:
+        log.warning("python-dotenv is unavailable in controller interpreter; skipping .env load.")
+
+
+def _run_tests_in_venv(integration: bool = False) -> None:
+    python = _get_python_path()
+    marker = "integration" if integration else "not integration"
+    log.info("Running pytest via venv interpreter (%s), marker: %s", python, marker)
+    _run_command([str(python), "-m", "pytest", "tests", "-m", marker])
 
 
 # ---------------------------------------------------------------------------
@@ -555,6 +655,25 @@ def _is_runtime_ready():
     if not (VENV_DIR.exists() and python.exists() and npm and npx):
         return False
 
+    # Ensure runtime dependencies are present in the selected Python interpreter.
+    try:
+        _run_command(
+            [
+                str(python),
+                "-c",
+                (
+                    "import asyncua, websockets, dotenv, requests, packaging, "
+                    "pytz, aiofiles"
+                ),
+            ]
+        )
+    except Exception:
+        log.info(
+            "Runtime dependency check failed in %s. Triggering full setup.",
+            python,
+        )
+        return False
+
     env_max_age = int(os.getenv("ENV_MAX_AGE_DAYS", "14"))
     age_days = _get_last_setup_age_days()
     if age_days is None:
@@ -582,6 +701,7 @@ def _is_runtime_ready():
 def main():
     # Always ensure we run under the newest Python available.
     _relaunch_under_latest_python()
+    _require_python_314_or_newer()
 
     parser = argparse.ArgumentParser(
         description="Setup and run the IJT Web Client environment.",
@@ -596,20 +716,24 @@ def main():
     parser.add_argument(
         "--silent", action="store_true", help="Show only warnings/errors"
     )
+    parser.add_argument(
+        "--run-tests",
+        action="store_true",
+        help="Run pytest from the project venv after setup/runtime checks.",
+    )
+    parser.add_argument(
+        "--integration-tests",
+        action="store_true",
+        help="Run integration pytest marker (requires OPCUA_TEST_ENDPOINT).",
+    )
     args = parser.parse_args()
 
     # Fast path: if everything exists and isn't too old, just run.
     if not args.force_full and _is_runtime_ready():
-        try:
-            from dotenv import load_dotenv
-        except Exception:
-            # Install python-dotenv into the CONTROLLER interpreter (not venv)
-            subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", "--upgrade", "python-dotenv"]
-            )
-            from dotenv import load_dotenv
-
-        load_dotenv()
+        _load_dotenv_if_available()
+        if args.run_tests or args.integration_tests:
+            _run_tests_in_venv(integration=args.integration_tests)
+            return
         _start_server(args)
         _run_index()
         return
@@ -623,39 +747,8 @@ def main():
         sys.exit(1)
 
     latest_cmd, latest_ver = _find_latest_python_executable()
-    # --- REQUIRE PYTHON 3.14 OR NEWER -----------------------------------------
-    try:
-        major, minor = map(int, latest_ver.split("."))
-    except Exception:
-        log.error("Could not parse detected Python version: %s", latest_ver)
-        sys.exit(1)
-
+    _require_python_314_or_newer(latest_ver)
     log.info("Newest Python detected on this system: %s", latest_ver)
-
-    if (major, minor) < (3, 14):
-        log.error(
-            "\n"
-            "=====================================================================\n"
-            "  PYTHON 3.14 OR NEWER IS REQUIRED FOR THIS IJT WEB CLIENT\n"
-            "=====================================================================\n"
-            "Your system only has Python %s installed.\n\n"
-            "Please install Python 3.14, 3.15, or newer from:\n"
-            "  https://www.python.org/downloads/\n\n"
-            "WINDOWS USERS:\n"
-            "  1. Install Python 3.14+ using the official installer.\n"
-            "  2. Ensure the 'py' launcher is installed.\n"
-            "  3. Verify using:\n"
-            "         py -0\n"
-            "     You must see something like:\n"
-            "         -3.14-64  *\n"
-            "     (the * indicates your latest default Python)\n\n"
-            "After installing Python 3.14+, re-run:\n"
-            "     python setup_project.py --force_full\n"
-            "=====================================================================\n",
-            latest_ver,
-        )
-        sys.exit(1)
-    # --------------------------------------------------------------------------
 
     # if os.getenv("IS_DOCKER") != "true":
     _create_virtualenv(latest_cmd)
@@ -665,16 +758,10 @@ def main():
     _install_js_packages()
     _create_env_template()
 
-    try:
-        from dotenv import load_dotenv
-    except Exception:
-        # Install python-dotenv into the CONTROLLER interpreter (not venv)
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "--upgrade", "python-dotenv"]
-        )
-        from dotenv import load_dotenv
-
-    load_dotenv()
+    _load_dotenv_if_available()
+    if args.run_tests or args.integration_tests:
+        _run_tests_in_venv(integration=args.integration_tests)
+        return
     _start_server(args)
     _run_index()
     _update_setup_timestamp()

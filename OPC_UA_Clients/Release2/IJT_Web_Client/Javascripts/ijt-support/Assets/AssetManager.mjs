@@ -102,7 +102,9 @@ export class AssetManager {
         JSON.stringify(
           [{ namespaceindex: nsIJT, identifier: 'AssetManagement' },
             { namespaceindex: nsIJT, identifier: 'Assets' }])).then((assetsFolderMessage) => {
-        this.addressSpace.findOrLoadNode(JSON.parse(assetsFolderMessage.message.nodeid)).then(
+        this.addressSpace.findOrLoadNode(
+          this.addressSpace.parseMaybeJson(assetsFolderMessage.message.nodeid)
+        ).then(
           (node) => {
             resolve(node)
           },

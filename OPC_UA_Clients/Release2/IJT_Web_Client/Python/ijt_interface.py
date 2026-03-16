@@ -1,176 +1,197 @@
-__all__ = ["IJTInterface"]
+﻿__all__ = ["IJTInterface"]
 
 import asyncio
 import json
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-from Python.ijt_logger import ijt_log
 from Python.connection import Connection
+from Python.ijt_logger import ijt_log
 
 
 class IJTInterface:
-    """
-    OPC UA interface to Industrial Joining Technique specification
-    """
+    """OPC UA interface used by one websocket client session."""
 
     def __init__(self) -> None:
-        self.connectionList: Dict[str, Connection] = {}
-        self.disconnected: bool = False
+        self.connection_list: Dict[str, Optional[Connection]] = {}
+        self.disconnected = False
 
-    async def ensureConnectionOpen(self, connection: Connection) -> bool:
+    @staticmethod
+    def _resource_path(filename: str) -> Path:
+        return Path("Resources") / filename
+
+    async def ensure_connection_open(self, connection: Connection) -> bool:
         try:
-            if connection.client.uaclient.protocol.state != "open":
-                ijt_log.info(
-                    f"protocol.state: {connection.client.uaclient.protocol.state}"
-                )
-                ijt_log.info("Reconnecting...")
-                await connection.connect()
-            return True
-        except Exception as e:
-            ijt_log.error(f"Error reconnecting client: {e}")
+            if await connection.is_connection_open():
+                return True
+            ijt_log.info("Connection is not open. Reconnecting...")
+            result = await connection.connect()
+            return "exception" not in result
+        except Exception as exc:
+            ijt_log.error(f"Error reconnecting client: {exc}")
             return False
 
-    async def callConnection(self, data: dict, func: str) -> dict:
+    async def call_connection(self, data: dict, func: str) -> dict:
         endpoint = data.get("endpoint")
-        connection = self.connectionList.get(endpoint)
+        connection = self.connection_list.get(endpoint)
 
         if not connection:
-            ijt_log.info(f"No connection found for endpoint: {endpoint}")
-            return {"exception": f"No connection found for endpoint: {endpoint}"}
+            msg = f"No connection found for endpoint: {endpoint}"
+            ijt_log.info(msg)
+            return {"exception": msg}
 
-        if not await self.ensureConnectionOpen(connection):
+        if not await self.ensure_connection_open(connection):
             return {"exception": "Failed to ensure connection is open"}
 
         try:
-            methodRepr = getattr(connection, func)
+            method = getattr(connection, func)
         except AttributeError:
             ijt_log.error(f"Method '{func}' not found in Connection object.")
             return {"exception": f"Method '{func}' not found"}
 
         try:
-            return await methodRepr(data)
-        except Exception as e:
-            ijt_log.error("Exception in Methodcall")
-            ijt_log.error(f"Exception: {e}")
-            return {"exception": str(e)}
+            return await method(data)
+        except Exception as exc:
+            ijt_log.error(f"Exception in method call '{func}': {exc}")
+            return {"exception": str(exc)}
 
-    async def handleGetConnectionPoints(self) -> dict:
+    async def handle_get_connection_points(self) -> dict:
+        path = self._resource_path("connectionpoints.json")
         try:
-            with open("./Resources/connectionpoints.json") as json_file:
-                return json.load(json_file)
-        except Exception as e:
-            ijt_log.error(f"Error reading connectionpoints: {e}")
-            return {"exception": str(e)}
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            ijt_log.error(f"Error reading connection points: {exc}")
+            return {"exception": str(exc)}
 
-    async def handleSetConnectionPoints(self, data: dict) -> None:
+    async def handle_set_connection_points(self, data: dict) -> None:
+        path = self._resource_path("connectionpoints.json")
         try:
-            with open("./Resources/connectionpoints.json", "w") as file:
-                json.dump(data, file)
-        except Exception as e:
-            ijt_log.error(f"Error writing connectionpoints: {e}")
+            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception as exc:
+            ijt_log.error(f"Error writing connection points: {exc}")
 
-    async def handleGetSettings(self) -> dict:
+    async def handle_get_settings(self) -> dict:
+        path = self._resource_path("settings.json")
         try:
-            with open("./Resources/settings.json") as json_file:
-                return json.load(json_file)
+            return json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
-            return {"exception": "File not found (ABC)"}
-        except Exception as e:
-            ijt_log.error(f"Error reading settings: {e}")
-            return {"exception": str(e)}
+            return {"exception": "File not found: Resources/settings.json"}
+        except Exception as exc:
+            ijt_log.error(f"Error reading settings: {exc}")
+            return {"exception": str(exc)}
 
-    async def handleSetSettings(self, data: dict) -> None:
+    async def handle_set_settings(self, data: dict) -> None:
+        path = self._resource_path("settings.json")
         try:
-            with open("./Resources/settings.json", "w") as file:
-                json.dump(data, file)
-        except Exception as e:
-            ijt_log.error(f"Error writing settings: {e}")
+            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception as exc:
+            ijt_log.error(f"Error writing settings: {exc}")
 
-    async def handleConnectTo(self, endpoint: str, websocket) -> dict:
-        ijt_log.info("SOCKET: Connect")
-        if endpoint in self.connectionList and self.connectionList[endpoint]:
-            ijt_log.info("Endpoint was already connected. Closing down old connection.")
+    async def handle_connect_to(self, endpoint: str, websocket) -> dict:
+        ijt_log.info("SOCKET: connect")
+        if endpoint in self.connection_list and self.connection_list[endpoint]:
+            ijt_log.info("Endpoint already connected. Closing old connection first.")
             try:
-                await self.connectionList[endpoint].terminate()
-                await asyncio.sleep(1)  # Give server time to release session
-            except Exception as e:
-                ijt_log.warning(f"Error terminating old connection: {e}")
-            self.connectionList[endpoint] = None
+                await self.connection_list[endpoint].terminate()  # type: ignore[union-attr]
+                await asyncio.sleep(0.2)
+            except Exception as exc:
+                ijt_log.warning(f"Error terminating old connection: {exc}")
+            self.connection_list[endpoint] = None
 
         try:
             connection = Connection(endpoint, websocket)
-            self.connectionList[endpoint] = connection
+            self.connection_list[endpoint] = connection
             return await connection.connect()
-        except Exception as e:
-            ijt_log.error("Exception in Connect")
-            ijt_log.error(f"Exception: {e}")
-            return {"exception": str(e)}
+        except Exception as exc:
+            ijt_log.error(f"Exception in connect to '{endpoint}': {exc}")
+            return {"exception": str(exc)}
 
-    async def handleTerminateConnection(self, endpoint: str) -> dict:
+    async def handle_terminate_connection(self, endpoint: str) -> dict:
         ijt_log.info("SOCKET: terminate")
-        if endpoint in self.connectionList and self.connectionList[endpoint]:
-            await self._safe_terminate(endpoint, self.connectionList[endpoint])
-            self.connectionList[endpoint] = None
+        if endpoint in self.connection_list and self.connection_list[endpoint]:
+            await self._safe_terminate(endpoint, self.connection_list[endpoint])
+            self.connection_list[endpoint] = None
         return {}
 
+    @staticmethod
+    def _build_response(
+        command: Optional[str],
+        endpoint: Optional[str],
+        unique_id: Optional[Any],
+        data: dict,
+    ) -> dict:
+        event: dict[str, Any] = {
+            "command": command,
+            "endpoint": endpoint,
+            "data": data,
+        }
+
+        if unique_id is not None:
+            event["uniqueid"] = unique_id
+
+        if isinstance(data, dict) and "exception" in data:
+            event["error"] = {
+                "code": "OPCUA_REQUEST_FAILED",
+                "message": str(data.get("exception")),
+            }
+
+        return event
+
     async def handle(self, websocket, data: dict) -> None:
-        event: dict[str, Any] = {}
-        returnValues: dict[str, Any] = {}
+        return_values: dict[str, Any] = {}
         command = data.get("command")
         endpoint = data.get("endpoint")
 
         try:
             if command == "get connectionpoints":
-                returnValues = await self.handleGetConnectionPoints()
+                return_values = await self.handle_get_connection_points()
             elif command == "set connectionpoints":
-                await self.handleSetConnectionPoints(data)
+                await self.handle_set_connection_points(data)
                 return
             elif command == "get settings":
-                returnValues = await self.handleGetSettings()
+                return_values = await self.handle_get_settings()
             elif command == "set settings":
-                await self.handleSetSettings(data)
+                await self.handle_set_settings(data)
                 return
             elif command == "connect to":
-                returnValues = await self.handleConnectTo(endpoint, websocket)
+                return_values = await self.handle_connect_to(endpoint, websocket)
             elif command == "terminate connection":
-                returnValues = await self.handleTerminateConnection(endpoint)
+                return_values = await self.handle_terminate_connection(endpoint)
             else:
-                returnValues = await self.callConnection(data, command)
-        except Exception as e:
-            ijt_log.error(f"Exception in handle: {e}")
-            returnValues = {"exception": str(e)}
+                return_values = await self.call_connection(data, command)
+        except Exception as exc:
+            ijt_log.error(f"Exception in IJTInterface.handle: {exc}")
+            return_values = {"exception": str(exc)}
 
-        if data.get("uniqueid"):
-            event["uniqueid"] = data["uniqueid"]
-        event["command"] = command
-        event["endpoint"] = endpoint
-        event["data"] = returnValues
-        await websocket.send(json.dumps(event))
+        response = self._build_response(command, endpoint, data.get("uniqueid"), return_values)
+        await websocket.send(json.dumps(response))
 
     async def disconnect(self) -> None:
         if self.disconnected:
             return
         self.disconnected = True
-        ijt_log.info("disconnect - Disconnecting all OPC UA connections...")
+        ijt_log.info("Disconnecting all OPC UA connections for websocket session...")
 
         tasks = []
-        for endpoint, connection in list(self.connectionList.items()):
+        for endpoint, connection in list(self.connection_list.items()):
             if connection:
                 tasks.append(self._safe_terminate(endpoint, connection))
 
-        await asyncio.gather(*tasks, return_exceptions=True)
-        self.connectionList.clear()
-        ijt_log.info("disconnect - All connections cleaned up.")
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _safe_terminate(self, endpoint: str, connection) -> None:
+        self.connection_list.clear()
+        ijt_log.info("All OPC UA connections cleaned up.")
+
+    async def _safe_terminate(self, endpoint: str, connection: Optional[Connection]) -> None:
+        if not connection:
+            return
         try:
             await connection.terminate()
-            await asyncio.sleep(0.5)
-            ijt_log.info(f"disconnect - Disconnected from {endpoint}")
-        except Exception as e:
-            ijt_log.warning(f"disconnect - Error disconnecting from {endpoint}: {e}")
+            ijt_log.info(f"Disconnected from {endpoint}")
+        except Exception as exc:
+            ijt_log.warning(f"Error disconnecting from {endpoint}: {exc}")
 
     def __del__(self) -> None:
-        ijt_log.warning(
-            "Destructor called — async cleanup should be handled externally."
-        )
+        # Avoid noisy destructor warnings during normal garbage collection.
+        return

@@ -1,12 +1,12 @@
-import asyncio
-import websockets
+﻿import asyncio
 import json
 import traceback
-from threading import Thread
-from asyncua import ua
+
+import websockets
+
 from Python.ijt_logger import ijt_log
-from Python.utils import log_joining_system_event, nodeid_to_str, localizedtext_to_str
 from Python.serialize_data import serializeFullEvent
+from Python.utils import log_joining_system_event, localizedtext_to_str, nodeid_to_str
 
 
 class Short:
@@ -58,66 +58,65 @@ class EventHandler:
         self.websocket = websocket
         self.server_url = server_url
         self.client = client
-        self.queue = asyncio.Queue()
-        self.loop = asyncio.new_event_loop()
-
-        def start_loop():
-            asyncio.set_event_loop(self.loop)
-            self.loop.run_forever()
-
-        thread = Thread(target=start_loop, daemon=True)
-        thread.start()
-        asyncio.run_coroutine_threadsafe(self.handleQueue(), self.loop)
+        self.queue: asyncio.Queue = asyncio.Queue()
+        self.closed = False
+        self._queue_task = asyncio.create_task(self.handleQueue())
 
     async def process_event(self, short_event: Short):
+        if self.closed:
+            return
         try:
-            ijt_log.info("EventHandler: Processing event")
             await self.queue.put(short_event)
-        except Exception as e:
-            ijt_log.error(f"Error handling process_event: {e}")
+        except Exception as exc:
+            ijt_log.error(f"Error handling process_event: {exc}")
             ijt_log.error(traceback.format_exc())
 
     async def event_notification(self, event):
+        if self.closed:
+            return
         try:
-            ijt_log.info("EventHandler: Event notification")
             short_event = Short(event)
             await log_joining_system_event(short_event)
-            asyncio.run_coroutine_threadsafe(self.process_event(short_event), self.loop)
-        except Exception as e:
-            ijt_log.error(f"Error handling event notification: {e}")
+            await self.process_event(short_event)
+        except Exception as exc:
+            ijt_log.error(f"Error handling event notification: {exc}")
             ijt_log.error(traceback.format_exc())
 
     async def handleQueue(self):
         while True:
             item = await self.queue.get()
             if item is None:
+                self.queue.task_done()
                 break
             try:
                 serialized_event = serializeFullEvent(item)
-                returnValue = {
+                return_value = {
                     "command": "event",
                     "endpoint": self.server_url,
                     "data": serialized_event,
                 }
-
-                json_payload = json.dumps(returnValue)
-                await self.websocket.send(json_payload)
+                await self.websocket.send(json.dumps(return_value))
             except websockets.exceptions.ConnectionClosedOK:
                 ijt_log.info("WebSocket connection closed normally.")
                 break
-            except Exception as e:
-                ijt_log.error(f"Error sending message: {e}")
+            except Exception as exc:
+                ijt_log.error(f"Error sending message: {exc}")
                 ijt_log.error(traceback.format_exc())
-                await self.websocket.close()
+                try:
+                    await self.websocket.close()
+                except Exception:
+                    pass
                 break
             finally:
                 self.queue.task_done()
 
     async def shutdown(self):
-        await self.queue.put(None)
+        if not self.closed:
+            self.closed = True
+            await self.queue.put(None)
 
     async def close(self):
         await self.shutdown()
-        if self.loop.is_running():
-            self.loop.call_soon_threadsafe(self.loop.stop)
+        if self._queue_task:
+            await self._queue_task
         ijt_log.info("EventHandler closed.")

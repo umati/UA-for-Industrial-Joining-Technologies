@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import json
 import socket
 from typing import Any, Dict
@@ -6,7 +6,7 @@ from typing import Any, Dict
 from asyncua import Client, ua
 from asyncua.ua.uaerrors import UaError
 
-from Python.serialize_data import serializeTuple, serializeValue
+from Python.serialize_data import serializeFullEvent, serializeTuple, serializeValue
 from Python.call_structure import createCallStructure
 from Python.event_handler import EventHandler
 from Python.result_event_handler import ResultEventHandler
@@ -16,8 +16,12 @@ from Python.ijt_logger import ijt_log
 def IdObjectToString(inp: Any) -> str:
     if isinstance(inp, str):
         return inp
-    if isinstance(inp, int):
-        return f"ns={inp['NamespaceIndex']};i={inp['Identifier']}"
+    if isinstance(inp, dict):
+        identifier = inp.get("Identifier")
+        namespace = inp.get("NamespaceIndex")
+        if isinstance(identifier, int):
+            return f"ns={namespace};i={identifier}"
+        return f"ns={namespace};s={identifier}"
     return f"ns={inp['NamespaceIndex']};s={inp['Identifier']}"
 
 
@@ -39,6 +43,13 @@ class Connection:
 
         self.handlerJoiningEvent = None
         self.handlerResultEvent = None
+
+    async def is_connection_open(self) -> bool:
+        if not hasattr(self, "client") or self.client is None:
+            return False
+        protocol = getattr(getattr(self.client, "uaclient", None), "protocol", None)
+        state = getattr(protocol, "state", None)
+        return str(state).lower() == "open"
 
     async def connect(self) -> Dict[str, Any]:
         self.terminated = False
@@ -123,19 +134,9 @@ class Connection:
                 f"Protocol state before disconnect: {getattr(self.client.uaclient.protocol, 'state', 'unknown')}"
             )
 
-            # Unsubscribe and cleanup first
+            # Unsubscribe/delete subscriptions while channel is still open.
             await self._unsubscribe_and_cleanup()
             await asyncio.sleep(0.5)
-
-            # Cancel pending requests gracefully before disconnect
-            try:
-                if hasattr(self.client, "uaclient") and hasattr(
-                    self.client.uaclient, "_callbackmap"
-                ):
-                    self.client.uaclient._callbackmap.clear()
-                    ijt_log.info("Cleared pending OPC UA callbacks before disconnect.")
-            except Exception as e:
-                ijt_log.warning(f"Failed to clear pending callbacks: {e}")
 
             # Disconnect client safely
             try:
@@ -159,39 +160,43 @@ class Connection:
         finally:
             ijt_log.info(f"Terminate: Connection to {self.server_url} cleaned up")
 
-        ijt_log.info("Disconnect completed — late OPC UA messages ignored.")
+        ijt_log.info("Disconnect completed - late OPC UA messages ignored.")
 
     async def _unsubscribe_and_cleanup(self) -> None:
+        if not await self.is_connection_open():
+            ijt_log.info(
+                "Connection already not open, skipping unsubscribe/delete subscription."
+            )
+            self.subResultEvent = "sub"
+            self.subJoiningEvent = "sub"
+            return
+
         # Result Event
         if self.subResultEvent != "sub":
             try:
-                ijt_log.info("Attempting to unsubscribe handleResultEvent")
-                await self.subResultEvent.unsubscribe(self.handleResultEvent)
-            except Exception as e:
-                ijt_log.warning(f"Unsubscribe failed (ResultEvent): {e}")
-            try:
                 if hasattr(self.subResultEvent, "subscription_id"):
+                    ijt_log.info("Deleting ResultEvent subscription.")
                     await self.client.delete_subscriptions(
                         [self.subResultEvent.subscription_id]
                     )
             except Exception as e:
-                ijt_log.warning(f"Delete subscription failed (ResultEvent): {e}")
+                ijt_log.warning(
+                    f"Delete subscription failed (ResultEvent). Continuing shutdown: {e}"
+                )
             self.subResultEvent = "sub"
 
         # Joining Event
         if self.subJoiningEvent != "sub":
             try:
-                ijt_log.info("Attempting to unsubscribe handleJoiningEvent")
-                await self.subJoiningEvent.unsubscribe(self.handleJoiningEvent)
-            except Exception as e:
-                ijt_log.warning(f"Unsubscribe failed (JoiningEvent): {e}")
-            try:
                 if hasattr(self.subJoiningEvent, "subscription_id"):
+                    ijt_log.info("Deleting JoiningEvent subscription.")
                     await self.client.delete_subscriptions(
                         [self.subJoiningEvent.subscription_id]
                     )
             except Exception as e:
-                ijt_log.warning(f"Delete subscription failed (JoiningEvent): {e}")
+                ijt_log.warning(
+                    f"Delete subscription failed (JoiningEvent). Continuing shutdown: {e}"
+                )
             self.subJoiningEvent = "sub"
 
     async def subscribe(self, data: dict) -> Dict[str, Any]:
@@ -356,7 +361,7 @@ class Connection:
             result = await self.client.uaclient.translate_browsepaths_to_nodeids(
                 [browse_path]
             )
-            return {"nodeid": serializeValue(result[0].Targets[0].TargetId)}
+            return {"nodeid": serializeFullEvent(result[0].Targets[0].TargetId)}
         except Exception as e:
             ijt_log.error("Exception in PathToId path")
             ijt_log.error("Exception: " + str(e))
@@ -365,7 +370,7 @@ class Connection:
     async def namespaces(self, data: dict) -> Dict[str, Any]:
         try:
             namespacesReply = await self.client.get_namespace_array()
-            return {"namespaces": json.dumps(namespacesReply)}
+            return {"namespaces": namespacesReply}
         except Exception as e:
             ijt_log.error("Exception in Namespaces")
             ijt_log.error("Exception: " + str(e))
@@ -445,7 +450,7 @@ class Connection:
                         and variant_type == ua.VariantType.String
                     ):
                         ijt_log.warning(
-                            f"[methodcall] Argument {i+1} is empty string — server may reject it."
+                            f"[methodcall] Argument {i+1} is empty string - server may reject it."
                         )
 
                     # Handle arrays
@@ -502,8 +507,9 @@ class Connection:
 
             ijt_log.info("[methodcall] Calling method on object...")
             out = await obj.call_method(method, *input_args)
-            ijt_log.info(f"[methodcall] Method output: {serializeValue(out)}")
-            return {"output": serializeValue(out)}
+            serialized_output = serializeFullEvent(out)
+            ijt_log.info(f"[methodcall] Method output: {serialized_output}")
+            return {"output": serialized_output}
 
         except ua.UaError as ua_err:
             ijt_log.error(f"[methodcall] UAError: {ua_err}")
@@ -511,3 +517,4 @@ class Connection:
         except Exception as e:
             ijt_log.error(f"[methodcall] General Exception: {e}")
             return {"exception": f"Method call exception: {e}"}
+

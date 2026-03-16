@@ -27,3 +27,4 @@ ijt_log.propagate = False
 
 # Reduce verbosity of external libraries
 logging.getLogger("asyncua").setLevel(logging.ERROR)
+logging.getLogger("asyncua.client.ua_client").setLevel(logging.CRITICAL)

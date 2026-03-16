@@ -16,11 +16,15 @@ export class MethodManager {
         (tighteningSystemNode) => {
           this.tighteningSystemNode = tighteningSystemNode
           for (const folderPath of methodFolders) {
-            methodPromises.push(this.addressFolder(JSON.stringify(folderPath)))
+            methodPromises.push(
+              this.addressFolder(JSON.stringify(folderPath)).catch((error) => {
+                console.warn('Skipping unavailable method folder', folderPath, error)
+              })
+            )
           }
 
           this.methodObject = {}
-          Promise.all(methodPromises).then((methodList) => {
+          Promise.all(methodPromises).then(() => {
             this.addressSpace.connectionManager.trigger('methods', true)
             resolve()
           })
@@ -58,7 +62,7 @@ export class MethodManager {
       const relations = folderNode.getChildRelations('component')
       this.addressSpace.relationsToNodes(relations).then((children) => {
         for (const child of children) {
-          if (child.nodeClass === '4') {
+          if (parseInt(child.nodeClass) === 4) {
             methodPromises.push(this.setupMethod(child))
           }
         }

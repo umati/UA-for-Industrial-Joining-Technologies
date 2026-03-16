@@ -53,7 +53,7 @@ export default class MethodGUICreator {
         const lineArea = this.screen.createArea()
         lineArea.classList.add('methodRowDistance')
         area.appendChild(lineArea)
-        listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, defaults?.arguments[index]))
+        listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, defaults?.arguments[index], undefined, methodData.methodNode.displayName, index))
       }
 
       // Create the actual button for the call
@@ -81,13 +81,24 @@ export default class MethodGUICreator {
    * @returns a function that tells the value of the input field
    */
   createMethodInput (arg, area, defaultValue = '', callback) {
+    const dataTypeId = String(arg?.DataType?.Identifier ?? '')
+    if (defaultValue === '' || typeof defaultValue === 'undefined') {
+      if (arg?.Name === 'Result Type') {
+        defaultValue = 2
+      } else if (arg?.Name === 'Include Traces') {
+        defaultValue = true
+      } else if (arg?.Name === 'Send Child Results as References (Recommended)') {
+        defaultValue = true
+      }
+    }
+
     if (arg.Name && arg.Name.length > 0) {
       const titleLabel = this.screen.createLabel(arg.Name + '  ')
       titleLabel.classList.add('methodLabel')
       area.appendChild(titleLabel)
     }
 
-    switch (arg.DataType.Identifier) {
+    switch (dataTypeId) {
       case 'DropDown': { // DropDown
         const drop = this.screen.createDropdown('', (x) => {
           if (callback) {

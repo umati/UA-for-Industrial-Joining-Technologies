@@ -1,86 +1,75 @@
-from typing import Any
+﻿import json
 from datetime import datetime as std_datetime
-from Python.ijt_logger import ijt_log
+from typing import Any
+
 
 def isInstanceOfClass(cls: Any) -> bool:
-    """
-    The best I could find to detect that something is an instance of a user defined class
-    """
-    return str(type(cls)).startswith("<class") and hasattr(cls, "__weakref__")
+    """Best-effort check for user-defined class instances."""
+    # Keep backward-compatible behavior with previous serializer logic:
+    # many asyncua objects were detected via __weakref__.
+    return str(type(cls)).startswith("<class") and (
+        hasattr(cls, "__weakref__") or hasattr(cls, "__dict__")
+    )
+
+
+def _to_jsonable(value: Any) -> Any:
+    if isInstanceOfClass(value):
+        return serializeClassInstanceAsDict(value)
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {k: _to_jsonable(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_to_jsonable(item) for item in value]
+    if isinstance(value, tuple):
+        return [_to_jsonable(item) for item in value]
+    if isinstance(value, std_datetime):
+        return value.isoformat()
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if hasattr(value, "__slots__"):
+        result = {"pythonclass": type(value).__name__}
+        for slot in getattr(value, "__slots__", []):
+            try:
+                result[slot] = _to_jsonable(getattr(value, slot))
+            except Exception:
+                continue
+        if len(result) > 1:
+            return result
+    return str(value)
 
 
 def serializeTuple(listOfTuples: list[tuple[str, Any]]) -> str:
-    """
-    Serialize a special zipped list of key - values
-    """
-    result = "{"
-    first = True
-    for pair in listOfTuples:
-        if not first:
-            result = result + ","
-        first = False
-        result = result + '"' + pair[0] + '":' + serializeValue(pair[1])
-    return result + "}"
+    """Serialize a zipped list of key/value tuples as JSON string."""
+    return json.dumps({k: _to_jsonable(v) for k, v in listOfTuples}, ensure_ascii=False)
 
 
 def serializeValue(value: Any) -> str:
-    """
-    Serialize an value
-    """
-    # ijt_log.info(type(value).__name__)
-    if isInstanceOfClass(value):
-        return "{" + serializeClassInstance(value) + "}"
-    elif value == None:
-        return "null"
-    elif isinstance(value, list):
-        result = "["
-        first = True
-        for item in value:
-            if not first:
-                result = result + ","
-            first = False
-            result = result + serializeValue(item)
-        return result + "]"
-    else:
-        return '"' + str(value).replace("\n", "\\n") + '"'
+    """Serialize a value as JSON string."""
+    return json.dumps(_to_jsonable(value), ensure_ascii=False)
 
 
 def serializeClassInstance(obj: Any) -> str:
-    """
-    Serialize an instance of a class (or something implementing __dict___)
-    """
-    result = '"pythonclass":"' + type(obj).__name__ + '"'
-    # ijt_log.info(type(obj).__name__)
-    dict = obj.__dict__
-    for key, value in dict.items():
-        # ijt_log.info(type(value).__name__)
-        if key != "_freeze":
-            result = result + ","
-            result = result + '"' + key + '"' + ":" + serializeValue(value)
-    return result
+    """Serialize an instance as JSON string (legacy helper)."""
+    return json.dumps(serializeClassInstanceAsDict(obj), ensure_ascii=False)
 
 
 def serializeFullEvent(value: Any) -> Any:
-    if isInstanceOfClass(value):
-        return serializeClassInstanceAsDict(value)
-    elif value is None:
-        return None
-    elif isinstance(value, list):
-        return [serializeFullEvent(item) for item in value]
-    elif isinstance(value, dict):
-        return {k: serializeFullEvent(v) for k, v in value.items()}
-    elif isinstance(value, std_datetime):
-        return value.isoformat()
-    elif isinstance(value, (str, int, float, bool)):
-        return value
-    else:
-        return str(value)
+    """Serialize recursively into JSON-compatible python types."""
+    return _to_jsonable(value)
 
 
 def serializeClassInstanceAsDict(obj: Any) -> dict:
     result = {"pythonclass": type(obj).__name__}
-    dict_obj = obj.__dict__
-    for key, value in dict_obj.items():
-        if key != "_freeze":
-            result[key] = serializeFullEvent(value)
+    if hasattr(obj, "__dict__"):
+        for key, value in obj.__dict__.items():
+            if key != "_freeze":
+                result[key] = _to_jsonable(value)
+    elif hasattr(obj, "__slots__"):
+        for slot in getattr(obj, "__slots__", []):
+            try:
+                if slot != "_freeze":
+                    result[slot] = _to_jsonable(getattr(obj, slot))
+            except Exception:
+                continue
     return result

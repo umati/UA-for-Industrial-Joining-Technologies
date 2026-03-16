@@ -1,4 +1,5 @@
-﻿from datetime import datetime
+import json
+from datetime import datetime
 
 from Python.serialize_data import serializeFullEvent, serializeTuple, serializeValue
 from Pytest.TestSubscriptionHandler import combinedNameFilter
@@ -46,5 +47,5 @@ def test_serialize_full_event_handles_datetime_and_ignores_freeze_flag():
 
 def test_serialize_tuple_and_value_json_shapes():
     out = serializeTuple([("a", 1), ("b", ["x", None])])
-    assert out == '{"a":"1","b":["x",null]}'
+    assert json.loads(out) == {"a": 1, "b": ["x", None]}
     assert serializeValue("line1\nline2") == '"line1\\nline2"'

@@ -1,70 +1,96 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 import asyncio
-import websockets
 import json
-import traceback
 import os
-import signal
 import platform
-import socket
-import socket
+import signal
 import time
-from typing import Optional
+import traceback
+from typing import Set
+
+import websockets
 from dotenv import load_dotenv
+
 from Python.ijt_interface import IJTInterface
 from Python.ijt_logger import ijt_log
-try:
-    from websockets.exceptions import ConnectionClosed
-except Exception:
-    from websockets import ConnectionClosed
-
 
 # Load environment variables
 load_dotenv()
 
-opcuaHandler: Optional[IJTInterface] = None
 websocket_server = None
+active_handlers: Set[IJTInterface] = set()
+active_handlers_lock = asyncio.Lock()
 
 
-# WebSocket handler
 async def handler(websocket):
-    global opcuaHandler
-    client_ip = websocket.remote_address[0]
+    """Handle one browser websocket session and isolate OPC UA state per client."""
+    client_ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
     ijt_log.info(f"Client connected: {client_ip}")
 
-    if opcuaHandler is None:
-        opcuaHandler = IJTInterface()
+    opcua_handler = IJTInterface()
+    async with active_handlers_lock:
+        active_handlers.add(opcua_handler)
 
     try:
         async for message in websocket:
-            mess = json.loads(message)
-            await opcuaHandler.handle(websocket, mess)
-    except ConnectionClosed:
+            try:
+                payload = json.loads(message)
+            except json.JSONDecodeError as exc:
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "command": "invalid request",
+                            "endpoint": "common",
+                            "data": {"exception": f"Invalid JSON payload: {exc.msg}"},
+                            "error": {
+                                "code": "INVALID_JSON",
+                                "message": "Request payload is not valid JSON.",
+                            },
+                        }
+                    )
+                )
+                continue
+
+            await opcua_handler.handle(websocket, payload)
+    except websockets.exceptions.ConnectionClosed:
         ijt_log.info(f"Client disconnected: {client_ip}")
     except Exception:
-        ijt_log.error("Exception in handler:")
+        ijt_log.error("Exception in websocket handler:")
         ijt_log.error(traceback.format_exc())
     finally:
         ijt_log.info(f"Cleaning up for client: {client_ip}")
-        if opcuaHandler:
-            await opcuaHandler.disconnect()
+        await opcua_handler.disconnect()
+        async with active_handlers_lock:
+            active_handlers.discard(opcua_handler)
 
 
-# Graceful shutdown
 async def shutdown():
+    """Graceful shutdown for all active websocket sessions and OPC UA connections."""
+    global websocket_server
     ijt_log.info("Shutting down gracefully...")
-    if opcuaHandler:
-        await opcuaHandler.disconnect()
+
+    async with active_handlers_lock:
+        handlers = list(active_handlers)
+        active_handlers.clear()
+
+    if handlers:
+        await asyncio.gather(
+            *(handler.disconnect() for handler in handlers),
+            return_exceptions=True,
+        )
+
     if websocket_server:
         websocket_server.close()
         await websocket_server.wait_closed()
+        websocket_server = None
 
     ijt_log.info("Shutdown complete.")
 
 
-# Main entry
 async def main():
+    """Main entrypoint for websocket server."""
     global websocket_server
+
     try:
         port = int(os.getenv("WS_PORT", 8001))
     except ValueError:
@@ -78,9 +104,9 @@ async def main():
 
     ijt_log.info(
         "\n========================================"
-        "\n ✅ WebSocket server started successfully!"
+        "\n WebSocket server started successfully."
         f"\n Local Access:   ws://localhost:{port}"
-        f"\n Remote Access:  Use your server IP"
+        "\n Remote Access:  Use your server IP"
         f"\n Bound in {elapsed:.2f} seconds"
         "\n========================================"
     )
@@ -97,7 +123,7 @@ async def main():
                     f"Signal handling not supported for {sig} on this platform."
                 )
     else:
-        # Windows fallback: monitor for shutdown via a dummy task
+
         async def windows_shutdown_monitor():
             try:
                 while True:
@@ -111,11 +137,10 @@ async def main():
     try:
         await asyncio.Future()  # Run forever
     finally:
-        ijt_log.warning("main() exiting — attempting shutdown cleanup.")
+        ijt_log.warning("main() exiting - attempting shutdown cleanup.")
         await shutdown()
 
 
-# Entry point
 if __name__ == "__main__":
     try:
         asyncio.run(main())

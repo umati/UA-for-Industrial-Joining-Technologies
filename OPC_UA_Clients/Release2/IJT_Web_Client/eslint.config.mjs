@@ -3,7 +3,8 @@ import neostandard from 'neostandard'
 export default neostandard({
   ignores: [
     'node_modules/**',
-    'venv/**'
+    'venv/**',
+    '.tmp-pip/**'
   ],
   languageOptions: {
     globals: {

@@ -2,6 +2,7 @@ import pytz
 import traceback
 import aiofiles
 import re
+import json
 from datetime import datetime
 from typing import Optional, Dict
 from asyncua import Client, ua
@@ -218,7 +219,7 @@ async def log_result_to_file(event):
     # This logic can be used to parse the Result and use it accordingly.
     if ENABLE_RESULT_FILE_LOGGING:
         try:
-            json_str = serializeFullEvent(event.Result)
+            json_str = json.dumps(serializeFullEvent(event.Result), ensure_ascii=False)
 
             log_dir = Path("result_logs")
             log_dir.mkdir(exist_ok=True)

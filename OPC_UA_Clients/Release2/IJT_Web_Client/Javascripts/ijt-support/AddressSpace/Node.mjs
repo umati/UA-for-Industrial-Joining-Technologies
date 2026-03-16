@@ -20,14 +20,32 @@ const typeMapping = {
  */
 class PartialNode {
   constructor (data) {
-    this.data = data
-    for (const x of data.relations) {
-      const index = x.ReferenceTypeId.Identifier
-      if (!index || !typeMapping[index]) {
-        throw new Error('referenceTypeId ' + index + ' not mapped.')
+    this.data = data || {}
+    if (!this.data.attributes) {
+      this.data.attributes = {}
+    }
+    if (!this.data.attributes.NodeId) {
+      this.data.attributes.NodeId = { NamespaceIndex: 0, Identifier: 0 }
+    }
+
+    const relations = Array.isArray(this.data.relations) ? this.data.relations : []
+    this.data.relations = relations
+
+    const normalizedRelations = []
+    for (const x of relations) {
+      if (!x || typeof x !== 'object') {
+        continue
+      }
+      const index = Number(x?.ReferenceTypeId?.Identifier)
+      if (!Number.isFinite(index) || !typeMapping[index]) {
+        x.referenceTypeName = 'relation'
+        normalizedRelations.push(x)
+        continue
       }
       x.referenceTypeName = typeMapping[index].name
+      normalizedRelations.push(x)
     }
+    this.data.relations = normalizedRelations
     // this.nodeIdObject = data.attributes.NodeId
   }
 
@@ -40,6 +58,9 @@ class PartialNode {
   }
 
   get nodeIdString () {
+    if (!this.data?.attributes?.NodeId) {
+      return 'ns=0;i=0'
+    }
     let st = ';s='
     if (Number(this.data.attributes.NodeId.Identifier)) {
       st = ';i='
@@ -76,17 +97,17 @@ class PartialNode {
 
   getChildRelations (type) {
     return Object.values(this.data.relations).filter(
-      x => { return x.IsForward === 'True' && (!type || type === x.referenceTypeName) })
+      x => { return (x.IsForward === true || x.IsForward === 'True') && (!type || type === x.referenceTypeName) })
   }
 
   getParentRelations () {
     return Object.values(this.data.relations).filter(
-      (x) => { return (x.IsForward !== 'True') })
+      (x) => { return (x.IsForward !== true && x.IsForward !== 'True') })
   }
 
   getTypeDefinitionRelations (typeDefinition) {
     return Object.values(this.data.relations).filter(
-      (x) => { return (x.TypeDefinition.Identifier === typeDefinition) })
+      (x) => { return String(x?.TypeDefinition?.Identifier) === String(typeDefinition) })
   }
 }
 
@@ -97,7 +118,7 @@ class PartialNode {
  * @returns a node
  */
 export function NodeFactory (data) {
-  switch (parseInt(data.attributes.NodeClass)) {
+  switch (parseInt(data?.attributes?.NodeClass || 1)) {
     case 1:
       return new ObjectNode(data)
     case 2:
