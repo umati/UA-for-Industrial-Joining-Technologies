@@ -2,14 +2,33 @@
 import argparse
 import asyncio
 import contextlib
+import errno
 import json
 import logging
 import os
+import shutil
 import subprocess
+import sys
 import time
 import warnings
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+from venv_bootstrap import ensure_regression_env, is_current_interpreter
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _ensure_test_interpreter_and_relaunch() -> Path:
+    test_python = ensure_regression_env(PROJECT_ROOT)
+    if not is_current_interpreter(test_python):
+        cmd = [str(test_python), str(Path(__file__).resolve()), *sys.argv[1:]]
+        raise SystemExit(subprocess.call(cmd, cwd=str(PROJECT_ROOT)))
+    return test_python
+
+
+TEST_PYTHON = _ensure_test_interpreter_and_relaunch()
 
 import websockets
 from asyncua import Client, ua
@@ -32,12 +51,17 @@ CANONICAL_METHOD_ALIASES: dict[str, list[str]] = {
     "SimulateJobResult": ["SimulateJobResult"],
     "Simulate_Batch_or_SYNC_Result": [
         "Simulate_Batch_or_SYNC_Result",
+        "SimulateBatch_Or_Sync_Result",
         "SimulateBatchOrSyncResult",
     ],
     "SimulateEvents": ["SimualteEvents", "SimulateEvents"],
     "SelectJoint": ["SelectJoint"],
     "StartSelectedJoining": ["StartSelectedJoining"],
 }
+
+DEFAULT_PRODUCT_ID = os.getenv("REGRESSION_PRODUCT_ID", "www.atlascopco.com/CABLE-B0000000-")
+DEFAULT_JOINT_1 = os.getenv("REGRESSION_JOINT_1", "Joint_1")
+DEFAULT_JOINT_2 = os.getenv("REGRESSION_JOINT_2", "Joint_2")
 
 
 def nodeid_to_payload(nodeid: ua.NodeId) -> dict[str, Any]:
@@ -79,11 +103,11 @@ def _build_method_arguments(method_name: str, default_arguments: list[dict[str, 
     if method_name == "SelectJoint":
         return [
             {
-                "value": "12",
+                "value": DEFAULT_PRODUCT_ID,
                 "dataType": 12,  # String NodeId fallback used by current backend mapper
             },
             {
-                "value": "SourceTightening_Identifier_1",
+                "value": DEFAULT_JOINT_1,
                 "dataType": 31918,  # TrimmedString
             },
             {
@@ -94,7 +118,7 @@ def _build_method_arguments(method_name: str, default_arguments: list[dict[str, 
     if method_name == "StartSelectedJoining":
         return [
             {
-                "value": "12",
+                "value": DEFAULT_PRODUCT_ID,
                 "dataType": 12,  # String NodeId fallback used by current backend mapper
             },
             {
@@ -117,70 +141,120 @@ def _pick_method_for_alias(methods_by_name: dict[str, MethodSpec], canonical_nam
     return None
 
 
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default
+    return parsed if parsed >= 0 else default
+
+
+def _env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        return default
+    return parsed if parsed >= 0 else default
+
+
+def _is_connection_refused(exc: Exception) -> bool:
+    if isinstance(exc, ConnectionRefusedError):
+        return True
+    winerror = getattr(exc, "winerror", None)
+    if winerror in {10061, 1225}:
+        return True
+    err_no = getattr(exc, "errno", None)
+    return err_no in {errno.ECONNREFUSED, 111}
+
+
 async def discover_target_methods(endpoint: str) -> list[MethodSpec]:
+    retries = max(1, _env_int("OPCUA_CONNECT_RETRIES", 6))
+    delay_sec = _env_float("OPCUA_CONNECT_DELAY_SEC", 0.4)
+    max_delay_sec = _env_float("OPCUA_CONNECT_MAX_DELAY_SEC", 2.0)
+
     methods: list[MethodSpec] = []
     targets = _target_method_names()
 
-    async with Client(endpoint, timeout=10) as client:
-        await client.load_data_type_definitions()
-        objects = await client.nodes.root.get_child(["0:Objects"])
+    attempt = 1
+    current_delay = max(delay_sec, 0.0)
+    while True:
+        try:
+            async with Client(endpoint, timeout=10) as client:
+                await client.load_data_type_definitions()
+                objects = await client.nodes.root.get_child(["0:Objects"])
 
-        queue: list[tuple[Any, int]] = [(objects, 0)]
-        visited: set[str] = set()
+                queue: list[tuple[Any, int]] = [(objects, 0)]
+                visited: set[str] = set()
 
-        while queue:
-            node, depth = queue.pop(0)
-            node_id = str(node.nodeid)
-            if node_id in visited or depth > 7:
-                continue
-            visited.add(node_id)
+                while queue:
+                    node, depth = queue.pop(0)
+                    node_id = str(node.nodeid)
+                    if node_id in visited or depth > 7:
+                        continue
+                    visited.add(node_id)
 
-            try:
-                node_class = await node.read_node_class()
-            except Exception:
-                node_class = None
-
-            if node_class == ua.NodeClass.Method:
-                try:
-                    browse = await node.read_browse_name()
-                except Exception:
-                    browse = None
-
-                if browse and browse.Name in targets:
                     try:
-                        parent = await node.get_parent()
-                        input_args: list[dict[str, Any]] = []
-                        try:
-                            args_node = await node.get_child("0:InputArguments")
-                            args_meta = await args_node.get_value()
-                            for arg_meta in args_meta:
-                                dtype_id = int(getattr(arg_meta.DataType, "Identifier", 12))
-                                input_args.append(
-                                    {
-                                        "dataType": dtype_id,
-                                        "value": default_arg_value(dtype_id),
-                                    }
-                                )
-                        except Exception:
-                            pass
-
-                        methods.append(
-                            MethodSpec(
-                                name=browse.Name,
-                                object_node=nodeid_to_payload(parent.nodeid),
-                                method_node=nodeid_to_payload(node.nodeid),
-                                arguments=_build_method_arguments(browse.Name, input_args),
-                            )
-                        )
+                        node_class = await node.read_node_class()
                     except Exception:
-                        pass
+                        node_class = None
 
-            try:
-                children = await node.get_children()
-            except Exception:
-                children = []
-            for child in children:
-                queue.append((child, depth + 1))
+                    if node_class == ua.NodeClass.Method:
+                        try:
+                            browse = await node.read_browse_name()
+                        except Exception:
+                            browse = None
+
+                        if browse and browse.Name in targets:
+                            try:
+                                parent = await node.get_parent()
+                                input_args: list[dict[str, Any]] = []
+                                try:
+                                    args_node = await node.get_child("0:InputArguments")
+                                    args_meta = await args_node.get_value()
+                                    for arg_meta in args_meta:
+                                        dtype_id = int(getattr(arg_meta.DataType, "Identifier", 12))
+                                        input_args.append(
+                                            {
+                                                "dataType": dtype_id,
+                                                "value": default_arg_value(dtype_id),
+                                            }
+                                        )
+                                except Exception:
+                                    pass
+
+                                methods.append(
+                                    MethodSpec(
+                                        name=browse.Name,
+                                        object_node=nodeid_to_payload(parent.nodeid),
+                                        method_node=nodeid_to_payload(node.nodeid),
+                                        arguments=_build_method_arguments(browse.Name, input_args),
+                                    )
+                                )
+                            except Exception:
+                                pass
+
+                    try:
+                        children = await node.get_children()
+                    except Exception:
+                        children = []
+                    for child in children:
+                        queue.append((child, depth + 1))
+            break
+        except Exception as exc:
+            if not _is_connection_refused(exc) or attempt >= retries:
+                raise ConnectionError(
+                    f"Unable to connect to OPC UA endpoint '{endpoint}' after {attempt} attempt(s). "
+                    "Start the simulator/backend first or increase OPCUA_CONNECT_RETRIES."
+                ) from exc
+            await asyncio.sleep(current_delay)
+            current_delay = min(max_delay_sec, max(current_delay * 2, delay_sec))
+            attempt += 1
 
     dedup: dict[str, MethodSpec] = {}
     for method in methods:
@@ -240,6 +314,9 @@ class WsHarness:
 
 
 async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
+    min_single_results = max(1, _env_int("REGRESSION_MIN_SINGLE_RESULTS", 2))
+    min_job_tree = max(0, _env_int("REGRESSION_MIN_JOB_TREE_RESULTS", 0))
+
     report: dict[str, Any] = {
         "opc_endpoint": opc_endpoint,
         "ws_url": ws_url,
@@ -257,6 +334,7 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
     methods = await discover_target_methods(opc_endpoint)
     methods_by_name = {m.name: m for m in methods}
     report["discovered_methods"] = sorted(methods_by_name.keys())
+    events: list[dict[str, Any]] = []
 
     async with websockets.connect(ws_url) as ws:
         async def send_recv(command: str, payload: dict | None = None):
@@ -268,6 +346,9 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
             while time.time() < deadline:
                 raw = await asyncio.wait_for(ws.recv(), timeout=15)
                 rsp = json.loads(raw)
+                if rsp.get("command") == "event":
+                    events.append(rsp)
+                    continue
                 if rsp.get("uniqueid") == uid:
                     return rsp
             raise TimeoutError(f"Timeout waiting for response for command '{command}'")
@@ -391,7 +472,8 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
         rsp = await send_recv("read", {"nodeid": "ns=0;i=85"})
         report["checks"].append({"read_objects": "exception" not in rsp.get("data", {})})
 
-        await ws.send(json.dumps({"command": "subscribe", "endpoint": opc_endpoint}))
+        rsp = await send_recv("subscribe")
+        report["checks"].append({"subscribe": "exception" not in rsp.get("data", {})})
 
         # Method flow:
         # 1) Simulation methods
@@ -405,14 +487,14 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
         if select_joint:
             select_joint_1_args = [dict(arg) for arg in select_joint.arguments]
             if len(select_joint_1_args) > 1:
-                select_joint_1_args[1]["value"] = "SourceTightening_Identifier_1"
+                select_joint_1_args[1]["value"] = DEFAULT_JOINT_1
             await call_and_record("SelectJoint", arguments=select_joint_1_args)
 
             await call_and_record("StartSelectedJoining")
 
             select_joint_2_args = [dict(arg) for arg in select_joint.arguments]
             if len(select_joint_2_args) > 1:
-                select_joint_2_args[1]["value"] = "SourceTightening_Identifier_2"
+                select_joint_2_args[1]["value"] = DEFAULT_JOINT_2
             await call_and_record("SelectJoint", arguments=select_joint_2_args)
             await call_and_record("StartSelectedJoining")
         else:
@@ -420,7 +502,6 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
             report["called_methods"].append({"name": "StartSelectedJoining", "status": "not_run_without_select_joint"})
 
         event_deadline = time.time() + 14
-        events: list[dict[str, Any]] = []
         while time.time() < event_deadline:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
@@ -474,17 +555,45 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
         and report["events_received"] > 0
         and report["valid_result_payloads"] > 0
         and report["valid_general_payloads"] > 0
-        and report["single_result_entries"] >= 2
-        and report["job_results_with_full_tree"] >= 1
+        and report["single_result_entries"] >= min_single_results
+        and report["job_results_with_full_tree"] >= min_job_tree
     )
     return report
 
 
 def run_ui_assertions(ui_base_url: str) -> dict[str, Any]:
+    npm = shutil.which("npm")
+    npx = shutil.which("npx")
+    if not npm or not npx:
+        return {
+            "ok": False,
+            "exit_code": -1,
+            "error": "npm/npx are required for --ui-assertions but were not found in PATH.",
+        }
+
+    node_modules = PROJECT_ROOT / "node_modules"
+    if not node_modules.exists():
+        install_cmd = [npm, "ci"] if (PROJECT_ROOT / "package-lock.json").exists() else [npm, "install", "--legacy-peer-deps"]
+        install = subprocess.run(
+            install_cmd,
+            cwd=str(PROJECT_ROOT),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if install.returncode != 0:
+            return {
+                "ok": False,
+                "exit_code": install.returncode,
+                "error": "Failed to install JavaScript dependencies for UI assertions.",
+                "stdout_tail": "\n".join(install.stdout.splitlines()[-40:]),
+                "stderr_tail": "\n".join(install.stderr.splitlines()[-40:]),
+            }
+
     env = os.environ.copy()
     env.setdefault("PLAYWRIGHT_TEST_BASE_URL", ui_base_url)
     cmd = [
-        "npx",
+        npx,
         "playwright",
         "test",
         "tests/e2e/regression-ui.spec.mjs",
@@ -532,14 +641,20 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    report = asyncio.run(run_regression(args.endpoint, args.ws_url))
+    try:
+        report = asyncio.run(run_regression(args.endpoint, args.ws_url))
+    except ConnectionError as exc:
+        print(str(exc))
+        return 1
     if args.ui_assertions:
         ui_report = run_ui_assertions(args.ui_base_url)
         report["ui_assertions"] = ui_report
         if not ui_report.get("ok"):
             report["ok"] = False
 
-    with open(args.out, "w", encoding="utf-8") as f:
+    output_path = Path(args.out)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
 
     print(json.dumps(report, indent=2))

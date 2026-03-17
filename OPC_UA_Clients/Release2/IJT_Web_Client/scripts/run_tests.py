@@ -7,10 +7,9 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-IS_WINDOWS = sys.platform.startswith("win")
+from venv_bootstrap import ensure_test_env, is_current_interpreter
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-VENV_PYTHON = PROJECT_ROOT / "venv" / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
-REQUIREMENTS_DEV = PROJECT_ROOT / "requirements-dev.txt"
 
 
 def _endpoint_reachable(endpoint: str, timeout: float = 1.0) -> bool:
@@ -54,12 +53,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if not VENV_PYTHON.exists():
-        print(
-            "Virtual environment not found. Run 'python setup_project.py --force_full' first.",
-            file=sys.stderr,
-        )
-        return 1
+    test_python = ensure_test_env(PROJECT_ROOT)
+    if not is_current_interpreter(test_python):
+        cmd = [str(test_python), str(Path(__file__).resolve()), *sys.argv[1:]]
+        return subprocess.call(cmd, cwd=str(PROJECT_ROOT))
 
     marker = "integration" if args.integration else "not integration"
     endpoint = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
@@ -70,28 +67,7 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    try:
-        subprocess.check_call([str(VENV_PYTHON), "-c", "import pytest, pytest_asyncio"])
-    except subprocess.CalledProcessError:
-        if not REQUIREMENTS_DEV.exists():
-            print(
-                "[ERROR] pytest is missing and requirements-dev.txt was not found.",
-                file=sys.stderr,
-            )
-            return 1
-        print("Installing missing test dependencies from requirements-dev.txt ...")
-        try:
-            subprocess.check_call(
-                [str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", "-r", str(REQUIREMENTS_DEV)]
-            )
-        except subprocess.CalledProcessError:
-            print(
-                "[ERROR] Failed to install test dependencies. Check network access or run setup_project.py --force_full.",
-                file=sys.stderr,
-            )
-            return 1
-
-    cmd = [str(VENV_PYTHON), "-m", "pytest", str(PROJECT_ROOT / "tests"), "-m", marker]
+    cmd = [str(test_python), "-m", "pytest", str(PROJECT_ROOT / "tests"), "-m", marker]
     print("Running:", " ".join(cmd))
     pytest_rc = subprocess.call(cmd)
     if pytest_rc != 0:
@@ -100,7 +76,7 @@ def main() -> int:
     if args.integration and not args.skip_regression:
         regression_script = PROJECT_ROOT / "scripts" / "run_regression.py"
         regression_cmd = [
-            str(VENV_PYTHON),
+            str(test_python),
             str(regression_script),
             "--endpoint",
             endpoint,

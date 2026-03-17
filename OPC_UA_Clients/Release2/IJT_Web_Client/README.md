@@ -25,11 +25,11 @@
    ```bash
    python setup_project.py --force_full
    ```
-- **Run regression tests from project venv (core):**
+- **Run regression tests (autonomous `venv_test` bootstrap):**
    ```bash
    python setup_project.py --run-tests
    ```
-- **Run integration tests from project venv (requires `OPCUA_TEST_ENDPOINT`):**
+- **Run integration tests (autonomous `venv_test` bootstrap; requires `OPCUA_TEST_ENDPOINT`):**
    ```bash
    python setup_project.py --integration-tests
    ```
@@ -55,11 +55,8 @@
 - Use the following [**OPC UA IJT Server Simulator**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2) to connect from the **IJT Web Client**.
 
 ## Testing
-- Install runtime + test dependencies:
-  ```bash
-  python -m pip install -r requirements-dev.txt
-  ```
-- Run backend regression tests (mocked/unit style):
+- Tests and regression scripts auto-create/use `venv_test` and auto-install Python prerequisites (`requirements.txt` + `requirements-dev.txt`).
+- Run backend tests (mocked/unit style):
   ```bash
   python scripts/run_tests.py
   ```
@@ -67,6 +64,10 @@
   ```bash
   set OPCUA_TEST_ENDPOINT=opc.tcp://<host>:<port>
   python scripts/run_tests.py --integration
+  ```
+- Run functional regression directly (also autonomous test env bootstrap):
+  ```bash
+  python scripts/run_regression.py --endpoint opc.tcp://localhost:40451 --ws-url ws://localhost:8001
   ```
 
 ## Project Layout

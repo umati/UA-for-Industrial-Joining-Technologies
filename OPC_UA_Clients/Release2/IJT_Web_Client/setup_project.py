@@ -772,33 +772,20 @@ def _load_dotenv_if_available() -> None:
 
 
 def _run_tests_in_venv(integration: bool = False) -> None:
-    python = _get_python_path()
-    marker = "integration" if integration else "not integration"
-    endpoint = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
-    _ensure_opc_server_running(
-        endpoint,
-        allow_launch=True,
-        context="Test pre-check",
+    controller_python = Path(sys.executable)
+    test_script = Path("scripts") / "run_tests.py"
+    if not test_script.exists():
+        log.error("%s not found.", test_script)
+        raise FileNotFoundError(str(test_script))
+
+    cmd = [str(controller_python), str(test_script)]
+    if integration:
+        cmd.append("--integration")
+    log.info(
+        "Delegating test execution to autonomous test bootstrap script: %s",
+        " ".join(cmd),
     )
-    try:
-        _run_command([str(python), "-c", "import pytest, pytest_asyncio"])
-    except Exception:
-        req_dev = Path("requirements-dev.txt")
-        if req_dev.exists():
-            log.info(
-                "Test dependencies missing in venv. Installing from %s ...",
-                req_dev,
-            )
-            _run_command(
-                [str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_dev)]
-            )
-        else:
-            log.error(
-                "pytest is unavailable in venv and requirements-dev.txt is missing."
-            )
-            raise
-    log.info("Running pytest via venv interpreter (%s), marker: %s", python, marker)
-    _run_command([str(python), "-m", "pytest", "tests", "-m", marker])
+    _run_command(cmd)
 
 
 # ---------------------------------------------------------------------------
