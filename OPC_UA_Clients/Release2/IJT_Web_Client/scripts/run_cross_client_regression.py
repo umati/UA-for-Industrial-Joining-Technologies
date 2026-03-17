@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import socket
+import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
@@ -12,7 +13,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from tests.shared_opcua.adapters import adapters_from_env, discover_simulation_methods, make_adapter
+from scripts.venv_bootstrap import (
+    ensure_additional_requirements,
+    ensure_test_env,
+    is_current_interpreter,
+)
 
 
 def _endpoint_reachable(endpoint: str, timeout: float = 1.0) -> bool:
@@ -28,6 +33,8 @@ def _endpoint_reachable(endpoint: str, timeout: float = 1.0) -> bool:
 
 
 async def run_for_adapter(adapter_name: str, endpoint: str, ws_url: str, console_dir: str) -> dict:
+    from tests.shared_opcua.adapters import discover_simulation_methods, make_adapter
+
     adapter = make_adapter(adapter_name, endpoint, ws_url, console_dir)
     report = {
         "adapter": adapter_name,
@@ -103,6 +110,12 @@ async def run_all(endpoint: str, ws_url: str, console_dir: str, adapters: list[s
 
 
 def main() -> int:
+    test_python = ensure_test_env(PROJECT_ROOT)
+    if not is_current_interpreter(test_python):
+        cmd = [str(test_python), str(Path(__file__).resolve()), *sys.argv[1:]]
+        return subprocess.call(cmd, cwd=str(PROJECT_ROOT))
+
+    default_adapters = os.getenv("OPCUA_CLIENT_ADAPTERS", "web,console")
     parser = argparse.ArgumentParser(description="Run shared OPC UA regression through both client adapters")
     parser.add_argument("--endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451"))
     parser.add_argument("--ws-url", default=os.getenv("OPCUA_WS_URL", "ws://localhost:8001"))
@@ -113,11 +126,21 @@ def main() -> int:
             str((Path(__file__).resolve().parents[2] / "IJT_Console_Client").resolve()),
         ),
     )
-    parser.add_argument("--adapters", default=",".join(adapters_from_env()))
+    parser.add_argument("--adapters", default=default_adapters)
     parser.add_argument("--out", default="cross_client_regression_report.json")
     args = parser.parse_args()
 
     adapter_names = [x.strip().lower() for x in args.adapters.split(",") if x.strip()]
+    if "console" in adapter_names:
+        console_requirements = Path(args.console_dir) / "requirements.txt"
+        if console_requirements.exists():
+            ensure_additional_requirements(
+                test_python,
+                [console_requirements],
+                state_name="console_adapter_env",
+                import_probe="import orjson",
+            )
+
     if not _endpoint_reachable(args.endpoint):
         print(
             f"[ERROR] No OPC UA Server running on {args.endpoint}. "

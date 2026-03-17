@@ -200,6 +200,20 @@ def ensure_regression_env(project_root: Path | None = None) -> Path:
     return python_path
 
 
+def ensure_additional_requirements(
+    python_path: Path,
+    requirement_files: list[Path],
+    state_name: str,
+    import_probe: str | None = None,
+) -> None:
+    _ensure_requirements(
+        python_path,
+        requirement_files,
+        state_name=state_name,
+        import_probe=import_probe,
+    )
+
+
 def is_current_interpreter(python_path: Path) -> bool:
     try:
         current = Path(sys.executable).resolve()
