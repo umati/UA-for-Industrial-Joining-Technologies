@@ -1,4 +1,5 @@
 import asyncio
+import os
 import logging
 import traceback
 import socket
@@ -38,7 +39,9 @@ class OPCUAClient:
         await self.clear_old_logs()
         self.setup_client_metadata()
 
-        max_attempts = 3
+        max_attempts = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", "8")))
+        base_backoff = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", "1.0")))
+        max_backoff = max(base_backoff, float(os.getenv("OPCUA_CONNECT_MAX_DELAY_SEC", "4.0")))
         for attempt in range(1, max_attempts + 1):
             try:
                 start_time = time.time()
@@ -50,14 +53,18 @@ class OPCUAClient:
                 )
                 return
             except Exception as e:
-                ijt_log.warning(f"Connection attempt {attempt} failed: {e}")
+                ijt_log.warning(
+                    f"Connection attempt {attempt}/{max_attempts} failed for {self.server_url}: {e}"
+                )
                 ijt_log.error(traceback.format_exc())
                 if attempt < max_attempts:
-                    backoff = min(2**attempt, 10)
-                    ijt_log.info(f"Retrying in {backoff} seconds...")
+                    backoff = min(max_backoff, base_backoff * (2 ** (attempt - 1)))
+                    ijt_log.info(f"Retrying in {backoff:.1f} seconds...")
                     await asyncio.sleep(backoff)
                 else:
-                    ijt_log.error("All connection attempts failed.")
+                    ijt_log.error(
+                        f"All connection attempts failed for {self.server_url} after {max_attempts} tries."
+                    )
                     raise
 
     async def subscribe_to_events(self):

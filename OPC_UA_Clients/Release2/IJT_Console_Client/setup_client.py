@@ -192,6 +192,29 @@ def _is_endpoint_reachable(endpoint: str, timeout: float = 1.0) -> bool:
         sock.close()
 
 
+def _env_float(name: str, default: float, minimum: float) -> float:
+    raw = os.getenv(name, str(default))
+    try:
+        value = float(raw)
+    except ValueError:
+        log.warning("Invalid %s=%r. Falling back to %.2f.", name, raw, default)
+        value = default
+    return max(minimum, value)
+
+
+def _wait_for_endpoint_ready(
+    endpoint: str,
+    timeout_seconds: float = 45.0,
+    poll_interval: float = 0.5,
+) -> bool:
+    deadline = time.time() + max(1.0, timeout_seconds)
+    while time.time() < deadline:
+        if _is_endpoint_reachable(endpoint):
+            return True
+        time.sleep(max(0.1, poll_interval))
+    return _is_endpoint_reachable(endpoint)
+
+
 def _is_simulator_process_running() -> bool:
     if not IS_WINDOWS:
         return False
@@ -228,7 +251,13 @@ def _find_simulator_executable() -> Path | None:
 
 
 def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: bool = True) -> bool:
-    if _is_endpoint_reachable(endpoint):
+    startup_timeout = _env_float("OPCUA_STARTUP_TIMEOUT_SEC", 45.0, 1.0)
+    startup_poll = _env_float("OPCUA_STARTUP_POLL_SEC", 0.5, 0.1)
+    if _wait_for_endpoint_ready(
+        endpoint,
+        timeout_seconds=startup_timeout,
+        poll_interval=startup_poll,
+    ):
         return True
 
     if allow_launch and not IS_DOCKER:
@@ -244,15 +273,30 @@ def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: boo
                     if IS_WINDOWS:
                         popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
                     subprocess.Popen([str(exe)], **popen_kwargs)
-                    time.sleep(2.0)
+                    if _wait_for_endpoint_ready(
+                        endpoint,
+                        timeout_seconds=startup_timeout,
+                        poll_interval=startup_poll,
+                    ):
+                        log.info("OPC UA endpoint became reachable: %s", endpoint)
+                        return True
+                    log.warning(
+                        "Simulator process launched but endpoint %s was not reachable after %.1fs.",
+                        endpoint,
+                        startup_timeout,
+                    )
                 except Exception as exc:
                     log.warning("Failed to launch OPC UA simulator '%s': %s", exe, exc)
 
-    if _is_endpoint_reachable(endpoint):
-        return True
-
     if allow_launch and IS_DOCKER:
         log.info("Docker mode detected (IS_DOCKER=true). Skipping local OPC UA simulator launch.")
+
+    if _wait_for_endpoint_ready(
+        endpoint,
+        timeout_seconds=startup_timeout,
+        poll_interval=startup_poll,
+    ):
+        return True
 
     log.warning(
         "%s: No OPC UA server is running on %s. "
@@ -261,7 +305,6 @@ def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: boo
         endpoint,
     )
     return False
-
 
 def _get_environment_age_days() -> float | None:
     try:

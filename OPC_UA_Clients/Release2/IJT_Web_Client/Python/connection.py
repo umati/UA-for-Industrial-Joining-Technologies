@@ -1,5 +1,6 @@
-﻿import asyncio
+import asyncio
 import json
+import os
 import socket
 from typing import Any, Dict
 
@@ -54,7 +55,6 @@ class Connection:
     async def connect(self) -> Dict[str, Any]:
         self.terminated = False
 
-        import os
         import inspect
 
         # --- Docker-aware URL rewrite (keep this if you added it elsewhere) ---
@@ -86,8 +86,10 @@ class Connection:
             #     await maybe_coro
             pass
 
-        retries = 3
-        delay = 2
+        retries = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", "8")))
+        base_delay = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", "1.0")))
+        max_delay = max(base_delay, float(os.getenv("OPCUA_CONNECT_MAX_DELAY_SEC", "4.0")))
+        last_error: Exception | None = None
 
         for attempt in range(retries):
             try:
@@ -115,10 +117,22 @@ class Connection:
 
                 return event
             except Exception as e:
-                ijt_log.error(f"Connect attempt {attempt+1} failed: {e}")
-                await asyncio.sleep(delay)
+                last_error = e
+                delay = min(max_delay, base_delay * (2 ** attempt))
+                ijt_log.error(
+                    f"Connect attempt {attempt+1}/{retries} failed for {self.server_url}: {e}"
+                )
+                if attempt + 1 < retries:
+                    await asyncio.sleep(delay)
 
-        return {"exception": f"Failed to connect after {retries} attempts"}
+        if last_error is not None:
+            return {
+                "exception": (
+                    f"Failed to connect after {retries} attempts to {self.server_url}: "
+                    f"{last_error}"
+                )
+            }
+        return {"exception": f"Failed to connect after {retries} attempts to {self.server_url}"}
 
     async def terminate(self) -> None:
         try:
@@ -517,4 +531,3 @@ class Connection:
         except Exception as e:
             ijt_log.error(f"[methodcall] General Exception: {e}")
             return {"exception": f"Method call exception: {e}"}
-
