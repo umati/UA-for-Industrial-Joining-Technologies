@@ -53,6 +53,10 @@ log = logging.getLogger(__name__)
 # Constants & Paths
 # ---------------------------------------------------------------------------
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
+IS_WSL = bool(os.getenv("WSL_DISTRO_NAME")) or (
+    os.path.exists("/proc/version")
+    and "microsoft" in Path("/proc/version").read_text(encoding="utf-8", errors="ignore").lower()
+)
 # Use an in-container venv path to avoid Windows bind-mount conflicts
 VENV_DIR = Path("/opt/ijt_venv") if IS_DOCKER else Path("venv")
 SETUP_TIMESTAMP_FILE = STATE_DIR / "setup_timestamp"
@@ -567,6 +571,20 @@ def _ensure_opc_server_running(
     # Source of truth is OPC UA endpoint connectivity, not whether a terminal/process exists.
     if _is_endpoint_reachable(endpoint):
         return True
+
+    if IS_WSL:
+        host, port = _parse_endpoint_host_port(endpoint)
+        log.warning(
+            "%s: OPC UA endpoint %s is unreachable from WSL. "
+            "WSL mode skips auto-launch of the Windows simulator. "
+            "Start the simulator manually on Windows and set OPCUA_TEST_ENDPOINT "
+            "to a Windows-reachable host (not '%s' if needed), e.g. opc.tcp://<windows-host>:%s.",
+            context,
+            endpoint,
+            host,
+            port,
+        )
+        return False
 
     if allow_launch and not IS_DOCKER:
         _extract_simulator_zip_if_needed()
