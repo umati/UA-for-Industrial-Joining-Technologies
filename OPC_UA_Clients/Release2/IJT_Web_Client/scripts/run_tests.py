@@ -32,6 +32,26 @@ def main() -> int:
         action="store_true",
         help="Run integration tests (marker=integration)",
     )
+    parser.add_argument(
+        "--skip-regression",
+        action="store_true",
+        help="Skip post-integration regression scenario execution.",
+    )
+    parser.add_argument(
+        "--ws-url",
+        default=os.getenv("WS_TEST_URL", "ws://localhost:8001"),
+        help="Backend websocket URL used by regression script.",
+    )
+    parser.add_argument(
+        "--regression-out",
+        default=str(PROJECT_ROOT / "regression_report.json"),
+        help="Output path for regression JSON report.",
+    )
+    parser.add_argument(
+        "--ui-base-url",
+        default=os.getenv("UI_TEST_BASE_URL", "http://127.0.0.1:3000"),
+        help="Base URL for browser UI assertions.",
+    )
     args = parser.parse_args()
 
     if not VENV_PYTHON.exists():
@@ -73,7 +93,29 @@ def main() -> int:
 
     cmd = [str(VENV_PYTHON), "-m", "pytest", str(PROJECT_ROOT / "tests"), "-m", marker]
     print("Running:", " ".join(cmd))
-    return subprocess.call(cmd)
+    pytest_rc = subprocess.call(cmd)
+    if pytest_rc != 0:
+        return pytest_rc
+
+    if args.integration and not args.skip_regression:
+        regression_script = PROJECT_ROOT / "scripts" / "run_regression.py"
+        regression_cmd = [
+            str(VENV_PYTHON),
+            str(regression_script),
+            "--endpoint",
+            endpoint,
+            "--ws-url",
+            args.ws_url,
+            "--out",
+            args.regression_out,
+            "--ui-assertions",
+            "--ui-base-url",
+            args.ui_base_url,
+        ]
+        print("Running post-integration regression:", " ".join(regression_cmd))
+        return subprocess.call(regression_cmd)
+
+    return 0
 
 
 if __name__ == "__main__":

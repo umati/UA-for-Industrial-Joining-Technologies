@@ -303,20 +303,6 @@ def _wait_for_endpoint_ready(
     return _is_endpoint_reachable(endpoint)
 
 
-def _is_simulator_process_running() -> bool:
-    if not IS_WINDOWS:
-        return False
-    try:
-        output = subprocess.check_output(
-            ["tasklist", "/FI", f"IMAGENAME eq {SIMULATOR_EXE_NAME}"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-        return SIMULATOR_EXE_NAME.lower() in output.lower()
-    except Exception:
-        return False
-
-
 def _extract_simulator_zip_if_needed() -> None:
     if SIMULATOR_DIR.exists() or not SIMULATOR_ZIP.exists():
         return
@@ -341,6 +327,7 @@ def _find_simulator_executable() -> Path | None:
 def _ensure_opc_server_running(
     endpoint: str, *, allow_launch: bool, context: str
 ) -> bool:
+    # Source of truth is OPC UA endpoint connectivity, not whether a terminal/process exists.
     if _is_endpoint_reachable(endpoint):
         return True
 
@@ -348,33 +335,32 @@ def _ensure_opc_server_running(
         _extract_simulator_zip_if_needed()
         exe = _find_simulator_executable()
         if exe:
-            if _is_simulator_process_running():
+            try:
                 log.info(
-                    "OPC UA simulator is already running. Reusing existing process."
+                    "OPC UA endpoint %s is unreachable. Launching simulator binary: %s",
+                    endpoint,
+                    exe,
                 )
-            else:
-                try:
-                    log.info("Launching OPC UA simulator in separate terminal: %s", exe)
-                    popen_kwargs = {"cwd": str(exe.parent)}
-                    if IS_WINDOWS:
-                        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
-                    subprocess.Popen([str(exe)], **popen_kwargs)
-                    startup_timeout = _env_float("OPCUA_STARTUP_TIMEOUT_SEC", 45.0, 1.0)
-                    startup_poll = _env_float("OPCUA_STARTUP_POLL_SEC", 0.5, 0.1)
-                    if _wait_for_endpoint_ready(
-                        endpoint,
-                        timeout_seconds=startup_timeout,
-                        poll_interval=startup_poll,
-                    ):
-                        log.info("OPC UA endpoint became reachable: %s", endpoint)
-                        return True
-                    log.warning(
-                        "Simulator process launched but endpoint %s was not reachable after %.1fs.",
-                        endpoint,
-                        startup_timeout,
-                    )
-                except Exception as e:
-                    log.warning("Failed to launch OPC UA simulator '%s': %s", exe, e)
+                popen_kwargs = {"cwd": str(exe.parent)}
+                if IS_WINDOWS:
+                    popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+                subprocess.Popen([str(exe)], **popen_kwargs)
+                startup_timeout = _env_float("OPCUA_STARTUP_TIMEOUT_SEC", 45.0, 1.0)
+                startup_poll = _env_float("OPCUA_STARTUP_POLL_SEC", 0.5, 0.1)
+                if _wait_for_endpoint_ready(
+                    endpoint,
+                    timeout_seconds=startup_timeout,
+                    poll_interval=startup_poll,
+                ):
+                    log.info("OPC UA endpoint became reachable: %s", endpoint)
+                    return True
+                log.warning(
+                    "Simulator process launched but endpoint %s was not reachable after %.1fs.",
+                    endpoint,
+                    startup_timeout,
+                )
+            except Exception as e:
+                log.warning("Failed to launch OPC UA simulator '%s': %s", exe, e)
     elif allow_launch and IS_DOCKER:
         log.info(
             "Docker mode detected (IS_DOCKER=true). Skipping local OPC UA simulator launch."

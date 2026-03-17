@@ -11,6 +11,7 @@
     "test:integration:python": "python -m pytest tests/python/integration -q -m integration",
     "test:unit:js": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:regression": "playwright test tests/e2e/regression-ui.spec.mjs",
     "test:all": "npm run test:unit:python && npm run test:integration:python && npm run test:unit:js",
     "lint": "eslint Javascripts config.js --config eslint.config.mjs",
     "lint:fix": "eslint Javascripts config.js --fix --config eslint.config.mjs"
