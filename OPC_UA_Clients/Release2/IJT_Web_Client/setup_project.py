@@ -3,6 +3,8 @@ import sys
 import subprocess
 import shutil
 import logging
+import atexit
+import contextlib
 import webbrowser
 import socket
 import argparse
@@ -11,6 +13,7 @@ import time
 import shlex
 import re
 import zipfile
+import signal
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -63,6 +66,8 @@ SIMULATOR_ZIP = (
     REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
 )
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
+SETUP_LOCK_FILE = STATE_DIR / "setup.lock"
+RUNTIME_STATE_FILE = STATE_DIR / "runtime_processes.json"
 
 
 def _run_command(cmd: list[str], check: bool = True, capture_output: bool = False):
@@ -261,6 +266,238 @@ def _is_port_in_use(host: str, port: int, timeout: float = 0.5) -> bool:
         return sock.connect_ex((host, port)) == 0
     finally:
         sock.close()
+
+
+def _pid_is_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if IS_WINDOWS:
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            output = (result.stdout or "").strip()
+            if not output:
+                return False
+            if "No tasks are running" in output:
+                return False
+            return output.startswith("\"")
+        except Exception:
+            return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _read_runtime_state() -> dict:
+    if not RUNTIME_STATE_FILE.exists():
+        return {}
+    try:
+        return json.loads(RUNTIME_STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _write_runtime_state(state: dict) -> None:
+    RUNTIME_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    RUNTIME_STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def _clear_runtime_state() -> None:
+    if RUNTIME_STATE_FILE.exists():
+        RUNTIME_STATE_FILE.unlink()
+
+
+def _record_runtime_processes(frontend_pid: int | None, backend_pid: int | None) -> None:
+    if frontend_pid is None and backend_pid is None:
+        return
+    state = {
+        "created_at": time.time(),
+        "frontend_pid": frontend_pid,
+        "backend_pid": backend_pid,
+    }
+    _write_runtime_state(state)
+
+
+def _collect_managed_processes() -> list[tuple[str, int]]:
+    state = _read_runtime_state()
+    managed: list[tuple[str, int]] = []
+    for key, label in (("frontend_pid", "frontend"), ("backend_pid", "backend")):
+        raw = state.get(key)
+        try:
+            pid = int(raw)
+        except Exception:
+            continue
+        if _pid_is_running(pid):
+            managed.append((label, pid))
+    return managed
+
+
+def _stop_managed_processes(timeout_sec: float = 8.0) -> None:
+    managed = _collect_managed_processes()
+    if not managed:
+        log.info("No managed frontend/backend processes are currently running.")
+        _clear_runtime_state()
+        return
+
+    # Phase 1: graceful signal
+    for label, pid in managed:
+        try:
+            if IS_WINDOWS:
+                with contextlib.suppress(Exception):
+                    os.kill(pid, signal.CTRL_BREAK_EVENT)
+            else:
+                os.kill(pid, signal.SIGTERM)
+            log.info("Requested graceful stop for %s process (pid=%s).", label, pid)
+        except Exception as e:
+            log.warning("Failed graceful stop request for %s process (pid=%s): %s", label, pid, e)
+
+    deadline = time.time() + max(1.0, timeout_sec)
+    while time.time() < deadline:
+        if not _collect_managed_processes():
+            break
+        time.sleep(0.2)
+
+    # Phase 2: soft taskkill on Windows for anything still alive.
+    leftovers = _collect_managed_processes()
+    if IS_WINDOWS and leftovers:
+        for label, pid in leftovers:
+            with contextlib.suppress(Exception):
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T"],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                log.info("Requested soft taskkill for %s process (pid=%s).", label, pid)
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            if not _collect_managed_processes():
+                break
+            time.sleep(0.2)
+
+    # Phase 3: force kill as last resort.
+    leftovers = _collect_managed_processes()
+    if leftovers:
+        for label, pid in leftovers:
+            try:
+                if IS_WINDOWS:
+                    subprocess.run(
+                        ["taskkill", "/PID", str(pid), "/T", "/F"],
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                else:
+                    os.kill(pid, signal.SIGKILL)
+                log.warning("Forced stop for %s process (pid=%s).", label, pid)
+            except Exception as e:
+                log.warning("Failed forced stop for %s process (pid=%s): %s", label, pid, e)
+        time.sleep(0.4)
+        leftovers = _collect_managed_processes()
+        for label, pid in leftovers:
+            log.warning("%s process (pid=%s) is still running.", label, pid)
+    else:
+        _clear_runtime_state()
+
+
+def _runtime_status() -> dict[str, bool]:
+    state = _read_runtime_state()
+    frontend_pid = int(state.get("frontend_pid") or 0)
+    backend_pid = int(state.get("backend_pid") or 0)
+    return {
+        "frontend": _pid_is_running(frontend_pid),
+        "backend": _pid_is_running(backend_pid),
+    }
+
+
+def _should_block_foreground(frontend_proc, backend_proc) -> bool:
+    if frontend_proc is not None or backend_proc is not None:
+        return True
+    managed = _runtime_status()
+    return managed["frontend"] or managed["backend"]
+
+
+class _SetupLock:
+    def __init__(self, path: Path):
+        self.path = path
+        self._fh = None
+
+    def acquire(self) -> bool:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._fh = open(self.path, "a+", encoding="utf-8")
+        try:
+            if IS_WINDOWS:
+                import msvcrt
+
+                self._fh.seek(0)
+                msvcrt.locking(self._fh.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self._fh.seek(0)
+            self._fh.truncate()
+            self._fh.write(str(os.getpid()))
+            self._fh.flush()
+            atexit.register(self.release)
+            return True
+        except Exception:
+            self.release()
+            return False
+
+    def release(self) -> None:
+        if not self._fh:
+            return
+        try:
+            if IS_WINDOWS:
+                import msvcrt
+
+                self._fh.seek(0)
+                msvcrt.locking(self._fh.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(self._fh.fileno(), fcntl.LOCK_UN)
+        except Exception:
+            pass
+        try:
+            self._fh.close()
+        finally:
+            self._fh = None
+
+
+def _is_websocket_server_ready(port: int, timeout: float = 1.5) -> bool:
+    python = _get_python_path()
+    if not python.exists():
+        return _is_port_in_use("127.0.0.1", port, timeout=timeout)
+
+    probe_code = (
+        "import asyncio, sys\n"
+        "import websockets\n"
+        "async def main():\n"
+        "  try:\n"
+        f"    async with websockets.connect('ws://127.0.0.1:{port}', open_timeout={timeout}, close_timeout=0.3):\n"
+        "      return 0\n"
+        "  except Exception:\n"
+        "      return 1\n"
+        "raise SystemExit(asyncio.run(main()))\n"
+    )
+    try:
+        completed = subprocess.run(
+            [str(python), "-c", probe_code],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        return completed.returncode == 0
+    except Exception:
+        return _is_port_in_use("127.0.0.1", port, timeout=timeout)
 
 
 def _parse_endpoint_host_port(endpoint: str) -> tuple[str, int]:
@@ -708,7 +945,7 @@ def _start_server(args):
             "HTTP port %s is already in use. Skipping frontend start (assumed already running).",
             http_port,
         )
-        return
+        return None
 
     browser_host = os.getenv("WS_HOST") or socket.gethostbyname(socket.gethostname())
     browser_url = f"http://{browser_host}:{http_port}"
@@ -728,14 +965,19 @@ def _start_server(args):
         if args.silent:
             cmd.append("--no-request-logging")
 
-        subprocess.Popen(cmd)
+        popen_kwargs = {}
+        if IS_WINDOWS:
+            popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        proc = subprocess.Popen(cmd, **popen_kwargs)
 
         if os.getenv("IS_DOCKER") != "true":
             webbrowser.open(browser_url)
         else:
             log.info("Skipping browser launch inside Docker.")
+        return proc
     except Exception as e:
         log.error("Failed to start server or open browser: %s", e)
+        return None
 
 
 def _run_index():
@@ -746,20 +988,24 @@ def _run_index():
         log.error("Invalid WS_PORT value. Falling back to 8001.")
         ws_port = 8001
 
-    if _is_port_in_use("127.0.0.1", ws_port):
+    if _is_websocket_server_ready(ws_port):
         log.info(
             "WebSocket port %s is already in use. Skipping backend start (assumed already running).",
             ws_port,
         )
-        return
+        return None
 
     if Path("index.py").exists():
         try:
-            subprocess.Popen([str(python), "index.py"])
+            popen_kwargs = {}
+            if IS_WINDOWS:
+                popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            return subprocess.Popen([str(python), "index.py"], **popen_kwargs)
         except Exception as e:
             log.error("Failed to run index.py: %s", e)
     else:
         log.warning("index.py not found.")
+    return None
 
 
 def _load_dotenv_if_available() -> None:
@@ -887,7 +1133,36 @@ def main():
         action="store_true",
         help="Run integration pytest marker (requires OPCUA_TEST_ENDPOINT).",
     )
+    parser.add_argument(
+        "--stop",
+        action="store_true",
+        help="Stop managed frontend/backend processes started by setup_project.py.",
+    )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Show runtime status for managed frontend/backend processes and exit.",
+    )
+    parser.add_argument(
+        "--detach",
+        action="store_true",
+        help="Run setup launcher in detached mode (do not block terminal).",
+    )
     args = parser.parse_args()
+
+    if args.stop:
+        _stop_managed_processes()
+        return
+    if args.status:
+        status = _runtime_status()
+        log.info("Managed frontend running: %s", status["frontend"])
+        log.info("Managed backend running: %s", status["backend"])
+        return
+
+    setup_lock = _SetupLock(SETUP_LOCK_FILE)
+    if not setup_lock.acquire():
+        log.info("Another setup_project.py instance is already running. Exiting this invocation.")
+        return
 
     # Fast path: if everything exists and isn't too old, just run.
     if not args.force_full and _is_runtime_ready():
@@ -901,8 +1176,22 @@ def main():
             allow_launch=True,
             context="Startup pre-check",
         )
-        _start_server(args)
-        _run_index()
+        frontend_proc = _start_server(args)
+        backend_proc = _run_index()
+        _record_runtime_processes(
+            frontend_proc.pid if frontend_proc else None,
+            backend_proc.pid if backend_proc else None,
+        )
+        if not args.detach and _should_block_foreground(frontend_proc, backend_proc):
+            log.info("Foreground mode active. Press Ctrl+C to stop managed processes.")
+            try:
+                while True:
+                    time.sleep(1.0)
+            except KeyboardInterrupt:
+                log.info("Ctrl+C received. Stopping managed processes...")
+                _stop_managed_processes()
+        elif not args.detach:
+            log.info("No managed processes were started by this run. Exiting.")
         return
 
     # Full setup path
@@ -935,8 +1224,22 @@ def main():
         allow_launch=True,
         context="Startup pre-check",
     )
-    _start_server(args)
-    _run_index()
+    frontend_proc = _start_server(args)
+    backend_proc = _run_index()
+    _record_runtime_processes(
+        frontend_proc.pid if frontend_proc else None,
+        backend_proc.pid if backend_proc else None,
+    )
+    if not args.detach and _should_block_foreground(frontend_proc, backend_proc):
+        log.info("Foreground mode active. Press Ctrl+C to stop managed processes.")
+        try:
+            while True:
+                time.sleep(1.0)
+        except KeyboardInterrupt:
+            log.info("Ctrl+C received. Stopping managed processes...")
+            _stop_managed_processes()
+    elif not args.detach:
+        log.info("No managed processes were started by this run. Exiting.")
     _update_setup_timestamp()
     log.info("Setup complete.")
 

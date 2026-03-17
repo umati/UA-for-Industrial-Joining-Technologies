@@ -73,7 +73,7 @@ def nodeid_to_payload(nodeid: ua.NodeId) -> dict[str, Any]:
 
 def default_arg_value(dtype_identifier: int) -> Any:
     mapping = {
-        1: False,     # Boolean (safer simulator default)
+        1: True,      # Boolean
         2: 1,         # SByte
         3: 1,         # Byte
         4: 1,         # Int16
@@ -128,9 +128,6 @@ def _build_method_arguments(method_name: str, default_arguments: list[dict[str, 
         ]
 
     arguments = [dict(arg) for arg in default_arguments]
-    if method_name == "SimulateJobResult" and arguments:
-        # Simulator rejects True in some profiles; False is stable.
-        arguments[0]["value"] = False
     return arguments
 
 

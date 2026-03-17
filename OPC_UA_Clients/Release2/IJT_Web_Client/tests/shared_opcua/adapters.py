@@ -36,7 +36,7 @@ def payload_to_nodeid_string(payload: dict[str, Any]) -> str:
 
 def default_arg_value(dtype_identifier: int) -> Any:
     mapping = {
-        1: False,
+        1: True,
         2: 1,
         3: 1,
         4: 1,
@@ -172,8 +172,6 @@ async def discover_simulation_methods(endpoint: str) -> list[MethodSpec]:
 
     dedup: dict[str, MethodSpec] = {}
     for method in methods:
-        if method.name == "SimulateJobResult" and method.arguments:
-            method.arguments[0]["value"] = False
         dedup[method.name] = method
     return list(dedup.values())
 
@@ -277,7 +275,26 @@ class WebAdapter(BaseAdapter):
 
         # Retry once for transient simulator-side request races.
         await asyncio.sleep(0.4)
-        return await self._send_recv("methodcall", payload)
+        response = await self._send_recv("methodcall", payload)
+        if "exception" not in str(response).lower():
+            return response
+
+        # Simulator profiles may differ for first boolean argument handling.
+        if spec.arguments and isinstance(spec.arguments[0].get("value"), bool):
+            alt_arguments = [dict(x) for x in spec.arguments]
+            alt_arguments[0]["value"] = not bool(alt_arguments[0]["value"])
+            alt_payload = {
+                "objectnode": spec.object_node,
+                "methodnode": spec.method_node,
+                "arguments": alt_arguments,
+            }
+            response = await self._send_recv("methodcall", alt_payload)
+            if isinstance(response, dict):
+                response = dict(response)
+                response["note"] = "used_bool_fallback"
+            return response
+
+        return response
 
     async def collect_events(self, seconds: float = 6.0) -> dict[str, int]:
         if self.ws is None:

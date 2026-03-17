@@ -21,6 +21,19 @@
     ```bash
     python setup_project.py
     ```
+- **Default run is foreground-managed; Ctrl+C stops managed processes cleanly:**
+   ```bash
+   python setup_project.py
+   ```
+- **Run detached (old behavior):**
+   ```bash
+   python setup_project.py --detach
+   ```
+- **Show/stop managed local frontend+backend processes:**
+   ```bash
+   python setup_project.py --status
+   python setup_project.py --stop
+   ```
 - **Clean Rebuild:**
    ```bash
    python setup_project.py --force_full
@@ -59,6 +72,14 @@
 - Run backend tests (mocked/unit style):
   ```bash
   python scripts/run_tests.py
+  ```
+- Run docker setup smoke tests (includes local-mode pass-through checks for `run_docker_setup.py`):
+  ```bash
+  python scripts/run_tests.py --docker-tests
+  ```
+- Run docker setup live validation (build + compose up, no log tail):
+  ```bash
+  python scripts/run_tests.py --docker-tests --live-docker
   ```
 - Run integration tests against a live OPC UA server:
   ```bash

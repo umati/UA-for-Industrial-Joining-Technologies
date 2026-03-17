@@ -51,6 +51,16 @@ def main() -> int:
         default=os.getenv("UI_TEST_BASE_URL", "http://127.0.0.1:3000"),
         help="Base URL for browser UI assertions.",
     )
+    parser.add_argument(
+        "--docker-tests",
+        action="store_true",
+        help="Run run_docker_setup.py smoke tests after Python tests.",
+    )
+    parser.add_argument(
+        "--live-docker",
+        action="store_true",
+        help="With --docker-tests, run live docker build/start validation.",
+    )
     args = parser.parse_args()
 
     test_python = ensure_test_env(PROJECT_ROOT)
@@ -89,7 +99,19 @@ def main() -> int:
             args.ui_base_url,
         ]
         print("Running post-integration regression:", " ".join(regression_cmd))
-        return subprocess.call(regression_cmd)
+        regression_rc = subprocess.call(regression_cmd)
+        if regression_rc != 0:
+            return regression_rc
+
+    if args.docker_tests:
+        docker_test_script = PROJECT_ROOT / "scripts" / "run_docker_tests.py"
+        docker_cmd = [str(test_python), str(docker_test_script)]
+        if args.live_docker:
+            docker_cmd.append("--live-docker")
+        print("Running docker setup tests:", " ".join(docker_cmd))
+        docker_rc = subprocess.call(docker_cmd)
+        if docker_rc != 0:
+            return docker_rc
 
     return 0
 

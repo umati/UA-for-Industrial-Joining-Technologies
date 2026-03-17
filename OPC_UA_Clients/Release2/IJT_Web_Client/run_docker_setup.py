@@ -40,7 +40,7 @@ def detect_compose_cmd() -> list[str]:
     return ["docker", "compose"]
 
 
-def run_docker(setup_args: list[str]) -> None:
+def run_docker(setup_args: list[str], follow_logs: bool = True) -> None:
     compose_cmd = detect_compose_cmd()
 
     print("Stopping/removing existing container if present...")
@@ -61,8 +61,11 @@ def run_docker(setup_args: list[str]) -> None:
     print("Starting docker compose stack...")
     run_command(compose_cmd + ["up", "-d"])
 
-    print("Streaming container logs...")
-    run_command(["docker", "logs", "-f", CONTAINER_NAME], check=False)
+    if follow_logs:
+        print("Streaming container logs...")
+        run_command(["docker", "logs", "-f", CONTAINER_NAME], check=False)
+    else:
+        print("Skipping log follow (--no-follow-logs).")
 
 
 def run_local(setup_args: list[str]) -> None:
@@ -80,12 +83,33 @@ def main() -> None:
         nargs=argparse.REMAINDER,
         help="Arguments passed through to setup_project.py",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["auto", "docker", "local"],
+        default="auto",
+        help="Choose execution mode: auto-detect, force docker, or force local setup.",
+    )
+    parser.add_argument(
+        "--no-follow-logs",
+        action="store_true",
+        help="In docker mode, do not tail container logs after startup.",
+    )
     args = parser.parse_args()
 
     setup_args = args.setup_args if args.setup_args else ["--force_full"]
 
+    if args.mode == "local":
+        run_local(setup_args)
+        return
+
+    if args.mode == "docker":
+        if not docker_running():
+            raise RuntimeError("Docker mode requested but Docker is unavailable or not running.")
+        run_docker(setup_args, follow_logs=not args.no_follow_logs)
+        return
+
     if docker_running():
-        run_docker(setup_args)
+        run_docker(setup_args, follow_logs=not args.no_follow_logs)
     else:
         print("Docker unavailable/not running. Falling back to local setup.")
         run_local(setup_args)

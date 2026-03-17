@@ -256,9 +256,9 @@ export default class MethodGUICreator {
         }
       }
       case '1': { // Boolean
-        let returnValue = false
-        if (defaultValue) {
-          returnValue = defaultValue
+        let returnValue = true
+        if (typeof defaultValue !== 'undefined' && defaultValue !== '') {
+          returnValue = defaultValue === true || defaultValue === 'true'
         }
         const input = this.screen.createCheckbox(returnValue, (newValue) => {
           returnValue = newValue
