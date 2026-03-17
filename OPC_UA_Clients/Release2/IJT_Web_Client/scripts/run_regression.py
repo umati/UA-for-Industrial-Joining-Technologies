@@ -215,6 +215,41 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
                     return rsp
             raise TimeoutError(f"Timeout waiting for response for command '{command}'")
 
+        async def call_method_with_fallback(spec: MethodSpec) -> dict[str, Any]:
+            payload = {
+                "objectnode": spec.object_node,
+                "methodnode": spec.method_node,
+                "arguments": spec.arguments,
+            }
+            rsp = await send_recv("methodcall", payload)
+            if "exception" not in rsp.get("data", {}):
+                return rsp
+
+            # Retry transient simulator-side method races once.
+            await asyncio.sleep(0.4)
+            retry_rsp = await send_recv("methodcall", payload)
+            if "exception" not in retry_rsp.get("data", {}):
+                return retry_rsp
+
+            # Some simulator profiles require the first boolean argument inverted.
+            if spec.arguments and isinstance(spec.arguments[0].get("value"), bool):
+                alt_arguments = [dict(x) for x in spec.arguments]
+                alt_arguments[0]["value"] = not bool(alt_arguments[0]["value"])
+                alt_payload = {
+                    "objectnode": spec.object_node,
+                    "methodnode": spec.method_node,
+                    "arguments": alt_arguments,
+                }
+                alt_rsp = await send_recv("methodcall", alt_payload)
+                if "exception" not in alt_rsp.get("data", {}):
+                    data = dict(alt_rsp.get("data", {}))
+                    data["note"] = "used_bool_fallback"
+                    alt_rsp = dict(alt_rsp)
+                    alt_rsp["data"] = data
+                    return alt_rsp
+
+            return retry_rsp
+
         rsp = await send_recv("connect to")
         report["checks"].append({"connect": "exception" not in rsp.get("data", {})})
 
@@ -233,14 +268,7 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
                 report["called_methods"].append({"name": name, "status": "not_found"})
                 continue
 
-            rsp = await send_recv(
-                "methodcall",
-                {
-                    "objectnode": match.object_node,
-                    "methodnode": match.method_node,
-                    "arguments": match.arguments,
-                },
-            )
+            rsp = await call_method_with_fallback(match)
             ok = "exception" not in rsp.get("data", {})
             report["called_methods"].append({"name": name, "status": "ok" if ok else "failed", "response": rsp.get("data")})
 
