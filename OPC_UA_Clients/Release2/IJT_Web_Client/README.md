@@ -14,6 +14,8 @@
 -  **Download** the project directory: **`IJT_Web_Client`** and launch a terminial from the project directory.
 -  **Install** **Python 3.14+** (recommended: 3.14.x) and **Node.js 24.x** from the **official** websites and add them to `PATH`.
 - Ensure that Docker is installed and running **for** Docker Option.
+
+
   
 ## IJT Web Client - Option 1 - Automated Local Setup Script Guide
 
@@ -90,9 +92,32 @@
   ```bash
   python scripts/run_regression.py --endpoint opc.tcp://localhost:40451 --ws-url ws://localhost:8001
   ```
-
-## Project Layout
-- Root user entrypoints remain stable: setup_project.py and run_docker_setup.py.
-- Additional operational documentation lives in docs/.
-- Script implementations are organized under scripts/.
-
+## WSL Setup
+- If WSL is already opened in `IJT_Web_Client`, no `cd` is required.
+- Run one command to bootstrap WSL dependencies and fixes:
+  ```bash
+  bash scripts/bootstrap_wsl.sh
+  ```
+- Optional: bootstrap and also run project setup automatically:
+  ```bash
+  RUN_PROJECT_SETUP=1 bash scripts/bootstrap_wsl.sh
+  ```
+- For WSL usage, launch the OPC UA IJT Server Simulator manually on Windows.
+- Set endpoint in WSL to a Windows-reachable host/IP (recommended once in `~/.bashrc`):
+  ```bash
+  export OPCUA_TEST_ENDPOINT="opc.tcp://<windows-host-or-ip>:40451"
+  ```
+- Start web client services from WSL:
+  ```bash
+  python3.14 setup_project.py --detach
+  ```
+- Open UI from Windows browser:
+  ```text
+  http://localhost:3000
+  ```
+- Optional validation from WSL:
+  ```bash
+  python3.14 scripts/run_tests.py
+  python3.14 scripts/run_regression.py --endpoint "$OPCUA_TEST_ENDPOINT"
+  python3.14 scripts/run_cross_client_regression.py --endpoint "$OPCUA_TEST_ENDPOINT"
+  ```
