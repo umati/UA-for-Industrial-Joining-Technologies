@@ -7,7 +7,7 @@ import BasicScreen from './BasicScreen.mjs'
  */
 export default class ControlMessageSplitScreen extends BasicScreen {
   constructor (title, leftText, rightText, activationPhase) {
-    super(title, activationPhase)
+    super(title)
 
     const columnSetter = document.createElement('div')
     columnSetter.classList.add('columns')
