@@ -38,10 +38,10 @@ async function main() {
             return;
         }
 
-        // the well known node Id for ResultType  Variable Type in IJK namespace
+        // the well known node Id for ResultType  Variable Type in IJT namespace
         const resultTypeNodeId = resolveNodeId(`ns=${nsIJT};i=2001`);
 
-        // the well known node Id for TighteningSystemTypeNodeId  Object Type in IJK namespace
+        // the well known node Id for TighteningSystemTypeNodeId  Object Type in IJT namespace
         const tighteningSystemTypeNodeId = resolveNodeId(`ns=${nsIJT};i=1005`);
 
         // get all TightnessSystem objects in the ObjectFodler
