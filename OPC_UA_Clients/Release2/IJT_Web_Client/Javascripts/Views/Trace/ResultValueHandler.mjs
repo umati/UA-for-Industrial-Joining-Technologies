@@ -106,10 +106,6 @@ export default class ResultValueHandler {
         throw new Error('Unknown physicalQuantity in trace [physicalQuantity=' + value.PhysicalQuantity + ']')
     }
 
-    xHigh = value.HighLimit
-    xLow = value.LowLimit
-    xTarget = value.TargetValue
-
     // Guess where on the non described dimension it should be put
     if (y == null) {
       y = -1

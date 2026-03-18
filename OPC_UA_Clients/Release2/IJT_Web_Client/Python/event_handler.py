@@ -104,8 +104,8 @@ class EventHandler:
                 ijt_log.error(traceback.format_exc())
                 try:
                     await self.websocket.close()
-                except Exception:
-                    pass
+                except Exception as close_exc:
+                    ijt_log.debug(f"WebSocket close failed during error recovery: {close_exc}")
                 break
             finally:
                 self.queue.task_done()

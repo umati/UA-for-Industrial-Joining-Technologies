@@ -11,7 +11,7 @@ import IJTPropertyView from './IJTPropertyView.mjs' // The machine properties vi
  */
 export default class USDemo extends BasicScreen {
   constructor (methodManager, resultManager, connectionManager, settings) {
-    super('Demo', 'tighteningsystem') // Setting the name of the tab
+    super('Demo') // Setting the name of the tab
     this.methodManager = methodManager
     this.resultManager = resultManager
     this.settings = settings

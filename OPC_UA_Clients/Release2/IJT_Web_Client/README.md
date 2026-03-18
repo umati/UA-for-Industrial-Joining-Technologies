@@ -12,7 +12,7 @@
 ## Prerequisites
 -  **Internet Connection**
 -  **Download** the project directory: **`IJT_Web_Client`** and launch a terminial from the project directory.
--  **Install** **Python 3.14+** (recommended: 3.14.x) and **Node.js 24.x** from the **official** websites and add them to `PATH`.
+-  **Install** **Python 3.14+** and **Node.js 24+** from the **official** websites and add them to `PATH`.
 - Ensure that Docker is installed and running **for** Docker Option.
 
 ## OPC UA Server
@@ -68,7 +68,7 @@
   ```
 - Start web client services from WSL:
   ```bash
-  python3.14 setup_project.py --detach
+  python3 setup_project.py --detach
   ```
 - Launch **UI** from **Windows** browser:
   ```text
@@ -96,3 +96,9 @@
   ```bash
   python scripts/run_regression.py --endpoint opc.tcp://localhost:40451 --ws-url ws://localhost:8001
   ```
+### Dependencies Versions
+- **Python:** minimum supported version is **3.14**; newer stable Python versions are allowed automatically.
+- **Node.js:** minimum supported version is **24.0.0**.
+- **asyncua:** defaults to **`asyncua>=1.2b1`** and installs from stable channel first.
+- If stable asyncua resolution fails on very new Python, setup retries with `--pre` (controlled by `ASYNCUA_ALLOW_PRE`).
+- The setup warns (but does **not** fail) when using versions newer than tested baselines (`PYTHON_TESTED_MAX_MINOR`, `NODE_TESTED_MAX_MAJOR`).

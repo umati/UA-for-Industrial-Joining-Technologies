@@ -40,7 +40,7 @@ export default class EndpointGraphics extends BasicScreen {
     this.connectionManager.close()
   }
 
-  activate (state) {
+  activate () {
 
   }
 

@@ -222,8 +222,8 @@ async def discover_target_methods(endpoint: str) -> list[MethodSpec]:
                                                 "value": default_arg_value(dtype_id),
                                             }
                                         )
-                                except Exception:
-                                    pass
+                                except Exception as exc:
+                                    logging.debug("Could not infer method input args for %s: %s", browse.Name, exc)
 
                                 methods.append(
                                     MethodSpec(
@@ -233,8 +233,8 @@ async def discover_target_methods(endpoint: str) -> list[MethodSpec]:
                                         arguments=_build_method_arguments(browse.Name, input_args),
                                     )
                                 )
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logging.debug("Failed to parse method node %s: %s", browse.Name, exc)
 
                     try:
                         children = await node.get_children()

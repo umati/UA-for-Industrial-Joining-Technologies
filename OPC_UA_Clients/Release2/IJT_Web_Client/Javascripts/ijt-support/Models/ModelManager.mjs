@@ -1,8 +1,6 @@
 /* eslint-disable */
 import ResultValueDataType from './Results/ResultValueDataType.mjs'
-//import ProcessingTimesDataType from './ProcessingTimesDataType.mjs'
 import { DefaultNode, BrowseNameDataType, DisplayNameDataType } from './DefaultNode.mjs'
-//import ErrorInformationDataType from './ErrorInformationDataType.mjs'
 import TighteningDataType from './Results/TighteningDataType.mjs'
 import BatchDataModel from './Results/BatchDataType.mjs'
 import JobDataModel from './Results/JobDataModel.mjs'
@@ -17,13 +15,36 @@ import { LocalizationModel,
   ProcessingTimesDataType } from './SupportModels.mjs'
 import { TighteningTraceDataType, StepTraceDataType, TraceContentDataType, TraceValueDataType } from './Results/TighteningTraceDataType.mjs'
 import ResultMetaData from './Results/ResultMetaData.mjs'
-// import ResultContent from './ResultContent.mjs'
-// import AssociatedEntities from './AssociatedEntities.mjs'
 import ResultCounters from './Results/ResultCounters.mjs'
 import JoiningSystemEventModel from './Events/JoiningSystemEventModel.mjs'
 import { EntityDataType } from './Entities/EntityDataType.mjs' 
 import JoiningSystemResultReadyEvent from './Events/JoiningSystemResultReadyEventModel.mjs'
 import IJTBaseModel from './IJTBaseModel.mjs'
+
+const MODEL_CONSTRUCTORS = {
+  ResultValueDataType,
+  BrowseNameDataType,
+  DisplayNameDataType,
+  TighteningDataType,
+  BatchDataModel,
+  JobDataModel,
+  ResultDataType,
+  JoiningResultDataType,
+  StepResultDataType,
+  TagDataType,
+  LocalizationModel,
+  keyValuePair,
+  NodeId,
+  ErrorInformationDataType,
+  ProcessingTimesDataType,
+  TighteningTraceDataType,
+  StepTraceDataType,
+  TraceContentDataType,
+  TraceValueDataType,
+  ResultMetaData,
+  ResultCounters,
+  EntityDataType
+}
 
 /* eslint-disable */
 export class ModelManager {
@@ -86,8 +107,11 @@ export class ModelManager {
                  this.resultTypeNotification(result)
                  return result
             } else { // Some non-result data structure
-              // console.log('Factory selfcast: ' + name[1])
-              return eval('new ' + name[1] + '(content,this)')  
+              const Ctor = MODEL_CONSTRUCTORS[name[1]]
+              if (Ctor) {
+                return new Ctor(content, this)
+              }
+              return new IJTBaseModel(content, this, castMapping)
             }
           }
         }
@@ -147,7 +171,8 @@ export class ModelManager {
   createModelFromRead (values) {
     if (values.ResultMetaData) {
       return new ResultDataType(values, this)
-     }
+    }
+    return null
   }
 
   /**

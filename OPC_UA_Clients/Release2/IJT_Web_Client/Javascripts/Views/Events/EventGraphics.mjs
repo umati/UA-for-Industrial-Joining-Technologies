@@ -6,7 +6,7 @@ import SingleScreen from '../GraphicSupport/SingleScreen.mjs'
  */
 export default class EventGraphics extends SingleScreen {
   constructor (eventManager) {
-    super('Events', 'Events', 'subscribed')
+    super('Events', 'Events')
     this.eventManager = eventManager
     this.modelToHTML = new ModelToHTML()
     this.toggleQueueingState = false

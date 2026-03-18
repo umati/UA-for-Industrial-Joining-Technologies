@@ -5,7 +5,6 @@ import socket
 from typing import Any, Dict
 
 from asyncua import Client, ua
-from asyncua.ua.uaerrors import UaError
 
 from Python.serialize_data import serializeFullEvent, serializeTuple, serializeValue
 from Python.call_structure import createCallStructure

@@ -17,14 +17,32 @@ def _python_in_venv(venv_dir: Path) -> Path:
     return venv_dir / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
 
 
-def _run(cmd: list[str], cwd: Path | None = None) -> None:
+def _build_tmp_env() -> dict[str, str]:
     tmp_dir = STATE_DIR / "tmp"
     tmp_dir.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["TMPDIR"] = str(tmp_dir)
     env["TEMP"] = str(tmp_dir)
     env["TMP"] = str(tmp_dir)
+    return env
+
+
+def _run(cmd: list[str], cwd: Path | None = None) -> None:
+    env = _build_tmp_env()
     subprocess.check_call(cmd, cwd=str(cwd) if cwd else None, env=env)
+
+
+def _run_quiet(cmd: list[str], cwd: Path | None = None) -> int:
+    env = _build_tmp_env()
+    completed = subprocess.run(
+        cmd,
+        cwd=str(cwd) if cwd else None,
+        check=False,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return completed.returncode
 
 
 def _read_text(path: Path) -> str:
@@ -59,27 +77,54 @@ def _save_state(state_file: Path, state: dict) -> None:
 def _ensure_venv(venv_dir: Path) -> Path:
     python_path = _python_in_venv(venv_dir)
     if python_path.exists():
-        pip_probe = subprocess.run(
-            [str(python_path), "-m", "pip", "--version"],
-            cwd=str(PROJECT_ROOT),
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if pip_probe.returncode == 0:
+        if _run_quiet([str(python_path), "-m", "pip", "--version"], cwd=PROJECT_ROOT) == 0:
             return python_path
         try:
             _run([str(python_path), "-m", "ensurepip", "--upgrade"], cwd=PROJECT_ROOT)
             return python_path
         except Exception:
-            shutil.rmtree(venv_dir, ignore_errors=True)
+            # Fallback for environments where ensurepip temp extraction is blocked.
+            try:
+                _run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "--python",
+                        str(python_path),
+                        "install",
+                        "--upgrade",
+                        "pip",
+                    ],
+                    cwd=PROJECT_ROOT,
+                )
+                return python_path
+            except Exception:
+                shutil.rmtree(venv_dir, ignore_errors=True)
 
     venv_dir.parent.mkdir(parents=True, exist_ok=True)
-    _run([sys.executable, "-m", "venv", str(venv_dir)], cwd=PROJECT_ROOT)
+    # Build venv without bundled pip bootstrap first; then run ensurepip under controlled TMP dirs.
+    _run([sys.executable, "-m", "venv", "--without-pip", str(venv_dir)], cwd=PROJECT_ROOT)
     python_path = _python_in_venv(venv_dir)
     if not python_path.exists():
         raise RuntimeError(f"Failed to create virtual environment at '{venv_dir}'")
-    _run([str(python_path), "-m", "ensurepip", "--upgrade"], cwd=PROJECT_ROOT)
+    try:
+        _run([str(python_path), "-m", "ensurepip", "--upgrade"], cwd=PROJECT_ROOT)
+    except Exception:
+        # Fallback for environments where ensurepip temp extraction is blocked.
+        _run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "--python",
+                str(python_path),
+                "install",
+                "--upgrade",
+                "pip",
+            ],
+            cwd=PROJECT_ROOT,
+        )
     return python_path
 
 
@@ -108,21 +153,7 @@ def _ensure_requirements(
     state = _load_state(state_file)
 
     if state.get("fingerprint") == expected_hash and import_probe:
-        tmp_dir = STATE_DIR / "tmp"
-        tmp_dir.mkdir(parents=True, exist_ok=True)
-        env = os.environ.copy()
-        env["TMPDIR"] = str(tmp_dir)
-        env["TEMP"] = str(tmp_dir)
-        env["TMP"] = str(tmp_dir)
-        probe = subprocess.run(
-            [str(python_path), "-c", import_probe],
-            cwd=str(PROJECT_ROOT),
-            check=False,
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if probe.returncode == 0:
+        if _run_quiet([str(python_path), "-c", import_probe], cwd=PROJECT_ROOT) == 0:
             return
 
     for req in existing:

@@ -22,21 +22,11 @@
   <script type='module'>
 
     import {
-      AddressSpace,
-      AssetManager,
-      MethodManager,
-      EventManager,
-      ResultManager,
-      ModelManager,
-      SocketHandler,
       WebSocketManager
     } from 'ijt-support/ijt-support.mjs'
 
-    // import { WebSocketManager } from 'ijt-support/Connection/WebSocketManager.mjs'
-
     import ServerGraphics from 'views/Servers/ServerGraphics.mjs'
     import TabGenerator from 'views/GraphicSupport/TabGenerator.mjs'
-    import EndpointGraphics from 'views/EndpointTab/EndpointGraphics.mjs'
     import Settings from 'views/GraphicSupport/Settings.mjs'
 
 
@@ -90,7 +80,6 @@
      * Run this when the websocket to the webserver has been initialized
      */
     function afterWebSocketConnect(webSocketManager) {
-      const event = {}
       settings = new Settings(webSocketManager)
       settings.settingPromise().then(
         (s) => {

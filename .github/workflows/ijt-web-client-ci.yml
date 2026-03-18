@@ -1,0 +1,120 @@
+name: IJT Web Client CI
+
+on:
+  pull_request:
+    paths:
+      - "OPC_UA_Clients/Release2/IJT_Web_Client/**"
+      - ".github/workflows/ijt-web-client-ci.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "OPC_UA_Clients/Release2/IJT_Web_Client/**"
+      - ".github/workflows/ijt-web-client-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ijt-web-client-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-matrix:
+    name: Tests (Py ${{ matrix.python-version }} / Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.14", "3.x"]
+        node-version: ["24", "lts/*"]
+
+    defaults:
+      run:
+        working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
+            OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Install JS Dependencies
+        run: npm ci
+
+      - name: Python Unit Tests
+        run: python -m pytest tests/python/unit -q
+
+      - name: Python Integration Tests
+        run: python -m pytest tests/python/integration -q -m integration
+
+      - name: JS Unit Tests
+        run: npm run test:unit:js
+
+  docker-smoke:
+    name: Docker Smoke
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: docker build -t ijt_web_client .
+
+      - name: Start Compose Stack
+        run: docker compose up -d
+
+      - name: Wait For HTTP Readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000 >/dev/null; then
+              echo "HTTP endpoint is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Timed out waiting for http://127.0.0.1:3000"
+          docker ps
+          docker logs ijt_web_client || true
+          exit 1
+
+      - name: Verify WebSocket Port
+        shell: bash
+        run: |
+          timeout 30 bash -c 'until (echo > /dev/tcp/127.0.0.1/8001) >/dev/null 2>&1; do sleep 1; done'
+
+      - name: Show Container Status
+        run: docker ps --filter name=ijt_web_client
+
+      - name: Show Recent Logs
+        run: docker logs --tail 120 ijt_web_client
+
+      - name: Teardown Compose Stack
+        if: always()
+        run: docker compose down -v

@@ -1,9 +1,8 @@
 import os
-import socket
-from urllib.parse import urlparse
 
 import pytest
 
+from network_utils import endpoint_reachable
 from Python.connection import Connection
 
 
@@ -16,18 +15,10 @@ def opcua_endpoint() -> str:
     if not endpoint:
         pytest.skip("Set OPCUA_TEST_ENDPOINT to run integration tests.")
 
-    parsed = urlparse(endpoint)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or 40451
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(1.0)
-    try:
-        if sock.connect_ex((host, port)) != 0:
-            pytest.skip(
-                f"OPC UA endpoint {endpoint} is not reachable. Start the simulator/server and rerun."
-            )
-    finally:
-        sock.close()
+    if not endpoint_reachable(endpoint):
+        pytest.skip(
+            f"OPC UA endpoint {endpoint} is not reachable. Start the simulator/server and rerun."
+        )
 
     return endpoint
 

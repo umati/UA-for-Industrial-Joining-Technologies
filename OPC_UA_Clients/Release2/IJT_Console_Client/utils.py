@@ -3,7 +3,7 @@ import traceback
 import aiofiles
 import re
 from datetime import datetime, timezone
-from typing import Optional, Dict, List, Any
+from typing import Optional, List, Any
 from asyncua import Client, ua
 from asyncua.ua import String
 from pathlib import Path
@@ -19,8 +19,8 @@ def _to_json_str(obj) -> str:
     if orjson is not None:
         try:
             return orjson.dumps(obj).decode("utf-8")
-        except Exception:
-            pass
+        except Exception as exc:
+            ijt_log.debug(f"orjson serialization failed; using stdlib json fallback: {exc}")
 
     import json
 
@@ -284,8 +284,8 @@ def nodeid_to_str(nodeid: ua.NodeId) -> str:
                 return f"ns={ns};g={identifier}"
             elif nodeid.NodeIdType == ua.NodeIdType.Opaque:
                 return f"ns={ns};b={identifier}"
-    except Exception:
-        pass
+    except Exception as exc:
+        ijt_log.debug(f"Failed to format node id, falling back to str(): {exc}")
     return str(nodeid)
 
 
@@ -293,8 +293,8 @@ def localizedtext_to_str(lt: ua.LocalizedText) -> str:
     try:
         if isinstance(lt, ua.LocalizedText):
             return lt.Text
-    except Exception:
-        pass
+    except Exception as exc:
+        ijt_log.debug(f"Failed to read localized text, falling back to str(): {exc}")
     return str(lt)
 
 

@@ -7,7 +7,7 @@ import CommonPropertyView from './CommonPropertyView.mjs' // The machine propert
  */
 export default class JointDemo extends BasicScreen {
   constructor (methodManager, resultManager, connectionManager, settings) {
-    super('JointDemo', 'tighteningsystem') // Setting the name of the tab
+    super('JointDemo') // Setting the name of the tab
     this.methodManager = methodManager
     this.resultManager = resultManager
     this.settings = settings

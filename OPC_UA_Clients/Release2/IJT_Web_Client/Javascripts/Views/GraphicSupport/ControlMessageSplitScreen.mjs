@@ -6,8 +6,8 @@ import ControlSplitScreen from './ControlSplitScreen.mjs'
  * Implement your own initiate() function to run code every time the tab is opened
  */
 export default class ControlMessageSplitScreen extends ControlSplitScreen {
-  constructor (title, leftText, rightText, activationPhase) {
-    super(title, leftText, rightText, activationPhase)
+  constructor (title, leftText, rightText) {
+    super(title, leftText, rightText)
 
     this.messages = document.createElement('div')
     this.messages.classList.add('messages')

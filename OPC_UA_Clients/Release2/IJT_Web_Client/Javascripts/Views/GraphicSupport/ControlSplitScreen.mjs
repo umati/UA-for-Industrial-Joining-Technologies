@@ -6,8 +6,8 @@ import BasicScreen from './BasicScreen.mjs'
  * Implement your own initiate() function to run code every time the tab is opened
  */
 export default class ControlSplitScreen extends BasicScreen {
-  constructor (title, leftText, rightText, activationPhase) {
-    super(title, activationPhase)
+  constructor (title, leftText, rightText) {
+    super(title)
 
     const columnSetter = document.createElement('div')
     columnSetter.classList.add('columns')

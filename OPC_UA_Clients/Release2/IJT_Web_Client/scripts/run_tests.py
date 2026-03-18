@@ -1,27 +1,16 @@
 #!/usr/bin/env python3
 import argparse
 import os
-import socket
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
-
-from venv_bootstrap import ensure_test_env, is_current_interpreter
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-
-def _endpoint_reachable(endpoint: str, timeout: float = 1.0) -> bool:
-    parsed = urlparse(endpoint)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or 40451
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(timeout)
-    try:
-        return sock.connect_ex((host, port)) == 0
-    finally:
-        sock.close()
+from network_utils import endpoint_reachable
+from venv_bootstrap import ensure_test_env, is_current_interpreter
 
 
 def main() -> int:
@@ -70,7 +59,7 @@ def main() -> int:
 
     marker = "integration" if args.integration else "not integration"
     endpoint = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
-    if not _endpoint_reachable(endpoint):
+    if not endpoint_reachable(endpoint):
         print(
             f"[WARN] No OPC UA Server running on {endpoint}. "
             "If clients and simulator are in separate folders/downloads, start the server before running tests.",

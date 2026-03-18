@@ -102,7 +102,7 @@ run_project_setup_if_requested() {
   log "Running project setup in: $PROJECT_DIR"
   (
     cd "$PROJECT_DIR"
-    python3.14 setup_project.py
+    python3 setup_project.py
   )
 }
 
@@ -113,10 +113,10 @@ Completed WSL bootstrap.
 
 Next steps:
 1. cd "$PROJECT_DIR"
-2. python3.14 setup_project.py
-3. python3.14 scripts/run_tests.py
-4. python3.14 scripts/run_regression.py
-5. python3.14 scripts/run_cross_client_regression.py
+2. python3 setup_project.py
+3. python3 scripts/run_tests.py
+4. python3 scripts/run_regression.py
+5. python3 scripts/run_cross_client_regression.py
 
 Optional:
 - Run setup automatically in this script:
@@ -140,4 +140,3 @@ main() {
 }
 
 main "$@"
-

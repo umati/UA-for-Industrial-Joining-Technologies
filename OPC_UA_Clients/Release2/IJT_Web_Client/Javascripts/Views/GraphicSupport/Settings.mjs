@@ -6,7 +6,7 @@ import BasicScreen from './BasicScreen.mjs' // Basic functionality application c
  **/
 export default class Settings extends BasicScreen {
   constructor (webSocketManager) {
-    super('Settings', 'tighteningsystem')
+    super('Settings')
     this.loaded = false
     this.resolvers = []
 

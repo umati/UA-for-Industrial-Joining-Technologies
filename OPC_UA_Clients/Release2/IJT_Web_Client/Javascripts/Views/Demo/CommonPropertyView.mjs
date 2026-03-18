@@ -35,7 +35,7 @@ export default class CommonPropertyView {
         this.keys.appendChild(line1)
 
         const line2 = document.createElement('div')
-        let value = eval(p) // eslint-disable-line
+        let value = this.resolvePathValue(result, p)
         if (line1.innerText === 'ResultEvaluation:') {
           line1.innerText = 'ResultStatus:'
           if (parseInt(value) === 1) {
@@ -58,5 +58,20 @@ export default class CommonPropertyView {
         this.values.appendChild(line2)
       }
     }
+  }
+
+  /**
+   * Resolve a dot-path against a result object without using eval.
+   * @param {object} result OPC UA result object
+   * @param {string} path path expression (optionally prefixed with "result.")
+   * @returns {*} resolved value or undefined
+   */
+  resolvePathValue (result, path) {
+    if (!path) return undefined
+    const normalizedPath = path.startsWith('result.') ? path.slice('result.'.length) : path
+    return normalizedPath.split('.').reduce((current, key) => {
+      if (current === undefined || current === null) return undefined
+      return current[key]
+    }, result)
   }
 }

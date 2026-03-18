@@ -2,7 +2,7 @@ import SingleScreen from 'views/GraphicSupport/SingleScreen.mjs'
 
 export default class OkRateGraphics extends SingleScreen {
   constructor (resultManager, methodManager, addressSpace) {
-    super('OK rate', 'OK rate', 'subscribed')
+    super('OK rate', 'OK rate')
     this.resultManager = resultManager
     this.methodManager = methodManager
     this.addressSpace = addressSpace

@@ -15,7 +15,8 @@ import re
 import zipfile
 import signal
 from pathlib import Path
-from urllib.parse import urlparse
+
+from network_utils import endpoint_reachable, parse_endpoint_host_port
 
 STATE_DIR = Path(".state")
 LOGS_DIR = Path("logs")
@@ -94,6 +95,64 @@ def _semver_tuple(ver: str):
     return tuple(nums[:3])
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _warn_if_untested_python(version_string: str | None = None) -> None:
+    if not version_string:
+        version_string = f"{sys.version_info[0]}.{sys.version_info[1]}"
+    try:
+        major, minor = map(int, version_string.split("."))
+    except Exception:
+        return None
+
+    tested_max_minor_raw = os.getenv("PYTHON_TESTED_MAX_MINOR", "14").strip()
+    try:
+        tested_max_minor = int(tested_max_minor_raw)
+    except Exception:
+        log.warning(
+            "Invalid PYTHON_TESTED_MAX_MINOR=%r. Expected integer (e.g. 14).",
+            tested_max_minor_raw,
+        )
+        return None
+
+    if major == 3 and minor > tested_max_minor:
+        log.warning(
+            "Python %s detected. This project officially tests up to 3.%s; continuing in compatibility mode.",
+            version_string,
+            tested_max_minor,
+        )
+    return None
+
+
+def _warn_if_untested_node(version_string: str) -> None:
+    nums = [int(x) for x in re.findall(r"\d+", version_string)]
+    if not nums:
+        return None
+    major = nums[0]
+    tested_max_major_raw = os.getenv("NODE_TESTED_MAX_MAJOR", "24").strip()
+    try:
+        tested_max_major = int(tested_max_major_raw)
+    except Exception:
+        log.warning(
+            "Invalid NODE_TESTED_MAX_MAJOR=%r. Expected integer (e.g. 24).",
+            tested_max_major_raw,
+        )
+        return None
+
+    if major > tested_max_major:
+        log.warning(
+            "Node.js %s detected. This project officially tests up to major %s; continuing in compatibility mode.",
+            version_string,
+            tested_max_major,
+        )
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Windows/Posix: Find newest Python & relaunch under it (future-proof)
 # ---------------------------------------------------------------------------
@@ -168,8 +227,8 @@ def _find_latest_python_executable():
                     )
                     if direct_py.exists():
                         return ([str(direct_py)], version)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Could not resolve direct python.exe via LOCALAPPDATA hint: %s", exc)
         return (cmd, version)
     else:
         # Probe newer to older (extend upper bound periodically, harmless if missing)
@@ -468,8 +527,8 @@ class _SetupLock:
                 import fcntl
 
                 fcntl.flock(self._fh.fileno(), fcntl.LOCK_UN)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Failed to release setup lock cleanly: %s", exc)
         try:
             self._fh.close()
         finally:
@@ -505,20 +564,11 @@ def _is_websocket_server_ready(port: int, timeout: float = 1.5) -> bool:
 
 
 def _parse_endpoint_host_port(endpoint: str) -> tuple[str, int]:
-    parsed = urlparse(endpoint)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or 40451
-    return host, port
+    return parse_endpoint_host_port(endpoint)
 
 
 def _is_endpoint_reachable(endpoint: str, timeout: float = 1.0) -> bool:
-    host, port = _parse_endpoint_host_port(endpoint)
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(timeout)
-    try:
-        return sock.connect_ex((host, port)) == 0
-    finally:
-        sock.close()
+    return endpoint_reachable(endpoint, timeout=timeout)
 
 
 def _env_float(name: str, default: float, minimum: float) -> float:
@@ -654,8 +704,6 @@ def _get_python_path() -> Path:
     """
     Inside Docker, use system python. Otherwise use venv python.
     """
-    # if os.getenv("IS_DOCKER") == "true":
-    #     return Path(sys.executable)
     return _python_in_venv()
 
 
@@ -739,10 +787,6 @@ def _create_virtualenv(latest_cmd):
     - Calls that interpreter directly for ' -m venv '
     - Gives clear guidance if creation fails (Store / broken association cases)
     """
-    # if os.getenv("IS_DOCKER") == "true":
-    #     log.info("Docker detected: skipping virtualenv creation.")
-    #     return
-
     # Remove only the selected venv dir (in Docker this is /opt/ijt_venv, not your bind-mount)
     if VENV_DIR.exists():
 
@@ -763,7 +807,7 @@ def _create_virtualenv(latest_cmd):
     log.info("Creating virtual environment with interpreter: %s", target_exe)
 
     try:
-        subprocess.check_call([target_exe, "-m", "venv", str(VENV_DIR)])
+        subprocess.check_call([target_exe, "-m", "venv", "--without-pip", str(VENV_DIR)])
     except subprocess.CalledProcessError as e:
         log.error("Venv creation failed with %s", e)
         log.error(
@@ -780,18 +824,28 @@ def _create_virtualenv(latest_cmd):
     # Ensure pip inside the new venv
     py = _python_in_venv()
     try:
-        subprocess.check_call([str(py), "-m", "ensurepip", "--upgrade"])
+        tmp_dir = STATE_DIR / "tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        env = os.environ.copy()
+        env["TMPDIR"] = str(tmp_dir)
+        env["TEMP"] = str(tmp_dir)
+        env["TMP"] = str(tmp_dir)
+        subprocess.check_call([str(py), "-m", "ensurepip", "--upgrade"], env=env)
     except Exception as e:
-        log.warning("Failed to ensure pip in virtualenv: %s", e)
+        log.warning("Failed to ensure pip in virtualenv via ensurepip: %s", e)
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "--python", str(py), "install", "--upgrade", "pip"]
+        )
 
 
 # ---------------------------------------------------------------------------
-# Python: Install packages (requirements + asyncua pre-release support)
+# Python: Install packages (stable-first asyncua with optional pre-release fallback)
 # ---------------------------------------------------------------------------
 def _install_python_packages():
     """
-    Install from requirements.txt, then ensure 'asyncua' is upgraded allowing pre-releases.
-    (asyncua first shipped explicit Python 3.14 support in v1.2b1; using --pre helps future X.Y)  # noqa
+    Install from requirements.txt, then ensure asyncua in the configured range.
+    Prefer stable builds first; if resolution fails (e.g. newest Python support lag),
+    optionally retry with --pre.
     """
     python = _get_python_path()
     log.info("Using Python executable: %s", python)
@@ -825,16 +879,31 @@ def _install_python_packages():
                 "pyOpenSSL",
             ]
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Optional crypto stack upgrade skipped: %s", exc)
 
-    # Finally, allow asyncua pre-releases to support newest Python versions automatically
-    log.info(
-        "Ensuring asyncua supports the newest Python (allowing pre-releases if needed)..."
-    )
-    subprocess.check_call(
-        [str(python), "-m", "pip", "install", "--upgrade", "--pre", "asyncua>=1.2b1"]
-    )
+    # Stable-first asyncua install. Keep default broad to allow future stable releases.
+    asyncua_spec = os.getenv("ASYNCUA_VERSION_SPEC", "asyncua>=1.2b1").strip()
+    allow_pre_fallback = _env_bool("ASYNCUA_ALLOW_PRE", True)
+    log.info("Ensuring %s (stable channel)...", asyncua_spec)
+    try:
+        subprocess.check_call(
+            [str(python), "-m", "pip", "install", "--upgrade", asyncua_spec]
+        )
+    except Exception as exc:
+        if not allow_pre_fallback:
+            log.error(
+                "Stable asyncua install failed (%s) and ASYNCUA_ALLOW_PRE is disabled.",
+                exc,
+            )
+            raise
+        log.warning(
+            "Stable asyncua install failed (%s). Retrying with --pre for compatibility.",
+            exc,
+        )
+        subprocess.check_call(
+            [str(python), "-m", "pip", "install", "--upgrade", "--pre", asyncua_spec]
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -884,6 +953,7 @@ def _create_nodeenv():
         )
         sys.exit(1)
 
+    _warn_if_untested_node(node_ver)
     log.info("Node.js %s OK (>= %s). npm and npx found.", node_ver, required_node_ver)
     log.info("Using node: %s", node_path)
     log.info("Using npm:  %s", npm_path)
@@ -1127,6 +1197,7 @@ def main():
     # Always ensure we run under the newest Python available.
     _relaunch_under_latest_python()
     _require_python_314_or_newer()
+    _warn_if_untested_python()
 
     parser = argparse.ArgumentParser(
         description="Setup and run the IJT Web Client environment.",
@@ -1222,9 +1293,9 @@ def main():
 
     latest_cmd, latest_ver = _find_latest_python_executable()
     _require_python_314_or_newer(latest_ver)
+    _warn_if_untested_python(latest_ver)
     log.info("Newest Python detected on this system: %s", latest_ver)
 
-    # if os.getenv("IS_DOCKER") != "true":
     _create_virtualenv(latest_cmd)
     _install_python_packages()
 

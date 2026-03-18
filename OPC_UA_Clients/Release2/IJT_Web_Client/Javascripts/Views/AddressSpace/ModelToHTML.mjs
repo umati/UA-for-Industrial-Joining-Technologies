@@ -106,7 +106,7 @@ export default class ModelToHTML {
       // console.log(`${key}: ${value}`)
       if (!value || key === 'parent') {
         /* Do nothing for parents */
-      } else if (!value || key === 'data_types') {
+      } else if (key === 'data_types') {
         /* Do nothing for data_types since the structure can't easily be parsed */
       } else if (key === 'relations') {
         // console.log('Relation values: ' + value)

@@ -1,6 +1,7 @@
 import asyncio
 import importlib
 import json
+import logging
 import os
 import sys
 import time
@@ -9,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from asyncua import Client, ua
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -36,40 +39,40 @@ def payload_to_nodeid_string(payload: dict[str, Any]) -> str:
 
 def default_arg_value(dtype_identifier: int) -> Any:
     mapping = {
-        1: True,
-        2: 1,
-        3: 1,
-        4: 1,
-        5: 1,
-        6: 1,
-        7: 1,
-        8: 1,
-        9: 1,
-        10: 1.0,
-        11: 1.0,
-        12: "1",
-        13: "2026-01-01T00:00:00Z",
-        31918: "1",
+        1: True,                  # Boolean
+        2: 1,                     # SByte
+        3: 1,                     # Byte
+        4: 1,                     # Int16
+        5: 1,                     # UInt16
+        6: 1,                     # Int32
+        7: 1,                     # UInt32
+        8: 1,                     # Int64
+        9: 1,                     # UInt64
+        10: 1.0,                  # Float
+        11: 1.0,                  # Double
+        12: "1",                  # String
+        13: "2026-01-01T00:00:00Z",  # DateTime
+        31918: "1",               # TrimmedString (IJT custom type)
     }
     return mapping.get(dtype_identifier, "1")
 
 
 def map_nodeid_to_varianttype(nodeid_identifier: int) -> ua.VariantType:
     mapping = {
-        1: ua.VariantType.Boolean,
-        2: ua.VariantType.SByte,
-        3: ua.VariantType.Byte,
-        4: ua.VariantType.Int16,
-        5: ua.VariantType.UInt16,
-        6: ua.VariantType.Int32,
-        7: ua.VariantType.UInt32,
-        8: ua.VariantType.Int64,
-        9: ua.VariantType.UInt64,
-        10: ua.VariantType.Float,
-        11: ua.VariantType.Double,
-        12: ua.VariantType.String,
-        13: ua.VariantType.DateTime,
-        31918: ua.VariantType.String,
+        1: ua.VariantType.Boolean,   # Boolean
+        2: ua.VariantType.SByte,     # SByte
+        3: ua.VariantType.Byte,      # Byte
+        4: ua.VariantType.Int16,     # Int16
+        5: ua.VariantType.UInt16,    # UInt16
+        6: ua.VariantType.Int32,     # Int32
+        7: ua.VariantType.UInt32,    # UInt32
+        8: ua.VariantType.Int64,     # Int64
+        9: ua.VariantType.UInt64,    # UInt64
+        10: ua.VariantType.Float,    # Float
+        11: ua.VariantType.Double,   # Double
+        12: ua.VariantType.String,   # String
+        13: ua.VariantType.DateTime, # DateTime
+        31918: ua.VariantType.String,  # TrimmedString (IJT custom type)
     }
     return mapping.get(nodeid_identifier, ua.VariantType.String)
 
@@ -113,8 +116,8 @@ async def discover_simulation_methods(endpoint: str) -> list[MethodSpec]:
                 browse_name = await node.read_browse_name()
                 if browse_name.Name == "Simulations":
                     simulation_nodes.append(node)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to inspect browse name while finding simulation node: %s", exc)
 
             try:
                 children = await node.get_children()
@@ -156,8 +159,8 @@ async def discover_simulation_methods(endpoint: str) -> list[MethodSpec]:
                                         "value": default_arg_value(dtype),
                                     }
                                 )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug("Could not infer method input args for %s: %s", browse.Name, exc)
 
                         methods.append(
                             MethodSpec(

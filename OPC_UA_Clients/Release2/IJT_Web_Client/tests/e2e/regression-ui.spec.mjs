@@ -41,7 +41,7 @@ test('UI regression flow for methods, joint demo, and consolidated results', asy
   await callMethodByName(page, ['SimulateSingleResult'])
   await callMethodByName(page, ['SimulateJobResult'])
   await callMethodByName(page, ['Simulate_Batch_or_SYNC_Result', 'SimulateBatch_Or_Sync_Result', 'SimulateBatchOrSyncResult'])
-  await callMethodByName(page, ['SimualteEvents', 'SimulateEvents'])
+  await callMethodByName(page, ['SimulateEvents'])
 
   // Joint demo interactions: Select 1 -> tighten, Select 2 -> tighten.
   await clickTab(page, 'JointDemo')

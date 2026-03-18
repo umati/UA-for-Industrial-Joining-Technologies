@@ -58,6 +58,13 @@ def _run_command(cmd: list[str], check: bool = True) -> subprocess.CompletedProc
     return subprocess.run(cmd, check=False)
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _list_pythons_windows() -> list[str]:
     try:
         out = subprocess.check_output(["py", "-0"], text=True, stderr=subprocess.STDOUT)
@@ -143,6 +150,32 @@ def _require_python_314_or_newer(version_string: str | None = None) -> None:
     if (major, minor) < (3, 14):
         log.error("Python 3.14 or newer is required. Current interpreter: %s.%s", major, minor)
         sys.exit(1)
+
+
+def _warn_if_untested_python(version_string: str | None = None) -> None:
+    if not version_string:
+        version_string = f"{sys.version_info[0]}.{sys.version_info[1]}"
+    try:
+        major, minor = map(int, version_string.split("."))
+    except Exception:
+        return
+
+    tested_max_minor_raw = os.getenv("PYTHON_TESTED_MAX_MINOR", "14").strip()
+    try:
+        tested_max_minor = int(tested_max_minor_raw)
+    except Exception:
+        log.warning(
+            "Invalid PYTHON_TESTED_MAX_MINOR=%r. Expected integer (e.g. 14).",
+            tested_max_minor_raw,
+        )
+        return
+
+    if major == 3 and minor > tested_max_minor:
+        log.warning(
+            "Python %s detected. This project officially tests up to 3.%s; continuing in compatibility mode.",
+            version_string,
+            tested_max_minor,
+        )
 
 
 def _resolve_python_executable(latest_cmd: list[str]) -> str:
@@ -350,15 +383,36 @@ def _create_virtualenv(latest_cmd: list[str]) -> None:
     log.info("Creating virtual environment with interpreter: %s", target_exe)
 
     try:
-        subprocess.check_call([target_exe, "-m", "venv", str(VENV_DIR)])
+        subprocess.check_call([target_exe, "-m", "venv", "--without-pip", str(VENV_DIR)])
     except subprocess.CalledProcessError as exc:
         log.error("Venv creation failed: %s", exc)
         sys.exit(1)
 
     try:
-        subprocess.check_call([str(_python_in_venv()), "-m", "ensurepip", "--upgrade"])
+        tmp_dir = Path(".state") / "tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        env = os.environ.copy()
+        env["TMPDIR"] = str(tmp_dir)
+        env["TEMP"] = str(tmp_dir)
+        env["TMP"] = str(tmp_dir)
+        subprocess.check_call(
+            [str(_python_in_venv()), "-m", "ensurepip", "--upgrade"],
+            env=env,
+        )
     except Exception as exc:
-        log.warning("Failed to ensure pip in virtualenv: %s", exc)
+        log.warning("Failed to ensure pip in virtualenv via ensurepip: %s", exc)
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "--python",
+                str(_python_in_venv()),
+                "install",
+                "--upgrade",
+                "pip",
+            ]
+        )
 
 
 def _install_python_packages() -> None:
@@ -383,18 +437,40 @@ def _install_python_packages() -> None:
             "cryptography",
             "pyOpenSSL",
         ])
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Optional crypto stack upgrade skipped: %s", exc)
 
-    subprocess.check_call([
-        str(python),
-        "-m",
-        "pip",
-        "install",
-        "--upgrade",
-        "--pre",
-        "asyncua>=1.2b1",
-    ])
+    asyncua_spec = os.getenv("ASYNCUA_VERSION_SPEC", "asyncua>=1.2b1").strip()
+    allow_pre_fallback = _env_bool("ASYNCUA_ALLOW_PRE", True)
+    try:
+        subprocess.check_call([
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            asyncua_spec,
+        ])
+    except Exception as exc:
+        if not allow_pre_fallback:
+            log.error(
+                "Stable asyncua install failed (%s) and ASYNCUA_ALLOW_PRE is disabled.",
+                exc,
+            )
+            raise
+        log.warning(
+            "Stable asyncua install failed (%s). Retrying with --pre for compatibility.",
+            exc,
+        )
+        subprocess.check_call([
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "--pre",
+            asyncua_spec,
+        ])
 
 
 def _is_runtime_ready() -> bool:
@@ -468,6 +544,7 @@ def _run_client(url_arg: str, passthrough: list[str] | None) -> None:
 def main() -> None:
     _relaunch_under_latest_python()
     _require_python_314_or_newer()
+    _warn_if_untested_python()
 
     parser = argparse.ArgumentParser(description="Setup and run IJT Console Client.")
     parser.add_argument("--url", type=str, help="OPC UA server URL (opc.tcp://...)")
@@ -478,6 +555,7 @@ def main() -> None:
 
     latest_cmd, latest_ver = _find_latest_python_executable()
     _require_python_314_or_newer(latest_ver)
+    _warn_if_untested_python(latest_ver)
 
     if args.clean:
         if VENV_DIR.exists():

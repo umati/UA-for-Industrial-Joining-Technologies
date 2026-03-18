@@ -4,7 +4,7 @@ import aiofiles
 import re
 import json
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional
 from asyncua import Client, ua
 from pathlib import Path
 from Python.ijt_logger import ijt_log
@@ -255,8 +255,8 @@ def nodeid_to_str(nodeid: ua.NodeId) -> str:
                 return f"ns={ns};g={identifier}"
             elif nodeid_type == ua.NodeIdType.Opaque:
                 return f"ns={ns};b={identifier}"
-    except Exception:
-        pass
+    except Exception as exc:
+        ijt_log.debug(f"Failed to format node id, falling back to str(): {exc}")
     return str(nodeid)
 
 
@@ -264,8 +264,8 @@ def localizedtext_to_str(lt: ua.LocalizedText) -> str:
     try:
         if isinstance(lt, ua.LocalizedText):
             return lt.Text
-    except Exception:
-        pass
+    except Exception as exc:
+        ijt_log.debug(f"Failed to read localized text, falling back to str(): {exc}")
     return str(lt)
 
 

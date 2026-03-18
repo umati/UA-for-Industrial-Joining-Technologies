@@ -7,8 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --upgrade pip && \
-    pip install --upgrade requests python-dotenv nodeenv websockets packaging && \
-    pip install --upgrade --pre "asyncua>=1.2b1"
+    pip install --upgrade requests python-dotenv nodeenv websockets packaging
 
 ENV IS_DOCKER=true
 ENV PYTHONUNBUFFERED=1
