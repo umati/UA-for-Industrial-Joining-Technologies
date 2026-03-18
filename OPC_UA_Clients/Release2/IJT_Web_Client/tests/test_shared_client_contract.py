@@ -124,8 +124,12 @@ async def test_shared_client_contract(adapter_name: str, opcua_endpoint: str, ws
                 call_results.append({"name": name, "status": "not_found"})
                 continue
 
-            result = await adapter.call_method(spec)
-            ok = "exception" not in str(result).lower()
+            try:
+                result = await adapter.call_method(spec)
+                ok = True
+            except Exception as exc:
+                result = exc
+                ok = False
             call_results.append({"name": name, "status": "ok" if ok else "failed", "result": result})
 
         failures = [x for x in call_results if x["status"] == "failed"]
