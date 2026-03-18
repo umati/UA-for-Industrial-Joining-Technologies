@@ -75,7 +75,7 @@ export default class AssetGraphics extends BasicScreen {
       drawAssetWithExternals(associations, controller) // Draw it
 
       for (const tool of assetObject.Tools) { // Draw the tool separately
-        for (const association of associations) { // But only the tools assocoated to the above controller
+        for (const association of associations) { // But only the tools associated to the above controller
           if (association.nodeId === tool.nodeId) {
             this.createTool(tool, controller)
             drawAssetRecursive(tool)
