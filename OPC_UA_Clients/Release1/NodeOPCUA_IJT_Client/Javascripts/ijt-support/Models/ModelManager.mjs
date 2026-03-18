@@ -81,7 +81,8 @@ export class ModelManager {
   createModelFromRead (values) {
     if (values.resultId) {
       return new ResultDataType(values, this)
-     }
+    }
+    return null
   }
 
   /**
