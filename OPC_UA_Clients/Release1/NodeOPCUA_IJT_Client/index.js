@@ -13,7 +13,7 @@ import {
 import { NodeOPCUAInterface } from './Javascripts/ijt-support/Client/NodeOPCUAInterface.mjs';
 
 const app = express();
-const http = httpTemp.Server(app);
+const http = httpTemp.createServer(app);
 const io = new Server(http);
 const port = process.env.PORT || 3000;
 
