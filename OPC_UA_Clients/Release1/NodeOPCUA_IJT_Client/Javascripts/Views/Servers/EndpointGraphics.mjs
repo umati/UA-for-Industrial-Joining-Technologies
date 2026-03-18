@@ -3,7 +3,6 @@
  */
 import {
   AddressSpace,
-  AssetManager,
   MethodManager,
   EventManager,
   ResultManager,
