@@ -1,6 +1,5 @@
 /* eslint-disable */
 import ResultDataType from './ResultDataModel.mjs'
-import StepResultDataType from './StepResultDataType.mjs'
 /* eslint-disable */
 export class ModelManager {
   /**
