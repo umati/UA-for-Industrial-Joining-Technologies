@@ -11,6 +11,45 @@ from tests.shared_opcua.adapters import adapters_from_env, discover_simulation_m
 pytestmark = pytest.mark.integration
 
 
+def _is_websocket_startup_error(exc: Exception) -> bool:
+    if isinstance(exc, (ConnectionRefusedError, TimeoutError, OSError)):
+        return True
+
+    try:
+        from websockets import exceptions as ws_exceptions
+
+        ws_related = []
+        for name in (
+            "WebSocketException",
+            "InvalidURI",
+            "InvalidStatus",
+            "InvalidStatusCode",
+            "InvalidHandshake",
+            "NegotiationError",
+        ):
+            typ = getattr(ws_exceptions, name, None)
+            if typ is not None:
+                ws_related.append(typ)
+        if ws_related and isinstance(exc, tuple(ws_related)):
+            return True
+    except Exception:
+        pass
+
+    msg = str(exc).lower()
+    return any(
+        token in msg
+        for token in (
+            "websocket",
+            "handshake",
+            "connection refused",
+            "failed to establish a new connection",
+            "invalid uri",
+            "ws://",
+            "wss://",
+        )
+    )
+
+
 @pytest.fixture
 def opcua_endpoint() -> str:
     endpoint = os.getenv("OPCUA_TEST_ENDPOINT")
@@ -54,7 +93,7 @@ async def test_shared_client_contract(adapter_name: str, opcua_endpoint: str, ws
             await adapter.start()
         except Exception as exc:
             msg = str(exc).lower()
-            if adapter_name == "web":
+            if adapter_name == "web" and _is_websocket_startup_error(exc):
                 pytest.skip(
                     f"Web adapter websocket is unavailable/misconfigured at {ws_url}: {exc}"
                 )

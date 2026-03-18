@@ -30,7 +30,6 @@
     import Settings from 'views/GraphicSupport/Settings.mjs'
 
 
-    let connection = false
     let topLevelTabs
     let settings
 
@@ -95,7 +94,7 @@
     }
 
     // Establish a websocket to the webserver
-    const webSocketManager = new WebSocketManager(afterWebSocketConnect, window.APP_CONFIG.getWebSocketUrl())
+    window.webSocketManager = new WebSocketManager(afterWebSocketConnect, window.APP_CONFIG.getWebSocketUrl())
 
     // Ensure all connections are closed when leaving page or refreshing it
     window.onbeforeunload = function (event) {

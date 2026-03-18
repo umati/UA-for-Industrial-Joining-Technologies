@@ -265,6 +265,7 @@ def _find_latest_python_executable():
         except Exception:
             log.error("Could not find a usable Python 3 interpreter on this system.")
             sys.exit(1)
+    return None
 
 
 def _relaunch_under_latest_python():
@@ -775,6 +776,7 @@ def _resolve_python_executable(latest_cmd):
             "Failed to resolve Python executable from %s: %s", " ".join(latest_cmd), e
         )
         sys.exit(1)
+    return None
 
 
 # ---------------------------------------------------------------------------
