@@ -20,7 +20,6 @@ import {
 
 const endpointUrl = 'opc.tcp://127.0.0.1:40451';
 
-
 async function main() {
     const client = OPCUAClient.create({
         endpointMustExist: false,
