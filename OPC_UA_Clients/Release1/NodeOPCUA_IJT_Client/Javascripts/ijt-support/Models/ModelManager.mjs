@@ -15,7 +15,7 @@ export class ModelManager {
    * @returns
    */
   factory (parameterName, content, castMapping) {
-    if (typeof content === 'object' && Array !== content.constructor) {
+    if (typeof content === 'object' && !Array.isArray(content)) {
       let obj
       if (content.dataType === 'ExtensionObject') {
         content = content.value
