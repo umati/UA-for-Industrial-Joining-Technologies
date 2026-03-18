@@ -45,12 +45,12 @@ async function main() {
         const tighteningSystemTypeNodeId = resolveNodeId(`ns=${nsIJT};i=1005`);
 
         // get all TightnessSystem objects in the ObjectFodler
-        const thighteningSystems = await findChildrenOfType(ObjectIds.ObjectsFolder, 'Organizes', tighteningSystemTypeNodeId);
+        const tighteningSystems = await findChildrenOfType(ObjectIds.ObjectsFolder, 'Organizes', tighteningSystemTypeNodeId);
 
-        console.log('thighteningSystems found =', thighteningSystems.map((a) => a.browseName.toString()).join(','))
+        console.log('tighteningSystems found =', tighteningSystems.map((a) => a.browseName.toString()).join(','))
         // explore each one of them.
-        for (const thighteningSystem of thighteningSystems) {
-            await exploreTighteningSystem(thighteningSystem);
+        for (const tighteningSystem of tighteningSystems) {
+            await exploreTighteningSystem(tighteningSystem);
         }
 
 
