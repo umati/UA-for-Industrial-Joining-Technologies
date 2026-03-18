@@ -113,7 +113,10 @@ async def test_shared_client_contract(adapter_name: str, opcua_endpoint: str, ws
         assert namespaces.get("namespaces"), f"{adapter_name} namespaces empty: {namespaces}"
 
         read_result = await adapter.read_objects()
-        assert "exception" not in str(read_result).lower(), f"{adapter_name} read failed: {read_result}"
+        if isinstance(read_result, dict) and "status" in read_result:
+            assert read_result["status"] == "ok", f"{adapter_name} read failed: {read_result}"
+        else:
+            assert "exception" not in str(read_result).lower(), f"{adapter_name} read failed: {read_result}"
 
         await adapter.subscribe()
 
@@ -124,15 +127,19 @@ async def test_shared_client_contract(adapter_name: str, opcua_endpoint: str, ws
                 call_results.append({"name": name, "status": "not_found"})
                 continue
 
-            result = await adapter.call_method(spec)
-            ok = "exception" not in str(result).lower()
+            try:
+                result = await adapter.call_method(spec)
+                ok = True
+            except Exception as exc:
+                result = exc
+                ok = False
             call_results.append({"name": name, "status": "ok" if ok else "failed", "result": result})
 
         failures = [x for x in call_results if x["status"] == "failed"]
         assert not failures, f"{adapter_name} method failures: {failures}"
 
         events = await adapter.collect_events(seconds=6.0)
-        assert events.get("total", 0) >= 0
+        assert events.get("total", 0) > 0
 
     finally:
         with contextlib.suppress(Exception):
