@@ -19,8 +19,6 @@ import {
 
 
 const endpointUrl = 'opc.tcp://127.0.0.1:40451';
-const nodeId = 'ns=1;s=/ObjectsFolder/TighteningSystem/ResultManagement/Results/Result';
-
 
 async function main() {
     const client = OPCUAClient.create({
