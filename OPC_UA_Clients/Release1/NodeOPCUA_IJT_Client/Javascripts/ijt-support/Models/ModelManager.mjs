@@ -1,6 +1,5 @@
 /* eslint-disable */
 import ResultDataType from './ResultDataModel.mjs'
-/* eslint-disable */
 export class ModelManager {
   /**
    * The purpose of this method is to create a javascript class from a parameter name
