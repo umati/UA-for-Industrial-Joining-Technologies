@@ -1,7 +1,5 @@
 /* eslint-disable */
 import ResultValueDataType from './ResultValueDataType.mjs'
-import ProcessingTimesDataType from './ProcessingTimesDataType.mjs'
-import { DefaultNode, BrowseNameDataType, DisplayNameDataType } from './DefaultNode.mjs'
 import ErrorInformationDataType from './ErrorInformationDataType.mjs'
 import TighteningResultDataType from './TighteningResultDataType.mjs'
 import ResultDataType from './ResultDataModel.mjs'
