@@ -23,15 +23,15 @@
     ```bash
     python setup_project.py
     ```
-- **Default run is foreground-managed; Ctrl+C stops managed processes cleanly:**
+- **Default run is foreground-managed. Ctrl+C stops managed processes cleanly:**
    ```bash
    python setup_project.py
    ```
-- **Run detached (old behavior):**
+- **Run detached:**
    ```bash
    python setup_project.py --detach
    ```
-- **Show/stop managed local frontend+backend processes:**
+- **Manage local frontend and backend processes:**
    ```bash
    python setup_project.py --status
    python setup_project.py --stop
@@ -40,11 +40,11 @@
    ```bash
    python setup_project.py --force_full
    ```
-- **Run regression tests (autonomous `venv_test` bootstrap):**
+- **Run regression tests:**
    ```bash
    python setup_project.py --run-tests
    ```
-- **Run integration tests (autonomous `venv_test` bootstrap; requires `OPCUA_TEST_ENDPOINT`):**
+- **Run integration tests (requires `OPCUA_TEST_ENDPOINT`):**
    ```bash
    python setup_project.py --integration-tests
    ```
@@ -75,7 +75,7 @@
   ```bash
   python scripts/run_tests.py
   ```
-- Run docker setup smoke tests (includes local-mode pass-through checks for `run_docker_setup.py`):
+- Run docker setup smoke tests:
   ```bash
   python scripts/run_tests.py --docker-tests
   ```
@@ -88,22 +88,18 @@
   set OPCUA_TEST_ENDPOINT=opc.tcp://<host>:<port>
   python scripts/run_tests.py --integration
   ```
-- Run functional regression directly (also autonomous test env bootstrap):
+- Run functional regression directly:
   ```bash
   python scripts/run_regression.py --endpoint opc.tcp://localhost:40451 --ws-url ws://localhost:8001
   ```
-## WSL Setup
-- If WSL is already opened in `IJT_Web_Client`, no `cd` is required.
-- Run one command to bootstrap WSL dependencies and fixes:
-  ```bash
-  bash scripts/bootstrap_wsl.sh
-  ```
-- Optional: bootstrap and also run project setup automatically:
+## WSL Setup for Ubuntu
+- Lauch the terminal and change the directory to Project Directory: `IJT_Web_Client`.
+- Run one command to install WSL dependencies and run the project setup automatically:
   ```bash
   RUN_PROJECT_SETUP=1 bash scripts/bootstrap_wsl.sh
   ```
 - For WSL usage, launch the OPC UA IJT Server Simulator manually on Windows.
-- Set endpoint in WSL to a Windows-reachable host/IP (recommended once in `~/.bashrc`):
+- Set endpoint in WSL to a Windows-reachable host/IP:
   ```bash
   export OPCUA_TEST_ENDPOINT="opc.tcp://<windows-host-or-ip>:40451"
   ```
