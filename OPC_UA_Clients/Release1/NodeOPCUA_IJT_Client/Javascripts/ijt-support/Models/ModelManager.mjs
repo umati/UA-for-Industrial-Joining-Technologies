@@ -1,5 +1,4 @@
 /* eslint-disable */
-import ResultValueDataType from './ResultValueDataType.mjs'
 import ResultDataType from './ResultDataModel.mjs'
 import StepResultDataType from './StepResultDataType.mjs'
 import TagDataType from './TagDataType.mjs'
