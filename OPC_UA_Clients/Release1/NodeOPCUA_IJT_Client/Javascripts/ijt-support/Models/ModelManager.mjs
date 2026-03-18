@@ -2,7 +2,6 @@
 import ResultDataType from './ResultDataModel.mjs'
 import StepResultDataType from './StepResultDataType.mjs'
 import TagDataType from './TagDataType.mjs'
-import { LocalizationModel, keyValuePair } from './SupportModels.mjs'
 import { TighteningTraceDataType, StepTraceDataType, TraceContentDataType, TraceValueDataType } from './TighteningTraceDataType.mjs'
 /* eslint-disable */
 export class ModelManager {
