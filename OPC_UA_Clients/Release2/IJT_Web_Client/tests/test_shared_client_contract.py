@@ -132,7 +132,7 @@ async def test_shared_client_contract(adapter_name: str, opcua_endpoint: str, ws
         assert not failures, f"{adapter_name} method failures: {failures}"
 
         events = await adapter.collect_events(seconds=6.0)
-        assert events.get("total", 0) >= 0
+        assert events.get("total", 0) > 0
 
     finally:
         with contextlib.suppress(Exception):
