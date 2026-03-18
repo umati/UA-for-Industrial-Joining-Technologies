@@ -1,6 +1,5 @@
 /* eslint-disable */
 import ResultValueDataType from './ResultValueDataType.mjs'
-import ErrorInformationDataType from './ErrorInformationDataType.mjs'
 import TighteningResultDataType from './TighteningResultDataType.mjs'
 import ResultDataType from './ResultDataModel.mjs'
 import StepResultDataType from './StepResultDataType.mjs'
