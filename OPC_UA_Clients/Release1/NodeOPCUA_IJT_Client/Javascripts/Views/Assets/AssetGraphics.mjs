@@ -6,7 +6,7 @@ import BasicScreen from '../GraphicSupport/BasicScreen.mjs'
  */
 export default class AssetGraphics extends BasicScreen {
   constructor (assetManager) {
-    super('Assets', 'tighteningsystem')
+    super('Assets')
     this.assetManager = assetManager
 
     const displayArea = document.createElement('div')
