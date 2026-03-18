@@ -55,7 +55,7 @@ export default class AssetGraphics extends BasicScreen {
     }
 
     let i = 0
-    const externals = [ // What goues outside the box
+    const externals = [ // What goes outside the box
       ...assetObject.PowerSupplies,
       ...assetObject.Feeders,
       ...assetObject.Cables,
