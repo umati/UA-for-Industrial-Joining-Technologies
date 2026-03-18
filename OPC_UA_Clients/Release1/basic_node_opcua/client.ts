@@ -38,19 +38,19 @@ async function main() {
             return;
         }
 
-        // the well known node Id for ResultType  Variable Type in IJK namespace
+        // the well known node Id for ResultType  Variable Type in IJT namespace
         const resultTypeNodeId = resolveNodeId(`ns=${nsIJT};i=2001`);
 
-        // the well known node Id for TighteningSystemTypeNodeId  Object Type in IJK namespace
+        // the well known node Id for TighteningSystemTypeNodeId  Object Type in IJT namespace
         const tighteningSystemTypeNodeId = resolveNodeId(`ns=${nsIJT};i=1005`);
 
         // get all TightnessSystem objects in the ObjectFodler
-        const thighteningSystems = await findChildrenOfType(ObjectIds.ObjectsFolder, 'Organizes', tighteningSystemTypeNodeId);
+        const tighteningSystems = await findChildrenOfType(ObjectIds.ObjectsFolder, 'Organizes', tighteningSystemTypeNodeId);
 
-        console.log('thighteningSystems found =', thighteningSystems.map((a) => a.browseName.toString()).join(','))
+        console.log('tighteningSystems found =', tighteningSystems.map((a) => a.browseName.toString()).join(','))
         // explore each one of them.
-        for (const thighteningSystem of thighteningSystems) {
-            await exploreTighteningSystem(thighteningSystem);
+        for (const tighteningSystem of tighteningSystems) {
+            await exploreTighteningSystem(tighteningSystem);
         }
 
 
