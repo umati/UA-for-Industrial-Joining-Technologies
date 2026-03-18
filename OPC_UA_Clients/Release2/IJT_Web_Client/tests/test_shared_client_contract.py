@@ -113,7 +113,10 @@ async def test_shared_client_contract(adapter_name: str, opcua_endpoint: str, ws
         assert namespaces.get("namespaces"), f"{adapter_name} namespaces empty: {namespaces}"
 
         read_result = await adapter.read_objects()
-        assert "exception" not in str(read_result).lower(), f"{adapter_name} read failed: {read_result}"
+        if isinstance(read_result, dict) and "status" in read_result:
+            assert read_result["status"] == "ok", f"{adapter_name} read failed: {read_result}"
+        else:
+            assert "exception" not in str(read_result).lower(), f"{adapter_name} read failed: {read_result}"
 
         await adapter.subscribe()
 
