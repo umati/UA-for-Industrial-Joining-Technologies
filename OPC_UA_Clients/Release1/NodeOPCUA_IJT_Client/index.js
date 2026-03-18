@@ -48,5 +48,5 @@ http.listen(port, () => {
 });
 
 // ----------------------------- SocketIO -----------------------------
-const nodeOPCUAInterface = new NodeOPCUAInterface(io, AttributeIds, OPCUAClient);
+const nodeOPCUAInterface = new NodeOPCUAInterface(io, AttributeIds);
 nodeOPCUAInterface.setupSocketIO(OPCUAClient);
