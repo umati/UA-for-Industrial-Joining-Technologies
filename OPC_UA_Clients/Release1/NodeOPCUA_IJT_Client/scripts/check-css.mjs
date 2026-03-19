@@ -84,7 +84,7 @@ function checkFile (filePath) {
       findings.push(`${filePath}:${lineNo} missing space after colon`)
     }
 
-    if (declaration.property === 'border-radius' && /^-?\d+(\.\d+)?$/.test(declaration.value)) {
+    if (declaration.property === 'border-radius' && /^\d+(\.\d+)?$/.test(declaration.value)) {
       findings.push(`${filePath}:${lineNo} border-radius missing unit`)
     }
 
