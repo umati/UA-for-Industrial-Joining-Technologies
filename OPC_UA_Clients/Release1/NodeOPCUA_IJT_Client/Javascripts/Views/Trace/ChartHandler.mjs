@@ -1,4 +1,4 @@
-import '../../../node_modules/chart.js/dist/chart.umd.js'
+import '/vendor/chart.umd.js'
 import Dataset from './Dataset.mjs'
 /**
  * Chartmanager should encapsulate all access to chart.js in order to

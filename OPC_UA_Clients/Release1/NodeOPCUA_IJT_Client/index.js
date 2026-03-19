@@ -1,4 +1,5 @@
 import express from 'express'
+import fs from 'fs'
 import httpTemp from 'http'
 import path from 'path'
 import { createRequire } from 'module'
@@ -9,6 +10,7 @@ import rateLimit from 'express-rate-limit'
 import { NodeOPCUAInterface } from './Javascripts/ijt-support/Client/NodeOPCUAInterface.mjs'
 
 const app = express()
+app.disable('x-powered-by')
 const http = httpTemp.createServer(app)
 const io = new Server(http, {
   maxHttpBufferSize: 1e6
@@ -20,7 +22,16 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const requireLocal = createRequire(import.meta.url)
 const opcua = requireLocal('node-opcua')
+const chartDistDir = path.dirname(requireLocal.resolve('chart.js'))
+const chartUmdPath = [
+  path.join(chartDistDir, 'chart.umd.js'),
+  path.join(chartDistDir, 'chart.umd.min.js')
+].find((candidate) => fs.existsSync(candidate))
 const { AttributeIds } = opcua
+
+if (!chartUmdPath) {
+  throw new Error(`Unable to locate Chart.js UMD build in ${chartDistDir}`)
+}
 
 console.log('Home directory (__dirname): ' + __dirname)
 
@@ -32,10 +43,33 @@ const homepageLimiter = rateLimit({
 })
 
 // ----------------------------- Static Files -----------------------------
-app.use(express.static(__dirname))
+const staticOptions = {
+  index: false,
+  redirect: false,
+  dotfiles: 'ignore'
+}
+
+app.use('/Javascripts', express.static(path.join(__dirname, 'Javascripts'), staticOptions))
+app.use('/Resources', express.static(path.join(__dirname, 'Resources'), staticOptions))
+
+app.get('/nodeStyle.css', (req, res) => {
+  res.sendFile(path.join(__dirname, 'nodeStyle.css'))
+})
+
+app.get('/vendor/chart.umd.js', (req, res) => {
+  res.sendFile(chartUmdPath)
+})
+
+app.get('/favicon.ico', (req, res) => {
+  res.sendFile(path.join(__dirname, 'Resources', 'trussIcon.png'))
+})
 
 // ----------------------------- Webserver -----------------------------
 app.get('/', homepageLimiter, (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'))
+})
+
+app.get('/index.html', homepageLimiter, (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'))
 })
 
