@@ -74,17 +74,9 @@ export default class ServerGraphics extends BasicScreen {
    */
   connectionPoints (msg, socket, endpointTabGenerator) {
     this.socket = socket
-    function connect (point) {
-      // document.getElementById('displayedServerName').innerText = point.name
-      socket.emit('connect to', point.address)
-    }
     this.rows.innerHTML = ''
     for (const point of msg) {
       this.makeConnectionPointRow(point, socket, endpointTabGenerator)
-      if (point.autoConnect && this.lastConnection !== point.address) { // Only automatically connect first time
-        this.lastConnection = point.address
-        connect(point)
-      }
     }
   }
 

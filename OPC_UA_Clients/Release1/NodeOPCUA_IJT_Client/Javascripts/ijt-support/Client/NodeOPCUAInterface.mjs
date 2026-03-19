@@ -1,20 +1,10 @@
-import async from 'async'
-
-import {
-  AttributeIds,
-  promoteOpaqueStructure,
-  makeBrowsePath,
-  StatusCodes,
-  // TimestampsToReturn,
-  constructEventFilter,
-  ClientMonitoredItem,
-  DataType,
-  coerceNodeId
-  // resolveNodeId,
-  // ObjectIds
-} from 'node-opcua'
-
 import { promises as fs } from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const connectionPointsPath = path.resolve(__dirname, '../../../Resources/connectionpoints.json')
 
 /**
  * Support function to read a file
@@ -36,13 +26,9 @@ async function readFile (filePath) {
  * @param {*} filePath the name of the file including file path
  * @param {*} content the Content to be stored
  */
-function writeFile (filePath, content) {
+async function writeFile (filePath, content) {
   try {
-    fs.writeFile(filePath, content, (error) => {
-      if (error) {
-        console.error(`Got an error trying to write the file: ${error.message}`)
-      }
-    })
+    await fs.writeFile(filePath, content)
   } catch (error) {
     console.error(`Got an error trying to write the file: ${error.message}`)
   }
@@ -143,21 +129,26 @@ export class NodeOPCUAInterface {
       })
 
       socket.on('get connectionpoints', () => {
-        readFile('./Resources/connectionpoints.json').then((filecontent) => {
-          this.io.emit('connection points', filecontent.toString())
+        readFile(connectionPointsPath).then((filecontent) => {
+          this.io.emit('connection points', filecontent?.toString() ?? '[]')
         })
       })
 
       socket.on('set connectionpoints', (connectionpoints) => {
         console.log(connectionpoints)
-        writeFile('./Resources/connectionpoints.json', connectionpoints)
+        void writeFile(connectionPointsPath, connectionpoints)
       })
 
       socket.on('connect to', endpointUrl => {
         console.log('**********************************************')
         console.log('Nodejs OPC UA client attempting to connect to ' + endpointUrl)
         if (endpointUrl) {
-          const newConnection = new Connection(endpointUrl, this.displayFunction, this.OPCUAClient, this.io)
+          const existingConnection = this.connectionList[endpointUrl]
+          if (existingConnection && typeof existingConnection.isActive === 'function' && existingConnection.isActive()) {
+            console.log('Skipping duplicate connect request for ' + endpointUrl)
+            return
+          }
+          const newConnection = new Connection(endpointUrl, this.displayFunction, this.OPCUAClient, this.io, this.attributeIds)
           newConnection.setupClient()
           this.connectionList[endpointUrl] = newConnection
         }
@@ -181,59 +172,62 @@ export class NodeOPCUAInterface {
  * An object to store a specific connection
  */
 class Connection {
-  constructor (endpointUrl, displayFunction, client, io) {
+  constructor (endpointUrl, displayFunction, opcua, io, attributeIds) {
     this.endpointUrl = endpointUrl
     this.io = io
     this.displayFunction = displayFunction
-    this.OPCUAClient = client
+    this.opcua = opcua
+    this.attributeIds = attributeIds
     this.debugNr = 0
     this.eventMonitoringItems = []
+    this.connectionState = 'idle'
+  }
+
+  isActive () {
+    return this.connectionState === 'connecting' || this.connectionState === 'connected'
   }
 
   /**
    * Create the actual connection
    */
   setupClient () {
+    if (this.isActive()) {
+      console.log('Ignoring duplicate setupClient call for ' + this.endpointUrl)
+      return
+    }
     const io = this.io
     const endpointUrl = this.endpointUrl
-    const thisContainer = this
-    const client = this.OPCUAClient.create({ endpointMustExist: false })
+    const preferredEndpointUrl = endpointUrl
+    const connectRetries = Number(process.env.OPCUA_CONNECT_RETRIES ?? 3)
+    const connectDelaySec = Number(process.env.OPCUA_CONNECT_DELAY_SEC ?? 0.5)
+    const connectMaxDelaySec = Number(process.env.OPCUA_CONNECT_MAX_DELAY_SEC ?? 2)
+    const client = this.opcua.OPCUAClient.create({
+      endpointMustExist: false,
+      connectionStrategy: {
+        maxRetry: connectRetries,
+        initialDelay: Math.max(0.1, connectDelaySec) * 1000,
+        maxDelay: Math.max(0.2, connectMaxDelaySec) * 1000
+      }
+    })
+    this.connectionState = 'connecting'
     this.client = client
     this.endpointUrl = endpointUrl
 
-    async.series([
-      // ----------------------------------------------------------------------------------
-      // create connection
-      // ----------------------------------------------------------------------------------
-      function (callback) {
-        console.log('Attempting to establish connection')
-        client.connect(endpointUrl, function (err) {
-          if (err) {
-            console.log('Cannot connect to endpoint :', endpointUrl)
-          } else {
-            console.log('Connection established to endpoint ' + endpointUrl)
-            io.emit('connection established', { endpointurl: endpointUrl })
-          }
-          callback(err)
-        })
-      },
-      // ----------------------------------------------------------------------------------
-      // create session
-      // ----------------------------------------------------------------------------------
-      function (callback) {
-        client.createSession(function (err, session) {
-          if (!err) {
-            thisContainer.session = session
-            console.log('*************** Session established. (' + endpointUrl + ')')
-            io.emit('session established', { endpointurl: endpointUrl })
-          }
-          callback(err)
-        })
-      },
-      // ----------------------------------------------------------------------------------
-      // create subscription (on events)
-      // ----------------------------------------------------------------------------------
-      function (callback) {
+    client.on('backoff', (retryCount, delay) => {
+      console.log(`Retry ${retryCount}: reconnecting to ${preferredEndpointUrl} in ${delay} ms`)
+    })
+
+    ;(async () => {
+      try {
+        console.log('Attempting to establish connection to ' + preferredEndpointUrl)
+        await client.connect(preferredEndpointUrl)
+        console.log('Connection established to endpoint ' + preferredEndpointUrl)
+        io.emit('connection established', { endpointurl: endpointUrl })
+
+        this.session = await client.createSession()
+        console.log('*************** Session established. (' + preferredEndpointUrl + ')')
+        io.emit('session established', { endpointurl: endpointUrl })
+
         const parameters = {
           maxNotificationsPerPublish: 10,
           priority: 10,
@@ -242,44 +236,25 @@ class Connection {
           requestedMaxKeepAliveCount: 12,
           requestedPublishingInterval: 2000
         }
-        thisContainer.session.createSubscription2(parameters, function (err, subscription) {
-          if (!err) {
-            thisContainer.subscription = subscription
+        this.subscription = await this.session.createSubscription2(parameters)
+        console.log('Subscription established. (' + preferredEndpointUrl + ')')
+        io.emit('subscription created', { endpointurl: endpointUrl })
 
-            console.log('Subscription established. (' + endpointUrl + ')')
-            io.emit('subscription created', { endpointurl: endpointUrl })
-          }
-          callback(err)
-        })
-      },
-      function (callback) { // DataTypes
         console.log('Handling Datatypes')
-        io.emit('datatypes', { endpointurl: endpointUrl, datatype: DataType })
-        callback()
-      },
-      function (callback) { // Namespaces
-        thisContainer.session.readNamespaceArray((err, namespaces) => {
-          if (err) {
-            throw new Error(err)
-          }
-          console.log('Handling NameSpaces')
-          io.emit('namespaces', { endpointurl: endpointUrl, namespaces })
-          callback(err)
-        })
-      }
-    ],
-    function (err) {
-      if (err) {
-        console.log('Failure during establishing connection to OPC UA server ', err)
-        // this.io.emit('error message', err.toString(), 'connection')
-        if (this && this.io) {
-          this.io.emit('error message', { error: err, context: 'connection', message: err.message, endpointUrl })
-        }
-        // process.exit(0)
-      } else {
+        io.emit('datatypes', { endpointurl: endpointUrl, datatype: this.opcua.DataType })
+
+        const namespaces = await this.session.readNamespaceArray()
+        console.log('Handling NameSpaces')
+        io.emit('namespaces', { endpointurl: endpointUrl, namespaces })
+
+        this.connectionState = 'connected'
         console.log('Connection and session established.')
+      } catch (err) {
+        this.connectionState = 'error'
+        console.log('Failure during establishing connection to OPC UA server ', err)
+        this.io.emit('error message', { error: err, context: 'connection', message: err.message, endpointUrl })
       }
-    })
+    })()
   }
 
   /**
@@ -297,12 +272,12 @@ class Connection {
         }
         const dataValue = await this.session.read({
           nodeId,
-          attributeId: AttributeIds[attribute]
+          attributeId: this.attributeIds[attribute]
         })
 
         const result = dataValue.value.value
         if (result && result.resultContent) {
-          await promoteOpaqueStructure(this.session, [{ value: result.resultContent }])
+          await this.opcua.promoteOpaqueStructure(this.session, [{ value: result.resultContent }])
         }
 
         this.io.emit('readresult', { endpointurl: this.endpointUrl, callid, dataValue, stringValue: dataValue.toString(), nodeid: nodeId, attribute })
@@ -324,9 +299,9 @@ class Connection {
   translateBrowsePath (callid, nodeId, path) {
     (async () => {
       try {
-        const bpr2 = await this.session.translateBrowsePath(makeBrowsePath(nodeId, path))
+        const bpr2 = await this.session.translateBrowsePath(this.opcua.makeBrowsePath(nodeId, path))
 
-        if (bpr2.statusCode !== StatusCodes.Good) {
+        if (bpr2.statusCode !== this.opcua.StatusCodes.Good) {
           console.log(`Cannot find the ${nodeId} object.  ${path} `)
           return
         }
@@ -397,8 +372,8 @@ class Connection {
       const theSession = this.session
       try {
         const io = this.io
-        const objectId = coerceNodeId(objectNode) // SERVER
-        const methodId = coerceNodeId(methodNode) // GetMonitoredItems
+        const objectId = this.opcua.coerceNodeId(objectNode) // SERVER
+        const methodId = this.opcua.coerceNodeId(methodNode) // GetMonitoredItems
 
         const methodToCall2 = {
           objectId,
@@ -428,9 +403,9 @@ class Connection {
 
   /**
    * Close a connection and clean everything up
-   * @param {*} callback Call this when the connection is closed
    */
-  closeConnection (callback) {
+  closeConnection () {
+    this.connectionState = 'closing'
     try {
       console.log('Terminate eventmonitoring')
       if (this.eventMonitoringItems) {
@@ -483,6 +458,7 @@ class Connection {
       console.log('************ FAIL to disconnect client: ' + err)
       this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
     }
+    this.connectionState = 'closed'
   }
 
   /**
@@ -492,14 +468,14 @@ class Connection {
    */
   async eventSubscription (fields, subscriberDetails) {
     const serverObjectId = 'i=2253'
-    const eventFilter = constructEventFilter(fields)
+    const eventFilter = this.opcua.constructEventFilter(fields)
 
     // const subscribeDebugNr = this.debugNr++
 
-    const eventMonitoringItem = ClientMonitoredItem.create(
+    const eventMonitoringItem = this.opcua.ClientMonitoredItem.create(
       this.subscription,
       {
-        attributeId: AttributeIds.EventNotifier,
+        attributeId: this.attributeIds.EventNotifier,
         nodeId: serverObjectId
       },
       {
@@ -531,7 +507,7 @@ class Connection {
               // console.log('======EVENT RESULT VALUE' + events[i].value)
               // console.log('=================================================')
               if (events[i] && events[i].value) {
-                await promoteOpaqueStructure(this.session, [{ value: events[i].value }])
+                await this.opcua.promoteOpaqueStructure(this.session, [{ value: events[i].value }])
               }
               // console.log('------------ Opaque structure promoted')
               // console.log(events[i].value)

@@ -5,23 +5,27 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "eslint index.js Javascripts/ijt-support/Client/NodeOPCUAInterface.mjs scripts/*.mjs",
+    "regression:connection-established": "node ./scripts/regression-connection-established.mjs",
+    "regression:connection-no": "node ./scripts/regression-connection-no.mjs",
+    "smoke": "node ./scripts/smoke-test.mjs",
+    "test": "npm run lint && npm run smoke"
   },
   "author": "Joakim Gustafsson <joakim.gustafsson@atlascopco.com>",
   "license": "ISC",
   "dependencies": {
-    "chart.js": "^4.2.1",
-    "express": "^5.0.0",
-    "express-rate-limit": "^8.0.0",
-    "node-opcua": "^2.163.1",
-    "node-opcua-nodeset-ijt": "^2.155.0",
-    "socket.io": "^4.6.1"
+    "async": "^3.2.6",
+    "chart.js": "^4.5.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
+    "node-opcua": "^2.165.0",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
-    "eslint": "^8.37.0",
-    "eslint-config-standard": "^17.0.0",
-    "eslint-plugin-import": "^2.27.5",
-    "eslint-plugin-n": "^16.0.0",
-    "eslint-plugin-promise": "^6.1.1"
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "eslint-plugin-n": "^17.24.0",
+    "globals": "^17.4.0",
+    "playwright": "^1.54.2"
   }
 }
