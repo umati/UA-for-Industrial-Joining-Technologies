@@ -11,6 +11,48 @@ const cssFiles = [
 ]
 
 const findings = []
+const quotedColorProperties = new Set(['background', 'background-color', 'color'])
+
+function stripBlockComments (line, inBlockComment) {
+  let cursor = 0
+  let output = ''
+  let commentState = inBlockComment
+
+  while (cursor < line.length) {
+    if (commentState) {
+      const endIdx = line.indexOf('*/', cursor)
+      if (endIdx === -1) {
+        return { text: output, inBlockComment: true }
+      }
+      cursor = endIdx + 2
+      commentState = false
+      continue
+    }
+
+    const startIdx = line.indexOf('/*', cursor)
+    if (startIdx === -1) {
+      output += line.slice(cursor)
+      break
+    }
+
+    output += line.slice(cursor, startIdx)
+    cursor = startIdx + 2
+    commentState = true
+  }
+
+  return { text: output, inBlockComment: commentState }
+}
+
+function parseDeclaration (line) {
+  const match = line.match(/^\s*([a-z][a-z0-9-]*)\s*:\s*(.*?)\s*(;?)\s*$/i)
+  if (!match) return null
+
+  const property = match[1].toLowerCase()
+  const value = match[2].trim()
+  const hasSemicolon = match[3] === ';'
+
+  return { property, value, hasSemicolon }
+}
 
 function checkFile (filePath) {
   const content = fs.readFileSync(filePath, 'utf8')
@@ -20,17 +62,11 @@ function checkFile (filePath) {
 
   lines.forEach((line, idx) => {
     const lineNo = idx + 1
-    const trimmed = line.trim()
+    const withoutComments = stripBlockComments(line, inBlockComment)
+    inBlockComment = withoutComments.inBlockComment
+    const code = withoutComments.text
+    const trimmed = code.trim()
 
-    // Track block comments to avoid false positives on commented declarations.
-    if (inBlockComment) {
-      if (trimmed.includes('*/')) inBlockComment = false
-      return
-    }
-    if (trimmed.startsWith('/*')) {
-      if (!trimmed.includes('*/')) inBlockComment = true
-      return
-    }
     if (trimmed.startsWith('//') || trimmed === '') return
 
     if (/^\s*;\s*$/.test(line)) {
@@ -41,20 +77,22 @@ function checkFile (filePath) {
       findings.push(`${filePath}:${lineNo} trailing whitespace`)
     }
 
-    if (/^\s*[a-z-]+\s*:[^\s]/i.test(line)) {
+    const declaration = parseDeclaration(code)
+    if (!declaration) return
+
+    if (/:\S/.test(code)) {
       findings.push(`${filePath}:${lineNo} missing space after colon`)
     }
 
-    if (/^\s*border-radius\s*:\s*\d+(\.\d+)?\s*;\s*$/i.test(line)) {
+    if (declaration.property === 'border-radius' && /^-?\d+(\.\d+)?$/.test(declaration.value)) {
       findings.push(`${filePath}:${lineNo} border-radius missing unit`)
     }
 
-    if (/^\s*(background|background-color|color)\s*:\s*['"][^'"]+['"]\s*;\s*$/i.test(line)) {
+    if (quotedColorProperties.has(declaration.property) && /^['"][^'"]+['"]$/.test(declaration.value)) {
       findings.push(`${filePath}:${lineNo} quoted color value`)
     }
 
-    const looksLikeDeclaration = /^\s*[a-z-]+\s*:[^;{}]+$/i.test(line)
-    if (looksLikeDeclaration && !trimmed.endsWith(';')) {
+    if (!declaration.hasSemicolon) {
       findings.push(`${filePath}:${lineNo} missing semicolon`)
     }
   })
