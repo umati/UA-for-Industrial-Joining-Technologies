@@ -7,14 +7,10 @@
 ## Overview
 This application uses the open source NodeOPCUA SDK. The purpose of this application is to demonstrate the usage of OPC UA server based on the OPC 40451-1 UA CS for Tightening Systems 1.00.
 
-## Prerequisites
-- Fork or clone the repository
-- Go to OPCUA_Clients\NodeOPCUA_IJT_Client folder
-- Run  `npm install`
-
-## How to run?
-- Run the following command: `node index.js`
-- The above command will start the socket.io server at `http://localhost:3000`
+## Run Client Application
+- Launch a terminal from ..\OPCUA_Clients\NodeOPCUA_IJT_Client directory.
+- Run `npm install`
+- Run `node index.js`
 - Open the `http://localhost:3000` in the browser and start using the client.
 
 ## OPC UA Server
