@@ -51,7 +51,7 @@ export class EventManager {
 
   /**
    * Subscribe to events and return the listed fields
-   * @param {*} fields a list of fields the result should contain. Stronly reccomended to contain 'EventId' and 'SourceName'
+   * @param {*} fields a list of fields the result should contain. Strongly recommended to contain 'EventId' and 'SourceName'
    * @param {*} filter a function that if it returns true will call the callback
    * @param {*} callback a function to call if the event was received
    */

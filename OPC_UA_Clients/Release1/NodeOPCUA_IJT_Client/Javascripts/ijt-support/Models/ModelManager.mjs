@@ -83,7 +83,7 @@ export class ModelManager {
 
   /**
    * This method handles the top level interpretation of a message that should be
-   * converted to a model. 
+   * converted to a model.
    * @param {*} msg
    * @returns
    */
@@ -111,7 +111,7 @@ export class ModelManager {
   }
   /**
    * This method handles the top level interpretation of a message that should be
-   * converted to a model. 
+   * converted to a model.
    * @param {*} values
    * @returns
    */
