@@ -22,7 +22,7 @@ export class ResultManager {
   }
 
   activate () {
-    this.eventManager.simpleSubscribeEvent(['Result'],
+    this.eventManager.listenEvent(
       (e) => { // Filter
         return e.Result?.value
       },

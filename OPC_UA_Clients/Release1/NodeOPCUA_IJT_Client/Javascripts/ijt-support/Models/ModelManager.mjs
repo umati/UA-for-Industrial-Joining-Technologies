@@ -27,6 +27,17 @@ const modelRegistry = {
   keyValuePair
 }
 
+function eventTypeIdOf (msg) {
+  const value = msg?.EventType?.value
+  if (typeof value === 'string') {
+    return value
+  }
+  if (value && typeof value.toString === 'function') {
+    return value.toString()
+  }
+  return ''
+}
+
 export class ModelManager {
   /**
    * The purpose of this method is to create a javascript class from a parameter name
@@ -79,19 +90,21 @@ export class ModelManager {
   createModelFromEvent (msg) {
     // console.log(node.nodeId)
     // console.log(node.typeName)
+    const eventType = eventTypeIdOf(msg)
     let model
-    switch (msg.EventType.value) {
+    switch (eventType) {
       case ('TighteningSystemType'):
         model = new DefaultNode(msg, this)
         break
       case ('ResultManagementType'):
         model = new DefaultNode(msg, this)
         break
-      case ('ns=4;i=1007'):
-        model = new ResultDataType(msg.Result.value, this)
-        break
       default:
-        model = new DefaultNode(msg, this)
+        if (/^ns=\d+;i=1007$/.test(eventType) && msg?.Result?.value) {
+          model = new ResultDataType(msg.Result.value, this)
+        } else {
+          model = new DefaultNode(msg, this)
+        }
     }
     //node.model = model
     return model
@@ -128,6 +141,7 @@ export class ModelManager {
         model = new DefaultNode(node, this)
         break
       case ('ns=4;i=2001'):
+      case ('ns=1;i=2001'):
         model = new ResultDataType(node.value.value, this)
         break
       default:

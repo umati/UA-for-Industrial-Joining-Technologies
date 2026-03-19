@@ -100,9 +100,7 @@ export default class ServerGraphics extends BasicScreen {
 
     const nameInput = this.createInput(point.name, null, () => {})
 
-    const addrInput = this.createInput(point.address, null, (x) => {
-      console.log(x)
-    })
+    const addrInput = this.createInput(point.address, null, () => {})
 
     const checkBox = this.createCheckbox(point.autoconnect, (newValue) => {
       if (newValue) {

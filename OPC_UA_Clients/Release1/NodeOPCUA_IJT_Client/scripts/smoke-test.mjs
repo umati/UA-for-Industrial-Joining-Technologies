@@ -4,6 +4,7 @@ import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { attachChildOutput, waitForServerReady } from './test-utils.mjs'
 
 const port = Number(process.env.SMOKE_PORT ?? 3310)
 const host = '127.0.0.1'
@@ -34,32 +35,6 @@ function httpGet (url) {
     req.setTimeout(10000, () => {
       settle(reject, new Error(`Request timeout for ${url}`))
       req.destroy()
-    })
-  })
-}
-
-function waitForServerReady (child, timeoutMs = 15000) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error('Timed out waiting for server startup log line'))
-    }, timeoutMs)
-
-    child.stdout.on('data', (chunk) => {
-      const text = chunk.toString()
-      if (text.includes('Socket.IO server running at')) {
-        clearTimeout(timeout)
-        resolve()
-      }
-    })
-
-    child.on('error', (error) => {
-      clearTimeout(timeout)
-      reject(error)
-    })
-
-    child.on('exit', (code) => {
-      clearTimeout(timeout)
-      reject(new Error(`Server exited early with code ${code ?? 'null'}`))
     })
   })
 }
@@ -103,9 +78,7 @@ async function run () {
     stdio: ['ignore', 'pipe', 'pipe']
   })
 
-  child.stderr.on('data', (chunk) => {
-    process.stderr.write(chunk)
-  })
+  attachChildOutput(child)
 
   try {
     await waitForServerReady(child)

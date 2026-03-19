@@ -1,17 +1,18 @@
-# NodeOPCUA_IJTClient
+# Release1 Node OPC UA Client
+
+This application uses the open source NodeOPCUA SDK. The purpose of this application is to demonstrate the usage of OPC UA server based on the OPC 40451-1 UA CS for Tightening Systems 1.00.
 
 ## Contact
 - **Author:** Joakim Gustafsson: joakim.h.gustafsson@atlascopco.com
 - **Coordinator:** Mohit Agarwal: mohit.agarwal@atlascopco.com
 
-## Overview
-This application uses the open source NodeOPCUA SDK. The purpose of this application is to demonstrate the usage of OPC UA server based on the OPC 40451-1 UA CS for Tightening Systems 1.00.
+## Quick Start
+1. Open terminal in `OPC_UA_Clients/Release1/NodeOPCUA_IJT_Client`
+2. Run `npm install`
+3. Start client: `node index.js`
+4. Open `http://localhost:3000`
 
-## Run Client Application
-- Launch a terminal from ..\OPCUA_Clients\NodeOPCUA_IJT_Client directory.
-- Run `npm install`
-- Run `node index.js`
-- Open the `http://localhost:3000` in the browser and start using the client.
-
-## OPC UA Server
-- Use the following OPC UA Server to utilize the OPC UA Client: [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release1)
+## Notes
+- Expected server endpoint: `opc.tcp://127.0.0.1:40451`
+- Run checks with `npm test`
+- If port 3000 is busy: `$env:PORT=3001; node index.js`

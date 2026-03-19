@@ -6,16 +6,19 @@ export class EventManager {
   constructor (connectionManager) {
     this.socketHandler = connectionManager.socketHandler
     this.callbacks = []
+    this.serverSubscriptionActive = false
 
     connectionManager.subscribe('subscription', (setToTrue) => {
       if (setToTrue) {
-        this.reset()
+        this.ensureServerSubscription()
+      } else {
+        this.serverSubscriptionActive = false
       }
     })
 
     // Listen to subscribed events messages
     this.socketHandler.registerMandatory('subscribed event', (msg, context) => {
-      if (msg && msg.result.SourceName && msg.result.SourceName.value) {
+      if (msg?.result?.SourceName?.value) {
         console.log('Subscribed event triggered: ' + msg.result.SourceName.value)
       } else {
         console.log('Event lacking SourceName received')
@@ -40,15 +43,9 @@ export class EventManager {
       'ReceiveTime',
       'Message',
       'Severity',
-      'ConditionClassId',
-      'ConditionClassName',
-      'ConditionSubClassId',
-      'ConditionSubClassName',
       'JoiningTechnology',
-      'EventText',
-      'EventCode',
-      'AssociatedEntities',
-      'ReportedValues']
+      'Result'
+    ]
     this.subscribeEvent([...fields, ...newFields], filter, callback, subscriberDetails)
   }
 
@@ -62,7 +59,7 @@ export class EventManager {
     if (filter) {
       this.callbacks.push({ filter, callback, subscriberDetails })
     }
-    this.socketHandler.subscribeEvent(fields, subscriberDetails)
+    this.ensureServerSubscription(fields, subscriberDetails)
   }
 
   /**
@@ -76,15 +73,36 @@ export class EventManager {
   }
 
   receivedEvent (msg) {
+    const payload = msg?.result ?? msg
     for (const item of this.callbacks) {
-      if (item.filter && item.filter(msg.result)) {
+      if (item.filter && item.filter(payload)) {
         // console.log(`SUBSCRIPTION: ${item.subscriberDetails}`)
-        item.callback(msg.result)
+        item.callback(payload)
       }
     }
   }
 
   reset () {
     this.callbacks = []
+  }
+
+  ensureServerSubscription (fields, subscriberDetails = 'EventManager auto subscription') {
+    if (this.serverSubscriptionActive) {
+      return
+    }
+    const defaultFields = [
+      'EventId',
+      'EventType',
+      'SourceNode',
+      'SourceName',
+      'Time',
+      'ReceiveTime',
+      'Message',
+      'Severity',
+      'JoiningTechnology',
+      'Result'
+    ]
+    this.socketHandler.subscribeEvent(fields || defaultFields, subscriberDetails)
+    this.serverSubscriptionActive = true
   }
 }

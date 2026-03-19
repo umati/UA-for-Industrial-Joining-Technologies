@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import net from 'node:net'
 import process from 'node:process'
+import { attachChildOutput, waitForServerReady } from './test-utils.mjs'
 
 const port = Number(process.env.REGRESSION_PORT ?? 3321)
 const appUrl = `http://127.0.0.1:${port}`
@@ -53,32 +54,6 @@ function waitForOpcuaReachable (endpoint, timeoutMs = 1500) {
   })
 }
 
-function waitForServerReady (child, timeoutMs = 20000) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error('Timed out waiting for server startup log line'))
-    }, timeoutMs)
-
-    child.stdout.on('data', (chunk) => {
-      const text = chunk.toString()
-      if (text.includes('Socket.IO server running at')) {
-        clearTimeout(timeout)
-        resolve()
-      }
-    })
-
-    child.on('error', (error) => {
-      clearTimeout(timeout)
-      reject(error)
-    })
-
-    child.on('exit', (code) => {
-      clearTimeout(timeout)
-      reject(new Error(`Server exited early with code ${code ?? 'null'}`))
-    })
-  })
-}
-
 async function launchBrowser (playwright) {
   const candidates = [
     () => playwright.chromium.launch({ channel: 'msedge', headless: true }),
@@ -96,7 +71,27 @@ async function launchBrowser (playwright) {
   throw lastError ?? new Error('Failed to launch a browser')
 }
 
-async function collectStatusMap (page) {
+async function waitForEstablishedStatuses (page, timeoutMs = 20000) {
+  await page.waitForFunction(
+    (statusNames) => {
+      const map = {}
+      const rows = Array.from(document.querySelectorAll('.methodDiv'))
+      for (const row of rows) {
+        const labels = row.querySelectorAll('label')
+        if (labels.length >= 2) {
+          const name = labels[0].textContent?.replace(':', '').trim()
+          const value = labels[1].textContent?.trim()
+          if (name && value) {
+            map[name] = value
+          }
+        }
+      }
+      return statusNames.every((name) => map[name] === 'ESTABLISHED')
+    },
+    requiredStatusNames,
+    { timeout: timeoutMs, polling: 250 }
+  )
+
   return page.evaluate(() => {
     const map = {}
     const rows = Array.from(document.querySelectorAll('.methodDiv'))
@@ -114,19 +109,6 @@ async function collectStatusMap (page) {
   })
 }
 
-async function waitForEstablishedStatuses (page, timeoutMs = 20000) {
-  const start = Date.now()
-  while (Date.now() - start < timeoutMs) {
-    const statusMap = await collectStatusMap(page)
-    const allReady = requiredStatusNames.every((name) => statusMap[name] === 'ESTABLISHED')
-    if (allReady) {
-      return statusMap
-    }
-    await page.waitForTimeout(500)
-  }
-  return collectStatusMap(page)
-}
-
 async function run () {
   const reachable = await waitForOpcuaReachable(opcuaEndpoint)
   if (!reachable) {
@@ -142,12 +124,7 @@ async function run () {
     stdio: ['ignore', 'pipe', 'pipe']
   })
 
-  child.stdout.on('data', (chunk) => {
-    process.stdout.write(chunk)
-  })
-  child.stderr.on('data', (chunk) => {
-    process.stderr.write(chunk)
-  })
+  attachChildOutput(child)
 
   let browser
   try {

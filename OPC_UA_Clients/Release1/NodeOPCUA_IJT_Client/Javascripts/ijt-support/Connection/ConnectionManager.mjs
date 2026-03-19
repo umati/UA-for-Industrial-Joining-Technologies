@@ -31,10 +31,10 @@ export class ConnectionManager {
   }
 
   subscribe (state, callback) {
-    /* if (this[state] === changeTo) {
-      callback()
-    } else { */
     this.callbacks.push({ state, callback })
+    if (typeof this[state] === 'boolean') {
+      callback(this[state])
+    }
   }
 
   trigger (state, changeTo) {
