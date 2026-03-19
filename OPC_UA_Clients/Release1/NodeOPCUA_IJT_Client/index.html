@@ -47,9 +47,9 @@
     tabGenerator.generateTab(servers);
 
     // Ensure all connections are closed when leaving page or refreshing it
-    window.onbeforeunload = function () {
+    window.addEventListener('beforeunload', function (event) {
       tabGenerator.close();
-    };
+    });
   </script>
 </body>
 
