@@ -44,7 +44,7 @@ function stripBlockComments (line, inBlockComment) {
 }
 
 function parseDeclaration (line) {
-  const match = line.match(/^\s*([a-z][a-z0-9-]*)\s*:\s*(.*?)\s*(;?)\s*$/i)
+  const match = line.match(/^\s*(--?[a-z][a-z0-9-]*)\s*:\s*(.*?)\s*(;?)\s*$/i)
   if (!match) return null
 
   const property = match[1].toLowerCase()
@@ -84,7 +84,7 @@ function checkFile (filePath) {
       findings.push(`${filePath}:${lineNo} missing space after colon`)
     }
 
-    if (declaration.property === 'border-radius' && /^-?\d+(\.\d+)?$/.test(declaration.value)) {
+    if (declaration.property === 'border-radius' && /^\d+(\.\d+)?$/.test(declaration.value)) {
       findings.push(`${filePath}:${lineNo} border-radius missing unit`)
     }
 
