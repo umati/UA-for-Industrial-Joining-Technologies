@@ -14,15 +14,26 @@ const projectRoot = path.resolve(__dirname, '..')
 
 function httpGet (url) {
   return new Promise((resolve, reject) => {
+    let done = false
+    const settle = (fn, value) => {
+      if (done) {
+        return
+      }
+      done = true
+      req.setTimeout(0)
+      fn(value)
+    }
+
     const req = http.get(url, (res) => {
       let body = ''
       res.setEncoding('utf8')
       res.on('data', (chunk) => { body += chunk })
-      res.on('end', () => resolve({ status: res.statusCode ?? 0, body }))
+      res.on('end', () => settle(resolve, { status: res.statusCode ?? 0, body }))
     })
-    req.on('error', reject)
+    req.on('error', (err) => settle(reject, err))
     req.setTimeout(10000, () => {
-      req.destroy(new Error(`Request timeout for ${url}`))
+      settle(reject, new Error(`Request timeout for ${url}`))
+      req.destroy()
     })
   })
 }

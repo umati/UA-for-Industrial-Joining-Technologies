@@ -127,10 +127,10 @@ export default class ServerGraphics extends BasicScreen {
 
   /**
    * Basic support function to generate a row in the table
-   * @param {*} nameContent The HTML repressentation of name of the server
-   * @param {*} endpointUrlContent The HTML repressentation of address of the server
-   * @param {*} connectContent The HTML repressentation of 'wanted' connection status
-   * @param {*} deleteContent Th eHTML repressentation of button to delete the row
+   * @param {*} nameContent The HTML representation of name of the server
+   * @param {*} endpointUrlContent The HTML representation of address of the server
+   * @param {*} connectContent The HTML representation of 'wanted' connection status
+   * @param {*} deleteContent The HTML representation of button to delete the row
    * @returns A HTML representation of the row
    */
   makeServerRow (nameContent, endpointUrlContent, connectContent, deleteContent) {
