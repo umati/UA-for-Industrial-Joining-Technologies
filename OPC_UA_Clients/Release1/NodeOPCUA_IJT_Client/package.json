@@ -5,7 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "lint": "eslint index.js Javascripts/ijt-support/Client/NodeOPCUAInterface.mjs scripts/*.mjs",
+    "lint:js": "eslint index.js Javascripts/ijt-support/Client/NodeOPCUAInterface.mjs scripts/*.mjs",
+    "lint:css": "node ./scripts/check-css.mjs",
+    "lint": "npm run lint:js && npm run lint:css",
     "regression:connection-established": "node ./scripts/regression-connection-established.mjs",
     "regression:connection-no": "node ./scripts/regression-connection-no.mjs",
     "smoke": "node ./scripts/smoke-test.mjs",

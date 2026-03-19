@@ -41,6 +41,11 @@ const homepageLimiter = rateLimit({
   max: 100,
   message: 'Too many requests from this IP, please try again later.'
 })
+const staticLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300,
+  message: 'Too many static asset requests from this IP, please try again later.'
+})
 
 // ----------------------------- Static Files -----------------------------
 const staticOptions = {
@@ -49,18 +54,18 @@ const staticOptions = {
   dotfiles: 'ignore'
 }
 
-app.use('/Javascripts', express.static(path.join(__dirname, 'Javascripts'), staticOptions))
-app.use('/Resources', express.static(path.join(__dirname, 'Resources'), staticOptions))
+app.use('/Javascripts', staticLimiter, express.static(path.join(__dirname, 'Javascripts'), staticOptions))
+app.use('/Resources', staticLimiter, express.static(path.join(__dirname, 'Resources'), staticOptions))
 
-app.get('/nodeStyle.css', (req, res) => {
+app.get('/nodeStyle.css', staticLimiter, (req, res) => {
   res.sendFile(path.join(__dirname, 'nodeStyle.css'))
 })
 
-app.get('/vendor/chart.umd.js', (req, res) => {
+app.get('/vendor/chart.umd.js', staticLimiter, (req, res) => {
   res.sendFile(chartUmdPath)
 })
 
-app.get('/favicon.ico', (req, res) => {
+app.get('/favicon.ico', staticLimiter, (req, res) => {
   res.sendFile(path.join(__dirname, 'Resources', 'trussIcon.png'))
 })
 
