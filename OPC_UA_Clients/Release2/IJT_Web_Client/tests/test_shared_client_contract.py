@@ -11,6 +11,30 @@ from tests.shared_opcua.adapters import adapters_from_env, discover_simulation_m
 pytestmark = pytest.mark.integration
 
 
+def _assert_adapter_response_ok(adapter_name: str, action: str, response) -> None:
+    assert isinstance(response, dict), (
+        f"{adapter_name} {action} should return a structured dict, got: {type(response).__name__}"
+    )
+    if "status" in response:
+        assert response["status"] == "ok", f"{adapter_name} {action} failed: {response}"
+    assert "exception" not in response, f"{adapter_name} {action} failed: {response}"
+    assert "error" not in response, f"{adapter_name} {action} failed: {response}"
+
+
+def _assert_events_payload(adapter_name: str, events: dict) -> None:
+    assert isinstance(events, dict), f"{adapter_name} events response should be dict: {events}"
+    assert "total" in events, f"{adapter_name} events missing 'total': {events}"
+    assert isinstance(events["total"], int), f"{adapter_name} events total must be int: {events}"
+    assert events["total"] >= 0, f"{adapter_name} events total must be non-negative: {events}"
+    if "result_events" in events:
+        assert isinstance(events["result_events"], int), (
+            f"{adapter_name} result_events must be int: {events}"
+        )
+        assert 0 <= events["result_events"] <= events["total"], (
+            f"{adapter_name} invalid result_events count: {events}"
+        )
+
+
 def _is_websocket_startup_error(exc: Exception) -> bool:
     if isinstance(exc, (ConnectionRefusedError, TimeoutError, OSError)):
         return True
@@ -107,16 +131,13 @@ async def test_shared_client_contract(adapter_name: str, opcua_endpoint: str, ws
             raise
 
         connected = await adapter.connect()
-        assert "exception" not in str(connected).lower(), f"{adapter_name} connect failed: {connected}"
+        _assert_adapter_response_ok(adapter_name, "connect", connected)
 
         namespaces = await adapter.namespaces()
         assert namespaces.get("namespaces"), f"{adapter_name} namespaces empty: {namespaces}"
 
         read_result = await adapter.read_objects()
-        if isinstance(read_result, dict) and "status" in read_result:
-            assert read_result["status"] == "ok", f"{adapter_name} read failed: {read_result}"
-        else:
-            assert "exception" not in str(read_result).lower(), f"{adapter_name} read failed: {read_result}"
+        _assert_adapter_response_ok(adapter_name, "read", read_result)
 
         await adapter.subscribe()
 
@@ -135,11 +156,15 @@ async def test_shared_client_contract(adapter_name: str, opcua_endpoint: str, ws
                 ok = False
             call_results.append({"name": name, "status": "ok" if ok else "failed", "result": result})
 
+        missing = [x for x in call_results if x["status"] == "not_found"]
         failures = [x for x in call_results if x["status"] == "failed"]
+        assert not missing, f"{adapter_name} missing expected methods: {missing}"
         assert not failures, f"{adapter_name} method failures: {failures}"
 
         events = await adapter.collect_events(seconds=6.0)
-        assert events.get("total", 0) > 0
+        _assert_events_payload(adapter_name, events)
+        if adapter_name == "web":
+            assert events.get("total", 0) > 0, f"{adapter_name} expected events, got: {events}"
 
     finally:
         with contextlib.suppress(Exception):

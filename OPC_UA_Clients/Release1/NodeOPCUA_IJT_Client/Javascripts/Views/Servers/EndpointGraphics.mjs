@@ -28,9 +28,7 @@ export default class EndpointGraphics extends BasicScreen {
     this.connectionManager.close()
   }
 
-  activate (state) {
-
-  }
+  activate () {}
 
   instantiate (endpointUrl, socket) {
     this.socket = socket
@@ -59,8 +57,8 @@ export default class EndpointGraphics extends BasicScreen {
     const resultManager = new ResultManager(this.connectionManager, eventManager)
 
     // const assets = new AssetManager(addressSpace, this.connectionManager)
-    // const asstetGraphics = new AssetGraphics(assets)
-    // tabGenerator.generateTab(asstetGraphics)
+    // const assetGraphics = new AssetGraphics(assets)
+    // tabGenerator.generateTab(assetGraphics)
 
     const traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
     tabGenerator.generateTab(traceGraphics)

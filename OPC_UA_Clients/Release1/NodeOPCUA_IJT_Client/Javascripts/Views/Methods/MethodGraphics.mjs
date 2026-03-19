@@ -51,6 +51,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
    */
   createMethodArea (methodData) {
     const methodNode = methodData.methodNode
+    const methodName = String(methodNode.displayName ?? '')
     const area = this.createArea(methodNode.displayName)
     area.classList.add('methodBorder')
     const titleLabel = this.createLabel(methodNode.displayName)
@@ -61,7 +62,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
       const lineArea = this.createArea()
       lineArea.classList.add('methodRowDistance')
       area.appendChild(lineArea)
-      listOfValuegrabbers.push(this.createMethodInput(arg, lineArea))
+      listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, methodName))
     }
 
     const button = this.createButton('Call', area, (button) => {
@@ -81,7 +82,8 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
    * @param {*} area the area where the input field should go
    * @returns a function that tells the value of the input field
    */
-  createMethodInput (arg, area) {
+  createMethodInput (arg, area, methodName) {
+    const isSimulateResultMethod = /simulate(single|job)?result/i.test(methodName)
     const titleLabel = this.createLabel(arg.name + '  ')
     area.appendChild(titleLabel)
 
@@ -93,7 +95,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
 
         input.dataType = arg.dataType
         input.title = 'Datatype: ' + arg.typeName + '\n' + (arg?.description?.text ? arg.description.text : '')
-        input.value = 0
+        input.value = isSimulateResultMethod ? 2 : 0
         return function () {
           return { value: input.value, type: input.dataType }
         }

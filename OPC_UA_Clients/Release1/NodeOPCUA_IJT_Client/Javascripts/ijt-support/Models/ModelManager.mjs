@@ -1,5 +1,32 @@
 /* eslint-disable */
 import ResultDataType from './ResultDataModel.mjs'
+import { DefaultNode, BrowseNameDataType, DisplayNameDataType } from './DefaultNode.mjs'
+import { LocalizationModel, keyValuePair } from './SupportModels.mjs'
+import ProcessingTimesDataType from './ProcessingTimesDataType.mjs'
+import TagDataType from './TagDataType.mjs'
+import TighteningResultDataType from './TighteningResultDataType.mjs'
+import ResultValueDataType from './ResultValueDataType.mjs'
+import StepResultDataType from './StepResultDataType.mjs'
+import ErrorInformationDataType from './ErrorInformationDataType.mjs'
+import { TighteningTraceDataType, StepTraceDataType, TraceContentDataType, TraceValueDataType } from './TighteningTraceDataType.mjs'
+
+const modelRegistry = {
+  BrowseNameDataType,
+  DisplayNameDataType,
+  ErrorInformationDataType,
+  LocalizationModel,
+  ProcessingTimesDataType,
+  ResultValueDataType,
+  StepResultDataType,
+  StepTraceDataType,
+  TagDataType,
+  TighteningResultDataType,
+  TighteningTraceDataType,
+  TraceContentDataType,
+  TraceValueDataType,
+  keyValuePair
+}
+
 export class ModelManager {
   /**
    * The purpose of this method is to create a javascript class from a parameter name
@@ -10,7 +37,6 @@ export class ModelManager {
    */
   factory (parameterName, content, castMapping) {
     if (typeof content === 'object' && !Array.isArray(content)) {
-      let obj
       if (content.dataType === 'ExtensionObject') {
         content = content.value
       }
@@ -18,7 +44,11 @@ export class ModelManager {
       if (castMapping) {
         for (const name of Object.entries(castMapping)) {
           if (parameterName.toLowerCase() === name[0].toLowerCase()) {
-            return eval('new ' + name[1] + '(content,this)') // eslint-disable-line
+            const ctor = modelRegistry[name[1]]
+            if (ctor) {
+              return new ctor(content, this)
+            }
+            return content
           }
         }
       }
@@ -35,7 +65,7 @@ export class ModelManager {
         a[content.key] = content.value
         return new LocalizationModel(a, this)
       }
-      return obj
+      return content
     }
     return content
   }

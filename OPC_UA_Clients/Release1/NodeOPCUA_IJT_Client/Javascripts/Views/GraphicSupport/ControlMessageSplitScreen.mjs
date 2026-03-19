@@ -2,11 +2,11 @@ import BasicScreen from './BasicScreen.mjs'
 /**
  * Support class that creates the split screen
  * Use this.controlArea to add things to interact with
- * Use this.messageDisplay(msg) to desplay user feedback
+ * Use this.messageDisplay(msg) to display user feedback
  * Implement your own initiate() function to run code every time the tab is opened
  */
 export default class ControlMessageSplitScreen extends BasicScreen {
-  constructor (title, leftText, rightText, activationPhase) {
+  constructor (title, leftText, rightText) {
     super(title)
 
     const columnSetter = document.createElement('div')

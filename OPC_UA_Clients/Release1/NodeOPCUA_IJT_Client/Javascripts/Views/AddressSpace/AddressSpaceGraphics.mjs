@@ -13,7 +13,7 @@ const nodeClassColor = {
  */
 export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
   constructor (addressSpace) {
-    super('Address Space', 'Address Space', 'Messages', 'subscribed')
+    super('Address Space', 'Address Space', 'Messages')
     this.addressSpace = addressSpace
 
     addressSpace.connectionManager.subscribe('session', (setToTrue) => {

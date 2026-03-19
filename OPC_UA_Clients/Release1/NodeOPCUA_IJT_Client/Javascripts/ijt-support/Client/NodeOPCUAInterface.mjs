@@ -181,6 +181,7 @@ class Connection {
     this.debugNr = 0
     this.eventMonitoringItems = []
     this.connectionState = 'idle'
+    this._closingPromise = null
   }
 
   isActive () {
@@ -404,61 +405,81 @@ class Connection {
   /**
    * Close a connection and clean everything up
    */
-  closeConnection () {
-    this.connectionState = 'closing'
-    try {
-      console.log('Terminate eventmonitoring')
-      if (this.eventMonitoringItems) {
+  async closeConnection () {
+    if (this._closingPromise) {
+      return this._closingPromise
+    }
+
+    const settleCallback = (fn) => new Promise((resolve) => {
+      try {
+        fn(() => resolve())
+      } catch {
+        resolve()
+      }
+    })
+
+    this._closingPromise = (async () => {
+      this.connectionState = 'closing'
+
+      try {
+        console.log('Terminate eventmonitoring')
         for (const monitor of this.eventMonitoringItems) {
-          monitor.terminate(() => { console.log('Eventmonitoring terminated ' + this.endpointUrl) })
+          await settleCallback((done) => monitor.terminate(done))
+          console.log('Eventmonitoring terminated ' + this.endpointUrl)
         }
+      } catch (err) {
+        console.log('************ FAIL to close down EventMonitor: ' + err)
+        this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
+      } finally {
+        this.eventMonitoringItems = []
       }
-    } catch (err) {
-      console.log('************ FAIL to close down EventMonitor: ' + err)
-      this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
-    }
 
-    this.eventMonitoringItems = []
-
-    try {
-      console.log('Unsubscribe')
-      if (this.subscription) {
-        this.subscription.terminate(function () {
+      try {
+        console.log('Unsubscribe')
+        if (this.subscription) {
+          await this.subscription.terminate()
           console.log('Unsubscribed')
-        })
+        }
+      } catch (err) {
+        console.log('************ FAIL to unsubscribe: ' + err)
+        this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
+      } finally {
+        this.subscription = null
       }
-    } catch (err) {
-      console.log('************ FAIL to unsubscribe: ' + err)
-      this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
-    }
-    try {
-      console.log('Closing session')
-      if (!this || !this.session || !this.client) {
-        console.log('Session already closed')
-      } else {
-        this.session.close(function () {
+
+      try {
+        console.log('Closing session')
+        if (this.session) {
+          await this.session.close(true)
           console.log('Session closed')
-        })
+        } else {
+          console.log('Session already closed')
+        }
+      } catch (err) {
+        console.log('************ FAIL to close session: ' + err)
+        this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
+      } finally {
+        this.session = null
       }
-    } catch (err) {
-      console.log('************ FAIL to close session: ' + err)
-      this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
-    }
-    try {
-      console.log('Disconnect client. (' + this.endpointUrl + ')')
-      if (this && this.client) {
-        this.client.disconnect(function () {
-          console.log('Client disconnected.\n=========================================')
-          if (this && this.io) {
-            this.io.emit('client disconnected', { endpointurl: this.endpointUrl })
-          }
-        })
+
+      try {
+        console.log('Disconnect client. (' + this.endpointUrl + ')')
+        if (this.client) {
+          await this.client.disconnect()
+        }
+      } catch (err) {
+        console.log('************ FAIL to disconnect client: ' + err)
+        this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
+      } finally {
+        this.client = null
       }
-    } catch (err) {
-      console.log('************ FAIL to disconnect client: ' + err)
-      this.io.emit('error message', { error: err, context: 'closedown', message: err.message })
-    }
-    this.connectionState = 'closed'
+
+      this.connectionState = 'closed'
+      console.log('Client disconnected.\n=========================================')
+      this.io.emit('client disconnected', { endpointurl: this.endpointUrl })
+    })()
+
+    return this._closingPromise
   }
 
   /**
@@ -496,6 +517,9 @@ class Connection {
     eventMonitoringItem.on('changed', (events) => {
       (async () => {
         try {
+          if (this.connectionState !== 'connected') {
+            return
+          }
           console.log('================= RECIEVED EVENT')
           for (let i = 0; i < events.length; i++) {
             // console.log('================= LOOPING OVER ARGUMENTS ' + i)
@@ -529,8 +553,6 @@ class Connection {
     })
 
     this.eventMonitoringItems.push(eventMonitoringItem)
-
-    await new Promise((resolve) => process.once('SIGINT', resolve))
   }
 }
 

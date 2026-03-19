@@ -6,7 +6,7 @@ import ControlMessageSplitScreen from '../GraphicSupport/ControlMessageSplitScre
  */
 export default class EventGraphics extends ControlMessageSplitScreen {
   constructor (eventManager, modelManager) {
-    super('Events', 'Events', 'Event content', 'subscribed')
+    super('Events', 'Events', 'Event content')
     this.eventManager = eventManager
     this.modelManager = modelManager
     this.modelToHTML = new ModelToHTML()

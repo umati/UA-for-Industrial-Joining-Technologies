@@ -20,7 +20,6 @@
   </script>
 
   <script src="/socket.io/socket.io.js"
-          integrity="sha384-REPLACE_WITH_ACTUAL_HASH_OF_/socket.io/socket.io.js"
           crossorigin="anonymous"></script>
 
   <script type="module">
@@ -49,7 +48,7 @@
     tabGenerator.generateTab(servers);
 
     // Ensure all connections are closed when leaving page or refreshing it
-    window.addEventListener('beforeunload', function (event) {
+    window.addEventListener('beforeunload', () => {
       tabGenerator.close();
     });
   </script>
