@@ -44,12 +44,12 @@ function stripBlockComments (line, inBlockComment) {
 }
 
 function parseDeclaration (line) {
-  const match = line.match(/^\s*(--?[a-z][a-z0-9-]*)\s*:\s*(.*?)\s*(;?)\s*$/i)
+  const match = line.match(/^\s*((--[a-z][a-z0-9-]*|[a-z][a-z0-9-]*))\s*:\s*(.*?)\s*(;?)\s*$/i)
   if (!match) return null
 
   const property = match[1].toLowerCase()
-  const value = match[2].trim()
-  const hasSemicolon = match[3] === ';'
+  const value = match[3].trim()
+  const hasSemicolon = match[4] === ';'
 
   return { property, value, hasSemicolon }
 }
