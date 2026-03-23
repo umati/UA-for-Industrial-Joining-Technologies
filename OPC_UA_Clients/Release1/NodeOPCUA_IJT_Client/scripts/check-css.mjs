@@ -84,8 +84,42 @@ function checkFile (filePath) {
       findings.push(`${filePath}:${lineNo} missing space after colon`)
     }
 
-    if (declaration.property === 'border-radius' && /^\d+(\.\d+)?$/.test(declaration.value)) {
-      findings.push(`${filePath}:${lineNo} border-radius missing unit`)
+    if (declaration.property === 'border-radius') {
+      const rawValue = declaration.value.trim().toLowerCase()
+
+      // Skip complex/keyword values we don't attempt to validate for units
+      const borderRadiusKeywords = new Set([
+        'inherit',
+        'initial',
+        'unset',
+        'revert',
+        'revert-layer'
+      ])
+      if (!borderRadiusKeywords.has(rawValue) &&
+          !rawValue.includes('var(') &&
+          !rawValue.includes('calc(')) {
+        const unitPattern = /(px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pt|pc|%)\b/
+        // Split by whitespace and "/" (border-radius: 5px 10px / 2px 4px;)
+        const tokens = rawValue.split(/[\/\s]+/).filter(Boolean)
+        let hasUnit = false
+        let hasNumeric = false
+
+        for (const token of tokens) {
+          if (/^[+-]?\d*\.?\d+$/.test(token)) {
+            // pure number (e.g., "5" or "5.5")
+            if (token !== '0' && token !== '+0' && token !== '-0') {
+              hasNumeric = true
+            }
+          } else if (unitPattern.test(token)) {
+            hasUnit = true
+            break
+          }
+        }
+
+        if (hasNumeric && !hasUnit) {
+          findings.push(`${filePath}:${lineNo} border-radius missing unit`)
+        }
+      }
     }
 
     if (quotedColorProperties.has(declaration.property) && /^['"][^'"]+['"]$/.test(declaration.value)) {
