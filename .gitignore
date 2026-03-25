@@ -1,5 +1,124 @@
+# =============================================================================
+#  UA for Industrial Joining Technologies — root .gitignore
+#  Applies to the entire monorepo.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Python — applies to all sub-projects
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+venv_test/
+.venv/
+ENV/
+env/
+
+# Certificates / keys
 *.der
 *.pem
+
+# ---------------------------------------------------------------------------
+# Node.js — applies to all sub-projects
+# ---------------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---------------------------------------------------------------------------
+# Logs and runtime state — applies to all sub-projects
+# ---------------------------------------------------------------------------
+logs/
+*.log
+*.log.*
+.state/
+
+# ---------------------------------------------------------------------------
+# Environment / secrets
+# ---------------------------------------------------------------------------
+.env
+# .env.example files are committed — they are templates with no real secrets
+
+# ---------------------------------------------------------------------------
+# OS artefacts
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+Temp/
+OLD/
+
+# ---------------------------------------------------------------------------
+# IDEs
+# ---------------------------------------------------------------------------
+.vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# ---------------------------------------------------------------------------
+# Docker
+# ---------------------------------------------------------------------------
+.docker-build-cache/
+MockCache/
+
+# ---------------------------------------------------------------------------
+# IJT Web Client — project-specific
+# ---------------------------------------------------------------------------
+OPC_UA_Clients/Release2/IJT_Web_Client/.env
+OPC_UA_Clients/Release2/IJT_Web_Client/venv_test/
+OPC_UA_Clients/Release2/IJT_Web_Client/.state/
+OPC_UA_Clients/Release2/IJT_Web_Client/logs/
+OPC_UA_Clients/Release2/IJT_Web_Client/Resources/settings.json
+OPC_UA_Clients/Release2/IJT_Web_Client/Resources/connectionpoints.json
+OPC_UA_Clients/Release2/IJT_Web_Client/Javascripts/Views/Envelope/
+OPC_UA_Clients/Release2/IJT_Web_Client/tests/fixtures/tmp/
+OPC_UA_Clients/Release2/IJT_Web_Client/regression_report.json
+OPC_UA_Clients/Release2/IJT_Web_Client/cross_client_regression_report.json
+OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
+OPC_UA_Clients/Release2/IJT_Web_Client/playwright-report/
+
+# Embedded Python installation artefacts (legacy, kept for safety)
+OPC_UA_Clients/Release2/IJT_Web_Client/Python/DLLs/
+OPC_UA_Clients/Release2/IJT_Web_Client/Python/Scripts/
+OPC_UA_Clients/Release2/IJT_Web_Client/Python/Lib/
+OPC_UA_Clients/Release2/IJT_Web_Client/Python/libs/
+OPC_UA_Clients/Release2/IJT_Web_Client/Python/include/
+OPC_UA_Clients/Release2/IJT_Web_Client/Python/doc/
+OPC_UA_Clients/Release2/IJT_Web_Client/Python/tcl/
+OPC_UA_Clients/Release2/IJT_Web_Client/Python/NEWS.txt
+OPC_UA_Clients/Release2/IJT_Web_Client/Python/LICENSE.txt
+
+# ---------------------------------------------------------------------------
+# IJT Console Client — project-specific
+# ---------------------------------------------------------------------------
+OPC_UA_Clients/Release2/IJT_Console_Client/venv/
+OPC_UA_Clients/Release2/IJT_Console_Client/logs/
+OPC_UA_Clients/Release2/IJT_Console_Client/result_logs/
+
+# ---------------------------------------------------------------------------
+# OPC UA Servers — project-specific
+# ---------------------------------------------------------------------------
 OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/
 OPC_UA_Servers/Release1/IJT_OPC_UA_Server_Simulator/Opc.Ua.Di.NodeSet2.xml
 OPC_UA_Servers/Release1/IJT_OPC_UA_Server_Simulator/Opc.Ua.Ijt.Tightening.NodeSet2.xml
@@ -7,53 +126,6 @@ OPC_UA_Servers/Release1/IJT_OPC_UA_Server_Simulator/Opc.Ua.Machinery.NodeSet2.xm
 OPC_UA_Servers/Release1/IJT_OPC_UA_Server_Simulator/Opc.Ua.NodeSet2_1_04.xml
 OPC_UA_Servers/Release1/IJT_OPC_UA_Server_Simulator/tighteningapplication.xml
 OPC_UA_Servers/Release1/IJT_OPC_UA_Server_Simulator/Usage_IJT_OPC_UA_Server_Simulator.pdf
-
-node_modules
-node_modules/
-MockCache/
-.vscode
-*.exe
-node_modules/.bin
-node_modules/.bin/
-Envelope
-Envelope/
-.vscode
-.venv/
-venv/
-Resources/settings.json
-.setup_timestamp
-
-result_logs
-result_logs/
-
-.vs
-.vs/
-
-__pycache__/
-*.py[cod]
-Python/DLLs
-Python/DLLs/
-Python/Scripts
-Python/Scripts/
-Python/Lib
-Python/Lib/
-Python/libs
-Python/libs/
-Python/include
-Python/include/
-Python/doc
-Python/doc/
-Python/tcl
-Python/tcl/
-
-Temp/
-OLD/
-
-OPC_UA_Clients/Release2/IJT_Web_Client/log.txt
-OPC_UA_Clients/Release2/IJT_Web_Client/Resources/connectionpoints.json
-OPC_UA_Clients/Release2/IJT_Web_Client/Javascripts/Views/Envelope/
-OPC_UA_Clients/Release2/IJT_Web_Client/Javascripts/Views/Envelope
-OPC_UA_Clients/Release2/IJT_Web_Client/Resources/connectionpoints.json
 OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_New_RC_1.01.0/Opc.Ua.AMB.NodeSet2.xml
 OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_New_RC_1.01.0/Opc.Ua.Di.NodeSet2.xml
 OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_New_RC_1.01.0/Opc.Ua.IA.NodeSet2.xml
@@ -65,24 +137,9 @@ OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_New_RC_1.01.0/Opc.Ua.Machine
 OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_New_RC_1.01.0/Opc.Ua.NodeSet2.xml
 OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_New_RC_1.01.0/server_configuration.json
 OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_New_RC_1.01.0/simulated_data.json
-/OPC_UA_Clients/Release2/IJT_Web_Client/Python/tcl/tcl8.6/msgs
-/OPC_UA_Clients/Release2/IJT_Web_Client/Python/tcl
-/OPC_UA_Clients/Release2/IJT_Web_Client/Python/Lib
-/OPC_UA_Clients/Release2/IJT_Web_Client/Python/include
-/OPC_UA_Clients/Release2/IJT_Web_Client/Python/Doc
-/OPC_UA_Clients/Release2/IJT_Web_Client/Python/DLLs
-OPC_UA_Clients/Release2/IJT_Web_Client/Python/NEWS.txt
-OPC_UA_Clients/Release2/IJT_Web_Client/Python/LICENSE.txt
-*.log.*
 
-# IJT Web Client temporary test artifacts
-OPC_UA_Clients/Release2/IJT_Web_Client/tests/fixtures/tmp/
-OPC_UA_Clients/Release2/IJT_Web_Client/tests/fixtures/tmp/*.json
-
-# IJT Web Client runtime state/log artifacts
-OPC_UA_Clients/Release2/IJT_Web_Client/.state/
-OPC_UA_Clients/Release2/IJT_Web_Client/logs/setup.log
-
-# Local session handoff notes
+# ---------------------------------------------------------------------------
+# Session / handoff artefacts
+# ---------------------------------------------------------------------------
 SESSION_NOTES.md
-OPC_UA_Clients/Release2/IJT_Web_Client/regression_report.json
+Envelope/

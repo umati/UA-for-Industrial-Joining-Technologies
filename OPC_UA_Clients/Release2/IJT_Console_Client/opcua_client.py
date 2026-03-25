@@ -21,11 +21,16 @@ logging.getLogger("asyncua.client.ua_client").setLevel(logging.CRITICAL)
 class OPCUAClient:
     def __init__(self, server_url):
         self.server_url = server_url
-        self.client = Client(server_url)
+        # 60-second service-call timeout — methods like SimulateJobResult fire
+        # many separate OPC UA publish messages before returning; the default
+        # asyncua 4-second window is far too short.
+        self.client = Client(server_url, timeout=60)
         self.sub_result_event = None
         self.sub_joining_event = None
-        self.handler_result_event = ResultEventHandler(server_url, self.client)
-        self.handler_joining_event = EventHandler(None, server_url, self.client)
+        # Handlers are created inside subscribe_to_events() which runs in an async
+        # context, allowing asyncio.create_task() to be used safely.
+        self.handler_result_event = None
+        self.handler_joining_event = None
         self.methods = OPCUAMethodCaller(self.client)
 
     def setup_client_metadata(self):
@@ -69,6 +74,10 @@ class OPCUAClient:
 
     async def subscribe_to_events(self):
         try:
+            # Handlers are created here (async context) so asyncio.create_task() works.
+            self.handler_result_event = ResultEventHandler(self.server_url)
+            self.handler_joining_event = EventHandler(None, self.server_url, self.client)
+
             root = self.client.get_root_node()
             server_node = await root.get_child(["0:Objects", "0:Server"])
 
@@ -164,7 +173,7 @@ class OPCUAClient:
             ijt_log.error(traceback.format_exc())
 
     async def clear_old_logs(self):
-        log_dir = Path("result_logs")
+        log_dir = Path("logs") / "results"
         if log_dir.exists():
             for file in log_dir.glob("*.json"):
                 file.unlink()

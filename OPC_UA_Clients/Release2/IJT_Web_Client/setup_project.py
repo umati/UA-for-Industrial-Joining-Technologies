@@ -1,5 +1,7 @@
 import os
 import sys
+# Suppress __pycache__ / .pyc generation for all child processes (matches Docker behavior)
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
 import subprocess
 import shutil
 import logging
@@ -16,12 +18,16 @@ import zipfile
 import signal
 from pathlib import Path
 
-from network_utils import endpoint_reachable, parse_endpoint_host_port
+# Add src/ to path so "from Python.xxx import" works regardless of cwd
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+from Python.network_utils import endpoint_reachable, parse_endpoint_host_port
 
 STATE_DIR = Path(".state")
 LOGS_DIR = Path("logs")
+RESULTS_LOG_DIR = LOGS_DIR / "results"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
+RESULTS_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _detect_repo_root(start_dir: Path) -> Path:
@@ -703,8 +709,11 @@ def _pip_in_venv() -> Path:
 
 def _get_python_path() -> Path:
     """
-    Inside Docker, use system python. Otherwise use venv python.
+    Inside Docker, use system python (already set up by Dockerfile).
+    Otherwise use the venv python.
     """
+    if IS_DOCKER:
+        return Path(sys.executable)
     return _python_in_venv()
 
 
@@ -884,28 +893,34 @@ def _install_python_packages():
     except Exception as exc:
         log.debug("Optional crypto stack upgrade skipped: %s", exc)
 
-    # Stable-first asyncua install. Keep default broad to allow future stable releases.
-    asyncua_spec = os.getenv("ASYNCUA_VERSION_SPEC", "asyncua>=1.2b1").strip()
-    allow_pre_fallback = _env_bool("ASYNCUA_ALLOW_PRE", True)
-    log.info("Ensuring %s (stable channel)...", asyncua_spec)
+    # asyncua install — always use --pre so pip can find the current pre-release (1.2b2+).
+    # --pre does NOT force a pre-release: once asyncua 1.2.x stable is published pip will
+    # automatically pick that as the highest version satisfying the constraint.
+    # This avoids pip silently resolving to the older 1.1.8 LTS stable that lacks Python 3.14
+    # support.
+    asyncua_spec = os.getenv("ASYNCUA_VERSION_SPEC", "asyncua>=1.2b2").strip()
+    log.info("Installing asyncua (--pre enabled for 1.2b2+ / Python 3.14): %s", asyncua_spec)
+    subprocess.check_call(
+        [str(python), "-m", "pip", "install", "--upgrade", "--pre", asyncua_spec]
+    )
+
+    # Verify the installed asyncua satisfies the minimum version.
     try:
-        subprocess.check_call(
-            [str(python), "-m", "pip", "install", "--upgrade", asyncua_spec]
-        )
-    except Exception as exc:
-        if not allow_pre_fallback:
+        installed = subprocess.check_output(
+            [str(python), "-c", "import asyncua; print(asyncua.__version__)"],
+            text=True,
+        ).strip()
+        log.info("asyncua installed version: %s", installed)
+        from packaging.version import Version
+        if Version(installed) < Version("1.2b2"):
             log.error(
-                "Stable asyncua install failed (%s) and ASYNCUA_ALLOW_PRE is disabled.",
-                exc,
+                "asyncua %s is too old for Python 3.14. Minimum required: 1.2b2. "
+                "Run with --force_full to trigger a clean reinstall.",
+                installed,
             )
-            raise
-        log.warning(
-            "Stable asyncua install failed (%s). Retrying with --pre for compatibility.",
-            exc,
-        )
-        subprocess.check_call(
-            [str(python), "-m", "pip", "install", "--upgrade", "--pre", asyncua_spec]
-        )
+            sys.exit(1)
+    except Exception as exc:
+        log.warning("Could not verify asyncua version: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1149,7 +1164,13 @@ def _is_runtime_ready():
     npm = _get_npm_path()
     npx = _get_npx_path()
 
-    if not (VENV_DIR.exists() and python.exists() and npm and npx):
+    if IS_DOCKER:
+        # In Docker, packages are installed globally by Dockerfile; no venv needed.
+        venv_ok = True
+    else:
+        venv_ok = VENV_DIR.exists()
+
+    if not (venv_ok and python.exists() and npm and npx):
         return False
 
     # Ensure runtime dependencies are present in the selected Python interpreter.
@@ -1159,8 +1180,11 @@ def _is_runtime_ready():
                 str(python),
                 "-c",
                 (
-                    "import asyncua, websockets, dotenv, requests, packaging, "
-                    "pytz, aiofiles"
+                    "import asyncua, websockets, dotenv, packaging, "
+                    "pytz, aiofiles; "
+                    "from packaging.version import Version; "
+                    "assert Version(asyncua.__version__) >= Version('1.2b2'), "
+                    f"'asyncua ' + asyncua.__version__ + ' is too old; need >= 1.2b2'"
                 ),
             ]
         )
@@ -1298,7 +1322,10 @@ def main():
     _warn_if_untested_python(latest_ver)
     log.info("Newest Python detected on this system: %s", latest_ver)
 
-    _create_virtualenv(latest_cmd)
+    if IS_DOCKER:
+        log.info("Docker mode: skipping venv creation (packages installed by Dockerfile).")
+    else:
+        _create_virtualenv(latest_cmd)
     _install_python_packages()
 
     _create_nodeenv()

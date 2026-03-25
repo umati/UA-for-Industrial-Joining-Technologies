@@ -81,10 +81,13 @@ async def read_tool_identifier(client: Client) -> Optional[String]:
 
 
 async def log_result_event_details(
-    event, client: Client, server_url: str, client_received_time: datetime
+    event, server_url: str, client_received_time: datetime
 ) -> str:
     try:
-        server_time = await read_server_time(client)
+        # Do NOT perform OPC UA reads here — this callback fires concurrently with
+        # pending method calls and concurrent OPC UA requests on the same client
+        # cause "Unhandled exception while sending request to OPC UA server".
+        server_time = client_received_time
         event_time = event.Time
         event_id = event.EventId.decode("utf-8", errors="replace")
 
@@ -276,13 +279,19 @@ def nodeid_to_str(nodeid: ua.NodeId) -> str:
         if isinstance(nodeid, ua.NodeId):
             ns = nodeid.NamespaceIndex
             identifier = nodeid.Identifier
-            if nodeid.NodeIdType == ua.NodeIdType.Numeric:
+            # TwoByte and FourByte are compact encodings of numeric node IDs
+            if nodeid.NodeIdType in (
+                ua.NodeIdType.Numeric,
+                ua.NodeIdType.TwoByte,
+                ua.NodeIdType.FourByte,
+            ):
                 return f"ns={ns};i={identifier}"
             elif nodeid.NodeIdType == ua.NodeIdType.String:
                 return f"ns={ns};s={identifier}"
             elif nodeid.NodeIdType == ua.NodeIdType.Guid:
                 return f"ns={ns};g={identifier}"
-            elif nodeid.NodeIdType == ua.NodeIdType.Opaque:
+            else:
+                # ByteString / Opaque
                 return f"ns={ns};b={identifier}"
     except Exception as exc:
         ijt_log.debug(f"Failed to format node id, falling back to str(): {exc}")
@@ -292,7 +301,8 @@ def nodeid_to_str(nodeid: ua.NodeId) -> str:
 def localizedtext_to_str(lt: ua.LocalizedText) -> str:
     try:
         if isinstance(lt, ua.LocalizedText):
-            return lt.Text
+            # lt.Text may be None when only Locale is set
+            return lt.Text if lt.Text is not None else ""
     except Exception as exc:
         ijt_log.debug(f"Failed to read localized text, falling back to str(): {exc}")
     return str(lt)
@@ -313,7 +323,7 @@ async def log_result_to_file(event):
             json_data = serialize_full_event(event.Result)
             json_str = _to_json_str(json_data)
 
-            log_dir = Path("result_logs")
+            log_dir = Path("logs") / "results"
             log_dir.mkdir(exist_ok=True)
 
             safe_message = re.sub(

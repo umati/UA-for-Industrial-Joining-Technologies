@@ -1,20 +1,24 @@
 {
   "name": "opc-ua-ijt-client",
   "version": "1.0.0",
-  "description": "IJT client",
+  "description": "IJT OPC UA Web Client — Industrial Joining Technologies reference implementation",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "npx serve",
+    "start": "npx serve --listen tcp://127.0.0.1:3000 --no-clipboard .",
     "test": "npm run test:unit:js",
-    "test:unit:python": "python -m pytest tests/python/unit -q",
-    "test:integration:python": "python -m pytest tests/python/integration -q -m integration",
+    "test:unit:python": "python run_all_tests.py",
+    "test:integration:python": "python run_all_tests.py --integration",
+    "test:live:python": "python -m pytest tests/test_opcua_live.py -v",
     "test:unit:js": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:regression": "playwright test tests/e2e/regression-ui.spec.mjs",
-    "test:all": "npm run test:unit:python && npm run test:integration:python && npm run test:unit:js",
-    "lint": "eslint Javascripts config.js --config eslint.config.mjs",
-    "lint:fix": "eslint Javascripts config.js --fix --config eslint.config.mjs"
+    "test:e2e:smoke": "playwright test --project=smoke --reporter=line",
+    "test:e2e:regression": "playwright test --project=regression --reporter=line",
+    "test:e2e:features": "playwright test --project=features --reporter=line",
+    "test:e2e:report": "playwright show-report test-results/html",
+    "test:all": "python run_all_tests.py --all",
+    "lint": "eslint src/Javascripts config.js --config eslint.config.mjs",
+    "lint:fix": "eslint src/Javascripts config.js --fix --config eslint.config.mjs"
   },
   "author": "Joakim Gustafsson <joakim.gustafsson@atlascopco.com>",
   "license": "ISC",
@@ -24,14 +28,14 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@playwright/test": "^1.54.2",
+    "@playwright/test": "^1.58.2",
     "eslint": "^9.39.4",
     "eslint-plugin-n": "^17.24.0",
     "eslint-plugin-promise": "^7.2.1",
     "globals": "^17.4.0",
     "neostandard": "^0.13.0",
     "serve": "^14.2.6",
-    "vitest": "^4.0.0"
+    "vitest": "^4.1.0"
   },
   "engines": {
     "node": ">=24.0.0"

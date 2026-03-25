@@ -2,6 +2,8 @@ import argparse
 import logging
 import os
 import shlex
+# Suppress __pycache__ / .pyc generation — matches Docker/CI behavior
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
 import shutil
 import socket
 import subprocess
@@ -440,37 +442,39 @@ def _install_python_packages() -> None:
     except Exception as exc:
         log.debug("Optional crypto stack upgrade skipped: %s", exc)
 
-    asyncua_spec = os.getenv("ASYNCUA_VERSION_SPEC", "asyncua>=1.2b1").strip()
+    asyncua_spec = os.getenv("ASYNCUA_VERSION_SPEC", "asyncua>=1.2b2").strip()
     allow_pre_fallback = _env_bool("ASYNCUA_ALLOW_PRE", True)
+    # asyncua 1.2b2+ is required for Python 3.14 support. Always install with --pre so pip
+    # can find the current pre-release. --pre does NOT force a pre-release: once asyncua
+    # 1.2.x stable is published, pip automatically picks that as the highest matching version.
+    log.info("Installing asyncua (--pre enabled for 1.2b2+ / Python 3.14): %s", asyncua_spec)
+    subprocess.check_call([
+        str(python),
+        "-m",
+        "pip",
+        "install",
+        "--upgrade",
+        "--pre",
+        asyncua_spec,
+    ])
+
+    # Verify the installed asyncua satisfies the minimum version.
     try:
-        subprocess.check_call([
-            str(python),
-            "-m",
-            "pip",
-            "install",
-            "--upgrade",
-            asyncua_spec,
-        ])
-    except Exception as exc:
-        if not allow_pre_fallback:
+        installed = subprocess.check_output(
+            [str(python), "-c", "import asyncua; print(asyncua.__version__)"],
+            text=True,
+        ).strip()
+        log.info("asyncua installed version: %s", installed)
+        from packaging.version import Version
+        if Version(installed) < Version("1.2b2"):
             log.error(
-                "Stable asyncua install failed (%s) and ASYNCUA_ALLOW_PRE is disabled.",
-                exc,
+                "asyncua %s is too old for Python 3.14. Minimum required: 1.2b2. "
+                "Run setup_client.py --force_full for a clean reinstall.",
+                installed,
             )
-            raise
-        log.warning(
-            "Stable asyncua install failed (%s). Retrying with --pre for compatibility.",
-            exc,
-        )
-        subprocess.check_call([
-            str(python),
-            "-m",
-            "pip",
-            "install",
-            "--upgrade",
-            "--pre",
-            asyncua_spec,
-        ])
+            sys.exit(1)
+    except Exception as exc:
+        log.warning("Could not verify asyncua version: %s", exc)
 
 
 def _is_runtime_ready() -> bool:
@@ -483,7 +487,10 @@ def _is_runtime_ready() -> bool:
             [
                 str(python),
                 "-c",
-                "import asyncua, pytz, aiofiles, orjson, cryptography, OpenSSL",
+                "import asyncua, pytz, aiofiles, orjson, cryptography, OpenSSL; "
+                "from packaging.version import Version; "
+                "assert Version(asyncua.__version__) >= Version('1.2b2'), "
+                "'asyncua ' + asyncua.__version__ + ' is too old; need >= 1.2b2'",
             ]
         )
     except Exception:

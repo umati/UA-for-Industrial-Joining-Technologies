@@ -1,13 +1,19 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 import asyncio
 import contextlib
 import json
 import os
 import platform
 import signal
+import sys
 import time
 import traceback
+from pathlib import Path
 from typing import Set
+
+_SRC = str(Path(__file__).resolve().parent / "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 
 import websockets
 from dotenv import load_dotenv

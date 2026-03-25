@@ -145,6 +145,14 @@ def main():
         ijt_log.error(f"Unhandled exception: {e}")
         ijt_log.error(traceback.format_exc())
     finally:
+        # Cancel any tasks that are still pending (e.g. EventHandler._queue_task)
+        # so the loop closes cleanly without "Task was destroyed but pending" noise.
+        pending = asyncio.all_tasks(loop)
+        if pending:
+            for t in pending:
+                t.cancel()
+            with contextlib.suppress(Exception):
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
         loop.close()
         ijt_log.info("Event loop closed.")
 

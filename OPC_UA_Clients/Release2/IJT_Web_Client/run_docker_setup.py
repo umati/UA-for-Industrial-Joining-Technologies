@@ -1,17 +1,28 @@
 #!/usr/bin/env python3
+"""
+Docker setup automation for IJT Web Client.
+Canonical location: run_docker_setup.py
+
+Handles:
+  - Auto-detect: uses Docker if available, falls back to local setup
+  - Force docker: builds image, starts compose stack, optionally tails logs
+  - Force local: runs setup_project.py directly
+"""
 import argparse
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent
+SETUP_SCRIPT = PROJECT_ROOT / "setup_project.py"
+
 CONTAINER_NAME = "ijt_web_client"
 IMAGE_NAME = "ijt_web_client"
-SETUP_SCRIPT = Path("setup_project.py")
 
 
 def run_command(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
-    print("Running:", " ".join(cmd))
+    print("Running:", " ".join(str(c) for c in cmd))
     return subprocess.run(cmd, check=check)
 
 
@@ -56,13 +67,13 @@ def run_docker(setup_args: list[str], follow_logs: bool = True) -> None:
     run_command(["docker", "volume", "prune", "-f"], check=False)
 
     print("Building docker image...")
-    run_command(["docker", "build", "--no-cache", "-t", IMAGE_NAME, "."])
+    run_command(["docker", "build", "--no-cache", "-t", IMAGE_NAME, str(PROJECT_ROOT)])
 
     print("Starting docker compose stack...")
     run_command(compose_cmd + ["up", "-d"])
 
     if follow_logs:
-        print("Streaming container logs...")
+        print("Streaming container logs (Ctrl+C to stop following)...")
         run_command(["docker", "logs", "-f", CONTAINER_NAME], check=False)
     else:
         print("Skipping log follow (--no-follow-logs).")
@@ -70,14 +81,13 @@ def run_docker(setup_args: list[str], follow_logs: bool = True) -> None:
 
 def run_local(setup_args: list[str]) -> None:
     if not SETUP_SCRIPT.exists():
-        raise FileNotFoundError(f"{SETUP_SCRIPT} not found in current directory")
-
+        raise FileNotFoundError(f"{SETUP_SCRIPT} not found. Run from the project root.")
     print("Running local setup script...")
     run_command([sys.executable, str(SETUP_SCRIPT)] + setup_args)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run setup for IJT Web Client")
+    parser = argparse.ArgumentParser(description="Docker or local setup for IJT Web Client")
     parser.add_argument(
         "--setup-args",
         nargs=argparse.REMAINDER,
@@ -87,7 +97,7 @@ def main() -> None:
         "--mode",
         choices=["auto", "docker", "local"],
         default="auto",
-        help="Choose execution mode: auto-detect, force docker, or force local setup.",
+        help="auto (default): use Docker if available, else local; docker: force Docker; local: force local.",
     )
     parser.add_argument(
         "--no-follow-logs",
@@ -95,19 +105,18 @@ def main() -> None:
         help="In docker mode, do not tail container logs after startup.",
     )
     args = parser.parse_args()
-
     setup_args = args.setup_args if args.setup_args else ["--force_full"]
 
     if args.mode == "local":
         run_local(setup_args)
         return
-
     if args.mode == "docker":
         if not docker_running():
             raise RuntimeError("Docker mode requested but Docker is unavailable or not running.")
         run_docker(setup_args, follow_logs=not args.no_follow_logs)
         return
 
+    # auto mode
     if docker_running():
         run_docker(setup_args, follow_logs=not args.no_follow_logs)
     else:

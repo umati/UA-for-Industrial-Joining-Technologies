@@ -42,6 +42,8 @@ def serialize_value(value: Any) -> Any:
     if hasattr(value, "__slots__"):
         result = {"pythonclass": type(value).__name__}
         for slot in getattr(value, "__slots__", []):
+            if slot == "_freeze":
+                continue
             try:
                 result[slot] = serialize_value(getattr(value, slot))
             except Exception:
