@@ -1,6 +1,9 @@
 services:
   ijt_web_client:
-    image: ijt_web_client
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ijt_web_client:latest
     container_name: ijt_web_client
     working_dir: /app
     volumes:
@@ -12,14 +15,34 @@ services:
     environment:
       IS_DOCKER: "true"
       PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    # Override CMD for dev mode (setup + keep alive)
     command: >
-      sh -c "npm ci || npm install --legacy-peer-deps && python setup_project.py --force_full && tail -f /dev/null"
+      sh -c "python setup_project.py --force_full && tail -f /dev/null"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
+      start_period: 20s
       retries: 3
+
+  # Optional: run tests inside Docker
+  ijt_tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ijt_web_client:latest
+    container_name: ijt_tests
+    working_dir: /app
+    environment:
+      IS_DOCKER: "true"
+      PYTHONUNBUFFERED: "1"
+      OPCUA_TEST_ENDPOINT: "opc.tcp://host.docker.internal:40451"
+      WS_TEST_URL: "ws://localhost:8001"
+    command: ["python", "run_all_tests.py", "--all"]
+    profiles:
+      - test
 
 volumes:
   node_modules:

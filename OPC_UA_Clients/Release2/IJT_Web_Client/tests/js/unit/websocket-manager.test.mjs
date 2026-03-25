@@ -1,5 +1,5 @@
-﻿import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { WebSocketManager } from '../../../Javascripts/ijt-support/Connection/WebSocketManager.mjs'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { WebSocketManager } from '../../../src/Javascripts/ijt-support/Connection/WebSocketManager.mjs'
 
 class MockWebSocket {
   static instances = []
@@ -15,6 +15,10 @@ class MockWebSocket {
 
   addEventListener (name, callback) {
     this.listeners[name] = callback
+  }
+
+  removeEventListener (name, callback) {
+    if (this.listeners[name] === callback) delete this.listeners[name]
   }
 
   send (payload) {
@@ -35,6 +39,11 @@ describe('WebSocketManager', () => {
   beforeEach(() => {
     MockWebSocket.instances = []
     global.WebSocket = MockWebSocket
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('delivers subscribed events by endpoint and command', () => {
@@ -51,13 +60,19 @@ describe('WebSocketManager', () => {
     expect(callback).toHaveBeenCalledWith({ ok: true }, 'u1')
   })
 
-  it('re-establishes connection and sends when socket is not open', () => {
+  it('re-establishes connection and flushes queued message after reconnect', () => {
     const manager = new WebSocketManager(() => {}, 'ws://first')
 
+    // Socket exists but is not open (readyState=0); send queues + schedules reconnect
     manager.send('ping', 'ep2', 'id-1', { value: 42 })
+
+    // Advance timers past the reconnect delay so the new socket is created
+    vi.runAllTimers()
 
     expect(MockWebSocket.instances).toHaveLength(2)
     const reconnected = MockWebSocket.instances[1]
+
+    // Simulate the reconnected socket opening — queued message must be flushed
     reconnected.open()
 
     expect(reconnected.sent).toHaveLength(1)

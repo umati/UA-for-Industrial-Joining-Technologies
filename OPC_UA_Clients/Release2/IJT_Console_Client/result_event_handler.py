@@ -26,14 +26,16 @@ class ShortResultEvent:
 
 
 class ResultEventHandler:
-    def __init__(self, server_url, client):
+    """
+    Async handler for OPC UA ResultReadyEvent notifications.
+
+    Uses asyncio.create_task() on the running event loop — the same pattern as
+    the IJT Web Client — instead of asyncio.run_coroutine_threadsafe().
+    Must be instantiated from within an async context (e.g. inside subscribe_to_events).
+    """
+
+    def __init__(self, server_url):
         self.server_url = server_url
-        self.client = client
-        try:
-            self.loop = asyncio.get_running_loop()
-        except RuntimeError:
-            self.loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.loop)
         ijt_log.info("ResultEventHandler initialized.")
 
     async def process_event(self, event: ShortResultEvent):
@@ -48,7 +50,7 @@ class ResultEventHandler:
         try:
             client_received_time = datetime.now(pytz.utc)
             event_id = await log_result_event_details(
-                event, self.client, self.server_url, client_received_time
+                event, self.server_url, client_received_time
             )
             filtered_event = ShortResultEvent(
                 EventType=str(event.EventType),
@@ -56,9 +58,7 @@ class ResultEventHandler:
                 Message=getattr(event.Message, "Text", "N/A"),
                 EventId=event_id,
             )
-            asyncio.run_coroutine_threadsafe(
-                self.process_event(filtered_event), self.loop
-            )
+            asyncio.create_task(self.process_event(filtered_event))
         except Exception as e:
-            ijt_log.error(f"Error handling event notification: {e}")
+            ijt_log.error(f"Error handling result event notification: {e}")
             ijt_log.error(traceback.format_exc())

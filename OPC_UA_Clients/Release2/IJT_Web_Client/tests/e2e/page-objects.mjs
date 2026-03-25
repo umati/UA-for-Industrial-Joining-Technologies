@@ -1,0 +1,513 @@
+/**
+ * Page Object Model (POM) for the IJT Web Client.
+ *
+ * Every view in the application gets its own class. All Playwright
+ * locators are defined here — never hard-code selectors in spec files.
+ *
+ * Usage:
+ *   import { AppPage, MethodsPage, EventsPage, ... } from './page-objects.mjs'
+ */
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Selector constants — single source of truth for every CSS class / value
+// ─────────────────────────────────────────────────────────────────────────────
+export const SEL = {
+  // Navigation
+  MAIN_DROPDOWN: '.mainDropDown',
+  TAB_BUTTON: (name) => `input.tabButton[value="${name}"]`,
+
+  // Connection status bar
+  STATUS_LABEL: (text) => `.connection-label:has-text("${text}")`,
+  ON_COLOR: '.onColor',
+  OFF_COLOR: '.offColor',
+
+  // Methods view
+  METHOD_AREA: '.methodBorder',
+  METHOD_CALL_BTN: 'button:has-text("Call")',
+
+  // Events view
+  MESSAGES_LIST: '.messages',
+  MESSAGE_ITEMS: '.messages li',
+  TOGGLE_QUEUE_BTN: 'button:has-text("Toggle queueing")',
+  NEXT_EVENT_BTN: 'button:has-text("Next event")',
+
+  // Consolidated Result view
+  RESULT_HEADER: '.resultheader',
+  RESULT_TYPE_SELECT: '.resultheader select:first-of-type',
+  RESULT_ITEM_SELECT: '.resultheader select:nth-of-type(2)',
+  DRAW_BOX: '.drawResultBox',
+  COMPLE_WRAPPER: '.complewrapper',
+  RES_TIGHTENING: '.resTightening',
+  RES_JOB: '.resJob',
+  RES_BATCH: '.resBatch',
+  RES_NOK: '.resNOK',
+
+  // Joint Demo view
+  DEMO_SELECT_JOINT1: '.demoActionSelectJoint1',
+  DEMO_SELECT_JOINT2: '.demoActionSelectJoint2',
+  DEMO_SIMULATE_TIGHTEN: '.demoActionSimulateTightening',
+  DEMO_MAIN_AREA: '.demoMainArea',
+
+  // OK Rate view
+  OK_RATE_VIEW: '.okRateView',
+  OK_RATE_VALUE: '.okRateValue',
+  OK_RATE_STAT: '.okRateStat',
+  OK_RATE_SIMULATE_OK: 'button:has-text("Simulate OK result")',
+  OK_RATE_SIMULATE_NOK: 'button:has-text("Simulate NOT OK result")',
+  OK_RATE_CLEAR: 'button:has-text("Clear counters")',
+
+  // Address Space view
+  TREE_BUTTON: '.treeButton',
+  BUTTON_AREA: '.buttonArea',
+
+  // Servers view
+  SERVER_ROW: '.serverRow',
+  SERVER_ADD_BTN: 'button:has-text("Add new server")',
+  SERVER_SAVE_BTN: 'button:has-text("Save")',
+
+  // Assets view
+  ASSET_BOX: '.drawAssetBox',
+
+  // Joints / Entities view
+  ENTITY_NEW_BTN: 'button:has-text("New")',
+  ENTITY_DELETE_BTN: 'button:has-text("Delete")',
+}
+
+// Result type codes (matches server-side classification)
+export const RESULT_TYPE = {
+  LATEST: '-1',
+  OTHER: '0',
+  TIGHTENING: '1',
+  BATCH: '3',
+  JOB: '4',
+}
+
+// View levels in the main dropdown
+export const VIEW_LEVEL = {
+  BASIC: '1',
+  SIMPLE: '2',
+  DETAILED: '3',
+  SPECIALIZED: '4',
+  SETTINGS: '5',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AppPage — top-level page helper
+// ─────────────────────────────────────────────────────────────────────────────
+export class AppPage {
+  constructor (page) {
+    this.page = page
+  }
+
+  /** Navigate to the app root and wait for basic render. */
+  async goto () {
+    await this.page.goto('/')
+    await this.page.waitForLoadState('domcontentloaded')
+    // Give JS time to bootstrap
+    await this.page.waitForTimeout(500)
+  }
+
+  /** Switch the main view-level dropdown (1=Basic … 5=Settings). */
+  async setViewLevel (level) {
+    await this.page.selectOption(SEL.MAIN_DROPDOWN, level)
+    await this.page.waitForTimeout(300)
+  }
+
+  /** Click a top-level tab by its display name. */
+  async clickTab (tabName, { timeout = 30_000 } = {}) {
+    const tab = this.page.locator(SEL.TAB_BUTTON(tabName)).first()
+    await tab.waitFor({ state: 'visible', timeout })
+    await tab.click()
+    await this.page.waitForTimeout(300)
+  }
+
+  /** Connect to the LOCAL server endpoint tab. */
+  async connectToLocal ({ timeout = 90_000 } = {}) {
+    // The LOCAL tab connects automatically when clicked
+    await this.clickTab('LOCAL', { timeout })
+    // Wait for connection status to turn "on" (ESTABLISHED) or subscription
+    await this.page
+      .locator(SEL.ON_COLOR)
+      .first()
+      .waitFor({ state: 'visible', timeout })
+      .catch(() => {
+        // Connection status may render differently; not fatal for all tests
+      })
+    await this.page.waitForTimeout(1000)
+  }
+
+  /** Assert the page title matches the expected pattern. */
+  async expectTitle (pattern = /OPC UA IJT Demo/) {
+    await this.page.waitForFunction(
+      (pat) => new RegExp(pat).test(document.title),
+      pattern.source,
+      { timeout: 10_000 }
+    )
+  }
+
+  /** Return the methods page helper (switches to Methods tab). */
+  async openMethods () {
+    await this.clickTab('Methods')
+    return new MethodsPage(this.page)
+  }
+
+  async openEvents () {
+    await this.clickTab('Events')
+    return new EventsPage(this.page)
+  }
+
+  async openResults () {
+    await this.clickTab('Consolidated Result')
+    return new ResultsPage(this.page)
+  }
+
+  async openJointDemo () {
+    await this.clickTab('JointDemo')
+    return new JointDemoPage(this.page)
+  }
+
+  async openOkRate () {
+    await this.clickTab('OkRate')
+    return new OkRatePage(this.page)
+  }
+
+  async openAddressSpace () {
+    await this.clickTab('AddressSpace')
+    return new AddressSpacePage(this.page)
+  }
+
+  async openServers () {
+    await this.clickTab('Servers')
+    return new ServersPage(this.page)
+  }
+
+  async openAssets () {
+    await this.clickTab('Assets')
+    return new AssetsPage(this.page)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ConnectionStatusBar
+// ─────────────────────────────────────────────────────────────────────────────
+export class ConnectionStatusBar {
+  constructor (page) {
+    this.page = page
+  }
+
+  async waitForConnected ({ timeout = 60_000 } = {}) {
+    await this.page.locator(SEL.ON_COLOR).first().waitFor({ state: 'visible', timeout })
+  }
+
+  async isAnyStatusOn () {
+    return (await this.page.locator(SEL.ON_COLOR).count()) > 0
+  }
+
+  async isAnyStatusOff () {
+    return (await this.page.locator(SEL.OFF_COLOR).count()) > 0
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MethodsPage
+// ─────────────────────────────────────────────────────────────────────────────
+export class MethodsPage {
+  constructor (page) {
+    this.page = page
+  }
+
+  /** Wait for at least one method area to appear. */
+  async waitForMethods ({ timeout = 90_000 } = {}) {
+    await this.page.locator(SEL.METHOD_AREA).first().waitFor({ state: 'visible', timeout })
+  }
+
+  /** Find a method area that contains a label matching any of the given names. */
+  async findMethodArea (nameOrAliases) {
+    const names = Array.isArray(nameOrAliases) ? nameOrAliases : [nameOrAliases]
+    for (const name of names) {
+      const area = this.page
+        .locator(SEL.METHOD_AREA)
+        .filter({ has: this.page.locator('label', { hasText: name }) })
+        .first()
+      if ((await area.count()) > 0) return { area, name }
+    }
+    return null
+  }
+
+  /** Click the Call button for the first matching method area. */
+  async callMethod (nameOrAliases, { waitMs = 500 } = {}) {
+    const found = await this.findMethodArea(nameOrAliases)
+    if (!found) throw new Error(`Method not found: ${JSON.stringify(nameOrAliases)}`)
+    await found.area.locator(SEL.METHOD_CALL_BTN).first().click()
+    if (waitMs > 0) await this.page.waitForTimeout(waitMs)
+    return found.name
+  }
+
+  /** Return all visible method area labels. */
+  async getMethodNames () {
+    const areas = this.page.locator(SEL.METHOD_AREA)
+    const count = await areas.count()
+    const names = []
+    for (let i = 0; i < count; i++) {
+      const label = await areas.nth(i).locator('label').first().textContent()
+      if (label) names.push(label.trim())
+    }
+    return names
+  }
+
+  /** Simulate all four standard IJT simulation methods in sequence. */
+  async runAllSimulations () {
+    await this.callMethod(['SimulateSingleResult'], { waitMs: 800 })
+    await this.callMethod(['SimulateJobResult'], { waitMs: 800 })
+    await this.callMethod([
+      'Simulate_Batch_or_SYNC_Result',
+      'SimulateBatch_Or_Sync_Result',
+      'SimulateBatchOrSyncResult',
+    ], { waitMs: 800 })
+    await this.callMethod(['SimulateEvents', 'SimualteEvents'], { waitMs: 800 })
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EventsPage
+// ─────────────────────────────────────────────────────────────────────────────
+export class EventsPage {
+  constructor (page) {
+    this.page = page
+  }
+
+  async waitForEvents ({ minCount = 1, timeout = 60_000 } = {}) {
+    await this.page.waitForFunction(
+      ([sel, min]) => document.querySelectorAll(sel).length >= min,
+      ['.messages li', minCount],
+      { timeout }
+    )
+  }
+
+  async getEventCount () {
+    return this.page.locator(SEL.MESSAGE_ITEMS).count()
+  }
+
+  async getAllEventText () {
+    return this.page.locator(SEL.MESSAGES_LIST).innerText()
+  }
+
+  /** Returns true if any event item contains the given substring. */
+  async hasEventContaining (text) {
+    const items = this.page.locator(SEL.MESSAGE_ITEMS)
+    const count = await items.count()
+    for (let i = 0; i < count; i++) {
+      const t = await items.nth(i).textContent()
+      if (t?.includes(text)) return true
+    }
+    return false
+  }
+
+  async toggleQueue () {
+    await this.page.locator(SEL.TOGGLE_QUEUE_BTN).first().click()
+    await this.page.waitForTimeout(200)
+  }
+
+  async clickNextEvent () {
+    const btn = this.page.locator(SEL.NEXT_EVENT_BTN).first()
+    if ((await btn.count()) > 0) {
+      await btn.click()
+      await this.page.waitForTimeout(200)
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ResultsPage
+// ─────────────────────────────────────────────────────────────────────────────
+export class ResultsPage {
+  constructor (page) {
+    this.page = page
+  }
+
+  async waitForHeader ({ timeout = 60_000 } = {}) {
+    await this.page.locator(SEL.RESULT_HEADER).waitFor({ state: 'visible', timeout })
+  }
+
+  async selectResultType (typeCode) {
+    await this.page.locator(SEL.RESULT_TYPE_SELECT).selectOption(typeCode)
+    await this.page.waitForTimeout(600)
+  }
+
+  async selectResult (optionValue) {
+    await this.page.locator(SEL.RESULT_ITEM_SELECT).selectOption(optionValue)
+    await this.page.waitForTimeout(1000)
+  }
+
+  async getResultOptionCount () {
+    return this.page.locator(`${SEL.RESULT_ITEM_SELECT} option`).count()
+  }
+
+  async waitForResultBox ({ timeout = 60_000 } = {}) {
+    await this.page.locator(SEL.COMPLE_WRAPPER).first().waitFor({ state: 'visible', timeout })
+  }
+
+  async countResultNodes (selector) {
+    return this.page.locator(selector).count()
+  }
+
+  /** Select the "Latest" from any result type and verify the tree rendered. */
+  async viewLatestOfType (typeCode) {
+    await this.selectResultType(typeCode)
+    const count = await this.getResultOptionCount()
+    if (count < 2) return false   // only "Unresolved" placeholder
+    await this.selectResult('-1')
+    return true
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JointDemoPage
+// ─────────────────────────────────────────────────────────────────────────────
+export class JointDemoPage {
+  constructor (page) {
+    this.page = page
+  }
+
+  async waitForButtons ({ timeout = 60_000 } = {}) {
+    await this.page.locator(SEL.DEMO_SELECT_JOINT1).first().waitFor({ state: 'visible', timeout })
+  }
+
+  async selectJoint1 () {
+    await this.page.locator(SEL.DEMO_SELECT_JOINT1).first().click()
+    await this.page.waitForTimeout(300)
+  }
+
+  async selectJoint2 () {
+    await this.page.locator(SEL.DEMO_SELECT_JOINT2).first().click()
+    await this.page.waitForTimeout(300)
+  }
+
+  async simulateTightening () {
+    await this.page.locator(SEL.DEMO_SIMULATE_TIGHTEN).first().click()
+    await this.page.waitForTimeout(800)
+  }
+
+  /** Full demo cycle: joint1 → tighten → joint2 → tighten */
+  async runFullDemoCycle () {
+    await this.selectJoint1()
+    await this.simulateTightening()
+    await this.selectJoint2()
+    await this.simulateTightening()
+    await this.page.waitForTimeout(3_000)  // allow results to propagate
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OkRatePage
+// ─────────────────────────────────────────────────────────────────────────────
+export class OkRatePage {
+  constructor (page) {
+    this.page = page
+  }
+
+  async waitForView ({ timeout = 30_000 } = {}) {
+    await this.page.locator(SEL.OK_RATE_VIEW).waitFor({ state: 'visible', timeout })
+  }
+
+  /** Returns the displayed OK-rate percentage string (e.g. "87.50%"). */
+  async getOkRateText () {
+    return this.page.locator(SEL.OK_RATE_VALUE).textContent()
+  }
+
+  async simulateOk () {
+    await this.page.locator(SEL.OK_RATE_SIMULATE_OK).first().click()
+    await this.page.waitForTimeout(600)
+  }
+
+  async simulateNok () {
+    await this.page.locator(SEL.OK_RATE_SIMULATE_NOK).first().click()
+    await this.page.waitForTimeout(600)
+  }
+
+  async clearCounters () {
+    await this.page.locator(SEL.OK_RATE_CLEAR).first().click()
+    await this.page.waitForTimeout(300)
+  }
+
+  /** Parse the percentage value from the displayed text. Returns NaN if unparseable. */
+  async getOkRateNumber () {
+    const text = (await this.getOkRateText()) ?? ''
+    return parseFloat(text.replace('%', '').trim())
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AddressSpacePage
+// ─────────────────────────────────────────────────────────────────────────────
+export class AddressSpacePage {
+  constructor (page) {
+    this.page = page
+  }
+
+  async waitForTree ({ timeout = 30_000 } = {}) {
+    await this.page.locator(SEL.TREE_BUTTON).first().waitFor({ state: 'visible', timeout })
+  }
+
+  /** Returns number of visible tree-node buttons. */
+  async getVisibleNodeCount () {
+    return this.page.locator(SEL.TREE_BUTTON).count()
+  }
+
+  /** Expand the first tree node. */
+  async expandFirstNode () {
+    const btn = this.page.locator(SEL.TREE_BUTTON).first()
+    await btn.click()
+    await this.page.waitForTimeout(800)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ServersPage
+// ─────────────────────────────────────────────────────────────────────────────
+export class ServersPage {
+  constructor (page) {
+    this.page = page
+  }
+
+  async waitForServerList ({ timeout = 30_000 } = {}) {
+    // The server list may be empty; just wait for DOM paint
+    await this.page.waitForTimeout(500)
+  }
+
+  async getServerRowCount () {
+    return this.page.locator(SEL.SERVER_ROW).count()
+  }
+
+  async clickAddServer () {
+    await this.page.locator(SEL.SERVER_ADD_BTN).first().click()
+    await this.page.waitForTimeout(300)
+  }
+
+  async clickSave () {
+    const btn = this.page.locator(SEL.SERVER_SAVE_BTN)
+    if ((await btn.count()) > 0) {
+      await btn.first().click()
+      await this.page.waitForTimeout(300)
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AssetsPage
+// ─────────────────────────────────────────────────────────────────────────────
+export class AssetsPage {
+  constructor (page) {
+    this.page = page
+  }
+
+  async waitForAssets ({ timeout = 60_000 } = {}) {
+    await this.page.locator(SEL.ASSET_BOX).waitFor({ state: 'visible', timeout })
+  }
+
+  async hasAssetContent () {
+    const box = this.page.locator(SEL.ASSET_BOX)
+    const text = (await box.textContent()) ?? ''
+    return text.trim().length > 0
+  }
+}

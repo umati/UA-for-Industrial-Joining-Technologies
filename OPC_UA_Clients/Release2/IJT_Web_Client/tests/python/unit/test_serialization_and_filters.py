@@ -1,8 +1,16 @@
 import json
 from datetime import datetime
 
-from Python.serialize_data import serializeFullEvent, serializeTuple, serializeValue
-from Pytest.TestSubscriptionHandler import combinedNameFilter
+from src.Python.serialize_data import serializeFullEvent, serializeTuple, serializeValue
+
+
+def _combined_name_filter(event, class_name: str, subclass_names: list) -> bool:
+    """Return True if event's ConditionClassName matches class_name AND
+    at least one of event's ConditionSubClassName entries is in subclass_names."""
+    if event.ConditionClassName.Text != class_name:
+        return False
+    event_subclass_texts = {sc.Text for sc in event.ConditionSubClassName}
+    return any(name in event_subclass_texts for name in subclass_names)
 
 
 class _Text:
@@ -26,12 +34,12 @@ class _Payload:
 
 def test_combined_name_filter_true_when_class_and_subclasses_match():
     event = _Event("SystemConditionClassType", ["AssetConnectedConditionClassType", "X"])
-    assert combinedNameFilter(event, "SystemConditionClassType", ["AssetConnectedConditionClassType"])
+    assert _combined_name_filter(event, "SystemConditionClassType", ["AssetConnectedConditionClassType"])
 
 
 def test_combined_name_filter_false_when_subclass_missing():
     event = _Event("SystemConditionClassType", ["AnotherSubClass"])
-    assert not combinedNameFilter(event, "SystemConditionClassType", ["AssetConnectedConditionClassType"])
+    assert not _combined_name_filter(event, "SystemConditionClassType", ["AssetConnectedConditionClassType"])
 
 
 def test_serialize_full_event_handles_datetime_and_ignores_freeze_flag():

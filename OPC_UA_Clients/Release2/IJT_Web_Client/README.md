@@ -75,30 +75,37 @@
   http://localhost:3000
   ```
 ## Testing
-- **Backend tests** (mocked/unit style):
+- **All tests — single command** (unit + integration + JS):
   ```bash
-  python scripts/run_tests.py
+  python run_all_tests.py
   ```
-- **Docker setup smoke** tests:
+- **Python unit/integration only:**
   ```bash
-  python scripts/run_tests.py --docker-tests
+  python -m pytest tests/ --timeout=120 -q
   ```
-- **Docker setup live** validation (build + compose up, no log tail):
+- **JS unit tests only:**
   ```bash
-  python scripts/run_tests.py --docker-tests --live-docker
+  npx vitest run
   ```
-- **Integration tests** against a live OPC UA server:
+- **Docker smoke tests** (container must be running):
+  ```bash
+  python scripts/run_docker_tests.py
+  ```
+- **Docker live validation** (full build + compose up):
+  ```bash
+  python scripts/run_docker_tests.py --live-docker
+  ```
+- **Integration tests against a live OPC UA server:**
   ```bash
   set OPCUA_TEST_ENDPOINT=opc.tcp://<host>:<port>
-  python scripts/run_tests.py --integration
+  python -m pytest tests/ -m live --timeout=120
   ```
-- **Functional regression tests**
+- **Functional regression tests:**
   ```bash
   python scripts/run_regression.py --endpoint opc.tcp://localhost:40451 --ws-url ws://localhost:8001
   ```
 ### Dependencies Versions
 - **Python:** minimum supported version is **3.14**; newer stable Python versions are allowed automatically.
 - **Node.js:** minimum supported version is **24.0.0**.
-- **asyncua:** defaults to **`asyncua>=1.2b1`** and installs from stable channel first.
-- If stable asyncua resolution fails on very new Python, setup retries with `--pre` (controlled by `ASYNCUA_ALLOW_PRE`).
-- The setup warns (but does **not** fail) when using versions newer than tested baselines (`PYTHON_TESTED_MAX_MINOR`, `NODE_TESTED_MAX_MAJOR`).
+- **asyncua:** requires **`asyncua>=1.2b2`** (pre-release for Python 3.14 support); once asyncua 1.2.x stable ships, pip will prefer the stable build automatically.
+- The setup warns (but does **not** fail) when using versions newer than tested baselines.

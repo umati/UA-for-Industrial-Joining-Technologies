@@ -1,101 +1,68 @@
-import { test, expect } from '@playwright/test'
+/**
+ * Full UI regression test.
+ *
+ * Covers the complete user journey in one test: connect → run all simulations →
+ * Joint Demo cycle → verify Events → verify all three result types in the
+ * Consolidated Result view.
+ *
+ * Requires:
+ *   - Python backend running on ws://localhost:8001
+ *   - OPC UA IJT Server running on opc.tcp://localhost:40451
+ *
+ * Run: npx playwright test --project=regression
+ */
+import { test, expect } from './e2e-fixtures.mjs'
+import { MethodsPage, EventsPage, ResultsPage, JointDemoPage, RESULT_TYPE } from './page-objects.mjs'
 
-async function clickTab(page, name) {
-  const tab = page.locator(`input.tabButton[value="${name}"]`).first()
-  await expect(tab).toBeVisible({ timeout: 60000 })
-  await tab.click()
-}
+test('full UI regression — connect, simulate, events, all result types', async ({ connected: app }) => {
+  test.setTimeout(240_000)
 
-async function resolveMethodArea(page, candidates) {
-  for (const name of candidates) {
-    const area = page.locator('.methodBorder').filter({
-      has: page.locator('label', { hasText: name })
-    }).first()
-    if ((await area.count()) > 0) {
-      return { area, name }
-    }
-  }
-  return null
-}
+  // ── 1. Simulate all four result/event types ─────────────────────────────
+  const methods = await app.openMethods()
+  await methods.waitForMethods({ timeout: 90_000 })
+  await methods.runAllSimulations()
 
-async function callMethodByName(page, candidates) {
-  const resolved = await resolveMethodArea(page, candidates)
-  expect(resolved, `Could not find any method area for: ${candidates.join(', ')}`).not.toBeNull()
-  await resolved.area.locator('button', { hasText: 'Call' }).first().click()
-  await page.waitForTimeout(500)
-  return resolved.name
-}
+  // ── 2. Joint demo cycle ─────────────────────────────────────────────────
+  const demo = await app.openJointDemo()
+  await demo.waitForButtons({ timeout: 60_000 })
+  await demo.runFullDemoCycle()
 
-test('UI regression flow for methods, joint demo, and consolidated results', async ({ page }) => {
-  test.setTimeout(180000)
+  // ── 3. Events tab — must show ResultEvent entries ───────────────────────
+  const events = await app.openEvents()
+  await events.waitForEvents({ minCount: 1, timeout: 60_000 })
 
-  await page.goto('/')
-  await expect(page).toHaveTitle(/OPC UA IJT Demo/)
+  const count = await events.getEventCount()
+  expect(count).toBeGreaterThan(0)
 
-  // Ensure endpoint tab exists and open it.
-  await clickTab(page, 'LOCAL')
+  const hasResult = await events.hasEventContaining('ResultEvent')
+  expect(hasResult, 'Expected at least one ResultEvent in the events list').toBe(true)
 
-  // Call simulator methods from Methods tab.
-  await clickTab(page, 'Methods')
-  await expect(page.locator('.methodBorder').first()).toBeVisible({ timeout: 90000 })
-  await callMethodByName(page, ['SimulateSingleResult'])
-  await callMethodByName(page, ['SimulateJobResult'])
-  await callMethodByName(page, ['Simulate_Batch_or_SYNC_Result', 'SimulateBatch_Or_Sync_Result', 'SimulateBatchOrSyncResult'])
-  await callMethodByName(page, ['SimulateEvents'])
+  // ── 4. Consolidated Result — Single tightenings ──────────────────────────
+  const results = await app.openResults()
+  await results.waitForHeader({ timeout: 60_000 })
 
-  // Joint demo interactions: Select 1 -> tighten, Select 2 -> tighten.
-  await clickTab(page, 'JointDemo')
-  const joint1 = page.locator('button.demoActionSelectJoint1').first()
-  const joint2 = page.locator('button.demoActionSelectJoint2').first()
-  const tighten = page.locator('button.demoActionSimulateTightening').first()
-  await expect(joint1).toBeVisible({ timeout: 60000 })
-  await expect(joint2).toBeVisible({ timeout: 60000 })
-  await expect(tighten).toBeVisible({ timeout: 60000 })
+  await results.selectResultType(RESULT_TYPE.TIGHTENING)
+  const singleCount = await results.getResultOptionCount()
+  expect(singleCount, 'Expected ≥ 4 single-result options (Unresolved+Latest+results)').toBeGreaterThanOrEqual(4)
 
-  await joint1.click()
-  await page.waitForTimeout(300)
-  await tighten.click()
-  await page.waitForTimeout(800)
-  await joint2.click()
-  await page.waitForTimeout(300)
-  await tighten.click()
+  await results.selectResult(RESULT_TYPE.LATEST)
+  await results.waitForResultBox({ timeout: 60_000 })
+  const tighteningNodes = await results.countResultNodes('.resTightening')
+  expect(tighteningNodes).toBeGreaterThanOrEqual(1)
 
-  // Wait for events/results propagation.
-  await page.waitForTimeout(3000)
+  // ── 5. Consolidated Result — Job results with nested tree ────────────────
+  await results.selectResultType(RESULT_TYPE.JOB)
+  const jobCount = await results.getResultOptionCount()
+  expect(jobCount, 'Expected ≥ 3 job-result options').toBeGreaterThanOrEqual(3)
 
-  // Verify result/general events are shown in Events tab.
-  await clickTab(page, 'Events')
-  await expect(page.locator('.messages li').first()).toBeVisible({ timeout: 60000 })
-  const eventsText = (await page.locator('.messages').innerText()) || ''
-  expect(eventsText.length).toBeGreaterThan(0)
-  expect(eventsText.includes('ResultEvent')).toBeTruthy()
+  await results.selectResult(RESULT_TYPE.LATEST)
+  await results.waitForResultBox({ timeout: 60_000 })
+  const jobNodes = await results.countResultNodes('.resJob')
+  expect(jobNodes, 'Job result should contain nested .resJob nodes').toBeGreaterThanOrEqual(1)
 
-  // Consolidated Result assertions.
-  await clickTab(page, 'Consolidated Result')
-  const typeSelect = page.locator('.resultheader select').nth(0)
-  const resultSelect = page.locator('.resultheader select').nth(1)
-
-  await expect(typeSelect).toBeVisible({ timeout: 60000 })
-  await expect(resultSelect).toBeVisible({ timeout: 60000 })
-
-  // Single tightenings should be listed as separate entries.
-  await typeSelect.selectOption('1')
-  await page.waitForTimeout(800)
-  const singleOptions = await resultSelect.locator('option').count()
-  expect(singleOptions).toBeGreaterThanOrEqual(4) // Unresolved + Latest + >=2 single results
-
-  // Job results should exist and draw as a tree with nested child result nodes.
-  await typeSelect.selectOption('4')
-  await page.waitForTimeout(800)
-  const jobOptions = await resultSelect.locator('option').count()
-  expect(jobOptions).toBeGreaterThanOrEqual(3) // Unresolved + Latest + >=1 job result
-
-  await resultSelect.selectOption('-1')
-  await page.waitForTimeout(1200)
-  const firstWrapper = page.locator('.drawResultBox .complewrapper').first()
-  await expect(firstWrapper).toBeVisible({ timeout: 60000 })
-  const jobCount = await firstWrapper.locator('.resJob').count()
-  const tighteningCount = await firstWrapper.locator('.resTightening').count()
-  expect(jobCount).toBeGreaterThanOrEqual(1)
-  expect(tighteningCount).toBeGreaterThanOrEqual(1)
+  // ── 6. Consolidated Result — Batch results ───────────────────────────────
+  await results.selectResultType(RESULT_TYPE.BATCH)
+  const batchCount = await results.getResultOptionCount()
+  // Batch simulation was called — at least Unresolved + Latest + 1 batch
+  expect(batchCount).toBeGreaterThanOrEqual(3)
 })

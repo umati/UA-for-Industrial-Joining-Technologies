@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import importlib
 import json
 import logging
@@ -342,6 +343,8 @@ class ConsoleAdapter(BaseAdapter):
         self.client_wrapper = None
         self._event_sub = None
         self._event_handler = None
+        self._counter: _CountingHandler | None = None
+        self._counter_sub = None
 
     async def start(self) -> None:
         if not self.console_dir.exists():
@@ -373,6 +376,22 @@ class ConsoleAdapter(BaseAdapter):
 
     async def subscribe(self) -> dict[str, Any]:
         await self.client_wrapper.subscribe_to_events()
+
+        # Add a lightweight counting subscription so collect_events() can report
+        # real numbers. Subscribing to BaseEventType (empty list) catches everything.
+        try:
+            self._counter = _CountingHandler()
+            server_node = await self.client_wrapper.client.nodes.root.get_child(
+                ["0:Objects", "0:Server"]
+            )
+            self._counter_sub = await self.client_wrapper.client.create_subscription(
+                500, self._counter
+            )
+            await self._counter_sub.subscribe_events(server_node, [], queuesize=500)
+        except Exception as exc:
+            logger.warning("ConsoleAdapter: could not add counting subscription: %s", exc)
+            self._counter = None
+
         return {"ok": True}
 
     async def call_method(self, spec: MethodSpec) -> dict[str, Any]:
@@ -401,12 +420,15 @@ class ConsoleAdapter(BaseAdapter):
             raise first_retry_exc
 
     async def collect_events(self, seconds: float = 6.0) -> dict[str, int]:
-        # Console adapter already subscribes through OPCUAClient.subscribe_to_events().
-        # Avoid creating extra transient subscriptions, which can make simulator teardown noisy.
         await asyncio.sleep(seconds)
-        return {"total": 0, "result_events": 0}
+        total = self._counter.count if self._counter is not None else 0
+        return {"total": total, "result_events": 0}
 
     async def terminate(self) -> dict[str, Any]:
+        if self._counter_sub is not None:
+            with contextlib.suppress(Exception):
+                await self._counter_sub.delete()
+            self._counter_sub = None
         if self.client_wrapper is None:
             return {"terminated": False, "reason": "client_not_initialized"}
         await self.client_wrapper.cleanup()
