@@ -108,7 +108,7 @@ jobs:
         run: npm audit --audit-level=high --json > test-results/npm-audit.json
 
       - name: Publish Test Reports
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: "Web Client — Tests"
@@ -182,7 +182,7 @@ jobs:
         run: python -m bandit -r . -c pyproject.toml --severity-level medium -f json -o test-results/bandit.json
 
       - name: Publish Test Reports
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: "Console Client — Tests"
@@ -249,7 +249,7 @@ jobs:
         run: npm audit --audit-level=high --json > test-results/npm-audit.json
 
       - name: Publish Test Reports
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: "Node Client — Tests"
