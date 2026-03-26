@@ -142,12 +142,12 @@ class Connection:
             )  # use None if server allows it
             if inspect.isawaitable(maybe_coro):
                 await maybe_coro
-        except Exception:
+        except Exception as exc:  # nosec B110 — security policy is optional; falls back to no security
             # If your server requires secure policy, replace with e.g.:
             # maybe_coro = self.client.set_security_string("Basic256Sha256,Sign")  # or SignAndEncrypt
             # if inspect.isawaitable(maybe_coro):
             #     await maybe_coro
-            pass
+            ijt_log.debug("Security policy 'None' not applied (server may not require it): %s", exc)
 
         retries = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT)))
         base_delay = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT)))

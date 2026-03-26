@@ -62,8 +62,8 @@ export default class ModelToHTML {
     if (parentName) {
       const ownerName = document.createElement('li')
       const ownerName2 = document.createElement('li')
-      ownerName.innerHTML = `${parentName}${abbreviation} &#9655`
-      ownerName2.innerHTML = `${parentName} &#9661`
+      ownerName.textContent = `${parentName}${abbreviation} \u25B7`
+      ownerName2.textContent = `${parentName} \u25BD`
       shortVersion.appendChild(ownerName)
       longVersionOuter.appendChild(ownerName2)
     }
@@ -122,14 +122,14 @@ export default class ModelToHTML {
         const outerList = document.createElement('li')
         longVersion.appendChild(outerList)
         const ownerName = document.createElement('li')
-        ownerName.innerHTML = `${key}(${value.length}) &#9655`
+        ownerName.textContent = `${key}(${value.length}) \u25B7`
         outerList.appendChild(ownerName)
 
         const item = document.createElement('li')
         const ind = document.createElement('li')
         item.style.display = 'none'
         const ownerName2 = document.createElement('li')
-        ownerName2.innerHTML = key + '&#9661'
+        ownerName2.textContent = key + '\u25BD'
         ind.classList.add('indent')
         item.appendChild(ownerName2)
         item.appendChild(ind)
@@ -144,7 +144,7 @@ export default class ModelToHTML {
             ind.appendChild(obj)
           } else {
             const li = document.createElement('li')
-            li.innerHTML = v
+            li.textContent = v
             ind.appendChild(li)
           }
           i++
@@ -197,7 +197,7 @@ export default class ModelToHTML {
     } else { // Handle a single value
       onScreen = document.createElement('li')
 
-      onScreen.innerHTML = `${startText} ${this.prettyPrint(JSON.parse(receivedObject))}`
+      onScreen.textContent = `${startText} ${this.prettyPrint(JSON.parse(receivedObject))}`
 
       this.messageArea.appendChild(onScreen)
       this.messageArea.scrollTo(0, this.messageArea.scrollHeight)

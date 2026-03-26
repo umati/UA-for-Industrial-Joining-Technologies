@@ -61,20 +61,20 @@ export default class EventGraphics extends ControlMessageSplitScreen {
         const row = document.createElement('li')
         row.innerText = key
         if (!value || typeof value !== 'object' || !Object.hasOwn(value, 'dataType')) {
-          row.innerHTML += ' = ' + String(value)
+          row.textContent += ' = ' + String(value)
         } else {
           switch (value.dataType) {
             case 'Null':
-              row.innerHTML += ' = Null'
+              row.textContent += ' = Null'
               break
             case 'ByteString':
-              row.innerHTML += ' = ' + handleTextandLists(value.value?.data, (entry) => entry)
+              row.textContent += ' = ' + handleTextandLists(value.value?.data, (entry) => entry)
               break
             case 'LocalizedText':
-              row.innerHTML += ' = ' + handleTextandLists(value.value, (entry) => entry?.text ?? '')
+              row.textContent += ' = ' + handleTextandLists(value.value, (entry) => entry?.text ?? '')
               break
             default:
-              row.innerHTML += ' = ' + handleTextandLists(value.value, (entry) => entry)
+              row.textContent += ' = ' + handleTextandLists(value.value, (entry) => entry)
           }
         }
         if (key === 'ConditionClassName' || key === 'ConditionSubClassName') {

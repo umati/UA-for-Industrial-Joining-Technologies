@@ -149,7 +149,7 @@ export default class BasicScreen {
     const container = document.createElement('div')
     if (name && name.length > 0) {
       const label = document.createElement('label')
-      label.innerHTML = `${name}  `
+      label.textContent = `${name}  `
       container.appendChild(label)
     }
     container.select = document.createElement('select')

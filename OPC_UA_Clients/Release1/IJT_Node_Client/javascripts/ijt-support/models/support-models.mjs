@@ -9,7 +9,7 @@ export class keyValuePair extends IJTBaseModel {
   toHTML (brief, parentName) {
     const container = document.createElement('li')
     const li1 = document.createElement('li')
-    li1.innerHTML = this.key + ': ' + this.value
+    li1.textContent = this.key + ': ' + this.value
     container.appendChild(li1)
     container.expandLong = function () { } // Override expand
     return container

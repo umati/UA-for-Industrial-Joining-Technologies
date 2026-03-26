@@ -117,6 +117,9 @@ def test_all_python_module_filenames_are_snake_case():
     violations: list[str] = []
     for path in src_python.glob("*.py"):
         stem = path.stem
+        # __init__.py and similar dunder files are valid Python package markers
+        if stem.startswith("__") and stem.endswith("__"):
+            continue
         if not _snake_case_re.match(stem):
             violations.append(str(path.relative_to(_PROJECT_ROOT)))
 

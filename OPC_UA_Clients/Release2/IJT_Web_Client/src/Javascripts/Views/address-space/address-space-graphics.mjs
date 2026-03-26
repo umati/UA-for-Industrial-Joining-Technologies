@@ -97,8 +97,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     if (!node.browseButton) {
       const browse = document.createElement('button')
       browse.classList.add('buttonAreaStyle')
-      browse.innerHTML = name
-      browse.classList.add('invisButton')
+      browse.textContent = name
       browse.classList.add('pointer')
       browse.classList.add('treeButton')
       browse.classList.add('treeButtonPlace')
@@ -134,7 +133,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
 
     const browse = document.createElement('button')
     browse.classList.add('buttonAreaStyle')
-    browse.innerHTML = relation.BrowseName.Name // + '  [' + relation.referenceTypeName + ']'
+    browse.textContent = relation.BrowseName.Name // + '  [' + relation.referenceTypeName + ']'
     browse.callback = clickCallback
     browse.relation = relation
     browse.classList.add('invisButton')

@@ -34,7 +34,7 @@ export default class EndpointGraphics extends BasicScreen {
   instantiate (endpointUrl, socket) {
     this.socket = socket
     this.endpointUrl = endpointUrl
-    this.backGround.innerHTML = 'EndpointUrl: ' + endpointUrl
+    this.backGround.textContent = 'EndpointUrl: ' + endpointUrl
 
     // Setting up tab handling and model handling
 

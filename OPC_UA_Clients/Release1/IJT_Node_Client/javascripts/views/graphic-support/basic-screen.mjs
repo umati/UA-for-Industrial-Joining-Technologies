@@ -26,7 +26,7 @@ export default class BasicScreen {
     newButton.callback = callback
     newButton.classList.add('my-button')
 
-    newButton.innerHTML = title
+    newButton.textContent = title
 
     newButton.onclick = () => {
       newButton.callback(newButton)
@@ -41,7 +41,7 @@ export default class BasicScreen {
   createLabel (text) {
     const a = document.createElement('label')
     a.classList.add('label-style')
-    a.innerHTML = text
+    a.textContent = text
     return a
   }
 

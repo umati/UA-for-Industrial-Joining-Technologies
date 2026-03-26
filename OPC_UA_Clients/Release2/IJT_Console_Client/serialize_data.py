@@ -46,10 +46,10 @@ def serialize_value(value: Any) -> Any:
                 continue
             try:
                 result[slot] = serialize_value(getattr(value, slot))
-            except Exception:
+            except Exception as exc:  # nosec B112 — slot may be unreadable; skip it gracefully
+                ijt_log.debug("Skipping unreadable slot '%s': %s", slot, exc)
                 continue
-        if len(result) > 1:
-            return result
+        return result
     return str(value)
 
 
@@ -64,7 +64,8 @@ def serialize_class_instance_as_dict(obj: Any) -> dict:
             try:
                 if slot != "_freeze":
                     result[slot] = serialize_value(getattr(obj, slot))
-            except Exception:
+            except Exception as exc:  # nosec B112 — slot may be unreadable; skip it gracefully
+                ijt_log.debug("Skipping unreadable slot '%s': %s", slot, exc)
                 continue
     return result
 
