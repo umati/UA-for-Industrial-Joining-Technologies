@@ -29,6 +29,25 @@ def _npm_available() -> bool:
     return shutil.which("npm") is not None
 
 
+def _is_wsl() -> bool:
+    """Detect WSL: Linux kernel but accessing a Windows NTFS filesystem."""
+    import platform
+    release = platform.release().lower()
+    return "microsoft" in release or "wsl" in release
+
+
+def _eslint_executable() -> bool:
+    """Return True only if running npm run lint is expected to work.
+
+    Skipped on WSL because Windows node_modules on /mnt/c/ NTFS are far too
+    slow for the 30 s pytest-timeout (cross-filesystem overhead).  Native
+    Windows and Linux CI both have platform-native node_modules and work fine.
+    """
+    if not _npm_available():
+        return False
+    return not _is_wsl()
+
+
 # ===========================================================================
 # 1. Pylint — Python source quality gate
 # ===========================================================================
@@ -94,8 +113,8 @@ def test_bandit_no_high_severity_issues():
 
 
 @pytest.mark.skipif(
-    not _npm_available(),
-    reason="npm not available — skipping JS lint gate",
+    not _eslint_executable(),
+    reason="eslint binary not executable in this environment — skipping JS lint gate",
 )
 def test_eslint_passes():
     """npm run lint must exit 0 (no ESLint errors in src/javascripts/)."""

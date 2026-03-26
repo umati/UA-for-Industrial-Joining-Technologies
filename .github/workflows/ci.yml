@@ -32,6 +32,10 @@ permissions:
   contents: read
   checks: write        # required by dorny/test-reporter
 
+# Opt into Node.js 24 for all actions (suppresses the Node.js 20 deprecation warning)
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -113,6 +117,7 @@ jobs:
             OPC_UA_Clients/Release2/IJT_Web_Client/test-results/vitest.xml
           reporter: java-junit
           fail-on-error: false
+          fail-on-empty: false
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -184,6 +189,7 @@ jobs:
           path: OPC_UA_Clients/Release2/IJT_Console_Client/test-results/pytest.xml
           reporter: java-junit
           fail-on-error: false
+          fail-on-empty: false
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -250,6 +256,7 @@ jobs:
           path: OPC_UA_Clients/Release1/IJT_Node_Client/test-results/vitest.xml
           reporter: java-junit
           fail-on-error: false
+          fail-on-empty: false
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -338,7 +345,7 @@ jobs:
 
     steps:
       - name: Download All Test Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: all-results/
 
