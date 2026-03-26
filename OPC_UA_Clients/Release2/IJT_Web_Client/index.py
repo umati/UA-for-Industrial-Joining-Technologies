@@ -18,8 +18,8 @@ if _SRC not in sys.path:
 import websockets
 from dotenv import load_dotenv
 
-from Python.ijt_interface import IJTInterface
-from Python.ijt_logger import ijt_log
+from python.ijt_interface import IJTInterface
+from python.ijt_logger import ijt_log
 
 # Load environment variables
 load_dotenv()

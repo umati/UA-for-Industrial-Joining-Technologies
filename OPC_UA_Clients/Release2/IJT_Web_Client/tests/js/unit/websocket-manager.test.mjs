@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { WebSocketManager } from '../../../src/Javascripts/ijt-support/Connection/WebSocketManager.mjs'
+import { WebSocketManager } from '../../../src/javascripts/ijt-support/connection/websocket-manager.mjs'
 
 class MockWebSocket {
   static instances = []

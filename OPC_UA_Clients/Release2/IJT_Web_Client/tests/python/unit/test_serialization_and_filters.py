@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 
-from src.Python.serialize_data import serializeFullEvent, serializeTuple, serializeValue
+from src.python.serialize_data import serialize_full_event, serialize_tuple, serialize_value
 
 
 def _combined_name_filter(event, class_name: str, subclass_names: list) -> bool:
@@ -44,7 +44,7 @@ def test_combined_name_filter_false_when_subclass_missing():
 
 def test_serialize_full_event_handles_datetime_and_ignores_freeze_flag():
     payload = _Payload()
-    serialized = serializeFullEvent(payload)
+    serialized = serialize_full_event(payload)
 
     assert serialized["pythonclass"] == "_Payload"
     assert serialized["name"] == "demo"
@@ -54,6 +54,6 @@ def test_serialize_full_event_handles_datetime_and_ignores_freeze_flag():
 
 
 def test_serialize_tuple_and_value_json_shapes():
-    out = serializeTuple([("a", 1), ("b", ["x", None])])
+    out = serialize_tuple([("a", 1), ("b", ["x", None])])
     assert json.loads(out) == {"a": 1, "b": ["x", None]}
-    assert serializeValue("line1\nline2") == '"line1\\nline2"'
+    assert serialize_value("line1\nline2") == '"line1\\nline2"'

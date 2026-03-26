@@ -1,6 +1,6 @@
-import { EntityDataType, EntityTypes } from '../../ijt-support/Models/Entities/EntityDataType.mjs'
-import ControlSplitScreen from '../GraphicSupport/ControlSplitScreen.mjs'
-import MethodGUICreator from '../Methods/MethodGUICreator.mjs'
+import { EntityDataType, EntityTypes } from '../../ijt-support/models/entities/entity-data-type.mjs'
+import ControlSplitScreen from '../graphic-support/control-split-screen.mjs'
+import MethodGUICreator from '../methods/method-gui-creator.mjs'
 
 export default class EntityCacheView extends ControlSplitScreen {
   constructor (entityManager) {

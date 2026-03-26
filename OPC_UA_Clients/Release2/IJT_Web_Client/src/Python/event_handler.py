@@ -1,16 +1,33 @@
+"""WebSocket event handler for OPC UA JoiningSystemEventType notifications.
+
+Incoming OPC UA subscription events are briefly summarised into a
+:class:`Short` snapshot, logged, and forwarded to the browser over the shared
+WebSocket by the :class:`EventHandler` queue worker.
+"""
+
 import asyncio
 import json
 import traceback
+from typing import Any
 
 import websockets
 
-from Python.ijt_logger import ijt_log
-from Python.serialize_data import serializeFullEvent
-from Python.utils import log_joining_system_event, localizedtext_to_str, nodeid_to_str
+from python.ijt_logger import ijt_log
+from python.serialize_data import serialize_full_event
+from python.utils import log_joining_system_event, localizedtext_to_str, nodeid_to_str
+
+_SHUTDOWN_TIMEOUT_S = 5.0
 
 
 class Short:
-    def __init__(self, event):
+    """Lightweight snapshot of a JoiningSystemEventType notification.
+
+    Extracts and normalises a small subset of fields from the raw asyncua
+    event object so that the rest of the pipeline can work with plain Python
+    types rather than asyncua-specific objects.
+    """
+
+    def __init__(self, event: Any) -> None:
         self.EventType = event.EventType
         self.EventId = (
             event.EventId.decode("utf-8", errors="replace")
@@ -54,15 +71,36 @@ class Short:
 
 
 class EventHandler:
-    def __init__(self, websocket, server_url, client):
+    """Asyncio-based handler that queues JoiningSystemEvent notifications for WebSocket delivery.
+
+    Instances are created once per OPC UA subscription and remain alive until
+    :meth:`close` is called (typically during connection teardown).
+    """
+
+    def __init__(self, websocket: Any, server_url: str, client: Any | None = None) -> None:
+        """Initialise the handler and start the background queue-worker task.
+
+        Args:
+            websocket: Active WebSocket connection used to push events to the
+                browser.
+            server_url: OPC UA server URL — included in every event message so
+                the front-end can route it to the right connection view.
+            client: Optional asyncua :class:`~asyncua.Client` instance.
+                Stored for potential future use; defaults to ``None``.
+        """
         self.websocket = websocket
         self.server_url = server_url
         self.client = client
         self.queue: asyncio.Queue = asyncio.Queue()
         self.closed = False
-        self._queue_task = asyncio.create_task(self.handleQueue())
+        self._queue_task = asyncio.create_task(self.handle_queue())
 
     async def process_event(self, short_event: Short):
+        """Coroutine. Enqueue a pre-processed event snapshot for WebSocket delivery.
+
+        Args:
+            short_event: A :class:`Short` snapshot ready for serialization.
+        """
         if self.closed:
             return
         try:
@@ -71,25 +109,40 @@ class EventHandler:
             ijt_log.error(f"Error handling process_event: {exc}")
             ijt_log.error(traceback.format_exc())
 
-    async def event_notification(self, event):
+    async def event_notification(self, event: Any) -> None:
+        """Coroutine. asyncua subscription callback for JoiningSystemEventType events.
+
+        Wraps the raw event in a :class:`Short` snapshot, logs its details via
+        :func:`~Python.utils.log_joining_system_event`, and forwards it to the
+        queue via :meth:`process_event`.
+
+        Args:
+            event: Raw asyncua event object delivered by the subscription.
+        """
         if self.closed:
             return
         try:
             short_event = Short(event)
-            await log_joining_system_event(short_event)
+            log_joining_system_event(short_event)
             await self.process_event(short_event)
         except Exception as exc:
             ijt_log.error(f"Error handling event notification: {exc}")
             ijt_log.error(traceback.format_exc())
 
-    async def handleQueue(self):
+    async def handle_queue(self):
+        """Coroutine. Background worker that drains the event queue and sends messages.
+
+        Runs until a sentinel ``None`` item is dequeued (placed by
+        :meth:`shutdown`).  Breaks out of the loop and closes the WebSocket on
+        unrecoverable send errors.
+        """
         while True:
             item = await self.queue.get()
             if item is None:
                 self.queue.task_done()
                 break
             try:
-                serialized_event = serializeFullEvent(item)
+                serialized_event = serialize_full_event(item)
                 return_value = {
                     "command": "event",
                     "endpoint": self.server_url,
@@ -111,6 +164,10 @@ class EventHandler:
                 self.queue.task_done()
 
     async def shutdown(self):
+        """Coroutine. Signal the queue worker to stop by enqueuing a sentinel ``None``.
+
+        Idempotent — only enqueues the sentinel on the first call.
+        """
         if not self.closed:
             self.closed = True
             await self.queue.put(None)
@@ -124,7 +181,7 @@ class EventHandler:
         await self.shutdown()
         if self._queue_task and not self._queue_task.done():
             try:
-                await asyncio.wait_for(asyncio.shield(self._queue_task), timeout=5.0)
+                await asyncio.wait_for(asyncio.shield(self._queue_task), timeout=_SHUTDOWN_TIMEOUT_S)
             except asyncio.TimeoutError:
                 self._queue_task.cancel()
                 try:

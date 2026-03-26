@@ -3,7 +3,7 @@ import traceback
 import aiofiles
 import re
 from datetime import datetime, timezone
-from typing import Optional, List, Any
+from typing import Any
 from asyncua import Client, ua
 from asyncua.ua import String
 from pathlib import Path
@@ -43,7 +43,7 @@ def log_field(label: str, value: str, label_width: int = 35):
     ijt_log.info(f"{label:<{label_width}} : {value}")
 
 
-def log_separator(label_width: int = 35):
+def log_separator(label_width: int = 35) -> None:
     ijt_log.info("-" * (label_width + 40))
 
 
@@ -57,7 +57,7 @@ def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:
     return dt.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
-async def read_server_time(client: Client) -> Optional[datetime]:
+async def read_server_time(client: Client) -> datetime | None:
     try:
         node = client.get_node(ua.NodeId(2258, 0))  # ServerStatus.CurrentTime
         return await node.read_value()
@@ -66,7 +66,7 @@ async def read_server_time(client: Client) -> Optional[datetime]:
         return None
 
 
-async def read_tool_identifier(client: Client) -> Optional[String]:
+async def read_tool_identifier(client: Client) -> String | None:
     try:
         node = client.get_node(
             ua.NodeId(
@@ -81,7 +81,7 @@ async def read_tool_identifier(client: Client) -> Optional[String]:
 
 
 async def log_result_event_details(
-    event, server_url: str, client_received_time: datetime
+    event, _server_url: str, client_received_time: datetime
 ) -> str:
     try:
         # Do NOT perform OPC UA reads here — this callback fires concurrently with
@@ -162,7 +162,7 @@ async def log_result_event_details(
         return "unknown"
 
 
-async def log_joining_system_event(event):
+async def log_joining_system_event(event: Any) -> None:
     label_width = 35
     log_separator(label_width)
     log_field(
@@ -246,13 +246,13 @@ async def log_joining_system_event(event):
     log_separator(label_width)
 
 
-def log_entity(entity: Any):
+def log_entity(entity: Any) -> None:
     label_width = 35
     for field in ["Name", "Description", "EntityId", "EntityType", "IsExternal"]:
         log_field(field, getattr(entity, field, ""), label_width)
 
 
-def log_reported_value(rv: Any):
+def log_reported_value(rv: Any) -> None:
     label_width = 35
     eu = getattr(rv, "EngineeringUnits", None)
     eu_display = getattr(eu, "DisplayName", "")
@@ -309,15 +309,15 @@ def localizedtext_to_str(lt: ua.LocalizedText) -> str:
 
 
 def format_list_for_logging(
-    label: str, items: List[str], label_width: int = 35
-) -> List[str]:
+    label: str, items: list[str], label_width: int = 35
+) -> list[str]:
     lines = [f"{label:<{label_width}} :"]
     for item in items:
         lines.append(f"{'':<{label_width}} {item}")
     return lines
 
 
-async def log_result_to_file(event):
+async def log_result_to_file(event: Any) -> None:
     if ENABLE_RESULT_FILE_LOGGING:
         try:
             json_data = serialize_full_event(event.Result)

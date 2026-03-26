@@ -7,7 +7,7 @@ This application uses the open source NodeOPCUA SDK. The purpose of this applica
 - **Coordinator:** Mohit Agarwal: mohit.agarwal@atlascopco.com
 
 ## Quick Start
-1. Open terminal in `OPC_UA_Clients/Release1/NodeOPCUA_IJT_Client`
+1. Open terminal in `OPC_UA_Clients/Release1/IJT_Node_Client`
 2. Run `npm install`
 3. Start client: `node index.js`
 4. Open `http://localhost:3000`

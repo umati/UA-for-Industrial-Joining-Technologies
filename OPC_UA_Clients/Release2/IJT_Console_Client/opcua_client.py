@@ -13,18 +13,26 @@ from ijt_logger import ijt_log
 from event_types import get_event_types
 from method_caller import OPCUAMethodCaller
 
+_OPCUA_TIMEOUT_S = 60
+_SUBSCRIPTION_PERIOD_MS = 100
+_QUEUE_SIZE = 200
+_CONNECT_RETRIES_DEFAULT = "8"
+_CONNECT_DELAY_DEFAULT = "1.0"
+_CONNECT_MAX_DELAY_DEFAULT = "4.0"
+_SHUTDOWN_TIMEOUT_S = 5.0
+
 # Reduce asyncua late-response noise during shutdown windows.
 logging.getLogger("asyncua").setLevel(logging.CRITICAL)
 logging.getLogger("asyncua.client.ua_client").setLevel(logging.CRITICAL)
 
 
 class OPCUAClient:
-    def __init__(self, server_url):
+    def __init__(self, server_url: str) -> None:
         self.server_url = server_url
         # 60-second service-call timeout — methods like SimulateJobResult fire
         # many separate OPC UA publish messages before returning; the default
         # asyncua 4-second window is far too short.
-        self.client = Client(server_url, timeout=60)
+        self.client = Client(server_url, timeout=_OPCUA_TIMEOUT_S)
         self.sub_result_event = None
         self.sub_joining_event = None
         # Handlers are created inside subscribe_to_events() which runs in an async
@@ -33,7 +41,7 @@ class OPCUAClient:
         self.handler_joining_event = None
         self.methods = OPCUAMethodCaller(self.client)
 
-    def setup_client_metadata(self):
+    def setup_client_metadata(self) -> None:
         computer_name = socket.getfqdn()
         self.client.name = f"urn:{computer_name}:IJT:ConsoleClient"
         self.client.description = f"urn:{computer_name}:IJT:ConsoleClient"
@@ -44,9 +52,9 @@ class OPCUAClient:
         await self.clear_old_logs()
         self.setup_client_metadata()
 
-        max_attempts = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", "8")))
-        base_backoff = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", "1.0")))
-        max_backoff = max(base_backoff, float(os.getenv("OPCUA_CONNECT_MAX_DELAY_SEC", "4.0")))
+        max_attempts = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT)))
+        base_backoff = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT)))
+        max_backoff = max(base_backoff, float(os.getenv("OPCUA_CONNECT_MAX_DELAY_SEC", _CONNECT_MAX_DELAY_DEFAULT)))
         for attempt in range(1, max_attempts + 1):
             try:
                 start_time = time.time()
@@ -92,23 +100,23 @@ class OPCUAClient:
             # Subscribe to Result and Joining Result Events
             if self.sub_result_event is None:
                 self.sub_result_event = await self.client.create_subscription(
-                    100, self.handler_result_event
+                    _SUBSCRIPTION_PERIOD_MS, self.handler_result_event
                 )
                 await self.sub_result_event.subscribe_events(
                     server_node,
                     [result_event_node, joining_result_event_node],
-                    queuesize=200,
+                    queuesize=_QUEUE_SIZE,
                 )
 
             # Subscribe to Joining System Events
             if self.sub_joining_event is None:
                 self.sub_joining_event = await self.client.create_subscription(
-                    100, self.handler_joining_event
+                    _SUBSCRIPTION_PERIOD_MS, self.handler_joining_event
                 )
                 await self.sub_joining_event.subscribe_events(
                     server_node,
                     [joining_system_event_node],
-                    queuesize=200,
+                    queuesize=_QUEUE_SIZE,
                 )
 
             ijt_log.info("Subscribed to all relevant event types.")

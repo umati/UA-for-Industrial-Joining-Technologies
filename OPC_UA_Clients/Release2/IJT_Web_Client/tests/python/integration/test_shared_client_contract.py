@@ -1,10 +1,9 @@
 import contextlib
 import os
-from pathlib import Path
 
 import pytest
 
-from Python.network_utils import endpoint_reachable
+from python.network_utils import endpoint_reachable
 from tests.shared_opcua.adapters import adapters_from_env, discover_simulation_methods, make_adapter
 
 
@@ -97,8 +96,7 @@ def ws_url() -> str:
 
 @pytest.fixture
 def console_client_dir() -> str:
-    default = Path(__file__).resolve().parents[2] / "IJT_Console_Client"
-    return os.getenv("OPCUA_CONSOLE_CLIENT_DIR", str(default.resolve()))
+    return os.getenv("OPCUA_CONSOLE_CLIENT_DIR", "")
 
 
 @pytest.mark.asyncio

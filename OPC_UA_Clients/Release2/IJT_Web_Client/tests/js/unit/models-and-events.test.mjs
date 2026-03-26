@@ -7,9 +7,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { NodeId, LocalizationModel, ErrorInformationDataType, ProcessingTimesDataType } from '../../../src/Javascripts/ijt-support/Models/SupportModels.mjs'
-import { EntityDataType, EntityTypes } from '../../../src/Javascripts/ijt-support/Models/Entities/EntityDataType.mjs'
-import { EventManager } from '../../../src/Javascripts/ijt-support/Events/EventManager.mjs'
+import { NodeId, LocalizationModel, ErrorInformationDataType, ProcessingTimesDataType } from '../../../src/javascripts/ijt-support/models/support-models.mjs'
+import { EntityDataType, EntityTypes } from '../../../src/javascripts/ijt-support/models/entities/entity-data-type.mjs'
+import { EventManager } from '../../../src/javascripts/ijt-support/events/event-manager.mjs'
 
 // ---------------------------------------------------------------------------
 // Shared model manager stub (no OPC UA needed)

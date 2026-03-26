@@ -369,7 +369,7 @@ def _update_setup_timestamp() -> None:
 
 def _create_virtualenv(latest_cmd: list[str]) -> None:
     if VENV_DIR.exists():
-        def _on_rm_error(func, path, exc_info):
+        def _on_rm_error(func, path, _exc):
             try:
                 os.chmod(path, 0o700)
                 func(path)
@@ -377,7 +377,7 @@ def _create_virtualenv(latest_cmd: list[str]) -> None:
                 log.warning("Could not remove %s; continuing.", path)
 
         try:
-            shutil.rmtree(VENV_DIR, onerror=_on_rm_error)
+            shutil.rmtree(VENV_DIR, onexc=_on_rm_error)
         except Exception as exc:
             log.warning("Non-fatal: could not fully remove %s: %s", VENV_DIR, exc)
 
@@ -443,7 +443,6 @@ def _install_python_packages() -> None:
         log.debug("Optional crypto stack upgrade skipped: %s", exc)
 
     asyncua_spec = os.getenv("ASYNCUA_VERSION_SPEC", "asyncua>=1.2b2").strip()
-    allow_pre_fallback = _env_bool("ASYNCUA_ALLOW_PRE", True)
     # asyncua 1.2b2+ is required for Python 3.14 support. Always install with --pre so pip
     # can find the current pre-release. --pre does NOT force a pre-release: once asyncua
     # 1.2.x stable is published, pip automatically picks that as the highest matching version.

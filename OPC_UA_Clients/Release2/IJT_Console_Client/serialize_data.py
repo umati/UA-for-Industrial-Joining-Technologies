@@ -81,19 +81,3 @@ def serialize_tuple(list_of_tuples: list[tuple[str, Any]]) -> str:
         ijt_log.error(f"Failed to serialize tuple: {exc}")
         return "{}"
 
-
-# Compatibility aliases to keep both naming styles usable across clients.
-def serializeValue(value: Any) -> str:
-    return _json_dumps(serialize_value(value))
-
-
-def serializeTuple(listOfTuples: list[tuple[str, Any]]) -> str:
-    return serialize_tuple(listOfTuples)
-
-
-def serializeFullEvent(value: Any) -> Any:
-    return serialize_full_event(value)
-
-
-def serializeClassInstanceAsDict(obj: Any) -> dict:
-    return serialize_class_instance_as_dict(obj)

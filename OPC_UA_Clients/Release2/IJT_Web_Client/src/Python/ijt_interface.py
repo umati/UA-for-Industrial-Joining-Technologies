@@ -1,3 +1,12 @@
+"""High-level OPC UA interface that drives a single WebSocket client session.
+
+:class:`IJTInterface` is instantiated once per connected browser tab and
+delegates every command arriving over the WebSocket to the appropriate
+:class:`~python.connection.Connection` method.  It also owns the persistent
+JSON resource files (``connectionpoints.json``, ``settings.json``) under
+``src/resources/``.
+"""
+
 __all__ = ["IJTInterface"]
 
 import asyncio
@@ -5,8 +14,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from Python.connection import Connection
-from Python.ijt_logger import ijt_log
+from python.connection import Connection
+from python.ijt_logger import ijt_log
 
 
 class IJTInterface:
@@ -25,6 +34,15 @@ class IJTInterface:
         return cls._RESOURCES_DIR / filename
 
     async def ensure_connection_open(self, connection: Connection) -> bool:
+        """Coroutine. Ensure a connection is open, reconnecting if necessary.
+
+        Args:
+            connection: The :class:`~Python.connection.Connection` to check.
+
+        Returns:
+            ``True`` if the connection is (or was successfully restored to)
+            open; ``False`` if reconnection failed.
+        """
         try:
             if await connection.is_connection_open():
                 return True
@@ -36,6 +54,20 @@ class IJTInterface:
             return False
 
     async def call_connection(self, data: dict, func: str) -> dict:
+        """Coroutine. Dispatch a named method call to the connection for the given endpoint.
+
+        Looks up the connection by ``data["endpoint"]``, ensures it is open,
+        then calls ``getattr(connection, func)(data)`` dynamically.
+
+        Args:
+            data: Command payload; must contain ``"endpoint"`` key.
+            func: Name of the :class:`~Python.connection.Connection` method to
+                invoke (e.g. ``"read"``, ``"browse"``).
+
+        Returns:
+            The dict returned by the connection method, or
+            ``{"exception": "…"}`` on any error.
+        """
         endpoint = data.get("endpoint")
         connection = self.connection_list.get(endpoint)
 
@@ -60,6 +92,12 @@ class IJTInterface:
             return {"exception": str(exc)}
 
     async def handle_get_connection_points(self) -> dict:
+        """Coroutine. Read and return the saved connection-points configuration.
+
+        Returns:
+            Parsed JSON contents of ``Resources/connectionpoints.json``, or
+            ``{"exception": "…"}`` if the file cannot be read.
+        """
         path = self._resource_path("connectionpoints.json")
         try:
             return json.loads(path.read_text(encoding="utf-8"))
@@ -68,6 +106,12 @@ class IJTInterface:
             return {"exception": str(exc)}
 
     async def handle_set_connection_points(self, data: dict) -> None:
+        """Coroutine. Persist the supplied connection-points configuration to disk.
+
+        Args:
+            data: The connection-points dict to write as JSON to
+                ``Resources/connectionpoints.json``.
+        """
         path = self._resource_path("connectionpoints.json")
         try:
             path.write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -75,6 +119,12 @@ class IJTInterface:
             ijt_log.error(f"Error writing connection points: {exc}")
 
     async def handle_get_settings(self) -> dict:
+        """Coroutine. Read and return the saved application settings.
+
+        Returns:
+            Parsed JSON contents of ``Resources/settings.json``, or
+            ``{"exception": "…"}`` if the file is missing or unreadable.
+        """
         path = self._resource_path("settings.json")
         try:
             return json.loads(path.read_text(encoding="utf-8"))
@@ -85,6 +135,12 @@ class IJTInterface:
             return {"exception": str(exc)}
 
     async def handle_set_settings(self, data: dict) -> None:
+        """Coroutine. Persist the supplied settings to disk.
+
+        Args:
+            data: The settings dict to write as JSON to
+                ``Resources/settings.json``.
+        """
         path = self._resource_path("settings.json")
         try:
             path.write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -92,6 +148,19 @@ class IJTInterface:
             ijt_log.error(f"Error writing settings: {exc}")
 
     async def handle_connect_to(self, endpoint: str, websocket) -> dict:
+        """Coroutine. Open (or re-open) an OPC UA connection for the given endpoint.
+
+        If a connection for ``endpoint`` already exists it is terminated before
+        the new one is established, ensuring a clean state.
+
+        Args:
+            endpoint: OPC UA server URL (e.g. ``"opc.tcp://192.168.1.1:4840"``).
+            websocket: The active WebSocket connection used to forward events.
+
+        Returns:
+            The result dict from :meth:`~Python.connection.Connection.connect`,
+            or ``{"exception": "…"}`` on failure.
+        """
         ijt_log.info("SOCKET: connect")
         if endpoint in self.connection_list and self.connection_list[endpoint]:
             ijt_log.info("Endpoint already connected. Closing old connection first.")
@@ -111,6 +180,14 @@ class IJTInterface:
             return {"exception": str(exc)}
 
     async def handle_terminate_connection(self, endpoint: str) -> dict:
+        """Coroutine. Terminate the OPC UA connection for the given endpoint.
+
+        Args:
+            endpoint: OPC UA server URL whose connection should be closed.
+
+        Returns:
+            An empty dict ``{}`` (termination errors are logged, not raised).
+        """
         ijt_log.info("SOCKET: terminate")
         if endpoint in self.connection_list and self.connection_list[endpoint]:
             await self._safe_terminate(endpoint, self.connection_list[endpoint])
@@ -142,6 +219,17 @@ class IJTInterface:
         return event
 
     async def handle(self, websocket, data: dict) -> None:
+        """Coroutine. Route an incoming WebSocket command to the appropriate handler.
+
+        Parses ``data["command"]``, dispatches to the matching handler method
+        or :meth:`call_connection`, serializes the result, and sends it back
+        over the WebSocket as JSON.
+
+        Args:
+            websocket: The active WebSocket connection to send the response on.
+            data: Parsed JSON payload from the client; must contain at least
+                a ``"command"`` key.
+        """
         return_values: dict[str, Any] = {}
         command = data.get("command")
         endpoint = data.get("endpoint")
@@ -173,6 +261,11 @@ class IJTInterface:
         await websocket.send(json.dumps(response))
 
     async def disconnect(self) -> None:
+        """Coroutine. Terminate all OPC UA connections for this WebSocket session.
+
+        Idempotent — subsequent calls after the first are no-ops.  Uses
+        ``asyncio.gather`` to terminate all connections concurrently.
+        """
         if self.disconnected:
             return
         self.disconnected = True
@@ -190,6 +283,13 @@ class IJTInterface:
         ijt_log.info("All OPC UA connections cleaned up.")
 
     async def _safe_terminate(self, endpoint: str, connection: Optional[Connection]) -> None:
+        """Coroutine. Terminate a connection, swallowing exceptions.
+
+        Args:
+            endpoint: Server URL used only for log messages.
+            connection: The :class:`~Python.connection.Connection` to close,
+                or ``None`` (in which case this is a no-op).
+        """
         if not connection:
             return
         try:
@@ -200,4 +300,4 @@ class IJTInterface:
 
     def __del__(self) -> None:
         # Avoid noisy destructor warnings during normal garbage collection.
-        return
+        pass

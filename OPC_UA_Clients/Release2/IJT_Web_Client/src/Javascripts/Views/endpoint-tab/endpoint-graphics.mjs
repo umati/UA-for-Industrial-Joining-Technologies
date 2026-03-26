@@ -1,0 +1,208 @@
+/**
+ * EndpointGraphics  creates the graphics with tabs for the various ways to interact with the OPC UA server
+ */
+import {
+  AddressSpace,
+  AssetManager,
+  MethodManager,
+  EventManager,
+  ResultManager,
+  ModelManager,
+  ConnectionManager,
+  EntityCache,
+  JointManager,
+  ijtLog
+} from 'ijt-support/ijt-support.mjs'
+
+import TraceGraphics from 'views/trace/trace-graphics.mjs'
+import AddressSpaceGraphics from 'views/address-space/address-space-graphics.mjs'
+import EventGraphics from 'views/events/event-graphics.mjs'
+import MethodGraphics from 'views/methods/method-graphics.mjs'
+import USDemo from 'views/demo/us-demo.mjs'
+import JointDemo from 'views/demo/joint-demo.mjs'
+import AssetGraphics from 'views/assets/asset-graphics.mjs'
+import EntityCacheView from 'views/entities/entities.mjs'
+import JointGraphics from 'views/joints/joint-graphics.mjs'
+import ConnectionGraphics from 'views/connection/connection-graphics.mjs'
+import ResultGraphics from 'views/complex-result/result-graphics.mjs'
+import OkRateGraphics from 'views/ok-rate/ok-rate-graphics.mjs'
+import TabGenerator from 'views/graphic-support/tab-generator.mjs'
+import BasicScreen from 'views/graphic-support/basic-screen.mjs'
+
+/** Default view level shown when a new endpoint tab is opened (Detailed = 3). */
+const DEFAULT_VIEW_LEVEL = 3
+
+export default class EndpointGraphics extends BasicScreen {
+  constructor (title, settings) {
+    super(title)
+    this.endpointUrl = ''
+    this.tabGenerator = null
+    this.settings = settings
+  }
+
+  close () {
+    this.connectionManager.close()
+  }
+
+  activate () {
+
+  }
+
+  changeViewLevel (newLevel) {
+    this.tabGenerator.changeViewLevel(newLevel)
+  }
+
+  async loadOptionalEnvelopeTab (tabGenerator, resultManager) {
+    const modulePath = '/Javascripts/views/Envelope/EnvelopeGraphics.mjs'
+    try {
+      const probe = await fetch(modulePath, { method: 'GET', cache: 'no-store' })
+      if (!probe.ok) {
+        return
+      }
+      const EnvelopeScreen = await import('../Envelope/EnvelopeGraphics.mjs')
+      if (EnvelopeScreen?.Envelope) {
+        const envelopeScreen = new EnvelopeScreen.Envelope(
+          this.connectionManager,
+          resultManager,
+          this.settings
+        )
+        tabGenerator.generateTab(envelopeScreen, 3, false)
+      }
+    } catch (error) {
+      // Envelope view is optional. Skip quietly if unavailable.
+    }
+  }
+
+  instantiate (endpointUrl, webSocketManager) {
+    this.endpointUrl = endpointUrl
+
+    // Setting up tab handling and model handling
+    const entityCache = new EntityCache()
+    const jointManager = new JointManager()
+
+    const tabGenerator = new TabGenerator(this.backGround, DEFAULT_VIEW_LEVEL)
+    this.tabGenerator = tabGenerator
+    const urlDiv = document.createElement('div')
+    urlDiv.innerText = endpointUrl
+    tabGenerator.setRightInfo(urlDiv)
+
+    const modelManager = new ModelManager(entityCache, jointManager)
+
+    // Initiate the different tab handlers
+
+    this.connectionManager = new ConnectionManager(webSocketManager, endpointUrl)
+    const connectionGraphics = new ConnectionGraphics(this.connectionManager)
+
+    const addressSpace = new AddressSpace(this.connectionManager)
+    const addressSpaceGraphics = new AddressSpaceGraphics(addressSpace)
+
+    const eventManager = new EventManager(this.connectionManager, modelManager)
+    const eventGraphics = new EventGraphics(eventManager)
+
+    const resultManager = new ResultManager(eventManager)
+
+    // Optional local-only tab: load if module exists, otherwise skip silently.
+    this.loadOptionalEnvelopeTab(tabGenerator, resultManager)
+
+    // Asset view is not critical
+    let assetGraphics = null
+    try {
+      const assets = new AssetManager(addressSpace, this.connectionManager)
+      assetGraphics = new AssetGraphics(assets)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    // Trace view is not critical
+    let traceGraphics = null
+    try {
+      traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    const methodManager = new MethodManager(addressSpace)
+    const methodGraphics = new MethodGraphics(methodManager, addressSpace, this.settings, entityCache)
+
+    // USDemo view is not critical
+    let demoGraphics = null
+    try {
+      demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager, this.settings)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    // JointDemo view is not critical
+    let jointDemoGraphics = null
+    try {
+      jointDemoGraphics = new JointDemo(methodManager, resultManager, this.connectionManager, this.settings)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    // Consolidated view is not critical
+    let resultGraphics = null
+    try {
+      resultGraphics = new ResultGraphics(resultManager)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    // OK rate view is not critical
+    let okRateGraphics = null
+    try {
+      okRateGraphics = new OkRateGraphics(resultManager, methodManager, addressSpace)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    // Entity view is not critical
+    let entityCacheView = null
+    try {
+      entityCacheView = new EntityCacheView(entityCache)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    // Entity view is not critical
+    let jointGraphics = null
+    try {
+      jointGraphics = new JointGraphics(jointManager)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    tabGenerator.changeViewLevel(2)
+
+    tabGenerator.generateTab(connectionGraphics, 2)
+    if (demoGraphics) {
+      tabGenerator.generateTab(demoGraphics, 1)
+    }
+    if (jointDemoGraphics) {
+      tabGenerator.generateTab(jointDemoGraphics, 1, true)
+    }
+
+    if (traceGraphics) {
+      tabGenerator.generateTab(traceGraphics, 2)
+    }
+    tabGenerator.generateTab(methodGraphics, 2)
+    tabGenerator.generateTab(eventGraphics, 2, false)
+
+    tabGenerator.generateTab(addressSpaceGraphics, 3, false)
+    if (resultGraphics) {
+      tabGenerator.generateTab(resultGraphics, 4)
+    }
+    if (okRateGraphics) {
+      tabGenerator.generateTab(okRateGraphics, 4)
+    }
+    if (assetGraphics) {
+      tabGenerator.generateTab(assetGraphics, 5)
+    }
+    if (entityCacheView) {
+      tabGenerator.generateTab(entityCacheView, 3)
+    }
+    if (jointGraphics) {
+      tabGenerator.generateTab(jointGraphics, 3)
+    }
+  }
+}

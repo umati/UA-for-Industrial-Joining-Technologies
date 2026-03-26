@@ -25,7 +25,7 @@ How to write effective requests for coding agents (Copilot, OpenAI, etc.) workin
 
 ```bash
 # Lint
-npx eslint src/Javascripts config.js --config eslint.config.mjs --max-warnings 0
+npx eslint src/javascripts config.js --config eslint.config.mjs --max-warnings 0
 
 # JS unit tests
 npx vitest run

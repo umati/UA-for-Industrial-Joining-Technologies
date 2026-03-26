@@ -2,11 +2,13 @@ import asyncio
 import traceback
 import pytz
 from datetime import datetime
-from typing import Dict
+from typing import Any
 from dataclasses import dataclass
 
 from ijt_logger import ijt_log
 from utils import log_result_to_file, log_result_event_details
+
+_SHUTDOWN_TIMEOUT_S = 5.0
 
 
 @dataclass
@@ -16,7 +18,7 @@ class ShortResultEvent:
     Message: str
     EventId: str
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "EventType": self.EventType,
             "Result": self.Result,
@@ -34,7 +36,7 @@ class ResultEventHandler:
     Must be instantiated from within an async context (e.g. inside subscribe_to_events).
     """
 
-    def __init__(self, server_url):
+    def __init__(self, server_url: str) -> None:
         self.server_url = server_url
         ijt_log.info("ResultEventHandler initialized.")
 
@@ -46,7 +48,7 @@ class ResultEventHandler:
             ijt_log.error("Exception: " + str(e))
             ijt_log.error(traceback.format_exc())
 
-    async def event_notification(self, event):
+    async def event_notification(self, event: Any) -> None:
         try:
             client_received_time = datetime.now(pytz.utc)
             event_id = await log_result_event_details(

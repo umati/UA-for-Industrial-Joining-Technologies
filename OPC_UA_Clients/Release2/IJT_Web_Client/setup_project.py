@@ -18,9 +18,9 @@ import zipfile
 import signal
 from pathlib import Path
 
-# Add src/ to path so "from Python.xxx import" works regardless of cwd
+# Add src/ to path so "from python.xxx import" works regardless of cwd
 sys.path.insert(0, str(Path(__file__).parent / "src"))
-from Python.network_utils import endpoint_reachable, parse_endpoint_host_port
+from python.network_utils import endpoint_reachable, parse_endpoint_host_port
 
 STATE_DIR = Path(".state")
 LOGS_DIR = Path("logs")

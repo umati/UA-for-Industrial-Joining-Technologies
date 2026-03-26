@@ -1,19 +1,48 @@
+"""OPC UA connection management for the IJT Web Client.
+
+This module provides the :class:`Connection` class, which wraps an asyncua
+``Client`` and exposes all OPC UA operations (connect, subscribe, read, browse,
+method call, …) needed by the web-socket layer.  It also contains the helper
+:func:`id_object_to_string` for normalising node-id representations received from
+the front-end.
+"""
+
 import asyncio
 import json
 import os
 import socket
-from typing import Any, Dict
+import inspect
+from typing import Any
 
 from asyncua import Client, ua
 
-from Python.serialize_data import serializeFullEvent, serializeTuple, serializeValue
-from Python.call_structure import createCallStructure
-from Python.event_handler import EventHandler
-from Python.result_event_handler import ResultEventHandler
-from Python.ijt_logger import ijt_log
+from python.serialize_data import serialize_full_event, serialize_tuple, serialize_value
+from python.call_structure import create_call_structure
+from python.event_handler import EventHandler
+from python.result_event_handler import ResultEventHandler
+from python.ijt_logger import ijt_log
+
+_OPCUA_TIMEOUT_S = 60
+_OPCUA_TIMEOUT_SHORT_S = 15
+_OPCUA_TIMEOUT_BROWSE_S = 30
+_SUBSCRIPTION_PERIOD_MS = 100
+_CONNECT_RETRIES_DEFAULT = "8"
+_CONNECT_DELAY_DEFAULT = "1.0"
+_CONNECT_MAX_DELAY_DEFAULT = "4.0"
+_EXPONENTIAL_BACKOFF_BASE = 2
 
 
-def IdObjectToString(inp: Any) -> str:
+def id_object_to_string(inp: Any) -> str:
+    """Convert a node-id object (string, dict, or unknown) to an OPC UA string form.
+
+    Args:
+        inp: A node-id value.  May be a plain string, a dict with
+            ``"Identifier"`` and ``"NamespaceIndex"`` keys (as received from
+            the front-end), or any other type that will be stringified.
+
+    Returns:
+        A node-id string such as ``"ns=2;i=1001"`` or ``"ns=2;s=MyNode"``.
+    """
     if isinstance(inp, str):
         return inp
     if isinstance(inp, dict):
@@ -37,25 +66,54 @@ class Connection:
         self.websocket = websocket
         self.terminated = False
 
-        self.handleResultEvent = "handle"
-        self.handleJoiningEvent = "handle"
-        self.subResultEvent = "sub"
-        self.subJoiningEvent = "sub"
+        self.handle_result_event = "handle"
+        self.handle_joining_event = "handle"
+        self.sub_result_event = "sub"
+        self.sub_joining_event = "sub"
 
-        self.handlerJoiningEvent = None
-        self.handlerResultEvent = None
+        self.handler_joining_event = None
+        self.handler_result_event = None
+
+        # Initialised in connect() / subscribe() — declared here so pylint
+        # does not flag W0201 (attribute-defined-outside-init).
+        self.client: Any = None
+        self.root: Any = None
+        self.handle_result_events: Any = None
+        self.handle_joining_events: Any = None
+
+        # Dedicated client for OPC UA subscriptions/event delivery.
+        # Kept separate from self.client (used for method calls and browse) so
+        # that concurrent method-call responses and subscription publish
+        # messages never share the same asyncua request pipeline.
+        self.subscription_client: Any = None
 
     async def is_connection_open(self) -> bool:
+        """Coroutine. Check whether the underlying OPC UA secure channel is open.
+
+        Returns:
+            ``True`` if the channel protocol state is ``"open"``, ``False``
+            otherwise (e.g. never connected, disconnected, or faulted).
+        """
         if not hasattr(self, "client") or self.client is None:
             return False
         protocol = getattr(getattr(self.client, "uaclient", None), "protocol", None)
         state = getattr(protocol, "state", None)
         return str(state).lower() == "open"
 
-    async def connect(self) -> Dict[str, Any]:
+    async def connect(self) -> dict[str, Any]:
+        """Coroutine. Establish an OPC UA session and load type definitions.
+
+        Rewrites ``127.0.0.1``/``localhost`` to ``host.docker.internal`` when
+        the ``IS_DOCKER`` environment variable is ``"true"``.  Retries up to
+        ``OPCUA_CONNECT_RETRIES`` times (default 8) with exponential back-off.
+
+        Returns:
+            A dict ``{"command": "connection established", "endpoint": …}`` on
+            success, or ``{"exception": "<message>"}`` after all retries are
+            exhausted.
+        """
         self.terminated = False
 
-        import inspect
 
         # --- Docker-aware URL rewrite (keep this if you added it elsewhere) ---
         server_url = self.server_url
@@ -75,7 +133,7 @@ class Connection:
         # PublishRequest.  Under this load the CallResponse can arrive well after
         # the old 10-second window, causing asyncua to raise
         # "Unhandled exception while sending request to OPC UA server".
-        self.client = Client(server_url, timeout=60)
+        self.client = Client(server_url, timeout=_OPCUA_TIMEOUT_S)
 
         # --- Security policy: await if your asyncua version returns a coroutine ---
         try:
@@ -91,9 +149,9 @@ class Connection:
             #     await maybe_coro
             pass
 
-        retries = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", "8")))
-        base_delay = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", "1.0")))
-        max_delay = max(base_delay, float(os.getenv("OPCUA_CONNECT_MAX_DELAY_SEC", "4.0")))
+        retries = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT)))
+        base_delay = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT)))
+        max_delay = max(base_delay, float(os.getenv("OPCUA_CONNECT_MAX_DELAY_SEC", _CONNECT_MAX_DELAY_DEFAULT)))
         last_error: Exception | None = None
 
         for attempt in range(retries):
@@ -104,13 +162,33 @@ class Connection:
                 self.client.application_uri = f"urn:{computer_name}:IJT:WebClient"
                 self.client.product_uri = "urn:IJT:WebClient"
 
-                await asyncio.wait_for(self.client.connect(), timeout=15.0)
+                await asyncio.wait_for(self.client.connect(), timeout=_OPCUA_TIMEOUT_SHORT_S)
 
                 # Small wait to avoid races right after SecureChannel/Session creation
                 await asyncio.sleep(0.1)
 
-                await asyncio.wait_for(self.client.load_type_definitions(), timeout=30.0)
+                await asyncio.wait_for(self.client.load_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S)
                 self.root = self.client.get_root_node()
+
+                # Connect the dedicated subscription client (separate OPC UA session).
+                # This eliminates concurrent-request issues when SimulateJobResult
+                # fires many Publish messages while a CallResponse is still in-flight.
+                try:
+                    self.subscription_client = Client(server_url, timeout=_OPCUA_TIMEOUT_S)
+                    sub_client_name = f"urn:{computer_name}:IJT:WebClient:Sub"
+                    self.subscription_client.name = sub_client_name
+                    self.subscription_client.application_uri = sub_client_name
+                    await asyncio.wait_for(self.subscription_client.connect(), timeout=_OPCUA_TIMEOUT_SHORT_S)
+                    await asyncio.sleep(0.1)
+                    await asyncio.wait_for(
+                        self.subscription_client.load_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S
+                    )
+                    ijt_log.info("Subscription client connected.")
+                except Exception as sub_err:
+                    ijt_log.warning(
+                        f"Subscription client failed to connect (events may not work): {sub_err}"
+                    )
+                    self.subscription_client = None
 
                 event = {
                     "command": "connection established",
@@ -123,7 +201,7 @@ class Connection:
                 return event
             except Exception as e:
                 last_error = e
-                delay = min(max_delay, base_delay * (2 ** attempt))
+                delay = min(max_delay, base_delay * (_EXPONENTIAL_BACKOFF_BASE ** attempt))
                 ijt_log.error(
                     f"Connect attempt {attempt+1}/{retries} failed for {self.server_url}: {e}"
                 )
@@ -140,6 +218,12 @@ class Connection:
         return {"exception": f"Failed to connect after {retries} attempts to {self.server_url}"}
 
     async def terminate(self) -> None:
+        """Coroutine. Gracefully shut down all subscriptions and the OPC UA session.
+
+        Deletes active event subscriptions, disconnects the asyncua client,
+        and closes both event-handler queue workers.  Idempotent — subsequent
+        calls are no-ops.
+        """
         try:
             if self.terminated:
                 return
@@ -166,11 +250,22 @@ class Connection:
             except Exception as e:
                 ijt_log.warning(f"Disconnect failed: {e}")
 
+            # Disconnect the dedicated subscription client
+            if self.subscription_client:
+                try:
+                    await asyncio.wait_for(self.subscription_client.disconnect(), timeout=2)
+                    ijt_log.info("Subscription client disconnected successfully.")
+                except asyncio.TimeoutError:
+                    ijt_log.warning("Subscription client disconnect timed out.")
+                except Exception as e:
+                    ijt_log.warning(f"Subscription client disconnect failed: {e}")
+                self.subscription_client = None
+
             # Shutdown event handlers
-            if self.handlerJoiningEvent:
-                await self.handlerJoiningEvent.close()
-            if self.handlerResultEvent:
-                await self.handlerResultEvent.close()
+            if self.handler_joining_event:
+                await self.handler_joining_event.close()
+            if self.handler_result_event:
+                await self.handler_result_event.close()
 
             ijt_log.info(f"Disconnected from {self.server_url}")
 
@@ -182,60 +277,89 @@ class Connection:
         ijt_log.info("Disconnect completed - late OPC UA messages ignored.")
 
     async def _unsubscribe_and_cleanup(self) -> None:
+        """Coroutine. Delete OPC UA subscriptions while the channel is still open.
+
+        Attempts to delete the ResultEvent and JoiningEvent subscriptions by
+        their ``subscription_id``.  Failures are logged as warnings so that
+        the shutdown sequence continues regardless.
+        """
         if not await self.is_connection_open():
             ijt_log.info(
                 "Connection already not open, skipping unsubscribe/delete subscription."
             )
-            self.subResultEvent = "sub"
-            self.subJoiningEvent = "sub"
+            self.sub_result_event = "sub"
+            self.sub_joining_event = "sub"
             return
 
+        # Use the dedicated subscription client to delete subscriptions; fall back
+        # to the method client if subscription_client is not available.
+        delete_client = self.subscription_client or self.client
+
         # Result Event
-        if self.subResultEvent != "sub":
+        if self.sub_result_event != "sub":
             try:
-                if hasattr(self.subResultEvent, "subscription_id"):
+                if hasattr(self.sub_result_event, "subscription_id"):
                     ijt_log.info("Deleting ResultEvent subscription.")
-                    await self.client.delete_subscriptions(
-                        [self.subResultEvent.subscription_id]
+                    await delete_client.delete_subscriptions(
+                        [self.sub_result_event.subscription_id]
                     )
             except Exception as e:
                 ijt_log.warning(
                     f"Delete subscription failed (ResultEvent). Continuing shutdown: {e}"
                 )
-            self.subResultEvent = "sub"
+            self.sub_result_event = "sub"
 
         # Joining Event
-        if self.subJoiningEvent != "sub":
+        if self.sub_joining_event != "sub":
             try:
-                if hasattr(self.subJoiningEvent, "subscription_id"):
+                if hasattr(self.sub_joining_event, "subscription_id"):
                     ijt_log.info("Deleting JoiningEvent subscription.")
-                    await self.client.delete_subscriptions(
-                        [self.subJoiningEvent.subscription_id]
+                    await delete_client.delete_subscriptions(
+                        [self.sub_joining_event.subscription_id]
                     )
             except Exception as e:
                 ijt_log.warning(
                     f"Delete subscription failed (JoiningEvent). Continuing shutdown: {e}"
                 )
-            self.subJoiningEvent = "sub"
+            self.sub_joining_event = "sub"
 
-    async def subscribe(self, data: dict) -> Dict[str, Any]:
+    async def subscribe(self, data: dict) -> dict[str, Any]:
+        """Coroutine. Create OPC UA event subscriptions as requested by the front-end.
+
+        Args:
+            data: Command payload.  The optional ``"eventtype"`` key selects
+                which subscriptions to create:
+
+                * ``"resultevent"`` / ``"joiningresultevent"`` — result-ready
+                  events only.
+                * ``"joiningsystemevent"`` — joining-system events only.
+                * Absent or empty — both subscription types are created.
+
+        Returns:
+            An empty dict ``{}`` on success, or ``{"exception": "…"}`` on
+            failure.
+        """
         try:
-            self.handlerJoiningEvent = self.handlerJoiningEvent or EventHandler(
-                self.websocket, self.server_url, self.client
+            self.handler_joining_event = self.handler_joining_event or EventHandler(
+                self.websocket, self.server_url
             )
-            self.handlerResultEvent = self.handlerResultEvent or ResultEventHandler(
+            self.handler_result_event = self.handler_result_event or ResultEventHandler(
                 self.websocket, self.server_url
             )
 
-            ns_machinery_result = await self.client.get_namespace_index(
+            # Use the dedicated subscription client when available.  Fall back
+            # to the method client only if subscription_client failed to connect.
+            sub_client = self.subscription_client or self.client
+
+            ns_machinery_result = await sub_client.get_namespace_index(
                 "http://opcfoundation.org/UA/Machinery/Result/"
             )
-            ns_joining_base = await self.client.get_namespace_index(
+            ns_joining_base = await sub_client.get_namespace_index(
                 "http://opcfoundation.org/UA/IJT/Base/"
             )
 
-            obj_node = await self.client.nodes.root.get_child(["0:Objects", "0:Server"])
-            result_event_node = await self.client.nodes.root.get_child(
+            obj_node = await sub_client.nodes.root.get_child(["0:Objects", "0:Server"])
+            result_event_node = await sub_client.nodes.root.get_child(
                 [
                     "0:Types",
                     "0:EventTypes",
@@ -243,7 +367,7 @@ class Connection:
                     f"{ns_machinery_result}:ResultReadyEventType",
                 ]
             )
-            joining_result_event_node = await self.client.nodes.root.get_child(
+            joining_result_event_node = await sub_client.nodes.root.get_child(
                 [
                     "0:Types",
                     "0:EventTypes",
@@ -252,7 +376,7 @@ class Connection:
                     f"{ns_joining_base}:JoiningSystemResultReadyEventType",
                 ]
             )
-            joining_system_event_node = await self.client.nodes.root.get_child(
+            joining_system_event_node = await sub_client.nodes.root.get_child(
                 [
                     "0:Types",
                     "0:EventTypes",
@@ -261,7 +385,7 @@ class Connection:
                 ]
             )
 
-            await self.client.load_data_type_definitions()
+            await sub_client.load_data_type_definitions()
 
             event_type = data.get("eventtype", "").lower().strip()
 
@@ -270,12 +394,12 @@ class Connection:
                 or "resultevent" in event_type
                 or "joiningresultevent" in event_type
             ):
-                if self.subResultEvent == "sub":
-                    self.subResultEvent = await self.client.create_subscription(
-                        100, self.handlerResultEvent
+                if self.sub_result_event == "sub":
+                    self.sub_result_event = await sub_client.create_subscription(
+                        _SUBSCRIPTION_PERIOD_MS, self.handler_result_event
                     )
-                    self.handleResultEvents = (
-                        await self.subResultEvent.subscribe_events(
+                    self.handle_result_events = (
+                        await self.sub_result_event.subscribe_events(
                             obj_node,
                             [result_event_node, joining_result_event_node],
                             queuesize=200,
@@ -283,12 +407,12 @@ class Connection:
                     )
 
             if not event_type or "joiningsystemevent" in event_type:
-                if self.subJoiningEvent == "sub":
-                    self.subJoiningEvent = await self.client.create_subscription(
-                        100, self.handlerJoiningEvent
+                if self.sub_joining_event == "sub":
+                    self.sub_joining_event = await sub_client.create_subscription(
+                        _SUBSCRIPTION_PERIOD_MS, self.handler_joining_event
                     )
-                    self.handleJoiningEvents = (
-                        await self.subJoiningEvent.subscribe_events(
+                    self.handle_joining_events = (
+                        await self.sub_joining_event.subscribe_events(
                             obj_node, [joining_system_event_node], queuesize=200
                         )
                     )
@@ -299,14 +423,30 @@ class Connection:
             ijt_log.error(f"Exception: {e}")
             return {"exception": f"Subscribe exception: {e}"}
 
-    async def read(self, data: dict) -> Dict[str, Any]:
-        nodeId = data.get("nodeid")
-        lastReadState = "READ_ENTER"
+    async def read(self, data: dict) -> dict[str, Any]:
+        """Coroutine. Read a set of standard OPC UA attributes for a single node.
+
+        Reads NodeId, NodeClass, BrowseName, DisplayName, Description,
+        EventNotifier, WriteMask, UserWriteMask, RolePermissions,
+        UserRolePermissions, AccessRestrictions, and Value in one round-trip.
+        Also fetches the node's references and (for Variable nodes) its value.
+
+        Args:
+            data: Command payload containing ``"nodeid"`` — the OPC UA node-id
+                string or dict identifying the target node.
+
+        Returns:
+            A dict with keys ``"command"``, ``"endpoint"``, ``"attributes"``
+            (JSON string), ``"relations"`` (JSON string), ``"value"`` (JSON
+            string), and ``"nodeid"``; or ``{"exception": "…"}`` on failure.
+        """
+        node_id = data.get("nodeid")
+        last_read_state = "READ_ENTER"
 
         try:
-            node = self.client.get_node(nodeId)
+            node = self.client.get_node(node_id)
 
-            attrIdsStrings = [
+            attr_ids_strings = [
                 "NodeId",
                 "NodeClass",
                 "BrowseName",
@@ -320,47 +460,64 @@ class Connection:
                 "AccessRestrictions",
                 "Value",
             ]
-            attrIds = [ua.AttributeIds[name] for name in attrIdsStrings]
+            attr_ids = [ua.AttributeIds[name] for name in attr_ids_strings]
 
-            lastReadState = "READ_ATTRIBUTES_SETUP"
-            attributeReply = await node.read_attributes(attrIds)
+            last_read_state = "READ_ATTRIBUTES_SETUP"
+            attribute_reply = await node.read_attributes(attr_ids)
 
-            lastReadState = "READ_ATTRIBUTES_READ"
-            attributeValues = [reply.Value.Value for reply in attributeReply]
-            zipped = list(zip(attrIdsStrings, attributeValues))
-            serializedAttributes = serializeTuple(zipped)
+            last_read_state = "READ_ATTRIBUTES_READ"
+            attribute_values = [reply.Value.Value for reply in attribute_reply]
+            zipped = list(zip(attr_ids_strings, attribute_values))
+            serialized_attributes = serialize_tuple(zipped)
 
-            lastReadState = "READ_SERIALIZED"
+            last_read_state = "READ_SERIALIZED"
             relations = await node.get_references()
 
             value = {}
-            nodeClass = await node.read_node_class()
-            if nodeClass == ua.NodeClass.Variable:
+            node_class = await node.read_node_class()
+            if node_class == ua.NodeClass.Variable:
                 value = await node.get_value()
-                lastReadState = "READ_SERIALIZED_VALUE_GENERATION"
+                last_read_state = "READ_SERIALIZED_VALUE_GENERATION"
 
             return {
                 "command": "readresult",
                 "endpoint": self.server_url,
-                "attributes": serializedAttributes,
-                "relations": serializeValue(relations),
-                "value": serializeValue(value),
-                "nodeid": nodeId,
+                "attributes": serialized_attributes,
+                "relations": serialize_value(relations),
+                "value": serialize_value(value),
+                "nodeid": node_id,
             }
         except Exception as e:
             ijt_log.error(
-                f"Exception in Read ({lastReadState}): {IdObjectToString(nodeId)}"
+                f"Exception in Read ({last_read_state}): {id_object_to_string(node_id)}"
             )
             ijt_log.error("Exception: " + str(e))
-            return {"exception": f"Read Exception ({lastReadState}): {str(e)}"}
+            return {"exception": f"Read Exception ({last_read_state}): {str(e)}"}
 
-    async def pathtoid(self, data: dict) -> Dict[str, Any]:
+    async def pathtoid(self, data: dict) -> dict[str, Any]:
+        """Coroutine. Resolve a relative browse path to a node-id.
+
+        Uses ``TranslateBrowsePathsToNodeIds`` to walk the address space
+        starting from a given node.
+
+        Args:
+            data: Command payload with:
+
+                * ``"nodeid"`` — dict with ``"NamespaceIndex"`` and
+                  ``"Identifier"`` for the starting node.
+                * ``"path"`` — JSON-encoded list of path steps, each a dict
+                  with ``"identifier"`` and ``"namespaceindex"``.
+
+        Returns:
+            ``{"nodeid": <serialized TargetId>}`` on success, or
+            ``{"exception": "…"}`` on failure.
+        """
         try:
-            nodeId = data["nodeid"]
+            node_id = data["nodeid"]
             path = json.loads(data["path"])
 
             node = self.client.get_node(
-                f"ns={nodeId['NamespaceIndex']};s={nodeId['Identifier']}"
+                f"ns={node_id['NamespaceIndex']};s={node_id['Identifier']}"
             )
 
             relative_path = ua.RelativePath()
@@ -380,22 +537,44 @@ class Connection:
             result = await self.client.uaclient.translate_browsepaths_to_nodeids(
                 [browse_path]
             )
-            return {"nodeid": serializeFullEvent(result[0].Targets[0].TargetId)}
+            return {"nodeid": serialize_full_event(result[0].Targets[0].TargetId)}
         except Exception as e:
             ijt_log.error("Exception in PathToId path")
             ijt_log.error("Exception: " + str(e))
             return {"exception": "PathToId Exception: " + str(e)}
 
-    async def namespaces(self, data: dict) -> Dict[str, Any]:
+    async def namespaces(self, _data: dict) -> dict[str, Any]:
+        """Coroutine. Retrieve the server's namespace array.
+
+        Args:
+            _data: Unused command payload (accepted for interface uniformity).
+
+        Returns:
+            ``{"namespaces": [<uri>, …]}`` on success, or
+            ``{"exception": "…"}`` on failure.
+        """
         try:
-            namespacesReply = await self.client.get_namespace_array()
-            return {"namespaces": namespacesReply}
+            namespaces_reply = await self.client.get_namespace_array()
+            return {"namespaces": namespaces_reply}
         except Exception as e:
             ijt_log.error("Exception in Namespaces")
             ijt_log.error("Exception: " + str(e))
             return {"exception": "Exception in Namespaces: " + str(e)}
 
-    async def browse(self, data: dict) -> Dict[str, Any]:
+    async def browse(self, data: dict) -> dict[str, Any]:
+        """Coroutine. Browse the references of a single OPC UA node.
+
+        Args:
+            data: Command payload with:
+
+                * ``"nodeid"`` — the node-id string or dict to browse.
+                * ``"details"`` *(optional, default False)* — when ``True``,
+                  includes the ``"TypeDefinition"`` field in each result entry.
+
+        Returns:
+            ``{"nodes": [{"NodeId": …, "BrowseName": …, …}, …]}`` on success,
+            or ``{"exception": "…"}`` on failure.
+        """
         node_id = data.get("nodeid")
         details = data.get("details", False)
         try:
@@ -420,6 +599,16 @@ class Connection:
             return {"exception": f"Browse exception: {e}"}
 
     def map_nodeid_to_varianttype(self, nodeid: int) -> ua.VariantType:
+        """Map an OPC UA built-in data-type node identifier to an asyncua VariantType.
+
+        Args:
+            nodeid: OPC UA built-in type numeric ID (e.g. ``6`` for Int32,
+                ``12`` for String).  Also handles ``31918`` (IJT TrimmedString).
+
+        Returns:
+            The matching :class:`ua.VariantType` member, falling back to
+            :attr:`ua.VariantType.String` for unknown identifiers.
+        """
         mapping = {
             1: ua.VariantType.Boolean,
             2: ua.VariantType.SByte,
@@ -439,7 +628,7 @@ class Connection:
         }
         return mapping.get(nodeid, ua.VariantType.String)
 
-    async def read_product_instance_uri(self, data: dict) -> Dict[str, Any]:
+    async def read_product_instance_uri(self, _data: dict) -> dict[str, Any]:
         """
         Browse all tool nodes under the Tools container and return their
         BrowseName + ProductInstanceUri as a list.
@@ -486,22 +675,51 @@ class Connection:
 
         return {"tools": tools}
 
-    async def methodcall(self, data: dict) -> Dict[str, Any]:
-        objectNode = data.get("objectnode")
-        methodNode = data.get("methodnode")
+    async def methodcall(self, data: dict) -> dict[str, Any]:
+        """Coroutine. Invoke an OPC UA method node on an object node.
+
+        Resolves the object and method from their string-based node-ids,
+        inspects the server-declared ``InputArguments``, converts each
+        front-end argument to the appropriate ``ua.Variant`` (including
+        arrays, ``LocalizedText``, ``ExtensionObject``, …), calls the method,
+        and returns the serialized output.
+
+        Args:
+            data: Command payload with:
+
+                * ``"object_node"`` — dict with ``"NamespaceIndex"`` and
+                  ``"Identifier"`` for the parent object.
+                * ``"method_node"`` — dict with ``"NamespaceIndex"`` and
+                  ``"Identifier"`` for the method.
+                * ``"arguments"`` — list of argument dicts, each containing
+                  ``"dataType"`` (int) and ``"value"`` (Any).
+
+        Returns:
+            ``{"output": <serialized result>}`` on success, or
+            ``{"exception": "…"}`` on failure.
+
+        Raises:
+            Does not propagate exceptions — all OPC UA errors and general
+            exceptions are caught and returned as ``{"exception": "…"}``.
+        """
+        object_node = data.get("objectnode")
+        method_node = data.get("methodnode")
         arguments = data.get("arguments", [])
+
+        if object_node is None or method_node is None:
+            return {"exception": "Missing objectnode or methodnode in methodcall payload"}
 
         if not await self.is_connection_open():
             return {"exception": "Not connected to OPC UA server. Please connect first."}
 
         try:
-            obj_id = f"ns={objectNode['NamespaceIndex']};s={objectNode['Identifier']}"
+            obj_id = f"ns={object_node['NamespaceIndex']};s={object_node['Identifier']}"
             method_id = (
-                f"ns={methodNode['NamespaceIndex']};s={methodNode['Identifier']}"
+                f"ns={method_node['NamespaceIndex']};s={method_node['Identifier']}"
             )
 
-            ijt_log.info(f"[methodcall] ObjectNode: {obj_id}")
-            ijt_log.info(f"[methodcall] MethodNode: {method_id}")
+            ijt_log.info(f"[methodcall] object_node: {obj_id}")
+            ijt_log.info(f"[methodcall] method_node: {method_id}")
             ijt_log.info(f"[methodcall] Arguments: {json.dumps(arguments)}")
 
             obj = self.client.get_node(obj_id)
@@ -607,11 +825,11 @@ class Connection:
                     ijt_log.warning(
                         f"[methodcall] Failed to map argument {i+1}, fallback to original type: {map_err}"
                     )
-                    input_args.append(createCallStructure(arg))
+                    input_args.append(create_call_structure(arg))
 
             ijt_log.info("[methodcall] Calling method on object...")
             out = await obj.call_method(method, *input_args)
-            serialized_output = serializeFullEvent(out)
+            serialized_output = serialize_full_event(out)
             ijt_log.info(f"[methodcall] Method output: {serialized_output}")
             return {"output": serialized_output}
 

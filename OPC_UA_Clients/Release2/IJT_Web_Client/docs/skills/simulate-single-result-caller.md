@@ -1,6 +1,6 @@
 # SimulateSingleResult Caller
 
-Implement consistent `SimulateSingleResult` invocation using existing method infrastructure in `MethodGraphics`, `MethodGUICreator`, `MethodManager`, and `src/Resources/settings.json`.
+Implement consistent `SimulateSingleResult` invocation using existing method infrastructure in `MethodGraphics`, `MethodGUICreator`, `MethodManager`, and `src/resources/settings.json`.
 
 ## Input Arguments
 
@@ -21,8 +21,8 @@ Prefer scenario `1` for default behavior. Use `3` when a NOK default is explicit
 
 ## Workflow
 
-1. Verify method discovery includes the SimulateResults folder in `src/Javascripts/Views/Methods/MethodGraphics.mjs`.
-2. Verify or update defaults for `ns=1;s=TighteningSystem/Simulations/SimulateResults/SimulateSingleResult` in `src/Resources/settings.json`.
+1. Verify method discovery includes the SimulateResults folder in `src/javascripts/views/methods/method-graphics.mjs`.
+2. Verify or update defaults for `ns=1;s=TighteningSystem/Simulations/SimulateResults/SimulateSingleResult` in `src/resources/settings.json`.
 3. Use the existing Methods tab call pipeline:
    - `MethodGUICreator.createMethodArea(...)` builds inputs and Call button.
    - `MethodManager.call(...)` sends the OPC UA method call.
@@ -32,10 +32,10 @@ Prefer scenario `1` for default behavior. Use `3` when a NOK default is explicit
 
 ## Source-of-Truth Files
 
-- `src/Javascripts/Views/Methods/MethodGraphics.mjs`
-- `src/Javascripts/Views/Methods/MethodGUICreator.mjs`
-- `src/Javascripts/ijt-support/Methods/MethodManager.mjs`
-- `src/Resources/settings.json`
+- `src/javascripts/views/methods/method-graphics.mjs`
+- `src/javascripts/views/methods/method-gui-creator.mjs`
+- `src/javascripts/ijt-support/methods/method-manager.mjs`
+- `src/resources/settings.json`
 
 ## Required Checks
 
@@ -50,7 +50,7 @@ Prefer scenario `1` for default behavior. Use `3` when a NOK default is explicit
 
 ### Add or adjust defaults
 
-Edit this block in `src/Resources/settings.json`:
+Edit this block in `src/resources/settings.json`:
 
 ```json
 "ns=1;s=TighteningSystem/Simulations/SimulateResults/SimulateSingleResult": {
@@ -63,7 +63,7 @@ Use only values that map to the method's current input argument schema.
 
 ### Ensure method appears in Methods tab
 
-Confirm `activate()` in `MethodGraphics.mjs` includes the SimulateResults folder path in `methodFolders` and keeps `setupMethodsInFolders(...)` flow intact.
+Confirm `activate()` in `method-graphics.mjs` includes the SimulateResults folder path in `methodFolders` and keeps `setupMethodsInFolders(...)` flow intact.
 
 ### Diagnose call failures
 

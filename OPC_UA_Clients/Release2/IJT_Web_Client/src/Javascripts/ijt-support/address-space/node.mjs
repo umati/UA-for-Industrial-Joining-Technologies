@@ -1,0 +1,158 @@
+const typeMapping = {
+  0: { name: 'error' },
+  61: { name: 'relation' },
+  40: { name: 'hasTypeDefinition' },
+  46: { name: 'hasProperty', isHierarchical: true },
+  35: { name: 'organizes', isHierarchical: true },
+  37: { name: '???', isHierarchical: true, color: 'red' },
+  41: { name: 'generatesEvents', color: 'black' },
+  45: { name: 'hasSubtype', color: 'black', isHierarchical: true },
+  47: { name: 'component', color: 'black', isHierarchical: true },
+  48: { name: 'hasNotifier', color: 'black' },
+  17603: { name: 'hasInterface', color: 'green' },
+  17604: { name: 'hasAddin', color: 'brown', isHierarchical: true },
+  24136: { name: '???', color: 'red' },
+  24137: { name: 'association', color: 'grey' }
+}
+
+/**
+ * This abstract class contains all functionality any type of node should have
+ */
+class PartialNode {
+  constructor (data) {
+    this.data = data || {}
+    if (!this.data.attributes) {
+      this.data.attributes = {}
+    }
+    if (!this.data.attributes.NodeId) {
+      this.data.attributes.NodeId = { NamespaceIndex: 0, Identifier: 0 }
+    }
+
+    const relations = Array.isArray(this.data.relations) ? this.data.relations : []
+    this.data.relations = relations
+
+    const normalizedRelations = []
+    for (const x of relations) {
+      if (!x || typeof x !== 'object') {
+        continue
+      }
+      const index = Number(x?.ReferenceTypeId?.Identifier)
+      if (!Number.isFinite(index) || !typeMapping[index]) {
+        x.referenceTypeName = 'relation'
+        normalizedRelations.push(x)
+        continue
+      }
+      x.referenceTypeName = typeMapping[index].name
+      normalizedRelations.push(x)
+    }
+    this.data.relations = normalizedRelations
+    // this.nodeIdObject = data.attributes.NodeId
+  }
+
+  get nodeId () {
+    return this.data.attributes.NodeId
+  }
+
+  get value () {
+    return this.data.value
+  }
+
+  get nodeIdString () {
+    if (!this.data?.attributes?.NodeId) {
+      return 'ns=0;i=0'
+    }
+    let st = ';s='
+    if (Number(this.data.attributes.NodeId.Identifier)) {
+      st = ';i='
+    }
+    return `ns=${this.data.attributes.NodeId.NamespaceIndex}${st}${this.data.attributes.NodeId.Identifier}`
+  }
+
+  get nodeClass () {
+    return this.data.attributes.NodeClass
+  }
+
+  get browseName () {
+    return this.data.attributes.BrowseName.Name
+  }
+
+  get displayName () {
+    return this.data.attributes.DisplayName.Text
+  }
+
+  getRelation (nodeId) {
+    return Object.values(this.data.relations).find(
+      x => nodeId === x.nodeId)
+  }
+
+  getNamedRelation (browseName) {
+    return Object.values(this.data.relations).find(
+      x => browseName === x.BrowseName.Name)
+  }
+
+  getRelations (type) {
+    return Object.values(this.data.relations).filter(
+      x => type === x.referenceTypeName)
+  }
+
+  getChildRelations (type) {
+    return Object.values(this.data.relations).filter(
+      x => { return (x.IsForward === true || x.IsForward === 'True') && (!type || type === x.referenceTypeName) })
+  }
+
+  getParentRelations () {
+    return Object.values(this.data.relations).filter(
+      (x) => { return (x.IsForward !== true && x.IsForward !== 'True') })
+  }
+
+  getTypeDefinitionRelations (typeDefinition) {
+    return Object.values(this.data.relations).filter(
+      (x) => { return String(x?.TypeDefinition?.Identifier) === String(typeDefinition) })
+  }
+}
+
+/**
+ * factory function that given node data from OPC UA calls create an internal node in
+ * our address space implementation
+ * @param {*} data from the OPC UA calls
+ * @returns a node
+ */
+export function NodeFactory (data) {
+  switch (parseInt(data?.attributes?.NodeClass || 1)) {
+    case 1:
+      return new ObjectNode(data)
+    case 2:
+      return new VariableNode(data)
+    case 4:
+      return new MethodNode(data)
+    default:
+      return new ObjectNode(data)
+      // throw new Error('NodeFactory trying to create unknown type of NodeClass '+ data)
+  }
+}
+class ObjectNode extends PartialNode {
+  constructor (data) {
+    super(data)
+    if (data.browseName) {
+      this.aname = `${this.browseName} Object` // To simplify debugging
+    }
+  }
+}
+
+class VariableNode extends PartialNode {
+  constructor (data) {
+    super(data)
+    if (data?.displayname?.value?.text) {
+      this.aname = `${data.displayname.value.text}Variable` // To simplify debugging
+    }
+  }
+}
+
+class MethodNode extends PartialNode {
+  constructor (data) {
+    super(data)
+    if (data?.displayname?.value?.text) {
+      this.aname = `${data.displayname.value.text} Method` // To simplify debugging
+    }
+  }
+}

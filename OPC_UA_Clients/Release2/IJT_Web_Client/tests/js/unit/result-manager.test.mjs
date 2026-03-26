@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ResultManager } from '../../../src/Javascripts/ijt-support/Results/ResultManager.mjs'
+import { ResultManager } from '../../../src/javascripts/ijt-support/results/result-manager.mjs'
 
 function makeEventManager () {
   return {

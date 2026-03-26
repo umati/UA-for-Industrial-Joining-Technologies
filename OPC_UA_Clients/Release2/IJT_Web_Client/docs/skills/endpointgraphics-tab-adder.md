@@ -1,23 +1,23 @@
 # EndpointGraphics Tab Adder
 
-Implement tab additions in `src/Javascripts/Views/EndpointTab/EndpointGraphics.mjs` using the project's manager-plus-view architecture.
+Implement tab additions in `src/javascripts/views/endpoint-tab/endpoint-graphics.mjs` using the project's manager-plus-view architecture.
 
 ## Key Principles
 
-1. Reuse existing managers from `src/Javascripts/ijt-support` first.
+1. Reuse existing managers from `src/javascripts/ijt-support` first.
 2. Add a new manager only when no existing manager fits.
 3. Keep view logic in the view and transport/subscription logic in managers.
 4. Preserve existing initialization order and guard patterns.
 
 ## Workflow
 
-1. Choose a manager from `src/Javascripts/ijt-support`:
+1. Choose a manager from `src/javascripts/ijt-support`:
    - Reuse an existing manager when it already provides the needed data.
    - Create a new manager only when no existing manager fits.
-2. If creating a new manager, add `src/Javascripts/ijt-support/FeatureName/FeatureNameManager.mjs` and export it from `src/Javascripts/ijt-support/ijt-support.mjs`.
-3. Create a new view file in `src/Javascripts/Views/FeatureName/FeatureNameGraphics.mjs`.
+2. If creating a new manager, add `src/javascripts/ijt-support/feature-name/feature-name-manager.mjs` and export it from `src/javascripts/ijt-support/ijt-support.mjs`.
+3. Create a new view file in `src/javascripts/views/feature-name/feature-name-graphics.mjs`.
 4. Implement `constructor`, `initiate`, and `activate` in the new view class.
-5. Import and instantiate the chosen manager + new view in `src/Javascripts/Views/EndpointTab/EndpointGraphics.mjs`.
+5. Import and instantiate the chosen manager + new view in `src/javascripts/views/endpoint-tab/endpoint-graphics.mjs`.
 6. Register the tab with `tabGenerator.generateTab(viewInstance, level, selected?)`.
 7. Preserve ordering conventions and view-level grouping.
 8. Run lint to catch integration issues.
@@ -33,7 +33,7 @@ import { EventManager } from 'ijt-support/ijt-support.mjs'
 
 New manager pattern (only if needed):
 ```javascript
-// src/Javascripts/ijt-support/MyFeature/MyFeatureManager.mjs
+// src/javascripts/ijt-support/my-feature/my-feature-manager.mjs
 export class MyFeatureManager {
   constructor (connectionManager) {
     this.connectionManager = connectionManager
@@ -47,14 +47,14 @@ export class MyFeatureManager {
 ```
 
 ```javascript
-// src/Javascripts/ijt-support/ijt-support.mjs
-export { MyFeatureManager } from './MyFeature/MyFeatureManager.mjs'
+// src/javascripts/ijt-support/ijt-support.mjs
+export { MyFeatureManager } from './my-feature/my-feature-manager.mjs'
 ```
 
 ### View must include constructor/initiate/activate
 ```javascript
-// src/Javascripts/Views/MyFeature/MyFeatureGraphics.mjs
-import SingleScreen from '../GraphicSupport/SingleScreen.mjs'
+// src/javascripts/views/my-feature/my-feature-graphics.mjs
+import SingleScreen from '../graphic-support/single-screen.mjs'
 
 export default class MyFeatureGraphics extends SingleScreen {
   constructor (myFeatureManager) {
@@ -76,7 +76,7 @@ export default class MyFeatureGraphics extends SingleScreen {
 ```javascript
 // imports
 import { MyFeatureManager } from 'ijt-support/ijt-support.mjs'
-import MyFeatureGraphics from 'views/MyFeature/MyFeatureGraphics.mjs'
+import MyFeatureGraphics from 'views/my-feature/my-feature-graphics.mjs'
 
 // inside instantiate(...)
 const myFeatureManager = new MyFeatureManager(this.connectionManager)
@@ -120,8 +120,8 @@ Use nearby existing tabs as the source of truth when uncertain.
 ## Completion Checklist
 
 1. Confirm a manager from `ijt-support` is used (existing preferred; new only if justified).
-2. If a new manager was added, confirm it exists in `src/Javascripts/ijt-support/FeatureName/` and is exported from `ijt-support.mjs`.
-3. Confirm new view file exists in `src/Javascripts/Views/FeatureName/` with `constructor`, `initiate`, and `activate`.
+2. If a new manager was added, confirm it exists in `src/javascripts/ijt-support/feature-name/` and is exported from `ijt-support.mjs`.
+3. Confirm new view file exists in `src/javascripts/views/feature-name/` with `constructor`, `initiate`, and `activate`.
 4. Confirm `EndpointGraphics.mjs` imports and constructs the manager and view with valid dependencies.
 5. Confirm `tabGenerator.generateTab(...)` is called with intended level and optional selection flag.
 6. Run `npm run lint` from project root.

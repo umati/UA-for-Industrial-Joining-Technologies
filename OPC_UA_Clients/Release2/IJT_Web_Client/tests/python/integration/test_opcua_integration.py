@@ -3,8 +3,8 @@ import os
 
 import pytest
 
-from Python.network_utils import endpoint_reachable
-from Python.connection import Connection
+from python.network_utils import endpoint_reachable
+from python.connection import Connection
 
 
 pytestmark = pytest.mark.integration

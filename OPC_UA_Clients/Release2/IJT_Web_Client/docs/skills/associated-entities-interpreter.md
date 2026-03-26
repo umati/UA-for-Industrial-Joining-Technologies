@@ -10,9 +10,9 @@ Interpret associated entities in result payloads using project source-of-truth m
 
 ## Source-of-Truth Files
 
-- `src/Javascripts/ijt-support/Models/Results/ResultMetaData.mjs`
-- `src/Javascripts/ijt-support/Models/Entities/EntityDataType.mjs`
-- `src/Javascripts/ijt-support/Models/Results/ResultDataType.mjs`
+- `src/javascripts/ijt-support/models/results/result-meta-data.mjs`
+- `src/javascripts/ijt-support/models/entities/entity-data-type.mjs`
+- `src/javascripts/ijt-support/models/results/result-data-type.mjs`
 
 ## Entity Type Clarifications
 

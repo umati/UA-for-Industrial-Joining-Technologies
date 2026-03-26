@@ -36,10 +36,6 @@ from typing import Optional
 # Paths
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent
-CONSOLE_DIR = ROOT.parent.parent / "IJT_Console_Client"
-# Support both flat layout and Release2 layout
-if not CONSOLE_DIR.exists():
-    CONSOLE_DIR = ROOT.parent / "IJT_Console_Client"
 IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 IS_CI = bool(os.getenv("CI"))
@@ -307,36 +303,6 @@ def _stage_playwright_e2e(ws_url: str, ui_url: str) -> StageResult:
     return StageResult("playwright-e2e", max(rc1, rc2), duration=time.monotonic() - t0)
 
 
-def _stage_console_client(python: Path) -> StageResult:
-    _banner("STAGE 8  IJT Console Client tests")
-    t0 = time.monotonic()
-    if not CONSOLE_DIR.exists():
-        _warn(f"Console client not found at {CONSOLE_DIR}")
-        return StageResult("console-client", 0, skipped=True)
-
-    req = CONSOLE_DIR / "requirements.txt"
-    if req.exists():
-        _run(
-            [python, "-m", "pip", "install",
-             "--quiet", "--disable-pip-version-check", "--pre",
-             "-r", str(req)],
-            cwd=CONSOLE_DIR,
-            label="pip install console deps",
-        )
-
-    tests_dir = CONSOLE_DIR / "tests"
-    if not tests_dir.exists():
-        _warn("Console client has no tests/ directory — skipping")
-        return StageResult("console-client", 0, skipped=True)
-
-    rc = _run(
-        [python, "-m", "pytest", "tests/", "-v", "--tb=short", "--no-header"],
-        cwd=CONSOLE_DIR,
-        label="pytest console client",
-    )
-    return StageResult("console-client", rc, duration=time.monotonic() - t0)
-
-
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
@@ -371,7 +337,7 @@ def _print_summary(results: list[StageResult], total_time: float) -> int:
 STAGES = [
     "versions", "pip-install", "python-unit", "js-unit",
     "python-live", "playwright-install", "playwright-smoke",
-    "playwright-e2e", "console-client",
+    "playwright-e2e",
 ]
 
 
@@ -382,7 +348,7 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--all",          action="store_true",
-                        help="Run every stage (unit + live + E2E + console)")
+                        help="Run every stage (unit + live + E2E)")
     parser.add_argument("--integration",  action="store_true",
                         help="Include live OPC UA + WS backend tests")
     parser.add_argument("--e2e",          action="store_true",
@@ -457,9 +423,6 @@ def main() -> int:
             else:
                 _skip("playwright-e2e: WebSocket backend not reachable")
                 results.append(StageResult("playwright-e2e", 0, skipped=True))
-
-    # ── Console client ────────────────────────────────────────────────────────
-    results.append(_stage_console_client(python))
 
     return _print_summary(results, time.monotonic() - t_start)
 

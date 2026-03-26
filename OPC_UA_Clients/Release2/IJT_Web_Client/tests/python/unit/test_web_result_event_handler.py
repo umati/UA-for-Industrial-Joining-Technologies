@@ -8,7 +8,7 @@ Covers:
   enqueues JSON string, respects closed flag, exception caught
 - ResultEventHandler.event_notification: respects closed flag, creates Short,
   calls process_event; exception does not propagate
-- ResultEventHandler.handleQueue: sends JSON string via websocket,
+- ResultEventHandler.handle_queue: sends JSON string via websocket,
   breaks on ConnectionClosedOK, breaks on other exception
 - Double shutdown is idempotent
 """
@@ -22,7 +22,7 @@ import pytest
 asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
 from asyncua import ua  # noqa: E402
 
-from Python.result_event_handler import ResultEventHandler, Short  # noqa: E402
+from python.result_event_handler import ResultEventHandler, Short  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ async def test_process_event_enqueues_json_string():
 
     short = Short(ua.NodeId(1007, 2), {"result": 1}, ua.LocalizedText("OK", "en"), "id-1")
 
-    with patch("Python.result_event_handler.serializeFullEvent", return_value={"serialized": True}):
+    with patch("python.result_event_handler.serialize_full_event", return_value={"serialized": True}):
         await handler.process_event(short)
         await asyncio.sleep(0)  # let queue task pick it up
 
@@ -136,7 +136,7 @@ async def test_process_event_exception_caught():
     handler = ResultEventHandler(ws, "opc.tcp://localhost:40451")
 
     short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("", "en"), "id-0")
-    with patch("Python.result_event_handler.serializeFullEvent", side_effect=ValueError("bad")):
+    with patch("python.result_event_handler.serialize_full_event", side_effect=ValueError("bad")):
         # Must not raise
         await handler.process_event(short)
     await handler.close()
@@ -163,7 +163,7 @@ async def test_event_notification_respects_closed_flag():
     handler = ResultEventHandler(ws, "opc.tcp://localhost:40451")
     handler.closed = True
 
-    with patch("Python.result_event_handler.log_result_event_details", new_callable=AsyncMock):
+    with patch("python.result_event_handler.log_result_event_details", new_callable=AsyncMock):
         await handler.event_notification(_make_result_event())
 
     assert handler.queue.qsize() == 0
@@ -181,7 +181,7 @@ async def test_event_notification_builds_short_and_calls_process():
         captured.append(evt)
 
     with (
-        patch("Python.result_event_handler.log_result_event_details", new_callable=AsyncMock, return_value="evt-id-xx"),
+        patch("python.result_event_handler.log_result_event_details", new_callable=AsyncMock, return_value="evt-id-xx"),
         patch.object(handler, "process_event", side_effect=_capture),
     ):
         await handler.event_notification(_make_result_event())
@@ -199,7 +199,7 @@ async def test_event_notification_exception_does_not_propagate():
     handler = ResultEventHandler(ws, "opc.tcp://localhost:40451")
 
     with patch(
-        "Python.result_event_handler.log_result_event_details",
+        "python.result_event_handler.log_result_event_details",
         new_callable=AsyncMock,
         side_effect=RuntimeError("server gone"),
     ):
@@ -209,7 +209,7 @@ async def test_event_notification_exception_does_not_propagate():
 
 
 # ---------------------------------------------------------------------------
-# ResultEventHandler.handleQueue
+# ResultEventHandler.handle_queue
 # ---------------------------------------------------------------------------
 
 
@@ -223,7 +223,7 @@ async def test_handle_queue_breaks_on_connection_closed_ok():
     handler = ResultEventHandler(ws, server_url)
 
     short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("msg", "en"), "id-ok")
-    with patch("Python.result_event_handler.serializeFullEvent", return_value={}):
+    with patch("python.result_event_handler.serialize_full_event", return_value={}):
         await handler.process_event(short)
     await asyncio.wait_for(handler._queue_task, timeout=2.0)
 
@@ -235,7 +235,7 @@ async def test_handle_queue_breaks_on_exception():
     handler = ResultEventHandler(ws, "opc.tcp://localhost:40451")
 
     short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("msg", "en"), "id-err")
-    with patch("Python.result_event_handler.serializeFullEvent", return_value={}):
+    with patch("python.result_event_handler.serialize_full_event", return_value={}):
         await handler.process_event(short)
     await asyncio.wait_for(handler._queue_task, timeout=2.0)
 
@@ -256,13 +256,13 @@ def test_log_result_event_details_has_no_client_parameter():
     fire many events before returning.
     """
     import inspect
-    from Python.utils import log_result_event_details
+    from python.utils import log_result_event_details
     params = list(inspect.signature(log_result_event_details).parameters.keys())
     assert "client" not in params, (
         "log_result_event_details must not take a 'client' parameter — "
         "OPC UA reads inside event callbacks cause race conditions"
     )
-    assert params == ["event", "server_url", "client_received_time"]
+    assert params == ["event", "_server_url", "client_received_time"]
 
 
 @pytest.mark.asyncio
@@ -278,7 +278,7 @@ async def test_event_notification_calls_log_without_client():
         call_args_list.append((event, server_url, client_received_time))
         return "evt-regression"
 
-    with patch("Python.result_event_handler.log_result_event_details",
+    with patch("python.result_event_handler.log_result_event_details",
                side_effect=_capture_log):
         await handler.event_notification(_make_result_event())
 
@@ -304,7 +304,7 @@ async def test_concurrent_event_notifications_simulate_job_result():
     async def _fast_log(event, server_url, client_received_time):
         return f"evt-{id(event)}"
 
-    with patch("Python.result_event_handler.log_result_event_details",
+    with patch("python.result_event_handler.log_result_event_details",
                side_effect=_fast_log):
         # Fire all events concurrently — as asyncua does when a method triggers many events
         await asyncio.gather(*[handler.event_notification(e) for e in events])

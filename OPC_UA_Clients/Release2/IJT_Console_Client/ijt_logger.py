@@ -1,11 +1,12 @@
 import logging
 from datetime import datetime
+from logging import LogRecord
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 
 class MillisecondFormatter(logging.Formatter):
-    def formatTime(self, record, datefmt=None):
+    def formatTime(self, record: LogRecord, datefmt: str | None = None) -> str:
         ct = datetime.fromtimestamp(record.created)
         if datefmt:
             s = ct.strftime(datefmt)

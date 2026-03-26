@@ -9,10 +9,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ModelManager } from '../../../src/Javascripts/ijt-support/Models/ModelManager.mjs'
-import IJTBaseModel from '../../../src/Javascripts/ijt-support/Models/IJTBaseModel.mjs'
-import { LocalizationModel, NodeId } from '../../../src/Javascripts/ijt-support/Models/SupportModels.mjs'
-import ResultDataType from '../../../src/Javascripts/ijt-support/Models/Results/ResultDataType.mjs'
+import { ModelManager } from '../../../src/javascripts/ijt-support/models/model-manager.mjs'
+import IJTBaseModel from '../../../src/javascripts/ijt-support/models/ijt-base-model.mjs'
+import { LocalizationModel, NodeId } from '../../../src/javascripts/ijt-support/models/support-models.mjs'
+import ResultDataType from '../../../src/javascripts/ijt-support/models/results/result-data-type.mjs'
 
 // ---------------------------------------------------------------------------
 // Shared fixture

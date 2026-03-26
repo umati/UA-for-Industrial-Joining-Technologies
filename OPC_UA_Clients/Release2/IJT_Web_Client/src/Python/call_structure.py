@@ -1,6 +1,14 @@
+"""Utilities for constructing asyncua call-input structures from front-end data.
+
+The single public function :func:`create_call_structure` maps web-client argument
+descriptors (containing an OPC UA data-type ID and a raw Python value) to the
+``asyncua`` ``Variant`` or extension-object instances required by
+``Node.call_method``.
+"""
+
 from asyncua import ua
 from typing import Any
-from Python.ijt_logger import ijt_log
+from python.ijt_logger import ijt_log
 
 # IJT-specific OPC UA extension type identifiers (namespace-qualified IDs from IJT companion spec)
 _JOINING_PROCESS_ID_DATA_TYPE = 3029   # ua.JoiningProcessIdentificationDataType
@@ -25,13 +33,35 @@ _BUILTIN_TYPE_MAP: dict[int, ua.VariantType] = {
 }
 
 
-def createCallStructure(argument: dict[str, Any]) -> Any:
-    """
-    Convert a web-client argument descriptor into an asyncua call input structure.
+def create_call_structure(argument: dict[str, Any]) -> Any:
+    """Convert a web-client argument descriptor into an asyncua call input structure.
 
-    Each argument dict must contain:
-        "dataType": int   – OPC UA data type node identifier
-        "value":    Any   – the raw value from the frontend
+    Handles three categories of OPC UA data types:
+
+    * **JoiningProcessIdentificationDataType** (type ID 3029) — builds a
+      ``ua.JoiningProcessIdentificationDataType`` from a three-element list.
+    * **EntityDataType array** (type ID 3010) — builds a
+      ``ua.Variant(list[EntityDataType], ExtensionObject)``.
+    * **OPC UA built-in types** — maps the numeric type ID to the matching
+      :class:`ua.VariantType` via ``_BUILTIN_TYPE_MAP`` and wraps the value
+      in a ``ua.Variant``.
+
+    Args:
+        argument: A dict with the following keys:
+
+            * ``"dataType"`` (``int``) — OPC UA data type node identifier.
+            * ``"value"`` (``Any``) — Raw value received from the front-end.
+              For ``JoiningProcessIdentificationDataType`` this must be a
+              list of at least three ``{"value": …}`` dicts.
+
+    Returns:
+        An ``asyncua`` call-input object — either a typed ``ua.Variant``, a
+        ``ua.JoiningProcessIdentificationDataType``, or
+        ``ua.Variant(None, ua.VariantType.Null)`` when the input is invalid.
+
+    Raises:
+        KeyError: If ``"dataType"`` or ``"value"`` is missing from
+            ``argument``.
     """
     value = argument["value"]
     data_type = argument["dataType"]
@@ -41,7 +71,7 @@ def createCallStructure(argument: dict[str, Any]) -> Any:
         case _ if data_type == _JOINING_PROCESS_ID_DATA_TYPE:
             if not isinstance(value, list) or len(value) < 3:
                 ijt_log.error(
-                    "[createCallStructure] JoiningProcessIdentificationDataType requires 3 "
+                    "[create_call_structure] JoiningProcessIdentificationDataType requires 3 "
                     "elements (JoiningProcessId, JoiningProcessOriginId, SelectionName), "
                     f"got {len(value) if isinstance(value, list) else type(value).__name__}"
                 )
@@ -69,10 +99,11 @@ def createCallStructure(argument: dict[str, Any]) -> Any:
             variant_type = _BUILTIN_TYPE_MAP.get(data_type)
             if variant_type is None:
                 ijt_log.warning(
-                    f"[createCallStructure] Unknown dataType {data_type!r}; "
+                    f"[create_call_structure] Unknown dataType {data_type!r}; "
                     "falling back to String Variant."
                 )
                 variant_type = ua.VariantType.String
             inp = ua.Variant(value, variant_type)
 
     return inp
+

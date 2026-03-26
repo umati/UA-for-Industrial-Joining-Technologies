@@ -19,7 +19,7 @@ URL_PATTERN = re.compile(r"opc\.tcp://[a-zA-Z0-9\.\-]+:\d+")
 
 
 def validate_url(url: str) -> str:
-    if url and URL_PATTERN.match(url):
+    if url and URL_PATTERN.fullmatch(url):
         return url
     env_url = os.getenv("OPCUA_SERVER_URL")
     if env_url and URL_PATTERN.match(env_url):
@@ -159,3 +159,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -15,7 +15,7 @@ asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
 import pytz  # noqa: E402  (asyncua depends on pytz, so it will be available)
 from asyncua import ua  # noqa: E402
 
-from Python.utils import (  # noqa: E402
+from python.utils import (  # noqa: E402
     format_list_for_logging,
     format_local_time,
     localizedtext_to_str,

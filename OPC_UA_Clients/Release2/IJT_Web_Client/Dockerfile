@@ -63,4 +63,4 @@ EXPOSE 3000 8001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:3000 || exit 1
 
-CMD ["python", "setup_project.py", "--serve"]
+CMD ["python", "setup_project.py"]

@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from Python.ijt_interface import IJTInterface
-from Python.connection import Connection
+from python.ijt_interface import IJTInterface
+from python.connection import Connection
 
 
 # ---------------------------------------------------------------------------
@@ -48,9 +48,9 @@ def test_connection_has_required_method(method_name):
 WEB_CLIENT_ROOT = Path(__file__).parents[3]
 
 REQUIRED_STATIC_ASSETS = [
-    "src/Resources/digital_twin.jpg",
-    "src/Resources/settings.json",
-    "src/Resources/connectionpoints.json",
+    "src/resources/digital_twin.jpg",
+    "src/resources/settings.json",
+    "src/resources/connectionpoints.json",
     "node_modules/chart.js/dist/chart.umd.js",
 ]
 
@@ -69,20 +69,20 @@ def test_required_static_asset_exists(asset_path):
 # CONTRACT: JS source must not use stale relative paths for static assets
 # ---------------------------------------------------------------------------
 
-JS_SRC_ROOT = WEB_CLIENT_ROOT / "src" / "Javascripts"
+JS_SRC_ROOT = WEB_CLIENT_ROOT / "src" / "javascripts"
 
 def test_jointdemo_uses_absolute_image_path():
-    """JointDemo.mjs must use /src/Resources/ (absolute) for the digital_twin image.
-    A relative ./Resources/ path resolves from document root and breaks after src/ reorg."""
-    joint_demo = WEB_CLIENT_ROOT / "src" / "Javascripts" / "Views" / "Demo" / "JointDemo.mjs"
-    assert joint_demo.exists(), f"JointDemo.mjs not found at {joint_demo}"
+    """joint-demo.mjs must use /src/resources/ (absolute) for the digital_twin image.
+    A relative ./resources/ path resolves from document root and breaks after src/ reorg."""
+    joint_demo = WEB_CLIENT_ROOT / "src" / "javascripts" / "views" / "demo" / "joint-demo.mjs"
+    assert joint_demo.exists(), f"joint-demo.mjs not found at {joint_demo}"
     content = joint_demo.read_text(encoding="utf-8")
-    assert "./Resources/digital_twin" not in content, (
-        "JointDemo.mjs uses './Resources/digital_twin' which is relative to document root and breaks. "
-        "Use '/src/Resources/digital_twin.jpg' instead."
+    assert "./resources/digital_twin" not in content, (
+        "joint-demo.mjs uses './resources/digital_twin' which is relative to document root and breaks. "
+        "Use '/src/resources/digital_twin.jpg' instead."
     )
-    assert "/src/Resources/digital_twin" in content, (
-        "JointDemo.mjs must reference digital_twin.jpg via '/src/Resources/digital_twin.jpg'"
+    assert "/src/resources/digital_twin" in content, (
+        "joint-demo.mjs must reference digital_twin.jpg via '/src/resources/digital_twin.jpg'"
     )
 
 

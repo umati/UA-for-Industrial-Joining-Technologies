@@ -3,7 +3,7 @@
 Run these before and after code changes:
 
 ```bash
-npx eslint src/Javascripts config.js --config eslint.config.mjs --max-warnings 0
+npx eslint src/javascripts config.js --config eslint.config.mjs --max-warnings 0
 python -m pip check
 python index.py
 ```

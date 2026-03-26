@@ -8,7 +8,7 @@ Covers:
 - EventHandler lifecycle: init creates queue+task, shutdown sets closed, close awaits task
 - EventHandler.process_event: respects closed flag, enqueues item
 - EventHandler.event_notification: respects closed flag, builds Short event, calls process_event
-- EventHandler.handleQueue: sends JSON with command="event", endpoint=server_url, data=serialized;
+- EventHandler.handle_queue: sends JSON with command="event", endpoint=server_url, data=serialized;
   breaks on ConnectionClosedOK; breaks + closes websocket on other exceptions
 - EventHandler double-shutdown is idempotent
 """
@@ -22,7 +22,7 @@ import pytest
 asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
 from asyncua import ua  # noqa: E402
 
-from Python.event_handler import EventHandler, Short  # noqa: E402
+from python.event_handler import EventHandler, Short  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ def _fake_raw_event(message_text="Event", event_id_bytes=b"evt-001"):
 
 def test_short_event_id_from_bytes():
     raw = _fake_raw_event(event_id_bytes=b"hello-bytes")
-    with patch("Python.event_handler.log_joining_system_event"):
+    with patch("python.event_handler.log_joining_system_event"):
         short = Short(raw)
     assert short.EventId == "hello-bytes"
 
@@ -69,7 +69,7 @@ def test_short_event_id_from_bytes():
 def test_short_event_id_from_non_bytes():
     raw = _fake_raw_event()
     raw.EventId = "string-id-42"
-    with patch("Python.event_handler.log_joining_system_event"):
+    with patch("python.event_handler.log_joining_system_event"):
         short = Short(raw)
     assert short.EventId == "string-id-42"
 
@@ -153,8 +153,8 @@ def test_short_missing_attribute_does_not_raise():
 @pytest.mark.asyncio
 async def test_event_handler_creates_task_on_init():
     ws = AsyncMock()
-    with patch("Python.event_handler.log_joining_system_event", new_callable=AsyncMock):
-        handler = EventHandler(ws, "opc.tcp://localhost:40451", MagicMock())
+    with patch("python.event_handler.log_joining_system_event", new_callable=AsyncMock):
+        handler = EventHandler(ws, "opc.tcp://localhost:40451")
     assert not handler._queue_task.done()
     await handler.close()
 
@@ -162,7 +162,7 @@ async def test_event_handler_creates_task_on_init():
 @pytest.mark.asyncio
 async def test_event_handler_shutdown_sets_closed():
     ws = AsyncMock()
-    handler = EventHandler(ws, "opc.tcp://localhost:40451", MagicMock())
+    handler = EventHandler(ws, "opc.tcp://localhost:40451")
     assert not handler.closed
     await handler.shutdown()
     assert handler.closed
@@ -172,7 +172,7 @@ async def test_event_handler_shutdown_sets_closed():
 @pytest.mark.asyncio
 async def test_event_handler_close_awaits_task():
     ws = AsyncMock()
-    handler = EventHandler(ws, "opc.tcp://localhost:40451", MagicMock())
+    handler = EventHandler(ws, "opc.tcp://localhost:40451")
     await handler.close()
     assert handler._queue_task.done()
     assert handler.closed
@@ -181,7 +181,7 @@ async def test_event_handler_close_awaits_task():
 @pytest.mark.asyncio
 async def test_event_handler_double_shutdown_idempotent():
     ws = AsyncMock()
-    handler = EventHandler(ws, "opc.tcp://localhost:40451", MagicMock())
+    handler = EventHandler(ws, "opc.tcp://localhost:40451")
     await handler.shutdown()
     await handler.shutdown()  # second call must not add another sentinel
     await asyncio.wait_for(handler._queue_task, timeout=1.0)
@@ -195,7 +195,7 @@ async def test_event_handler_double_shutdown_idempotent():
 @pytest.mark.asyncio
 async def test_process_event_ignored_when_closed():
     ws = AsyncMock()
-    handler = EventHandler(ws, "opc.tcp://localhost:40451", MagicMock())
+    handler = EventHandler(ws, "opc.tcp://localhost:40451")
     handler.closed = True
     short = Short(_fake_raw_event())
     await handler.process_event(short)
@@ -206,7 +206,7 @@ async def test_process_event_ignored_when_closed():
 @pytest.mark.asyncio
 async def test_process_event_enqueues_when_open():
     ws = AsyncMock()
-    handler = EventHandler(ws, "opc.tcp://localhost:40451", MagicMock())
+    handler = EventHandler(ws, "opc.tcp://localhost:40451")
     short = Short(_fake_raw_event())
     await handler.process_event(short)
     # Give the queue task a tick to process the item
@@ -224,16 +224,16 @@ async def test_process_event_enqueues_when_open():
 @pytest.mark.asyncio
 async def test_event_notification_ignored_when_closed():
     ws = AsyncMock()
-    handler = EventHandler(ws, "opc.tcp://localhost:40451", MagicMock())
+    handler = EventHandler(ws, "opc.tcp://localhost:40451")
     handler.closed = True
-    with patch("Python.event_handler.log_joining_system_event", new_callable=AsyncMock):
+    with patch("python.event_handler.log_joining_system_event", new_callable=AsyncMock):
         await handler.event_notification(_fake_raw_event())
     assert handler.queue.qsize() == 0
     await handler.close()
 
 
 # ---------------------------------------------------------------------------
-# EventHandler.handleQueue — happy path sends correct JSON
+# EventHandler.handle_queue — happy path sends correct JSON
 # ---------------------------------------------------------------------------
 
 
@@ -243,10 +243,10 @@ async def test_handle_queue_sends_json_with_correct_structure():
     server_url = "opc.tcp://localhost:40451"
 
     with (
-        patch("Python.event_handler.log_joining_system_event", new_callable=AsyncMock),
-        patch("Python.event_handler.serializeFullEvent", return_value={"key": "value"}),
+        patch("python.event_handler.log_joining_system_event", new_callable=AsyncMock),
+        patch("python.event_handler.serialize_full_event", return_value={"key": "value"}),
     ):
-        handler = EventHandler(ws, server_url, MagicMock())
+        handler = EventHandler(ws, server_url)
         await handler.event_notification(_fake_raw_event("TighteningOK"))
         await asyncio.sleep(0.05)
 
@@ -267,10 +267,10 @@ async def test_handle_queue_breaks_on_connection_closed_ok():
     ws.send = AsyncMock(side_effect=websockets.exceptions.ConnectionClosedOK(None, None))
 
     with (
-        patch("Python.event_handler.log_joining_system_event", new_callable=AsyncMock),
-        patch("Python.event_handler.serializeFullEvent", return_value={"x": 1}),
+        patch("python.event_handler.log_joining_system_event", new_callable=AsyncMock),
+        patch("python.event_handler.serialize_full_event", return_value={"x": 1}),
     ):
-        handler = EventHandler(ws, "opc.tcp://localhost:40451", MagicMock())
+        handler = EventHandler(ws, "opc.tcp://localhost:40451")
         await handler.event_notification(_fake_raw_event())
         await asyncio.wait_for(handler._queue_task, timeout=2.0)
 
@@ -281,11 +281,12 @@ async def test_handle_queue_breaks_and_closes_ws_on_exception():
     ws.send = AsyncMock(side_effect=RuntimeError("broken pipe"))
 
     with (
-        patch("Python.event_handler.log_joining_system_event", new_callable=AsyncMock),
-        patch("Python.event_handler.serializeFullEvent", return_value={"x": 1}),
+        patch("python.event_handler.log_joining_system_event", new_callable=AsyncMock),
+        patch("python.event_handler.serialize_full_event", return_value={"x": 1}),
     ):
-        handler = EventHandler(ws, "opc.tcp://localhost:40451", MagicMock())
+        handler = EventHandler(ws, "opc.tcp://localhost:40451")
         await handler.event_notification(_fake_raw_event())
         await asyncio.wait_for(handler._queue_task, timeout=2.0)
 
     ws.close.assert_awaited()
+

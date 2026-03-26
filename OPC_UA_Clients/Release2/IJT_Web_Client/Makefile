@@ -70,7 +70,7 @@ test-smoke:
 .PHONY: lint
 lint:
 	npm run lint
-	$(PYTHON) -m py_compile src/Python/*.py src/scripts/*.py
+	$(PYTHON) -m py_compile src/python/*.py scripts/*.py
 
 .PHONY: lint-fix
 lint-fix:

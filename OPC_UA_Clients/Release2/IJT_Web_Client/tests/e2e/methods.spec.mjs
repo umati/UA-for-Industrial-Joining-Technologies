@@ -100,3 +100,37 @@ test('WS: methodcall with invalid node returns exception (not crash)', async ({ 
   expect(resp.data).toBeDefined()
   expect(resp.data?.exception).toBeDefined()
 })
+
+// ── Wire-format regression tests ──────────────────────────────────────────────
+// These freeze the exact JSON keys so a snake_case rename can never silently
+// break the protocol again (objectnode/methodnode vs object_node/method_node).
+
+test('WS regression: methodcall with wrong key "object_node" returns exception field', async ({ ws }) => {
+  await ws.send('connect to')
+  const resp = await ws.send('methodcall', {
+    object_node: { NamespaceIndex: 1, Identifier: 'TighteningSystem' },
+    method_node: { NamespaceIndex: 1, Identifier: 'SimulateSingleResult' },
+    arguments: [],
+  })
+  // Backend must return a structured response with exception — not a crash
+  expect(resp).toBeDefined()
+  expect(resp.data).toBeDefined()
+  // The "Missing objectnode or methodnode" guard must have fired
+  expect(typeof resp.data?.exception).toBe('string')
+  expect(resp.data.exception).toMatch(/Missing/i)
+})
+
+test('WS regression: methodcall with correct "objectnode"/"methodnode" keys passes None guard', async ({ ws }) => {
+  await ws.send('connect to')
+  const resp = await ws.send('methodcall', {
+    objectnode: { NamespaceIndex: 99, Identifier: 999999 },
+    methodnode: { NamespaceIndex: 99, Identifier: 999998 },
+    arguments: [],
+  })
+  // The correct keys must pass the None guard:
+  // error should be about the invalid node, NOT about missing keys
+  expect(resp.data).toBeDefined()
+  if (resp.data?.exception) {
+    expect(resp.data.exception).not.toMatch(/Missing objectnode/i)
+  }
+})

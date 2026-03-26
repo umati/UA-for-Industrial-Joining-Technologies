@@ -1,0 +1,53 @@
+[MAIN]
+# Run pylint from the IJT_Console_Client directory.
+# asyncua members are generated at runtime from OPC UA NodeSet XML, and
+# orjson is a C-extension whose .dumps member is not visible to pylint.
+
+[MESSAGES CONTROL]
+disable =
+    # E1101: no-member
+    #   asyncua.ua.* members and orjson.dumps are generated/provided by
+    #   C extensions at runtime — pylint cannot see them statically.
+    no-member,
+
+    # W0718: broad-exception-caught
+    #   OPC UA subscriptions and method calls can raise many different
+    #   exception types; broad catching is intentional for robustness.
+    broad-exception-caught,
+
+    # W1203 / W1201: logging-fstring-interpolation / logging-not-lazy
+    #   Consistent use of f-strings in log calls for readability.
+    logging-fstring-interpolation,
+    logging-not-lazy,
+
+    # C0103: invalid-name
+    #   OPC UA and asyncua use PascalCase for event fields.
+    #   Legacy camelCase variables mirror existing API surface.
+    invalid-name,
+
+    # C0411: wrong-import-order — minor style.
+    wrong-import-order,
+
+    # C0415: import-outside-toplevel — intentional where used.
+    import-outside-toplevel,
+
+    # R0801: duplicate-code — tracked for future refactoring.
+    duplicate-code,
+
+    # R0902: too-many-instance-attributes — OPC UA client state.
+    too-many-instance-attributes,
+
+    # R0903: too-few-public-methods — dataclasses/handler classes.
+    too-few-public-methods,
+
+    # R0911, R0912, R0914, R0915: complexity limits — necessary for protocol code.
+    too-many-return-statements,
+    too-many-branches,
+    too-many-locals,
+    too-many-statements,
+
+[FORMAT]
+max-line-length = 120
+
+[DESIGN]
+max-args = 10

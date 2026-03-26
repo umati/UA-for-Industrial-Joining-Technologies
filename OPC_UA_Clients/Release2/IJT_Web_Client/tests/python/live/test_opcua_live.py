@@ -436,3 +436,51 @@ class TestBackendWebSocket:
 
 # Serialisation contract tests live in tests/python/unit/test_serialize_data.py
 # (pure sync — moved there to avoid module-level asyncio pytestmark warnings)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. Performance / Response-Time SLA tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.live_ws
+@skip_no_ws
+class TestResponseTimeSLA:
+    """Backend WebSocket operations must respond within defined SLA windows.
+
+    Uses the send_recv timeout parameter to assert the deadline.  If the
+    backend does not respond in time, TimeoutError is raised by the
+    send_recv helper, which fails the test with a clear message.
+    """
+
+    async def test_connect_responds_within_30_seconds(self, ws_client):
+        """'connect to' must receive a response within 30 seconds."""
+        resp = await ws_client.send_recv("connect to", timeout=30)
+        assert resp is not None
+        assert isinstance(resp, dict)
+
+    async def test_browse_responds_within_5_seconds(self, ws_client):
+        """browse(ns=0;i=85 Objects) must respond within 5 seconds once connected."""
+        await ws_client.send_recv("connect to", timeout=30)
+        resp = await ws_client.send_recv(
+            "browse", {"nodeid": "ns=0;i=85"}, timeout=5
+        )
+        assert resp is not None
+        assert isinstance(resp, dict)
+
+    async def test_read_responds_within_3_seconds(self, ws_client):
+        """read(ns=0;i=2258 CurrentTime) must respond within 3 seconds once connected."""
+        await ws_client.send_recv("connect to", timeout=30)
+        resp = await ws_client.send_recv(
+            "read", {"nodeid": "ns=0;i=2258"}, timeout=3
+        )
+        assert resp is not None
+        assert isinstance(resp, dict)
+
+    async def test_namespaces_responds_within_5_seconds(self, ws_client):
+        """'namespaces' command must respond within 5 seconds once connected."""
+        await ws_client.send_recv("connect to", timeout=30)
+        resp = await ws_client.send_recv("namespaces", timeout=5)
+        assert resp is not None
+        data = resp.get("data", {})
+        assert "exception" not in data, f"namespaces returned exception: {data}"

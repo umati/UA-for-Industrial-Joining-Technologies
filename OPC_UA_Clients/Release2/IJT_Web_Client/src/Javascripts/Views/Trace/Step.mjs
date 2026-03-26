@@ -1,5 +1,12 @@
-// import ChartManager from './ChartHandler.mjs'
-import ResultValueHandler from './ResultValueHandler.mjs'
+// import ChartManager from './chart-handler.mjs'
+import ResultValueHandler from './result-value-handler.mjs'
+
+const PHYSICAL_QUANTITY = Object.freeze({
+  TIME: 1,
+  TORQUE: 2,
+  ANGLE: 3,
+  CURRENT: 11,
+})
 
 export default class Step {
   constructor (step, owner, nr, chartManager, resultId, color, displayOffset) {
@@ -21,16 +28,16 @@ export default class Step {
 
     for (const data of step.StepTraceContent) {
       switch (parseInt(data.PhysicalQuantity)) {
-        case 1: // Time
+        case PHYSICAL_QUANTITY.TIME: // Time
           this.time = data.Values
           break
-        case 2: // Torque
+        case PHYSICAL_QUANTITY.TORQUE: // Torque
           this.torque = data.Values
           break
-        case 3: // Angle
+        case PHYSICAL_QUANTITY.ANGLE: // Angle
           this.angle = data.Values
           break
-        case 11: // Current
+        case PHYSICAL_QUANTITY.CURRENT: // Current
           break
         default:
           throw new Error('Unknown physicalQuantity in trace')
@@ -93,11 +100,9 @@ export default class Step {
 
     if (xValues.length !== yValues.length) { // Error handling
       if (!this.name) {
-        this.name = 'number ' + this.nr
+        this.name = `number ${this.nr}`
       }
-      throw new Error('In step ' + this.name +
-      ' there are not the same number of trace sample points in the ' + this.xDimensionName +
-      ' and ' + this.yDimensionName + ' lists')
+      throw new Error(`In step ${this.name} there are not the same number of trace sample points in the ${this.xDimensionName} and ${this.yDimensionName} lists`)
     }
 
     for (let i = 0; i < xValues.length; i++) {

@@ -31,7 +31,7 @@ export default class Graphic {
   }
 
   createStepValue (value, points, color) {
-    function handleGroup (list, tag) {
+    const handleGroup = (list, tag) => {
       const dataset = new Dataset(value.Name + tag)
       // The look of a step value
       dataset.display(true)
@@ -193,6 +193,6 @@ export class Dataset {
     let c = parseFloat(b)
     c = 100 * (c - fractionFade) / 100
 
-    return h + ',' + s + ',' + l + ',' + c + ')'
+    return `${h},${s},${l},${c})`
   }
 }

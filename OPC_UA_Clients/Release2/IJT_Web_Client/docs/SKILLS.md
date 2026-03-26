@@ -32,7 +32,7 @@
 
 ```
 IJT_Web_Client/
-├── index.html              # Browser entry point — loads Javascripts/ijt-support/ijt-support.mjs
+├── index.html              # Browser entry point — loads src/javascripts/ijt-support/ijt-support.mjs
 ├── index.py                # Python WebSocket backend (asyncio + websockets, port 8001)
 ├── config.js               # Shared JS config (WS_PORT, endpoints, timeouts)
 ├── run_all_tests.py        # PRIMARY TEST RUNNER — one command for everything
@@ -47,9 +47,8 @@ IJT_Web_Client/
 ├── Makefile                # make setup|test|lint|docker|clean
 ├── .env / .env.example     # OPCUA_TEST_ENDPOINT, WS_PORT, etc.
 │
-├── scripts/                # All helper scripts (was root-level before cleanup)
-│   ├── setup_project.py    # Full setup launcher (venv, npm, OPC UA server check, serve)
-│   ├── run_docker_setup.py # Docker/local setup dispatcher
+├── scripts/                # All helper scripts
+│   ├── test_live_ops.py    # Standalone live OPC UA smoke test (asyncio.run)
 │   ├── run_docker_tests.py # Docker smoke + build + compose tests
 │   ├── run_all_tests_bootstrap.ps1  # Windows PS7 full bootstrap
 │   ├── run_regression.py   # WS regression test runner
@@ -57,7 +56,7 @@ IJT_Web_Client/
 │   ├── venv_bootstrap.py   # Venv utilities
 │   └── _browse_methods.py  # OPC UA address space debug helper
 │
-├── Python/                 # Python backend modules
+├── src/python/             # Python backend modules
 │   ├── connection.py       # OPC UA connection with asyncio.wait_for timeouts
 │   ├── event_handler.py    # Event subscription (subscribes on Server node, no custom filters)
 │   ├── result_event_handler.py  # Tightening result WebSocket relay
@@ -67,25 +66,25 @@ IJT_Web_Client/
 │   ├── network_utils.py    # endpoint_reachable(), parse_endpoint_host_port()
 │   └── utils.py            # Shared helpers
 │
-├── Javascripts/
-│   ├── ijt-support/        # Core client library (see IJT_SUPPORT_AGENT_GUIDE.md)
+├── src/javascripts/
+│   ├── ijt-support/        # Core client library (see docs/guides/ijt-support-guide.md)
 │   │   ├── ijt-support.mjs         # Barrel export
-│   │   ├── Connection/             # WebSocketManager, ConnectionManager, SocketHandler
-│   │   ├── Models/                 # ModelManager, IJTBaseModel, domain models
-│   │   ├── Results/                # ResultManager
-│   │   ├── Events/                 # EventManager (Queue maxSize=500)
-│   │   ├── Methods/                # MethodManager
-│   │   ├── Assets/                 # AssetManager
-│   │   ├── EntityCache/            # EntityManager
-│   │   ├── Joints/                 # JointManager
-│   │   └── Settings/               # App config helpers
-│   └── Views/              # UI screens (see VIEWS_AGENT_GUIDE.md)
-│       ├── Servers/
-│       ├── EndpointTab/
-│       ├── Methods/
-│       ├── Trace/ Envelope/ Demo/ ComplexResult/
-│       ├── Assets/ Entities/ Joints/
-│       └── GraphicSupport/  # TabGenerator, BasicScreen base
+│   │   ├── connection/             # WebSocketManager, ConnectionManager, SocketHandler
+│   │   ├── models/                 # ModelManager, IJTBaseModel, domain models
+│   │   ├── results/                # ResultManager
+│   │   ├── events/                 # EventManager (Queue maxSize=500)
+│   │   ├── methods/                # MethodManager
+│   │   ├── assets/                 # AssetManager
+│   │   ├── entity-cache/           # EntityManager
+│   │   ├── joints/                 # JointManager
+│   │   └── settings/               # App config helpers
+│   └── views/              # UI screens (see docs/guides/views-guide.md)
+│       ├── servers/
+│       ├── endpoint-tab/
+│       ├── methods/
+│       ├── trace/ events/ demo/ complex-result/
+│       ├── assets/ entities/ joints/
+│       └── graphic-support/  # TabGenerator, BasicScreen base
 │
 ├── tests/
 │   ├── conftest.py                 # Shared fixtures (OPC UA client, event loop, sys.path)
@@ -110,7 +109,7 @@ IJT_Web_Client/
 │   ├── shared_opcua/               # Shared OPC UA adapters (cross-client contracts)
 │   └── legacy/                     # Old Pytest stubs (historical only)
 │
-├── Resources/
+├── src/resources/
 │   └── css/nodeStyle.css   # Main stylesheet (referenced by index.html directly)
 │
 ├── docs/
@@ -139,7 +138,7 @@ python -m pytest tests/ --timeout=120 -q --ignore=tests/python/live
 npx vitest run
 
 # ESLint
-npx eslint Javascripts config.js --config eslint.config.mjs --max-warnings 0
+npx eslint src/javascripts config.js --config eslint.config.mjs --max-warnings 0
 
 # Live OPC UA tests (server must be running at endpoint)
 set OPCUA_TEST_ENDPOINT=opc.tcp://localhost:40451
@@ -250,7 +249,7 @@ if not IS_DOCKER:
 
 ## Python Import Pattern (after scripts/ move)
 
-Any file in `scripts/` that imports from `Python/` must add project root to `sys.path`:
+Any file in `scripts/` that imports from `src/python/` must add project root to `sys.path`:
 ```python
 from pathlib import Path
 import sys
@@ -258,7 +257,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from Python.network_utils import endpoint_reachable, parse_endpoint_host_port
+from python.network_utils import endpoint_reachable, parse_endpoint_host_port
 ```
 Same pattern applies to test files outside the package root.
 
@@ -290,19 +289,19 @@ Commands sent as JSON over WS. Key message shapes:
 - `{ action: "methodcall", methodId: "...", args: [...] }`
 - `{ action: "subscribe_events" }`
 
-### Model Layer (`Javascripts/ijt-support/Models/`)
-- `ModelManager.mjs` — factory routing by `ResultMetaData.Classification`:
+### Model Layer (`src/javascripts/ijt-support/models/`)
+- `model-manager.mjs` — factory routing by `ResultMetaData.Classification`:
   - `1` → `TighteningDataType`, `3` → `BatchDataModel`, `4` → `JobDataModel`
-- `IJTBaseModel.mjs` — recursive property casting engine
+- `ijt-base-model.mjs` — recursive property casting engine
 - Linked-value contract: `{ type: 'linkedValue', value, link }` — **never change shape**
 
-### Connection States (`ConnectionManager.mjs`)
+### Connection States (`connection-manager.mjs`)
 Uses `CONNECTION_STATES` enum — not raw strings. Always import the enum when checking state.
 
-### Event Queue (`EventManager.mjs`)
+### Event Queue (`event-manager.mjs`)
 `maxSize=500` — oldest events dropped when full.
 
-### View Level Constants (`EndpointGraphics.mjs`)
+### View Level Constants (`endpoint-graphics.mjs`)
 ```js
 const DEFAULT_VIEW_LEVEL = 3;  // Detailed (Basic=1, Simple=2, Detailed=3, Specialized=4, Settings=5)
 ```
@@ -313,21 +312,20 @@ const DEFAULT_VIEW_LEVEL = 3;  // Detailed (Basic=1, Simple=2, Detailed=3, Speci
 
 ### Root Level (keep clean — 20 files max)
 Only standard files at root: `index.html`, `index.py`, `config.js`, `run_all_tests.py`,
+`setup_project.py`, `run_docker_setup.py`,
 `pytest.ini`, `vitest.config.mjs`, `eslint.config.mjs`, `Dockerfile`, `docker-compose.yaml`,
 `Makefile`, `package.json`, `package-lock.json`, `playwright.config.mjs`,
-`requirements.txt`, `requirements-dev.txt`, `README.md`, `SKILLS.md`, `.env`, `.env.example`, `.gitignore`
+`requirements.txt`, `requirements-dev.txt`, `README.md`, `.env`, `.env.example`, `.gitignore`
 
 ### Root Directories
-`.state/`, `docs/`, `logs/` (includes `logs/results/`), `src/`, `tests/`
+`.state/`, `docs/`, `logs/` (includes `logs/results/`), `scripts/`, `src/`, `tests/`
 
 > **`.state/`** — pure runtime state (gitignored). Contains process JSON, locks, temp venvs. No code changes ever needed here.
 
 ### Deleted/Moved (do not re-create at root)
-- `setup_project.py` — at **project root** (canonical, backward-compatible)
-- `run_docker_setup.py` — at **project root** (canonical, backward-compatible)
 - `create_structure.py` → `scripts/create_structure.py`
-- `network_utils.py` → `Python/network_utils.py`
-- `nodeStyle.css` → `Resources/css/nodeStyle.css`
+- `network_utils.py` → `src/python/network_utils.py`
+- `nodeStyle.css` → `src/resources/css/nodeStyle.css`
 - `conftest.py` (root no-op stub) — deleted
 - `run_tests.sh`, `RUN_ALL_TESTS.bat`, `run_all_tests_bootstrap.ps1` (root) — deleted
 - `scripts/run_tests.py` — deleted (orphaned)
@@ -358,17 +356,17 @@ These files work with **any AI tool** (GitHub Copilot, Cursor, Claude, ChatGPT, 
 | `docs/skills/associated-entities-interpreter.md` | Interpreting `ResultMetaData.AssociatedEntities` |
 | `docs/skills/endpointgraphics-tab-adder.md` | Adding new UI tabs (manager + view pattern) |
 | `docs/skills/simulate-single-result-caller.md` | Wiring `SimulateSingleResult` method invocation |
-| `src/Javascripts/ijt-support/IJT_SUPPORT_AGENT_GUIDE.md` | JS core library map and contracts |
-| `src/Javascripts/ijt-support/Models/MODELS_AGENT_GUIDE.md` | Model layer: parsing, casting, side effects |
-| `src/Javascripts/ijt-support/Models/Results/RESULT_MODEL_GUIDE.md` | Result model hierarchy and helpers |
-| `src/Javascripts/Views/VIEWS_AGENT_GUIDE.md` | UI layer: screens, tabs, styling |
+| `docs/guides/ijt-support-guide.md` | JS core library map and contracts |
+| `docs/guides/models-guide.md` | Model layer: parsing, casting, side effects |
+| `docs/guides/result-model-guide.md` | Result model hierarchy and helpers |
+| `docs/guides/views-guide.md` | UI layer: screens, tabs, styling |
 
 ---
 
 ## Common Mistakes to Avoid
 
-1. **Never** create `setup_project.py`, `run_docker_setup.py`, `network_utils.py` at project root — they live in `scripts/` and `Python/` respectively.
-2. **Never** use `from network_utils import ...` in test files — use `from Python.network_utils import ...`.
+1. **Never** create `network_utils.py` at project root — it lives in `src/python/`. `setup_project.py` and `run_docker_setup.py` are **canonical at project root** (the Makefile invokes them there; never add duplicates to `scripts/`).
+2. **Never** use `from network_utils import ...` in test files — use `from python.network_utils import ...`.
 3. **Never** use `venv\Scripts\python.exe` in docs/scripts — use `python` (venv activated by `run_all_tests.py`).
 4. **Never** subscribe events on individual method nodes — always use the Server node.
 5. **Never** use raw string connection states in JS — use `CONNECTION_STATES` enum.

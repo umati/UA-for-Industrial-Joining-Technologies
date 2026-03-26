@@ -2,7 +2,7 @@ import asyncio
 import json
 import traceback
 from dataclasses import dataclass
-from typing import List, Any
+from typing import Any
 
 from asyncua import ua
 from ijt_logger import ijt_log
@@ -23,13 +23,13 @@ class ShortJoiningEvent:
     LocalTime: ua.TimeZoneDataType
     ConditionClassId: ua.NodeId
     ConditionClassName: ua.LocalizedText
-    ConditionSubClassId: List[ua.NodeId]
-    ConditionSubClassName: List[ua.LocalizedText]
+    ConditionSubClassId: list[ua.NodeId]
+    ConditionSubClassName: list[ua.LocalizedText]
     EventCode: Any
     EventText: str
     JoiningTechnology: str
-    AssociatedEntities: List[Any]
-    ReportedValues: List[Any]
+    AssociatedEntities: list[Any]
+    ReportedValues: list[Any]
 
 
 class EventHandler:
@@ -42,7 +42,7 @@ class EventHandler:
     so that asyncio.create_task() is available.
     """
 
-    def __init__(self, websocket, server_url, client):
+    def __init__(self, websocket: Any, server_url: str, client: Any) -> None:
         self.websocket = websocket
         self.server_url = server_url
         self.client = client
@@ -50,7 +50,7 @@ class EventHandler:
         self.closed = False
         self._queue_task = asyncio.create_task(self.handle_queue())
 
-    async def event_notification(self, event):
+    async def event_notification(self, event: Any) -> None:
         if self.closed:
             return
         try:
