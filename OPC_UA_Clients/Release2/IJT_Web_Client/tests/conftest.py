@@ -1,15 +1,8 @@
 import json
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-
-# Ensure src/ is on sys.path so Python/ modules are importable
-# from any test file regardless of which directory pytest is invoked from.
-_WEB_CLIENT_ROOT = Path(__file__).resolve().parent.parent
-if str(_WEB_CLIENT_ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(_WEB_CLIENT_ROOT / "src"))
 
 
 @dataclass
