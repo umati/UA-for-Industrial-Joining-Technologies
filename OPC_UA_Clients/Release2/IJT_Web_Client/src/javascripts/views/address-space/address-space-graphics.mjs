@@ -15,7 +15,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     super('Address Space', 'Address Space', 'Messages')
     this.addressSpace = addressSpace
 
-    addressSpace.connectionManager.subscribe('connection', (setToTrue) => {
+    addressSpace.connectionManager.subscribe(addressSpace.connectionManager.CONNECTION_STATES.CONNECTION, (setToTrue) => {
       if (setToTrue) {
         this.initiateNodeTree()
       }

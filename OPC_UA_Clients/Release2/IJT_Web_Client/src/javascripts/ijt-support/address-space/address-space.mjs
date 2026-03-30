@@ -48,7 +48,7 @@ export class AddressSpace {
       const tgtSystem = await this.findOrLoadNode(typerelations[0].NodeId)
       this.tighteningSystem = tgtSystem
       this.addressSpaceSetup('tighteningsystem')
-      this.connectionManager.trigger('tighteningsystem', true)
+      this.connectionManager.trigger(this.connectionManager.CONNECTION_STATES.TIGHTENING_SYSTEM, true)
     } catch (err) {
       ijtLog.error('initiate failed:', err)
     }

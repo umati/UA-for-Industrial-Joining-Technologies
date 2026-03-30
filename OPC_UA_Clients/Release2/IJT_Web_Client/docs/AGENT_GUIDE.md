@@ -16,7 +16,9 @@ How to write effective requests for coding agents (Copilot, OpenAI, etc.) workin
 
 - Do **not** edit `venv/`, `venv_test/`, or `node_modules/`.
 - Do **not** change Docker setup unless explicitly requested.
+- Prefer code that is easy to read and understand. This code is used for educational purpose.
 - Prefer minimal, targeted edits over broad rewrites.
+- Comment the code where it makes reading and understanding easier.
 - If runtime behaviour might change, explain assumptions and impact first.
 - Never guess — ask if uncertain.
 - Preserve existing public APIs unless the request explicitly changes them.

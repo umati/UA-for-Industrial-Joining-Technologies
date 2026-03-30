@@ -22,7 +22,7 @@ export class MethodManager {
       }
     })
     await Promise.all(methodPromises)
-    this.addressSpace.connectionManager.trigger('methods', true)
+    this.addressSpace.connectionManager.trigger(this.addressSpace.connectionManager.CONNECTION_STATES.METHODS, true)
   }
 
   /**

@@ -16,7 +16,7 @@ import {
 
 import TraceGraphics from 'views/trace/trace-graphics.mjs'
 import AddressSpaceGraphics from 'views/address-space/address-space-graphics.mjs'
-import EventGraphics from 'views/events/event-graphics.mjs'
+// import EventGraphics from 'views/events/event-graphics.mjs'
 import MethodGraphics from 'views/methods/method-graphics.mjs'
 import USDemo from 'views/demo/us-demo.mjs'
 import JointDemo from 'views/demo/joint-demo.mjs'
@@ -53,15 +53,15 @@ export default class EndpointGraphics extends BasicScreen {
   }
 
   async loadOptionalEnvelopeTab (tabGenerator, resultManager) {
-    const modulePath = '/Javascripts/views/Envelope/EnvelopeGraphics.mjs'
+    const modulePath = '/src/javascripts/views/envelope/envelope-graphics.mjs'
     try {
       const probe = await fetch(modulePath, { method: 'GET', cache: 'no-store' })
       if (!probe.ok) {
         return
       }
-      const EnvelopeScreen = await import('../Envelope/EnvelopeGraphics.mjs')
-      if (EnvelopeScreen?.Envelope) {
-        const envelopeScreen = new EnvelopeScreen.Envelope(
+      const { default: EnvelopeScreen } = await import(modulePath)
+      if (EnvelopeScreen) {
+        const envelopeScreen = new EnvelopeScreen(
           this.connectionManager,
           resultManager,
           this.settings
@@ -97,7 +97,7 @@ export default class EndpointGraphics extends BasicScreen {
     const addressSpaceGraphics = new AddressSpaceGraphics(addressSpace)
 
     const eventManager = new EventManager(this.connectionManager, modelManager)
-    const eventGraphics = new EventGraphics(eventManager)
+    // const eventGraphics = new EventGraphics(eventManager)
 
     const resultManager = new ResultManager(eventManager)
 
@@ -186,7 +186,7 @@ export default class EndpointGraphics extends BasicScreen {
       tabGenerator.generateTab(traceGraphics, 2)
     }
     tabGenerator.generateTab(methodGraphics, 2)
-    tabGenerator.generateTab(eventGraphics, 2, false)
+    // tabGenerator.generateTab(eventGraphics, 2, false)
 
     tabGenerator.generateTab(addressSpaceGraphics, 3, false)
     if (resultGraphics) {

@@ -15,6 +15,8 @@ export const CONNECTION_STATES = Object.freeze({
   ATTEMPT_CONNECTION: 'attemptconnection',
   CONNECTION: 'connection',
   SUBSCRIPTION: 'subscription',
+  METHODS: 'methods',
+  TIGHTENING_SYSTEM: 'tighteningsystem',
   ATTEMPT_CLOSE: 'attemptclose'
 })
 
@@ -39,6 +41,8 @@ export class ConnectionManager {
 
     this.trigger(CONNECTION_STATES.ATTEMPT_CONNECTION, true)
     this.socketHandler.connect()
+
+    this.CONNECTION_STATES = CONNECTION_STATES
   }
 
   /**
@@ -48,6 +52,9 @@ export class ConnectionManager {
    */
   subscribe (state, callback) {
     this.callbacks.push({ state, callback })
+    if (this[state]) { // If this state is already reached, immediately call back
+      callback(this[state])
+    }
   }
 
   /**
@@ -55,7 +62,7 @@ export class ConnectionManager {
    * @param {string} state
    * @param {boolean} changeTo
    */
-  trigger (state, changeTo) {
+  trigger (state, changeTo = true) {
     if (this[state] !== changeTo) {
       for (const row of this.callbacks) {
         if (row.state === state) {

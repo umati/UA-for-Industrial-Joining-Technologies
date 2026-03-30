@@ -182,8 +182,8 @@ export default class BasicScreen {
     return container
   }
 
-  createDropdownFromImport (name, importList, onchange) {
-    const area = document.createElement('div')
+  createDropdownFromImport (importList, onchange) {
+    // const area = document.createElement('div')
     // const parameterArea = document.createElement('div')
     // area.appendChild(parameterArea)
 
@@ -197,16 +197,16 @@ export default class BasicScreen {
       }
     })
 
-    area.selectFromDropDown = (selected) => { // Use this to preselect
-      dropDown.select.value = selected
-    }
+    // area.selectFromDropDown = (selected) => { // Use this to preselect
+    //  dropDown.select.value = selected
+    // }
 
-    this.createTitledInput(name, dropDown, area)
+    // this.createTitledInput(name, dropDown)
 
     for (const subclass of Object.values(importList)) {
       dropDown.addOption(subclass.displayText, subclass.name)
     }
-    return area
+    return dropDown
   }
 
   /**
