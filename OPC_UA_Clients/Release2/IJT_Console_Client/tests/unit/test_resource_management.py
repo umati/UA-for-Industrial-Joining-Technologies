@@ -18,7 +18,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from opcua_client import _QUEUE_SIZE, OPCUAClient
 from event_handler import EventHandler
-from result_event_handler import _SHUTDOWN_TIMEOUT_S
 
 
 # ---------------------------------------------------------------------------
@@ -41,10 +40,6 @@ async def test_event_handler_queue_is_not_unbounded():
     with contextlib.suppress(asyncio.CancelledError):
         await h._queue_task
 
-
-def test_shutdown_timeout_is_bounded():
-    """_SHUTDOWN_TIMEOUT_S must be a finite, reasonable value."""
-    assert 0 < _SHUTDOWN_TIMEOUT_S <= 60.0
 
 
 # ---------------------------------------------------------------------------

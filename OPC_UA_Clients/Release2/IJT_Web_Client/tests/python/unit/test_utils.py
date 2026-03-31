@@ -13,7 +13,8 @@ import uuid
 from datetime import datetime
 
 _ = pytest.importorskip("asyncua", reason="asyncua not installed")
-import pytz  # noqa: E402  (asyncua depends on pytz, so it will be available)
+_ = pytest.importorskip("pytz", reason="pytz not installed")
+import pytz  # noqa: E402
 from asyncua import ua  # noqa: E402
 
 from python.utils import (  # noqa: E402
