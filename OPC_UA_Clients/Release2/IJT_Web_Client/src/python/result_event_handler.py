@@ -61,7 +61,7 @@ class ResultEventHandler:
         """
         self.websocket = websocket
         self.server_url = server_url
-        self.queue: asyncio.Queue = asyncio.Queue()
+        self.queue: asyncio.Queue = asyncio.Queue(_QUEUE_SIZE)
         self.closed = False
         self._queue_task = asyncio.create_task(self.handle_queue())
         ijt_log.info("ResultEventHandler initialized.")

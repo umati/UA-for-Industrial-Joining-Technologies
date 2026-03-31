@@ -9,6 +9,7 @@ Covers:
 """
 
 import pytest
+import uuid
 from datetime import datetime
 
 _ = pytest.importorskip("asyncua", reason="asyncua not installed")
@@ -41,7 +42,6 @@ def test_nodeid_to_str_string():
 
 
 def test_nodeid_to_str_guid():
-    import uuid
     guid = uuid.UUID("12345678-1234-5678-1234-567812345678")
     node = ua.NodeId(guid, 1, ua.NodeIdType.Guid)
     result = nodeid_to_str(node)

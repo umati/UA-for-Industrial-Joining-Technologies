@@ -361,12 +361,32 @@ def test_no_duplicate_imports():
 
 
 # ===========================================================================
-# 8. Unused global declarations  (CodeQL-style)
+# 8. Unused global declarations  (CodeQL py/unused-global-variable)
 # ===========================================================================
+
+_KNOWN_UNUSED_GLOBAL_EXCEPTIONS = {
+    "pytestmark",
+}
+
+
+def _collect_all_imported_names(root: Path) -> set[str]:
+    """Return every name imported via 'from X import Y' in any .py file under root."""
+    imported: set[str] = set()
+    for py_file in _all_py_files(root):
+        try:
+            src = py_file.read_text(encoding="utf-8")
+            tree = ast.parse(src)
+        except (SyntaxError, OSError):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    imported.add(alias.asname or alias.name)
+    return imported
 
 
 def _find_unused_global_decls(func_node: ast.FunctionDef) -> list[str]:
-    """Return global names declared but never read or written in the function."""
+    """Return global names declared inside a function but never read or written there."""
     declared: set[str] = set()
     for node in ast.walk(func_node):
         if isinstance(node, ast.Global):
@@ -380,8 +400,40 @@ def _find_unused_global_decls(func_node: ast.FunctionDef) -> list[str]:
     return list(declared - used)
 
 
+def _find_unused_module_globals(
+    source: str,
+    tree: ast.Module,
+    cross_file_exports: set[str],
+) -> list[tuple[int, str]]:
+    """Return (lineno, name) for module-level names assigned but never read.
+
+    Excludes dunder names, framework magic (pytestmark), and cross-file exports.
+    """
+    assigned: dict[str, int] = {}
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Assign):
+            for target in stmt.targets:
+                if (
+                    isinstance(target, ast.Name)
+                    and not target.id.startswith("__")
+                    and target.id != "_"
+                    and target.id not in _KNOWN_UNUSED_GLOBAL_EXCEPTIONS
+                    and target.id not in cross_file_exports
+                ):
+                    assigned[target.id] = stmt.lineno
+
+    reads: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            reads.add(node.id)
+
+    return [(lineno, name) for name, lineno in assigned.items() if name not in reads]
+
+
 def test_no_unused_global_declarations():
-    """No 'global x' inside a function where x is never referenced."""
+    """No 'global x' inside a function where x is never referenced,
+    AND no module-level assignment where the name is never read (anywhere in project)."""
+    cross_file_exports = _collect_all_imported_names(_CONSOLE_ROOT)
     issues = []
     for py_file in _all_py_files(_CONSOLE_ROOT):
         source = py_file.read_text(encoding="utf-8")
@@ -396,7 +448,12 @@ def test_no_unused_global_declarations():
                         f"{py_file}:{node.lineno}: "
                         f"'{name}' declared global but never used in {node.name}()"
                     )
+        for lineno, name in _find_unused_module_globals(source, tree, cross_file_exports):
+            issues.append(
+                f"{py_file}:{lineno}: module-level '{name}' assigned but never read"
+            )
     assert not issues, "Unused global declarations:\n" + "\n".join(issues)
+
 
 
 # ===========================================================================

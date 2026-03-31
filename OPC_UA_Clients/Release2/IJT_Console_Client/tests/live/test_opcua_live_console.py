@@ -8,7 +8,6 @@ Run with:
     pytest tests/live/ -v -m live
 """
 import asyncio
-import socket
 import sys
 from pathlib import Path
 
@@ -16,28 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-
-def _is_server_available(host: str = "localhost", port: int = 40451, timeout: float = 1.0) -> bool:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(timeout)
-    try:
-        return sock.connect_ex((host, port)) == 0
-    except OSError:
-        return False
-    finally:
-        sock.close()
-
-
 _SERVER_URL = "opc.tcp://localhost:40451"
-_SERVER_AVAILABLE = _is_server_available()
-
-pytestmark = [
-    pytest.mark.live,
-    pytest.mark.skipif(
-        not _SERVER_AVAILABLE,
-        reason="OPC UA server not available at localhost:40451",
-    ),
-]
 
 
 # ---------------------------------------------------------------------------
@@ -45,7 +23,6 @@ pytestmark = [
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _SERVER_AVAILABLE, reason="OPC UA server not available at localhost:40451")
 async def test_connect_to_server():
     """Verify that a real connection to the OPC UA server can be established."""
     from opcua_client import OPCUAClient
@@ -59,7 +36,6 @@ async def test_connect_to_server():
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _SERVER_AVAILABLE, reason="OPC UA server not available at localhost:40451")
 async def test_browse_root_node_returns_results():
     """Browsing the root node must return child nodes."""
     from opcua_client import OPCUAClient
@@ -75,7 +51,6 @@ async def test_browse_root_node_returns_results():
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _SERVER_AVAILABLE, reason="OPC UA server not available at localhost:40451")
 async def test_subscribe_to_events_and_receive_within_30s():
     """Subscribe to events and wait up to 30s for at least one event."""
     from opcua_client import OPCUAClient
