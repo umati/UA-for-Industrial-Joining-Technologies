@@ -169,5 +169,6 @@ def test_format_list_for_logging_multiple_items():
 
 def test_format_list_for_logging_default_width():
     lines = format_list_for_logging("X", ["y"])
-    # Default label_width=35; header line should be at least 35+2 chars wide
-    assert len(lines[0]) >= 37
+    # Default label_width=35; label padded to 35 chars, then space and colon.
+    expected_header = "X" + (" " * 34) + " :"
+    assert lines[0] == expected_header
