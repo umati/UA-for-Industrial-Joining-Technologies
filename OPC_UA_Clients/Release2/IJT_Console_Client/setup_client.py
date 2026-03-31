@@ -483,18 +483,15 @@ def _is_runtime_ready() -> bool:
     if not (VENV_DIR.exists() and python.exists()):
         return False
 
+    _dep_check_cmd = (
+        "import asyncua, sys; "
+        "from packaging.version import Version; "
+        "v = asyncua.__version__; "
+        "sys.exit(0) if Version(v) >= Version('1.2b2') "
+        "else sys.exit('asyncua ' + v + ' is too old; need >= 1.2b2')"
+    )
     try:
-        _run_command(
-            [
-                str(python),
-                "-c",
-                "import asyncua, sys; "
-                "from packaging.version import Version; "
-                "v = asyncua.__version__; "
-                "sys.exit(0) if Version(v) >= Version('1.2b2') "
-                "else sys.exit('asyncua ' + v + ' is too old; need >= 1.2b2')",
-            ]
-        )
+        _run_command([str(python), "-c", _dep_check_cmd])
     except Exception:
         log.info("Runtime dependency check failed in %s. Triggering full setup.", python)
         return False

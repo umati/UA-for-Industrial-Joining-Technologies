@@ -1174,20 +1174,15 @@ def _is_runtime_ready():
         return False
 
     # Ensure runtime dependencies are present in the selected Python interpreter.
+    _dep_check_cmd = (
+        "import asyncua, websockets, dotenv, packaging, "
+        "pytz, aiofiles; "
+        "from packaging.version import Version; "
+        "assert Version(asyncua.__version__) >= Version('1.2b2'), "
+        f"'asyncua ' + asyncua.__version__ + ' is too old; need >= 1.2b2'"
+    )
     try:
-        _run_command(
-            [
-                str(python),
-                "-c",
-                (
-                    "import asyncua, websockets, dotenv, packaging, "
-                    "pytz, aiofiles; "
-                    "from packaging.version import Version; "
-                    "assert Version(asyncua.__version__) >= Version('1.2b2'), "
-                    f"'asyncua ' + asyncua.__version__ + ' is too old; need >= 1.2b2'"
-                ),
-            ]
-        )
+        _run_command([str(python), "-c", _dep_check_cmd])
     except Exception:
         log.info(
             "Runtime dependency check failed in %s. Triggering full setup.",

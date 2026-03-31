@@ -298,16 +298,14 @@ class TestOpcuaSubscription:
             # Give asyncua's publish loop a moment to register the subscription
             await asyncio.sleep(1)
 
-            try:
-                parent = client.get_node(ua.NodeId(_SIM_R_ID, _NS, ua.NodeIdType.String))
-                method = client.get_node(ua.NodeId(_SIM_SINGLE_ID, _NS, ua.NodeIdType.String))
+            parent = client.get_node(ua.NodeId(_SIM_R_ID, _NS, ua.NodeIdType.String))
+            method = client.get_node(ua.NodeId(_SIM_SINGLE_ID, _NS, ua.NodeIdType.String))
+            with contextlib.suppress(Exception):  # Event subscription is what we validate
                 await parent.call_method(
                     method.nodeid,
                     ua.Variant(0, ua.VariantType.UInt32),     # ResultType (SIMPLE_OK)
                     ua.Variant(True, ua.VariantType.Boolean),  # IncludeTraces
                 )
-            except Exception:
-                pass  # Event subscription is what we validate
 
             # Wait for event propagation
             await asyncio.sleep(8)
