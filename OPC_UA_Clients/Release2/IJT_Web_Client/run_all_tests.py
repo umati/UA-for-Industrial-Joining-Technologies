@@ -126,12 +126,25 @@ def _port_open(host: str, port: int, timeout: float = 2.0) -> bool:
 
 
 def _parse_opcua_host_port(endpoint: str) -> tuple[str, int]:
-    """Parse 'opc.tcp://host:port' → (host, port)."""
+    """Parse 'opc.tcp://host:port' → (host, port).
+
+    The 'opc.tcp//' variant (missing colon) is a common copy-paste typo seen
+    in config files and environment variables, so both forms are stripped.
+    """
     clean = endpoint.replace("opc.tcp://", "").replace("opc.tcp//", "")
     if ":" in clean:
         host, port_str = clean.rsplit(":", 1)
         return host, int(port_str)
     return clean, 4840
+
+
+def _parse_ws_host_port(url: str) -> tuple[str, int]:
+    """Parse 'ws://host:port[/path]' or 'wss://host:port[/path]' → (host, port)."""
+    clean = url.replace("wss://", "").replace("ws://", "").split("/")[0]
+    if ":" in clean:
+        host, port_str = clean.rsplit(":", 1)
+        return host, int(port_str)
+    return clean, 80  # ws default port when none specified
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +363,7 @@ def _stage_docker_smoke() -> StageResult:
         return StageResult("docker-smoke", rc, duration=time.monotonic() - t0,
                            notes=["docker compose up failed"])
 
-    # Wait up to 120 s for HTTP readiness
+    # Wait up to 180 s for HTTP readiness (60 polls × up to 3 s each: 1 s connect timeout + 2 s sleep)
     _info("Waiting for http://127.0.0.1:3000 ...")
     ready = False
     for _ in range(60):
@@ -366,7 +379,7 @@ def _stage_docker_smoke() -> StageResult:
 
     if not ready:
         return StageResult("docker-smoke", 1, duration=time.monotonic() - t0,
-                           notes=["HTTP :3000 not ready within 120 s"])
+                           notes=["HTTP :3000 not ready within 180 s"])
 
     notes = [] if ws_ready else ["WS :8001 not ready — backend may need OPC UA server"]
     return StageResult("docker-smoke", 0, duration=time.monotonic() - t0, notes=notes)
@@ -448,8 +461,9 @@ def main() -> int:
 
     # Check availability upfront — drives auto-detection of optional stages
     opcua_host, opcua_port = _parse_opcua_host_port(args.opcua_endpoint)
+    ws_host,    ws_port    = _parse_ws_host_port(args.ws_url)
     opcua_up   = _port_open(opcua_host, opcua_port)
-    ws_up      = _port_open("localhost", 8001)
+    ws_up      = _port_open(ws_host, ws_port)
     docker_up  = _docker_available()
 
     # Auto-detect optional stages when not explicitly requested

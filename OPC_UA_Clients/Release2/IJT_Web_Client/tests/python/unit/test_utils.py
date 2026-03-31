@@ -91,11 +91,13 @@ def test_localizedtext_to_str_returns_text():
     assert localizedtext_to_str(lt) == "Hello World"
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_localizedtext_to_str_empty_text():
     lt = ua.LocalizedText("", "en")
     assert localizedtext_to_str(lt) == ""
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_localizedtext_to_str_none_locale():
     # Text present, no locale
     lt = ua.LocalizedText("No locale", None)
@@ -118,6 +120,7 @@ def test_localizedtext_to_str_fallback_on_string():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_format_local_time_utc_aware():
     """A UTC-aware datetime converts correctly to Stockholm local time."""
     utc_dt = datetime(2025, 6, 15, 10, 0, 0, tzinfo=pytz.utc)
@@ -128,6 +131,7 @@ def test_format_local_time_utc_aware():
     assert len(result) == len("2025-06-15 12:00:00.000")
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_format_local_time_winter_utc_plus_one():
     """Stockholm is UTC+1 in winter (CET)."""
     utc_dt = datetime(2025, 1, 15, 10, 0, 0, tzinfo=pytz.utc)
@@ -135,6 +139,7 @@ def test_format_local_time_winter_utc_plus_one():
     assert result.startswith("2025-01-15 11:00:00")
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_format_local_time_different_timezone():
     utc_dt = datetime(2025, 6, 15, 12, 0, 0, tzinfo=pytz.utc)
     result = format_local_time(utc_dt, timezone="America/New_York")
@@ -142,6 +147,7 @@ def test_format_local_time_different_timezone():
     assert result.startswith("2025-06-15 08:00:00")
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_format_local_time_output_length():
     """Output must be exactly 23 chars: YYYY-MM-DD HH:MM:SS.mmm"""
     utc_dt = datetime(2025, 3, 27, 8, 30, 45, 123456, tzinfo=pytz.utc)
