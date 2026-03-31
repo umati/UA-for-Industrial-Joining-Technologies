@@ -98,3 +98,48 @@ def test_bandit_no_high_severity():
     assert result.returncode == 0, (
         f"bandit found security issues:\n{result.stdout}\n{result.stderr}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Code quality regression tests
+# ---------------------------------------------------------------------------
+
+
+_BROAD_EXCEPTION_FILES = [
+    ("serialize_data.py", "except ImportError"),
+    ("utils.py", "except ImportError"),
+    ("method_caller.py", "except (ValueError, TypeError)"),
+]
+
+
+@pytest.mark.parametrize("filename,expected_except", _BROAD_EXCEPTION_FILES)
+def test_import_exception_specificity(filename, expected_except):
+    """Source files must use specific exception types, not bare 'except Exception'.
+
+    Regression tests for M-4 and M-5: broad except Exception was masking real
+    errors during orjson import and method return status parsing.
+    """
+    path = _CONSOLE_ROOT / filename
+    if not path.exists():
+        pytest.skip(f"{filename} does not exist")
+    content = path.read_text(encoding="utf-8")
+    assert expected_except in content, (
+        f"{filename}: expected '{expected_except}' but not found. "
+        f"Using 'except Exception' is too broad — use a specific exception type."
+    )
+
+
+def test_setup_client_version_check_uses_sys_exit_not_assert():
+    """setup_client.py must use sys.exit() for the asyncua version check, not assert.
+
+    Regression test for M-3: assert is stripped by Python -O optimized mode.
+    """
+    path = _CONSOLE_ROOT / "setup_client.py"
+    if not path.exists():
+        pytest.skip("setup_client.py does not exist")
+    content = path.read_text(encoding="utf-8")
+    # The version check must use sys.exit, not assert
+    assert "assert Version(asyncua.__version__)" not in content, (
+        "setup_client.py uses 'assert' for asyncua version check — "
+        "assert is stripped by 'python -O'. Use sys.exit() instead."
+    )

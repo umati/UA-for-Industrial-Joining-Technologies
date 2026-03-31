@@ -5,7 +5,7 @@ from ijt_logger import ijt_log
 
 try:
     import orjson
-except Exception:
+except ImportError:
     orjson = None
 
 

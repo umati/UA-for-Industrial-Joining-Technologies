@@ -11,7 +11,7 @@ from pathlib import Path
 # ---- START: robust JSON import (fallback if orjson is missing) ----
 try:
     import orjson  # fast path
-except Exception:
+except ImportError:
     orjson = None
 
 

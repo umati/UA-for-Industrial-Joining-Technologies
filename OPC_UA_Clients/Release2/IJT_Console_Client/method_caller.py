@@ -17,7 +17,8 @@ class OPCUAMethodCaller:
             if len(ret) >= 1:
                 try:
                     status = int(ret[0])
-                except Exception:
+                except (ValueError, TypeError) as e:
+                    ijt_log.warning(f"Could not parse method return status from {ret[0]!r}: {e}")
                     status = None
             if len(ret) >= 2:
                 msg = ret[1]

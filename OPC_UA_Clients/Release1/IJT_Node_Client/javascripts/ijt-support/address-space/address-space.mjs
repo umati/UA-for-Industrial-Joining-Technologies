@@ -88,11 +88,7 @@ export class AddressSpace {
   }
 
   methodCall (locationId, methodNode, args) {
-    return new Promise((resolve, reject) => {
-      this.socketHandler.methodCall(locationId, methodNode, args).then((result, err) => {
-        resolve(result, err)
-      })
-    })
+    return this.socketHandler.methodCall(locationId, methodNode, args)
   }
 
   /**
@@ -127,50 +123,28 @@ export class AddressSpace {
      * @param {*} details do we want the extra data from the browse?
      * @returns a promise of a datastructure that can be used to create a node
      */
-    const browseAndRead = (nodeId, details = false) => {
-      return this.socketHandler.browsePromise(nodeId, details).then(
-        (browseMsg) => {
-          return new Promise((resolve) => {
-            this.socketHandler.readPromise(nodeId, 'DisplayName').then(
-              (readname) => {
-                return new Promise(() => {
-                  this.socketHandler.readPromise(nodeId, 'NodeClass').then(
-                    (readclass) => {
-                      const returnValue = {
-                        nodeid: browseMsg.message.nodeid,
-                        nodeclass: readclass.message.dataValue.value,
-                        displayname: readname.message.dataValue.value,
-                        relations: browseMsg.message.browseresult.references
-                      }
-                      if (readclass.message.dataValue.value.value === 2) {
-                        return new Promise(() => {
-                          this.socketHandler.readPromise(nodeId, 'Value').then(
-                            (value) => {
-                              returnValue.value = value
-                              resolve(returnValue)
-                            })
-                        })
-                      } else {
-                        resolve(returnValue)
-                      }
-                    })
-                })
-              })
-          })
-        })
+    const browseAndRead = async (nodeId, details = false) => {
+      const browseMsg = await this.socketHandler.browsePromise(nodeId, details)
+      const readname = await this.socketHandler.readPromise(nodeId, 'DisplayName')
+      const readclass = await this.socketHandler.readPromise(nodeId, 'NodeClass')
+      const returnValue = {
+        nodeid: browseMsg.message.nodeid,
+        nodeclass: readclass.message.dataValue.value,
+        displayname: readname.message.dataValue.value,
+        relations: browseMsg.message.browseresult.references
+      }
+      if (readclass.message.dataValue.value.value === 2) {
+        const value = await this.socketHandler.readPromise(nodeId, 'Value')
+        returnValue.value = value
+      }
+      return returnValue
     }
 
     const returnNode = this.nodeMapping[nodeId]
     if (returnNode) {
-      return new Promise((resolve, reject) => {
-        resolve(returnNode, false)
-      })
+      return Promise.resolve(returnNode)
     } else {
-      return new Promise((resolve, reject) => {
-        browseAndRead(nodeId, true).then((m) => {
-          resolve(createNode(m), true)
-        })
-      })
+      return browseAndRead(nodeId, true).then(m => createNode(m))
     }
   }
 

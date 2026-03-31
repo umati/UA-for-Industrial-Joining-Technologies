@@ -286,3 +286,48 @@ class TestNoHardcodedSecrets:
             "Possible hardcoded secrets found in Python source:\n  "
             + "\n  ".join(all_violations)
         )
+
+
+# ===========================================================================
+# 4. JS source code quality — fix regression tests
+# ===========================================================================
+
+
+_JS_SRC_ROOT = _PROJECT_ROOT / "src" / "javascripts"
+
+
+class TestJsCodeQuality:
+    """Regression tests that catch specific known bugs so they cannot be reintroduced."""
+
+    def test_model_to_html_no_variable_shadowing(self):
+        """model-to-html.mjs must not redeclare onScreen with 'const' inside display().
+
+        Regression test for M-6: 'const onScreen = this.toHTML(...)' inside the
+        if-branch of display() shadows the outer 'let onScreen', making the outer
+        variable permanently unassigned in that branch.
+        """
+        path = _JS_SRC_ROOT / "views" / "address-space" / "model-to-html.mjs"
+        if not path.exists():
+            pytest.skip(f"model-to-html.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        # The fix removes 'const onScreen = this.toHTML(...)' and uses assignment instead
+        assert "const onScreen = this.toHTML(" not in content, (
+            "model-to-html.mjs still has 'const onScreen = this.toHTML(...)' inside display(). "
+            "This shadows the outer 'let onScreen'. Change to assignment: 'onScreen = this.toHTML(...)'"
+        )
+
+    def test_result_manager_object_assign_filters_proto_keys(self):
+        """result-manager.mjs handlePartial must not use bare Object.assign with newResult.
+
+        Regression test for L-1: bare Object.assign(stored, newResult) allows prototype
+        pollution if newResult contains __proto__, constructor, or prototype keys.
+        The fix destructures to strip those keys first.
+        """
+        path = _JS_SRC_ROOT / "ijt-support" / "results" / "result-manager.mjs"
+        if not path.exists():
+            pytest.skip(f"result-manager.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        assert "Object.assign(stored, newResult)" not in content, (
+            "result-manager.mjs uses bare Object.assign(stored, newResult) which is vulnerable "
+            "to prototype pollution. Destructure __proto__/constructor/prototype keys out first."
+        )

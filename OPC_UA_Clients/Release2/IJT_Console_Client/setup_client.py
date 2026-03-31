@@ -308,7 +308,8 @@ def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: boo
                     popen_kwargs = {"cwd": str(exe.parent)}
                     if IS_WINDOWS:
                         popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
-                    subprocess.Popen([str(exe)], **popen_kwargs)  # nosec B603 B607 — hardcoded path, not user input  # pylint: disable=consider-using-with
+                    proc = subprocess.Popen([str(exe)], **popen_kwargs)  # nosec B603 B607 — hardcoded path, not user input  # pylint: disable=consider-using-with
+                    log.info("Launched OPC UA simulator with PID: %d", proc.pid)
                     if _wait_for_endpoint_ready(
                         endpoint,
                         timeout_seconds=startup_timeout,
@@ -487,10 +488,11 @@ def _is_runtime_ready() -> bool:
             [
                 str(python),
                 "-c",
-                "import asyncua, pytz, aiofiles, orjson, cryptography, OpenSSL; "
+                "import asyncua, sys; "
                 "from packaging.version import Version; "
-                "assert Version(asyncua.__version__) >= Version('1.2b2'), "
-                "'asyncua ' + asyncua.__version__ + ' is too old; need >= 1.2b2'",
+                "v = asyncua.__version__; "
+                "sys.exit(0) if Version(v) >= Version('1.2b2') "
+                "else sys.exit('asyncua ' + v + ' is too old; need >= 1.2b2')",
             ]
         )
     except Exception:

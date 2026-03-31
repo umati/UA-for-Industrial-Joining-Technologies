@@ -68,12 +68,9 @@ export class AssetManager {
             }
           }
           if (promiseList.length > 0) {
-            return Promise.all(promiseList).then((a) => {
-              _resolve(a)
-            },
-            (b) => {
-              ijtLog.info(b)
-            }
+            return Promise.all(promiseList).then(
+              (a) => { _resolve(a) },
+              (b) => { ijtLog.error('Asset load failed:', b); _resolve([]) }
             )
           } else {
             _resolve([])

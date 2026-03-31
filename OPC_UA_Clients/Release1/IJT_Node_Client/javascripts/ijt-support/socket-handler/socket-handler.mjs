@@ -140,7 +140,8 @@ export class SocketHandler {
 
         if (msg && msg.callid) {
           const callbackFunction = this.callMapping[msg.callid]
-          this.callMapping[msg.callid] = null
+          delete this.callMapping[msg.callid]
+          delete this.failMapping[msg.callid]
           if (callbackFunction) {
             // console.log('typeList'+typeList+returnNode?.nodeId)
             callbackFunction({ message: msg, node: returnNode })

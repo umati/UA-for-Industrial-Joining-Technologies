@@ -71,4 +71,42 @@ describe('AddressSpace', () => {
     expect(AddressSpace).toBeDefined()
     expect(typeof AddressSpace).toBe('function')
   })
+
+  it('methodCall delegates directly to socketHandler.methodCall', async () => {
+    const { AddressSpace } = await import('../../../javascripts/ijt-support/address-space/address-space.mjs')
+    const mockResolve = { message: { result: 'ok' }, node: null }
+    const socketHandler = {
+      methodCall: vi.fn(() => Promise.resolve(mockResolve)),
+      registerMandatory: vi.fn(),
+      readPromise: vi.fn(),
+      browsePromise: vi.fn()
+    }
+    const cm = {
+      socketHandler,
+      subscribe: vi.fn(),
+      trigger: vi.fn()
+    }
+    const as = new AddressSpace(cm)
+    const result = await as.methodCall('ns=1;i=10', 'ns=1;i=20', [])
+    expect(socketHandler.methodCall).toHaveBeenCalledWith('ns=1;i=10', 'ns=1;i=20', [])
+    expect(result).toBe(mockResolve)
+  })
+
+  it('findOrLoadNode returns cached node synchronously without socket calls', async () => {
+    const { AddressSpace } = await import('../../../javascripts/ijt-support/address-space/address-space.mjs')
+    const socketHandler = {
+      methodCall: vi.fn(),
+      registerMandatory: vi.fn(),
+      readPromise: vi.fn(),
+      browsePromise: vi.fn()
+    }
+    const cm = { socketHandler, subscribe: vi.fn(), trigger: vi.fn() }
+    const as = new AddressSpace(cm)
+    const fakeNode = { nodeId: 'ns=1;i=100', displayName: 'cached' }
+    as.nodeMapping['ns=1;i=100'] = fakeNode
+
+    const result = await as.findOrLoadNode('ns=1;i=100')
+    expect(result).toBe(fakeNode)
+    expect(socketHandler.browsePromise).not.toHaveBeenCalled()
+  })
 })

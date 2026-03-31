@@ -142,12 +142,12 @@ export class MethodManager {
       })
     }
 
-    this.addressSpace.methodCall(methodData.parentNode.nodeId, methodData.methodNode.nodeId, inputArguments).then(
-      (results, err) => {
-        if (err) {
-          ijtLog.info(err)
-        }
-      }
-    )
+    this.addressSpace.methodCall(methodData.parentNode.nodeId, methodData.methodNode.nodeId, inputArguments)
+      .then((results) => {
+        ijtLog.info('Method call completed:', results?.message)
+      })
+      .catch((err) => {
+        ijtLog.error('Method call failed:', err)
+      })
   }
 }

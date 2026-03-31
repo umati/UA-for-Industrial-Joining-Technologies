@@ -1,28 +1,20 @@
 import asyncio
 import argparse
-import re
 import traceback
 import os
 import logging
 import contextlib
 
 from opcua_client import OPCUAClient
-from client_config import SERVER_URL as DEFAULT_SERVER_URL
+from client_config import SERVER_URL as DEFAULT_SERVER_URL, URL_PATTERN
 from ijt_logger import ijt_log
-
-# Keep asyncua shutdown noise minimal during Ctrl+C / late callback windows.
-logging.getLogger("asyncua").setLevel(logging.ERROR)
-logging.getLogger("asyncua.client.ua_client").setLevel(logging.CRITICAL)
-
-# KEEPING your original URL pattern as-is
-URL_PATTERN = re.compile(r"opc\.tcp://[a-zA-Z0-9\.\-]+:\d+")
 
 
 def validate_url(url: str) -> str:
     if url and URL_PATTERN.fullmatch(url):
         return url
     env_url = os.getenv("OPCUA_SERVER_URL")
-    if env_url and URL_PATTERN.match(env_url):
+    if env_url and URL_PATTERN.fullmatch(env_url):
         ijt_log.info(f"Using OPC UA server URL from environment: {env_url}")
         return env_url
     ijt_log.warning("Invalid or missing OPC UA URL. Falling back to default.")

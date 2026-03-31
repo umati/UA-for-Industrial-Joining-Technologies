@@ -7,6 +7,13 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const connectionPointsPath = path.resolve(__dirname, '../../../Resources/connectionpoints.json')
 
+/** Validates that endpointUrl is a well-formed OPC UA endpoint (prevents SSRF). */
+export const ENDPOINT_URL_PATTERN = /^opc\.tcp:\/\/[a-zA-Z0-9.-]+(:\d+)?(?:\/(?!.*\.\.)[^\s]*)?$/
+
+export function isValidEndpointUrl (url) {
+  return typeof url === 'string' && ENDPOINT_URL_PATTERN.test(url)
+}
+
 /**
  * Support function to read a file
  * @param {*} filePath  the name of the file including file path
@@ -68,9 +75,7 @@ export class NodeOPCUAInterface {
     this.session = null
 
     io.on('connection', (socket) => {
-      /* socket.on('subscribe item', (endpoint, callid, msg) => {
-        this.addMonitor(endpoint, callid, msg)
-      }) */
+      /* (dead code removed — subscribe item socket was never implemented) */
 
       socket.on('read', (endpoint, callid, msg, attribute) => {
         const connectionObject = this.connectionList[endpoint]
@@ -108,6 +113,10 @@ export class NodeOPCUAInterface {
       socket.on('terminate connection', (endpointUrl) => {
         ijtLog.info('**********************************************------------------------')
         ijtLog.info('Recieving terminate session request (' + endpointUrl + ')')
+        if (!isValidEndpointUrl(endpointUrl)) {
+          ijtLog.warn('Rejected invalid endpointUrl for terminate connection: ' + endpointUrl)
+          return
+        }
         const connectionObject = this.connectionList[endpointUrl]
         if (!connectionObject) {
           ijtLog.info('Nodejs OPC UA client failed to find EndpointUrl ' + endpointUrl + ' for termination')
@@ -120,6 +129,10 @@ export class NodeOPCUAInterface {
       socket.on('disconnect from', endpointUrl => {
         ijtLog.info('**********************************************------------------------')
         ijtLog.info('Nodejs OPC UA client attempting to disconnect from ' + endpointUrl)
+        if (!isValidEndpointUrl(endpointUrl)) {
+          ijtLog.warn('Rejected invalid endpointUrl for disconnect from: ' + endpointUrl)
+          return
+        }
         if (endpointUrl) {
           const connection = this.connectionList[endpointUrl]
           if (connection) {
@@ -143,6 +156,10 @@ export class NodeOPCUAInterface {
       socket.on('connect to', endpointUrl => {
         ijtLog.info('**********************************************')
         ijtLog.info('Nodejs OPC UA client attempting to connect to ' + endpointUrl)
+        if (!isValidEndpointUrl(endpointUrl)) {
+          ijtLog.warn('Rejected invalid endpointUrl for connect to: ' + endpointUrl)
+          return
+        }
         if (endpointUrl) {
           const existingConnection = this.connectionList[endpointUrl]
           if (existingConnection && typeof existingConnection.isActive === 'function' && existingConnection.isActive()) {
@@ -556,44 +573,3 @@ class Connection {
     this.eventMonitoringItems.push(eventMonitoringItem)
   }
 }
-
-/*
-  // Subscribe to some value.      Not tested    Total Rewrite???
-  addMonitor (callid, path) {
-    const itemToMonitor = {
-      nodeId: path,
-      attributeId: this.AttributeIds.Value
-    }
-
-    (async () => {
-      try {
-        const parameters = {
-          samplingInterval: 100,
-          discardOldest: true,
-          queueSize: 100
-        }
-        const monitoredItem = await this.subscription.monitor(itemToMonitor, parameters, TimestampsToReturn.Both)
-
-        monitoredItem.on('changed', (dataValue) => {
-          ijtLog.info('******************* dataValue.value.value.toString()')
-          this.io.emit('object message', dataValue)
-        })
-      } catch (err) {
-        this.displayFunction('Node.js OPC UA client error (subscribing): ' + err.message)
-        this.displayFunction(err)
-        this.io.emit('error message', err, 'subscribe')
-      }
-    })()
-  }
-
-  async function main () {
-    const client = OPCUAClient.create({})
-
-    const endpointUrl = 'opc.tcp://opcua.demo-this.com:62544/Quickstarts/AlarmConditionServer'
-
-    const subscriptionParamters = {
-      requestedPublishingInterval: 1000,
-      maxNotificationsPerPublish: 100,
-      publishingEnabled: true,
-      priority: 10
-    } */
