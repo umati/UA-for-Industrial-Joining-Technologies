@@ -156,6 +156,79 @@ class TestGitignoreCoverage:
         text = self._gitignore_text()
         assert "venv/" in text, "venv/ not found in .gitignore"
 
+    def test_gitignore_covers_code_workspace(self):
+        """*.code-workspace must be in .gitignore (personal IDE workspace files)."""
+        text = self._gitignore_text()
+        assert "*.code-workspace" in text, "*.code-workspace not found in .gitignore"
+
+
+# ===========================================================================
+# 3. connectionpoints.json — default config enforcement
+# ===========================================================================
+
+
+class TestConnectionpointsDefault:
+    """Enforce that committed connectionpoints.json files contain only the LOCAL entry.
+
+    Developers may add extra entries locally, but must not push them.
+    CI catches this automatically.
+    """
+
+    _LOCAL_NAMES = {"local", "localhost"}
+
+    @pytest.mark.skipif(
+        not _git_available(),
+        reason="git not installed — skipping connectionpoints checks",
+    )
+    def test_web_client_connectionpoints_has_only_local(self):
+        """src/resources/connectionpoints.json in IJT_Web_Client must have exactly one
+        entry and it must be the LOCAL endpoint (127.0.0.1 / localhost)."""
+        import json
+
+        path = (
+            _GIT_ROOT
+            / "OPC_UA_Clients"
+            / "Release2"
+            / "IJT_Web_Client"
+            / "src"
+            / "resources"
+            / "connectionpoints.json"
+        )
+        if not path.exists():
+            pytest.skip(f"connectionpoints.json not found at {path}")
+
+        data = json.loads(path.read_text(encoding="utf-8"))
+        points = data.get("connectionpoints", [])
+
+        assert len(points) == 1, (
+            f"connectionpoints.json must contain exactly 1 entry (the LOCAL endpoint), "
+            f"but found {len(points)} entries: "
+            + ", ".join(p.get("name", "?") for p in points)
+            + "\n  Remove personal/team endpoints before committing."
+        )
+
+        name = points[0].get("name", "").strip().lower()
+        address = points[0].get("address", "")
+        is_local = name in self._LOCAL_NAMES or "127.0.0.1" in address or "localhost" in address
+        assert is_local, (
+            f"The single entry in connectionpoints.json must be the LOCAL endpoint "
+            f"(name 'LOCAL' or address 127.0.0.1/localhost), got: name={points[0].get('name')!r}, "
+            f"address={address!r}"
+        )
+
+    @pytest.mark.skipif(
+        not _git_available(),
+        reason="git not installed — skipping connectionpoints checks",
+    )
+    def test_no_code_workspace_files_tracked(self):
+        """*.code-workspace files must not be committed (personal IDE workspace files)."""
+        tracked = _git_ls_files("*.code-workspace")
+        assert tracked == [], (
+            "The following *.code-workspace files are tracked by git and must be removed:\n  "
+            + "\n  ".join(tracked)
+            + "\n  Run: git rm --cached <file>  then commit the removal."
+        )
+
 
 # ===========================================================================
 # 3. No hardcoded secrets in Python source

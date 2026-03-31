@@ -102,18 +102,20 @@ describe('ConnectionManager — subscribe and trigger', () => {
   })
 
   it('does NOT call the callback when the state value is unchanged', () => {
-    manager[CONNECTION_STATES.CONNECTION] = true // pre-set
     const cb = vi.fn()
     manager.subscribe(CONNECTION_STATES.CONNECTION, cb)
-    manager.trigger(CONNECTION_STATES.CONNECTION, true) // same value → no-op
+    manager.trigger(CONNECTION_STATES.CONNECTION, true) // first trigger: state changes, fires cb
+    cb.mockClear()                                       // reset; now test the no-op case
+    manager.trigger(CONNECTION_STATES.CONNECTION, true) // same value again → no-op
     expect(cb).not.toHaveBeenCalled()
   })
 
   it('fires callback when state transitions from true to false', () => {
-    manager[CONNECTION_STATES.CONNECTION] = true
     const cb = vi.fn()
     manager.subscribe(CONNECTION_STATES.CONNECTION, cb)
-    manager.trigger(CONNECTION_STATES.CONNECTION, false)
+    manager.trigger(CONNECTION_STATES.CONNECTION, true) // set state to true
+    cb.mockClear()                                       // reset; now test the transition
+    manager.trigger(CONNECTION_STATES.CONNECTION, false) // true → false: fires cb
     expect(cb).toHaveBeenCalledWith(false)
   })
 
