@@ -11,8 +11,7 @@ class MillisecondFormatter(logging.Formatter):
         if datefmt:
             s = ct.strftime(datefmt)
             return s[:-3]  # Trim microseconds to milliseconds
-        else:
-            return ct.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        return ct.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(filename)s:%(funcName)s - %(message)s"

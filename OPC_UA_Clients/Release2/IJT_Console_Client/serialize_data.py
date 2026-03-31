@@ -81,4 +81,3 @@ def serialize_tuple(list_of_tuples: list[tuple[str, Any]]) -> str:
     except Exception as exc:
         ijt_log.error(f"Failed to serialize tuple: {exc}")
         return "{}"
-

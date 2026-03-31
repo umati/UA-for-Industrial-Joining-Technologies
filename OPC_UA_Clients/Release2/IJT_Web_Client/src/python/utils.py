@@ -14,7 +14,7 @@ from pathlib import Path
 
 import aiofiles
 import pytz
-from asyncua import Client, ua
+from asyncua import ua
 
 from python.ijt_logger import ijt_log
 from python.serialize_data import serialize_full_event

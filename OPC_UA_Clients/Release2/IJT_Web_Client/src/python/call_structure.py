@@ -106,4 +106,3 @@ def create_call_structure(argument: dict[str, Any]) -> Any:
             inp = ua.Variant(value, variant_type)
 
     return inp
-
