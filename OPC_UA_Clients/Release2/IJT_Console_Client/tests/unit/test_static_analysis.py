@@ -463,6 +463,56 @@ def test_no_multiple_definitions():
 
 
 # ===========================================================================
+# 10. Unused pytest.importorskip assignments
+#     Catches: X = pytest.importorskip(...) where X is never used as X.something
+# ===========================================================================
+
+
+def _find_unused_importorskip_assignments(source: str) -> list[str]:
+    """Return variable names assigned from pytest.importorskip but never accessed as X.attr."""
+    assignments = re.findall(r"^(\w+)\s*=\s*pytest\.importorskip\(", source, re.MULTILINE)
+    return [
+        name for name in assignments
+        if not re.search(r"\b" + re.escape(name) + r"\.", source)
+    ]
+
+
+def test_no_unused_importorskip_assignments():
+    """No X = pytest.importorskip(...) where X is never used as X.something.
+
+    The skip guard works without the assignment.  The variable is only needed
+    when the returned module object is accessed as X.attr later in the file.
+    Unused assignments are dead code (CodeQL py/unused-local-variable).
+    """
+    issues = []
+    for py_file in _all_py_files(_CONSOLE_ROOT):
+        source = py_file.read_text(encoding="utf-8")
+        for name in _find_unused_importorskip_assignments(source):
+            issues.append(
+                f"{py_file}: '{name} = pytest.importorskip(...)'"
+                f" — '{name}' never used as attribute access"
+            )
+    assert not issues, "Unused importorskip assignments:\n" + "\n".join(issues)
+
+
+# ===========================================================================
+# 11. Unused local variables  (pylint W0612)
+# ===========================================================================
+
+
+@pytest.mark.skipif(not _PYLINT_AVAILABLE, reason="pylint not installed")
+def test_no_unused_local_variables():
+    """pylint must find no unused local variables (W0612) across all project Python files."""
+    all_files = [str(f) for f in _all_py_files(_CONSOLE_ROOT)]
+    result = subprocess.run(
+        [sys.executable, "-m", "pylint", *all_files,
+         "--disable=all", "--enable=W0612", "--score=no", "--output-format=text"],
+        capture_output=True, text=True, cwd=str(_CONSOLE_ROOT)
+    )
+    assert result.returncode == 0, f"Unused local variables found:\n{result.stdout}"
+
+
+# ===========================================================================
 # Regression tests — guard against previously fixed issues
 # ===========================================================================
 

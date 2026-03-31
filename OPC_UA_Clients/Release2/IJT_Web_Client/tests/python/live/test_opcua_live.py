@@ -163,6 +163,7 @@ class TestOpcuaDirectConnection:
 
     async def test_tightening_system_node_exists(self, opcua_client):
         """TighteningSystem node must exist under Objects."""
+        from asyncua import ua
         _ = await opcua_client.get_namespace_index(IJT_NAMESPACE_URI)
         objects = await opcua_client.nodes.root.get_child(["0:Objects"])
         children = await objects.get_children()
@@ -174,7 +175,7 @@ class TestOpcuaDirectConnection:
                 if "TighteningSystem" in str(bn.Name):
                     ts_node = child
                     break
-            except Exception:
+            except (ua.UaError, OSError):
                 continue
 
         assert ts_node is not None, "TighteningSystem node not found under Objects"
@@ -300,7 +301,7 @@ class TestOpcuaSubscription:
 
             parent = client.get_node(ua.NodeId(_SIM_R_ID, _NS, ua.NodeIdType.String))
             method = client.get_node(ua.NodeId(_SIM_SINGLE_ID, _NS, ua.NodeIdType.String))
-            with contextlib.suppress(Exception):  # Event subscription is what we validate
+            with contextlib.suppress(ua.UaError, OSError):  # Method call may fail; we validate the event subscription below
                 await parent.call_method(
                     method.nodeid,
                     ua.Variant(0, ua.VariantType.UInt32),     # ResultType (SIMPLE_OK)

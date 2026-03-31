@@ -12,7 +12,7 @@ Covers:
 import pytest
 from datetime import datetime
 
-asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
+pytest.importorskip("asyncua", reason="asyncua not installed")
 import pytz  # noqa: E402
 from asyncua import ua  # noqa: E402
 

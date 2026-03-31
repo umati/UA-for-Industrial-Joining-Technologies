@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
+pytest.importorskip("asyncua", reason="asyncua not installed")
 
 from python.connection import Connection  # noqa: E402
 

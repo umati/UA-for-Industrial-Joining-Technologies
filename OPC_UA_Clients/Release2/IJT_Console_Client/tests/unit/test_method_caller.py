@@ -15,7 +15,7 @@ Covers:
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
+pytest.importorskip("asyncua", reason="asyncua not installed")
 from asyncua import ua  # noqa: E402
 
 from method_caller import OPCUAMethodCaller  # noqa: E402

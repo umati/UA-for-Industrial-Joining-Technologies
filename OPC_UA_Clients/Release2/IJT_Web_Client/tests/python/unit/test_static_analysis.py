@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import io
+import re
 import shutil
 import subprocess
 import sys
@@ -495,3 +496,77 @@ def test_no_multiple_definitions():
                         f"'{name}' assigned again without use in {node.name}()"
                     )
     assert not issues, "Multiple definitions found:\n" + "\n".join(issues)
+
+
+# ===========================================================================
+# 11. Unused pytest.importorskip assignments
+#     Catches: X = pytest.importorskip(...) where X is never used as X.something
+# ===========================================================================
+
+
+def _find_unused_importorskip_assignments(source: str) -> list[str]:
+    """Return variable names assigned from pytest.importorskip but never accessed as X.attr."""
+    assignments = re.findall(r"^(\w+)\s*=\s*pytest\.importorskip\(", source, re.MULTILINE)
+    return [
+        name for name in assignments
+        if not re.search(r"\b" + re.escape(name) + r"\.", source)
+    ]
+
+
+def test_no_unused_importorskip_assignments():
+    """No X = pytest.importorskip(...) where X is never used as X.something.
+
+    The skip guard works without the assignment.  The variable is only needed
+    when the returned module object is accessed as X.attr later in the file.
+    Unused assignments are dead code (CodeQL py/unused-local-variable).
+    """
+    issues = []
+    for py_file in _all_py_files(_PROJECT_ROOT):
+        source = py_file.read_text(encoding="utf-8")
+        for name in _find_unused_importorskip_assignments(source):
+            issues.append(
+                f"{py_file}: '{name} = pytest.importorskip(...)'"
+                f" — '{name}' never used as attribute access"
+            )
+    assert not issues, "Unused importorskip assignments:\n" + "\n".join(issues)
+
+
+# ===========================================================================
+# 12. Unused local variables  (pylint W0612)
+# ===========================================================================
+
+
+@pytest.mark.skipif(
+    not _tool_available("pylint"),
+    reason="pylint not installed — skipping unused-locals gate",
+)
+def test_no_unused_local_variables():
+    """pylint must find no unused local variables (W0612) across all project Python files."""
+    all_files = [str(f) for f in _all_py_files(_PROJECT_ROOT)]
+    result = subprocess.run(
+        [sys.executable, "-m", "pylint", *all_files,
+         "--disable=all", "--enable=W0612", "--score=no", "--output-format=text"],
+        capture_output=True, text=True, cwd=str(_PROJECT_ROOT)
+    )
+    assert result.returncode == 0, f"Unused local variables found:\n{result.stdout}"
+
+
+# ===========================================================================
+# Regression tests — guard against previously fixed issues
+# ===========================================================================
+
+
+def test_setup_project_version_check_uses_sysexit_not_assert():
+    """setup_project.py must not use 'assert' for the asyncua version check.
+
+    Regression test: assert is stripped by 'python -O', making the guard
+    ineffective.  The fix uses raise SystemExit(...) instead.
+    """
+    path = _PROJECT_ROOT / "setup_project.py"
+    if not path.exists():
+        pytest.skip("setup_project.py does not exist")
+    content = path.read_text(encoding="utf-8")
+    assert "assert Version(asyncua.__version__)" not in content, (
+        "setup_project.py uses 'assert' for asyncua version check — "
+        "assert is stripped by 'python -O'. Use raise SystemExit() instead."
+    )

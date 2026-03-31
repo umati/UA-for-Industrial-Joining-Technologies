@@ -1178,8 +1178,9 @@ def _is_runtime_ready():
         "import asyncua, websockets, dotenv, packaging, "
         "pytz, aiofiles; "
         "from packaging.version import Version; "
-        "assert Version(asyncua.__version__) >= Version('1.2b2'), "
-        f"'asyncua ' + asyncua.__version__ + ' is too old; need >= 1.2b2'"
+        "v = asyncua.__version__; "
+        "ok = Version(v) >= Version('1.2b2'); "
+        "raise SystemExit(0) if ok else SystemExit('asyncua ' + v + ' is too old; need >= 1.2b2')"
     )
     try:
         _run_command([str(python), "-c", _dep_check_cmd])
