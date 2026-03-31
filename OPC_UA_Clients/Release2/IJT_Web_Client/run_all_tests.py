@@ -7,11 +7,18 @@ Requires: Python 3.11+  (already installed for this project)
 No PowerShell, no bash, no special shell required.
 
 Usage:
-  python run_all_tests.py               # unit tests + smoke only (fast)
-  python run_all_tests.py --all         # every stage
-  python run_all_tests.py --integration # unit + live OPC UA tests
-  python run_all_tests.py --e2e         # unit + Playwright E2E
-  python run_all_tests.py --list        # print stages and exit
+  python run_all_tests.py        # auto-detects all optional stages — ONE command for everything
+  python run_all_tests.py --list # print stages and exit
+
+Optional stages activate automatically when available:
+  Docker smoke  — if Docker daemon is running  (build + compose-up + readiness check + down)
+  Live OPC UA   — if server reachable at OPCUA_TEST_ENDPOINT  (default: opc.tcp://localhost:40451)
+  Playwright E2E — if WebSocket backend reachable at WS_TEST_URL (default: ws://localhost:8001)
+
+Force flags (override auto-detection):
+  --integration  force live OPC UA stage even if server unreachable
+  --e2e          force Playwright E2E stage even if WS backend unreachable
+  --all          force every optional stage
 
 Environment variables (all optional):
   OPCUA_TEST_ENDPOINT   default: opc.tcp://localhost:40451
@@ -304,6 +311,68 @@ def _stage_playwright_e2e(ws_url: str, ui_url: str) -> StageResult:
 
 
 # ---------------------------------------------------------------------------
+# Docker helpers
+# ---------------------------------------------------------------------------
+def _docker_available() -> bool:
+    """Return True if the Docker daemon is reachable."""
+    docker = shutil.which("docker") or shutil.which("docker.exe")
+    if not docker:
+        return False
+    try:
+        r = subprocess.run(
+            [docker, "info"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=20,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _stage_docker_smoke() -> StageResult:
+    """Build image, start compose, verify HTTP + WS readiness, then tear down."""
+    _banner("STAGE 8  Docker smoke (build + compose up + readiness + down)")
+    t0 = time.monotonic()
+    docker = shutil.which("docker") or shutil.which("docker.exe")
+    if not docker:
+        return StageResult("docker-smoke", 0, skipped=True,
+                           notes=["docker not in PATH"])
+    compose_cmd = [docker, "compose"]
+
+    rc = _run([docker, "build", "-t", "ijt_web_client", "."], label="docker build")
+    if rc != 0:
+        return StageResult("docker-smoke", rc, duration=time.monotonic() - t0,
+                           notes=["docker build failed"])
+
+    rc = _run(compose_cmd + ["up", "-d"], label="docker compose up -d")
+    if rc != 0:
+        return StageResult("docker-smoke", rc, duration=time.monotonic() - t0,
+                           notes=["docker compose up failed"])
+
+    # Wait up to 120 s for HTTP readiness
+    _info("Waiting for http://127.0.0.1:3000 ...")
+    ready = False
+    for _ in range(60):
+        if _port_open("127.0.0.1", 3000, timeout=1.0):
+            ready = True
+            break
+        time.sleep(2)
+
+    ws_ready = _port_open("127.0.0.1", 8001, timeout=2.0)
+
+    _run(compose_cmd + ["logs", "--tail=20"], label="docker compose logs")
+    _run(compose_cmd + ["down", "-v"], label="docker compose down -v")
+
+    if not ready:
+        return StageResult("docker-smoke", 1, duration=time.monotonic() - t0,
+                           notes=["HTTP :3000 not ready within 120 s"])
+
+    notes = [] if ws_ready else ["WS :8001 not ready — backend may need OPC UA server"]
+    return StageResult("docker-smoke", 0, duration=time.monotonic() - t0, notes=notes)
+
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 def _print_summary(results: list[StageResult], total_time: float) -> int:
@@ -337,7 +406,7 @@ def _print_summary(results: list[StageResult], total_time: float) -> int:
 STAGES = [
     "versions", "pip-install", "python-unit", "js-unit",
     "python-live", "playwright-install", "playwright-smoke",
-    "playwright-e2e",
+    "playwright-e2e", "docker-smoke",
 ]
 
 
@@ -377,21 +446,29 @@ def main() -> int:
     python = Path(sys.executable)
     t_start = time.monotonic()
 
+    # Check availability upfront — drives auto-detection of optional stages
+    opcua_host, opcua_port = _parse_opcua_host_port(args.opcua_endpoint)
+    opcua_up   = _port_open(opcua_host, opcua_port)
+    ws_up      = _port_open("localhost", 8001)
+    docker_up  = _docker_available()
+
+    # Auto-detect optional stages when not explicitly requested
+    run_live   = run_live   or opcua_up
+    run_e2e    = run_e2e    or ws_up
+    run_docker = args.all   or docker_up
+
     _banner("IJT Web Client — Cross-Platform Test Runner")
     _info(f"Python  : {python}")
     _info(f"Root    : {ROOT}")
     _info(f"OS      : {sys.platform} / {platform.machine()}")
-    _info(f"Mode    : {'--all' if args.all else '--integration' if run_live else '--e2e' if run_e2e else 'unit+smoke'}")
+    _info(f"OPC UA  : {'UP' if opcua_up else 'not reachable'} ({args.opcua_endpoint})")
+    _info(f"WS      : {'UP' if ws_up else 'not reachable'} ({args.ws_url})")
+    _info(f"Docker  : {'available' if docker_up else 'not available'}")
 
-    # Check server availability upfront
-    opcua_host, opcua_port = _parse_opcua_host_port(args.opcua_endpoint)
-    opcua_up = _port_open(opcua_host, opcua_port)
-    ws_up    = _port_open("localhost", 8001)
-
-    if run_live and not opcua_up:
-        _warn(f"OPC UA server NOT reachable at {args.opcua_endpoint}")
-    if run_e2e and not ws_up:
-        _warn(f"WebSocket backend NOT reachable at {args.ws_url}")
+    if (args.integration or args.all) and not opcua_up:
+        _warn(f"OPC UA server NOT reachable at {args.opcua_endpoint} — live tests will be skipped")
+    if (args.e2e or args.all) and not ws_up:
+        _warn(f"WebSocket backend NOT reachable at {args.ws_url} — E2E tests will be skipped")
 
     results: list[StageResult] = []
 
@@ -409,7 +486,7 @@ def main() -> int:
             _skip("python-live: OPC UA server not reachable")
             results.append(StageResult("python-live", 0, skipped=True))
 
-    # ── Playwright (smoke always runs; E2E only when --e2e/--all) ─────────────
+    # ── Playwright (smoke always runs; E2E auto-detected or explicit) ─────────
     pw_install = _stage_playwright_install()
     results.append(pw_install)
 
@@ -423,6 +500,13 @@ def main() -> int:
             else:
                 _skip("playwright-e2e: WebSocket backend not reachable")
                 results.append(StageResult("playwright-e2e", 0, skipped=True))
+
+    # ── Docker smoke (auto-detected; skipped if Docker unavailable) ───────────
+    if run_docker:
+        results.append(_stage_docker_smoke())
+    else:
+        _skip("docker-smoke: Docker not available")
+        results.append(StageResult("docker-smoke", 0, skipped=True))
 
     return _print_summary(results, time.monotonic() - t_start)
 

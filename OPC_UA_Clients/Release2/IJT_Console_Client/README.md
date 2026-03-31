@@ -27,19 +27,17 @@ python setup_client.py
 ```
 
 ## Testing
-- **All unit tests:**
-  ```bash
-  python -m pytest tests/ -v
-  ```
-- **With a live OPC UA server** (set endpoint first):
-  ```bash
-  set OPCUA_TEST_ENDPOINT=opc.tcp://<host>:<port>
-  python -m pytest tests/ -m live -v
-  ```
-- **Install test dependencies first** (if not already installed):
-  ```bash
-  pip install pytest pytest-asyncio
-  ```
+
+Run everything with one command — live OPC UA tests auto-skip when no server is available:
+
+```bash
+python -m pytest tests/
+```
+
+| Stage | Runs when |
+|-------|-----------|
+| Unit tests | Always |
+| Live OPC UA tests | OPC UA server reachable at `opc.tcp://localhost:40451` (auto-detected) |
 
 ## Project Structure
 ```
