@@ -36,7 +36,7 @@ import pytest
 # Module-level loop scope so all async fixtures and tests share one event loop.
 # (pytest-asyncio 0.21+ deprecates the custom event_loop fixture; use this instead.)
 # ─────────────────────────────────────────────────────────────────────────────
-pytestmark = pytest.mark.asyncio(loop_scope="module")
+# asyncio_default_fixture_loop_scope = module is set in pytest.ini for all async tests
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration

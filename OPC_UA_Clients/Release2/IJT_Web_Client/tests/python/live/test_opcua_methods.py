@@ -62,7 +62,7 @@ def _patch_asyncua_send_timeout():
 
 _patch_asyncua_send_timeout()
 
-pytestmark = pytest.mark.asyncio(loop_scope="module")
+# asyncio_default_fixture_loop_scope = module is set in pytest.ini for all async tests
 
 OPCUA_URL    = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
 NS           = 1

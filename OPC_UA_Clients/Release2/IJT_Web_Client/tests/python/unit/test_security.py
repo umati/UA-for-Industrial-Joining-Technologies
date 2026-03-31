@@ -12,7 +12,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-pytest.importorskip("asyncua", reason="asyncua not installed")
+_ = pytest.importorskip("asyncua", reason="asyncua not installed")
 
 from python.connection import Connection  # noqa: E402
 

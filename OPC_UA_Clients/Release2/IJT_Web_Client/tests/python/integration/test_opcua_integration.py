@@ -7,9 +7,6 @@ from python.network_utils import endpoint_reachable
 from python.connection import Connection
 
 
-pytestmark = pytest.mark.integration
-
-
 @pytest.fixture
 def opcua_endpoint() -> str:
     endpoint = os.getenv("OPCUA_TEST_ENDPOINT")

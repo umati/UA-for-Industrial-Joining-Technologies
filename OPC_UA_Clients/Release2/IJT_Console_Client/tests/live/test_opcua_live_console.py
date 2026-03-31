@@ -16,8 +16,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-pytestmark = pytest.mark.live
-
 
 def _is_server_available(host: str = "localhost", port: int = 40451, timeout: float = 1.0) -> bool:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

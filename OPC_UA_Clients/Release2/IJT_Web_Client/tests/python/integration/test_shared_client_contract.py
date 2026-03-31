@@ -7,9 +7,6 @@ from python.network_utils import endpoint_reachable
 from tests.shared_opcua.adapters import adapters_from_env, discover_simulation_methods, make_adapter
 
 
-pytestmark = pytest.mark.integration
-
-
 def _assert_adapter_response_ok(adapter_name: str, action: str, response) -> None:
     assert isinstance(response, dict), (
         f"{adapter_name} {action} should return a structured dict, got: {type(response).__name__}"

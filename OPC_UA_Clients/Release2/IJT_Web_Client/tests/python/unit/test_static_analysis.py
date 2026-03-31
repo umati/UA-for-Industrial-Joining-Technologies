@@ -505,20 +505,23 @@ def test_no_multiple_definitions():
 
 
 def _find_unused_importorskip_assignments(source: str) -> list[str]:
-    """Return variable names assigned from pytest.importorskip but never accessed as X.attr."""
+    """Return variable names assigned from pytest.importorskip but never accessed as X.attr.
+
+    Excludes '_' which is the Python discard convention for intentionally unused values.
+    """
     assignments = re.findall(r"^(\w+)\s*=\s*pytest\.importorskip\(", source, re.MULTILINE)
     return [
         name for name in assignments
-        if not re.search(r"\b" + re.escape(name) + r"\.", source)
+        if name != "_" and not re.search(r"\b" + re.escape(name) + r"\.", source)
     ]
 
 
 def test_no_unused_importorskip_assignments():
     """No X = pytest.importorskip(...) where X is never used as X.something.
 
-    The skip guard works without the assignment.  The variable is only needed
-    when the returned module object is accessed as X.attr later in the file.
-    Unused assignments are dead code (CodeQL py/unused-local-variable).
+    Use '_ = pytest.importorskip(...)' as the discard-pattern when the module
+    object is not needed after the skip guard.
+    Unused named assignments are dead code (CodeQL py/unused-local-variable).
     """
     issues = []
     for py_file in _all_py_files(_PROJECT_ROOT):
