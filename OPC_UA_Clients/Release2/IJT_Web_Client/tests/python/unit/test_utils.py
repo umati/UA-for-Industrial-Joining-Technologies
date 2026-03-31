@@ -12,10 +12,14 @@ import pytest
 import uuid
 from datetime import datetime
 
-_ = pytest.importorskip("asyncua", reason="asyncua not installed")
-_ = pytest.importorskip("pytz", reason="pytz not installed")
-import pytz  # noqa: E402
-from asyncua import ua  # noqa: E402
+try:
+    import pytz  # noqa: E402
+    from asyncua import ua  # noqa: E402
+    HAS_ASYNCUA = True
+except ImportError:  # pragma: no cover - environment-dependent
+    pytz = None
+    ua = None
+    HAS_ASYNCUA = False
 
 from python.utils import (  # noqa: E402
     format_list_for_logging,
@@ -30,18 +34,21 @@ from python.utils import (  # noqa: E402
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_nodeid_to_str_numeric():
     node = ua.NodeId(1234, 2)
     result = nodeid_to_str(node)
     assert result == "ns=2;i=1234"
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_nodeid_to_str_string():
     node = ua.NodeId("MyIdentifier", 3, ua.NodeIdType.String)
     result = nodeid_to_str(node)
     assert result == "ns=3;s=MyIdentifier"
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_nodeid_to_str_guid():
     guid = uuid.UUID("12345678-1234-5678-1234-567812345678")
     node = ua.NodeId(guid, 1, ua.NodeIdType.Guid)
@@ -49,6 +56,7 @@ def test_nodeid_to_str_guid():
     assert result == f"ns=1;g={guid}"
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_nodeid_to_str_opaque():
     data = b"\x01\x02\x03"
     # asyncua 1.x renamed NodeIdType.Opaque → ByteString
@@ -63,6 +71,7 @@ def test_nodeid_to_str_fallback_on_non_nodeid():
     assert result == "not_a_nodeid"
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_nodeid_to_str_numeric_namespace_zero():
     """Namespace 0 is the core OPC UA namespace."""
     node = ua.NodeId(2258, 0)  # Server/ServerStatus/CurrentTime
@@ -75,6 +84,7 @@ def test_nodeid_to_str_numeric_namespace_zero():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 def test_localizedtext_to_str_returns_text():
     # asyncua 1.x: LocalizedText(Text, Locale) — Text is the first positional arg
     lt = ua.LocalizedText("Hello World", "en")
@@ -169,5 +179,6 @@ def test_format_list_for_logging_multiple_items():
 
 def test_format_list_for_logging_default_width():
     lines = format_list_for_logging("X", ["y"])
-    # Default label_width=35; header line should be at least 35+2 chars wide
-    assert len(lines[0]) >= 37
+    # Default label_width=35; label padded to 35 chars, then space and colon.
+    expected_header = "X" + (" " * 34) + " :"
+    assert lines[0] == expected_header
