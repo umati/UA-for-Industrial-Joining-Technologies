@@ -51,7 +51,7 @@ def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str: 
     if isinstance(dt, str):
         try:
             dt = datetime.fromisoformat(dt)
-        except Exception:
+        except ValueError:
             return dt
     local_tz = pytz.timezone(timezone)
     return dt.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]

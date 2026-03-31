@@ -12,7 +12,6 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -331,3 +330,102 @@ class TestJsCodeQuality:
             "result-manager.mjs uses bare Object.assign(stored, newResult) which is vulnerable "
             "to prototype pollution. Destructure __proto__/constructor/prototype keys out first."
         )
+
+    def test_connection_graphics_uses_textcontent_not_innerhtml(self):
+        """connection-graphics.mjs must use textContent not innerHTML for status labels.
+
+        Regression test: innerHTML = 'ESTABLISHED'/'LOST' triggers CodeQL XSS warnings
+        even for hardcoded strings. textContent is semantically correct and safe.
+        """
+        path = _JS_SRC_ROOT / "views" / "connection" / "connection-graphics.mjs"
+        if not path.exists():
+            pytest.skip(f"connection-graphics.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        assert "innerHTML = 'ESTABLISHED'" not in content, (
+            "connection-graphics.mjs still uses innerHTML = 'ESTABLISHED'. "
+            "Use textContent = 'ESTABLISHED' instead to avoid CodeQL XSS warnings."
+        )
+        assert "innerHTML = 'LOST'" not in content, (
+            "connection-graphics.mjs still uses innerHTML = 'LOST'. "
+            "Use textContent = 'LOST' instead."
+        )
+        assert "textContent = 'ESTABLISHED'" in content, (
+            "connection-graphics.mjs must set textContent = 'ESTABLISHED'."
+        )
+
+    def test_settings_labels_use_textcontent_not_innerhtml(self):
+        """settings.mjs must use textContent not innerHTML for static label text.
+
+        Regression test: CodeQL flags all innerHTML assignments as potential XSS vectors,
+        even hardcoded strings. textContent is the correct API for plain-text content.
+        """
+        path = _JS_SRC_ROOT / "views" / "graphic-support" / "settings.mjs"
+        if not path.exists():
+            pytest.skip(f"settings.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        # None of the label assignments should use innerHTML any more
+        for label in ("ProductId", "Button 1 selection", "Button 2 selection",
+                      "Joint 1 identity", "Joint 2 identity", "Default view level"):
+            assert f"innerHTML = '{label}" not in content, (
+                f"settings.mjs still uses innerHTML for label '{label}'. "
+                "Use textContent instead."
+            )
+
+    def test_joint_demo_thead_uses_dom_not_innerhtml(self):
+        """joint-demo.mjs must build the tools table header with DOM methods, not innerHTML.
+
+        Regression test: CodeQL CWE-79 flags all innerHTML assignments. The table header
+        used a template literal with only hardcoded content, but the fix uses DOM construction
+        which is safer and immune to future variable interpolation accidents.
+        """
+        path = _JS_SRC_ROOT / "views" / "demo" / "joint-demo.mjs"
+        if not path.exists():
+            pytest.skip(f"joint-demo.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        assert "thead.innerHTML" not in content, (
+            "joint-demo.mjs still uses thead.innerHTML. "
+            "Replace with DOM createElement/textContent/appendChild calls."
+        )
+
+    def test_address_space_readandstructure_rejects_on_error(self):
+        """address-space.mjs readAndStructure Promise must call reject() on socket error.
+
+        Regression test: the original readAndStructure Promise had no reject parameter —
+        if socketHandler.readPromise failed, the Promise would hang forever (never
+        resolve or reject), causing dependent code to silently stall.
+        """
+        path = _JS_SRC_ROOT / "ijt-support" / "address-space" / "address-space.mjs"
+        if not path.exists():
+            pytest.skip(f"address-space.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        # The fix adds 'reject(error)' inside the readAndStructure error handler
+        assert "reject(error)" in content, (
+            "address-space.mjs readAndStructure does not call reject(error) on socket error. "
+            "Add reject parameter to the Promise constructor and call reject(error) in the "
+            "error handler to prevent the Promise from hanging forever."
+        )
+
+
+# ===========================================================================
+# 5. Implicit string concatenation gate
+# ===========================================================================
+
+
+def test_no_implicit_string_concatenation_in_lists():
+    """No implicit string concat in source Python files (CodeQL py/implicit-string-concatenation)."""
+    import tokenize
+    import io
+    _src_python = _PROJECT_ROOT / "src" / "python"
+    issues = []
+    for py_file in _src_python.rglob("*.py"):
+        src = py_file.read_text(encoding="utf-8")
+        try:
+            tokens = list(tokenize.generate_tokens(io.StringIO(src).readline))
+        except tokenize.TokenError:
+            continue
+        for i in range(len(tokens) - 1):
+            if (tokens[i].type == tokenize.STRING and
+                    tokens[i + 1].type == tokenize.STRING and
+                    tokens[i].end[0] <= tokens[i + 1].start[0]):
+                issues.append(f"{py_file}:{tokens[i].start[0]}: implicit string concat")
+    assert not issues, "Implicit string concatenation found:\n" + "\n".join(issues)

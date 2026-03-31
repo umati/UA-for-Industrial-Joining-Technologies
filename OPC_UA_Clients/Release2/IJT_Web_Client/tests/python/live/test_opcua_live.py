@@ -137,7 +137,6 @@ class TestOpcuaDirectConnection:
 
     async def test_server_time_is_readable(self, opcua_client):
         """CurrentTime node (ns=0;i=2258) must return a datetime."""
-        from asyncua import ua
         node = opcua_client.get_node("ns=0;i=2258")
         value = await node.read_value()
         assert value is not None
@@ -163,8 +162,7 @@ class TestOpcuaDirectConnection:
 
     async def test_tightening_system_node_exists(self, opcua_client):
         """TighteningSystem node must exist under Objects."""
-        from asyncua import ua
-        idx = await opcua_client.get_namespace_index(IJT_NAMESPACE_URI)
+        _ = await opcua_client.get_namespace_index(IJT_NAMESPACE_URI)
         objects = await opcua_client.nodes.root.get_child(["0:Objects"])
         children = await objects.get_children()
 

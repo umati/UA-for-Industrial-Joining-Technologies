@@ -11,6 +11,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import platform
 from pathlib import Path
 
 import pytest
@@ -31,7 +32,6 @@ def _npm_available() -> bool:
 
 def _is_wsl() -> bool:
     """Detect WSL: Linux kernel but accessing a Windows NTFS filesystem."""
-    import platform
     release = platform.release().lower()
     return "microsoft" in release or "wsl" in release
 
@@ -129,3 +129,46 @@ def test_eslint_passes():
         f"ESLint failed (exit {result.returncode}).\n"
         f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
+
+
+# ===========================================================================
+# 4. pylint unused-imports gate
+# ===========================================================================
+
+
+@pytest.mark.skipif(
+    not _tool_available("pylint"),
+    reason="pylint not installed — skipping unused-imports gate",
+)
+def test_no_unused_imports_in_source():
+    """pylint must find no unused imports (W0611) in src/python."""
+    result = subprocess.run(
+        [sys.executable, "-m", "pylint", str(_SRC_PYTHON),
+         "--disable=all", "--enable=W0611", "--score=no", "--output-format=text"],
+        capture_output=True, text=True, cwd=str(_PROJECT_ROOT)
+    )
+    assert result.returncode == 0, f"Unused imports found:\n{result.stdout}"
+
+
+# ===========================================================================
+# 5. Empty except-block gate
+# ===========================================================================
+
+
+def test_no_empty_except_blocks():
+    """No bare except:pass blocks in src/python/ (CodeQL py/empty-except)."""
+    import ast as ast_module
+    issues = []
+    for py_file in _SRC_PYTHON.rglob("*.py"):
+        src = py_file.read_text(encoding="utf-8")
+        try:
+            tree = ast_module.parse(src)
+        except SyntaxError:
+            continue
+        for node in ast_module.walk(tree):
+            if isinstance(node, ast_module.ExceptHandler):
+                if (len(node.body) == 1
+                        and isinstance(node.body[0], ast_module.Pass)
+                        and node.type is None):
+                    issues.append(f"{py_file}:{node.lineno}: bare except:pass")
+    assert not issues, "Empty bare except blocks found:\n" + "\n".join(issues)

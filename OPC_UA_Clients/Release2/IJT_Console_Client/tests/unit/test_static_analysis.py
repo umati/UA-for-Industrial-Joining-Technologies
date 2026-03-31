@@ -143,3 +143,20 @@ def test_setup_client_version_check_uses_sys_exit_not_assert():
         "setup_client.py uses 'assert' for asyncua version check — "
         "assert is stripped by 'python -O'. Use sys.exit() instead."
     )
+
+
+def test_format_local_time_uses_valueerror_not_broad_exception():
+    """utils.py format_local_time() must catch ValueError, not bare Exception.
+
+    Regression test: datetime.fromisoformat() raises ValueError for malformed
+    input — catching bare Exception is too broad and hides unrelated bugs.
+    """
+    path = _CONSOLE_ROOT / "utils.py"
+    if not path.exists():
+        pytest.skip("utils.py does not exist")
+    content = path.read_text(encoding="utf-8")
+    assert "except ValueError:" in content, (
+        "utils.py does not use 'except ValueError:'. "
+        "format_local_time() should catch ValueError (from fromisoformat) "
+        "rather than bare except Exception."
+    )

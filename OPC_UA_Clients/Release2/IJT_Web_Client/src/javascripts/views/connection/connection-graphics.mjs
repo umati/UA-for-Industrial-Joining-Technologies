@@ -24,12 +24,12 @@ export default class ConnectionGraphics extends ControlMessageSplitScreen {
     this.connectionManager.subscribe(trigger, (setToTrue) => {
       if (setToTrue) {
         this.messageDisplay(`${name} established`)
-        connectionLabel.innerHTML = 'ESTABLISHED'
+        connectionLabel.textContent = 'ESTABLISHED'
         connectionLabel.classList.remove('offColor')
         connectionLabel.classList.add('onColor')
       } else {
         this.messageDisplay(`${name}lost`)
-        connectionLabel.innerHTML = 'LOST'
+        connectionLabel.textContent = 'LOST'
         connectionLabel.classList.remove('onColor')
         connectionLabel.classList.add('offColor')
       }

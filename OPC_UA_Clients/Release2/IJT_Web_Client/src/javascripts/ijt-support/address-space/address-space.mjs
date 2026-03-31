@@ -184,7 +184,7 @@ export class AddressSpace {
      * @returns a promise of a datastructure that can be used to create a node
      */
     const readAndStructure = (nodeId, details = false) => {
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         this.socketHandler.readPromise(nodeId, 'DisplayName, NodeClass').then(
           (response) => {
             const attributes = this.parseMaybeJson(response.message.attributes)
@@ -200,6 +200,7 @@ export class AddressSpace {
           },
           (error) => {
             ijtLog.error(error)
+            reject(error)
           })
       })
     }
@@ -213,7 +214,7 @@ export class AddressSpace {
       return new Promise((resolve, reject) => {
         readAndStructure(nodeId, true).then((m) => {
           resolve(createNode(m), true)
-        })
+        }).catch(reject)
       })
     }
   }
@@ -284,7 +285,7 @@ export class AddressSpace {
         new Promise((resolve, reject) => {
           this.findOrLoadNode(relation.NodeId).then((node) => {
             resolve(node)
-          })
+          }).catch(reject)
         })
       )
     }

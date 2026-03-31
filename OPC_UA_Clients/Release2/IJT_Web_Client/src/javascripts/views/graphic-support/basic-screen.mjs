@@ -17,7 +17,7 @@ export default class BasicScreen {
 
   activate () {}
 
-  changeViewLevel (newLevel) {}
+  changeViewLevel (_newLevel) {}
 
   createArea (name) {
     const newDiv = document.createElement('div')
@@ -183,12 +183,6 @@ export default class BasicScreen {
   }
 
   createDropdownFromImport (importList, onchange) {
-    // const area = document.createElement('div')
-    // const parameterArea = document.createElement('div')
-    // area.appendChild(parameterArea)
-
-    // parameterArea.style.border = '1px dotted purple'
-
     const dropDown = this.createDropdown(null, (cname) => {
       const newSelection = new importList[cname]()
 
@@ -196,12 +190,6 @@ export default class BasicScreen {
         onchange(newSelection)
       }
     })
-
-    // area.selectFromDropDown = (selected) => { // Use this to preselect
-    //  dropDown.select.value = selected
-    // }
-
-    // this.createTitledInput(name, dropDown)
 
     for (const subclass of Object.values(importList)) {
       dropDown.addOption(subclass.displayText, subclass.name)

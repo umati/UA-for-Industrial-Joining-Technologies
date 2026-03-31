@@ -6,9 +6,6 @@ The method-call building logic lives in method_caller.py (OPCUAMethodCaller).
 These tests verify naming conventions and ensure no legacy camelCase aliases exist.
 """
 import inspect
-import importlib.util
-
-import pytest
 
 import sys
 from pathlib import Path

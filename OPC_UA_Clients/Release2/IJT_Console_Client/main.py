@@ -2,7 +2,6 @@ import asyncio
 import argparse
 import traceback
 import os
-import logging
 import contextlib
 
 from opcua_client import OPCUAClient

@@ -307,7 +307,6 @@ def test_serialize_slots_class_is_serialized():
 
 def test_serialize_datetime_in_dict_is_iso_string():
     """datetime values inside dicts become ISO format strings."""
-    from datetime import datetime, timezone
     dt = datetime(2025, 7, 4, 12, 0, 0, tzinfo=timezone.utc)
     result = serialize_full_event({"ts": dt})
     assert isinstance(result["ts"], str)

@@ -34,22 +34,20 @@ export class AddressSpace {
    */
   initiate () {
     this.findOrLoadNode('ns=0;i=84').then((rootFolder) => { // GRoot
-      this.findOrLoadNode('ns=0;i=85').then((objectFolder) => {
+      return this.findOrLoadNode('ns=0;i=85').then((objectFolder) => {
         this.objectFolder = objectFolder
         const typerelations = objectFolder.getTypeDefinitionRelations('1005')
         if (!typerelations || typerelations.length === 0) {
           throw new Error('Could not find Tightening System')
         }
-        this.findOrLoadNode(typerelations[0].nodeId).then((tgtSystem) => {
+        return this.findOrLoadNode(typerelations[0].nodeId).then((tgtSystem) => {
           this.tighteningSystem = tgtSystem
           this.addressSpaceSetup('tighteningsystem')
           this.connectionManager.trigger('tighteningsystem', true)
-          /* for (const promise of this.listOfTSPromises) {
-            this.tighteningSystem = tgtSystem
-            promise.resolve(tgtSystem)
-          } */
         })
       })
+    }).catch((err) => {
+      console.error('AddressSpace initiate failed:', err)
     })
   }
 
@@ -201,9 +199,9 @@ export class AddressSpace {
         this.socketHandler.pathtoidPromise(tgtSystem.nodeId, path).then((msg) => {
           this.findOrLoadNode(msg.message.nodeid).then((node) => {
             resolve(node)
-          })
-        })
-      })
+          }).catch(reject)
+        }).catch(reject)
+      }).catch(reject)
     )
   }
 
@@ -225,7 +223,7 @@ export class AddressSpace {
         new Promise((resolve, reject) => {
           this.findOrLoadNode(relation.nodeId).then((node) => {
             resolve(node)
-          })
+          }).catch(reject)
         })
       )
     }
@@ -245,7 +243,10 @@ export class AddressSpace {
       this.socketHandler.readPromise(nodeId, attribute).then(
         (response) => {
           resolve(response.node)
-        })
+        }).catch((err) => {
+        console.error('read failed:', err)
+        resolve(null)
+      })
     })
   }
 }

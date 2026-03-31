@@ -8,7 +8,6 @@ internal state.
 from __future__ import annotations
 
 import json
-import sys
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -159,7 +158,6 @@ class TestMethodcallArgumentSanitization:
     async def test_string_argument_with_none_value_is_sanitized_to_empty_string(self):
         """None argument value for String type (dataType=12) → sanitized to '' not crash."""
         conn = _make_connection()
-        from asyncua import ua
 
         mock_arg_desc = MagicMock()
         mock_arg_desc.DataType.Identifier = 12  # String

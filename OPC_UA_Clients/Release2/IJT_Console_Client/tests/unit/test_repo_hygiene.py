@@ -8,7 +8,6 @@ Repository hygiene tests.
 - All .py files have at most 500 lines (complexity gate)
 """
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -88,7 +87,7 @@ def _git_is_available() -> bool:
             timeout=5,
         )
         return result.returncode == 0
-    except Exception:
+    except Exception:  # noqa: BLE001 — intentional broad catch for availability check
         return False
 
 

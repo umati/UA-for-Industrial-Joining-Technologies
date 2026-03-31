@@ -10,7 +10,7 @@ Covers:
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -315,7 +315,6 @@ async def test_methodcall_string_argument_type_mapping():
 async def test_methodcall_uint32_negative_value_abs_applied():
     """UInt32 (dataType=7) with negative value → abs() applied before Variant creation."""
     conn = _make_connection()
-    from asyncua import ua
 
     mock_arg_desc = MagicMock()
     mock_arg_desc.DataType.Identifier = 7  # UInt32
@@ -458,7 +457,6 @@ async def test_methodcall_missing_input_arguments_node_returns_exception():
 async def test_methodcall_array_argument_creates_list_variant():
     """List value for String type creates a Variant carrying the list."""
     conn = _make_connection()
-    from asyncua import ua
 
     mock_arg_desc = MagicMock()
     mock_arg_desc.DataType.Identifier = 12  # String

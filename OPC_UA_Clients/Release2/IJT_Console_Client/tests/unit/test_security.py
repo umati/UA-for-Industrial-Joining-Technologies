@@ -7,7 +7,6 @@ Security tests for IJT_Console_Client.
 - bandit scan (skipped if bandit not installed)
 """
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -69,7 +68,6 @@ def test_endpoint_with_shell_metacharacters_validate_url():
     """validate_url() must reject endpoints with shell metacharacters."""
     sys.path.insert(0, str(_CONSOLE_ROOT))
     from main import validate_url
-    from client_config import SERVER_URL
 
     evil_url = "opc.tcp://localhost:4840; rm -rf /"
     result = validate_url(evil_url)
