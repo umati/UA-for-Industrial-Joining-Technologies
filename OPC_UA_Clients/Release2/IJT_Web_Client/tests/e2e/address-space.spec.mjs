@@ -4,7 +4,6 @@
  * Requires: backend + OPC UA server running.
  */
 import { test, expect } from './e2e-fixtures.mjs'
-import { AddressSpacePage } from './page-objects.mjs'
 
 async function openAddressSpace (app) {
   await app.setViewLevel('4')    // Specialized includes AddressSpace tab

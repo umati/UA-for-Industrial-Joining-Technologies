@@ -8,6 +8,7 @@ violates lint or security policies.
 
 from __future__ import annotations
 
+import ast
 import shutil
 import subprocess
 import sys
@@ -156,19 +157,34 @@ def test_no_unused_imports_in_source():
 
 
 def test_no_empty_except_blocks():
-    """No bare except:pass blocks in src/python/ (CodeQL py/empty-except)."""
-    import ast as ast_module
+    """No empty except blocks in src/python/ (CodeQL py/empty-except).
+
+    Catches two patterns:
+    - bare ``except: pass``  (node.type is None)
+    - broad ``except Exception: pass`` with no logging or re-raise
+    Both are flagged by CodeQL as py/empty-except-clause.
+    """
+    _BROAD_NAMES = {"Exception", "BaseException"}
+
+    def _is_broad(handler: ast.ExceptHandler) -> bool:
+        """Return True for bare except or except Exception/BaseException."""
+        if handler.type is None:
+            return True  # bare except:
+        if isinstance(handler.type, ast.Name) and handler.type.id in _BROAD_NAMES:
+            return True  # except Exception: or except BaseException:
+        return False
+
     issues = []
     for py_file in _SRC_PYTHON.rglob("*.py"):
         src = py_file.read_text(encoding="utf-8")
         try:
-            tree = ast_module.parse(src)
+            tree = ast.parse(src)
         except SyntaxError:
             continue
-        for node in ast_module.walk(tree):
-            if isinstance(node, ast_module.ExceptHandler):
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ExceptHandler):
                 if (len(node.body) == 1
-                        and isinstance(node.body[0], ast_module.Pass)
-                        and node.type is None):
-                    issues.append(f"{py_file}:{node.lineno}: bare except:pass")
-    assert not issues, "Empty bare except blocks found:\n" + "\n".join(issues)
+                        and isinstance(node.body[0], ast.Pass)
+                        and _is_broad(node)):
+                    issues.append(f"{py_file}:{node.lineno}: empty except block")
+    assert not issues, "Empty except blocks found:\n" + "\n".join(issues)

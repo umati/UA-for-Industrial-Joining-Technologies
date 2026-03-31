@@ -4,10 +4,9 @@
  * Requires: backend + OPC UA server running.
  */
 import { test, expect } from './e2e-fixtures.mjs'
-import { EventsPage } from './page-objects.mjs'
 
 test('Events tab: renders the messages container', async ({ connected: app }) => {
-  const events = await app.openEvents()
+  await app.openEvents()
   const list = app.page.locator('.messages')
   await expect(list).toBeVisible({ timeout: 30_000 })
 })
@@ -55,7 +54,7 @@ test('Events tab: ResultEvent entries appear after result simulation', async ({ 
 
 test('Events tab: Toggle queueing button exists and is clickable', async ({ connected: app }) => {
   test.setTimeout(60_000)
-  const events = await app.openEvents()
+  await app.openEvents()
   const btn = app.page.locator('button:has-text("Toggle queueing")').first()
   // May not appear until events arrive; just verify it doesn't crash if present
   const count = await btn.count()

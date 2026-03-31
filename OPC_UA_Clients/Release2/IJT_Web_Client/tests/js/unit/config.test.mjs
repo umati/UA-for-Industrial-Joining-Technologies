@@ -6,7 +6,7 @@
  * original module (which would lock in the JSDOM defaults).
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 
 /**
  * Rebuild an APP_CONFIG object from a simulated window.location.

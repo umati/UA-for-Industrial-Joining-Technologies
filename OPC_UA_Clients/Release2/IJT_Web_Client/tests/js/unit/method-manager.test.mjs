@@ -7,7 +7,7 @@
  * addressSpace.methodCall(), which (via SocketHandler) sends:
  *   { objectnode, methodnode, arguments }  — no underscores!
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { MethodManager } from '../../../src/javascripts/ijt-support/methods/method-manager.mjs'
 
 // ---------------------------------------------------------------------------

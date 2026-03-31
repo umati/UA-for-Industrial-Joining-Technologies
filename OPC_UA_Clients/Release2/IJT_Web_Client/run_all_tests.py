@@ -53,9 +53,8 @@ def _enable_ansi_windows() -> bool:
         if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
             kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
             return True
-    except Exception:
-        pass
-    return False
+    except (AttributeError, OSError):
+        return False
 
 
 _USE_COLOUR = sys.stdout.isatty() and (
@@ -98,7 +97,7 @@ def _run(
     env: Optional[dict] = None,
 ) -> int:
     display = label or " ".join(str(c) for c in cmd[:5])
-    print(f"\n{_C.DIM}CMD: {' '.join(str(c) for c in cmd)}{_C.RESET}")
+    print(f"\n{_C.DIM}CMD: {display}{_C.RESET}")
     result = subprocess.run(
         [str(c) for c in cmd],
         cwd=str(cwd),

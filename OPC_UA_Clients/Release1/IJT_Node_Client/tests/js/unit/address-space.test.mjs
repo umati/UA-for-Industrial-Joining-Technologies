@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { NodeFactory } from '../../../javascripts/ijt-support/address-space/node.mjs'
 
 function makeNodeData (nodeclass, nodeid = 'ns=1;i=100', relations = []) {

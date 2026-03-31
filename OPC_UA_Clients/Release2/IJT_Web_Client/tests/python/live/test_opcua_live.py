@@ -23,6 +23,7 @@ Run only WS:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import socket
@@ -226,17 +227,13 @@ class TestOpcuaDirectConnection:
             except Exception:
                 continue
             if nc == ua.NodeClass.Method:
-                try:
+                with contextlib.suppress(Exception):
                     bn = await node.read_browse_name()
                     if bn.Name in target_names:
                         found.add(bn.Name)
-                except Exception:
-                    pass
-            try:
+            with contextlib.suppress(Exception):
                 for child in await node.get_children():
                     queue.append((child, depth + 1))
-            except Exception:
-                pass
 
         assert "SimulateSingleResult" in found, (
             f"SimulateSingleResult not found. Found: {found}"
@@ -253,7 +250,6 @@ class TestOpcuaDirectConnection:
 class TestOpcuaSubscription:
     async def test_subscribe_to_events_succeeds(self, opcua_client):
         """Event subscription must be established without error."""
-        from asyncua import ua
 
         received: list[Any] = []
 

@@ -7,7 +7,6 @@
  * Requires: backend + OPC UA server running.
  */
 import { test, expect } from './e2e-fixtures.mjs'
-import { MethodsPage } from './page-objects.mjs'
 
 // ── UI layer ──────────────────────────────────────────────────────────────────
 

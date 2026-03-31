@@ -1,5 +1,6 @@
 """Helper script: browse the live OPC UA server and print all callable methods + args."""
 import asyncio
+import contextlib
 from asyncua import Client, ua
 
 
@@ -26,7 +27,7 @@ async def main():
                     parent = await child.get_parent()
                     parent_bn = await parent.read_browse_name()
                     args_info = []
-                    try:
+                    with contextlib.suppress(Exception):
                         for prop in await child.get_children():
                             pbn = await prop.read_browse_name()
                             if pbn.Name == "InputArguments":
@@ -34,8 +35,6 @@ async def main():
                                     args_info.append(
                                         f"{a.Name}(type={a.DataType.Identifier})"
                                     )
-                    except Exception:
-                        pass
                     methods.append({
                         "name": bn.Name,
                         "nodeid": str(child.nodeid),

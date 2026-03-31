@@ -7,6 +7,7 @@ Resource management tests.
 - After cleanup(), no dangling client references
 """
 import asyncio
+import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -37,10 +38,8 @@ async def test_event_handler_queue_is_not_unbounded():
     h = EventHandler(websocket=ws, server_url="opc.tcp://localhost:4840", client=client)
     assert _QUEUE_SIZE > 0
     h._queue_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await h._queue_task
-    except asyncio.CancelledError:
-        pass
 
 
 def test_shutdown_timeout_is_bounded():
