@@ -20,6 +20,7 @@ export default class USDemo extends BasicScreen {
     // Create display areas
     const displayArea = document.createElement('div')
     this.backGround.appendChild(displayArea)
+    this.backGround.classList.add('demoScreen')
     this.container = displayArea
 
     // Wait until the methods have loaded
@@ -46,7 +47,7 @@ export default class USDemo extends BasicScreen {
     this.container.classList.add('demoRow')
 
     const buttonArea = document.createElement('div')
-    buttonArea.classList.add('demoCol', 'demoSidebar')
+    buttonArea.classList.add('demoCol', 'demoSidebar', 'demoProgramSidebar')
     this.container.appendChild(buttonArea)
 
     // Handling of button 1 (calling select process)
@@ -91,18 +92,10 @@ export default class USDemo extends BasicScreen {
     resultBottomArea.classList.add('demoBottomPane')
     resultArea.appendChild(resultBottomArea)
 
-    const backGround = document.createElement('div')
-    backGround.classList.add('myInfoArea')
-    resultBottomArea.appendChild(backGround)
-
-    const title = document.createElement('div')
-    title.classList.add('myHeader')
-    title.innerText = 'Trace'
-    backGround.appendChild(title)
-
-    const field = document.createElement('div') // This is where the trace graphics will do
-    backGround.appendChild(field)
-    //
+    const field = this.makeNamedArea('Trace', 'demoMachine', resultBottomArea)
+    if (field?.parentArea?.classList) {
+      field.parentArea.classList.add('demoTraceArea')
+    }
 
     this.traceInterface = new TraceInterface(resultBottomArea, this.settings)
     this.traceDisplay = new TraceDisplay(['angle', 'torque'], this.resultManager, this, field, 'US Demo')

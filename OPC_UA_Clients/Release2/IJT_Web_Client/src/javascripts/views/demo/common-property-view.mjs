@@ -5,11 +5,11 @@
 export default class CommonPropertyView {
   constructor (propList, context, resultManager) {
     this.background = document.createElement('div')
-    this.background.classList.add('demoRow')
+    this.background.classList.add('commonResultGrid')
     this.keys = document.createElement('div')
-    this.keys.style.minWidth = '180px'
+    this.keys.classList.add('commonResultKeys')
     this.values = document.createElement('div')
-    this.values.style.minWidth = '400px'
+    this.values.classList.add('commonResultValues')
     context.appendChild(this.background)
 
     this.background.appendChild(this.keys)
@@ -38,12 +38,13 @@ export default class CommonPropertyView {
         let value = this.resolvePathValue(result, p)
         if (line1.innerText === 'ResultEvaluation:') {
           line1.innerText = 'ResultStatus:'
+          line2.classList.add('connectionStatusValue')
           if (parseInt(value) === 1) {
             value = 'OK'
-            line2.style.color = 'green'
+            line2.classList.add('onColor')
           } else {
-            value = 'NOT OK'
-            line2.style.color = 'red'
+            value = 'NOK'
+            line2.classList.add('offColor')
           }
         } else if (line1.innerText === 'ProgramId:') {
           line1.innerText = 'Program Name:'

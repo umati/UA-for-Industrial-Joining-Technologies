@@ -22,6 +22,7 @@ export default class JointDemo extends BasicScreen {
     // Create display areas
     const displayArea = document.createElement('div')
     this.backGround.appendChild(displayArea)
+    this.backGround.classList.add('jointDemoScreen')
     this.container = displayArea
 
     this.activate()
@@ -85,18 +86,18 @@ export default class JointDemo extends BasicScreen {
     if (!this._detectedTools.length) {
       const msg = document.createElement('p')
       msg.textContent = 'No tools found on server (or not yet connected).'
-      msg.style.cssText = 'color:#888;font-style:italic;margin:4px 0;'
+      msg.classList.add('jointDemoHintText')
       this._toolsTableContainer.appendChild(msg)
       return
     }
 
     const table = document.createElement('table')
-    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:0.85em;'
+    table.classList.add('jointDemoToolsTable')
 
     // Header — built with DOM to avoid innerHTML with any variable content
     const thead = document.createElement('thead')
     const headerRow = document.createElement('tr')
-    headerRow.style.cssText = 'background:#2a2a2a;color:#ccc;'
+    headerRow.classList.add('jointDemoToolsHeaderRow')
     const headerCells = [
       { text: 'Tool Name', align: 'left' },
       { text: 'ProductInstanceUri', align: 'left' },
@@ -105,7 +106,8 @@ export default class JointDemo extends BasicScreen {
     for (const { text, align } of headerCells) {
       const th = document.createElement('th')
       th.textContent = text
-      th.style.cssText = `padding:4px 8px;text-align:${align};border-bottom:1px solid #444;`
+      th.classList.add('jointDemoToolsHeaderCell')
+      th.style.textAlign = align
       headerRow.appendChild(th)
     }
     thead.appendChild(headerRow)
@@ -114,28 +116,29 @@ export default class JointDemo extends BasicScreen {
     const tbody = document.createElement('tbody')
     this._detectedTools.forEach((tool, idx) => {
       const tr = document.createElement('tr')
-      tr.style.cssText = idx % 2 === 0 ? 'background:#1e1e1e;' : 'background:#252525;'
+      tr.classList.add('jointDemoToolsRow')
+      tr.classList.add(idx % 2 === 0 ? 'jointDemoToolsRowEven' : 'jointDemoToolsRowOdd')
 
       const tdName = document.createElement('td')
       tdName.textContent = tool.toolName
-      tdName.style.cssText = 'padding:4px 8px;color:#ddd;'
+      tdName.classList.add('jointDemoToolsCell', 'jointDemoToolsCellName')
 
       const tdUri = document.createElement('td')
       tdUri.textContent = tool.productInstanceUri
       tdUri.title = tool.productInstanceUri // full URI on hover
-      tdUri.style.cssText = 'padding:4px 8px;color:#adf;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+      tdUri.classList.add('jointDemoToolsCell', 'jointDemoToolsCellUri')
 
       const tdBtn = document.createElement('td')
-      tdBtn.style.cssText = 'padding:2px 8px;text-align:center;'
+      tdBtn.classList.add('jointDemoToolsCell', 'jointDemoToolsCellButton')
       const btn = document.createElement('button')
       btn.textContent = 'Use'
-      btn.style.cssText = 'font-size:0.8em;padding:2px 8px;cursor:pointer;'
+      btn.classList.add('jointDemoToolsUseButton')
       btn.addEventListener('click', () => {
         this._selectedProductInstanceUri = tool.productInstanceUri
         this._updateActiveUriLabel()
         // Highlight selected row
-        tbody.querySelectorAll('tr').forEach(r => { r.style.outline = '' })
-        tr.style.outline = '2px solid #5af'
+        tbody.querySelectorAll('tr').forEach(r => { r.classList.remove('jointDemoToolsRowSelected') })
+        tr.classList.add('jointDemoToolsRowSelected')
       })
       tdBtn.appendChild(btn)
 
@@ -238,10 +241,10 @@ export default class JointDemo extends BasicScreen {
 
     // ── Tools table (ProductInstanceUri discovery) ────────────────────────────
     const toolsArea = this.makeNamedArea('Tools on Server', 'demoToolsArea', this.container)
-    toolsArea.style.cssText = 'margin:8px 0;padding:6px;'
+    toolsArea.classList.add('jointDemoToolsArea')
 
     this._activeUriLabel = document.createElement('div')
-    this._activeUriLabel.style.cssText = 'font-size:0.8em;color:#aaa;margin-bottom:6px;'
+    this._activeUriLabel.classList.add('jointDemoActiveUriLabel')
     this._activeUriLabel.textContent = 'Active ProductInstanceUri: — (not yet loaded)'
     toolsArea.appendChild(this._activeUriLabel)
 
@@ -251,7 +254,7 @@ export default class JointDemo extends BasicScreen {
     // Placeholder while not connected
     const placeholder = document.createElement('p')
     placeholder.textContent = 'Connect to a server to discover tools and their ProductInstanceUri.'
-    placeholder.style.cssText = 'color:#888;font-style:italic;margin:4px 0;font-size:0.85em;'
+    placeholder.classList.add('jointDemoHintText')
     this._toolsTableContainer.appendChild(placeholder)
 
     // ── Result area ───────────────────────────────────────────────────────────

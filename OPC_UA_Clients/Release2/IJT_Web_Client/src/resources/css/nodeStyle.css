@@ -3,20 +3,51 @@
    ========================================================= */
 :root {
   --ui-bg-primary: #000;
-  --ui-bg-panel: rgb(52 63 72 / 90%);
-  --ui-bg-panel-alt: rgb(62 73 82 / 90%);
+  --ui-bg-panel: rgba(52, 63, 72, 0.9);
+  --ui-bg-panel-alt: rgba(62, 73, 82, 0.9);
   --ui-bg-light: lightgray;
   --ui-accent: #fcdf07;
   --ui-text-main: yellow;
+  --connection-panel-border: rgba(252, 223, 7, 0.35);
+  --connection-panel-bg-start: rgba(52, 63, 72, 0.95);
+  --connection-panel-bg-end: rgba(44, 54, 62, 0.95);
+  --connection-panel-shadow: rgba(0, 0, 0, 0.22);
+  --connection-header-bg-start: rgba(0, 0, 0, 0.9);
+  --connection-header-bg-end: rgba(12, 12, 12, 0.9);
+  --connection-card-border: rgba(252, 223, 7, 0.25);
+  --connection-card-bg: rgba(0, 0, 0, 0.2);
+  --connection-pill-bg: rgba(0, 0, 0, 0.3);
+  --connection-pill-off-text: #ff8f8f;
+  --connection-pill-off-bg: rgba(160, 20, 20, 0.32);
+  --connection-pill-on-text: #b6ffb6;
+  --connection-pill-on-bg: rgba(20, 120, 20, 0.35);
+  --connection-message-border: rgba(252, 223, 7, 0.18);
+  --connection-message-bg: rgba(0, 0, 0, 0.18);
+  --demo-uri-text: #9dd8ff;
+  --demo-row-selected: var(--ui-accent);
+  --demo-gap: 10px;
+  --demo-surface-border: rgba(252, 223, 7, 0.26);
+  --demo-surface-bg: rgba(0, 0, 0, 0.18);
+  --demo-button-bg: rgba(0, 0, 0, 0.45);
+  --demo-button-bg-hover: rgba(252, 223, 7, 0.22);
+  --demo-button-text-hover: #fff8c4;
+  --demo-muted-text: rgba(252, 223, 7, 0.75);
+  --demo-font-title: 14px;
+  --demo-font-body: 12px;
+  --demo-font-small: 11px;
+  --demo-font-button: 12px;
+  --ui-line-width: 0.75px;
+  --ui-line-color: #fcdf07;
 }
 
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: var(--demo-font-body);
 }
 
 #form {
-  background: rgb(0 0 0 / 15%);
+  background: rgba(0, 0, 0, 0.15);
   padding: 0.25rem;
   position: fixed;
   bottom: 0;
@@ -25,7 +56,9 @@ body {
   display: flex;
   height: 3rem;
   box-sizing: border-box;
-
+  /* --webkit-backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px); */
 }
 
 #input {
@@ -63,16 +96,16 @@ body {
 }
 
 .messages>li {
-  border: 0 solid transparent;
-  border-radius: 0;
-  margin: 0;
+  border: 0px solid transparent;
+  border-radius: 0px;
+  margin: 0px 0px;
   background-color: var(--ui-bg-panel);
   color: yellow;
-  padding: 0 0 0 2px;
+  padding: 0px 0px 0px 2px;
 }
 
 canvas {
-  margin: 0 0 40px;
+  margin: 0px 0px 40px 0px;
 }
 
 .messages>li:nth-child(odd) {
@@ -97,6 +130,7 @@ canvas {
   height: 100vh;
   background-color: var(--ui-bg-panel);
   width: 100%;
+  /*overflow:hidden;*/
 }
 
 /* =========================================================
@@ -109,8 +143,8 @@ canvas {
   right: 50px;
   top: 50px;
   height: 150px;
-  background-color: rgb(0 255 0 / 30%);
-  border: 1px solid green;
+  background-color: rgba(0, 255, 0, 0.3);
+  border: var(--ui-line-width) solid var(--ui-line-color);
 }
 
 .tabGeneratorBase {
@@ -124,7 +158,6 @@ canvas {
 .basescreen {
   display: flex;
   flex-direction: column;
-
   /* default value; can be omitted */
   justify-content: space-between;
   font-weight: lighter;
@@ -150,12 +183,12 @@ canvas {
   width: 99%;
   min-height: 22px;
   height: auto;
-  padding: 5px 5px 1px;
+  padding: 5px 5px 01px 5px;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 4px;
-  border-bottom: 1px solid var(--ui-text-main);
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
 }
 
 .topLevelSelectorBackground {
@@ -171,16 +204,16 @@ canvas {
   color: var(--ui-text-main);
   padding: 5px;
   margin-bottom: -2px;
-  border: 1px solid var(--ui-text-main);
+  border: var(--ui-line-width) solid var(--ui-line-color);
   border-top-left-radius: 5px;
   border-top-right-radius: 5px;
-  border-bottom: 1px solid var(--ui-text-main);
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
 }
 
 .tabButton.is-selected {
   background-color: var(--ui-bg-panel);
   font-weight: bold;
-  border-bottom: 1px solid var(--ui-bg-panel);
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
 }
 
 .tabButton:hover {
@@ -198,17 +231,22 @@ canvas {
   display: flex;
   background-color: var(--ui-bg-panel);
   color: yellow;
+  /* overflow: hidden; */
   border-top: none;
   width: 99%;
   height: 95%;
   min-height: 0;
   overflow: hidden;
+  /* height: 92vh; */
+  /* margin: 0;
+  padding: 0;
+  /* vertical-align: bottom; */
 }
 
 .errorTab {
   padding: 20px;
   margin: 10px;
-  border: 10px solid yellow;
+  border: var(--ui-line-width) solid var(--ui-line-color);
   color: yellow;
   background-color: black;
   position: absolute;
@@ -221,9 +259,9 @@ canvas {
 }
 
 .methodDiv {
-  padding: 0;
+  padding: 0px;
   margin: 2px;
-
+  /* border-bottom: 1px solid rgba(52, 63, 72, 0.9); */
 }
 
 .methodJoiningProcess {
@@ -239,15 +277,15 @@ canvas {
 }
 
 .tightUL {
-  padding: 0;
+  padding: 0px;
 }
 
 .myHeader {
   background: darkgray;
   position: relative;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 0px;
+  left: 0px;
+  right: 0px;
   color: white;
   padding: 5px;
 }
@@ -268,21 +306,21 @@ canvas {
 }
 
 .myButton {
-  background: indianred;
+  background: IndianRed;
   color: black;
   margin: 5px;
 }
 
 .methodBorder {
-  border: 1px solid black;
+  border: var(--ui-line-width) solid var(--ui-line-color);
 }
 
 .methodRowDistance {
-  padding: 0 5px;
+  padding: 0px 5px;
 }
 
 .myButton:hover {
-  background: indianred;
+  background: IndianRed;
 }
 
 .myButton:active {
@@ -293,13 +331,13 @@ canvas {
 .invisButton {
   background: transparent;
   border-color: transparent;
-  border-width: 0;
+  border-width: 0px;
   color: black;
   margin: 5px;
 }
 
 .invisButton:hover {
-  background: indianred;
+  background: IndianRed;
 }
 
 .invisButton:active {
@@ -313,7 +351,7 @@ canvas {
 }
 
 .serverRow {
-  border-bottom: 1px solid black;
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
   text-align: left;
 }
 
@@ -364,20 +402,21 @@ ul {
   width: 49%;
   max-height: 97%;
   display: inline-block;
-  margin: 10px 0 0 10px;
+  margin: 10px 0px 0px 10px;
+  /* display: inline-block; */
 }
 
 .righthalf {
   width: 49%;
   max-height: 97%;
   display: inline-block;
-  margin: 10px 0 0 10px;
+  margin: 10px 0px 0px 10px;
 }
 
 .traceList {
-  border-color: blue;
+  border-color: var(--ui-line-color);
   border-style: solid;
-  border-width: 2px;
+  border-width: var(--ui-line-width);
   border-radius: 5px;
 }
 
@@ -408,7 +447,7 @@ ul {
 .scrollFull {
   overflow: auto;
   height: 100%;
-  margin: 0 5px;
+  margin: 0px 5px;
 }
 
 .namedInfoArea {
@@ -427,15 +466,14 @@ ul {
   height: 10px;
   margin: -5px;
   background-color: yellow;
-  border: solid red 1px;
+  border: var(--ui-line-width) solid var(--ui-line-color);
   position: absolute;
 }
-
 .limitDragboxStart {
   width: 20px;
   height: 20px;
   margin: -10px;
-  background-color: rgb(0 0 0 / 15%);
+  background-color: rgba(0, 0, 0, 0.15);
   position: absolute;
 }
 
@@ -443,7 +481,7 @@ ul {
   width: 30px;
   height: 30px;
   margin: -15px;
-  background-color: rgb(0 0 0 / 15%);
+  background-color: rgba(0, 0, 0, 0.15);
   position: absolute;
 }
 
@@ -465,7 +503,7 @@ ul {
   height: 10px;
   margin: -5px;
   background-color: green;
-  border: solid red 1px;
+  border: var(--ui-line-width) solid var(--ui-line-color);
   position: absolute;
 }
 
@@ -480,7 +518,7 @@ ul {
 }
 
 html {
-  background-color: #000;
+  background-color: #000000;
 }
 
 .tabrow {
@@ -497,12 +535,12 @@ html {
 .tabright {
   flex-basis: content;
   align-self: flex-end;
-  border-bottom: 1px solid var(--ui-text-main);
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
 }
 
 .tab {
   float: left;
-  border: 1px solid purple;
+  border: var(--ui-line-width) solid var(--ui-line-color);
 }
 
 
@@ -512,17 +550,17 @@ html {
   list-style: none;
   position: relative;
   text-align: left;
-  margin: 10px 15px 5px;
+  margin: 10px 15px 5px 15px;
   background-color: var(--ui-bg-panel);
 }
 
 .tabs>li {
   float: left;
   display: block;
-  border-top: solid var(--ui-accent) 3px;
-  border-left: solid var(--ui-accent) 3px;
-  border-right: solid 3px var(--ui-accent);
-  border-radius: 10px 10px 0 0;
+  border-top: var(--ui-line-width) solid var(--ui-line-color);
+  border-left: var(--ui-line-width) solid var(--ui-line-color);
+  border-right: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 10px 10px 0px 0px;
   color: var(--ui-accent);
   padding: 15px;
   background-color: var(--ui-bg-panel);
@@ -544,11 +582,16 @@ html {
   height: 100%;
   position: relative;
   min-height: 0;
+  background: var(--ui-bg-light);
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 0;
 }
 
 #myChart {
   width: 100%;
   height: 100%;
+  background: var(--ui-bg-light);
+  border-radius: 0;
 }
 
 .traceButtonArea {
@@ -577,6 +620,8 @@ html {
 }
 
 .kvSelect {
+  -webkit-appearance: none;
+  -moz-appearance: none;
   appearance: none;
   color: black;
   cursor: pointer;
@@ -588,8 +633,8 @@ html {
 .asset {
   color: black;
   cursor: pointer;
-  border-color: black;
-  border-width: 1px;
+  border-color: var(--ui-line-color);
+  border-width: var(--ui-line-width);
   border-style: solid;
   width: 90%;
   padding: 25px;
@@ -597,29 +642,61 @@ html {
 }
 
 .drawAssetBox {
+  /* border: 2px solid gray; */
   position: fixed;
-  inset: 115px 30px 35px 15px;
+  top: 115px;
+  left: 15px;
+  right: 30px;
+  bottom: 35px;
+  /* background-color: green; */
 }
 
 .assetArea {
   position: absolute;
-  inset: 0%;
+  top:0%;
+  left:0%;
+  bottom:0%;
+  right:0%;
   color: yellow;
 
 }
 
 .assetBox {
-  border: 1px solid black;
+  border: var(--ui-line-width) solid var(--ui-line-color);
   position: absolute;
-  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .offColor {
-  color: indianred;
+  color: IndianRed;
 }
 
 .onColor {
   color: green;
+}
+
+/* Standardized thin line width across major graphical components */
+.tabButton,
+.myButton,
+.demoButton,
+.demoButtonFree,
+.jointDemoToolsUseButton,
+.methodBorder,
+.serverRow,
+.traceArea,
+.mainDropDown,
+.zoomwindow,
+.connectionStatusCard,
+.jointDemoToolsHeaderCell,
+.jointDemoToolsRowSelected,
+.demoScreen .scrollableInfoArea,
+.demoScreen .myInfoArea,
+.jointDemoScreen .scrollableInfoArea,
+.jointDemoScreen .myInfoArea,
+.connectionScreen .scrollableInfoArea {
+  border-style: solid;
+  border-width: var(--ui-line-width);
+  border-color: var(--ui-line-color);
 }
 
 .connectionScreen .columns {
@@ -644,19 +721,19 @@ html {
 .connectionScreen .scrollableInfoArea {
   height: 100%;
   min-height: 0;
-  border: 1px solid rgba(252, 223, 7, 0.35);
+  border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 10px;
-  background: linear-gradient(180deg, rgba(52, 63, 72, 0.95) 0%, rgba(44, 54, 62, 0.95) 100%);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
+  box-shadow: 0 10px 24px var(--connection-panel-shadow);
 }
 
 .connectionScreen .myHeader {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, rgba(12, 12, 12, 0.9) 100%);
+  background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
   color: var(--ui-text-main);
   font-weight: 600;
   letter-spacing: 0.02em;
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(252, 223, 7, 0.35);
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
 }
 
 .connectionStatusGrid {
@@ -673,9 +750,9 @@ html {
   gap: 8px;
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid rgba(252, 223, 7, 0.25);
+  border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 8px;
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: var(--connection-card-bg);
 }
 
 .connectionStatusName {
@@ -695,17 +772,27 @@ html {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  background-color: rgba(0, 0, 0, 0.3);
+  background-color: var(--connection-pill-bg);
+}
+
+.connectionStatusValue.offColor {
+  color: var(--connection-pill-off-text);
+  background-color: var(--connection-pill-off-bg);
+}
+
+.connectionStatusValue.onColor {
+  color: var(--connection-pill-on-text);
+  background-color: var(--connection-pill-on-bg);
 }
 
 .connectionScreen .connectionStatusValue.offColor {
-  color: #ff8f8f;
-  background-color: rgba(160, 20, 20, 0.32);
+  color: var(--connection-pill-off-text);
+  background-color: var(--connection-pill-off-bg);
 }
 
 .connectionScreen .connectionStatusValue.onColor {
-  color: #b6ffb6;
-  background-color: rgba(20, 120, 20, 0.35);
+  color: var(--connection-pill-on-text);
+  background-color: var(--connection-pill-on-bg);
 }
 
 .connectionScreen .messages {
@@ -716,11 +803,336 @@ html {
 .connectionScreen .messages > li {
   margin: 0 0 8px 0;
   padding: 8px 10px;
-  border: 1px solid rgba(252, 223, 7, 0.18);
+  border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 6px;
-  background-color: rgba(0, 0, 0, 0.18);
+  background-color: var(--connection-message-bg);
   color: var(--ui-text-main);
   font-size: 12px;
+}
+
+.demoScreen .scrollableInfoArea,
+.demoScreen .myInfoArea,
+.jointDemoScreen .scrollableInfoArea,
+.jointDemoScreen .myInfoArea {
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
+  box-shadow: 0 10px 24px var(--connection-panel-shadow);
+  overflow: hidden;
+}
+
+.demoScreen .myHeader,
+.jointDemoScreen .myHeader {
+  background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
+  color: var(--ui-text-main);
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
+  font-size: var(--demo-font-title);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.demoScreen .labelStyle,
+.jointDemoScreen .labelStyle {
+  color: var(--ui-text-main);
+  font-size: var(--demo-font-body);
+  line-height: 1.35;
+}
+
+.demoScreen {
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.jointDemoScreen {
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.demoScreen .demoRow,
+.jointDemoScreen .demoRow {
+  gap: var(--demo-gap);
+  margin: 0;
+  min-height: 0;
+}
+
+.demoScreen .demoCol,
+.jointDemoScreen .demoCol {
+  gap: var(--demo-gap);
+  margin: 0;
+  height: 100%;
+}
+
+.demoScreen .demoSidebar {
+  width: 22%;
+  min-width: 170px;
+  justify-content: flex-start;
+  padding: 10px;
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 10px;
+  background: var(--demo-surface-bg);
+}
+
+.demoScreen .demoProgramSidebar {
+  width: 170px;
+  min-width: 170px;
+  flex: 0 0 170px;
+}
+
+.demoScreen .demoMainArea,
+.jointDemoScreen .demoMainArea {
+  width: 78%;
+}
+
+.jointDemoScreen .demoCol {
+  height: auto;
+}
+
+.jointDemoScreen .demoMainArea {
+  width: 100%;
+  min-width: 0;
+}
+
+.demoScreen .demoTopPane,
+.jointDemoScreen .demoTopPane {
+  height: auto;
+  min-height: 200px;
+  flex: 0 0 auto;
+}
+
+.demoScreen .demoBottomPane,
+.jointDemoScreen .demoBottomPane {
+  height: auto;
+  flex: 1 1 auto;
+  margin: 0;
+  min-height: 0;
+}
+
+.demoScreen .demoTraceArea {
+  height: 100%;
+  min-height: 0;
+}
+
+.demoScreen .demoTraceArea .standardCol,
+.demoScreen .demoTraceArea .tightUL,
+.demoScreen .demoTraceArea .traceArea {
+  height: 100%;
+  min-height: 0;
+}
+
+.demoScreen .demoMachine,
+.jointDemoScreen .demoMachine,
+.jointDemoScreen .demoTwin {
+  width: 100%;
+  max-width: none;
+}
+
+.demoScreen .demoMachine,
+.demoScreen .demoMachine .kvKey,
+.demoScreen .demoMachine .kvValue,
+.demoScreen .demoMachine div,
+.jointDemoScreen .demoMachine,
+.jointDemoScreen .demoMachine .kvKey,
+.jointDemoScreen .demoMachine .kvValue,
+.jointDemoScreen .demoMachine div {
+  color: var(--ui-text-main);
+}
+
+.demoScreen .demoButton,
+.jointDemoScreen .demoButton,
+.jointDemoScreen .demoButtonFree,
+.jointDemoScreen .jointDemoToolsUseButton {
+  background-color: var(--demo-button-bg);
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  color: var(--ui-text-main);
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: var(--demo-font-button);
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  transition: background-color 120ms linear, transform 120ms ease;
+}
+
+.demoScreen .demoButton {
+  min-height: 34px;
+  width: 100%;
+  margin: 0 0 10px 0;
+  text-align: left;
+}
+
+.demoScreen .demoButton:hover,
+.jointDemoScreen .demoButton:hover,
+.jointDemoScreen .demoButtonFree:hover,
+.jointDemoScreen .jointDemoToolsUseButton:hover {
+  background: var(--demo-button-bg-hover);
+  color: var(--demo-button-text-hover);
+}
+
+.demoScreen .demoButton:active,
+.jointDemoScreen .demoButton:active,
+.jointDemoScreen .demoButtonFree:active,
+.jointDemoScreen .jointDemoToolsUseButton:active {
+  transform: translateY(1px);
+}
+
+.jointDemoToolsArea {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.jointDemoScreen .demoToolsArea {
+  height: 33%;
+  min-height: 180px;
+  max-height: 280px;
+  overflow: hidden;
+}
+
+.jointDemoScreen .demoTopPane .scrollableInfoArea {
+  margin: 0;
+}
+
+.jointDemoScreen .demoTwin {
+  height: 400px;
+  min-height: 400px;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.jointDemoActiveUriLabel {
+  font-size: var(--demo-font-small);
+  color: var(--ui-text-main);
+  margin-bottom: 6px;
+  line-height: 1.35;
+}
+
+.jointDemoHintText {
+  color: var(--demo-muted-text);
+  font-style: italic;
+  margin: 4px 0;
+  font-size: var(--demo-font-small);
+  line-height: 1.35;
+}
+
+.jointDemoToolsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--demo-font-body);
+  line-height: 1.35;
+}
+
+.jointDemoToolsHeaderRow {
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--ui-text-main);
+}
+
+.jointDemoToolsHeaderCell {
+  padding: 6px 8px;
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
+  font-size: var(--demo-font-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.jointDemoToolsRowEven {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.jointDemoToolsRowOdd {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.jointDemoToolsCell {
+  padding: 6px 8px;
+}
+
+.jointDemoToolsCellName {
+  color: var(--ui-text-main);
+}
+
+.jointDemoToolsCellUri {
+  color: var(--demo-uri-text);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jointDemoToolsRow {
+  transition: background-color 120ms linear;
+}
+
+.jointDemoToolsRow:hover {
+  background: rgba(252, 223, 7, 0.14);
+}
+
+.jointDemoScreen .demoRelativeArea img {
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.jointDemoToolsCellButton {
+  text-align: center;
+}
+
+.jointDemoToolsUseButton {
+  font-size: 0.8em;
+  padding: 2px 8px;
+  cursor: pointer;
+  background-color: var(--ui-bg-primary);
+  color: var(--ui-text-main);
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 4px;
+}
+
+.jointDemoToolsUseButton:hover {
+  background: darkgray;
+  color: black;
+}
+
+.jointDemoToolsRowSelected {
+  outline: 2px solid var(--demo-row-selected);
+}
+
+.commonResultGrid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0 10px;
+  width: 100%;
+}
+
+.commonResultKeys,
+.commonResultValues {
+  min-width: 0;
+}
+
+.commonResultKeys > div {
+  white-space: nowrap;
+}
+
+.commonResultValues > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .jointDemoScreen .demoRow {
+    flex-direction: column;
+  }
+
+  .jointDemoScreen .demoMainArea {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
 }
 
 .drawResultBox {
@@ -741,49 +1153,52 @@ html {
   background-color: red;
   color: white;
 }
-
 .resOK {
   background-color: green;
   color: white;
 }
 
 .resTightening {
-  border-width: 2px;
-  border-color: black;
-  background-color: rgb(75 172  198 / 100%);
+  border-style: solid;
+  border-width: var(--ui-line-width);
+  border-color: var(--ui-line-color);
+  background-color: rgba(75, 172,  198, 1);
   text-align: center;
   color: black;
-  margin: 0 5px 0 0;
+  margin: 0px 5px 0px 0px;
   padding: 5px;
 }
 
 .resBatch {
-  background-color: rgb(192 80  70 / 100%);
-  border-width: 2px;
-  border-color: black;
+  background-color: rgba(192, 80,  70, 1);
+  border-style: solid;
+  border-width: var(--ui-line-width);
+  border-color: var(--ui-line-color);
   color: black;
   text-align: center;
-  margin: 0 5px 0 0;
+  margin: 0px 5px 0px 0px;
   padding: 5px;
 }
 
 .resJob {
-  background-color: rgb(146 208  80 / 100%);
-  border-width: 2px;
-  border-color: black;
+  background-color: rgba(146, 208,  80, 1);
+  border-style: solid;
+  border-width: var(--ui-line-width);
+  border-color: var(--ui-line-color);
   color: black;
   text-align: center;
-  margin: 0 5px 0 0;
+  margin: 0px 5px 0px 0px;
   padding: 5px;
 }
 
 .resOther {
   background-color: midnightblue;
-  border-color: black;
+  border-style: solid;
+  border-color: var(--ui-line-color);
   color: white;
   text-align: center;
-  border-width: 1px;
-  margin: 0 5px 0 0;
+  border-width: var(--ui-line-width);
+  margin: 0px 5px 0px 0px;
 }
 
 .resReference {
@@ -792,97 +1207,105 @@ html {
 }
 
 .resNew1 {
-  transition: box-shadow 0.3s ease;
+  transition: box-shadow 5px 5px 5px black;
+}
+
+.resNew1 {
   animation: shadow1 15s;
 }
 
 @keyframes shadow1 {
-
   /* The 0% keyframe represents the initial state of the element */
   0% {
-    box-shadow: 0 5px 5px rgb(0 0 0 / 25%);
+    box-shadow: 0 5px 5px rgba(0,0,0,0.25);
   }
  
   /* The 100% keyframe represents the final state of the element */
   100% {
-    box-shadow: 0 5px 5px rgb(0 0 0 / 0%);
+    box-shadow: 0 5px 5px rgba(0,0,0,0);
   }
 }
 
 .resNew2 {
-  transition: box-shadow 0.3s ease;
+  transition: box-shadow 5px 5px 5px black;
+}
+
+.resNew2 {
   animation: shadow2 30s;
 }
 
 @keyframes shadow2 {
-
   /* The 0% keyframe represents the initial state of the element */
   0% {
-    box-shadow: 0 5px 5px rgb(0 0 0 / 50%);
+    box-shadow: 0 5px 5px rgba(0,0,0,0.5);
   }
  
   /* The 100% keyframe represents the final state of the element */
   100% {
-    box-shadow: 0 5px 5px rgb(0 0 0 / 0%);
+    box-shadow: 0 5px 5px rgba(0,0,0,0);
   }
 }
 
 
 
 .resNew3 {
-  transition: box-shadow 0.3s ease;
+  transition: box-shadow 5px 5px 5px black;
+}
+
+.resNew3 {
   animation: shadow3 45s;
 }
 
 @keyframes shadow3 {
-
   /* The 0% keyframe represents the initial state of the element */
   0% {
-    box-shadow: 0 5px 5px rgb(0 0 0 / 75%);
+    box-shadow: 0 5px 5px rgba(0,0,0,0.75);
   }
  
   /* The 100% keyframe represents the final state of the element */
   100% {
-    box-shadow: 0 5px 5px rgb(0 0 0 / 0%);
+    box-shadow: 0 5px 5px rgba(0,0,0,0);
   }
 }
 
 
 .resNew4 {
-  transition: box-shadow 0.3s ease;
+  transition: box-shadow 5px 5px 5px darkgrey;
+}
+
+.resNew4 {
   animation: shadow4 60s;
 }
 
 @keyframes shadow4 {
-
   /* The 0% keyframe represents the initial state of the element */
   0% {
-    box-shadow: 0 5px 5px rgb(0 0 0 / 100%);
+    box-shadow: 0 5px 5px rgba(0,0,0,1);
   }
  
   /* The 100% keyframe represents the final state of the element */
   100% {
-    box-shadow: 0 5px 5px rgb(0 0 0 / 0%);
+    box-shadow: 0 5px 5px rgba(0,0,0,0);
   }
 }
 
 
 .resultHeader {
   height: 20px;
-  border: 1px solid indianred;
-  display: flex;
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  display:flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
 }
 
 .resultHeaderItem {
-  display: inline;
-  padding: 0 5px;
+  display:inline;
+  padding: 0px 5px;
 }
 
 .rootTop {
-  display: flex;
+  display:flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
@@ -892,7 +1315,7 @@ html {
 .rootCenterRef {
   min-width: 10px;
   max-width: 1000px;
-  display: flex;
+  display:flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -902,7 +1325,7 @@ html {
 .rootCenterHier {
   min-width: 10px;
   max-width: 1000px;
-  display: flex;
+  display:flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -911,16 +1334,16 @@ html {
 }
 
 .horStack {
-  display: flex;
+  display:flex;
   flex-direction: row;
   justify-content: center;
-  align-items: start
+  align-items:start
 }
 
 .rootChildRef {
   min-width: 10px;
   max-width: 1000px;
-  display: flex;
+  display:flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -930,7 +1353,7 @@ html {
 .rootChildHier {
   min-width: 10px;
   max-width: 1000px;
-  display: flex;
+  display:flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -939,35 +1362,31 @@ html {
 
 
 .snibbRow {
-  display: flex;
+  display:flex;
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  width: 100%;
+  width:100%;
 }
-
 .snibbNone {
   width: 50%;
   height: 10px;
 }
-
 .snibbRight {
-  border-left: 1px solid black;
+  border-left: var(--ui-line-width) solid var(--ui-line-color);
   width: 50%;
   height: 10px;
 }
-
 .snibbTopRef {
-  border-top: 1px solid black;
+  border-top: var(--ui-line-width) solid var(--ui-line-color);
 }
 
 
 .demoRow {
   display: flex;
   flex-direction: row;
-
-  /* justify-content: center;
-  align-items: center; */
+  /*justify-content: center;
+  align-items: center;*/
   height: 97%;
   margin: 5px;
   min-height: 0;
@@ -1011,7 +1430,7 @@ html {
   background-color: var(--ui-bg-primary);
   color: var(--ui-text-main);
   padding: 5px;
-  border: 1px solid var(--ui-text-main);
+  border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 5px;
   margin: 10px;
 }
@@ -1031,7 +1450,7 @@ html {
   background-color: var(--ui-bg-primary);
   color: var(--ui-text-main);
   padding: 5px;
-  border: 1px solid var(--ui-text-main);
+  border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 5px;
   margin: 10px;
   height: 30px;
@@ -1097,8 +1516,8 @@ html {
   color: black;
   overflow: hidden;
   width: 30%;
-  margin: 0 5px 0 0;
-  padding: 0;
+  margin: 0px 5px 0px 0px;
+  padding: 0px;
   height: 100%;
 }
 
@@ -1108,7 +1527,7 @@ html {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgb(0 0 0 / 70%);
+  background: rgba(0, 0, 0, 0.7);
 }
 
 .coverLayer {
@@ -1116,17 +1535,17 @@ html {
   height: 0%;
   background: transparent;
   position: absolute;
-  top: 0;
+  top:0px;
 }
 
 .drag-over {
   width: 100%;
   height: 100%;
-  background: rgb(0 0 0 / 30%);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .envpopup {
-  display: flex;
+  display:flex;
   flex-direction: row;
   position: fixed;
   top: 10%;
@@ -1145,13 +1564,13 @@ html {
 }
 
 .buttonArea {
-  margin: 0 0 0 10px;
+  margin: 0px 0px 0px 10px;
   width: 95%;
 }
 
 
 .treeButtonPlace {
-  margin: -5px 0 -5px -5px;
+  margin: -5px 0px -5px -5px;
   color: black;
   overflow: hidden;
 }
@@ -1167,19 +1586,22 @@ html {
 
 .identifier {
   font-weight: normal;
-  padding: 0 0 0 15px;
+  padding: 0px 0px 0px 15px;
 }
 
 .identifier:hover {
-  background: indianred;
+  background: IndianRed;
   transition: background-color 100ms linear;
 }
 
 .idSelectDialog {
   position: absolute;
-  inset: 100px;
+  left: 100px;
+  right: 100px;
+  bottom: 100px;
+  top: 100px;
   z-index: 100000;
-  border: 1px solid black;
+  border: var(--ui-line-width) solid var(--ui-line-color);
   background-color: darkgray;
   font-weight: bold;
   padding: 5px;
@@ -1187,9 +1609,12 @@ html {
 
 .idSelectDialogGrayBackground {
   position: absolute;
-  inset: 1px;
+  left: 1px;
+  right: 1px;
+  bottom: 1px;
+  top: 1px;
   z-index: 99999;
-  background-color: rgb(0 0 0 / 67.6%);
+  background-color: rgba(0, 0, 0, 0.676);
 }
 
 .methodLabel {
@@ -1205,24 +1630,27 @@ html {
 .methodInputRight {
   width: 45%;
   display: inline-block;
-  padding-left: 0;
+  padding-left: 0px;
 }
 
 .myCheckBox {
-  margin-left: 0;
+  margin-left: 0px;
 }
 
 .mainDropDown {
-  background-color: lightgray;
+  background-color: var(--ui-bg-light);
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .fillWidth {
-  margin: 5px 0 5px 5px ;
+  margin: 5px 0px 5px 5px ;
   width: 100%;
 }
 
 .bigTraceMargin {
-  margin: 5px 0 0 5px;
+  margin: 5px 0px 0px 5px;
 }
 
 .eventqueuehoverdiv {
@@ -1231,7 +1659,7 @@ html {
   bottom: 15px;
   min-height: 62px;
   background-color: black;
-  border: 1px solid yellow;
+  border: var(--ui-line-width) solid var(--ui-line-color);
   color: yellow;
   display: flex;
   flex-direction: row;
@@ -1239,7 +1667,7 @@ html {
 }
 
 .eventQueuePeeks {
-  padding: 0 10px;
+  padding: 0px 10px;
 }
 
 .eventInfo {
@@ -1362,7 +1790,7 @@ html {
   min-width: 6rem;
   min-height: 0;
   padding: 10px;
-  border: 1px solid rgb(0 0 0 / 18%);
+  border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 10px;
   box-sizing: border-box;
 }
@@ -1400,9 +1828,9 @@ html {
   flex-direction: column;
   min-height: 0;
   padding: 0;
-  border: 1px solid rgb(0 0 0 / 18%);
+  border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 10px;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 12%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 .envelopeSection {
@@ -1448,7 +1876,8 @@ html {
 .envelopeBorderCard .tightUL,
 .envelopeBorderCard .contentArea,
 .envelopeBorderCard .standardCol {
-  place-content: flex-start flex-start;
+  justify-content: flex-start;
+  align-content: flex-start;
   padding-top: 0;
 }
 
@@ -1514,13 +1943,13 @@ html {
   min-width: 0;
 }
 
-@media (width <= 860px) {
+@media (max-width: 860px) {
   .envelopeSidebar {
     flex-basis: 8.4rem;
   }
 }
 
-@media (width <= 720px) {
+@media (max-width: 720px) {
   .envelopeLayout {
     padding: 6px;
     gap: 8px;
@@ -1566,10 +1995,10 @@ html {
 .okRateValue {
   min-width: 280px;
   padding: 20px 28px;
-  border: 2px solid #fff06a;
+  border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 14px;
-  background: rgb(0 0 0 / 45%);
-  box-shadow: 0 0 20px rgb(0 0 0 / 40%);
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
   text-align: center;
   font-size: 4rem;
   font-weight: 700;
@@ -1578,17 +2007,17 @@ html {
 
 .okRateValue.is-good {
   color: #9dff9d;
-  border-color: #9dff9d;
+  border-color: var(--ui-line-color);
 }
 
 .okRateValue.is-medium {
   color: #ffe88a;
-  border-color: #ffe88a;
+  border-color: var(--ui-line-color);
 }
 
 .okRateValue.is-low {
   color: #ff9b9b;
-  border-color: #ff9b9b;
+  border-color: var(--ui-line-color);
 }
 
 .okRateSummary {
@@ -1609,8 +2038,8 @@ html {
   min-width: 130px;
   padding: 8px 12px;
   border-radius: 8px;
-  border: 1px solid rgb(255 255 255 / 35%);
-  background: rgb(255 255 255 / 8%);
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  background: rgba(255, 255, 255, 0.08);
   text-align: center;
   font-size: 1rem;
 }
