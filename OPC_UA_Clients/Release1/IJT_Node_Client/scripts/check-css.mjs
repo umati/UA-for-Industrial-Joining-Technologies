@@ -100,7 +100,7 @@ function checkFile (filePath) {
           !rawValue.includes('calc(')) {
         const unitPattern = /(px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pt|pc|%)\b/
         // Split by whitespace and "/" (border-radius: 5px 10px / 2px 4px;)
-        const tokens = rawValue.split(/[\/\s]+/).filter(Boolean)
+        const tokens = rawValue.split(/[/\s]+/).filter(Boolean)
         let hasUnit = false
         let hasNumeric = false
 

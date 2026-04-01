@@ -4,7 +4,7 @@
  * Requires: backend + OPC UA server running.
  */
 import { test, expect } from './e2e-fixtures.mjs'
-import { JointDemoPage, EventsPage, ResultsPage, RESULT_TYPE } from './page-objects.mjs'
+import { RESULT_TYPE } from './page-objects.mjs'
 
 test('JointDemo: demo buttons are rendered', async ({ connected: app }) => {
   test.setTimeout(90_000)

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import aiofiles
 import pytz
-from asyncua import Client, ua
+from asyncua import ua
 
 from python.ijt_logger import ijt_log
 from python.serialize_data import serialize_full_event
@@ -243,7 +243,7 @@ def log_joining_system_event(event: Any) -> None:
         for entity in event.AssociatedEntities:
             try:
                 log_entity(entity, label_width)
-            except Exception as e:
+            except (AttributeError, TypeError) as e:
                 log_field("Error logging entity", e, label_width)
     else:
         log_field("AssociatedEntities", event.AssociatedEntities, label_width)
@@ -254,7 +254,7 @@ def log_joining_system_event(event: Any) -> None:
         for rv in event.ReportedValues:
             try:
                 log_reported_value(rv, label_width)
-            except Exception as e:
+            except (AttributeError, TypeError) as e:
                 log_field("Error logging reported value", e, label_width)
     else:
         log_field("ReportedValues", event.ReportedValues, label_width)

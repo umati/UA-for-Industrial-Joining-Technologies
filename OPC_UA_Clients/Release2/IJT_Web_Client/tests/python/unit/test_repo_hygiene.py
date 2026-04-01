@@ -12,7 +12,6 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -156,6 +155,79 @@ class TestGitignoreCoverage:
         text = self._gitignore_text()
         assert "venv/" in text, "venv/ not found in .gitignore"
 
+    def test_gitignore_covers_code_workspace(self):
+        """*.code-workspace must be in .gitignore (personal IDE workspace files)."""
+        text = self._gitignore_text()
+        assert "*.code-workspace" in text, "*.code-workspace not found in .gitignore"
+
+
+# ===========================================================================
+# 3. connectionpoints.json — default config enforcement
+# ===========================================================================
+
+
+class TestConnectionpointsDefault:
+    """Enforce that committed connectionpoints.json files contain only the LOCAL entry.
+
+    Developers may add extra entries locally, but must not push them.
+    CI catches this automatically.
+    """
+
+    _LOCAL_NAMES = {"local", "localhost"}
+
+    @pytest.mark.skipif(
+        not _git_available(),
+        reason="git not installed — skipping connectionpoints checks",
+    )
+    def test_web_client_connectionpoints_has_only_local(self):
+        """src/resources/connectionpoints.json in IJT_Web_Client must have exactly one
+        entry and it must be the LOCAL endpoint (127.0.0.1 / localhost)."""
+        import json
+
+        path = (
+            _GIT_ROOT
+            / "OPC_UA_Clients"
+            / "Release2"
+            / "IJT_Web_Client"
+            / "src"
+            / "resources"
+            / "connectionpoints.json"
+        )
+        if not path.exists():
+            pytest.skip(f"connectionpoints.json not found at {path}")
+
+        data = json.loads(path.read_text(encoding="utf-8"))
+        points = data.get("connectionpoints", [])
+
+        assert len(points) == 1, (
+            f"connectionpoints.json must contain exactly 1 entry (the LOCAL endpoint), "
+            f"but found {len(points)} entries: "
+            + ", ".join(p.get("name", "?") for p in points)
+            + "\n  Remove personal/team endpoints before committing."
+        )
+
+        name = points[0].get("name", "").strip().lower()
+        address = points[0].get("address", "")
+        is_local = name in self._LOCAL_NAMES or "127.0.0.1" in address or "localhost" in address
+        assert is_local, (
+            f"The single entry in connectionpoints.json must be the LOCAL endpoint "
+            f"(name 'LOCAL' or address 127.0.0.1/localhost), got: name={points[0].get('name')!r}, "
+            f"address={address!r}"
+        )
+
+    @pytest.mark.skipif(
+        not _git_available(),
+        reason="git not installed — skipping connectionpoints checks",
+    )
+    def test_no_code_workspace_files_tracked(self):
+        """*.code-workspace files must not be committed (personal IDE workspace files)."""
+        tracked = _git_ls_files("*.code-workspace")
+        assert tracked == [], (
+            "The following *.code-workspace files are tracked by git and must be removed:\n  "
+            + "\n  ".join(tracked)
+            + "\n  Run: git rm --cached <file>  then commit the removal."
+        )
+
 
 # ===========================================================================
 # 3. No hardcoded secrets in Python source
@@ -213,3 +285,147 @@ class TestNoHardcodedSecrets:
             "Possible hardcoded secrets found in Python source:\n  "
             + "\n  ".join(all_violations)
         )
+
+
+# ===========================================================================
+# 4. JS source code quality — fix regression tests
+# ===========================================================================
+
+
+_JS_SRC_ROOT = _PROJECT_ROOT / "src" / "javascripts"
+
+
+class TestJsCodeQuality:
+    """Regression tests that catch specific known bugs so they cannot be reintroduced."""
+
+    def test_model_to_html_no_variable_shadowing(self):
+        """model-to-html.mjs must not redeclare onScreen with 'const' inside display().
+
+        Regression test for M-6: 'const onScreen = this.toHTML(...)' inside the
+        if-branch of display() shadows the outer 'let onScreen', making the outer
+        variable permanently unassigned in that branch.
+        """
+        path = _JS_SRC_ROOT / "views" / "address-space" / "model-to-html.mjs"
+        if not path.exists():
+            pytest.skip(f"model-to-html.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        # The fix removes 'const onScreen = this.toHTML(...)' and uses assignment instead
+        assert "const onScreen = this.toHTML(" not in content, (
+            "model-to-html.mjs still has 'const onScreen = this.toHTML(...)' inside display(). "
+            "This shadows the outer 'let onScreen'. Change to assignment: 'onScreen = this.toHTML(...)'"
+        )
+
+    def test_result_manager_object_assign_filters_proto_keys(self):
+        """result-manager.mjs handlePartial must not use bare Object.assign with newResult.
+
+        Regression test for L-1: bare Object.assign(stored, newResult) allows prototype
+        pollution if newResult contains __proto__, constructor, or prototype keys.
+        The fix destructures to strip those keys first.
+        """
+        path = _JS_SRC_ROOT / "ijt-support" / "results" / "result-manager.mjs"
+        if not path.exists():
+            pytest.skip(f"result-manager.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        assert "Object.assign(stored, newResult)" not in content, (
+            "result-manager.mjs uses bare Object.assign(stored, newResult) which is vulnerable "
+            "to prototype pollution. Destructure __proto__/constructor/prototype keys out first."
+        )
+
+    def test_connection_graphics_uses_textcontent_not_innerhtml(self):
+        """connection-graphics.mjs must use textContent not innerHTML for status labels.
+
+        Regression test: innerHTML = 'ESTABLISHED'/'LOST' triggers CodeQL XSS warnings
+        even for hardcoded strings. textContent is semantically correct and safe.
+        """
+        path = _JS_SRC_ROOT / "views" / "connection" / "connection-graphics.mjs"
+        if not path.exists():
+            pytest.skip(f"connection-graphics.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        assert "innerHTML = 'ESTABLISHED'" not in content, (
+            "connection-graphics.mjs still uses innerHTML = 'ESTABLISHED'. "
+            "Use textContent = 'ESTABLISHED' instead to avoid CodeQL XSS warnings."
+        )
+        assert "innerHTML = 'LOST'" not in content, (
+            "connection-graphics.mjs still uses innerHTML = 'LOST'. "
+            "Use textContent = 'LOST' instead."
+        )
+        assert "textContent = 'ESTABLISHED'" in content, (
+            "connection-graphics.mjs must set textContent = 'ESTABLISHED'."
+        )
+
+    def test_settings_labels_use_textcontent_not_innerhtml(self):
+        """settings.mjs must use textContent not innerHTML for static label text.
+
+        Regression test: CodeQL flags all innerHTML assignments as potential XSS vectors,
+        even hardcoded strings. textContent is the correct API for plain-text content.
+        """
+        path = _JS_SRC_ROOT / "views" / "graphic-support" / "settings.mjs"
+        if not path.exists():
+            pytest.skip(f"settings.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        # None of the label assignments should use innerHTML any more
+        for label in ("ProductId", "Button 1 selection", "Button 2 selection",
+                      "Joint 1 identity", "Joint 2 identity", "Default view level"):
+            assert f"innerHTML = '{label}" not in content, (
+                f"settings.mjs still uses innerHTML for label '{label}'. "
+                "Use textContent instead."
+            )
+
+    def test_joint_demo_thead_uses_dom_not_innerhtml(self):
+        """joint-demo.mjs must build the tools table header with DOM methods, not innerHTML.
+
+        Regression test: CodeQL CWE-79 flags all innerHTML assignments. The table header
+        used a template literal with only hardcoded content, but the fix uses DOM construction
+        which is safer and immune to future variable interpolation accidents.
+        """
+        path = _JS_SRC_ROOT / "views" / "demo" / "joint-demo.mjs"
+        if not path.exists():
+            pytest.skip(f"joint-demo.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        assert "thead.innerHTML" not in content, (
+            "joint-demo.mjs still uses thead.innerHTML. "
+            "Replace with DOM createElement/textContent/appendChild calls."
+        )
+
+    def test_address_space_readandstructure_rejects_on_error(self):
+        """address-space.mjs readAndStructure Promise must call reject() on socket error.
+
+        Regression test: the original readAndStructure Promise had no reject parameter —
+        if socketHandler.readPromise failed, the Promise would hang forever (never
+        resolve or reject), causing dependent code to silently stall.
+        """
+        path = _JS_SRC_ROOT / "ijt-support" / "address-space" / "address-space.mjs"
+        if not path.exists():
+            pytest.skip(f"address-space.mjs not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        # The fix adds 'reject(error)' inside the readAndStructure error handler
+        assert "reject(error)" in content, (
+            "address-space.mjs readAndStructure does not call reject(error) on socket error. "
+            "Add reject parameter to the Promise constructor and call reject(error) in the "
+            "error handler to prevent the Promise from hanging forever."
+        )
+
+
+# ===========================================================================
+# 5. Implicit string concatenation gate
+# ===========================================================================
+
+
+def test_no_implicit_string_concatenation_in_lists():
+    """No implicit string concat in source Python files (CodeQL py/implicit-string-concatenation)."""
+    import tokenize
+    import io
+    _src_python = _PROJECT_ROOT / "src" / "python"
+    issues = []
+    for py_file in _src_python.rglob("*.py"):
+        src = py_file.read_text(encoding="utf-8")
+        try:
+            tokens = list(tokenize.generate_tokens(io.StringIO(src).readline))
+        except tokenize.TokenError:
+            continue
+        for i in range(len(tokens) - 1):
+            if (tokens[i].type == tokenize.STRING and
+                    tokens[i + 1].type == tokenize.STRING and
+                    tokens[i].end[0] <= tokens[i + 1].start[0]):
+                issues.append(f"{py_file}:{tokens[i].start[0]}: implicit string concat")
+    assert not issues, "Implicit string concatenation found:\n" + "\n".join(issues)

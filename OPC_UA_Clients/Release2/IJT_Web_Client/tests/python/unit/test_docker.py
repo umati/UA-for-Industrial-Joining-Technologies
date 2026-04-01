@@ -13,17 +13,13 @@ and verify that key instructions are present and correct:
 
 from __future__ import annotations
 
+import importlib.util
 import re
 from pathlib import Path
-from typing import Iterator
 
 import pytest
 
-try:
-    import yaml
-    _YAML_AVAILABLE = True
-except ImportError:
-    _YAML_AVAILABLE = False
+_YAML_AVAILABLE = importlib.util.find_spec("yaml") is not None
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _DOCKERFILE = _PROJECT_ROOT / "Dockerfile"

@@ -12,13 +12,6 @@ import sys
 
 ROOT = Path(__file__).resolve().parent
 
-
-# ---------------------------------------------------------------------------
-# File contents
-# ---------------------------------------------------------------------------
-
-_NODE_STYLE_CSS = None  # read lazily inside main() before the shim edit
-
 _TEST_SUBSCRIPTION_HANDLER_PY = """\
 from asyncio import Future
 

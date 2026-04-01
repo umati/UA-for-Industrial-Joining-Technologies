@@ -7,7 +7,6 @@ output from third-party libraries such as *asyncua*.
 
 import logging
 from datetime import datetime
-from logging import LogRecord
 
 
 class MillisecondFormatter(logging.Formatter):
@@ -17,7 +16,7 @@ class MillisecondFormatter(logging.Formatter):
     (3 decimal places) rather than Python's default microsecond output.
     """
 
-    def formatTime(self, record: LogRecord, datefmt: str | None = None) -> str:
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
         """Format the creation time of a log record with millisecond precision.
 
         Args:

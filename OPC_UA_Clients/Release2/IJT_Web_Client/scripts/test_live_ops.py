@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Test live OPC UA operations"""
 import asyncio
-import json
 
 OPCUA_ENDPOINT = "opc.tcp://localhost:40451"
 IJT_NAMESPACE_URI = "http://opcfoundation.org/UA/IJT/Base/"

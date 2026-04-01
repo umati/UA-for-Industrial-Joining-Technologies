@@ -96,8 +96,9 @@ def _find_latest_python_executable() -> tuple[list[str], str]:
             except Exception as exc:  # nosec B112 — version string parse failure; skip this candidate
                 log.debug("Skipping Python version '%s': %s", version, exc)
                 continue
+        _cur_ver = f"{sys.version_info[0]}.{sys.version_info[1]}"
         candidates.append(
-            ((sys.version_info[0], sys.version_info[1]), [sys.executable], current_ver)
+            ((sys.version_info[0], sys.version_info[1]), [sys.executable], _cur_ver)
         )
 
         if not candidates:
@@ -137,7 +138,10 @@ def _relaunch_under_latest_python() -> None:
 
     cmd = latest_cmd + [__file__] + sys.argv[1:]
     log.info("Re-launching with Python %s: %s", latest_ver, " ".join(shlex.quote(c) for c in cmd))
-    os.execvp(cmd[0], cmd)  # nosec B606 — cmd[0] is a Python interpreter path, not user input(version_string: str | None = None) -> None:
+    os.execvp(cmd[0], cmd)  # nosec B606 — cmd[0] is a Python interpreter path, not user input
+
+
+def _require_python_314_or_newer(version_string: str | None = None) -> None:
     if version_string:
         try:
             major, minor = map(int, version_string.split("."))
@@ -304,7 +308,8 @@ def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: boo
                     popen_kwargs = {"cwd": str(exe.parent)}
                     if IS_WINDOWS:
                         popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
-                    subprocess.Popen([str(exe)], **popen_kwargs)  # nosec B603 B607 — hardcoded path, not user input
+                    proc = subprocess.Popen([str(exe)], **popen_kwargs)  # nosec B603 B607 — hardcoded path, not user input  # pylint: disable=consider-using-with
+                    log.info("Launched OPC UA simulator with PID: %d", proc.pid)
                     if _wait_for_endpoint_ready(
                         endpoint,
                         timeout_seconds=startup_timeout,
@@ -478,17 +483,15 @@ def _is_runtime_ready() -> bool:
     if not (VENV_DIR.exists() and python.exists()):
         return False
 
+    _dep_check_cmd = (
+        "import asyncua, sys; "
+        "from packaging.version import Version; "
+        "v = asyncua.__version__; "
+        "sys.exit(0) if Version(v) >= Version('1.2b2') "
+        "else sys.exit('asyncua ' + v + ' is too old; need >= 1.2b2')"
+    )
     try:
-        _run_command(
-            [
-                str(python),
-                "-c",
-                "import asyncua, pytz, aiofiles, orjson, cryptography, OpenSSL; "
-                "from packaging.version import Version; "
-                "assert Version(asyncua.__version__) >= Version('1.2b2'), "
-                "'asyncua ' + asyncua.__version__ + ' is too old; need >= 1.2b2'",
-            ]
-        )
+        _run_command([str(python), "-c", _dep_check_cmd])
     except Exception:
         log.info("Runtime dependency check failed in %s. Triggering full setup.", python)
         return False

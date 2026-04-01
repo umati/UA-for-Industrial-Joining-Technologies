@@ -6,6 +6,7 @@ WebSocket by the :class:`EventHandler` queue worker.
 """
 
 import asyncio
+import contextlib
 import json
 import traceback
 from typing import Any
@@ -184,8 +185,6 @@ class EventHandler:
                 await asyncio.wait_for(asyncio.shield(self._queue_task), timeout=_SHUTDOWN_TIMEOUT_S)
             except asyncio.TimeoutError:
                 self._queue_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._queue_task
-                except asyncio.CancelledError:
-                    pass
         ijt_log.info("EventHandler closed.")

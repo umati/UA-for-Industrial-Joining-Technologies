@@ -6,11 +6,8 @@ expected public API and produce correct output — without importing from any
 other client.
 """
 import json
-import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
-import pytest
 from asyncua import ua
 
 from python import serialize_data as web_serialize

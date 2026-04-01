@@ -17,14 +17,12 @@ All tests are pure unit tests (no server, no network, no venv creation).
 External calls are patched via unittest.mock / monkeypatch.
 """
 
-import json
 import socket
 import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-import pytest
+from unittest.mock import MagicMock
 
 # ── Import setup_project from repo root ──────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parents[3]))

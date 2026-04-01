@@ -15,7 +15,7 @@ Covers:
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
+pytest.importorskip("asyncua", reason="asyncua not installed")
 from asyncua import ua  # noqa: E402
 
 from method_caller import OPCUAMethodCaller  # noqa: E402
@@ -82,13 +82,13 @@ def test_parse_outputs_empty_returns_none_none():
 
 def test_parse_outputs_non_int_status():
     caller = OPCUAMethodCaller(MagicMock())
-    status, message = caller._parse_outputs(("not-an-int", "msg"))
+    status, _ = caller._parse_outputs(("not-an-int", "msg"))
     assert status is None
 
 
 def test_parse_outputs_plain_string_message():
     caller = OPCUAMethodCaller(MagicMock())
-    status, message = caller._parse_outputs((0, "plain string"))
+    _, message = caller._parse_outputs((0, "plain string"))
     assert message == "plain string"
 
 
@@ -227,7 +227,7 @@ async def test_enable_asset_false():
 
     caller = OPCUAMethodCaller(client)
     with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
-        result = await caller.enable_asset("obj", "mth", False)
+        _ = await caller.enable_asset("obj", "mth", False)
 
     call_args = node_mock.call_method.call_args[0]
     bool_variant = call_args[2]
@@ -290,7 +290,7 @@ async def test_start_selected_joining_deselect_false():
 
     caller = OPCUAMethodCaller(client)
     with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
-        result = await caller.start_selected_joining("obj", "mth", False)
+        _ = await caller.start_selected_joining("obj", "mth", False)
 
     call_args = node_mock.call_method.call_args[0]
     deselect_variant = call_args[2]

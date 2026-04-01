@@ -1,5 +1,4 @@
 """Verify IJT_Web_Client has no cross-client dependencies."""
-import ast
 import pathlib
 
 SRC = pathlib.Path(__file__).parent.parent.parent / "src" / "python"

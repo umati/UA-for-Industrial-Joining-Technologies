@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { NodeId, LocalizationModel, ErrorInformationDataType, ProcessingTimesDataType } from '../../../src/javascripts/ijt-support/models/support-models.mjs'
+import { NodeId, LocalizationModel } from '../../../src/javascripts/ijt-support/models/support-models.mjs'
 import { EntityDataType, EntityTypes } from '../../../src/javascripts/ijt-support/models/entities/entity-data-type.mjs'
 import { EventManager } from '../../../src/javascripts/ijt-support/events/event-manager.mjs'
 

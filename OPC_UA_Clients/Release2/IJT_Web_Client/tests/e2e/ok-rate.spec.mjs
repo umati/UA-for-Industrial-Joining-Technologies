@@ -4,7 +4,6 @@
  * Requires: backend + OPC UA server running.
  */
 import { test, expect } from './e2e-fixtures.mjs'
-import { OkRatePage } from './page-objects.mjs'
 
 async function openOkRate (app) {
   await app.setViewLevel('3')   // Detailed view exposes OkRate tab
@@ -16,7 +15,7 @@ async function openOkRate (app) {
 
 test('OkRate: view renders after connecting', async ({ connected: app }) => {
   test.setTimeout(90_000)
-  const okRate = await openOkRate(app)
+  await openOkRate(app)
   await expect(app.page.locator('.okRateView')).toBeVisible()
 })
 
@@ -31,7 +30,7 @@ test('OkRate: percentage value is displayed', async ({ connected: app }) => {
 
 test('OkRate: simulate OK result button exists and responds', async ({ connected: app }) => {
   test.setTimeout(90_000)
-  const okRate = await openOkRate(app)
+  await openOkRate(app)
   const btn = app.page.locator('button:has-text("Simulate OK result")').first()
   if ((await btn.count()) > 0) {
     await btn.click()
@@ -43,7 +42,7 @@ test('OkRate: simulate OK result button exists and responds', async ({ connected
 
 test('OkRate: simulate NOT OK result button exists and responds', async ({ connected: app }) => {
   test.setTimeout(90_000)
-  const okRate = await openOkRate(app)
+  await openOkRate(app)
   const btn = app.page.locator('button:has-text("Simulate NOT OK result")').first()
   if ((await btn.count()) > 0) {
     await btn.click()
@@ -98,7 +97,7 @@ test('OkRate: rate decreases after simulating a NOT OK result', async ({ connect
 
 test('OkRate: clear counters resets display', async ({ connected: app }) => {
   test.setTimeout(90_000)
-  const okRate = await openOkRate(app)
+  await openOkRate(app)
 
   const clearBtn = app.page.locator('button:has-text("Clear counters")').first()
   if ((await clearBtn.count()) === 0) { test.skip() }

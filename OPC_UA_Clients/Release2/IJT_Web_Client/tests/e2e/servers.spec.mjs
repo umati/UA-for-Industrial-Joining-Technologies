@@ -5,7 +5,6 @@
  * connection (the server list is persisted in Resources/connectionpoints.json).
  */
 import { test, expect } from './e2e-fixtures.mjs'
-import { ServersPage } from './page-objects.mjs'
 
 async function openServers (app) {
   await app.setViewLevel('5')   // Settings view exposes the Servers tab
@@ -22,10 +21,9 @@ test('Servers: tab is reachable from Settings view level', async ({ app }) => {
 })
 
 test('Servers: server list renders after opening tab', async ({ app }) => {
-  const servers = await openServers(app)
+  await openServers(app)
   // The servers container should exist (may be empty)
   await app.page.waitForTimeout(800)
-  const leftArea = app.page.locator('.leftArea, .serverRow, [class*="server"]').first()
   // Page should not crash
   await expect(app.page).toHaveTitle(/OPC UA IJT Demo/i)
 })

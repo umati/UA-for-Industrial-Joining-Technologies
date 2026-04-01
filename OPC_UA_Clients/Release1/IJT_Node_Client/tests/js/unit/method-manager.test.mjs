@@ -52,4 +52,17 @@ describe('MethodManager', () => {
       [{ dataType: 7, value: 42 }]
     )
   })
+
+  it('call() catches and logs errors from methodCall rejection', async () => {
+    addressSpace.methodCall.mockRejectedValueOnce(new Error('OPC UA error'))
+    const methodData = {
+      parentNode: { nodeId: 'ns=1;i=10' },
+      methodNode: { nodeId: 'ns=1;i=20', displayName: 'TestMethod' },
+      arguments: []
+    }
+    // Should not throw — error is caught internally
+    expect(() => mm.call(methodData, [])).not.toThrow()
+    // Allow microtask queue to flush so the .catch() runs
+    await Promise.resolve()
+  })
 })

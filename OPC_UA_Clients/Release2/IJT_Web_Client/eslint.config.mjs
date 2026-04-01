@@ -19,6 +19,7 @@ export default neostandard({
     }
   },
   rules: {
-    'space-before-function-paren': ['error', 'always']
+    'space-before-function-paren': ['error', 'always'],
+    'no-unused-vars': ['error', { 'args': 'none', 'caughtErrors': 'none' }]
   }
 })

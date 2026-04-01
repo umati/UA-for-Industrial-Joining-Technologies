@@ -7,9 +7,6 @@ from python.network_utils import endpoint_reachable
 from python.connection import Connection
 
 
-pytestmark = pytest.mark.integration
-
-
 @pytest.fixture
 def opcua_endpoint() -> str:
     endpoint = os.getenv("OPCUA_TEST_ENDPOINT")
@@ -102,8 +99,6 @@ async def test_read_server_status_current_time(opcua_endpoint):
     ServerStatus/CurrentTime (ns=0;i=2258) must be readable and return a datetime.
     This is a standard OPC UA node present on all compliant servers.
     """
-    from datetime import datetime
-
     conn = Connection(opcua_endpoint, websocket=None)
     try:
         await conn.connect()

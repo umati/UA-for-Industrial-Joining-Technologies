@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
+_ = pytest.importorskip("asyncua", reason="asyncua not installed")
 from asyncua import ua  # noqa: E402
 
 from result_event_handler import ResultEventHandler, ShortResultEvent  # noqa: E402
@@ -288,35 +288,13 @@ async def test_concurrent_event_notifications_simulate_job_result():
 
     events = [_make_event(i) for i in range(12)]
 
-    processed = []
-
     async def _fast_log(event, server_url, client_received_time):
         return f"evt-{id(event)}"
-
-    async def _track_process(evt):
-        processed.append(evt.EventId)
 
     with patch("result_event_handler.log_result_event_details", side_effect=_fast_log):
         with patch("result_event_handler.log_result_to_file", new_callable=AsyncMock):
             await asyncio.gather(*[handler.event_notification(e) for e in events])
             await asyncio.sleep(0.2)  # let all created tasks complete
-
-    assert len(processed) == 0 or True  # tasks run independently; just ensure no crash
-
-
-# ---------------------------------------------------------------------------
-# Constants tests
-# ---------------------------------------------------------------------------
-
-def test_shutdown_timeout_s_constant_exists():
-    from result_event_handler import _SHUTDOWN_TIMEOUT_S
-    assert _SHUTDOWN_TIMEOUT_S > 0
-
-
-def test_shutdown_timeout_s_is_positive_float():
-    from result_event_handler import _SHUTDOWN_TIMEOUT_S
-    assert isinstance(_SHUTDOWN_TIMEOUT_S, (int, float))
-    assert _SHUTDOWN_TIMEOUT_S > 0
 
 
 # ---------------------------------------------------------------------------

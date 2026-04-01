@@ -34,7 +34,6 @@ shutdown_started = False
 
 async def handler(websocket):
     """Handle one browser websocket session and isolate OPC UA state per client."""
-    global shutdown_started
     if shutdown_started:
         await websocket.close(code=1012, reason="Server shutting down")
         return
@@ -179,6 +178,8 @@ async def main():
     try:
         await asyncio.Future()  # Run forever
     finally:
+        websocket_server.close()
+        await websocket_server.wait_closed()
         ijt_log.warning("main() exiting - attempting shutdown cleanup.")
         await shutdown()
 

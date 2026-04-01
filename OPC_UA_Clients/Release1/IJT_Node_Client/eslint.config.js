@@ -50,5 +50,27 @@ export default [
       'n/no-unsupported-features/es-syntax': 'off',
       'no-unused-vars': ['error', { 'args': 'none', 'caughtErrors': 'none' }]
     }
+  },
+  {
+    files: [
+      'tests/**/*.mjs',
+      'vitest.config.mjs',
+      'playwright.config.mjs'
+    ],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.node
+      }
+    },
+    rules: {
+      'n/no-unpublished-import': 'off',
+      'n/no-missing-import': 'off',
+      'n/no-unsupported-features/es-builtins': 'off',
+      'n/no-unsupported-features/es-syntax': 'off',
+      'no-unused-vars': ['error', { 'args': 'none', 'caughtErrors': 'none' }]
+    }
   }
 ]

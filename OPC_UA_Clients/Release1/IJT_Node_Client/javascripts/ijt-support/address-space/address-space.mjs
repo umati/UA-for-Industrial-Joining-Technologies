@@ -34,22 +34,20 @@ export class AddressSpace {
    */
   initiate () {
     this.findOrLoadNode('ns=0;i=84').then((rootFolder) => { // GRoot
-      this.findOrLoadNode('ns=0;i=85').then((objectFolder) => {
+      return this.findOrLoadNode('ns=0;i=85').then((objectFolder) => {
         this.objectFolder = objectFolder
         const typerelations = objectFolder.getTypeDefinitionRelations('1005')
         if (!typerelations || typerelations.length === 0) {
           throw new Error('Could not find Tightening System')
         }
-        this.findOrLoadNode(typerelations[0].nodeId).then((tgtSystem) => {
+        return this.findOrLoadNode(typerelations[0].nodeId).then((tgtSystem) => {
           this.tighteningSystem = tgtSystem
           this.addressSpaceSetup('tighteningsystem')
           this.connectionManager.trigger('tighteningsystem', true)
-          /* for (const promise of this.listOfTSPromises) {
-            this.tighteningSystem = tgtSystem
-            promise.resolve(tgtSystem)
-          } */
         })
       })
+    }).catch((err) => {
+      console.error('AddressSpace initiate failed:', err)
     })
   }
 
@@ -88,11 +86,7 @@ export class AddressSpace {
   }
 
   methodCall (locationId, methodNode, args) {
-    return new Promise((resolve, reject) => {
-      this.socketHandler.methodCall(locationId, methodNode, args).then((result, err) => {
-        resolve(result, err)
-      })
-    })
+    return this.socketHandler.methodCall(locationId, methodNode, args)
   }
 
   /**
@@ -127,50 +121,28 @@ export class AddressSpace {
      * @param {*} details do we want the extra data from the browse?
      * @returns a promise of a datastructure that can be used to create a node
      */
-    const browseAndRead = (nodeId, details = false) => {
-      return this.socketHandler.browsePromise(nodeId, details).then(
-        (browseMsg) => {
-          return new Promise((resolve) => {
-            this.socketHandler.readPromise(nodeId, 'DisplayName').then(
-              (readname) => {
-                return new Promise(() => {
-                  this.socketHandler.readPromise(nodeId, 'NodeClass').then(
-                    (readclass) => {
-                      const returnValue = {
-                        nodeid: browseMsg.message.nodeid,
-                        nodeclass: readclass.message.dataValue.value,
-                        displayname: readname.message.dataValue.value,
-                        relations: browseMsg.message.browseresult.references
-                      }
-                      if (readclass.message.dataValue.value.value === 2) {
-                        return new Promise(() => {
-                          this.socketHandler.readPromise(nodeId, 'Value').then(
-                            (value) => {
-                              returnValue.value = value
-                              resolve(returnValue)
-                            })
-                        })
-                      } else {
-                        resolve(returnValue)
-                      }
-                    })
-                })
-              })
-          })
-        })
+    const browseAndRead = async (nodeId, details = false) => {
+      const browseMsg = await this.socketHandler.browsePromise(nodeId, details)
+      const readname = await this.socketHandler.readPromise(nodeId, 'DisplayName')
+      const readclass = await this.socketHandler.readPromise(nodeId, 'NodeClass')
+      const returnValue = {
+        nodeid: browseMsg.message.nodeid,
+        nodeclass: readclass.message.dataValue.value,
+        displayname: readname.message.dataValue.value,
+        relations: browseMsg.message.browseresult.references
+      }
+      if (readclass.message.dataValue.value.value === 2) {
+        const value = await this.socketHandler.readPromise(nodeId, 'Value')
+        returnValue.value = value
+      }
+      return returnValue
     }
 
     const returnNode = this.nodeMapping[nodeId]
     if (returnNode) {
-      return new Promise((resolve, reject) => {
-        resolve(returnNode, false)
-      })
+      return Promise.resolve(returnNode)
     } else {
-      return new Promise((resolve, reject) => {
-        browseAndRead(nodeId, true).then((m) => {
-          resolve(createNode(m), true)
-        })
-      })
+      return browseAndRead(nodeId, true).then(m => createNode(m))
     }
   }
 
@@ -227,9 +199,9 @@ export class AddressSpace {
         this.socketHandler.pathtoidPromise(tgtSystem.nodeId, path).then((msg) => {
           this.findOrLoadNode(msg.message.nodeid).then((node) => {
             resolve(node)
-          })
-        })
-      })
+          }).catch(reject)
+        }).catch(reject)
+      }).catch(reject)
     )
   }
 
@@ -251,7 +223,7 @@ export class AddressSpace {
         new Promise((resolve, reject) => {
           this.findOrLoadNode(relation.nodeId).then((node) => {
             resolve(node)
-          })
+          }).catch(reject)
         })
       )
     }
@@ -271,7 +243,10 @@ export class AddressSpace {
       this.socketHandler.readPromise(nodeId, attribute).then(
         (response) => {
           resolve(response.node)
-        })
+        }).catch((err) => {
+        console.error('read failed:', err)
+        resolve(null)
+      })
     })
   }
 }

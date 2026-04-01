@@ -183,7 +183,7 @@ export default class ModelToHTML {
   display (receivedObject, startText = 'Response') {
     let onScreen
     if (typeof receivedObject === 'object') { // Handle a model
-      const onScreen = this.toHTML(receivedObject, true, startText)
+      onScreen = this.toHTML(receivedObject, true, startText)
       if (onScreen.expandLong) {
         onScreen.expandLong()
       }

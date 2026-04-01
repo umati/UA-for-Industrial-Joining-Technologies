@@ -19,7 +19,6 @@ _QUEUE_SIZE = 200
 _CONNECT_RETRIES_DEFAULT = "8"
 _CONNECT_DELAY_DEFAULT = "1.0"
 _CONNECT_MAX_DELAY_DEFAULT = "4.0"
-_SHUTDOWN_TIMEOUT_S = 5.0
 
 # Reduce asyncua late-response noise during shutdown windows.
 logging.getLogger("asyncua").setLevel(logging.CRITICAL)

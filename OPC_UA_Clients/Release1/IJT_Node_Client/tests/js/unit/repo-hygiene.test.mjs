@@ -55,3 +55,49 @@ describe('repo-hygiene', () => {
     expect(pkg.type).toBe('module')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Security regression tests — innerHTML XSS prevention
+// ---------------------------------------------------------------------------
+
+describe('security — no innerHTML with variable data', () => {
+  it('connection-graphics.mjs uses textContent not innerHTML for ESTABLISHED/LOST labels', async () => {
+    const src = await readFile(
+      join(projectRoot, 'javascripts', 'views', 'connection', 'connection-graphics.mjs'),
+      'utf-8'
+    )
+    // innerHTML assignments with these literal strings must be gone
+    expect(src).not.toContain("innerHTML = 'ESTABLISHED'")
+    expect(src).not.toContain('innerHTML = "ESTABLISHED"')
+    expect(src).not.toContain("innerHTML = 'LOST'")
+    expect(src).not.toContain('innerHTML = "LOST"')
+    // textContent replacements must be present
+    expect(src).toContain("textContent = 'ESTABLISHED'")
+    expect(src).toContain("textContent = 'LOST'")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Security regression tests — unhandled promise rejections
+// ---------------------------------------------------------------------------
+
+describe('security — promise error handling', () => {
+  it('address-space.mjs initiate() propagates errors with .catch()', async () => {
+    const src = await readFile(
+      join(projectRoot, 'javascripts', 'ijt-support', 'address-space', 'address-space.mjs'),
+      'utf-8'
+    )
+    // The initiate() method must have a .catch() so rejected promises surface as errors
+    // (without it, unhandled rejections are silently swallowed)
+    expect(src).toContain('.catch(')
+  })
+
+  it('method-manager.mjs promise chains have .catch(reject) error propagation', async () => {
+    const src = await readFile(
+      join(projectRoot, 'javascripts', 'ijt-support', 'methods', 'method-manager.mjs'),
+      'utf-8'
+    )
+    expect(src).toContain('.catch(reject)')
+  })
+})
+

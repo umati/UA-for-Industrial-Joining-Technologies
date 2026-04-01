@@ -15,7 +15,7 @@ Covers:
 import pytest
 
 # Import asyncua first to skip the whole module if the library is not installed.
-asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
+_ = pytest.importorskip("asyncua", reason="asyncua not installed")
 from asyncua import ua  # noqa: E402
 
 from python.call_structure import (  # noqa: E402

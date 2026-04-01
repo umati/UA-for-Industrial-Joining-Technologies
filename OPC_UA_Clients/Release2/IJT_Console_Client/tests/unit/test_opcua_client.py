@@ -2,7 +2,6 @@
 Unit tests for opcua_client.py (OPCUAClient class).
 All OPC UA network calls are mocked — no real server required.
 """
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -207,7 +206,6 @@ def test_setup_client_metadata_sets_uris():
 # ---------------------------------------------------------------------------
 
 def test_named_constants_importable():
-    from opcua_client import _OPCUA_TIMEOUT_S, _SUBSCRIPTION_PERIOD_MS, _QUEUE_SIZE
     assert isinstance(_OPCUA_TIMEOUT_S, (int, float))
     assert isinstance(_SUBSCRIPTION_PERIOD_MS, (int, float))
     assert isinstance(_QUEUE_SIZE, int)

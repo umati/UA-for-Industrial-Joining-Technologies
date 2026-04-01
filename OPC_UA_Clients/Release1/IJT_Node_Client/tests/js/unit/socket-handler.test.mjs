@@ -102,14 +102,24 @@ describe('SocketHandler', () => {
     expect(handler.uniqueId).toBe(initialId + 2)
   })
 
-  it('callMapping entry is nulled after promise resolves', async () => {
+  it('callMapping entry is deleted (not null) after promise resolves', async () => {
     const promise = handler.browsePromise('ns=0;i=84', false)
     const call = socket.emit.mock.calls.find(c => c[0] === 'browse')
     const callId = call[2]
 
     socket._trigger('browseresult', { callid: callId, endpointurl: endpoint, browseresult: {} })
     await promise
-    expect(handler.callMapping[callId]).toBeNull()
+    expect(Object.prototype.hasOwnProperty.call(handler.callMapping, callId)).toBe(false)
+  })
+
+  it('failMapping entry is deleted after promise resolves', async () => {
+    const promise = handler.browsePromise('ns=0;i=84', false)
+    const call = socket.emit.mock.calls.find(c => c[0] === 'browse')
+    const callId = call[2]
+
+    socket._trigger('browseresult', { callid: callId, endpointurl: endpoint, browseresult: {} })
+    await promise
+    expect(Object.prototype.hasOwnProperty.call(handler.failMapping, callId)).toBe(false)
   })
 
   it('subscribeEvent() emits "subscribe event"', () => {

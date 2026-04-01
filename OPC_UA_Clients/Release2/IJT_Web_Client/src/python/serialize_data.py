@@ -93,4 +93,3 @@ def serialize_class_instance_as_dict(obj: Any) -> dict:
                 ijt_log.debug("serialize: skipped slot '%s' on %s: %s", slot, type(obj).__name__, exc)
                 continue
     return result
-

@@ -46,4 +46,25 @@ describe('ResultManager', () => {
     expect(stored.ResultMetaData.IsPartial).toBe('False')
     expect(stored.ClientData.rebuildState.claimed).toBe(true)
   })
+
+  it('handlePartial does not pollute prototype via __proto__ key', () => {
+    const rm = new ResultManager(makeEventManager())
+    const stored = makeResult('r-safe', '2', 'True', [])
+    const evilUpdate = makeResult('r-safe', '2', 'False', [{ id: 'x' }])
+    // Simulate what JSON.parse('{"__proto__":{"injected":true}}') would produce
+    Object.defineProperty(evilUpdate, '__proto__', { value: { injected: true }, enumerable: true, configurable: true })
+    // handlePartial must not copy __proto__ key to stored
+    rm.handlePartial(stored, evilUpdate)
+    const fresh = {}
+    expect(fresh.injected).toBeUndefined()
+  })
+
+  it('handlePartial does not copy constructor key from update', () => {
+    const rm = new ResultManager(makeEventManager())
+    const stored = makeResult('r-ctor', '2', 'True', [])
+    const update = makeResult('r-ctor', '2', 'False', [{ id: 'y' }])
+    const originalConstructor = stored.constructor
+    rm.handlePartial(stored, update)
+    expect(stored.constructor).toBe(originalConstructor)
+  })
 })

@@ -12,7 +12,8 @@ Covers:
 import pytest
 from datetime import datetime
 
-asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
+_ = pytest.importorskip("asyncua", reason="asyncua not installed")
+_ = pytest.importorskip("pytz", reason="pytz not installed")
 import pytz  # noqa: E402
 from asyncua import ua  # noqa: E402
 
@@ -200,8 +201,6 @@ def test_format_list_items_indented():
 # New tests per spec
 # ---------------------------------------------------------------------------
 
-import asyncio  # noqa: E402 (placed here to avoid disturbing existing import order)
-
 
 def test_log_joining_system_event_is_async():
     """log_joining_system_event MUST be async (regression guard against it being sync)."""
@@ -215,7 +214,6 @@ def test_log_joining_system_event_is_async():
 def test_nodeid_to_str_has_type_hints():
     """nodeid_to_str must have type hints."""
     import inspect
-    from utils import nodeid_to_str
     sig = inspect.signature(nodeid_to_str)
     params = list(sig.parameters.values())
     assert params[0].annotation is not inspect.Parameter.empty
@@ -223,7 +221,6 @@ def test_nodeid_to_str_has_type_hints():
 
 def test_localizedtext_to_str_has_type_hints():
     import inspect
-    from utils import localizedtext_to_str
     sig = inspect.signature(localizedtext_to_str)
     params = list(sig.parameters.values())
     assert params[0].annotation is not inspect.Parameter.empty
@@ -231,18 +228,15 @@ def test_localizedtext_to_str_has_type_hints():
 
 def test_format_local_time_handles_none_gracefully():
     """format_local_time with a string input should not raise AttributeError."""
-    from utils import format_local_time
     result = format_local_time("2025-01-01T00:00:00")
     assert isinstance(result, str)
 
 
 def test_nodeid_to_str_handles_none():
-    from utils import nodeid_to_str
     result = nodeid_to_str(None)
     assert result == "None"
 
 
 def test_localizedtext_to_str_handles_none():
-    from utils import localizedtext_to_str
     result = localizedtext_to_str(None)
     assert result == "None"

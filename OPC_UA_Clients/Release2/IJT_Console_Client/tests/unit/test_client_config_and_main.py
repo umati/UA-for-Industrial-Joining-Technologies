@@ -5,8 +5,7 @@ Comprehensive tests for:
 """
 
 import os
-import re
-import pytest
+from pathlib import Path
 from unittest.mock import patch
 
 from client_config import URL_PATTERN, SERVER_URL, ENABLE_RESULT_FILE_LOGGING
@@ -128,3 +127,45 @@ class TestValidateUrl:
         with patch.dict(os.environ, {"OPCUA_SERVER_URL": env_url}):
             result = validate_url(provided)
         assert result == provided
+
+    def test_env_var_with_path_suffix_is_rejected_by_fullmatch(self):
+        """Env var URL with trailing path must be rejected (fullmatch, not match).
+
+        Regression test for H-2: using re.match() only validates the prefix,
+        allowing bypass like 'opc.tcp://server:4840/../../etc/passwd'.
+        fullmatch() must be used so the entire string is validated.
+        """
+        evil_env = "opc.tcp://server:4840/../../etc/passwd"
+        with patch.dict(os.environ, {"OPCUA_SERVER_URL": evil_env}):
+            result = validate_url(None)
+        # Must fall back to the safe default, not return the evil URL
+        assert result == SERVER_URL
+        assert "etc/passwd" not in result
+
+    def test_env_var_with_semicolon_is_rejected(self):
+        """Env var URL with shell injection characters must be rejected."""
+        evil_env = "opc.tcp://localhost:4840; rm -rf /"
+        with patch.dict(os.environ, {"OPCUA_SERVER_URL": evil_env}):
+            result = validate_url(None)
+        assert result == SERVER_URL
+
+
+class TestUrlPatternNotDuplicatedInMain:
+    """Regression test for L-2: URL_PATTERN must not be defined in main.py.
+
+    It should be imported from client_config only.
+    """
+
+    _MAIN_PATH = Path(__file__).resolve().parent.parent.parent / "main.py"
+
+    def test_url_pattern_not_redefined_in_main(self):
+        content = self._MAIN_PATH.read_text(encoding="utf-8")
+        assert "URL_PATTERN = re.compile" not in content, (
+            "URL_PATTERN is re-defined in main.py — it should only be imported from client_config.py"
+        )
+
+    def test_url_pattern_imported_from_client_config_in_main(self):
+        content = self._MAIN_PATH.read_text(encoding="utf-8")
+        assert "from client_config import" in content and "URL_PATTERN" in content, (
+            "URL_PATTERN should be imported from client_config in main.py"
+        )

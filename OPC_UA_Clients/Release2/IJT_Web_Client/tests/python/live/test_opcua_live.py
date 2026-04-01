@@ -23,6 +23,7 @@ Run only WS:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import socket
@@ -35,7 +36,7 @@ import pytest
 # Module-level loop scope so all async fixtures and tests share one event loop.
 # (pytest-asyncio 0.21+ deprecates the custom event_loop fixture; use this instead.)
 # ─────────────────────────────────────────────────────────────────────────────
-pytestmark = pytest.mark.asyncio(loop_scope="module")
+# asyncio_default_fixture_loop_scope = module is set in pytest.ini for all async tests
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration
@@ -137,7 +138,6 @@ class TestOpcuaDirectConnection:
 
     async def test_server_time_is_readable(self, opcua_client):
         """CurrentTime node (ns=0;i=2258) must return a datetime."""
-        from asyncua import ua
         node = opcua_client.get_node("ns=0;i=2258")
         value = await node.read_value()
         assert value is not None
@@ -164,7 +164,7 @@ class TestOpcuaDirectConnection:
     async def test_tightening_system_node_exists(self, opcua_client):
         """TighteningSystem node must exist under Objects."""
         from asyncua import ua
-        idx = await opcua_client.get_namespace_index(IJT_NAMESPACE_URI)
+        _ = await opcua_client.get_namespace_index(IJT_NAMESPACE_URI)
         objects = await opcua_client.nodes.root.get_child(["0:Objects"])
         children = await objects.get_children()
 
@@ -175,7 +175,7 @@ class TestOpcuaDirectConnection:
                 if "TighteningSystem" in str(bn.Name):
                     ts_node = child
                     break
-            except Exception:
+            except (ua.UaError, OSError):
                 continue
 
         assert ts_node is not None, "TighteningSystem node not found under Objects"
@@ -228,17 +228,13 @@ class TestOpcuaDirectConnection:
             except Exception:
                 continue
             if nc == ua.NodeClass.Method:
-                try:
+                with contextlib.suppress(Exception):
                     bn = await node.read_browse_name()
                     if bn.Name in target_names:
                         found.add(bn.Name)
-                except Exception:
-                    pass
-            try:
+            with contextlib.suppress(Exception):
                 for child in await node.get_children():
                     queue.append((child, depth + 1))
-            except Exception:
-                pass
 
         assert "SimulateSingleResult" in found, (
             f"SimulateSingleResult not found. Found: {found}"
@@ -255,7 +251,6 @@ class TestOpcuaDirectConnection:
 class TestOpcuaSubscription:
     async def test_subscribe_to_events_succeeds(self, opcua_client):
         """Event subscription must be established without error."""
-        from asyncua import ua
 
         received: list[Any] = []
 
@@ -304,16 +299,14 @@ class TestOpcuaSubscription:
             # Give asyncua's publish loop a moment to register the subscription
             await asyncio.sleep(1)
 
-            try:
-                parent = client.get_node(ua.NodeId(_SIM_R_ID, _NS, ua.NodeIdType.String))
-                method = client.get_node(ua.NodeId(_SIM_SINGLE_ID, _NS, ua.NodeIdType.String))
+            parent = client.get_node(ua.NodeId(_SIM_R_ID, _NS, ua.NodeIdType.String))
+            method = client.get_node(ua.NodeId(_SIM_SINGLE_ID, _NS, ua.NodeIdType.String))
+            with contextlib.suppress(ua.UaError, OSError):  # Method call may fail; we validate the event subscription below
                 await parent.call_method(
                     method.nodeid,
                     ua.Variant(0, ua.VariantType.UInt32),     # ResultType (SIMPLE_OK)
                     ua.Variant(True, ua.VariantType.Boolean),  # IncludeTraces
                 )
-            except Exception:
-                pass  # Event subscription is what we validate
 
             # Wait for event propagation
             await asyncio.sleep(8)

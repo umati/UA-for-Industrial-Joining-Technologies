@@ -50,4 +50,23 @@ describe('AssetManager', () => {
       expect.stringContaining('AssetManagement')
     )
   })
+
+  it('loadAllAssetsSupport() resolves with [] when node has no component relations', async () => {
+    const emptyNode = { getChildRelations: () => [] }
+    const result = await am.loadAllAssetsSupport(emptyNode)
+    expect(result).toEqual([])
+  })
+
+  it('loadAllAssetsSupport() resolves (not hang) when Promise.all succeeds with empty list', async () => {
+    const addressSpaceWithRelations = makeAddressSpace()
+    addressSpaceWithRelations.relationsToNodes = vi.fn(() => Promise.resolve([
+      { nodeId: 'ns=1;i=501', getChildRelations: () => [], displayName: 'Child' }
+    ]))
+    const amWithRelations = new AssetManager(addressSpaceWithRelations, connectionManager)
+    const nodeWithChild = {
+      getChildRelations: (type) => type === 'component' ? [{ nodeId: 'ns=1;i=500' }] : []
+    }
+    const result = await amWithRelations.loadAllAssetsSupport(nodeWithChild)
+    expect(Array.isArray(result)).toBe(true)
+  })
 })

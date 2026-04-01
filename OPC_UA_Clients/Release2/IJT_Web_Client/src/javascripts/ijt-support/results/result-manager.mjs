@@ -184,7 +184,10 @@ export class ResultManager {
     if (newResult.ResultContent.length > stored.ResultContent.length ||
       newResult.ResultMetaData.IsPartial === 'False') {
       const claimed = stored.ClientData.rebuildState.claimed
-      Object.assign(stored, newResult)
+      const safeResult = Object.fromEntries(
+        Object.entries(newResult).filter(([k]) => !['__proto__', 'constructor', 'prototype'].includes(k))
+      )
+      Object.assign(stored, safeResult)
       stored.ClientData.rebuildState.claimed = claimed
       stored.ResultMetaData.IsPartial = newResult.ResultMetaData.IsPartial
       return true

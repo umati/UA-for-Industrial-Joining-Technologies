@@ -17,7 +17,7 @@ export default class BasicScreen {
 
   activate () {}
 
-  changeViewLevel (newLevel) {}
+  changeViewLevel (_newLevel) {}
 
   createArea (name) {
     const newDiv = document.createElement('div')

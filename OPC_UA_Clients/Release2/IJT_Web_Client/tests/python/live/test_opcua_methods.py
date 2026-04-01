@@ -36,8 +36,10 @@ from __future__ import annotations
 import asyncio
 import os
 import socket
-from typing import List
+import time
 
+import asyncua.client.ua_client as _uc
+from asyncua import ua
 import pytest
 import pytest_asyncio
 
@@ -49,12 +51,9 @@ import pytest_asyncio
 # Fix: replace _send_request so it uses self._timeout when no timeout is given.
 # ──────────────────────────────────────────────────────────────────────────────
 def _patch_asyncua_send_timeout():
-    import asyncua.client.ua_client as _uc
-    from asyncua import ua as _ua
-
     _orig = _uc.UaClient._send_request
 
-    async def _fixed(self, request, timeout=None, message_type=_ua.MessageType.SecureMessage):
+    async def _fixed(self, request, timeout=None, message_type=ua.MessageType.SecureMessage):
         if timeout is None:
             timeout = self._timeout          # use the configured timeout (e.g. 60 s)
         return await _orig(self, request, timeout, message_type)
@@ -63,7 +62,7 @@ def _patch_asyncua_send_timeout():
 
 _patch_asyncua_send_timeout()
 
-pytestmark = pytest.mark.asyncio(loop_scope="module")
+# asyncio_default_fixture_loop_scope = module is set in pytest.ini for all async tests
 
 OPCUA_URL    = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
 NS           = 1
@@ -175,8 +174,7 @@ async def ijt_session():
     # MaxNotificationsPerPublish=3 prevents large PublishResponse payloads when the
     # server fires many events synchronously (SimulateJobResult(refs=True) → ~12 events).
     def _sub_params(period_ms: float, max_notif: int = 3) -> ua.CreateSubscriptionParameters:
-        from asyncua import ua as _ua
-        p = _ua.CreateSubscriptionParameters()
+        p = ua.CreateSubscriptionParameters()
         p.RequestedPublishingInterval = period_ms
         p.RequestedLifetimeCount      = 10000
         p.RequestedMaxKeepAliveCount  = 27000
@@ -204,12 +202,12 @@ async def ijt_session():
     for sub in (sub_r, sub_s):
         try:
             await sub.delete()
-        except Exception:
-            pass
+        except OSError:
+            pass  # server already gone — teardown must not fail
     try:
         await c.disconnect()
-    except Exception:
-        pass
+    except OSError:
+        pass  # server already gone — teardown must not fail
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -217,12 +215,10 @@ async def ijt_session():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _node(c, identifier: str):
-    from asyncua import ua
     return c.get_node(ua.NodeId(identifier, NS, ua.NodeIdType.String))
 
 
 def _v(value, vtype):
-    from asyncua import ua
     return ua.Variant(value, vtype)
 
 
@@ -234,13 +230,12 @@ async def _pi_uri(c) -> str:
     """Read ProductInstanceUri (same as utils.read_tool_identifier)."""
     try:
         return str(await _node(c, _PI_URI).read_value()) or ""
-    except Exception:
+    except (OSError, AttributeError):
         return ""
 
 
-async def _wait_events(handler, min_count: int = 1, timeout: float = 8.0) -> List:
+async def _wait_events(handler, min_count: int = 1, timeout: float = 8.0) -> list:
     """Poll until min_count events arrive or timeout expires."""
-    import time
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if len(handler.events) >= min_count:
@@ -295,7 +290,6 @@ class TestSimulateSingleResult:
         (4, True), (4, False),
     ])
     async def test_fires_result_event(self, ijt_session, rtype, traces):
-        from asyncua import ua
         c, result_h, _, = ijt_session
         ev_exp, code_exp, label = _SINGLE_EXPECT[rtype]
 
@@ -329,7 +323,6 @@ class TestSimulateSingleResult:
                 assert steps and len(steps) > 0, "IncludeTraces=True but StepResults empty"
 
     async def test_out_of_range_defaults_to_0(self, ijt_session):
-        from asyncua import ua
         c, result_h, _ = ijt_session
         events = await _invoke_result(
             c, result_h, f"{_SIM_R}/SimulateSingleResult", timeout=6.0,
@@ -340,7 +333,6 @@ class TestSimulateSingleResult:
         _assert_meta(events, cls=1, ev=1, code=0)
 
     async def test_sequence_number_increments(self, ijt_session):
-        from asyncua import ua
         c, result_h, _ = ijt_session
         seqs = []
         for rtype in range(3):
@@ -374,7 +366,6 @@ class TestSimulateBatchOrSync:
         (3, "BATCH", 5,  False),  # larger inline batch — one combined event, safe payload
     ])
     async def test_batch_or_sync(self, ijt_session, cls, label, n, refs):
-        from asyncua import ua
         c, result_h, _ = ijt_session
         result_h.events.clear()
         # Budget: n children × 0.5s each + 6s buffer for combined parent event
@@ -401,7 +392,6 @@ class TestSimulateBatchOrSync:
 
     async def test_invalid_cls_defaults_to_batch(self, ijt_session):
         """Classification=99 (unknown) must fall back to BATCH(3)."""
-        from asyncua import ua
         c, result_h, _ = ijt_session
         result_h.events.clear()
         await _call(c, _SIM_R, f"{_SIM_R}/SimulateBatch_Or_Sync_Result",
@@ -426,7 +416,6 @@ class TestSimulateJobResult:
 
     @pytest.mark.parametrize("refs", [False, True])
     async def test_job_result(self, ijt_session, refs):
-        from asyncua import ua
         c, result_h, _ = ijt_session
         # Settle: drain any residual events from previous tests before starting.
         await asyncio.sleep(0.5)
@@ -464,7 +453,6 @@ class TestSimulateBulkResults:
         (2, 100, 105, True),   # to-from=5, no auto-raise
     ])
     async def test_bulk(self, ijt_session, rtype, from_seq, to_seq, traces):
-        from asyncua import ua
         from asyncua.ua.uaerrors import BadTooManyOperations
         c, result_h, _ = ijt_session
         ev_exp, code_exp, _ = _SINGLE_EXPECT[rtype]
@@ -473,7 +461,7 @@ class TestSimulateBulkResults:
 
         # The server uses a flag to prevent concurrent BulkResults threads.
         # Wait up to 5 s for any previous BulkResults operation to finish.
-        for attempt in range(5):
+        for _ in range(5):
             result_h.events.clear()
             try:
                 await _call(c, _SIM_R, f"{_SIM_R}/SimulateBulkResults",
@@ -500,10 +488,9 @@ class TestSimulateBulkResults:
 
     async def test_range_below_min_auto_raised(self, ijt_session):
         """from=1,to=2 (range=2) — server raises to MIN=5."""
-        from asyncua import ua
         from asyncua.ua.uaerrors import BadTooManyOperations
         c, result_h, _ = ijt_session
-        for attempt in range(5):
+        for _ in range(5):
             result_h.events.clear()
             try:
                 await _call(c, _SIM_R, f"{_SIM_R}/SimulateBulkResults",
@@ -536,7 +523,6 @@ class TestSimulateEvents:
         81, 90, 91,
     ])
     async def test_single_event_type(self, ijt_session, etype):
-        from asyncua import ua
         c, _, system_h = ijt_session
         events = await _invoke_system(c, system_h, _SIM_E, f"{_SIM_E}/SimulateEvents",
                                       timeout=5.0, *[_v(etype, ua.VariantType.UInt32)])
@@ -545,7 +531,6 @@ class TestSimulateEvents:
         assert msg, f"Event Message.Text empty for EventType={etype}"
 
     async def test_out_of_range_defaults(self, ijt_session):
-        from asyncua import ua
         c, _, system_h = ijt_session
         events = await _invoke_system(c, system_h, _SIM_E, f"{_SIM_E}/SimulateEvents",
                                       timeout=5.0, *[_v(9999, ua.VariantType.UInt32)])
@@ -558,7 +543,6 @@ class TestSimulateEvents:
         (4,  50),
     ])
     async def test_bulk_events(self, ijt_session, etype, count):
-        from asyncua import ua
         import time
         c, _, system_h = ijt_session
         system_h.events.clear()
@@ -578,7 +562,6 @@ class TestSimulateEvents:
 
     async def test_bulk_events_capped_at_100(self, ijt_session):
         """Request 200 bulk events — server should deliver at least 100 within 30s."""
-        from asyncua import ua
         import time
         c, _, system_h = ijt_session
         system_h.events.clear()
@@ -611,7 +594,6 @@ class TestEnableAsset:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
     async def test_enable_true(self, ijt_session):
-        from asyncua import ua
         c, _, system_h = ijt_session
         pi = await _pi_uri(c)
         events = await _invoke_system(c, system_h, _ASSET, f"{_ASSET}/EnableAsset",
@@ -623,7 +605,6 @@ class TestEnableAsset:
         assert msg, f"EnableAsset event must carry a message, got {msg!r}"
 
     async def test_disable_then_enable(self, ijt_session):
-        from asyncua import ua
         c, _, system_h = ijt_session
         pi = await _pi_uri(c)
 
@@ -650,25 +631,21 @@ class TestJoiningProcess:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
     async def _jp(self, c):
-        from asyncua import ua
         jp = ua.JoiningProcessIdentificationDataType()
         jp.JoiningProcessId = jp.JoiningProcessOriginId = jp.SelectionName = ""
         return jp
 
     async def test_get_process_list(self, ijt_session):
-        from asyncua import ua
         c, *_ = ijt_session
         assert await _call(c, _JP, f"{_JP}/GetJoiningProcessList",
                            _v(await _pi_uri(c), ua.VariantType.String)) is not None
 
     async def test_get_selected_program(self, ijt_session):
-        from asyncua import ua
         c, *_ = ijt_session
         assert await _call(c, _JP, f"{_JP}/GetSelectedJoiningProgram",
                            _v(await _pi_uri(c), ua.VariantType.String)) is not None
 
     async def test_abort_with_localized_text(self, ijt_session):
-        from asyncua import ua
         c, *_ = ijt_session
         jp = await self._jp(c)
         result = await _call(c, _JP, f"{_JP}/AbortJoiningProcess",
@@ -679,7 +656,6 @@ class TestJoiningProcess:
         assert result is not None
 
     async def test_increment_decrement_counter(self, ijt_session):
-        from asyncua import ua
         c, *_ = ijt_session
         jp, pi = await self._jp(c), await _pi_uri(c)
         await _call(c, _JP, f"{_JP}/IncrementJoiningProcessCounter",
@@ -692,7 +668,6 @@ class TestJoiningProcess:
                     _v(1,  ua.VariantType.UInt32))
 
     async def test_start_selected_joining(self, ijt_session):
-        from asyncua import ua
         c, *_ = ijt_session
         result = await _call(c, _JP, f"{_JP}/StartSelectedJoining",
                              _v(await _pi_uri(c), ua.VariantType.String),
@@ -710,7 +685,6 @@ class TestResultManagement:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
     async def test_get_latest_result(self, ijt_session):
-        from asyncua import ua
         c, result_h, _ = ijt_session
         # Fire a single result so there is something to fetch
         await _invoke_result(c, result_h, f"{_SIM_R}/SimulateSingleResult", timeout=4.0,
@@ -720,7 +694,6 @@ class TestResultManagement:
         assert result is not None
 
     async def test_request_results_by_sequence(self, ijt_session):
-        from asyncua import ua
         from datetime import datetime, timezone
         c, *_ = ijt_session
         # Use real datetime values instead of None to avoid asyncua DateTime decode errors
@@ -734,7 +707,7 @@ class TestResultManagement:
                                  _v(future, ua.VariantType.DateTime),
                                  _v(10,     ua.VariantType.UInt32))
             assert result is not None
-        except Exception:
+        except OSError:
             pass  # empty result set or server-side Uncertain is acceptable
 
 
@@ -748,14 +721,12 @@ class TestJointManagement:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
     async def test_get_joint_list(self, ijt_session):
-        from asyncua import ua
         c, *_ = ijt_session
         result = await _call(c, _JT, f"{_JT}/GetJointList",
                              _v(await _pi_uri(c), ua.VariantType.String))
         assert result is not None
 
     async def test_get_joint_by_id(self, ijt_session):
-        from asyncua import ua
         c, *_ = ijt_session
         # First get the real joint IDs from the server via GetJointList
         joint_id = "Joint_1"  # fallback default
@@ -769,7 +740,7 @@ class TestJointManagement:
                 joint_id = (getattr(first, "JointId", None)
                             or getattr(first, "Id", None)
                             or joint_id)
-        except Exception:
+        except OSError:
             pass  # fall back to "Joint_1" if GetJointList fails
 
         try:
@@ -777,5 +748,5 @@ class TestJointManagement:
                                  _v(await _pi_uri(c), ua.VariantType.String),
                                  _v(str(joint_id),    ua.VariantType.String))
             assert result is not None
-        except Exception:
+        except OSError:
             pass  # Uncertain / not-found status is valid

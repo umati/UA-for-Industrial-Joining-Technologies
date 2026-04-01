@@ -3,9 +3,6 @@ Tests for ijt_logger.py (MillisecondFormatter and ijt_log).
 """
 import inspect
 import logging
-from logging import LogRecord
-
-import pytest
 
 import sys
 from pathlib import Path
@@ -19,7 +16,7 @@ from ijt_logger import MillisecondFormatter, ijt_log
 # ---------------------------------------------------------------------------
 
 def _make_record(message="test message"):
-    record = LogRecord(
+    record = logging.LogRecord(
         name="test",
         level=logging.INFO,
         pathname="",

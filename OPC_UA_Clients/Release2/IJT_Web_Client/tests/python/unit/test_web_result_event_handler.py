@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
+pytest.importorskip("asyncua", reason="asyncua not installed")
 from asyncua import ua  # noqa: E402
 
 from python.result_event_handler import ResultEventHandler, Short  # noqa: E402

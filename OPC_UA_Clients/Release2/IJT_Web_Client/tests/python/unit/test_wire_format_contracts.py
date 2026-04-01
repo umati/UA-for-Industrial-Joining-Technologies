@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-asyncua = pytest.importorskip("asyncua", reason="asyncua not installed")
+pytest.importorskip("asyncua", reason="asyncua not installed")
 
 from unittest.mock import AsyncMock, MagicMock, patch  # noqa: E402
 

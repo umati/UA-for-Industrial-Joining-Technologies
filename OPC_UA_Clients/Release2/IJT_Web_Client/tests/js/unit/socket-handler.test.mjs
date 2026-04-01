@@ -13,7 +13,7 @@
  *     - "arguments"
  *   The Python backend reads exactly these key names.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { SocketHandler } from '../../../src/javascripts/ijt-support/connection/socket-handler.mjs'
 
 // ---------------------------------------------------------------------------

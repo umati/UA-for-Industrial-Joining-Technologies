@@ -135,7 +135,7 @@ export default class Settings extends BasicScreen {
       this.container.innerHTML = ''
 
       const labelElement = document.createElement('label')
-      labelElement.innerHTML = 'ProductId   '
+      labelElement.textContent = 'ProductId   '
       this.container.appendChild(labelElement)
 
       this.createInput(this.productId, this.container, (evt) => {
@@ -144,7 +144,7 @@ export default class Settings extends BasicScreen {
       this.container.appendChild(document.createElement('br'))
 
       const labelElement2 = document.createElement('label')
-      labelElement2.innerHTML = 'Button 1 selection   '
+      labelElement2.textContent = 'Button 1 selection   '
       this.container.appendChild(labelElement2)
 
       this.createInput(this.JoiningProcess1, this.container, (evt) => {
@@ -153,7 +153,7 @@ export default class Settings extends BasicScreen {
       this.container.appendChild(document.createElement('br'))
 
       const labelElement3 = document.createElement('label')
-      labelElement3.innerHTML = 'Button 2 selection   '
+      labelElement3.textContent = 'Button 2 selection   '
       this.container.appendChild(labelElement3)
 
       this.createInput(this.JoiningProcess2, this.container, (evt) => {
@@ -162,7 +162,7 @@ export default class Settings extends BasicScreen {
       this.container.appendChild(document.createElement('br'))
 
       const labelElement31 = document.createElement('label')
-      labelElement31.innerHTML = 'Joint 1 identity   '
+      labelElement31.textContent = 'Joint 1 identity   '
       this.container.appendChild(labelElement31)
 
       this.createInput(this.Joint1, this.container, (evt) => {
@@ -171,7 +171,7 @@ export default class Settings extends BasicScreen {
       this.container.appendChild(document.createElement('br'))
 
       const labelElement32 = document.createElement('label')
-      labelElement32.innerHTML = 'Joint 2 identity   '
+      labelElement32.textContent = 'Joint 2 identity   '
       this.container.appendChild(labelElement32)
 
       this.createInput(this.Joint2, this.container, (evt) => {
@@ -180,7 +180,7 @@ export default class Settings extends BasicScreen {
       this.container.appendChild(document.createElement('br'))
 
       const labelElement4 = document.createElement('label')
-      labelElement4.innerHTML = 'Default view level   '
+      labelElement4.textContent = 'Default view level   '
       this.container.appendChild(labelElement4)
 
       this.container.select = document.createElement('select')
@@ -191,7 +191,7 @@ export default class Settings extends BasicScreen {
       for (const optionData of viewLevels) {
         const option = document.createElement('option')
         option.value = optionData[1]
-        option.innerHTML = optionData[0]
+        option.textContent = optionData[0]
         this.container.select.appendChild(option)
       }
 

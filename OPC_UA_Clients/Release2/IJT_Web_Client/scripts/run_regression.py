@@ -28,7 +28,7 @@ def _ensure_test_interpreter_and_relaunch() -> Path:
     return test_python
 
 
-TEST_PYTHON = _ensure_test_interpreter_and_relaunch()
+_ = _ensure_test_interpreter_and_relaunch()
 
 import websockets
 from asyncua import Client, ua

@@ -6,8 +6,6 @@ silently. These tests parse the actual source code to verify exact strings.
 """
 from pathlib import Path
 
-import pytest
-
 _CONSOLE_ROOT = Path(__file__).resolve().parent.parent.parent
 
 

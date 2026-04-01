@@ -75,35 +75,19 @@
   http://localhost:3000
   ```
 ## Testing
-- **All tests — single command** (unit + integration + JS):
-  ```bash
-  python run_all_tests.py
-  ```
-- **Python unit/integration only:**
-  ```bash
-  python -m pytest tests/ --timeout=120 -q
-  ```
-- **JS unit tests only:**
-  ```bash
-  npx vitest run
-  ```
-- **Docker smoke tests** (container must be running):
-  ```bash
-  python scripts/run_docker_tests.py
-  ```
-- **Docker live validation** (full build + compose up):
-  ```bash
-  python scripts/run_docker_tests.py --live-docker
-  ```
-- **Integration tests against a live OPC UA server:**
-  ```bash
-  set OPCUA_TEST_ENDPOINT=opc.tcp://<host>:<port>
-  python -m pytest tests/ -m live --timeout=120
-  ```
-- **Functional regression tests:**
-  ```bash
-  python scripts/run_regression.py --endpoint opc.tcp://localhost:40451 --ws-url ws://localhost:8001
-  ```
+
+Run everything with one command — optional stages (Docker, live OPC UA, Playwright E2E) activate automatically when available and are skipped if not:
+
+```bash
+python run_all_tests.py
+```
+
+| Stage | Runs when |
+|-------|-----------|
+| Python unit + JS unit + Playwright smoke | Always |
+| Live OPC UA tests | OPC UA server reachable at `opc.tcp://localhost:40451` |
+| Playwright E2E | WebSocket backend reachable at `ws://localhost:8001` |
+| Docker smoke (build + start + verify) | Docker daemon is running |
 ### Dependencies Versions
 - **Python:** minimum supported version is **3.14**; newer stable Python versions are allowed automatically.
 - **Node.js:** minimum supported version is **24.0.0**.

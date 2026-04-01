@@ -11,7 +11,7 @@ from pathlib import Path
 # ---- START: robust JSON import (fallback if orjson is missing) ----
 try:
     import orjson  # fast path
-except Exception:
+except ImportError:
     orjson = None
 
 
@@ -47,11 +47,11 @@ def log_separator(label_width: int = 35) -> None:
     ijt_log.info("-" * (label_width + 40))
 
 
-def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:
+def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:  # pylint: disable=redefined-outer-name
     if isinstance(dt, str):
         try:
             dt = datetime.fromisoformat(dt)
-        except Exception:
+        except ValueError:
             return dt
     local_tz = pytz.timezone(timezone)
     return dt.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
@@ -286,13 +286,12 @@ def nodeid_to_str(nodeid: ua.NodeId) -> str:
                 ua.NodeIdType.FourByte,
             ):
                 return f"ns={ns};i={identifier}"
-            elif nodeid.NodeIdType == ua.NodeIdType.String:
+            if nodeid.NodeIdType == ua.NodeIdType.String:
                 return f"ns={ns};s={identifier}"
-            elif nodeid.NodeIdType == ua.NodeIdType.Guid:
+            if nodeid.NodeIdType == ua.NodeIdType.Guid:
                 return f"ns={ns};g={identifier}"
-            else:
-                # ByteString / Opaque
-                return f"ns={ns};b={identifier}"
+            # ByteString / Opaque
+            return f"ns={ns};b={identifier}"
     except Exception as exc:
         ijt_log.debug(f"Failed to format node id, falling back to str(): {exc}")
     return str(nodeid)

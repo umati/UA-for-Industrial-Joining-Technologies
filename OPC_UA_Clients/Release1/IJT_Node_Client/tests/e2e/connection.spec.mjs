@@ -1,5 +1,4 @@
 import { test, expect, BASE_URL, OPCUA_ENDPOINT } from './e2e-fixtures.mjs'
-import { ConnectionPage } from './page-objects.mjs'
 
 test.describe('Connection tab', () => {
   test('page loads and has input area', async ({ page }) => {

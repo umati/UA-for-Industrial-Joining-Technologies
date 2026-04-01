@@ -87,10 +87,6 @@ test('no failed network requests for essential scripts', async ({ page }) => {
 })
 
 test('chart.umd.js loads successfully (regression: src/ path depth)', async ({ page }) => {
-  let chartLoaded = false
-  page.on('response', (resp) => {
-    if (resp.url().includes('chart.umd') && resp.status() === 200) chartLoaded = true
-  })
   await page.goto('/')
   // Navigate to a view that uses Chart.js (Trace/OkRate)
   await page.waitForTimeout(2_000)

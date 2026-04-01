@@ -6,6 +6,7 @@ forwarded to the browser by the :class:`ResultEventHandler` queue worker.
 """
 
 import asyncio
+import contextlib
 import json
 import traceback
 from dataclasses import dataclass
@@ -60,7 +61,7 @@ class ResultEventHandler:
         """
         self.websocket = websocket
         self.server_url = server_url
-        self.queue: asyncio.Queue = asyncio.Queue()
+        self.queue: asyncio.Queue = asyncio.Queue(_QUEUE_SIZE)
         self.closed = False
         self._queue_task = asyncio.create_task(self.handle_queue())
         ijt_log.info("ResultEventHandler initialized.")
@@ -160,8 +161,6 @@ class ResultEventHandler:
                 await asyncio.wait_for(asyncio.shield(self._queue_task), timeout=_SHUTDOWN_TIMEOUT_S)
             except asyncio.TimeoutError:
                 self._queue_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._queue_task
-                except asyncio.CancelledError:
-                    pass
         ijt_log.info("ResultEventHandler closed.")

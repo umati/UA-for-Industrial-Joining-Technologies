@@ -7,6 +7,7 @@ Resource management tests.
 - After cleanup(), no dangling client references
 """
 import asyncio
+import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,7 +18,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from opcua_client import _QUEUE_SIZE, OPCUAClient
 from event_handler import EventHandler
-from result_event_handler import _SHUTDOWN_TIMEOUT_S
 
 
 # ---------------------------------------------------------------------------
@@ -37,15 +37,9 @@ async def test_event_handler_queue_is_not_unbounded():
     h = EventHandler(websocket=ws, server_url="opc.tcp://localhost:4840", client=client)
     assert _QUEUE_SIZE > 0
     h._queue_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await h._queue_task
-    except asyncio.CancelledError:
-        pass
 
-
-def test_shutdown_timeout_is_bounded():
-    """_SHUTDOWN_TIMEOUT_S must be a finite, reasonable value."""
-    assert 0 < _SHUTDOWN_TIMEOUT_S <= 60.0
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@
  * Run: npx playwright test --project=regression
  */
 import { test, expect } from './e2e-fixtures.mjs'
-import { MethodsPage, EventsPage, ResultsPage, JointDemoPage, RESULT_TYPE } from './page-objects.mjs'
+import { RESULT_TYPE } from './page-objects.mjs'
 
 test('full UI regression — connect, simulate, events, all result types', async ({ connected: app }) => {
   test.setTimeout(240_000)

@@ -8,8 +8,6 @@ from dataclasses import dataclass
 from ijt_logger import ijt_log
 from utils import log_result_to_file, log_result_event_details
 
-_SHUTDOWN_TIMEOUT_S = 5.0
-
 
 @dataclass
 class ShortResultEvent:

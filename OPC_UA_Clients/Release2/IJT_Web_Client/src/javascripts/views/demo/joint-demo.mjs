@@ -93,14 +93,22 @@ export default class JointDemo extends BasicScreen {
     const table = document.createElement('table')
     table.style.cssText = 'width:100%;border-collapse:collapse;font-size:0.85em;'
 
-    // Header
+    // Header — built with DOM to avoid innerHTML with any variable content
     const thead = document.createElement('thead')
-    thead.innerHTML = `
-      <tr style="background:#2a2a2a;color:#ccc;">
-        <th style="padding:4px 8px;text-align:left;border-bottom:1px solid #444;">Tool Name</th>
-        <th style="padding:4px 8px;text-align:left;border-bottom:1px solid #444;">ProductInstanceUri</th>
-        <th style="padding:4px 8px;text-align:center;border-bottom:1px solid #444;">Use</th>
-      </tr>`
+    const headerRow = document.createElement('tr')
+    headerRow.style.cssText = 'background:#2a2a2a;color:#ccc;'
+    const headerCells = [
+      { text: 'Tool Name', align: 'left' },
+      { text: 'ProductInstanceUri', align: 'left' },
+      { text: 'Use', align: 'center' }
+    ]
+    for (const { text, align } of headerCells) {
+      const th = document.createElement('th')
+      th.textContent = text
+      th.style.cssText = `padding:4px 8px;text-align:${align};border-bottom:1px solid #444;`
+      headerRow.appendChild(th)
+    }
+    thead.appendChild(headerRow)
     table.appendChild(thead)
 
     const tbody = document.createElement('tbody')

@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import traceback
 from dataclasses import dataclass
@@ -145,8 +146,6 @@ class EventHandler:
                 await asyncio.wait_for(asyncio.shield(self._queue_task), timeout=5.0)
             except asyncio.TimeoutError:
                 self._queue_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._queue_task
-                except asyncio.CancelledError:
-                    pass
         ijt_log.info("EventHandler closed.")

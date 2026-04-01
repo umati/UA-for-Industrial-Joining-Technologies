@@ -23,8 +23,8 @@ export class MethodManager {
           this.methodObject = {}
           Promise.all(methodPromises).then((methodList) => {
             resolve()
-          })
-        })
+          }).catch(reject)
+        }).catch(reject)
     })
   }
 
@@ -41,8 +41,8 @@ export class MethodManager {
         this.addressSpace.findNodeFromPathPromise(`${folderPath}`).then((folderNode) => {
           this.folderPromise(folderNode).then((folderPath) => {
             resolve(folderPath)
-          })
-        })
+          }).catch(reject)
+        }).catch(reject)
       })
     }
   }
@@ -67,8 +67,8 @@ export class MethodManager {
             this.methodObject[methodItem.methodNode.displayName] = { parentNode: folderNode, methodNode: methodItem.methodNode, arguments: methodItem.arguments }
           }
           resolve()
-        })
-      })
+        }).catch(reject)
+      }).catch(reject)
     })
   }
 
@@ -95,7 +95,7 @@ export class MethodManager {
           }
         }
         resolve({ methodNode, arguments: simplifiedArguments })
-      })
+      }).catch(reject)
     })
   }
 
@@ -142,12 +142,12 @@ export class MethodManager {
       })
     }
 
-    this.addressSpace.methodCall(methodData.parentNode.nodeId, methodData.methodNode.nodeId, inputArguments).then(
-      (results, err) => {
-        if (err) {
-          ijtLog.info(err)
-        }
-      }
-    )
+    this.addressSpace.methodCall(methodData.parentNode.nodeId, methodData.methodNode.nodeId, inputArguments)
+      .then((results) => {
+        ijtLog.info('Method call completed:', results?.message)
+      })
+      .catch((err) => {
+        ijtLog.error('Method call failed:', err)
+      })
   }
 }

@@ -17,11 +17,8 @@ def _source_files():
             continue
         # Skip the tests directory — test support files may legitimately mention
         # other client names in fixture strings, skip lists, or docstrings.
-        try:
-            py_file.relative_to(TESTS_DIR)
+        if py_file.is_relative_to(TESTS_DIR):
             continue
-        except ValueError:
-            pass
         yield py_file
 
 

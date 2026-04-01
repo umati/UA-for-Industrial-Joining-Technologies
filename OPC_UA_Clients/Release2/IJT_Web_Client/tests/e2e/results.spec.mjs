@@ -5,7 +5,7 @@
  * Requires: backend + OPC UA server running.
  */
 import { test, expect } from './e2e-fixtures.mjs'
-import { ResultsPage, RESULT_TYPE } from './page-objects.mjs'
+import { RESULT_TYPE } from './page-objects.mjs'
 
 // ─── Setup helper — run simulations once then open results ────────────────────
 async function setupWithSimulations (app) {
