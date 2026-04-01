@@ -992,7 +992,7 @@ def _validate_package_json():
         sys.exit(1)
 
 
-def _install_js_packages():
+def _install_js_packages(dev_mode: bool = False):
     npm = _get_npm_path()
     if not npm:
         log.error("npm not found. Node.js environment setup failed.")
@@ -1000,16 +1000,24 @@ def _install_js_packages():
 
     _validate_package_json()
 
-    log.info("Installing JavaScript packages...")
+    # Set HUSKY=0 for end users so the prepare script does not install git hooks.
+    # Contributors pass --dev to opt in to hook installation.
+    env = os.environ.copy()
+    if not dev_mode:
+        env["HUSKY"] = "0"
+        log.info("Installing JavaScript packages (HUSKY=0 — git hooks skipped for end users)...")
+    else:
+        log.info("Installing JavaScript packages with git hooks (contributor mode)...")
+
     try:
         if Path("package-lock.json").exists():
             log.info("Found package-lock.json. Running 'npm ci'...")
-            _run_command([str(npm), "ci"])
+            subprocess.check_call([str(npm), "ci"], env=env)
         else:
             log.warning(
                 "package-lock.json not found. Running 'npm install' with --legacy-peer-deps..."
             )
-            _run_command([str(npm), "install", "--legacy-peer-deps"])
+            subprocess.check_call([str(npm), "install", "--legacy-peer-deps"], env=env)
     except subprocess.CalledProcessError as e:
         log.error("JavaScript package installation failed. Command failed: %s", e.cmd)
         sys.exit(1)
@@ -1232,6 +1240,15 @@ def main():
     )
     parser.add_argument("--force_full", action="store_true", help="Force full setup")
     parser.add_argument(
+        "--dev",
+        action="store_true",
+        help=(
+            "Contributor mode: install git pre-commit hooks (husky + lint-staged).\n"
+            "Use this if you intend to make and commit changes to the project.\n"
+            "End users who only run the Web Client should omit this flag."
+        ),
+    )
+    parser.add_argument(
         "--silent", action="store_true", help="Show only warnings/errors"
     )
     parser.add_argument(
@@ -1325,7 +1342,7 @@ def main():
     _install_python_packages()
 
     _create_nodeenv()
-    _install_js_packages()
+    _install_js_packages(dev_mode=args.dev)
     _create_env_template()
 
     _load_dotenv_if_available()
