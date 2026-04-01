@@ -166,10 +166,11 @@ export class ButtonTraceInterface extends TraceInterface {
     backGround.appendChild(title)
 
     this.traceArea = document.createElement('div') // This is where the trace graphics will do
+    this.traceArea.classList.add('traceChartHost')
     backGround.appendChild(this.traceArea)
 
     const interfaceArea = document.createElement('div')
-    interfaceArea.classList.add('traceButtonArea')
+    interfaceArea.classList.add('traceButtonArea', 'traceControlDock')
     container.appendChild(interfaceArea)
 
     const trace = document.createElement('div')

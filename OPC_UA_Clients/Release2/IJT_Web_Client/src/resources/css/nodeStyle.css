@@ -821,8 +821,26 @@ html {
   overflow: hidden;
 }
 
+.traceScreen .mainDropDown,
+.traceScreen .myInfoArea {
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
+  box-shadow: 0 10px 24px var(--connection-panel-shadow);
+  overflow: hidden;
+}
+
 .demoScreen .myHeader,
 .jointDemoScreen .myHeader {
+  background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
+  color: var(--ui-text-main);
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
+  font-size: var(--demo-font-title);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.traceScreen .myHeader {
   background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
   color: var(--ui-text-main);
   border-bottom: var(--ui-line-width) solid var(--ui-line-color);
@@ -846,6 +864,16 @@ html {
 }
 
 .jointDemoScreen {
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.traceScreen {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
   height: 100%;
   min-height: 0;
   padding: 10px;
@@ -976,6 +1004,69 @@ html {
 .jointDemoScreen .demoButtonFree:active,
 .jointDemoScreen .jointDemoToolsUseButton:active {
   transform: translateY(1px);
+}
+
+.traceScreen .bigTraceMargin {
+  margin: 0 0 var(--demo-gap) 0;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.traceScreen .fillWidth {
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.traceScreen .traceButtonArea {
+  gap: var(--demo-gap);
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+
+.traceScreen .traceChartHost {
+  height: 100%;
+  min-height: 0;
+}
+
+.traceScreen .traceChartHost > .traceArea {
+  height: 100%;
+}
+
+.traceScreen .thinView {
+  margin: 0;
+  min-width: 170px;
+  width: 170px;
+}
+
+.traceScreen .kvKey,
+.traceScreen .kvValue {
+  color: var(--ui-text-main);
+}
+
+.traceScreen .kvSelect {
+  color: var(--ui-text-main);
+  background-color: rgba(0, 0, 0, 0.35);
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 6px;
+}
+
+.traceScreen .myButton {
+  background-color: var(--demo-button-bg);
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  color: var(--ui-text-main);
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: var(--demo-font-button);
+}
+
+.traceScreen .myButton:hover {
+  background: var(--demo-button-bg-hover);
+  color: var(--demo-button-text-hover);
+}
+
+.traceScreen .myButtonSelected {
+  background: rgba(252, 223, 7, 0.35);
 }
 
 .jointDemoToolsArea {
