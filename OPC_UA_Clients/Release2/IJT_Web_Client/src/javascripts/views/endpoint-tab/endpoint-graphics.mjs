@@ -22,7 +22,6 @@ import USDemo from 'views/demo/us-demo.mjs'
 import JointDemo from 'views/demo/joint-demo.mjs'
 import AssetGraphics from 'views/assets/asset-graphics.mjs'
 import EntityCacheView from 'views/entities/entities.mjs'
-import JointGraphics from 'views/joints/joint-graphics.mjs'
 import ConnectionGraphics from 'views/connection/connection-graphics.mjs'
 import ResultGraphics from 'views/complex-result/result-graphics.mjs'
 import OkRateGraphics from 'views/ok-rate/ok-rate-graphics.mjs'
@@ -164,14 +163,6 @@ export default class EndpointGraphics extends BasicScreen {
       ijtLog.error(error)
     }
 
-    // Entity view is not critical
-    let jointGraphics = null
-    try {
-      jointGraphics = new JointGraphics(jointManager)
-    } catch (error) {
-      ijtLog.error(error)
-    }
-
     tabGenerator.changeViewLevel(2)
 
     tabGenerator.generateTab(connectionGraphics, 2)
@@ -201,8 +192,6 @@ export default class EndpointGraphics extends BasicScreen {
     if (entityCacheView) {
       tabGenerator.generateTab(entityCacheView, 3)
     }
-    if (jointGraphics) {
-      tabGenerator.generateTab(jointGraphics, 3)
-    }
+    // Joints tab intentionally hidden.
   }
 }

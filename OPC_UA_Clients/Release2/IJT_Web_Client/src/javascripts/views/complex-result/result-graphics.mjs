@@ -6,6 +6,7 @@ export default class ResultGraphics extends BasicScreen {
   constructor (resultManager) {
     super('Consolidated Result')
     this.resultManager = resultManager
+    this.backGround.classList.add('consolidatedResultScreen')
 
     this.displayedIdentity = 0
     this.selectType = '-1'
@@ -17,7 +18,7 @@ export default class ResultGraphics extends BasicScreen {
     })
 
     this.header = document.createElement('div')
-    this.header.classList.add('resultheader')
+    this.header.classList.add('resultHeader', 'resultheader')
     this.backGround.appendChild(this.header)
 
     // Type selection dropdown

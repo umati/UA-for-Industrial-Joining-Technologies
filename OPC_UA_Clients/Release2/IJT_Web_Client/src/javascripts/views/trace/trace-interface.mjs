@@ -8,8 +8,9 @@ export class TraceInterface {
     if (this.hue > 100000) {
       this.resetColor()
     }
-    const lightness = Math.floor(15 + 35 * Math.random())
-    return `hsla(${(this.hue += 78)}, 100%, ${lightness}%, 1.0)`
+    const saturation = 92 + Math.floor(8 * Math.random())
+    const lightness = 56 + Math.floor(14 * Math.random())
+    return `hsla(${(this.hue += 78)}, ${saturation}%, ${lightness}%, 1.0)`
   }
 
   refreshTraceCallback () {

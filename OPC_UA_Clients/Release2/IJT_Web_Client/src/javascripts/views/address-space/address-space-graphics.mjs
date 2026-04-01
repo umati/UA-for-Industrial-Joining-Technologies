@@ -13,6 +13,7 @@ const nodeClassColor = {
 export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
   constructor (addressSpace) {
     super('Address Space', 'Address Space', 'Messages')
+    this.backGround.classList.add('addressSpaceScreen')
     this.addressSpace = addressSpace
 
     addressSpace.connectionManager.subscribe(addressSpace.connectionManager.CONNECTION_STATES.CONNECTION, (setToTrue) => {
@@ -88,7 +89,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
       name = node.browseName
     }
     const buttonArea = document.createElement('div')
-    buttonArea.classList.add('buttonArea')
+    buttonArea.classList.add('buttonArea', 'treeNodeContainer')
     buttonArea.nodeId = node.nodeId
     ReplaceOldButtonArea(context, buttonArea, node.nodeId)
 
@@ -127,7 +128,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
    */
   createRelation (relation, context, clickCallback) {
     const buttonArea = document.createElement('div')
-    buttonArea.style.margin = '0px 0px 0px 10px'
+    buttonArea.classList.add('treeRelationContainer')
     buttonArea.nodeId = relation.NodeId
     context.appendChild(buttonArea)
 
@@ -139,7 +140,6 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     browse.classList.add('invisButton')
     browse.classList.add('pointer')
     browse.classList.add('treeButton')
-    browse.style.margin = '-5px 0px -5px -5px'
     browse.title = 'Browse this node from the server'
     browse.style.color = nodeClassColor[relation.NodeClass_]
 
@@ -175,6 +175,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
   toggleNodeContent (node, buttonArea) {
     if (buttonArea.children.length > 1) {
       this.cleanse(buttonArea)
+      buttonArea.classList.remove('is-open')
     } else {
       const enumRelation = node.getNamedRelation('EnumStrings')
 
@@ -187,6 +188,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
           const area = buttonArea.children[0]
           area.innerText += ` = ${value.Text} [${index}]`
           buttonArea.appendChild(area)
+          buttonArea.classList.add('is-open')
         })
         return
       }
@@ -201,11 +203,13 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
             this.createRelation(relation, buttonArea, x => this.convertRelationToNode(relation, buttonArea))
         }
       }
+      buttonArea.classList.add('is-open')
     }
     if (buttonArea.children.length === 1 && node.data.value) {
       const value = buttonArea.children[0]
       value.innerText += ` = ${this.nodeValueToText(node.data.value)}`
       buttonArea.appendChild(value)
+      buttonArea.classList.add('is-open')
     }
   }
 

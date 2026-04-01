@@ -8,6 +8,7 @@ import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
 export default class MethodGraphics extends ControlMessageSplitScreen {
   constructor (methodManager, addressSpace, settings, entityManager) {
     super('Methods', 'Methods', 'Call results')
+    this.backGround.classList.add('methodsScreen')
     this.methodManager = methodManager
     this.settings = settings
     this.entityManager = entityManager
@@ -64,7 +65,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
   createMethodAreas (methodNames) {
     for (const name of methodNames) {
       const methodArea = this.methodGUICreator.createMethodArea(name)
-      this.controlArea.appendChild(methodArea)
+      this.controls.appendChild(methodArea)
     }
   }
 }

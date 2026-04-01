@@ -8,6 +8,7 @@ import EndpointGraphics from '../endpoint-tab/endpoint-graphics.mjs'
 export default class ServerGraphics extends BasicScreen {
   constructor (webSocketManager, endpointTabGenerator, settings) {
     super('+')
+    this.backGround.classList.add('serversScreen')
     this.webSocketManager = webSocketManager
     this.endpointTabGenerator = endpointTabGenerator
 
@@ -22,10 +23,11 @@ export default class ServerGraphics extends BasicScreen {
     ))
 
     this.rows = document.createElement('div')
+    this.rows.classList.add('serversRows')
     column.appendChild(this.rows)
 
     const newRow = document.createElement('div')
-    newRow.style.textAlign = 'right'
+    newRow.classList.add('serversActions')
 
     // The 'Add server' button
     this.createButton('Add new server', newRow, () => {

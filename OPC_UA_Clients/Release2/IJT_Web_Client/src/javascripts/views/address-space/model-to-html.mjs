@@ -205,30 +205,52 @@ export default class ModelToHTML {
     }
   }
 
-  prettyPrint (obj, indent = '&nbsp;&nbsp;&nbsp;') {
-    if (obj === '{}' || obj === null) {
+  prettyPrint (obj, indent = '   ') {
+    if (obj === null) {
       return ''
+    } else if (obj === '{}') {
+      return '{}'
     } else if (typeof obj === 'string' || obj instanceof String) {
       return obj
-    } else if (obj.length > 0) {
+    } else if (Array.isArray(obj)) {
+      if (obj.length === 0) {
+        return '[]'
+      }
       let result = '['
       for (const member of obj) {
-        result += `<br>${indent}${this.prettyPrint(member, `${indent}&nbsp;&nbsp;&nbsp;`)}`
+        const renderedMember = this.prettyPrint(member, `${indent}   `)
+        if (renderedMember !== '') {
+          result += `\n${indent}${renderedMember}`
+        }
       }
       return `${result}]`
     } else if (obj.pythonclass === 'LocalizedText') {
       return obj.Text
     } else {
+      if (typeof obj === 'object' && obj && Object.keys(obj).length === 0) {
+        return '{}'
+      }
       let typeOfClass = ''
-      let result = `<br>${indent}{`
+      const renderedFields = []
       for (const [key, value] of Object.entries(obj)) {
         if (key === 'pythonclass') {
           typeOfClass = value
         } else {
-          result += `<br>${indent}${key}: ${this.prettyPrint(value, `${indent}&nbsp;&nbsp;&nbsp;`)}`
+          const renderedValue = this.prettyPrint(value, `${indent}   `)
+          if (renderedValue !== '') {
+            renderedFields.push(`${key}: ${renderedValue}`)
+          }
         }
       }
-      return `+${typeOfClass}+ ${result}<br>${indent}}`
+      if (renderedFields.length === 0) {
+        return typeOfClass ? `+${typeOfClass}+ {}` : '{}'
+      }
+      let result = `\n${indent}{`
+      for (const field of renderedFields) {
+        result += `\n${indent}${field}`
+      }
+      const typePrefix = typeOfClass ? `+${typeOfClass}+ ` : ''
+      return `${typePrefix}${result}\n${indent}}`
     }
   }
 }
