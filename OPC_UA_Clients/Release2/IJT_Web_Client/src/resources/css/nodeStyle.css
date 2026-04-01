@@ -8,42 +8,11 @@
   --ui-bg-light: lightgray;
   --ui-accent: #fcdf07;
   --ui-text-main: yellow;
-  --connection-panel-border: rgba(252, 223, 7, 0.35);
-  --connection-panel-bg-start: rgba(52, 63, 72, 0.95);
-  --connection-panel-bg-end: rgba(44, 54, 62, 0.95);
-  --connection-panel-shadow: rgba(0, 0, 0, 0.22);
-  --connection-header-bg-start: rgba(0, 0, 0, 0.9);
-  --connection-header-bg-end: rgba(12, 12, 12, 0.9);
-  --connection-card-border: rgba(252, 223, 7, 0.25);
-  --connection-card-bg: rgba(0, 0, 0, 0.2);
-  --connection-pill-bg: rgba(0, 0, 0, 0.3);
-  --connection-pill-off-text: #ff8f8f;
-  --connection-pill-off-bg: rgba(160, 20, 20, 0.32);
-  --connection-pill-on-text: #b6ffb6;
-  --connection-pill-on-bg: rgba(20, 120, 20, 0.35);
-  --connection-message-border: rgba(252, 223, 7, 0.18);
-  --connection-message-bg: rgba(0, 0, 0, 0.18);
-  --demo-uri-text: #9dd8ff;
-  --demo-row-selected: var(--ui-accent);
-  --demo-gap: 10px;
-  --demo-surface-border: rgba(252, 223, 7, 0.26);
-  --demo-surface-bg: rgba(0, 0, 0, 0.18);
-  --demo-button-bg: rgba(0, 0, 0, 0.45);
-  --demo-button-bg-hover: rgba(252, 223, 7, 0.22);
-  --demo-button-text-hover: #fff8c4;
-  --demo-muted-text: rgba(252, 223, 7, 0.75);
-  --demo-font-title: 14px;
-  --demo-font-body: 12px;
-  --demo-font-small: 11px;
-  --demo-font-button: 12px;
-  --ui-line-width: 0.75px;
-  --ui-line-color: #fcdf07;
 }
 
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  font-size: var(--demo-font-body);
 }
 
 #form {
@@ -144,7 +113,7 @@ canvas {
   top: 50px;
   height: 150px;
   background-color: rgba(0, 255, 0, 0.3);
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid green;
 }
 
 .tabGeneratorBase {
@@ -188,7 +157,7 @@ canvas {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 4px;
-  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
+  border-bottom: 1px solid var(--ui-text-main);
 }
 
 .topLevelSelectorBackground {
@@ -204,16 +173,16 @@ canvas {
   color: var(--ui-text-main);
   padding: 5px;
   margin-bottom: -2px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid var(--ui-text-main);
   border-top-left-radius: 5px;
   border-top-right-radius: 5px;
-  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
+  border-bottom: 1px solid var(--ui-text-main);
 }
 
 .tabButton.is-selected {
   background-color: var(--ui-bg-panel);
   font-weight: bold;
-  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
+  border-bottom: 1px solid var(--ui-bg-panel);
 }
 
 .tabButton:hover {
@@ -246,7 +215,7 @@ canvas {
 .errorTab {
   padding: 20px;
   margin: 10px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 10px solid yellow;
   color: yellow;
   background-color: black;
   position: absolute;
@@ -312,7 +281,7 @@ canvas {
 }
 
 .methodBorder {
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid black;
 }
 
 .methodRowDistance {
@@ -351,7 +320,7 @@ canvas {
 }
 
 .serverRow {
-  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
+  border-bottom: 1px solid black;
   text-align: left;
 }
 
@@ -414,9 +383,9 @@ ul {
 }
 
 .traceList {
-  border-color: var(--ui-line-color);
+  border-color: blue;
   border-style: solid;
-  border-width: var(--ui-line-width);
+  border-width: 2px;
   border-radius: 5px;
 }
 
@@ -466,7 +435,7 @@ ul {
   height: 10px;
   margin: -5px;
   background-color: yellow;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: solid red 1px;
   position: absolute;
 }
 .limitDragboxStart {
@@ -503,7 +472,7 @@ ul {
   height: 10px;
   margin: -5px;
   background-color: green;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: solid red 1px;
   position: absolute;
 }
 
@@ -534,13 +503,13 @@ html {
 
 .tabright {
   flex-basis: content;
-  align-self: flex-end;
-  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
+  align-self: center;
+  border-bottom: 1px solid var(--ui-text-main);
 }
 
 .tab {
   float: left;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid purple;
 }
 
 
@@ -557,9 +526,9 @@ html {
 .tabs>li {
   float: left;
   display: block;
-  border-top: var(--ui-line-width) solid var(--ui-line-color);
-  border-left: var(--ui-line-width) solid var(--ui-line-color);
-  border-right: var(--ui-line-width) solid var(--ui-line-color);
+  border-top: solid var(--ui-accent) 3px;
+  border-left: solid var(--ui-accent) 3px;
+  border-right-style: solid var(--ui-accent) 3px;
   border-radius: 10px 10px 0px 0px;
   color: var(--ui-accent);
   padding: 15px;
@@ -582,16 +551,11 @@ html {
   height: 100%;
   position: relative;
   min-height: 0;
-  background: var(--ui-bg-light);
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 0;
 }
 
 #myChart {
   width: 100%;
   height: 100%;
-  background: var(--ui-bg-light);
-  border-radius: 0;
 }
 
 .traceButtonArea {
@@ -633,8 +597,8 @@ html {
 .asset {
   color: black;
   cursor: pointer;
-  border-color: var(--ui-line-color);
-  border-width: var(--ui-line-width);
+  border-color: black;
+  border-width: 1px;
   border-style: solid;
   width: 90%;
   padding: 25px;
@@ -662,7 +626,7 @@ html {
 }
 
 .assetBox {
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid black;
   position: absolute;
   word-wrap: break-word;
 }
@@ -673,557 +637,6 @@ html {
 
 .onColor {
   color: green;
-}
-
-/* Standardized thin line width across major graphical components */
-.tabButton,
-.myButton,
-.demoButton,
-.demoButtonFree,
-.jointDemoToolsUseButton,
-.methodBorder,
-.serverRow,
-.traceArea,
-.mainDropDown,
-.zoomwindow,
-.connectionStatusCard,
-.jointDemoToolsHeaderCell,
-.jointDemoToolsRowSelected,
-.demoScreen .scrollableInfoArea,
-.demoScreen .myInfoArea,
-.jointDemoScreen .scrollableInfoArea,
-.jointDemoScreen .myInfoArea,
-.connectionScreen .scrollableInfoArea {
-  border-style: solid;
-  border-width: var(--ui-line-width);
-  border-color: var(--ui-line-color);
-}
-
-.connectionScreen .columns {
-  height: 100%;
-  min-height: 0;
-  gap: 12px;
-  padding: 10px;
-  box-sizing: border-box;
-}
-
-.connectionScreen .lefthalf,
-.connectionScreen .righthalf {
-  display: flex;
-  flex-direction: column;
-  width: calc(50% - 8px);
-  height: 100%;
-  min-height: 0;
-  margin: 0;
-  max-height: none;
-}
-
-.connectionScreen .scrollableInfoArea {
-  height: 100%;
-  min-height: 0;
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
-  box-shadow: 0 10px 24px var(--connection-panel-shadow);
-}
-
-.connectionScreen .myHeader {
-  background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
-  color: var(--ui-text-main);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 8px 10px;
-  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
-}
-
-.connectionStatusGrid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-  padding: 8px;
-}
-
-.connectionStatusCard {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0;
-  padding: 10px 12px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 8px;
-  background-color: var(--connection-card-bg);
-}
-
-.connectionStatusName {
-  color: var(--ui-text-main);
-  font-weight: 600;
-}
-
-.connectionStatusValue {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  white-space: nowrap;
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  background-color: var(--connection-pill-bg);
-}
-
-.connectionStatusValue.offColor {
-  color: var(--connection-pill-off-text);
-  background-color: var(--connection-pill-off-bg);
-}
-
-.connectionStatusValue.onColor {
-  color: var(--connection-pill-on-text);
-  background-color: var(--connection-pill-on-bg);
-}
-
-.connectionScreen .connectionStatusValue.offColor {
-  color: var(--connection-pill-off-text);
-  background-color: var(--connection-pill-off-bg);
-}
-
-.connectionScreen .connectionStatusValue.onColor {
-  color: var(--connection-pill-on-text);
-  background-color: var(--connection-pill-on-bg);
-}
-
-.connectionScreen .messages {
-  margin: 0;
-  padding: 8px;
-}
-
-.connectionScreen .messages > li {
-  margin: 0 0 8px 0;
-  padding: 8px 10px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 6px;
-  background-color: var(--connection-message-bg);
-  color: var(--ui-text-main);
-  font-size: 12px;
-}
-
-.demoScreen .scrollableInfoArea,
-.demoScreen .myInfoArea,
-.jointDemoScreen .scrollableInfoArea,
-.jointDemoScreen .myInfoArea {
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
-  box-shadow: 0 10px 24px var(--connection-panel-shadow);
-  overflow: hidden;
-}
-
-.traceScreen .mainDropDown,
-.traceScreen .myInfoArea {
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
-  box-shadow: 0 10px 24px var(--connection-panel-shadow);
-  overflow: hidden;
-}
-
-.demoScreen .myHeader,
-.jointDemoScreen .myHeader {
-  background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
-  color: var(--ui-text-main);
-  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
-  font-size: var(--demo-font-title);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.traceScreen .myHeader {
-  background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
-  color: var(--ui-text-main);
-  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
-  font-size: var(--demo-font-title);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.demoScreen .labelStyle,
-.jointDemoScreen .labelStyle {
-  color: var(--ui-text-main);
-  font-size: var(--demo-font-body);
-  line-height: 1.35;
-}
-
-.demoScreen {
-  height: 100%;
-  min-height: 0;
-  padding: 10px;
-  box-sizing: border-box;
-}
-
-.jointDemoScreen {
-  height: 100%;
-  min-height: 0;
-  padding: 10px;
-  box-sizing: border-box;
-}
-
-.traceScreen {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  height: 100%;
-  min-height: 0;
-  padding: 10px;
-  box-sizing: border-box;
-}
-
-.demoScreen .demoRow,
-.jointDemoScreen .demoRow {
-  gap: var(--demo-gap);
-  margin: 0;
-  min-height: 0;
-}
-
-.demoScreen .demoCol,
-.jointDemoScreen .demoCol {
-  gap: var(--demo-gap);
-  margin: 0;
-  height: 100%;
-}
-
-.demoScreen .demoSidebar {
-  width: 22%;
-  min-width: 170px;
-  justify-content: flex-start;
-  padding: 10px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 10px;
-  background: var(--demo-surface-bg);
-}
-
-.demoScreen .demoProgramSidebar {
-  width: 170px;
-  min-width: 170px;
-  flex: 0 0 170px;
-}
-
-.demoScreen .demoMainArea,
-.jointDemoScreen .demoMainArea {
-  width: 78%;
-}
-
-.jointDemoScreen .demoCol {
-  height: auto;
-}
-
-.jointDemoScreen .demoMainArea {
-  width: 100%;
-  min-width: 0;
-}
-
-.demoScreen .demoTopPane,
-.jointDemoScreen .demoTopPane {
-  height: auto;
-  min-height: 200px;
-  flex: 0 0 auto;
-}
-
-.demoScreen .demoBottomPane,
-.jointDemoScreen .demoBottomPane {
-  height: auto;
-  flex: 1 1 auto;
-  margin: 0;
-  min-height: 0;
-}
-
-.demoScreen .demoTraceArea {
-  height: 100%;
-  min-height: 0;
-}
-
-.demoScreen .demoTraceArea .standardCol,
-.demoScreen .demoTraceArea .tightUL,
-.demoScreen .demoTraceArea .traceArea {
-  height: 100%;
-  min-height: 0;
-}
-
-.demoScreen .demoMachine,
-.jointDemoScreen .demoMachine,
-.jointDemoScreen .demoTwin {
-  width: 100%;
-  max-width: none;
-}
-
-.demoScreen .demoMachine,
-.demoScreen .demoMachine .kvKey,
-.demoScreen .demoMachine .kvValue,
-.demoScreen .demoMachine div,
-.jointDemoScreen .demoMachine,
-.jointDemoScreen .demoMachine .kvKey,
-.jointDemoScreen .demoMachine .kvValue,
-.jointDemoScreen .demoMachine div {
-  color: var(--ui-text-main);
-}
-
-.demoScreen .demoButton,
-.jointDemoScreen .demoButton,
-.jointDemoScreen .demoButtonFree,
-.jointDemoScreen .jointDemoToolsUseButton {
-  background-color: var(--demo-button-bg);
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  color: var(--ui-text-main);
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: var(--demo-font-button);
-  line-height: 1.2;
-  letter-spacing: 0.01em;
-  transition: background-color 120ms linear, transform 120ms ease;
-}
-
-.demoScreen .demoButton {
-  min-height: 34px;
-  width: 100%;
-  margin: 0 0 10px 0;
-  text-align: left;
-}
-
-.demoScreen .demoButton:hover,
-.jointDemoScreen .demoButton:hover,
-.jointDemoScreen .demoButtonFree:hover,
-.jointDemoScreen .jointDemoToolsUseButton:hover {
-  background: var(--demo-button-bg-hover);
-  color: var(--demo-button-text-hover);
-}
-
-.demoScreen .demoButton:active,
-.jointDemoScreen .demoButton:active,
-.jointDemoScreen .demoButtonFree:active,
-.jointDemoScreen .jointDemoToolsUseButton:active {
-  transform: translateY(1px);
-}
-
-.traceScreen .bigTraceMargin {
-  margin: 0 0 var(--demo-gap) 0;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.traceScreen .fillWidth {
-  margin: 0;
-  width: 100%;
-  min-width: 0;
-}
-
-.traceScreen .traceButtonArea {
-  gap: var(--demo-gap);
-  flex: 0 0 auto;
-  margin-top: auto;
-}
-
-.traceScreen .traceChartHost {
-  height: 100%;
-  min-height: 0;
-}
-
-.traceScreen .traceChartHost > .traceArea {
-  height: 100%;
-}
-
-.traceScreen .thinView {
-  margin: 0;
-  min-width: 170px;
-  width: 170px;
-}
-
-.traceScreen .kvKey,
-.traceScreen .kvValue {
-  color: var(--ui-text-main);
-}
-
-.traceScreen .kvSelect {
-  color: var(--ui-text-main);
-  background-color: rgba(0, 0, 0, 0.35);
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 6px;
-}
-
-.traceScreen .myButton {
-  background-color: var(--demo-button-bg);
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  color: var(--ui-text-main);
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: var(--demo-font-button);
-}
-
-.traceScreen .myButton:hover {
-  background: var(--demo-button-bg-hover);
-  color: var(--demo-button-text-hover);
-}
-
-.traceScreen .myButtonSelected {
-  background: rgba(252, 223, 7, 0.35);
-}
-
-.jointDemoToolsArea {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  min-height: 0;
-  overflow: auto;
-}
-
-.jointDemoScreen .demoToolsArea {
-  height: 33%;
-  min-height: 180px;
-  max-height: 280px;
-  overflow: hidden;
-}
-
-.jointDemoScreen .demoTopPane .scrollableInfoArea {
-  margin: 0;
-}
-
-.jointDemoScreen .demoTwin {
-  height: 400px;
-  min-height: 400px;
-  margin: 0;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.jointDemoActiveUriLabel {
-  font-size: var(--demo-font-small);
-  color: var(--ui-text-main);
-  margin-bottom: 6px;
-  line-height: 1.35;
-}
-
-.jointDemoHintText {
-  color: var(--demo-muted-text);
-  font-style: italic;
-  margin: 4px 0;
-  font-size: var(--demo-font-small);
-  line-height: 1.35;
-}
-
-.jointDemoToolsTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--demo-font-body);
-  line-height: 1.35;
-}
-
-.jointDemoToolsHeaderRow {
-  background: rgba(0, 0, 0, 0.35);
-  color: var(--ui-text-main);
-}
-
-.jointDemoToolsHeaderCell {
-  padding: 6px 8px;
-  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
-  font-size: var(--demo-font-small);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.jointDemoToolsRowEven {
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.jointDemoToolsRowOdd {
-  background: rgba(0, 0, 0, 0.3);
-}
-
-.jointDemoToolsCell {
-  padding: 6px 8px;
-}
-
-.jointDemoToolsCellName {
-  color: var(--ui-text-main);
-}
-
-.jointDemoToolsCellUri {
-  color: var(--demo-uri-text);
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.jointDemoToolsRow {
-  transition: background-color 120ms linear;
-}
-
-.jointDemoToolsRow:hover {
-  background: rgba(252, 223, 7, 0.14);
-}
-
-.jointDemoScreen .demoRelativeArea img {
-  border-radius: 10px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-}
-
-.jointDemoToolsCellButton {
-  text-align: center;
-}
-
-.jointDemoToolsUseButton {
-  font-size: 0.8em;
-  padding: 2px 8px;
-  cursor: pointer;
-  background-color: var(--ui-bg-primary);
-  color: var(--ui-text-main);
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 4px;
-}
-
-.jointDemoToolsUseButton:hover {
-  background: darkgray;
-  color: black;
-}
-
-.jointDemoToolsRowSelected {
-  outline: 2px solid var(--demo-row-selected);
-}
-
-.commonResultGrid {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 0 10px;
-  width: 100%;
-}
-
-.commonResultKeys,
-.commonResultValues {
-  min-width: 0;
-}
-
-.commonResultKeys > div {
-  white-space: nowrap;
-}
-
-.commonResultValues > div {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 1100px) {
-  .jointDemoScreen .demoRow {
-    flex-direction: column;
-  }
-
-  .jointDemoScreen .demoMainArea {
-    width: 100%;
-    min-width: 0;
-    flex: 1 1 auto;
-  }
 }
 
 .drawResultBox {
@@ -1250,9 +663,8 @@ html {
 }
 
 .resTightening {
-  border-style: solid;
-  border-width: var(--ui-line-width);
-  border-color: var(--ui-line-color);
+  border-width: 2px;
+  border-color: black;
   background-color: rgba(75, 172,  198, 1);
   text-align: center;
   color: black;
@@ -1262,9 +674,8 @@ html {
 
 .resBatch {
   background-color: rgba(192, 80,  70, 1);
-  border-style: solid;
-  border-width: var(--ui-line-width);
-  border-color: var(--ui-line-color);
+  border-width: 2px;
+  border-color: black;
   color: black;
   text-align: center;
   margin: 0px 5px 0px 0px;
@@ -1273,9 +684,8 @@ html {
 
 .resJob {
   background-color: rgba(146, 208,  80, 1);
-  border-style: solid;
-  border-width: var(--ui-line-width);
-  border-color: var(--ui-line-color);
+  border-width: 2px;
+  border-color: black;
   color: black;
   text-align: center;
   margin: 0px 5px 0px 0px;
@@ -1284,11 +694,10 @@ html {
 
 .resOther {
   background-color: midnightblue;
-  border-style: solid;
-  border-color: var(--ui-line-color);
+  border-color: black;
   color: white;
   text-align: center;
-  border-width: var(--ui-line-width);
+  border-width: 1px;
   margin: 0px 5px 0px 0px;
 }
 
@@ -1383,7 +792,7 @@ html {
 
 .resultHeader {
   height: 20px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid IndianRed;
   display:flex;
   flex-direction: row;
   align-items: center;
@@ -1464,12 +873,12 @@ html {
   height: 10px;
 }
 .snibbRight {
-  border-left: var(--ui-line-width) solid var(--ui-line-color);
+  border-left: 1px solid black;
   width: 50%;
   height: 10px;
 }
 .snibbTopRef {
-  border-top: var(--ui-line-width) solid var(--ui-line-color);
+  border-top: 1px solid black;
 }
 
 
@@ -1521,7 +930,7 @@ html {
   background-color: var(--ui-bg-primary);
   color: var(--ui-text-main);
   padding: 5px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid var(--ui-text-main);
   border-radius: 5px;
   margin: 10px;
 }
@@ -1541,7 +950,7 @@ html {
   background-color: var(--ui-bg-primary);
   color: var(--ui-text-main);
   padding: 5px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid var(--ui-text-main);
   border-radius: 5px;
   margin: 10px;
   height: 30px;
@@ -1692,7 +1101,7 @@ html {
   bottom: 100px;
   top: 100px;
   z-index: 100000;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid black;
   background-color: darkgray;
   font-weight: bold;
   padding: 5px;
@@ -1729,10 +1138,7 @@ html {
 }
 
 .mainDropDown {
-  background-color: var(--ui-bg-light);
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 10px;
-  overflow: hidden;
+  background-color: lightgray;
 }
 
 .fillWidth {
@@ -1750,7 +1156,7 @@ html {
   bottom: 15px;
   min-height: 62px;
   background-color: black;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid yellow;
   color: yellow;
   display: flex;
   flex-direction: row;
@@ -1881,7 +1287,7 @@ html {
   min-width: 6rem;
   min-height: 0;
   padding: 10px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid rgba(0, 0, 0, 0.18);
   border-radius: 10px;
   box-sizing: border-box;
 }
@@ -1919,7 +1325,7 @@ html {
   flex-direction: column;
   min-height: 0;
   padding: 0;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid rgba(0, 0, 0, 0.18);
   border-radius: 10px;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
@@ -2086,7 +1492,7 @@ html {
 .okRateValue {
   min-width: 280px;
   padding: 20px 28px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 2px solid #fff06a;
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.45);
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
@@ -2098,17 +1504,17 @@ html {
 
 .okRateValue.is-good {
   color: #9dff9d;
-  border-color: var(--ui-line-color);
+  border-color: #9dff9d;
 }
 
 .okRateValue.is-medium {
   color: #ffe88a;
-  border-color: var(--ui-line-color);
+  border-color: #ffe88a;
 }
 
 .okRateValue.is-low {
   color: #ff9b9b;
-  border-color: var(--ui-line-color);
+  border-color: #ff9b9b;
 }
 
 .okRateSummary {
@@ -2129,7 +1535,7 @@ html {
   min-width: 130px;
   padding: 8px 12px;
   border-radius: 8px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   background: rgba(255, 255, 255, 0.08);
   text-align: center;
   font-size: 1rem;
