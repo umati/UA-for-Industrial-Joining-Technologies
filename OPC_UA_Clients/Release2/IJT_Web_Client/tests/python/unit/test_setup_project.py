@@ -111,6 +111,59 @@ def test_extract_logs_warning_on_bad_zip(tmp_path, monkeypatch, caplog):
     assert any("Failed to extract" in r.message for r in caplog.records)
 
 
+def test_extract_skipped_when_dir_is_newer_than_zip(tmp_path, monkeypatch):
+    """Dir mtime > zip mtime → already up-to-date, no re-extraction."""
+    import os
+    sim_dir = tmp_path / "sim"
+    sim_dir.mkdir()
+    zip_path = tmp_path / "sim.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("opcua_ijt_demo_application.exe", "fake")
+    # Make the zip appear older than the directory.
+    old_time = sim_dir.stat().st_mtime - 60
+    os.utime(zip_path, (old_time, old_time))
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
+    monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
+    sp._extract_simulator_zip_if_needed()
+    assert sim_dir.exists()  # old dir was NOT removed
+
+
+def test_extract_replaces_dir_when_zip_is_newer(tmp_path, monkeypatch):
+    """Zip mtime > dir mtime → old dir removed, contents re-extracted."""
+    import os
+    sim_dir = tmp_path / "sim"
+    sim_dir.mkdir()
+    (sim_dir / "old_file.txt").write_text("stale")
+    zip_path = tmp_path / "sim.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("new_file.txt", "fresh")
+    # Make the zip appear newer than the directory.
+    future_time = sim_dir.stat().st_mtime + 60
+    os.utime(zip_path, (future_time, future_time))
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
+    monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
+    sp._extract_simulator_zip_if_needed()
+    assert not sim_dir.exists()  # old dir was removed
+    assert (tmp_path / "new_file.txt").exists()  # new contents extracted
+
+
+def test_extract_replaces_dir_logs_info_for_newer_zip(tmp_path, monkeypatch, caplog):
+    """Info message is emitted when a newer ZIP triggers a folder replacement."""
+    import os, logging
+    sim_dir = tmp_path / "sim"
+    sim_dir.mkdir()
+    zip_path = tmp_path / "sim.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("dummy.txt", "x")
+    future_time = sim_dir.stat().st_mtime + 60
+    os.utime(zip_path, (future_time, future_time))
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
+    monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
+    with caplog.at_level(logging.INFO, logger="setup_project"):
+        sp._extract_simulator_zip_if_needed()
+    assert any("Newer simulator ZIP" in r.message for r in caplog.records)
+
+
 # =============================================================================
 # _find_simulator_executable
 # =============================================================================

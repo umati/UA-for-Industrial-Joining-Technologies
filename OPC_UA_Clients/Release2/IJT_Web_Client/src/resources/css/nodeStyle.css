@@ -1,51 +1,52 @@
-﻿/* =========================================================
+/* =========================================================
    Base + Theme
    ========================================================= */
 :root {
   --ui-bg-primary: #000;
-  --ui-bg-panel: rgba(52, 63, 72, 0.9);
-  --ui-bg-panel-alt: rgba(62, 73, 82, 0.9);
+  --ui-bg-panel: rgb(52 63 72 / 90%);
+  --ui-bg-panel-alt: rgb(62 73 82 / 90%);
   --ui-bg-light: lightgray;
   --ui-accent: #fcdf07;
   --ui-text-main: yellow;
-  --connection-panel-border: rgba(252, 223, 7, 0.35);
-  --connection-panel-bg-start: rgba(52, 63, 72, 0.95);
-  --connection-panel-bg-end: rgba(44, 54, 62, 0.95);
-  --connection-panel-shadow: rgba(0, 0, 0, 0.22);
-  --connection-header-bg-start: rgba(0, 0, 0, 0.9);
-  --connection-header-bg-end: rgba(12, 12, 12, 0.9);
-  --connection-card-border: rgba(252, 223, 7, 0.25);
-  --connection-card-bg: rgba(0, 0, 0, 0.2);
-  --connection-pill-bg: rgba(0, 0, 0, 0.3);
+  --connection-panel-border: rgb(252 223 7 / 35%);
+  --connection-panel-bg-start: rgb(52 63 72 / 95%);
+  --connection-panel-bg-end: rgb(44 54 62 / 95%);
+  --connection-panel-shadow: rgb(0 0 0 / 22%);
+  --connection-header-bg-start: rgb(0 0 0 / 90%);
+  --connection-header-bg-end: rgb(12 12 12 / 90%);
+  --connection-card-border: rgb(252 223 7 / 25%);
+  --connection-card-bg: rgb(0 0 0 / 20%);
+  --connection-pill-bg: rgb(0 0 0 / 30%);
   --connection-pill-off-text: #ff8f8f;
-  --connection-pill-off-bg: rgba(160, 20, 20, 0.32);
+  --connection-pill-off-bg: rgb(160 20 20 / 32%);
   --connection-pill-on-text: #b6ffb6;
-  --connection-pill-on-bg: rgba(20, 120, 20, 0.35);
-  --connection-message-border: rgba(252, 223, 7, 0.18);
-  --connection-message-bg: rgba(0, 0, 0, 0.18);
+  --connection-pill-on-bg: rgb(20 120 20 / 35%);
+  --connection-message-border: rgb(252 223 7 / 18%);
+  --connection-message-bg: rgb(0 0 0 / 18%);
   --demo-uri-text: #9dd8ff;
   --demo-row-selected: var(--ui-accent);
   --demo-gap: 10px;
-  --demo-surface-border: rgba(252, 223, 7, 0.26);
-  --demo-surface-bg: rgba(0, 0, 0, 0.18);
-  --demo-button-bg: rgba(0, 0, 0, 0.45);
-  --demo-button-bg-hover: rgba(252, 223, 7, 0.22);
+  --demo-surface-border: rgb(252 223 7 / 26%);
+  --demo-surface-bg: rgb(0 0 0 / 18%);
+  --demo-button-bg: rgb(0 0 0 / 45%);
+  --demo-button-bg-hover: rgb(252 223 7 / 22%);
   --demo-button-text-hover: #fff8c4;
-  --demo-muted-text: rgba(252, 223, 7, 0.75);
+  --demo-muted-text: rgb(252 223 7 / 75%);
   --demo-font-title: 14px;
   --demo-font-body: 12px;
   --demo-font-small: 11px;
   --demo-font-button: 12px;
   --ui-line-width: 0.75px;
   --ui-line-color: #fcdf07;
-  --ui-control-bg: rgba(18, 22, 28, 0.94);
-  --ui-control-bg-hover: rgba(42, 50, 60, 0.96);
-  --ui-control-border: rgba(252, 223, 7, 0.45);
-  --ui-control-menu-bg: rgba(18, 22, 28, 0.98);
-  --ui-control-menu-hover: rgba(252, 223, 7, 0.2);
-  --ui-scroll-track: rgba(0, 0, 0, 0.35);
-  --ui-scroll-thumb: rgba(252, 223, 7, 0.5);
-  --ui-scroll-thumb-hover: rgba(252, 223, 7, 0.75);
+  --ui-control-bg: rgb(18 22 28 / 94%);
+  --ui-control-bg-hover: rgb(42 50 60 / 96%);
+  --ui-control-border: rgb(252 223 7 / 45%);
+  --ui-control-menu-bg: rgb(18 22 28 / 98%);
+  --ui-control-menu-hover: rgb(252 223 7 / 20%);
+  --ui-scroll-track: rgb(0 0 0 / 35%);
+  --ui-scroll-thumb: rgb(252 223 7 / 50%);
+  --ui-scroll-thumb-hover: rgb(252 223 7 / 75%);
+  --ui-select-arrow-offset: 0.45rem;
 }
 
 body {
@@ -86,8 +87,6 @@ select,
 .entitiesScreen .methodInput,
 .entitiesScreen .inputStyle {
   color-scheme: dark;
-  -webkit-appearance: none;
-  -moz-appearance: none;
   appearance: none;
   font-family: inherit;
   font-size: var(--demo-font-body);
@@ -135,7 +134,7 @@ select option:checked {
 }
 
 #form {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgb(0 0 0 / 15%);
   padding: 0.25rem;
   position: fixed;
   bottom: 0;
@@ -144,6 +143,7 @@ select option:checked {
   display: flex;
   height: 3rem;
   box-sizing: border-box;
+
   /* --webkit-backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px); */
@@ -184,16 +184,16 @@ select option:checked {
 }
 
 .messages>li {
-  border: 0px solid transparent;
-  border-radius: 0px;
-  margin: 0px 0px;
+  border: 0 solid transparent;
+  border-radius: 0;
+  margin: 0;
   background-color: var(--ui-bg-panel);
   color: yellow;
-  padding: 0px 0px 0px 2px;
+  padding: 0 0 0 2px;
 }
 
 canvas {
-  margin: 0px 0px 40px 0px;
+  margin: 0 0 40px;
 }
 
 .messages>li:nth-child(odd) {
@@ -218,7 +218,8 @@ canvas {
   height: 100vh;
   background-color: var(--ui-bg-panel);
   width: 100%;
-  /*overflow:hidden;*/
+
+  /* overflow:hidden; */
 }
 
 /* =========================================================
@@ -231,7 +232,7 @@ canvas {
   right: 50px;
   top: 50px;
   height: 150px;
-  background-color: rgba(0, 255, 0, 0.3);
+  background-color: rgb(0 255 0 / 30%);
   border: var(--ui-line-width) solid var(--ui-line-color);
 }
 
@@ -246,6 +247,7 @@ canvas {
 .basescreen {
   display: flex;
   flex-direction: column;
+
   /* default value; can be omitted */
   justify-content: space-between;
   font-weight: lighter;
@@ -271,7 +273,7 @@ canvas {
   width: 99%;
   min-height: 22px;
   height: auto;
-  padding: 5px 5px 01px 5px;
+  padding: 5px 5px 01px;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -319,12 +321,14 @@ canvas {
   display: flex;
   background-color: var(--ui-bg-panel);
   color: yellow;
+
   /* overflow: hidden; */
   border-top: none;
   width: 99%;
   height: 95%;
   min-height: 0;
   overflow: hidden;
+
   /* height: 92vh; */
   /* margin: 0;
   padding: 0;
@@ -347,8 +351,9 @@ canvas {
 }
 
 .methodDiv {
-  padding: 0px;
+  padding: 0;
   margin: 2px;
+
   /* border-bottom: 1px solid rgba(52, 63, 72, 0.9); */
 }
 
@@ -365,15 +370,15 @@ canvas {
 }
 
 .tightUL {
-  padding: 0px;
+  padding: 0;
 }
 
 .myHeader {
   background: darkgray;
   position: relative;
-  top: 0px;
-  left: 0px;
-  right: 0px;
+  top: 0;
+  left: 0;
+  right: 0;
   color: white;
   padding: 5px;
   font-size: var(--demo-font-title);
@@ -395,7 +400,7 @@ canvas {
 }
 
 .myButton {
-  background: IndianRed;
+  background: indianred;
   color: black;
   margin: 5px;
 }
@@ -405,11 +410,11 @@ canvas {
 }
 
 .methodRowDistance {
-  padding: 0px 5px;
+  padding: 0 5px;
 }
 
 .myButton:hover {
-  background: IndianRed;
+  background: indianred;
 }
 
 .myButton:active {
@@ -420,13 +425,13 @@ canvas {
 .invisButton {
   background: transparent;
   border-color: transparent;
-  border-width: 0px;
+  border-width: 0;
   color: black;
   margin: 5px;
 }
 
 .invisButton:hover {
-  background: IndianRed;
+  background: indianred;
 }
 
 .invisButton:active {
@@ -491,7 +496,8 @@ ul {
   width: 49%;
   max-height: 97%;
   display: inline-block;
-  margin: 10px 0px 0px 10px;
+  margin: 10px 0 0 10px;
+
   /* display: inline-block; */
 }
 
@@ -499,7 +505,7 @@ ul {
   width: 49%;
   max-height: 97%;
   display: inline-block;
-  margin: 10px 0px 0px 10px;
+  margin: 10px 0 0 10px;
 }
 
 .traceList {
@@ -567,7 +573,7 @@ ul {
 .scrollFull {
   overflow: auto;
   height: 100%;
-  margin: 0px 5px;
+  margin: 0 5px;
 }
 
 .namedInfoArea {
@@ -589,11 +595,12 @@ ul {
   border: var(--ui-line-width) solid var(--ui-line-color);
   position: absolute;
 }
+
 .limitDragboxStart {
   width: 20px;
   height: 20px;
   margin: -10px;
-  background-color: rgba(0, 0, 0, 0.15);
+  background-color: rgb(0 0 0 / 15%);
   position: absolute;
 }
 
@@ -601,7 +608,7 @@ ul {
   width: 30px;
   height: 30px;
   margin: -15px;
-  background-color: rgba(0, 0, 0, 0.15);
+  background-color: rgb(0 0 0 / 15%);
   position: absolute;
 }
 
@@ -638,7 +645,7 @@ ul {
 }
 
 html {
-  background-color: #000000;
+  background-color: #000;
 }
 
 .tabrow {
@@ -670,7 +677,7 @@ html {
   list-style: none;
   position: relative;
   text-align: left;
-  margin: 10px 15px 5px 15px;
+  margin: 10px 15px 5px;
   background-color: var(--ui-bg-panel);
 }
 
@@ -680,7 +687,7 @@ html {
   border-top: var(--ui-line-width) solid var(--ui-line-color);
   border-left: var(--ui-line-width) solid var(--ui-line-color);
   border-right: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 10px 10px 0px 0px;
+  border-radius: 10px 10px 0 0;
   color: var(--ui-accent);
   padding: 15px;
   background-color: var(--ui-bg-panel);
@@ -702,7 +709,7 @@ html {
   height: 100%;
   position: relative;
   min-height: 0;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgb(0 0 0 / 20%);
   border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 0;
 }
@@ -710,7 +717,7 @@ html {
 #myChart {
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgb(0 0 0 / 20%);
   border-radius: 0;
 }
 
@@ -740,14 +747,15 @@ html {
 }
 
 .kvSelect {
-  -webkit-appearance: none;
-  -moz-appearance: none;
   appearance: none;
   color: var(--ui-text-main);
   cursor: pointer;
   background-color: var(--ui-control-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23333'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--ui-select-arrow-offset) center;
   width: 100%;
-  padding: 5px;
+  padding: 5px 1.5rem 5px 5px;
   border: 1px solid var(--ui-control-border);
   border-radius: 6px;
 }
@@ -764,21 +772,17 @@ html {
 }
 
 .drawAssetBox {
+
   /* border: 2px solid gray; */
   position: fixed;
-  top: 115px;
-  left: 15px;
-  right: 30px;
-  bottom: 35px;
+  inset: 115px 30px 35px 15px;
+
   /* background-color: green; */
 }
 
 .assetArea {
   position: absolute;
-  top:0%;
-  left:0%;
-  bottom:0%;
-  right:0%;
+  inset: 0;
   color: yellow;
 
 }
@@ -786,11 +790,11 @@ html {
 .assetBox {
   border: var(--ui-line-width) solid var(--ui-line-color);
   position: absolute;
-  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .offColor {
-  color: IndianRed;
+  color: indianred;
 }
 
 .onColor {
@@ -985,7 +989,7 @@ html {
   min-width: 0;
   border: 1px solid var(--connection-panel-border);
   border-radius: 6px;
-  background-color: rgba(0, 0, 0, 0.35);
+  background-color: rgb(0 0 0 / 35%);
   color: var(--ui-text-main);
 }
 
@@ -1015,7 +1019,7 @@ html {
   color: var(--demo-button-text-hover);
 }
 
-@media (max-width: 980px) {
+@media (width <= 980px) {
   .serversScreen .serverRow {
     grid-template-columns: 1fr;
     gap: 6px;
@@ -1036,7 +1040,7 @@ html {
 }
 
 .connectionScreen .messages > li {
-  margin: 0 0 8px 0;
+  margin: 0 0 8px;
   padding: 8px 10px;
   border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 6px;
@@ -1222,7 +1226,7 @@ html {
 .demoScreen .demoButton {
   min-height: 34px;
   width: 100%;
-  margin: 0 0 10px 0;
+  margin: 0 0 10px;
   text-align: left;
 }
 
@@ -1281,7 +1285,7 @@ html {
 
 .traceScreen .kvSelect {
   color: var(--ui-text-main);
-  background-color: rgba(0, 0, 0, 0.35);
+  background-color: rgb(0 0 0 / 35%);
   border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 6px;
 }
@@ -1301,7 +1305,7 @@ html {
 }
 
 .traceScreen .myButtonSelected {
-  background: rgba(252, 223, 7, 0.35);
+  background: rgb(252 223 7 / 35%);
 }
 
 .jointDemoToolsArea {
@@ -1354,7 +1358,7 @@ html {
 }
 
 .jointDemoToolsHeaderRow {
-  background: rgba(0, 0, 0, 0.35);
+  background: rgb(0 0 0 / 35%);
   color: var(--ui-text-main);
 }
 
@@ -1368,11 +1372,11 @@ html {
 }
 
 .jointDemoToolsRowEven {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgb(0 0 0 / 20%);
 }
 
 .jointDemoToolsRowOdd {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgb(0 0 0 / 30%);
 }
 
 .jointDemoToolsCell {
@@ -1396,12 +1400,12 @@ html {
 }
 
 .jointDemoToolsRow:hover {
-  background: rgba(252, 223, 7, 0.14);
+  background: rgb(252 223 7 / 14%);
 }
 
 .jointDemoScreen .demoRelativeArea img {
   border-radius: 10px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 25%);
 }
 
 .jointDemoToolsCellButton {
@@ -1449,7 +1453,7 @@ html {
   white-space: nowrap;
 }
 
-@media (max-width: 1100px) {
+@media (width <= 1100px) {
   .jointDemoScreen .demoRow {
     flex-direction: column;
   }
@@ -1479,6 +1483,7 @@ html {
   background-color: red;
   color: white;
 }
+
 .resOK {
   background-color: green;
   color: white;
@@ -1488,32 +1493,32 @@ html {
   border-style: solid;
   border-width: var(--ui-line-width);
   border-color: var(--ui-line-color);
-  background-color: rgba(75, 172,  198, 1);
+  background-color: rgb(75 172  198 / 100%);
   text-align: center;
   color: black;
-  margin: 0px 5px 0px 0px;
+  margin: 0 5px 0 0;
   padding: 5px;
 }
 
 .resBatch {
-  background-color: rgba(192, 80,  70, 1);
+  background-color: rgb(192 80  70 / 100%);
   border-style: solid;
   border-width: var(--ui-line-width);
   border-color: var(--ui-line-color);
   color: black;
   text-align: center;
-  margin: 0px 5px 0px 0px;
+  margin: 0 5px 0 0;
   padding: 5px;
 }
 
 .resJob {
-  background-color: rgba(146, 208,  80, 1);
+  background-color: rgb(146 208  80 / 100%);
   border-style: solid;
   border-width: var(--ui-line-width);
   border-color: var(--ui-line-color);
   color: black;
   text-align: center;
-  margin: 0px 5px 0px 0px;
+  margin: 0 5px 0 0;
   padding: 5px;
 }
 
@@ -1524,7 +1529,7 @@ html {
   color: white;
   text-align: center;
   border-width: var(--ui-line-width);
-  margin: 0px 5px 0px 0px;
+  margin: 0 5px 0 0;
 }
 
 .resReference {
@@ -1533,85 +1538,77 @@ html {
 }
 
 .resNew1 {
-  transition: box-shadow 5px 5px 5px black;
-}
-
-.resNew1 {
+  transition: box-shadow 0.3s ease;
   animation: shadow1 15s;
 }
 
 @keyframes shadow1 {
+
   /* The 0% keyframe represents the initial state of the element */
   0% {
-    box-shadow: 0 5px 5px rgba(0,0,0,0.25);
+    box-shadow: 0 5px 5px rgb(0 0 0 / 25%);
   }
  
   /* The 100% keyframe represents the final state of the element */
   100% {
-    box-shadow: 0 5px 5px rgba(0,0,0,0);
+    box-shadow: 0 5px 5px rgb(0 0 0 / 0%);
   }
 }
 
 .resNew2 {
-  transition: box-shadow 5px 5px 5px black;
-}
-
-.resNew2 {
+  transition: box-shadow 0.3s ease;
   animation: shadow2 30s;
 }
 
 @keyframes shadow2 {
+
   /* The 0% keyframe represents the initial state of the element */
   0% {
-    box-shadow: 0 5px 5px rgba(0,0,0,0.5);
+    box-shadow: 0 5px 5px rgb(0 0 0 / 50%);
   }
  
   /* The 100% keyframe represents the final state of the element */
   100% {
-    box-shadow: 0 5px 5px rgba(0,0,0,0);
+    box-shadow: 0 5px 5px rgb(0 0 0 / 0%);
   }
 }
 
 
 
 .resNew3 {
-  transition: box-shadow 5px 5px 5px black;
-}
-
-.resNew3 {
+  transition: box-shadow 0.3s ease;
   animation: shadow3 45s;
 }
 
 @keyframes shadow3 {
+
   /* The 0% keyframe represents the initial state of the element */
   0% {
-    box-shadow: 0 5px 5px rgba(0,0,0,0.75);
+    box-shadow: 0 5px 5px rgb(0 0 0 / 75%);
   }
  
   /* The 100% keyframe represents the final state of the element */
   100% {
-    box-shadow: 0 5px 5px rgba(0,0,0,0);
+    box-shadow: 0 5px 5px rgb(0 0 0 / 0%);
   }
 }
 
 
 .resNew4 {
-  transition: box-shadow 5px 5px 5px darkgrey;
-}
-
-.resNew4 {
+  transition: box-shadow 0.3s ease;
   animation: shadow4 60s;
 }
 
 @keyframes shadow4 {
+
   /* The 0% keyframe represents the initial state of the element */
   0% {
-    box-shadow: 0 5px 5px rgba(0,0,0,1);
+    box-shadow: 0 5px 5px rgb(0 0 0 / 100%);
   }
  
   /* The 100% keyframe represents the final state of the element */
   100% {
-    box-shadow: 0 5px 5px rgba(0,0,0,0);
+    box-shadow: 0 5px 5px rgb(0 0 0 / 0%);
   }
 }
 
@@ -1627,7 +1624,7 @@ html {
 
 .resultHeaderItem {
   display:inline;
-  padding: 0px 5px;
+  padding: 0 5px;
 }
 
 .rootTop {
@@ -1663,7 +1660,7 @@ html {
   display:flex;
   flex-direction: row;
   justify-content: center;
-  align-items:start
+  align-items: flex-start;
 }
 
 .rootChildRef {
@@ -1694,15 +1691,18 @@ html {
   align-items: center;
   width:100%;
 }
+
 .snibbNone {
   width: 50%;
   height: 10px;
 }
+
 .snibbRight {
   border-left: var(--ui-line-width) solid var(--ui-line-color);
   width: 50%;
   height: 10px;
 }
+
 .snibbTopRef {
   border-top: var(--ui-line-width) solid var(--ui-line-color);
 }
@@ -1711,8 +1711,9 @@ html {
 .demoRow {
   display: flex;
   flex-direction: row;
-  /*justify-content: center;
-  align-items: center;*/
+
+  /* justify-content: center;
+  align-items: center; */
   height: 97%;
   margin: 5px;
   min-height: 0;
@@ -1842,8 +1843,8 @@ html {
   color: black;
   overflow: hidden;
   width: 30%;
-  margin: 0px 5px 0px 0px;
-  padding: 0px;
+  margin: 0 5px 0 0;
+  padding: 0;
   height: 100%;
 }
 
@@ -1853,21 +1854,21 @@ html {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgb(0 0 0 / 70%);
 }
 
 .coverLayer {
-  width: 0%;
-  height: 0%;
+  width: 0;
+  height: 0;
   background: transparent;
   position: absolute;
-  top:0px;
+  top:0;
 }
 
 .drag-over {
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgb(0 0 0 / 30%);
 }
 
 .envpopup {
@@ -1890,13 +1891,13 @@ html {
 }
 
 .buttonArea {
-  margin: 0px 0px 0px 10px;
+  margin: 0 0 0 10px;
   width: 95%;
 }
 
 
 .treeButtonPlace {
-  margin: -5px 0px -5px -5px;
+  margin: -5px 0 -5px -5px;
   color: black;
   overflow: hidden;
 }
@@ -1912,20 +1913,17 @@ html {
 
 .identifier {
   font-weight: normal;
-  padding: 0px 0px 0px 15px;
+  padding: 0 0 0 15px;
 }
 
 .identifier:hover {
-  background: IndianRed;
+  background: indianred;
   transition: background-color 100ms linear;
 }
 
 .idSelectDialog {
   position: absolute;
-  left: 100px;
-  right: 100px;
-  bottom: 100px;
-  top: 100px;
+  inset: 100px;
   z-index: 100000;
   border: var(--ui-line-width) solid var(--ui-line-color);
   background-color: darkgray;
@@ -1935,12 +1933,9 @@ html {
 
 .idSelectDialogGrayBackground {
   position: absolute;
-  left: 1px;
-  right: 1px;
-  bottom: 1px;
-  top: 1px;
+  inset: 1px;
   z-index: 99999;
-  background-color: rgba(0, 0, 0, 0.676);
+  background-color: rgb(0 0 0 / 67.6%);
 }
 
 .methodLabel {
@@ -1956,11 +1951,11 @@ html {
 .methodInputRight {
   width: 45%;
   display: inline-block;
-  padding-left: 0px;
+  padding-left: 0;
 }
 
 .myCheckBox {
-  margin-left: 0px;
+  margin-left: 0;
 }
 
 .mainDropDown {
@@ -1971,12 +1966,12 @@ html {
 }
 
 .fillWidth {
-  margin: 5px 0px 5px 5px ;
+  margin: 5px 0 5px 5px ;
   width: 100%;
 }
 
 .bigTraceMargin {
-  margin: 5px 0px 0px 5px;
+  margin: 5px 0 0 5px;
 }
 
 .eventqueuehoverdiv {
@@ -1993,7 +1988,7 @@ html {
 }
 
 .eventQueuePeeks {
-  padding: 0px 10px;
+  padding: 0 10px;
 }
 
 .eventInfo {
@@ -2059,11 +2054,11 @@ html {
 }
 
 .consolidatedResultScreen .complewrapper {
-  margin: 6px 0 0 0;
+  margin: 6px 0 0;
   padding: 10px;
   border: 1px solid var(--ui-line-color);
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgb(0 0 0 / 20%);
 }
 
 .consolidatedResultScreen .resTightening,
@@ -2076,7 +2071,6 @@ html {
   max-width: 20ch;
   white-space: normal;
   overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
 /* =========================================================
@@ -2276,7 +2270,7 @@ html {
   padding: 10px 12px;
   border: 1px solid var(--connection-card-border);
   border-radius: 8px;
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: rgb(0 0 0 / 20%);
 }
 
 .envelopeScreen .methodBorder > .labelStyle:first-child {
@@ -2307,7 +2301,7 @@ html {
 .envelopeScreen .inputStyle {
   border: 1px solid var(--connection-panel-border);
   border-radius: 6px;
-  background-color: rgba(0, 0, 0, 0.35);
+  background-color: rgb(0 0 0 / 35%);
   color: var(--ui-text-main);
 }
 
@@ -2330,8 +2324,7 @@ html {
 .envelopeBorderCard .tightUL,
 .envelopeBorderCard .contentArea,
 .envelopeBorderCard .standardCol {
-  justify-content: flex-start;
-  align-content: flex-start;
+  place-content: flex-start flex-start;
   padding-top: 0;
 }
 
@@ -2405,16 +2398,16 @@ html {
 
 .envelopeTraceField .traceArea,
 .envelopeTraceField #myChart {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgb(0 0 0 / 20%);
 }
 
-@media (max-width: 860px) {
+@media (width <= 860px) {
   .envelopeSidebar {
     flex-basis: 8.4rem;
   }
 }
 
-@media (max-width: 720px) {
+@media (width <= 720px) {
   .envelopeLayout {
     padding: 6px;
     gap: 8px;
@@ -2462,8 +2455,8 @@ html {
   padding: 20px 28px;
   border: var(--ui-line-width) solid var(--ui-line-color);
   border-radius: 14px;
-  background: rgba(0, 0, 0, 0.45);
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+  background: rgb(0 0 0 / 45%);
+  box-shadow: 0 0 20px rgb(0 0 0 / 40%);
   text-align: center;
   font-size: 4rem;
   font-weight: 700;
@@ -2504,7 +2497,7 @@ html {
   padding: 8px 12px;
   border-radius: 8px;
   border: var(--ui-line-width) solid var(--ui-line-color);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgb(255 255 255 / 8%);
   text-align: center;
   font-size: 1rem;
 }
@@ -2607,7 +2600,7 @@ html {
 .entitiesScreen .inputStyle {
   border: 1px solid var(--connection-panel-border);
   border-radius: 6px;
-  background-color: rgba(0, 0, 0, 0.35);
+  background-color: rgb(0 0 0 / 35%);
   color: var(--ui-text-main);
 }
 
@@ -2647,7 +2640,7 @@ html {
   padding: 10px 12px;
   border: 1px solid var(--connection-card-border);
   border-radius: 8px;
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: rgb(0 0 0 / 20%);
 }
 
 .methodsScreen .methodBorder > .labelStyle:first-child {
@@ -2672,7 +2665,7 @@ html {
 
 .methodsScreen .messages > li,
 .addressSpaceScreen .messages > li {
-  margin: 0 0 8px 0;
+  margin: 0 0 8px;
   padding: 8px 10px;
   border: 1px solid var(--connection-message-border);
   border-radius: 6px;
@@ -2703,13 +2696,13 @@ html {
 }
 
 .entitiesScreen .identifier:hover {
-  background: rgba(252, 223, 7, 0.18);
+  background: rgb(252 223 7 / 18%);
   border-color: var(--ui-line-color);
 }
 
 /* Address Space-specific */
 .addressSpaceScreen .doublecolumnleft {
-  background: rgba(0, 0, 0, 0.12);
+  background: rgb(0 0 0 / 12%);
   border-radius: 8px;
 }
 
@@ -2731,7 +2724,7 @@ html {
   left: 7px;
   top: 0;
   bottom: 0;
-  border-left: 1px solid rgba(252, 223, 7, 0.35);
+  border-left: 1px solid rgb(252 223 7 / 35%);
 }
 
 .addressSpaceScreen .doublecolumnleft > .treeNodeContainer::before {
@@ -2745,7 +2738,7 @@ html {
   left: 7px;
   top: 1.15em;
   width: 9px;
-  border-top: 1px solid rgba(252, 223, 7, 0.35);
+  border-top: 1px solid rgb(252 223 7 / 35%);
 }
 
 .addressSpaceScreen .treeButton {
@@ -2767,7 +2760,7 @@ html {
   display: inline-block;
   width: 0.9em;
   margin-right: 4px;
-  color: rgba(252, 223, 7, 0.9);
+  color: rgb(252 223 7 / 90%);
 }
 
 .addressSpaceScreen .treeNodeContainer.is-open > .treeButton::before,
@@ -2776,8 +2769,8 @@ html {
 }
 
 .addressSpaceScreen .treeButton:hover {
-  background: rgba(252, 223, 7, 0.14);
-  border-color: rgba(252, 223, 7, 0.28);
+  background: rgb(252 223 7 / 14%);
+  border-color: rgb(252 223 7 / 28%);
 }
 
 .addressSpaceScreen .messages > li {

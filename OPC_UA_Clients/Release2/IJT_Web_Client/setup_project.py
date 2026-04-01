@@ -602,8 +602,21 @@ def _wait_for_endpoint_ready(
 
 
 def _extract_simulator_zip_if_needed() -> None:
-    if SIMULATOR_DIR.exists() or not SIMULATOR_ZIP.exists():
+    if not SIMULATOR_ZIP.exists():
         return
+    if SIMULATOR_DIR.exists():
+        zip_mtime = SIMULATOR_ZIP.stat().st_mtime
+        dir_mtime = SIMULATOR_DIR.stat().st_mtime
+        if zip_mtime <= dir_mtime:
+            return  # extracted folder is already up-to-date
+        log.info(
+            "Newer simulator ZIP detected (zip mtime=%.0f > dir mtime=%.0f). "
+            "Removing old folder: %s",
+            zip_mtime,
+            dir_mtime,
+            SIMULATOR_DIR,
+        )
+        shutil.rmtree(SIMULATOR_DIR)
     try:
         log.info("Extracting OPC UA simulator from ZIP: %s", SIMULATOR_ZIP)
         with zipfile.ZipFile(SIMULATOR_ZIP, "r") as zf:
