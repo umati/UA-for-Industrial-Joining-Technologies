@@ -45,7 +45,7 @@ export default class BasicScreen {
 
   /**
    * Create a button containing named title, in area and call callback when pressed
-   * @param {*} title the name on the btton
+   * @param {*} title the name on the button
    * @param {*} area the area where to put it
    * @param {*} callback call this when pressed
    * @returns the button
