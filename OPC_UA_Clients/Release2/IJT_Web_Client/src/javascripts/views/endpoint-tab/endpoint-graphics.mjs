@@ -66,7 +66,7 @@ export default class EndpointGraphics extends BasicScreen {
           resultManager,
           this.settings
         )
-        tabGenerator.generateTab(envelopeScreen, 3, false)
+        tabGenerator.generateTab(envelopeScreen, 3, true)
       }
     } catch (error) {
       // Envelope view is optional. Skip quietly if unavailable.

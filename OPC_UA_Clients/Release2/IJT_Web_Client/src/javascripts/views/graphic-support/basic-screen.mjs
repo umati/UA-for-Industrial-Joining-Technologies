@@ -88,7 +88,12 @@ export default class BasicScreen {
   createLabel (text) {
     const a = document.createElement('label')
     a.classList.add('labelStyle')
-    a.textContent = text || ''
+    const labelText = text || ''
+    if (typeof labelText === 'string' && labelText.includes('<') && labelText.includes('>')) {
+      a.innerHTML = labelText
+    } else {
+      a.textContent = labelText
+    }
     delete a.textprediction
     return a
   }
@@ -183,12 +188,6 @@ export default class BasicScreen {
   }
 
   createDropdownFromImport (importList, onchange) {
-    // const area = document.createElement('div')
-    // const parameterArea = document.createElement('div')
-    // area.appendChild(parameterArea)
-
-    // parameterArea.style.border = '1px dotted purple'
-
     const dropDown = this.createDropdown(null, (cname) => {
       const newSelection = new importList[cname]()
 
@@ -196,12 +195,6 @@ export default class BasicScreen {
         onchange(newSelection)
       }
     })
-
-    // area.selectFromDropDown = (selected) => { // Use this to preselect
-    //  dropDown.select.value = selected
-    // }
-
-    // this.createTitledInput(name, dropDown)
 
     for (const subclass of Object.values(importList)) {
       dropDown.addOption(subclass.displayText, subclass.name)
@@ -230,6 +223,7 @@ export default class BasicScreen {
     const contentArea = document.createElement('div')
     contentArea.classList.add('tightUL')
     contentArea.classList.add('standardCol')
+    contentArea.parentArea = namedArea
     namedArea.appendChild(contentArea)
     namedArea.contentArea = contentArea
 

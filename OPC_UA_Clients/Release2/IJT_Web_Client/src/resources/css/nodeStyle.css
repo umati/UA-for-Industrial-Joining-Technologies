@@ -121,6 +121,7 @@ canvas {
   flex-direction: column;
   height: 100%;
   width: 100%;
+  min-height: 0;
 }
 
 .basescreen {
@@ -132,6 +133,7 @@ canvas {
   color: yellow;
   height: 100%;
   width: 100%;
+  min-height: 0;
 }
 
 .columns {
@@ -148,8 +150,14 @@ canvas {
 
 .tabSelect {
   width: 99%;
-  height: 22px;
-  padding: 5px;
+  min-height: 22px;
+  height: auto;
+  padding: 5px 5px 01px 5px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 4px;
+  border-bottom: 1px solid var(--ui-text-main);
 }
 
 .topLevelSelectorBackground {
@@ -164,6 +172,7 @@ canvas {
   background-color: var(--ui-bg-primary);
   color: var(--ui-text-main);
   padding: 5px;
+  margin-bottom: -2px;
   border: 1px solid var(--ui-text-main);
   border-top-left-radius: 5px;
   border-top-right-radius: 5px;
@@ -192,9 +201,11 @@ canvas {
   background-color: var(--ui-bg-panel);
   color: yellow;
   /* overflow: hidden; */
-  border-top: 1px solid yellow;
+  border-top: none;
   width: 99%;
   height: 95%;
+  min-height: 0;
+  overflow: hidden;
   /* height: 92vh; */
   /* margin: 0;
   padding: 0;
@@ -382,6 +393,7 @@ ul {
   background: var(--ui-bg-light);
   width: 98%;
   overflow: auto;
+  min-height: 0;
 }
 
 .envSelect {
@@ -491,7 +503,8 @@ html {
 
 .tabright {
   flex-basis: content;
-  align-self: center;
+  align-self: flex-end;
+  border-bottom: 1px solid var(--ui-text-main);
 }
 
 .tab {
@@ -537,6 +550,7 @@ html {
   overflow: hidden;
   height: 100%;
   position: relative;
+  min-height: 0;
 }
 
 #myChart {
@@ -549,6 +563,7 @@ html {
   flex-direction: row;
   justify-content: space-between;
   height: 27%;
+  min-height: 0;
 }
 
 
@@ -874,6 +889,7 @@ html {
   align-items: center;*/
   height: 97%;
   margin: 5px;
+  min-height: 0;
 }
 
 .demoCol {
@@ -881,6 +897,7 @@ html {
   flex-direction: column;
   height: 97%;
   margin: 5px;
+  min-height: 0;
 }
 
 .demoRelativeArea {
@@ -1244,7 +1261,214 @@ html {
    ========================================================= */
 
 .envelopeScreen {
-  border: 1px solid green;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.envelopeLayout {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.envelopeSidebar {
+  display: flex;
+  flex: 0 1 8.4rem;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 6rem;
+  min-height: 0;
+  padding: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 10px;
+  box-sizing: border-box;
+}
+
+.envelopeSidebar.envelopeleft {
+  width: auto;
+}
+
+.envelopeMain {
+  display: flex;
+  flex: 1 1 30rem;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.envelopeTopGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  grid-auto-rows: max-content;
+  gap: 12px;
+  align-items: stretch;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.envelopeTopGrid--wide {
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.envelopePanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.envelopeSection {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 12rem;
+}
+
+.envelopePanel.scrollableInfoArea,
+.envelopePanel.selectionArea,
+.envelopePanel.myInfoArea {
+  width: auto;
+  height: auto;
+  overflow: hidden;
+}
+
+.envelopePanel .tightUL,
+.envelopePanel.contentArea,
+.envelopePanel .standardCol {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.envelopeSidebar .methodBorder,
+.envelopeTopGrid .methodBorder,
+.envelopeTraceCard .methodBorder {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.envelopeSidebar .methodBorder > *,
+.envelopeTopGrid .methodBorder > *,
+.envelopeTraceCard .methodBorder > * {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.envelopeBorderCard .tightUL,
+.envelopeBorderCard .contentArea,
+.envelopeBorderCard .standardCol {
+  justify-content: flex-start;
+  align-content: flex-start;
+  padding-top: 0;
+}
+
+.envelopeBorderCard .myHeader + .tightUL,
+.envelopeBorderCard .myHeader + .contentArea,
+.envelopeBorderCard .myHeader + .standardCol {
+  padding-top: 0;
+}
+
+.envelopeSidebar .methodDiv,
+.envelopeTopGrid .methodDiv,
+.envelopeTraceCard .methodDiv {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.envelopeSidebar .methodLabel,
+.envelopeTopGrid .methodLabel,
+.envelopeTraceCard .methodLabel {
+  flex: 0 0 6.3rem;
+  width: 6.3rem;
+}
+
+.envelopeSidebar .methodInputRight,
+.envelopeSidebar .inputStyle,
+.envelopeTopGrid .methodInputRight,
+.envelopeTopGrid .inputStyle,
+.envelopeTraceCard .methodInputRight,
+.envelopeTraceCard .inputStyle {
+  width: auto !important;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 0;
+  box-sizing: border-box;
+}
+
+.envelopeSidebar .methodInputRight select,
+.envelopeTopGrid .methodInputRight select,
+.envelopeTraceCard .methodInputRight select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.envelopeTraceShell {
+  display: flex;
+  flex: 1 1 18rem;
+  min-height: 16rem;
+  min-width: 0;
+}
+
+.envelopeTraceCard {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.envelopeTraceField {
+  flex: 1 1 auto;
+  min-height: 18rem;
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .envelopeSidebar {
+    flex-basis: 8.4rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .envelopeLayout {
+    padding: 6px;
+    gap: 8px;
+  }
+
+  .envelopeSidebar,
+  .envelopeMain {
+    gap: 8px;
+  }
+
+  .envelopeTopGrid,
+  .envelopeTopGrid--wide {
+    grid-template-columns: 1fr;
+  }
+
+  .envelopeSection {
+    min-height: 10rem;
+  }
+
+  .envelopeTraceShell {
+    min-height: 18rem;
+  }
 }
 
 .okRateView {
