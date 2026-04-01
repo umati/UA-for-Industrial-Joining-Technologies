@@ -622,6 +622,107 @@ html {
   color: green;
 }
 
+.connectionScreen .columns {
+  height: 100%;
+  min-height: 0;
+  gap: 12px;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.connectionScreen .lefthalf,
+.connectionScreen .righthalf {
+  display: flex;
+  flex-direction: column;
+  width: calc(50% - 8px);
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  max-height: none;
+}
+
+.connectionScreen .scrollableInfoArea {
+  height: 100%;
+  min-height: 0;
+  border: 1px solid rgba(252, 223, 7, 0.35);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(52, 63, 72, 0.95) 0%, rgba(44, 54, 62, 0.95) 100%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.connectionScreen .myHeader {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, rgba(12, 12, 12, 0.9) 100%);
+  color: var(--ui-text-main);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(252, 223, 7, 0.35);
+}
+
+.connectionStatusGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 8px;
+}
+
+.connectionStatusCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(252, 223, 7, 0.25);
+  border-radius: 8px;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.connectionStatusName {
+  color: var(--ui-text-main);
+  font-weight: 600;
+}
+
+.connectionStatusValue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+.connectionScreen .connectionStatusValue.offColor {
+  color: #ff8f8f;
+  background-color: rgba(160, 20, 20, 0.32);
+}
+
+.connectionScreen .connectionStatusValue.onColor {
+  color: #b6ffb6;
+  background-color: rgba(20, 120, 20, 0.35);
+}
+
+.connectionScreen .messages {
+  margin: 0;
+  padding: 8px;
+}
+
+.connectionScreen .messages > li {
+  margin: 0 0 8px 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(252, 223, 7, 0.18);
+  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.18);
+  color: var(--ui-text-main);
+  font-size: 12px;
+}
+
 .drawResultBox {
   margin: 10px;
   padding: 10px;

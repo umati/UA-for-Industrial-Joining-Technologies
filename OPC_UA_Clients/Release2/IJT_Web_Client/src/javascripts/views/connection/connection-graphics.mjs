@@ -5,6 +5,11 @@ export default class ConnectionGraphics extends ControlMessageSplitScreen {
     super('Connection', 'Overview', 'Messages')
 
     this.connectionManager = connectionManager
+    this.backGround.classList.add('connectionScreen')
+
+    this.statusGrid = document.createElement('div')
+    this.statusGrid.classList.add('connectionStatusGrid')
+    this.controls.appendChild(this.statusGrid)
 
     this.createStatus('connection', 'Connection', 'NO')
     // this.createStatus('session', 'Session', 'NO')
@@ -13,13 +18,17 @@ export default class ConnectionGraphics extends ControlMessageSplitScreen {
   }
 
   createStatus (trigger, name, initial) {
-    const area = this.createArea('')
-    this.controls.appendChild(area)
-    const connectionTitleLabel = this.createLabel(`${name}: `)
-    area.appendChild(connectionTitleLabel)
+    const card = this.createArea('')
+    card.classList.add('connectionStatusCard')
+    this.statusGrid.appendChild(card)
+
+    const connectionTitleLabel = this.createLabel(name)
+    connectionTitleLabel.classList.add('connectionStatusName')
+    card.appendChild(connectionTitleLabel)
+
     const connectionLabel = this.createLabel(initial)
-    area.appendChild(connectionLabel)
-    connectionLabel.classList.add('offColor')
+    connectionLabel.classList.add('connectionStatusValue', 'offColor')
+    card.appendChild(connectionLabel)
 
     this.connectionManager.subscribe(trigger, (setToTrue) => {
       if (setToTrue) {
@@ -28,7 +37,7 @@ export default class ConnectionGraphics extends ControlMessageSplitScreen {
         connectionLabel.classList.remove('offColor')
         connectionLabel.classList.add('onColor')
       } else {
-        this.messageDisplay(`${name}lost`)
+        this.messageDisplay(`${name} lost`)
         connectionLabel.textContent = 'LOST'
         connectionLabel.classList.remove('onColor')
         connectionLabel.classList.add('offColor')
