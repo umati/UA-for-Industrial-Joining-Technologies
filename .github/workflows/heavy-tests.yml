@@ -169,15 +169,17 @@ jobs:
         run: python OPC_UA_Servers/Release2/tests/smoke_test.py --timeout 30
 
       - name: Install IJT Test Client dependencies
-        run: pip install -r OPC_UA_Clients/Release2/IJT_Test_Client/requirements.txt
+        working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
+        run: pip install -r requirements.txt
 
       - name: Run IJT Test Client tests (all tests)
+        working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
         env:
           OPCUA_SERVER_URL: opc.tcp://localhost:40451
         run: |
-          python -m pytest OPC_UA_Clients/Release2/IJT_Test_Client/ `
+          python -m pytest . `
             -v --tb=short --timeout=120 `
-            --junitxml=OPC_UA_Clients/Release2/IJT_Test_Client/test-results/pytest.xml
+            --junitxml=test-results/pytest.xml
 
       - name: Install Web Client Python dependencies
         run: pip install -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
