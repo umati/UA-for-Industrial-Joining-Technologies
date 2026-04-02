@@ -3,10 +3,10 @@
 #
 # Runs nightly, on manual trigger, or when OPC UA Server / Web Client code
 # changes are pushed to main. These jobs are excluded from the fast CI path
-# because they take 20-30 minutes (Wine Docker build + 13 integration tests).
+# because they take 20-30 minutes (Docker build + 13 integration tests).
 #
 # Jobs:
-#   server-smoke-docker  Release2 / OPC UA Server   Wine Docker build + smoke
+#   server-smoke-docker  Release2 / OPC UA Server   Linux native Docker build + smoke
 #   integration-tests    Release2 / Integration Tests  Windows: OPC UA + WebSocket
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -25,7 +25,6 @@ on:
 permissions:
   contents: read
   checks: write
-  packages: read    # pull pre-built Wine base image from GHCR
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -39,8 +38,8 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Release2 / OPC UA Server — Docker Smoke
-  #   Extract the ZIP to satisfy the COPY instructions in the Dockerfile,
-  #   build the Wine-based Docker image (layer-cached via GitHub Actions cache),
+  #   Extract the Linux ZIP to satisfy the COPY instructions in the Dockerfile,
+  #   build the native Linux Docker image (layer-cached via GitHub Actions cache),
   #   start the container, wait for TCP 40451, run all 8 smoke checks, tear down.
   # ───────────────────────────────────────────────────────────────────────────
   server-smoke-docker:
@@ -53,8 +52,8 @@ jobs:
       - name: Extract server ZIP (required for Docker COPY instructions)
         working-directory: OPC_UA_Servers/Release2
         run: |
-          unzip -q OPC_UA_IJT_Server_Simulator.zip
-          echo "Extracted: $(ls OPC_UA_IJT_Server_Simulator/)"
+          unzip -q OPC_UA_IJT_Server_Simulator_Linux.zip
+          echo "Extracted: $(ls OPC_UA_IJT_Server_Simulator_Linux/)"
 
       - name: Lint Dockerfile (hadolint)
         run: |
@@ -63,36 +62,10 @@ jobs:
             - < OPC_UA_Servers/Release2/Dockerfile
           echo "Dockerfile lint OK"
 
-      - name: Log in to GHCR (pull pre-built Wine base image)
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Wait for GHCR base image to be available
-        # Guards against the race condition where build-wine-base.yml and
-        # heavy-tests.yml are both triggered by the same push. The base image
-        # build takes ~2-3 minutes; we retry for up to 6 minutes before failing.
-        env:
-          BASE_IMAGE: ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-wine-base:latest
-        run: |
-          for i in 1 2 3 4 5 6; do
-            if docker manifest inspect "$BASE_IMAGE" > /dev/null 2>&1; then
-              echo "Base image available (attempt $i)"
-              exit 0
-            fi
-            echo "Base image not yet available — waiting 60 s (attempt $i/6)..."
-            sleep 60
-          done
-          echo "ERROR: Base image not available after 6 minutes."
-          echo "Trigger 'Build Wine Base Image' workflow manually and re-run this job."
-          exit 1
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build Docker image (uses pre-built Wine base from GHCR)
+      - name: Build Docker image (Linux native binary)
         uses: docker/build-push-action@v7
         with:
           context: OPC_UA_Servers/Release2
@@ -106,14 +79,14 @@ jobs:
           echo "Container started"
 
       - name: Wait for OPC UA port 40451
-        # Wine + server init takes ~40 s; allow up to 2 min total.
+        # Linux binary starts in ~3 s; allow up to 60 s total.
         run: |
-          for i in $(seq 1 24); do
+          for i in $(seq 1 12); do
             if nc -z localhost 40451 2>/dev/null; then
               echo "Port 40451 open after $((i * 5)) s"
               exit 0
             fi
-            echo "Waiting... attempt $i/24"
+            echo "Waiting... attempt $i/12"
             sleep 5
           done
           echo "ERROR: Timeout — dumping container logs:"

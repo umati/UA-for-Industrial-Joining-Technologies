@@ -3,8 +3,10 @@
 # Keeps the image small and avoids leaking documentation / certificates.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Distribution archives — binary files are already extracted in the subdirectory
+# Distribution archives — Linux ZIP is used directly by the Dockerfile (auto-extracted during build).
+# Windows ZIP is not needed in the Docker build context.
 *.zip
+!OPC_UA_IJT_Server_Simulator_Linux.zip
 
 # Documentation — not needed at runtime
 *.pdf

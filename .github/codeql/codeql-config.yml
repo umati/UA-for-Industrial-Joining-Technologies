@@ -7,8 +7,6 @@ paths-ignore:
   - '**/.state/**'
   - '**/node_modules/**'
   - '**/__pycache__/**'
-  # Wine-based Docker images must run as root (Wine requires root access
-  # to initialise the Wine prefix and run Windows executables via wineboot).
-  # The "runs as root" CodeQL finding is intentional and cannot be avoided.
+  # The server Dockerfile runs as root (required by the OPC UA server process
+  # to bind to port 40451 and write PKI certificates to its working directory).
   - 'OPC_UA_Servers/Release2/Dockerfile'
-  - 'OPC_UA_Servers/Release2/Dockerfile.wine-base'

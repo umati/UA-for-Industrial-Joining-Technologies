@@ -5,8 +5,11 @@
 
 ## Usage
 ### Common Steps
-- Download **OPC_UA_IJT_Server_Simulator.zip** by clicking on the **'Downlaod raw file'** button and **Extract** the zip file.
-- **Go** to the **OPC_UA_IJT_Server_Simulator** directory.
+- Download the appropriate ZIP by clicking the **'Download raw file'** button and **Extract** it:
+  - **Windows:** `OPC_UA_IJT_Server_Simulator.zip` → extract to `OPC_UA_IJT_Server_Simulator/`
+  - **Linux:** `OPC_UA_IJT_Server_Simulator_Linux.zip` → extract to `OPC_UA_IJT_Server_Simulator_Linux/`
+  - **Docker:** uses the Linux binary automatically — no manual download needed
+- **Go** to the extracted directory.
 - The **EndpointUrl** of the OPC UA Server would be: **opc.tcp://localhost:40451** or **opc.tcp://YourComputerName:40451**.
 
 ### Windows 10 or Later
@@ -15,8 +18,22 @@
 #### Running the application
 - **Launch** the **binary** file (**`opcua_ijt_demo_application.exe`**). Ensure that it is Run as **Adminstrator** or at least **Read/Write** access to the directory.
 
+### Linux (Ubuntu 20.04 or Later / Any glibc 2.17+ Distro)
+- Download **OPC_UA_IJT_Server_Simulator_Linux.zip** and extract it.
+- **Go** to the **OPC_UA_IJT_Server_Simulator_Linux** directory.
+- Make the binary executable (first time only):
+  ```
+  chmod +x opcua_ijt_demo_application
+  ```
+- **Run:**
+  ```
+  ./opcua_ijt_demo_application
+  ```
+- The binary is statically linked (no runtime library installation required). It runs on Ubuntu 20.04+, Debian 10+, RHEL/CentOS 7+, and any Linux with glibc 2.17+.
+
 ### Docker
 - The `Dockerfile` is in the **`Release2/`** directory — run all Docker commands from there.
+- The Docker image uses the **native Linux binary** (no Wine needed).
 - **Recommended:**
   ```
   docker compose up
@@ -46,7 +63,9 @@
 3. **Added** `tests/smoke_test.py` — 8-check OPC UA sanity test (TCP, session, namespaces, TighteningSystem, Simulations, ResultManagement, AssetManagement).
 4. **Added** `.dockerignore` to keep Docker image lean (excludes zip archives, PDFs, docs).
 5. **Added** missing interface for Asset.Identification IJoiningAdditionalInformationType.
-6. **Multiple** bugs, refactoring and optimizations.
+6. **Added** native Linux binary package (`OPC_UA_IJT_Server_Simulator_Linux.zip`) — runs on any glibc 2.17+ Linux distro without Wine or additional runtime dependencies.
+7. **Simplified** Docker image from Wine-based (40s startup) to native Linux binary (~3s startup).
+8. **Multiple** bugs, refactoring and optimizations.
 
 **2026-02-06:** Following Changes.
 1. **Added** appropriate logs when the binary path is too long on Windows.
