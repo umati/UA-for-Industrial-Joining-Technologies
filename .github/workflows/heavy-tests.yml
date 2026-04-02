@@ -70,6 +70,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Wait for GHCR base image to be available
+        # Guards against the race condition where build-wine-base.yml and
+        # heavy-tests.yml are both triggered by the same push. The base image
+        # build takes ~2-3 minutes; we retry for up to 6 minutes before failing.
+        env:
+          BASE_IMAGE: ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-wine-base:latest
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if docker manifest inspect "$BASE_IMAGE" > /dev/null 2>&1; then
+              echo "Base image available (attempt $i)"
+              exit 0
+            fi
+            echo "Base image not yet available — waiting 60 s (attempt $i/6)..."
+            sleep 60
+          done
+          echo "ERROR: Base image not available after 6 minutes."
+          echo "Trigger 'Build Wine Base Image' workflow manually and re-run this job."
+          exit 1
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
