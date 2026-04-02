@@ -8,19 +8,19 @@ the front-end.
 """
 
 import asyncio
+import inspect
 import json
 import os
 import socket
-import inspect
 from typing import Any
 
 from asyncua import Client, ua
 
-from python.serialize_data import serialize_full_event, serialize_tuple, serialize_value
 from python.call_structure import create_call_structure
 from python.event_handler import EventHandler
-from python.result_event_handler import ResultEventHandler
 from python.ijt_logger import ijt_log
+from python.result_event_handler import ResultEventHandler
+from python.serialize_data import serialize_full_event, serialize_tuple, serialize_value
 
 _OPCUA_TIMEOUT_S = 60
 _OPCUA_TIMEOUT_SHORT_S = 15
@@ -120,7 +120,6 @@ class Connection:
         if await self.is_connection_open():
             return {"command": "connection established", "endpoint": self.server_url}
 
-
         server_url = self.server_url
         if os.getenv("IS_DOCKER") == "true" and server_url:
             if "://127.0.0.1" in server_url or "://localhost" in server_url:
@@ -152,11 +151,21 @@ class Connection:
             # maybe_coro = self.client.set_security_string("Basic256Sha256,Sign")  # or SignAndEncrypt
             # if inspect.isawaitable(maybe_coro):
             #     await maybe_coro
-            ijt_log.debug("Security policy 'None' not applied (server may not require it): %s", exc)
+            ijt_log.debug(
+                "Security policy 'None' not applied (server may not require it): %s",
+                exc,
+            )
 
-        retries = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT)))
-        base_delay = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT)))
-        max_delay = max(base_delay, float(os.getenv("OPCUA_CONNECT_MAX_DELAY_SEC", _CONNECT_MAX_DELAY_DEFAULT)))
+        retries = max(
+            1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT))
+        )
+        base_delay = max(
+            0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT))
+        )
+        max_delay = max(
+            base_delay,
+            float(os.getenv("OPCUA_CONNECT_MAX_DELAY_SEC", _CONNECT_MAX_DELAY_DEFAULT)),
+        )
         last_error: Exception | None = None
 
         for attempt in range(retries):
@@ -167,26 +176,36 @@ class Connection:
                 self.client.application_uri = f"urn:{computer_name}:IJT:WebClient"
                 self.client.product_uri = "urn:IJT:WebClient"
 
-                await asyncio.wait_for(self.client.connect(), timeout=_OPCUA_TIMEOUT_SHORT_S)
+                await asyncio.wait_for(
+                    self.client.connect(), timeout=_OPCUA_TIMEOUT_SHORT_S
+                )
 
                 # Small wait to avoid races right after SecureChannel/Session creation
                 await asyncio.sleep(0.1)
 
-                await asyncio.wait_for(self.client.load_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S)
+                await asyncio.wait_for(
+                    self.client.load_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S
+                )
                 self.root = self.client.get_root_node()
 
                 # Connect the dedicated subscription client (separate OPC UA session).
                 # This eliminates concurrent-request issues when SimulateJobResult
                 # fires many Publish messages while a CallResponse is still in-flight.
                 try:
-                    self.subscription_client = Client(server_url, timeout=_OPCUA_TIMEOUT_S)
+                    self.subscription_client = Client(
+                        server_url, timeout=_OPCUA_TIMEOUT_S
+                    )
                     sub_client_name = f"urn:{computer_name}:IJT:WebClient:Sub"
                     self.subscription_client.name = sub_client_name
                     self.subscription_client.application_uri = sub_client_name
-                    await asyncio.wait_for(self.subscription_client.connect(), timeout=_OPCUA_TIMEOUT_SHORT_S)
+                    await asyncio.wait_for(
+                        self.subscription_client.connect(),
+                        timeout=_OPCUA_TIMEOUT_SHORT_S,
+                    )
                     await asyncio.sleep(0.1)
                     await asyncio.wait_for(
-                        self.subscription_client.load_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S
+                        self.subscription_client.load_type_definitions(),
+                        timeout=_OPCUA_TIMEOUT_BROWSE_S,
                     )
                     ijt_log.info("Subscription client connected.")
                 except Exception as sub_err:
@@ -206,9 +225,11 @@ class Connection:
                 return event
             except Exception as e:
                 last_error = e
-                delay = min(max_delay, base_delay * (_EXPONENTIAL_BACKOFF_BASE ** attempt))
+                delay = min(
+                    max_delay, base_delay * (_EXPONENTIAL_BACKOFF_BASE**attempt)
+                )
                 ijt_log.error(
-                    f"Connect attempt {attempt+1}/{retries} failed for {self.server_url}: {e}"
+                    f"Connect attempt {attempt + 1}/{retries} failed for {self.server_url}: {e}"
                 )
                 if attempt + 1 < retries:
                     await asyncio.sleep(delay)
@@ -220,7 +241,9 @@ class Connection:
                     f"{last_error}"
                 )
             }
-        return {"exception": f"Failed to connect after {retries} attempts to {self.server_url}"}
+        return {
+            "exception": f"Failed to connect after {retries} attempts to {self.server_url}"
+        }
 
     async def terminate(self) -> None:
         """Coroutine. Gracefully shut down all subscriptions and the OPC UA session.
@@ -258,7 +281,9 @@ class Connection:
             # Disconnect the dedicated subscription client
             if self.subscription_client:
                 try:
-                    await asyncio.wait_for(self.subscription_client.disconnect(), timeout=2)
+                    await asyncio.wait_for(
+                        self.subscription_client.disconnect(), timeout=2
+                    )
                     ijt_log.info("Subscription client disconnected successfully.")
                 except asyncio.TimeoutError:
                     ijt_log.warning("Subscription client disconnect timed out.")
@@ -659,11 +684,13 @@ class Connection:
                             f"ns=1;s={tools_path}/{tool_name}/Identification/ProductInstanceUri"
                         )
                         pi_value = await pi_node.read_value()
-                        tools.append({
-                            "toolName": tool_name,
-                            "productInstanceUri": str(pi_value) if pi_value else "",
-                            "path": f"{tools_path}/{tool_name}",
-                        })
+                        tools.append(
+                            {
+                                "toolName": tool_name,
+                                "productInstanceUri": str(pi_value) if pi_value else "",
+                                "path": f"{tools_path}/{tool_name}",
+                            }
+                        )
                         ijt_log.info(
                             f"[read_product_instance_uri] {tool_name} → {pi_value}"
                         )
@@ -712,10 +739,14 @@ class Connection:
         arguments = data.get("arguments", [])
 
         if object_node is None or method_node is None:
-            return {"exception": "Missing objectnode or methodnode in methodcall payload"}
+            return {
+                "exception": "Missing objectnode or methodnode in methodcall payload"
+            }
 
         if not await self.is_connection_open():
-            return {"exception": "Not connected to OPC UA server. Please connect first."}
+            return {
+                "exception": "Not connected to OPC UA server. Please connect first."
+            }
 
         try:
             obj_id = f"ns={object_node['NamespaceIndex']};s={object_node['Identifier']}"
@@ -745,10 +776,10 @@ class Connection:
                     value = arg["value"]
 
                     ijt_log.info(
-                        f"[methodcall] Argument {i+1} expected type NodeId: {expected_type_node}"
+                        f"[methodcall] Argument {i + 1} expected type NodeId: {expected_type_node}"
                     )
                     ijt_log.info(
-                        f"[methodcall] Argument {i+1} Identifier type: {type(expected_type_node.Identifier)}"
+                        f"[methodcall] Argument {i + 1} Identifier type: {type(expected_type_node.Identifier)}"
                     )
 
                     variant_type = (
@@ -761,7 +792,7 @@ class Connection:
                         if isinstance(value, dict):
                             value = ua.LocalizedText(
                                 Text=value.get("Text", ""),
-                                Locale=value.get("Locale", "en")
+                                Locale=value.get("Locale", "en"),
                             )
                         elif value is None:
                             value = ua.LocalizedText(Text="", Locale="en")
@@ -777,7 +808,7 @@ class Connection:
                         and variant_type == ua.VariantType.String
                     ):
                         ijt_log.warning(
-                            f"[methodcall] Argument {i+1} is empty string - server may reject it."
+                            f"[methodcall] Argument {i + 1} is empty string - server may reject it."
                         )
 
                     # Handle arrays
@@ -787,7 +818,7 @@ class Connection:
                                 ua.Variant(value, variant_type, is_array=True)
                             )
                             ijt_log.info(
-                                f"[methodcall] Argument {i+1} mapped to Array of {variant_type.name} with value {value}"
+                                f"[methodcall] Argument {i + 1} mapped to Array of {variant_type.name} with value {value}"
                             )
                         elif all(isinstance(v, ua.ExtensionObject) for v in value):
                             input_args.append(
@@ -796,14 +827,14 @@ class Connection:
                                 )
                             )
                             ijt_log.info(
-                                f"[methodcall] Argument {i+1} mapped to Array of ExtensionObjects"
+                                f"[methodcall] Argument {i + 1} mapped to Array of ExtensionObjects"
                             )
                         else:
                             input_args.append(
                                 ua.Variant(value, variant_type, is_array=True)
                             )
                             ijt_log.info(
-                                f"[methodcall] Argument {i+1} mapped to Array of {variant_type.name}"
+                                f"[methodcall] Argument {i + 1} mapped to Array of {variant_type.name}"
                             )
                     else:
                         # Type correction logic
@@ -824,11 +855,11 @@ class Connection:
 
                         input_args.append(ua.Variant(value, variant_type))
                         ijt_log.info(
-                            f"[methodcall] Argument {i+1} mapped to {variant_type.name} with value {value}"
+                            f"[methodcall] Argument {i + 1} mapped to {variant_type.name} with value {value}"
                         )
                 except Exception as map_err:
                     ijt_log.warning(
-                        f"[methodcall] Failed to map argument {i+1}, fallback to original type: {map_err}"
+                        f"[methodcall] Failed to map argument {i + 1}, fallback to original type: {map_err}"
                     )
                     input_args.append(create_call_structure(arg))
 
@@ -842,19 +873,33 @@ class Connection:
             err_str = str(ua_err)
             ijt_log.error(f"[methodcall] UAError: {ua_err}")
             if "BadTooManySessions" in err_str:
-                return {"exception": "OPC UA server has too many open sessions. Restart the server and reconnect."}
-            if "BadSecureChannelClosed" in err_str or "Unhandled exception" in err_str or "sending request" in err_str:
+                return {
+                    "exception": "OPC UA server has too many open sessions. Restart the server and reconnect."
+                }
+            if (
+                "BadSecureChannelClosed" in err_str
+                or "Unhandled exception" in err_str
+                or "sending request" in err_str
+            ):
                 if await self.is_connection_open():
-                    ijt_log.info("[methodcall] Session alive — method executed; results in event stream")
+                    ijt_log.info(
+                        "[methodcall] Session alive — method executed; results in event stream"
+                    )
                     return {"output": []}
-                return {"exception": "Connection to OPC UA server was lost. Please reconnect."}
+                return {
+                    "exception": "Connection to OPC UA server was lost. Please reconnect."
+                }
             return {"exception": f"OPC UA error: {ua_err}"}
         except Exception as e:
             err_str = str(e)
             ijt_log.error(f"[methodcall] General Exception: {e}")
             if "Unhandled exception" in err_str or "sending request" in err_str:
                 if await self.is_connection_open():
-                    ijt_log.info("[methodcall] Session alive — method executed; results in event stream")
+                    ijt_log.info(
+                        "[methodcall] Session alive — method executed; results in event stream"
+                    )
                     return {"output": []}
-                return {"exception": "Connection to OPC UA server was lost. Please reconnect."}
+                return {
+                    "exception": "Connection to OPC UA server was lost. Please reconnect."
+                }
             return {"exception": f"Method call exception: {e}"}

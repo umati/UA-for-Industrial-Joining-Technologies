@@ -5,11 +5,16 @@ isolation. Session-scoped fixtures (ns_indices, controllers_instances) are safe
 to combine with function-scoped opcua_client — pytest-asyncio handles the
 differing scopes correctly with asyncio_mode = auto.
 """
+
 import pytest
 from asyncua import ua
-from helpers.namespaces import NS_IJT_BASE, NS_DI, BN
-from helpers.node_discovery import find_joining_system, find_child_by_browse_name
+
+from helpers.namespaces import BN, NS_DI, NS_IJT_BASE
+from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+
 pytestmark = [pytest.mark.live, pytest.mark.methods]
+
+
 async def _get_jpm(client, ns_ijt):
     """Re-discover JoiningProcessManagement on a fresh client connection."""
     js = await find_joining_system(client)
@@ -34,7 +39,9 @@ async def _get_enable_asset_method(client, ns_ijt):
         pytest.skip("MethodSet not found in AssetManagement")
     method_node = await find_child_by_browse_name(method_set, BN.ENABLE_ASSET, ns_ijt)
     if method_node is None:
-        pytest.skip(f"'{BN.ENABLE_ASSET}' method not found in AssetManagement/MethodSet")
+        pytest.skip(
+            f"'{BN.ENABLE_ASSET}' method not found in AssetManagement/MethodSet"
+        )
     # OPC UA: call_method must be invoked on the direct parent (MethodSet), not AssetManagement
     return method_set, method_node
 
@@ -66,7 +73,9 @@ async def test_enable_asset_with_valid_asset_id(
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     am, method_node = await _get_enable_asset_method(opcua_client, ns_ijt)
-    pi_uri = await _get_product_instance_uri(opcua_client, ns_ijt, ns_di, tools_instances)
+    pi_uri = await _get_product_instance_uri(
+        opcua_client, ns_ijt, ns_di, tools_instances
+    )
     try:
         await am.call_method(
             method_node.nodeid,
@@ -75,9 +84,14 @@ async def test_enable_asset_with_valid_asset_id(
         )
     except ua.UaError as exc:
         status_str = str(exc)
-        if any(s in status_str for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound")):
+        if any(
+            s in status_str
+            for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound")
+        ):
             pytest.skip(f"EnableAsset returned expected error on this server: {exc}")
         raise
+
+
 async def test_disable_asset_with_valid_asset_id(
     opcua_client, ns_indices, tools_instances
 ):
@@ -87,7 +101,9 @@ async def test_disable_asset_with_valid_asset_id(
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     am, method_node = await _get_enable_asset_method(opcua_client, ns_ijt)
-    pi_uri = await _get_product_instance_uri(opcua_client, ns_ijt, ns_di, tools_instances)
+    pi_uri = await _get_product_instance_uri(
+        opcua_client, ns_ijt, ns_di, tools_instances
+    )
     try:
         await am.call_method(
             method_node.nodeid,
@@ -96,9 +112,16 @@ async def test_disable_asset_with_valid_asset_id(
         )
     except ua.UaError as exc:
         status_str = str(exc)
-        if any(s in status_str for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound")):
-            pytest.skip(f"EnableAsset(disable) returned expected error on this server: {exc}")
+        if any(
+            s in status_str
+            for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound")
+        ):
+            pytest.skip(
+                f"EnableAsset(disable) returned expected error on this server: {exc}"
+            )
         raise
+
+
 async def test_select_joining_process_with_invalid_id(opcua_client, ns_indices):
     """SelectJoiningProcess with empty string must raise BadInvalidArgument or BadNotSupported."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -109,7 +132,9 @@ async def test_select_joining_process_with_invalid_id(opcua_client, ns_indices):
         jpm, BN.SELECT_JOINING_PROCESS, ns_ijt
     )
     if method_node is None:
-        pytest.skip(f"'{BN.SELECT_JOINING_PROCESS}' method not found on JoiningProcessManagement")
+        pytest.skip(
+            f"'{BN.SELECT_JOINING_PROCESS}' method not found on JoiningProcessManagement"
+        )
     try:
         await jpm.call_method(
             method_node.nodeid,
@@ -118,31 +143,44 @@ async def test_select_joining_process_with_invalid_id(opcua_client, ns_indices):
         # Some servers may accept empty string without error — that is permitted
     except ua.UaError as exc:
         status_str = str(exc)
-        if any(s in status_str for s in (
-            "BadInvalidArgument", "BadNotSupported", "BadArgumentsMissing",
-        )):
+        if any(
+            s in status_str
+            for s in (
+                "BadInvalidArgument",
+                "BadNotSupported",
+                "BadArgumentsMissing",
+            )
+        ):
             pass  # Expected: server correctly rejected an invalid program ID
         else:
             raise
+
+
 async def test_abort_joining_process_returns_result(opcua_client, ns_indices):
     """AbortJoiningProcess must be callable without an unexpected exception."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     jpm = await _get_jpm(opcua_client, ns_ijt)
-    method_node = await find_child_by_browse_name(
-        jpm, BN.ABORT_JOINING_PROCESS, ns_ijt
-    )
+    method_node = await find_child_by_browse_name(jpm, BN.ABORT_JOINING_PROCESS, ns_ijt)
     if method_node is None:
-        pytest.skip(f"'{BN.ABORT_JOINING_PROCESS}' method not found on JoiningProcessManagement")
+        pytest.skip(
+            f"'{BN.ABORT_JOINING_PROCESS}' method not found on JoiningProcessManagement"
+        )
     try:
         await jpm.call_method(method_node.nodeid)
     except ua.UaError as exc:
         status_str = str(exc)
-        if any(s in status_str for s in (
-            "BadNotSupported", "BadInvalidArgument", "BadNothingToDo",
-            "BadConditionNotActive", "BadArgumentsMissing",
-        )):
+        if any(
+            s in status_str
+            for s in (
+                "BadNotSupported",
+                "BadInvalidArgument",
+                "BadNothingToDo",
+                "BadConditionNotActive",
+                "BadArgumentsMissing",
+            )
+        ):
             pass  # Expected when no active joining process is running
         else:
-            raise
+            raise

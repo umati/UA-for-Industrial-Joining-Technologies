@@ -17,21 +17,28 @@ Boolean arguments are set to TRUE (recommended) per server documentation.
 A fresh function-scoped opcua_client is used per test for state isolation.
 Layer: methods (triggers server simulation — server state changes expected).
 """
+
 import asyncio
+
 import pytest
 from asyncua import ua
+
+from helpers.event_collector import EventCollector
 from helpers.namespaces import (
-    NS_MACH_RESULT, NS_APP, NS_IJT_BASE, BN, ResultType,
+    BN,
+    NS_APP,
+    NS_IJT_BASE,
+    NS_MACH_RESULT,
     IJTTypes,
+    ResultType,
 )
 from helpers.node_discovery import find_child_by_browse_name
-from helpers.event_collector import EventCollector
 
 pytestmark = [pytest.mark.live, pytest.mark.methods]
 
 _METHOD_TIMEOUT = 20  # seconds per method call
 # ResultClassification Byte values for SimulateBatch_Or_Sync_Result
-_CLASSIFICATION_SYNC  = 2
+_CLASSIFICATION_SYNC = 2
 _CLASSIFICATION_BATCH = 3
 
 
@@ -54,13 +61,17 @@ async def _call(node, method, *args):
 
 # ─── SimulateSingleResult ────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("result_type,label", [
-    (ResultType.SIMPLE_OK_RESULT,              "simple_ok"),
-    (ResultType.ONE_STEP_OK_RESULT,            "one_step_ok"),
-    (ResultType.MULTI_STEP_OK_RESULT,          "multi_step_ok"),
-    (ResultType.MULTI_STEP_NOK_FAILING_STEP,   "multi_step_nok_failing"),
-    (ResultType.MULTI_STEP_NOK_TOOL_TRIGGER_LOST, "multi_step_nok_trigger_lost"),
-])
+
+@pytest.mark.parametrize(
+    "result_type,label",
+    [
+        (ResultType.SIMPLE_OK_RESULT, "simple_ok"),
+        (ResultType.ONE_STEP_OK_RESULT, "one_step_ok"),
+        (ResultType.MULTI_STEP_OK_RESULT, "multi_step_ok"),
+        (ResultType.MULTI_STEP_NOK_FAILING_STEP, "multi_step_nok_failing"),
+        (ResultType.MULTI_STEP_NOK_TOOL_TRIGGER_LOST, "multi_step_nok_trigger_lost"),
+    ],
+)
 async def test_simulate_single_result_all_types(
     result_type, label, opcua_client, simulate_results_folder, ns_indices
 ):
@@ -73,9 +84,10 @@ async def test_simulate_single_result_all_types(
     if method is None:
         pytest.skip("SimulateSingleResult not found")
     await _call(
-        sf, method,
+        sf,
+        method,
         ua.Variant(result_type, ua.VariantType.UInt32),
-        ua.Variant(True, ua.VariantType.Boolean),   # include_traces = TRUE
+        ua.Variant(True, ua.VariantType.Boolean),  # include_traces = TRUE
     )
 
 
@@ -84,7 +96,7 @@ async def test_simulate_single_result_result_appears_in_rm(
 ):
     """After SimulateSingleResult, GetLatestResult must return a non-None result."""
     ns_app = ns_indices.get(NS_APP)
-    ns_mr  = ns_indices.get(NS_MACH_RESULT)
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_app is None or ns_mr is None:
         pytest.skip("Required namespace(s) not registered")
     sf = _sim_folder(opcua_client, simulate_results_folder)
@@ -92,7 +104,8 @@ async def test_simulate_single_result_result_appears_in_rm(
     if method is None:
         pytest.skip("SimulateSingleResult not found")
     await _call(
-        sf, method,
+        sf,
+        method,
         ua.Variant(ResultType.ONE_STEP_OK_RESULT, ua.VariantType.UInt32),
         ua.Variant(True, ua.VariantType.Boolean),
     )
@@ -104,7 +117,9 @@ async def test_simulate_single_result_result_appears_in_rm(
         rm.call_method(gl.nodeid, ua.Variant(5000, ua.VariantType.Int32)),
         timeout=_METHOD_TIMEOUT,
     )
-    assert result is not None, "GetLatestResult returned None after SimulateSingleResult"
+    assert result is not None, (
+        "GetLatestResult returned None after SimulateSingleResult"
+    )
 
 
 async def test_simulate_single_result_fires_event(
@@ -126,7 +141,8 @@ async def test_simulate_single_result_fires_event(
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, [event_type_node])
         await _call(
-            sf, method,
+            sf,
+            method,
             ua.Variant(ResultType.SIMPLE_OK_RESULT, ua.VariantType.UInt32),
             ua.Variant(True, ua.VariantType.Boolean),
         )
@@ -138,10 +154,14 @@ async def test_simulate_single_result_fires_event(
 
 # ─── SimulateBatch_Or_Sync_Result ────────────────────────────────────────────
 
-@pytest.mark.parametrize("classification,label", [
-    (_CLASSIFICATION_BATCH, "batch"),
-    (_CLASSIFICATION_SYNC,  "sync"),
-])
+
+@pytest.mark.parametrize(
+    "classification,label",
+    [
+        (_CLASSIFICATION_BATCH, "batch"),
+        (_CLASSIFICATION_SYNC, "sync"),
+    ],
+)
 async def test_simulate_batch_or_sync_result(
     classification, label, opcua_client, simulate_results_folder, ns_indices
 ):
@@ -154,25 +174,25 @@ async def test_simulate_batch_or_sync_result(
     if method is None:
         pytest.skip("SimulateBatch_Or_Sync_Result not found")
     await _call(
-        sf, method,
-        ua.Variant(classification, ua.VariantType.Byte),   # classification
-        ua.Variant(3,              ua.VariantType.UInt32),  # num_children
-        ua.Variant(True,           ua.VariantType.Boolean), # include_traces = TRUE
-        ua.Variant(True,           ua.VariantType.Boolean), # send_as_refs = TRUE
+        sf,
+        method,
+        ua.Variant(classification, ua.VariantType.Byte),  # classification
+        ua.Variant(3, ua.VariantType.UInt32),  # num_children
+        ua.Variant(True, ua.VariantType.Boolean),  # include_traces = TRUE
+        ua.Variant(True, ua.VariantType.Boolean),  # send_as_refs = TRUE
     )
 
 
 # ─── SimulateJobResult ───────────────────────────────────────────────────────
 
+
 @pytest.mark.xfail(
     reason="SimulateJobResult holds the connection for an extended period while firing "
-           "all child results; asyncua drops the request before the server responds. "
-           "Use IJT_Console_Client to validate SimulateJobResult interactively.",
+    "all child results; asyncua drops the request before the server responds. "
+    "Use IJT_Console_Client to validate SimulateJobResult interactively.",
     strict=False,
 )
-async def test_simulate_job_result(
-    opcua_client, simulate_results_folder, ns_indices
-):
+async def test_simulate_job_result(opcua_client, simulate_results_folder, ns_indices):
     """SimulateJobResult must complete with send_as_refs=TRUE (recommended)."""
     ns_app = ns_indices.get(NS_APP)
     if ns_app is None:
@@ -182,12 +202,14 @@ async def test_simulate_job_result(
     if method is None:
         pytest.skip("SimulateJobResult not found")
     await _call(
-        sf, method,
+        sf,
+        method,
         ua.Variant(True, ua.VariantType.Boolean),  # send_as_refs = TRUE
     )
 
 
 # ─── SimulateBulkResults ─────────────────────────────────────────────────────
+
 
 async def test_simulate_bulk_results_small_range(
     opcua_client, simulate_results_folder, ns_indices
@@ -201,20 +223,24 @@ async def test_simulate_bulk_results_small_range(
     if method is None:
         pytest.skip("SimulateBulkResults not found")
     await _call(
-        sf, method,
+        sf,
+        method,
         ua.Variant(ResultType.ONE_STEP_OK_RESULT, ua.VariantType.UInt32),  # result_type
-        ua.Variant(True,  ua.VariantType.Boolean),                         # include_traces = TRUE
-        ua.Variant(1,     ua.VariantType.UInt64),                          # from_seq
-        ua.Variant(6,     ua.VariantType.UInt64),                          # to_seq
-        ua.Variant(200,   ua.VariantType.Int64),                           # min_duration_ms ≥100
-        ua.Variant(True,  ua.VariantType.Boolean),                         # update_vars = TRUE
+        ua.Variant(True, ua.VariantType.Boolean),  # include_traces = TRUE
+        ua.Variant(1, ua.VariantType.UInt64),  # from_seq
+        ua.Variant(6, ua.VariantType.UInt64),  # to_seq
+        ua.Variant(200, ua.VariantType.Int64),  # min_duration_ms ≥100
+        ua.Variant(True, ua.VariantType.Boolean),  # update_vars = TRUE
     )
 
 
-@pytest.mark.parametrize("result_type,label", [
-    (ResultType.SIMPLE_OK_RESULT,     "simple_ok"),
-    (ResultType.MULTI_STEP_OK_RESULT, "multi_step_ok"),
-])
+@pytest.mark.parametrize(
+    "result_type,label",
+    [
+        (ResultType.SIMPLE_OK_RESULT, "simple_ok"),
+        (ResultType.MULTI_STEP_OK_RESULT, "multi_step_ok"),
+    ],
+)
 async def test_simulate_bulk_results_multiple_types(
     result_type, label, opcua_client, simulate_results_folder, ns_indices
 ):
@@ -228,18 +254,26 @@ async def test_simulate_bulk_results_multiple_types(
         pytest.skip("SimulateBulkResults not found")
     try:
         await _call(
-            sf, method,
+            sf,
+            method,
             ua.Variant(result_type, ua.VariantType.UInt32),
             ua.Variant(True, ua.VariantType.Boolean),
-            ua.Variant(1,    ua.VariantType.UInt64),
-            ua.Variant(6,    ua.VariantType.UInt64),
-            ua.Variant(200,  ua.VariantType.Int64),
+            ua.Variant(1, ua.VariantType.UInt64),
+            ua.Variant(6, ua.VariantType.UInt64),
+            ua.Variant(200, ua.VariantType.Int64),
             ua.Variant(True, ua.VariantType.Boolean),
         )
     except ua.UaError as exc:
         status_str = str(exc)
-        if any(s in status_str for s in (
-            "BadTooManyOperations", "BadNotSupported", "BadInvalidArgument",
-        )):
-            pytest.xfail(f"SimulateBulkResults({label}) rejected by server (concurrent access limit): {exc}")
-        raise
+        if any(
+            s in status_str
+            for s in (
+                "BadTooManyOperations",
+                "BadNotSupported",
+                "BadInvalidArgument",
+            )
+        ):
+            pytest.xfail(
+                f"SimulateBulkResults({label}) rejected by server (concurrent access limit): {exc}"
+            )
+        raise

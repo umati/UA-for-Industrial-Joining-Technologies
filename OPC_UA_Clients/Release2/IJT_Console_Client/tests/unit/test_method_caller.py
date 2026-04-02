@@ -12,14 +12,14 @@ Covers:
   exception returns None
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 pytest.importorskip("asyncua", reason="asyncua not installed")
 from asyncua import ua  # noqa: E402
 
 from method_caller import OPCUAMethodCaller  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -108,7 +108,9 @@ async def test_select_joint_returns_none_when_no_tool_identifier():
     client, _ = _make_client()
     caller = OPCUAMethodCaller(client)
 
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None):
+    with patch(
+        "method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None
+    ):
         result = await caller.select_joint("obj", "mth", "joint-1")
 
     assert result is None
@@ -119,12 +121,18 @@ async def test_select_joint_happy_path():
     client, tool_id = _make_client("urn:tool:001")
 
     node_mock = AsyncMock()
-    node_mock.call_method = AsyncMock(return_value=(0, _make_localized_text("SelectJoint OK")))
+    node_mock.call_method = AsyncMock(
+        return_value=(0, _make_localized_text("SelectJoint OK"))
+    )
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
 
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+    with patch(
+        "method_caller.read_tool_identifier",
+        new_callable=AsyncMock,
+        return_value=tool_id,
+    ):
         result = await caller.select_joint("ns=1;s=Obj", "ns=1;s=Mth", "joint-7")
 
     assert result is not None
@@ -142,7 +150,11 @@ async def test_select_joint_default_origin_id_is_empty_string():
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+    with patch(
+        "method_caller.read_tool_identifier",
+        new_callable=AsyncMock,
+        return_value=tool_id,
+    ):
         await caller.select_joint("obj", "mth", "joint-1")  # no origin_id
 
     # Third argument to call_method must be a Variant containing ""
@@ -161,7 +173,11 @@ async def test_select_joint_explicit_origin_id():
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+    with patch(
+        "method_caller.read_tool_identifier",
+        new_callable=AsyncMock,
+        return_value=tool_id,
+    ):
         await caller.select_joint("obj", "mth", "joint-1", joint_origin_id="origin-A")
 
     call_args = node_mock.call_method.call_args[0]
@@ -177,7 +193,11 @@ async def test_select_joint_exception_returns_none():
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+    with patch(
+        "method_caller.read_tool_identifier",
+        new_callable=AsyncMock,
+        return_value=tool_id,
+    ):
         result = await caller.select_joint("obj", "mth", "joint-1")
 
     assert result is None
@@ -193,7 +213,9 @@ async def test_enable_asset_returns_none_when_no_tool_identifier():
     client, _ = _make_client()
     caller = OPCUAMethodCaller(client)
 
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None):
+    with patch(
+        "method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None
+    ):
         result = await caller.enable_asset("obj", "mth", True)
 
     assert result is None
@@ -203,11 +225,17 @@ async def test_enable_asset_returns_none_when_no_tool_identifier():
 async def test_enable_asset_true():
     client, tool_id = _make_client()
     node_mock = AsyncMock()
-    node_mock.call_method = AsyncMock(return_value=(0, _make_localized_text("Asset enabled")))
+    node_mock.call_method = AsyncMock(
+        return_value=(0, _make_localized_text("Asset enabled"))
+    )
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+    with patch(
+        "method_caller.read_tool_identifier",
+        new_callable=AsyncMock,
+        return_value=tool_id,
+    ):
         result = await caller.enable_asset("obj", "mth", True)
 
     assert result["status"] == 0
@@ -222,11 +250,17 @@ async def test_enable_asset_true():
 async def test_enable_asset_false():
     client, tool_id = _make_client()
     node_mock = AsyncMock()
-    node_mock.call_method = AsyncMock(return_value=(0, _make_localized_text("Disabled")))
+    node_mock.call_method = AsyncMock(
+        return_value=(0, _make_localized_text("Disabled"))
+    )
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+    with patch(
+        "method_caller.read_tool_identifier",
+        new_callable=AsyncMock,
+        return_value=tool_id,
+    ):
         _ = await caller.enable_asset("obj", "mth", False)
 
     call_args = node_mock.call_method.call_args[0]
@@ -242,7 +276,11 @@ async def test_enable_asset_exception_returns_none():
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+    with patch(
+        "method_caller.read_tool_identifier",
+        new_callable=AsyncMock,
+        return_value=tool_id,
+    ):
         result = await caller.enable_asset("obj", "mth", True)
 
     assert result is None
@@ -258,7 +296,9 @@ async def test_start_selected_joining_returns_none_when_no_tool_id():
     client, _ = _make_client()
     caller = OPCUAMethodCaller(client)
 
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None):
+    with patch(
+        "method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None
+    ):
         result = await caller.start_selected_joining("obj", "mth", True)
 
     assert result is None
@@ -272,7 +312,11 @@ async def test_start_selected_joining_deselect_true():
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+    with patch(
+        "method_caller.read_tool_identifier",
+        new_callable=AsyncMock,
+        return_value=tool_id,
+    ):
         result = await caller.start_selected_joining("obj", "mth", True)
 
     assert result["status"] == 0
@@ -289,7 +333,11 @@ async def test_start_selected_joining_deselect_false():
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+    with patch(
+        "method_caller.read_tool_identifier",
+        new_callable=AsyncMock,
+        return_value=tool_id,
+    ):
         _ = await caller.start_selected_joining("obj", "mth", False)
 
     call_args = node_mock.call_method.call_args[0]
@@ -305,7 +353,11 @@ async def test_start_selected_joining_exception_returns_none():
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+    with patch(
+        "method_caller.read_tool_identifier",
+        new_callable=AsyncMock,
+        return_value=tool_id,
+    ):
         result = await caller.start_selected_joining("obj", "mth", True)
 
     assert result is None
@@ -325,7 +377,11 @@ async def test_result_dict_has_status_status_message_raw():
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
-    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+    with patch(
+        "method_caller.read_tool_identifier",
+        new_callable=AsyncMock,
+        return_value=tool_id,
+    ):
         result = await caller.enable_asset("obj", "mth", True)
 
     assert "status" in result

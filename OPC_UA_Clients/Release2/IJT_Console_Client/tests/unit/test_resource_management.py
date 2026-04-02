@@ -6,23 +6,24 @@ Resource management tests.
 - EventHandler shutdown is clean
 - After cleanup(), no dangling client references
 """
+
 import asyncio
 import contextlib
+import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import sys
-from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from opcua_client import _QUEUE_SIZE, OPCUAClient
 from event_handler import EventHandler
-
+from opcua_client import _QUEUE_SIZE, OPCUAClient
 
 # ---------------------------------------------------------------------------
 # Queue boundedness
 # ---------------------------------------------------------------------------
+
 
 def test_queue_size_constant_is_finite():
     assert isinstance(_QUEUE_SIZE, int)
@@ -41,10 +42,10 @@ async def test_event_handler_queue_is_not_unbounded():
         await h._queue_task
 
 
-
 # ---------------------------------------------------------------------------
 # Multiple connect→cleanup cycles
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_multiple_cleanup_cycles_stable():
@@ -90,6 +91,7 @@ async def test_cleanup_sets_subs_to_none():
 # ---------------------------------------------------------------------------
 # EventHandler shutdown is clean — no CancelledError propagation
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_event_handler_close_no_cancelled_error_propagates():

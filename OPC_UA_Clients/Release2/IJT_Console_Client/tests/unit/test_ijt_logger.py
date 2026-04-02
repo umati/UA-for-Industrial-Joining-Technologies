@@ -1,19 +1,20 @@
 """
 Tests for ijt_logger.py (MillisecondFormatter and ijt_log).
 """
+
 import inspect
 import logging
-
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from ijt_logger import MillisecondFormatter, ijt_log
 
-
 # ---------------------------------------------------------------------------
 # MillisecondFormatter
 # ---------------------------------------------------------------------------
+
 
 def _make_record(message="test message"):
     record = logging.LogRecord(
@@ -64,6 +65,7 @@ def test_format_time_type_hint_on_record():
 # ---------------------------------------------------------------------------
 # ijt_log logger instance
 # ---------------------------------------------------------------------------
+
 
 def test_ijt_log_has_info_method():
     assert hasattr(ijt_log, "info")

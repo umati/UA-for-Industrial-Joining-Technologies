@@ -7,6 +7,7 @@ They are automatically skipped if the server is unavailable.
 Run with:
     pytest tests/live/ -v -m live
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ _SERVER_URL = "opc.tcp://localhost:40451"
 # ---------------------------------------------------------------------------
 # Live tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_connect_to_server():

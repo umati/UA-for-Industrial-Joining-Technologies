@@ -5,6 +5,7 @@ Import path tests.
 - No imports from shared_python, IJT_Web_Client, or sibling client directories
 - All imports are resolvable from the Console Client root
 """
+
 import ast
 import re
 from pathlib import Path
@@ -14,7 +15,8 @@ import pytest
 _CONSOLE_ROOT = Path(__file__).resolve().parent.parent.parent
 
 _SOURCE_FILES = [
-    f for f in _CONSOLE_ROOT.glob("*.py")
+    f
+    for f in _CONSOLE_ROOT.glob("*.py")
     if f.name not in ("setup_client.py",)  # setup_client uses stdlib only
     and not f.name.startswith("_")
 ]
@@ -23,6 +25,7 @@ _SOURCE_FILES = [
 # ---------------------------------------------------------------------------
 # Snake-case module names
 # ---------------------------------------------------------------------------
+
 
 def test_all_source_files_are_snake_case():
     """All .py files must have snake_case names (no CamelCase)."""
@@ -62,11 +65,36 @@ def test_no_cross_client_imports_in_source(source_file):
 # ---------------------------------------------------------------------------
 
 _STDLIB_AND_THIRD_PARTY = {
-    "asyncio", "os", "sys", "logging", "traceback", "socket", "time",
-    "re", "json", "inspect", "pathlib", "datetime", "typing", "dataclasses",
-    "asyncua", "pytz", "aiofiles", "orjson", "cryptography", "OpenSSL",
-    "packaging", "argparse", "shlex", "shutil", "subprocess", "zipfile",
-    "urllib", "contextlib", "asyncua.ua", "asyncua.ua.uaerrors",
+    "asyncio",
+    "os",
+    "sys",
+    "logging",
+    "traceback",
+    "socket",
+    "time",
+    "re",
+    "json",
+    "inspect",
+    "pathlib",
+    "datetime",
+    "typing",
+    "dataclasses",
+    "asyncua",
+    "pytz",
+    "aiofiles",
+    "orjson",
+    "cryptography",
+    "OpenSSL",
+    "packaging",
+    "argparse",
+    "shlex",
+    "shutil",
+    "subprocess",
+    "zipfile",
+    "urllib",
+    "contextlib",
+    "asyncua.ua",
+    "asyncua.ua.uaerrors",
 }
 
 
@@ -88,9 +116,17 @@ def _get_top_level_imports(source_file: Path) -> list:
 
 
 _LOCAL_MODULES = {
-    "opcua_client", "event_handler", "result_event_handler", "serialize_data",
-    "utils", "ijt_logger", "method_caller", "client_config", "main",
-    "event_types", "setup_client",
+    "opcua_client",
+    "event_handler",
+    "result_event_handler",
+    "serialize_data",
+    "utils",
+    "ijt_logger",
+    "method_caller",
+    "client_config",
+    "main",
+    "event_types",
+    "setup_client",
 }
 
 

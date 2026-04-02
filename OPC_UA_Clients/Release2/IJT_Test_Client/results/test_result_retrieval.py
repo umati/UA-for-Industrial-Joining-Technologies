@@ -8,11 +8,14 @@ Spec coverage:
   - ProcessingTimes.StartTime and EndTime are present in ResultMetaData.
 Layer: methods (reads result data; simulation called to ensure data exists).
 """
+
 import asyncio
 import logging
+
 import pytest
 from asyncua import ua
-from helpers.namespaces import NS_MACH_RESULT, NS_APP, BN, ResultType
+
+from helpers.namespaces import BN, NS_APP, NS_MACH_RESULT, ResultType
 from helpers.node_discovery import find_child_by_browse_name
 
 logger = logging.getLogger(__name__)
@@ -21,7 +24,9 @@ pytestmark = [pytest.mark.live, pytest.mark.methods]
 _METHOD_TIMEOUT = 15  # seconds for any single method call or browse
 
 
-async def _prepare_result(opcua_client, simulate_results_folder, result_management, ns_indices):
+async def _prepare_result(
+    opcua_client, simulate_results_folder, result_management, ns_indices
+):
     """
     Trigger a SimulateSingleResult to ensure at least one result exists.
     Returns the re-bound ResultManagement node via opcua_client.
@@ -31,7 +36,9 @@ async def _prepare_result(opcua_client, simulate_results_folder, result_manageme
     rm = opcua_client.get_node(result_management.nodeid)
     if ns_app is not None and simulate_results_folder is not None:
         sim_folder = opcua_client.get_node(simulate_results_folder.nodeid)
-        method = await find_child_by_browse_name(sim_folder, BN.SIMULATE_SINGLE_RESULT, ns_app)
+        method = await find_child_by_browse_name(
+            sim_folder, BN.SIMULATE_SINGLE_RESULT, ns_app
+        )
         if method is not None:
             try:
                 await asyncio.wait_for(
@@ -43,7 +50,9 @@ async def _prepare_result(opcua_client, simulate_results_folder, result_manageme
                     timeout=_METHOD_TIMEOUT,
                 )
             except asyncio.TimeoutError as exc:
-                logger.debug("Pre-flight SimulateSingleResult timed out (non-fatal): %s", exc)
+                logger.debug(
+                    "Pre-flight SimulateSingleResult timed out (non-fatal): %s", exc
+                )
     return rm
 
 
@@ -65,7 +74,9 @@ async def test_get_latest_result_returns_result(
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
-    rm = await _prepare_result(opcua_client, simulate_results_folder, result_management, ns_indices)
+    rm = await _prepare_result(
+        opcua_client, simulate_results_folder, result_management, ns_indices
+    )
     method = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
     if method is None:
         pytest.skip("GetLatestResult method not found in ResultManagement")
@@ -80,7 +91,9 @@ async def test_get_latest_result_has_result_meta_data(
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
-    rm = await _prepare_result(opcua_client, simulate_results_folder, result_management, ns_indices)
+    rm = await _prepare_result(
+        opcua_client, simulate_results_folder, result_management, ns_indices
+    )
     method = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
     if method is None:
         pytest.skip("GetLatestResult method not found")
@@ -100,7 +113,9 @@ async def test_get_latest_result_has_result_id(
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
-    rm = await _prepare_result(opcua_client, simulate_results_folder, result_management, ns_indices)
+    rm = await _prepare_result(
+        opcua_client, simulate_results_folder, result_management, ns_indices
+    )
     method = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
     if method is None:
         pytest.skip("GetLatestResult method not found")
@@ -126,7 +141,9 @@ async def test_get_result_by_id_matches_latest(
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
-    rm = await _prepare_result(opcua_client, simulate_results_folder, result_management, ns_indices)
+    rm = await _prepare_result(
+        opcua_client, simulate_results_folder, result_management, ns_indices
+    )
     get_latest = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
     get_by_id = await find_child_by_browse_name(rm, BN.GET_RESULT_BY_ID, ns_mr)
     if get_latest is None or get_by_id is None:
@@ -148,9 +165,7 @@ async def test_get_result_by_id_matches_latest(
         ),
         timeout=_METHOD_TIMEOUT,
     )
-    assert by_id is not None, (
-        f"GetResultById('{result_id}') returned None"
-    )
+    assert by_id is not None, f"GetResultById('{result_id}') returned None"
 
 
 async def test_result_meta_data_has_processing_times(
@@ -160,7 +175,9 @@ async def test_result_meta_data_has_processing_times(
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
-    rm = await _prepare_result(opcua_client, simulate_results_folder, result_management, ns_indices)
+    rm = await _prepare_result(
+        opcua_client, simulate_results_folder, result_management, ns_indices
+    )
     method = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
     if method is None:
         pytest.skip("GetLatestResult method not found")
@@ -177,4 +194,4 @@ async def test_result_meta_data_has_processing_times(
     assert hasattr(pt, "StartTime"), "ProcessingTimes.StartTime field missing"
     assert hasattr(pt, "EndTime"), "ProcessingTimes.EndTime field missing"
     assert pt.StartTime is not None, "ProcessingTimes.StartTime is None"
-    assert pt.EndTime is not None, "ProcessingTimes.EndTime is None"
+    assert pt.EndTime is not None, "ProcessingTimes.EndTime is None"

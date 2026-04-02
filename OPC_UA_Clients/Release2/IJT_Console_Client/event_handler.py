@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from asyncua import ua
+
 from ijt_logger import ijt_log
-from utils import log_joining_system_event, nodeid_to_str, localizedtext_to_str
 from serialize_data import serialize_full_event
+from utils import localizedtext_to_str, log_joining_system_event, nodeid_to_str
 
 
 @dataclass
@@ -122,7 +123,9 @@ class EventHandler:
                         try:
                             await self.websocket.close()
                         except Exception as close_exc:
-                            ijt_log.debug(f"WebSocket close failed during error recovery: {close_exc}")
+                            ijt_log.debug(
+                                f"WebSocket close failed during error recovery: {close_exc}"
+                            )
                     break
                 finally:
                     self.queue.task_done()

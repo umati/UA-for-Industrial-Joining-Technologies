@@ -2,6 +2,7 @@
 Unit test configuration for IJT_Console_Client.
 Adds the console client root to sys.path so modules are importable without installation.
 """
+
 import sys
 from pathlib import Path
 

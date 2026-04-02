@@ -9,8 +9,8 @@ import json
 import re
 import traceback
 from datetime import datetime
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import aiofiles
 import pytz
@@ -277,7 +277,9 @@ async def log_result_to_file(event: Any) -> None:
     # This logic can be used to parse the Result and use it accordingly.
     if ENABLE_RESULT_FILE_LOGGING:
         try:
-            json_str = json.dumps(serialize_full_event(event.Result), ensure_ascii=False)
+            json_str = json.dumps(
+                serialize_full_event(event.Result), ensure_ascii=False
+            )
 
             log_dir = Path("logs/results")
             log_dir.mkdir(parents=True, exist_ok=True)

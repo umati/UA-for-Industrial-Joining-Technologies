@@ -3,6 +3,7 @@ Console Client test configuration.
 Adds the console client root to sys.path so bare-import modules
 (event_handler, utils, serialize_data, etc.) are importable.
 """
+
 import sys
 from pathlib import Path
 

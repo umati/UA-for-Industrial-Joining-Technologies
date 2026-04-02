@@ -2,34 +2,47 @@
 Unit tests for opcua_client.py (OPCUAClient class).
 All OPC UA network calls are mocked — no real server required.
 """
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-_CONSOLE_ROOT_PATH = __import__('pathlib').Path(__file__).resolve().parent.parent.parent
-import sys; sys.path.insert(0, str(_CONSOLE_ROOT_PATH))
+_CONSOLE_ROOT_PATH = __import__("pathlib").Path(__file__).resolve().parent.parent.parent
+import sys
 
-from opcua_client import OPCUAClient, _OPCUA_TIMEOUT_S, _SUBSCRIPTION_PERIOD_MS, _QUEUE_SIZE
+sys.path.insert(0, str(_CONSOLE_ROOT_PATH))
 
+from opcua_client import (
+    _OPCUA_TIMEOUT_S,
+    _QUEUE_SIZE,
+    _SUBSCRIPTION_PERIOD_MS,
+    OPCUAClient,
+)
 
 # ---------------------------------------------------------------------------
 # Module-level constants
 # ---------------------------------------------------------------------------
 
+
 def test_opcua_timeout_constant_exists():
     assert _OPCUA_TIMEOUT_S == 60
+
 
 def test_subscription_period_constant_exists():
     assert _SUBSCRIPTION_PERIOD_MS == 100
 
+
 def test_queue_size_constant_exists():
     assert _QUEUE_SIZE == 200
+
 
 def test_queue_size_is_positive():
     assert _QUEUE_SIZE > 0
 
+
 def test_opcua_timeout_is_positive():
     assert _OPCUA_TIMEOUT_S > 0
+
 
 def test_subscription_period_is_positive():
     assert _SUBSCRIPTION_PERIOD_MS > 0
@@ -39,35 +52,44 @@ def test_subscription_period_is_positive():
 # OPCUAClient.__init__ — default state
 # ---------------------------------------------------------------------------
 
+
 def test_init_stores_server_url():
     with patch("opcua_client.Client"):
         c = OPCUAClient("opc.tcp://localhost:40451")
     assert c.server_url == "opc.tcp://localhost:40451"
+
 
 def test_init_sub_result_event_is_none():
     with patch("opcua_client.Client"):
         c = OPCUAClient("opc.tcp://localhost:40451")
     assert c.sub_result_event is None
 
+
 def test_init_sub_joining_event_is_none():
     with patch("opcua_client.Client"):
         c = OPCUAClient("opc.tcp://localhost:40451")
     assert c.sub_joining_event is None
+
 
 def test_init_handler_result_event_is_none():
     with patch("opcua_client.Client"):
         c = OPCUAClient("opc.tcp://localhost:40451")
     assert c.handler_result_event is None
 
+
 def test_init_handler_joining_event_is_none():
     with patch("opcua_client.Client"):
         c = OPCUAClient("opc.tcp://localhost:40451")
     assert c.handler_joining_event is None
 
+
 def test_init_creates_asyncua_client_with_timeout():
     with patch("opcua_client.Client") as MockClient:
         OPCUAClient("opc.tcp://localhost:40451")
-    MockClient.assert_called_once_with("opc.tcp://localhost:40451", timeout=_OPCUA_TIMEOUT_S)
+    MockClient.assert_called_once_with(
+        "opc.tcp://localhost:40451", timeout=_OPCUA_TIMEOUT_S
+    )
+
 
 def test_init_creates_method_caller():
     with patch("opcua_client.Client"):
@@ -78,6 +100,7 @@ def test_init_creates_method_caller():
 # ---------------------------------------------------------------------------
 # connect() — failure path
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_connect_raises_on_server_unreachable():
@@ -91,19 +114,24 @@ async def test_connect_raises_on_server_unreachable():
         c.client = mock_client
 
         with patch.object(c, "clear_old_logs", new_callable=AsyncMock):
-            with patch.dict("os.environ", {
-                "OPCUA_CONNECT_RETRIES": "1",
-                "OPCUA_CONNECT_DELAY_SEC": "0.01",
-                "OPCUA_CONNECT_MAX_DELAY_SEC": "0.01",
-            }):
+            with patch.dict(
+                "os.environ",
+                {
+                    "OPCUA_CONNECT_RETRIES": "1",
+                    "OPCUA_CONNECT_DELAY_SEC": "0.01",
+                    "OPCUA_CONNECT_MAX_DELAY_SEC": "0.01",
+                },
+            ):
                 with pytest.raises(Exception):
                     await c.connect()
+
 
 @pytest.mark.asyncio
 async def test_connect_retries_configured_count():
     """connect() must attempt exactly OPCUA_CONNECT_RETRIES times."""
     attempt_count = 0
     with patch("opcua_client.Client") as MockClient:
+
         async def _fail(*_, **__):
             nonlocal attempt_count
             attempt_count += 1
@@ -117,11 +145,14 @@ async def test_connect_retries_configured_count():
         c.client = mock_client
 
         with patch.object(c, "clear_old_logs", new_callable=AsyncMock):
-            with patch.dict("os.environ", {
-                "OPCUA_CONNECT_RETRIES": "3",
-                "OPCUA_CONNECT_DELAY_SEC": "0.01",
-                "OPCUA_CONNECT_MAX_DELAY_SEC": "0.01",
-            }):
+            with patch.dict(
+                "os.environ",
+                {
+                    "OPCUA_CONNECT_RETRIES": "3",
+                    "OPCUA_CONNECT_DELAY_SEC": "0.01",
+                    "OPCUA_CONNECT_MAX_DELAY_SEC": "0.01",
+                },
+            ):
                 with pytest.raises(Exception):
                     await c.connect()
 
@@ -131,6 +162,7 @@ async def test_connect_retries_configured_count():
 # ---------------------------------------------------------------------------
 # cleanup() — subscription deletion
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_cleanup_deletes_subscriptions():
@@ -147,6 +179,7 @@ async def test_cleanup_deletes_subscriptions():
     await c.cleanup()
     sub_mock.delete.assert_awaited_once()
 
+
 @pytest.mark.asyncio
 async def test_cleanup_sets_subs_to_none():
     with patch("opcua_client.Client"):
@@ -161,6 +194,7 @@ async def test_cleanup_sets_subs_to_none():
     assert c.sub_result_event is None
     assert c.sub_joining_event is None
 
+
 @pytest.mark.asyncio
 async def test_cleanup_disconnects_client():
     with patch("opcua_client.Client"):
@@ -171,6 +205,7 @@ async def test_cleanup_disconnects_client():
 
     await c.cleanup()
     mock_inner.disconnect.assert_awaited_once()
+
 
 @pytest.mark.asyncio
 async def test_cleanup_handles_sub_delete_exception():
@@ -190,6 +225,7 @@ async def test_cleanup_handles_sub_delete_exception():
 # setup_client_metadata — URI format
 # ---------------------------------------------------------------------------
 
+
 def test_setup_client_metadata_sets_uris():
     with patch("opcua_client.Client") as MockClient:
         mock_client_obj = MagicMock()
@@ -204,6 +240,7 @@ def test_setup_client_metadata_sets_uris():
 # ---------------------------------------------------------------------------
 # Named constants are importable at module level (regression guard)
 # ---------------------------------------------------------------------------
+
 
 def test_named_constants_importable():
     assert isinstance(_OPCUA_TIMEOUT_S, (int, float))

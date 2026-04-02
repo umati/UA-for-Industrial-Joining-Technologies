@@ -9,7 +9,9 @@ if str(_CONSOLE_ROOT) not in sys.path:
     sys.path.insert(0, str(_CONSOLE_ROOT))
 
 
-def _is_server_available(host: str = "localhost", port: int = 40451, timeout: float = 1.0) -> bool:
+def _is_server_available(
+    host: str = "localhost", port: int = 40451, timeout: float = 1.0
+) -> bool:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(timeout)
     try:
@@ -29,5 +31,7 @@ def pytest_collection_modifyitems(items):
             item.add_marker(pytest.mark.live)
             if not _SERVER_AVAILABLE:
                 item.add_marker(
-                    pytest.mark.skip(reason="OPC UA server not available at localhost:40451")
+                    pytest.mark.skip(
+                        reason="OPC UA server not available at localhost:40451"
+                    )
                 )

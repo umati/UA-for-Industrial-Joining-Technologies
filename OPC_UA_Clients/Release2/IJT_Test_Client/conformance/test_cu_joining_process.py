@@ -3,16 +3,22 @@ Conformance unit tests for JoiningProcessManagement — §11.1 CU-JP-001 through
 Structure tests use session fixtures. Method call tests use a fresh opcua_client
 combined with session-scoped controllers_instances for asset NodeId resolution.
 """
+
 import logging
+
 import pytest
 from asyncua import ua
-from helpers.namespaces import NS_IJT_BASE, NS_DI, BN
+
+from helpers.namespaces import BN, NS_DI, NS_IJT_BASE
 from helpers.node_discovery import (
-    find_joining_system,
     find_child_by_browse_name,
+    find_joining_system,
 )
+
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
+
+
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
@@ -25,14 +31,20 @@ async def _get_jpm(client, ns_ijt):
     if jpm is None:
         pytest.skip("JoiningProcessManagement node not found on JoiningSystem")
     return jpm
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-async def test_cu_joining_process_joining_process_management_addin(joining_process_management):
+async def test_cu_joining_process_joining_process_management_addin(
+    joining_process_management,
+):
     # §11.1 CU-JP-001: JoiningSystem must expose a JoiningProcessManagement AddIn
     assert joining_process_management is not None, (
         "JoiningProcessManagement AddIn node must not be None"
     )
+
+
 async def test_cu_joining_process_required_methods_present(
     joining_process_management, asset_management, ns_indices
 ):
@@ -50,12 +62,18 @@ async def test_cu_joining_process_required_methods_present(
             f"(ns={ns_ijt})"
         )
     # EnableAsset is on AssetManagement MethodSet
-    method_set = await find_child_by_browse_name(asset_management, BN.METHOD_SET, ns_ijt)
+    method_set = await find_child_by_browse_name(
+        asset_management, BN.METHOD_SET, ns_ijt
+    )
     if method_set is None:
         pytest.skip("AssetManagement MethodSet not found — cannot verify EnableAsset")
     enable_node = await find_child_by_browse_name(method_set, BN.ENABLE_ASSET, ns_ijt)
     if enable_node is None:
-        pytest.skip("EnableAsset not found in AssetManagement MethodSet — not implemented on this server")
+        pytest.skip(
+            "EnableAsset not found in AssetManagement MethodSet — not implemented on this server"
+        )
+
+
 async def test_cu_joining_process_enable_disable_asset_callable(
     opcua_client, ns_indices, tools_instances
 ):
@@ -83,11 +101,16 @@ async def test_cu_joining_process_enable_disable_asset_callable(
         try:
             ident = await find_child_by_browse_name(tool_node, BN.IDENTIFICATION, ns_di)
             if ident is not None:
-                pi_node = await find_child_by_browse_name(ident, "ProductInstanceUri", ns_di)
+                pi_node = await find_child_by_browse_name(
+                    ident, "ProductInstanceUri", ns_di
+                )
                 if pi_node is not None:
                     pi_uri = str(await pi_node.read_value() or "")
         except Exception as exc:
-            logger.debug("Could not read ProductInstanceUri from tool (using empty string): %s", exc)
+            logger.debug(
+                "Could not read ProductInstanceUri from tool (using empty string): %s",
+                exc,
+            )
     # Enable then disable using EnableAsset(PI, True/False)
     for enable_flag in (True, False):
         try:
@@ -98,10 +121,15 @@ async def test_cu_joining_process_enable_disable_asset_callable(
             )
         except ua.UaError as exc:
             status_str = str(exc)
-            if any(s in status_str for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound")):
+            if any(
+                s in status_str
+                for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound")
+            ):
                 pass  # Expected on some simulator configurations
             else:
                 raise
+
+
 async def test_cu_joining_process_abort_process_callable(opcua_client, ns_indices):
     # §11.1 CU-JP-004: AbortJoiningProcess must be callable without unexpected exception
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -117,10 +145,16 @@ async def test_cu_joining_process_abort_process_callable(opcua_client, ns_indice
         await jpm.call_method(method_node.nodeid)
     except ua.UaError as exc:
         status_str = str(exc)
-        if any(s in status_str for s in (
-            "BadNotSupported", "BadNothingToDo", "BadConditionNotActive",
-            "BadInvalidArgument", "BadArgumentsMissing",
-        )):
+        if any(
+            s in status_str
+            for s in (
+                "BadNotSupported",
+                "BadNothingToDo",
+                "BadConditionNotActive",
+                "BadInvalidArgument",
+                "BadArgumentsMissing",
+            )
+        ):
             pass  # Expected when no joining process is currently active
         else:
-            raise
+            raise

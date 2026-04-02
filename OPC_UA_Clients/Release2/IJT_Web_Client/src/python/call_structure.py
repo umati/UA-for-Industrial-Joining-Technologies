@@ -6,30 +6,32 @@ descriptors (containing an OPC UA data-type ID and a raw Python value) to the
 ``Node.call_method``.
 """
 
-from asyncua import ua
 from typing import Any
+
+from asyncua import ua
+
 from python.ijt_logger import ijt_log
 
 # IJT-specific OPC UA extension type identifiers (namespace-qualified IDs from IJT companion spec)
-_JOINING_PROCESS_ID_DATA_TYPE = 3029   # ua.JoiningProcessIdentificationDataType
-_ENTITY_DATA_TYPE_ARRAY = 3010         # ua.EntityDataType[]
+_JOINING_PROCESS_ID_DATA_TYPE = 3029  # ua.JoiningProcessIdentificationDataType
+_ENTITY_DATA_TYPE_ARRAY = 3010  # ua.EntityDataType[]
 
 # Correct OPC UA built-in data type ID → asyncua VariantType mapping (OPC UA Part 6, Table 1)
 _BUILTIN_TYPE_MAP: dict[int, ua.VariantType] = {
-    1:     ua.VariantType.Boolean,
-    2:     ua.VariantType.SByte,
-    3:     ua.VariantType.Byte,
-    4:     ua.VariantType.Int16,
-    5:     ua.VariantType.UInt16,
-    6:     ua.VariantType.Int32,
-    7:     ua.VariantType.UInt32,
-    8:     ua.VariantType.Int64,
-    9:     ua.VariantType.UInt64,
-    10:    ua.VariantType.Float,
-    11:    ua.VariantType.Double,
-    12:    ua.VariantType.String,
-    13:    ua.VariantType.DateTime,
-    31918: ua.VariantType.String,       # TrimmedString (IJT custom scalar type)
+    1: ua.VariantType.Boolean,
+    2: ua.VariantType.SByte,
+    3: ua.VariantType.Byte,
+    4: ua.VariantType.Int16,
+    5: ua.VariantType.UInt16,
+    6: ua.VariantType.Int32,
+    7: ua.VariantType.UInt32,
+    8: ua.VariantType.Int64,
+    9: ua.VariantType.UInt64,
+    10: ua.VariantType.Float,
+    11: ua.VariantType.Double,
+    12: ua.VariantType.String,
+    13: ua.VariantType.DateTime,
+    31918: ua.VariantType.String,  # TrimmedString (IJT custom scalar type)
 }
 
 

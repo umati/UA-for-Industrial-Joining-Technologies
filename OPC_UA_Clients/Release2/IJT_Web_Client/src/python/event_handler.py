@@ -15,7 +15,7 @@ import websockets
 
 from python.ijt_logger import ijt_log
 from python.serialize_data import serialize_full_event
-from python.utils import log_joining_system_event, localizedtext_to_str, nodeid_to_str
+from python.utils import localizedtext_to_str, log_joining_system_event, nodeid_to_str
 
 _SHUTDOWN_TIMEOUT_S = 5.0
 
@@ -78,7 +78,9 @@ class EventHandler:
     :meth:`close` is called (typically during connection teardown).
     """
 
-    def __init__(self, websocket: Any, server_url: str, client: Any | None = None) -> None:
+    def __init__(
+        self, websocket: Any, server_url: str, client: Any | None = None
+    ) -> None:
         """Initialise the handler and start the background queue-worker task.
 
         Args:
@@ -159,7 +161,9 @@ class EventHandler:
                 try:
                     await self.websocket.close()
                 except Exception as close_exc:
-                    ijt_log.debug(f"WebSocket close failed during error recovery: {close_exc}")
+                    ijt_log.debug(
+                        f"WebSocket close failed during error recovery: {close_exc}"
+                    )
                 break
             finally:
                 self.queue.task_done()
@@ -182,7 +186,9 @@ class EventHandler:
         await self.shutdown()
         if self._queue_task and not self._queue_task.done():
             try:
-                await asyncio.wait_for(asyncio.shield(self._queue_task), timeout=_SHUTDOWN_TIMEOUT_S)
+                await asyncio.wait_for(
+                    asyncio.shield(self._queue_task), timeout=_SHUTDOWN_TIMEOUT_S
+                )
             except asyncio.TimeoutError:
                 self._queue_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

@@ -9,8 +9,9 @@ Covers:
 - log_separator: produces a dashed line of correct width
 """
 
-import pytest
 from datetime import datetime
+
+import pytest
 
 _ = pytest.importorskip("asyncua", reason="asyncua not installed")
 _ = pytest.importorskip("pytz", reason="pytz not installed")
@@ -23,7 +24,6 @@ from utils import (  # noqa: E402
     localizedtext_to_str,
     nodeid_to_str,
 )
-
 
 # ---------------------------------------------------------------------------
 # nodeid_to_str
@@ -48,6 +48,7 @@ def test_nodeid_string():
 
 def test_nodeid_guid():
     import uuid
+
     g = uuid.UUID("12345678-1234-5678-1234-567812345678")
     node = ua.NodeId(g, 1, ua.NodeIdType.Guid)
     result = nodeid_to_str(node)
@@ -55,7 +56,7 @@ def test_nodeid_guid():
 
 
 def test_nodeid_opaque():
-    data = b"\xDE\xAD"
+    data = b"\xde\xad"
     # asyncua 1.2b2 renamed NodeIdType.Opaque → NodeIdType.ByteString
     node = ua.NodeId(data, 0, ua.NodeIdType.ByteString)
     result = nodeid_to_str(node)
@@ -205,7 +206,9 @@ def test_format_list_items_indented():
 def test_log_joining_system_event_is_async():
     """log_joining_system_event MUST be async (regression guard against it being sync)."""
     import inspect
+
     from utils import log_joining_system_event
+
     assert inspect.iscoroutinefunction(log_joining_system_event), (
         "log_joining_system_event must be async — was wrongly made sync in a previous regression"
     )
@@ -214,6 +217,7 @@ def test_log_joining_system_event_is_async():
 def test_nodeid_to_str_has_type_hints():
     """nodeid_to_str must have type hints."""
     import inspect
+
     sig = inspect.signature(nodeid_to_str)
     params = list(sig.parameters.values())
     assert params[0].annotation is not inspect.Parameter.empty
@@ -221,6 +225,7 @@ def test_nodeid_to_str_has_type_hints():
 
 def test_localizedtext_to_str_has_type_hints():
     import inspect
+
     sig = inspect.signature(localizedtext_to_str)
     params = list(sig.parameters.values())
     assert params[0].annotation is not inspect.Parameter.empty

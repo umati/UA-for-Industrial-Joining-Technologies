@@ -13,12 +13,15 @@ Event types 1-60: see SimulateEventType class in helpers/namespaces.py
 A fresh function-scoped opcua_client / subscription_client is used per test.
 Layer: methods + events (triggers server state changes).
 """
+
 import asyncio
+
 import pytest
 from asyncua import ua
-from helpers.namespaces import NS_APP, NS_IJT_BASE, BN, IJTTypes, SimulateEventType
-from helpers.node_discovery import find_child_by_browse_name
+
 from helpers.event_collector import EventCollector
+from helpers.namespaces import BN, NS_APP, NS_IJT_BASE, IJTTypes, SimulateEventType
+from helpers.node_discovery import find_child_by_browse_name
 
 pytestmark = [pytest.mark.live, pytest.mark.events]
 
@@ -43,6 +46,7 @@ async def _call(node, method, *args):
 
 # ─── SimulateEvents — no-exception (representative event types) ──────────────
 
+
 @pytest.mark.parametrize("event_type,label", SimulateEventType.REPRESENTATIVE)
 async def test_simulate_event_representative_types(
     event_type, label, opcua_client, simulate_events_folder, ns_indices
@@ -60,11 +64,15 @@ async def test_simulate_event_representative_types(
 
 # ─── SimulateBulkEvents — no-exception ───────────────────────────────────────
 
-@pytest.mark.parametrize("event_type,count,label", [
-    (SimulateEventType.TOOL_CONNECTED, 3,  "tool_connected_x3"),
-    (SimulateEventType.TOOL_STARTED,   5,  "tool_started_x5"),
-    (SimulateEventType.PROGRAM_SELECTED, 3, "program_selected_x3"),
-])
+
+@pytest.mark.parametrize(
+    "event_type,count,label",
+    [
+        (SimulateEventType.TOOL_CONNECTED, 3, "tool_connected_x3"),
+        (SimulateEventType.TOOL_STARTED, 5, "tool_started_x5"),
+        (SimulateEventType.PROGRAM_SELECTED, 3, "program_selected_x3"),
+    ],
+)
 async def test_simulate_bulk_events_no_exception(
     event_type, count, label, opcua_client, simulate_events_folder, ns_indices
 ):
@@ -77,13 +85,15 @@ async def test_simulate_bulk_events_no_exception(
     if method is None:
         pytest.skip("SimulateBulkEvents method not found")
     await _call(
-        ef, method,
+        ef,
+        method,
         ua.Variant(event_type, ua.VariantType.UInt32),
-        ua.Variant(count,      ua.VariantType.UInt32),
+        ua.Variant(count, ua.VariantType.UInt32),
     )
 
 
 # ─── SimulateEvents — subscription-based verification ───────────────────────
+
 
 async def test_simulate_event_fires_notification(
     opcua_client, subscription_client, simulate_events_folder, ns_indices
@@ -104,7 +114,8 @@ async def test_simulate_event_fires_notification(
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, [event_type_node])
         await _call(
-            ef, method,
+            ef,
+            method,
             ua.Variant(SimulateEventType.TOOL_CONNECTED, ua.VariantType.UInt32),
         )
         events = await collector.collect(count=1, timeout_s=20.0)
@@ -114,6 +125,7 @@ async def test_simulate_event_fires_notification(
 
 
 # ─── SimulateBulkEvents — verify count matches expected ─────────────────────
+
 
 @pytest.mark.parametrize("count", [3, 5])
 async def test_simulate_bulk_events_fires_expected_count(
@@ -135,7 +147,8 @@ async def test_simulate_bulk_events_fires_expected_count(
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, [event_type_node])
         await _call(
-            ef, method,
+            ef,
+            method,
             ua.Variant(SimulateEventType.TOOL_STARTED, ua.VariantType.UInt32),
             ua.Variant(count, ua.VariantType.UInt32),
         )
@@ -147,6 +160,7 @@ async def test_simulate_bulk_events_fires_expected_count(
 
 
 # ─── Comparison: bulk > single ───────────────────────────────────────────────
+
 
 async def test_bulk_events_exceeds_single_event_count(
     opcua_client, subscription_client, simulate_events_folder, ns_indices
@@ -162,21 +176,27 @@ async def test_bulk_events_exceeds_single_event_count(
     server_node = subscription_client.nodes.server
     ef = _events_folder(opcua_client, simulate_events_folder)
     single_method = await _find_method(ef, BN.SIMULATE_EVENTS, ns_app)
-    bulk_method   = await _find_method(ef, BN.SIMULATE_BULK_EVENTS, ns_app)
+    bulk_method = await _find_method(ef, BN.SIMULATE_BULK_EVENTS, ns_app)
     if single_method is None or bulk_method is None:
         pytest.skip("Simulate methods not found")
 
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, [event_type_node])
-        await _call(ef, single_method,
-                    ua.Variant(SimulateEventType.TOOL_STARTED, ua.VariantType.UInt32))
+        await _call(
+            ef,
+            single_method,
+            ua.Variant(SimulateEventType.TOOL_STARTED, ua.VariantType.UInt32),
+        )
         single_events = await collector.collect(count=10, timeout_s=10.0)
 
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, [event_type_node])
-        await _call(ef, bulk_method,
-                    ua.Variant(SimulateEventType.TOOL_STARTED, ua.VariantType.UInt32),
-                    ua.Variant(5, ua.VariantType.UInt32))
+        await _call(
+            ef,
+            bulk_method,
+            ua.Variant(SimulateEventType.TOOL_STARTED, ua.VariantType.UInt32),
+            ua.Variant(5, ua.VariantType.UInt32),
+        )
         bulk_events = await collector.collect(count=10, timeout_s=20.0)
 
     # If single_events is already at the collection ceiling (10), we can't distinguish

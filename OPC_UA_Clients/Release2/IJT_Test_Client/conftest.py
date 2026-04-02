@@ -10,23 +10,32 @@ Design rules enforced here:
   - Namespace indices are resolved once and cached in ns_indices dict.
   - Two separate client fixtures prevent asyncua concurrency issues with subscriptions.
 """
+
 import logging
 import os
+
 import pytest
 import pytest_asyncio
 from asyncua import Client
+
 from helpers.namespaces import (
-    NS_MACH_RESULT, NS_IJT_BASE, NS_APP,
-    ALL_NAMESPACE_URIS, BN,
+    ALL_NAMESPACE_URIS,
+    BN,
+    NS_APP,
+    NS_IJT_BASE,
+    NS_MACH_RESULT,
 )
 from helpers.node_discovery import (
-    find_joining_system,
-    find_child_by_browse_name,
     browse_folder_instances,
+    find_child_by_browse_name,
+    find_joining_system,
 )
+
 logger = logging.getLogger(__name__)
 SERVER_URL = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
 _OPCUA_TIMEOUT_S = 120  # SimulateJobResult fires many results; 4 s default is too short
+
+
 # ─── Early connection check ───────────────────────────────────────────────────
 def pytest_sessionstart(session) -> None:
     """
@@ -35,6 +44,7 @@ def pytest_sessionstart(session) -> None:
     do before any fixture error is reported.
     """
     import socket
+
     host, port = "localhost", 40451
     url = os.environ.get("OPCUA_SERVER_URL", "")
     if url:
@@ -51,30 +61,35 @@ def pytest_sessionstart(session) -> None:
         reachable = False
     if not reachable:
         import sys
+
         border = "=" * 70
         exe = (
             "OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/"
             "opcua_ijt_demo_application.exe"
         )
-        msg = "\n".join([
-            "",
-            border,
-            "  OPC UA SERVER NOT DETECTED",
-            border,
-            f"  Cannot reach: opc.tcp://{host}:{port}",
-            "",
-            "  Start the server (auto-launch attempted if OPCUA_SIMULATOR_EXE is set):",
-            f"    {exe}",
-            "",
-            "  Or set env vars:",
-            "    OPCUA_SIMULATOR_EXE=<path>   enable auto-launch on test start",
-            "    OPCUA_SERVER_URL=opc.tcp://host:port   custom endpoint",
-            "",
-            "  All tests require a live server and will be SKIPPED if unreachable.",
-            border,
-            "",
-        ])
+        msg = "\n".join(
+            [
+                "",
+                border,
+                "  OPC UA SERVER NOT DETECTED",
+                border,
+                f"  Cannot reach: opc.tcp://{host}:{port}",
+                "",
+                "  Start the server (auto-launch attempted if OPCUA_SIMULATOR_EXE is set):",
+                f"    {exe}",
+                "",
+                "  Or set env vars:",
+                "    OPCUA_SIMULATOR_EXE=<path>   enable auto-launch on test start",
+                "    OPCUA_SERVER_URL=opc.tcp://host:port   custom endpoint",
+                "",
+                "  All tests require a live server and will be SKIPPED if unreachable.",
+                border,
+                "",
+            ]
+        )
         print(msg, file=sys.stderr)
+
+
 # ─── Server lifecycle ─────────────────────────────────────────────────────────
 @pytest.fixture(scope="session")
 def managed_server():
@@ -84,6 +99,7 @@ def managed_server():
     simulator executable. Skips the entire session if unavailable.
     """
     from helpers.server_manager import ServerManager
+
     manager = ServerManager()
     available = manager.ensure_running()
     if not available:
@@ -93,6 +109,8 @@ def managed_server():
         )
     yield manager
     manager.teardown()
+
+
 # ─── Session-scoped shared client ────────────────────────────────────────────
 @pytest_asyncio.fixture(scope="session")
 async def session_client(managed_server):
@@ -120,6 +138,8 @@ async def session_client(managed_server):
         await client.disconnect()
     except Exception as exc:
         logger.debug("session_client disconnect failed (ignored): %s", exc)
+
+
 # ─── Namespace indices ────────────────────────────────────────────────────────
 @pytest_asyncio.fixture(scope="session")
 async def ns_indices(session_client) -> dict:
@@ -135,6 +155,8 @@ async def ns_indices(session_client) -> dict:
         except Exception:
             indices[uri] = None
     return indices
+
+
 # ─── JoiningSystem discovery ─────────────────────────────────────────────────
 @pytest_asyncio.fixture(scope="session")
 async def joining_system(session_client, ns_indices):
@@ -145,8 +167,12 @@ async def joining_system(session_client, ns_indices):
     """
     js = await find_joining_system(session_client)
     if js is None:
-        pytest.skip("JoiningSystem node not found in address space (by type definition)")
+        pytest.skip(
+            "JoiningSystem node not found in address space (by type definition)"
+        )
     return js
+
+
 # ─── AddIn nodes on JoiningSystem ────────────────────────────────────────────
 @pytest_asyncio.fixture(scope="session")
 async def asset_management(joining_system, ns_indices):
@@ -158,6 +184,8 @@ async def asset_management(joining_system, ns_indices):
     if node is None:
         pytest.skip("AssetManagement node not found on JoiningSystem")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def assets_folder(asset_management, ns_indices):
     """Assets folder node inside AssetManagement (IJT Base ns)."""
@@ -168,6 +196,8 @@ async def assets_folder(asset_management, ns_indices):
     if node is None:
         pytest.skip("Assets folder not found inside AssetManagement")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def result_management(joining_system, ns_indices):
     """ResultManagement AddIn node on the JoiningSystem (Machinery/Result ns)."""
@@ -178,6 +208,8 @@ async def result_management(joining_system, ns_indices):
     if node is None:
         pytest.skip("ResultManagement node not found on JoiningSystem")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def joining_process_management(joining_system, ns_indices):
     """JoiningProcessManagement AddIn node on the JoiningSystem (IJT Base ns)."""
@@ -190,6 +222,8 @@ async def joining_process_management(joining_system, ns_indices):
     if node is None:
         pytest.skip("JoiningProcessManagement node not found on JoiningSystem")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def joint_management(joining_system, ns_indices):
     """JointManagement AddIn node on the JoiningSystem (IJT Base ns)."""
@@ -200,6 +234,7 @@ async def joint_management(joining_system, ns_indices):
     if node is None:
         pytest.skip("JointManagement node not found on JoiningSystem")
     return node
+
 
 @pytest_asyncio.fixture(scope="session")
 async def simulations_node(joining_system, ns_indices):
@@ -212,16 +247,20 @@ async def simulations_node(joining_system, ns_indices):
         pytest.skip("Simulations node not found on JoiningSystem")
     return node
 
+
 @pytest_asyncio.fixture(scope="session")
 async def simulate_results_folder(simulations_node, ns_indices):
     """SimulateResults folder under Simulations (App ns)."""
     ns_app = ns_indices.get(NS_APP)
     if ns_app is None:
         pytest.skip("App namespace not registered — simulator not available")
-    node = await find_child_by_browse_name(simulations_node, BN.SIMULATE_RESULTS_FOLDER, ns_app)
+    node = await find_child_by_browse_name(
+        simulations_node, BN.SIMULATE_RESULTS_FOLDER, ns_app
+    )
     if node is None:
         pytest.skip("SimulateResults folder not found under Simulations")
     return node
+
 
 @pytest_asyncio.fixture(scope="session")
 async def simulate_events_folder(simulations_node, ns_indices):
@@ -235,11 +274,15 @@ async def simulate_events_folder(simulations_node, ns_indices):
     if node is None:
         pytest.skip("SimulateEventsAndConditions folder not found under Simulations")
     return node
+
+
 # ─── OPC UA Server node ───────────────────────────────────────────────────────
 @pytest_asyncio.fixture(scope="session")
 async def server_node(session_client):
     """OPC UA OPC UA Server node — root for event subscriptions."""
     return session_client.nodes.server
+
+
 # ─── Asset folder nodes ───────────────────────────────────────────────────────
 @pytest_asyncio.fixture(scope="session")
 async def controllers_folder(assets_folder, ns_indices):
@@ -251,6 +294,8 @@ async def controllers_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("Controllers folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def tools_folder(assets_folder, ns_indices):
     """Tools asset folder node (IJT Base ns)."""
@@ -261,6 +306,8 @@ async def tools_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("Tools folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def batteries_folder(assets_folder, ns_indices):
     """Batteries asset folder node (IJT Base ns)."""
@@ -271,6 +318,8 @@ async def batteries_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("Batteries folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def servos_folder(assets_folder, ns_indices):
     """Servos asset folder node (IJT Base ns)."""
@@ -281,6 +330,8 @@ async def servos_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("Servos folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def sensors_folder(assets_folder, ns_indices):
     """Sensors asset folder node (IJT Base ns)."""
@@ -291,6 +342,8 @@ async def sensors_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("Sensors folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def power_supplies_folder(assets_folder, ns_indices):
     """PowerSupplies asset folder node (IJT Base ns)."""
@@ -301,6 +354,8 @@ async def power_supplies_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("PowerSupplies folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def cables_folder(assets_folder, ns_indices):
     """Cables asset folder node (IJT Base ns)."""
@@ -311,6 +366,8 @@ async def cables_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("Cables folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def feeders_folder(assets_folder, ns_indices):
     """Feeders asset folder node (IJT Base ns)."""
@@ -321,6 +378,8 @@ async def feeders_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("Feeders folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def memory_devices_folder(assets_folder, ns_indices):
     """MemoryDevices asset folder node (IJT Base ns)."""
@@ -331,6 +390,8 @@ async def memory_devices_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("MemoryDevices folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def accessories_folder(assets_folder, ns_indices):
     """Accessories asset folder node (IJT Base ns)."""
@@ -341,6 +402,8 @@ async def accessories_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("Accessories folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def sub_components_folder(assets_folder, ns_indices):
     """SubComponents asset folder node (IJT Base ns)."""
@@ -351,16 +414,22 @@ async def sub_components_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("SubComponents folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def software_components_folder(assets_folder, ns_indices):
     """SoftwareComponents asset folder node (IJT Base ns)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered")
-    node = await find_child_by_browse_name(assets_folder, BN.SOFTWARE_COMPONENTS, ns_ijt)
+    node = await find_child_by_browse_name(
+        assets_folder, BN.SOFTWARE_COMPONENTS, ns_ijt
+    )
     if node is None:
         pytest.skip("SoftwareComponents folder not found in Assets")
     return node
+
+
 @pytest_asyncio.fixture(scope="session")
 async def virtual_stations_folder(assets_folder, ns_indices):
     """VirtualStations asset folder node (IJT Base ns)."""
@@ -371,6 +440,8 @@ async def virtual_stations_folder(assets_folder, ns_indices):
     if node is None:
         pytest.skip("VirtualStations folder not found in Assets")
     return node
+
+
 # ─── Pre-browsed asset instance collections ──────────────────────────────────
 @pytest_asyncio.fixture(scope="session")
 async def controllers_instances(controllers_folder):
@@ -382,6 +453,8 @@ async def controllers_instances(controllers_folder):
     if not instances:
         pytest.skip("No controller instances found in Controllers folder")
     return instances
+
+
 @pytest_asyncio.fixture(scope="session")
 async def tools_instances(tools_folder):
     """
@@ -392,6 +465,8 @@ async def tools_instances(tools_folder):
     if not instances:
         pytest.skip("No tool instances found in Tools folder")
     return instances
+
+
 # ─── Function-scoped clients for state-changing tests ────────────────────────
 @pytest_asyncio.fixture(scope="function")
 async def opcua_client(managed_server):
@@ -416,6 +491,8 @@ async def opcua_client(managed_server):
         await client.disconnect()
     except Exception as exc:
         logger.debug("opcua_client disconnect failed (ignored): %s", exc)
+
+
 @pytest_asyncio.fixture(scope="function")
 async def subscription_client(managed_server):
     """
@@ -438,4 +515,4 @@ async def subscription_client(managed_server):
     try:
         await client.disconnect()
     except Exception as exc:
-        logger.debug("subscription_client disconnect failed (ignored): %s", exc)
+        logger.debug("subscription_client disconnect failed (ignored): %s", exc)

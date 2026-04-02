@@ -10,10 +10,14 @@ The subscription_client must be a separate asyncua Client instance from the one
 used for method calls — asyncua cannot safely handle concurrent calls on a single
 client connection.
 """
+
 import asyncio
 import logging
 from typing import List
+
 logger = logging.getLogger(__name__)
+
+
 class EventCollector:
     """
     Collects OPC UA events via asyncua subscription into an asyncio.Queue.
@@ -21,10 +25,12 @@ class EventCollector:
     The event_notification method is called synchronously from the asyncio
     event loop; put_nowait is used to avoid blocking.
     """
+
     def __init__(self, client) -> None:
         self._client = client
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=0)  # unbounded
         self._subscription = None
+
     # ── asyncua handler interface ──────────────────────────────────────────
     def event_notification(self, event) -> None:
         """
@@ -35,10 +41,13 @@ class EventCollector:
             self._queue.put_nowait(event)
         except asyncio.QueueFull:
             logger.warning("EventCollector queue full, dropping event: %s", event)
+
     def datachange_notification(self, node, val, data) -> None:
         """Required by asyncua handler interface; not used by EventCollector."""
+
     def status_change_notification(self, status) -> None:
         """Required by asyncua handler interface; not used by EventCollector."""
+
     # ── public API ────────────────────────────────────────────────────────
     async def subscribe(
         self,
@@ -61,6 +70,7 @@ class EventCollector:
         await self._subscription.subscribe_events(
             server_node, event_type_nodes, queuesize=queue_size
         )
+
     async def collect(self, count: int = 1, timeout_s: float = 30.0) -> List:
         """
         Collect up to `count` events, waiting up to `timeout_s` seconds total.
@@ -80,6 +90,7 @@ class EventCollector:
             except asyncio.TimeoutError:
                 break
         return results
+
     async def unsubscribe(self) -> None:
         """Delete the subscription if one is active."""
         if self._subscription is not None:
@@ -89,8 +100,10 @@ class EventCollector:
                 logger.warning("Error deleting subscription: %s", exc)
             finally:
                 self._subscription = None
+
     # ── context manager ───────────────────────────────────────────────────
     async def __aenter__(self) -> "EventCollector":
         return self
+
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        await self.unsubscribe()
+        await self.unsubscribe()

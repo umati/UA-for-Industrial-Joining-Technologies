@@ -72,7 +72,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: "lts/*"
+          node-version: "24"
           cache: npm
           cache-dependency-path: OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json
 
@@ -106,6 +106,11 @@ jobs:
         continue-on-error: true
         run: python -m bandit -r . -c pyproject.toml --severity-level medium -f json -o test-results/bandit.json
 
+      - name: Ruff (Python Linting)
+        id: pylint
+        continue-on-error: true
+        run: python -m ruff check src/python --output-format=github
+
       - name: npm Audit (JS Security)
         id: npm_audit
         continue-on-error: true
@@ -136,6 +141,7 @@ jobs:
           steps.vitest.outcome    == 'failure' ||
           steps.eslint.outcome    == 'failure' ||
           steps.bandit.outcome    == 'failure' ||
+          steps.pylint.outcome    == 'failure' ||
           steps.npm_audit.outcome == 'failure')
         run: |
           echo "One or more checks failed:"
@@ -143,6 +149,7 @@ jobs:
           echo "  vitest     -> ${{ steps.vitest.outcome }}"
           echo "  eslint     -> ${{ steps.eslint.outcome }}"
           echo "  bandit     -> ${{ steps.bandit.outcome }}"
+          echo "  ruff       -> ${{ steps.pylint.outcome }}"
           echo "  npm audit  -> ${{ steps.npm_audit.outcome }}"
           exit 1
 
@@ -185,6 +192,11 @@ jobs:
         continue-on-error: true
         run: python -m bandit -r . -c pyproject.toml --severity-level medium -f json -o test-results/bandit.json
 
+      - name: Ruff (Python Linting)
+        id: pylint
+        continue-on-error: true
+        run: python -m ruff check . --output-format=github
+
       - name: Publish Test Reports
         uses: dorny/test-reporter@v3
         if: always()
@@ -205,11 +217,13 @@ jobs:
       - name: Fail if Any Check Failed
         if: always() && (
           steps.pytest.outcome == 'failure' ||
-          steps.bandit.outcome == 'failure')
+          steps.bandit.outcome == 'failure' ||
+          steps.pylint.outcome == 'failure')
         run: |
           echo "One or more checks failed:"
           echo "  pytest  -> ${{ steps.pytest.outcome }}"
           echo "  bandit  -> ${{ steps.bandit.outcome }}"
+          echo "  ruff    -> ${{ steps.pylint.outcome }}"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -228,7 +242,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: "lts/*"
+          node-version: "24"
           cache: npm
           cache-dependency-path: OPC_UA_Clients/Release1/IJT_Node_Client/package-lock.json
 
@@ -371,6 +385,11 @@ jobs:
         continue-on-error: true
         run: python -m bandit -r . -c pyproject.toml --severity-level medium -f json -o test-results/bandit.json
 
+      - name: Ruff (Python Linting)
+        id: pylint
+        continue-on-error: true
+        run: python -m ruff check . --output-format=github
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7
         if: always()
@@ -378,11 +397,14 @@ jobs:
           name: results-test-client
           path: OPC_UA_Clients/Release2/IJT_Test_Client/test-results/
 
-      - name: Fail if Bandit Failed
-        if: always() && steps.bandit.outcome == 'failure'
+      - name: Fail if Any Check Failed
+        if: always() && (
+          steps.bandit.outcome  == 'failure' ||
+          steps.pylint.outcome  == 'failure')
         run: |
-          echo "Bandit security check failed:"
-          echo "  bandit -> ${{ steps.bandit.outcome }}"
+          echo "One or more checks failed:"
+          echo "  bandit  -> ${{ steps.bandit.outcome }}"
+          echo "  ruff    -> ${{ steps.pylint.outcome }}"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────

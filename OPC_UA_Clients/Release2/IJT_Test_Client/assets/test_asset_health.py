@@ -4,9 +4,12 @@ Per IJT spec: Health is at Asset → Monitoring (Machinery ns) → Health (Machi
 The direct Asset.Health (IJT ns) is not used; only Asset.Monitoring.Health is implemented.
 DeviceHealth and DeviceHealthAlarms are children of Health in the DI namespace.
 """
+
 import pytest
-from helpers.namespaces import NS_MACHINERY, NS_DI, BN
+
+from helpers.namespaces import BN, NS_DI, NS_MACHINERY
 from helpers.node_discovery import find_child_by_browse_name
+
 pytestmark = [pytest.mark.live, pytest.mark.structure]
 
 
@@ -62,9 +65,13 @@ async def test_health_has_device_health_alarms(controllers_instances, ns_indices
     health_node = await _get_health_node(controller_node, ns_mach)
     if health_node is None:
         pytest.skip("Health node not found on first controller")
-    alarms_node = await find_child_by_browse_name(health_node, BN.DEVICE_HEALTH_ALARMS, ns_di)
+    alarms_node = await find_child_by_browse_name(
+        health_node, BN.DEVICE_HEALTH_ALARMS, ns_di
+    )
     if alarms_node is None:
-        pytest.skip("DeviceHealthAlarms not present on this server — folder is optional/empty")
+        pytest.skip(
+            "DeviceHealthAlarms not present on this server — folder is optional/empty"
+        )
     # Folder exists; contents may be empty — no further assertions
 
 
@@ -80,7 +87,9 @@ async def test_health_current_state_is_readable(controllers_instances, ns_indice
     health_node = await _get_health_node(controller_node, ns_mach)
     if health_node is None:
         pytest.skip("Health node not found on first controller")
-    device_health_node = await find_child_by_browse_name(health_node, BN.DEVICE_HEALTH, ns_di)
+    device_health_node = await find_child_by_browse_name(
+        health_node, BN.DEVICE_HEALTH, ns_di
+    )
     if device_health_node is None:
         pytest.skip("DeviceHealth variable not found under Health on first controller")
     try:
@@ -92,4 +101,4 @@ async def test_health_current_state_is_readable(controllers_instances, ns_indice
     assert value is not None, "DeviceHealth value must not be None"
     assert isinstance(value, int), (
         f"DeviceHealth value expected int (enum), got {type(value).__name__}: {value!r}"
-    )
+    )

@@ -14,6 +14,7 @@ import json
 from datetime import datetime, timezone
 
 import pytest
+
 from serialize_data import (
     _json_dumps,
     serialize_class_instance_as_dict,
@@ -21,7 +22,6 @@ from serialize_data import (
     serialize_tuple,
     serialize_value,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper classes
@@ -316,6 +316,7 @@ def test_serialize_datetime_in_dict_is_iso_string():
 
 def test_serialize_circular_like_does_not_infinite_loop():
     """An object whose attrs resolve to strings (like circular stubs) terminates."""
+
     class _Stub:
         def __init__(self):
             self.name = "stub"

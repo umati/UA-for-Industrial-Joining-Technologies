@@ -4,6 +4,7 @@ Wire-format contract tests.
 Key names used in OPC UA calls and serialized events must NEVER change
 silently. These tests parse the actual source code to verify exact strings.
 """
+
 from pathlib import Path
 
 _CONSOLE_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -16,6 +17,7 @@ def _read_source(filename: str) -> str:
 # ---------------------------------------------------------------------------
 # method_caller.py — OPC UA method call argument names
 # ---------------------------------------------------------------------------
+
 
 def test_method_caller_uses_object_nodeid_param():
     """select_joint, enable_asset, start_selected_joining all use 'object_nodeid'."""
@@ -43,6 +45,7 @@ def test_no_object_node_key_in_method_caller():
 # opcua_client.py — subscription and browse constants
 # ---------------------------------------------------------------------------
 
+
 def test_opcua_client_uses_subscription_period_ms():
     src = _read_source("opcua_client.py")
     assert "_SUBSCRIPTION_PERIOD_MS" in src
@@ -64,6 +67,7 @@ def test_opcua_client_subscribe_events_uses_queuesize_kwarg():
 # ---------------------------------------------------------------------------
 # ShortResultEvent wire shape — fields must not be renamed silently
 # ---------------------------------------------------------------------------
+
 
 def test_short_result_event_has_event_type_field():
     src = _read_source("result_event_handler.py")
@@ -88,6 +92,7 @@ def test_short_result_event_has_message_field():
 # ---------------------------------------------------------------------------
 # event_types.py — OPC UA namespace URIs must not change
 # ---------------------------------------------------------------------------
+
 
 def test_result_namespace_uri_unchanged():
     src = _read_source("event_types.py")

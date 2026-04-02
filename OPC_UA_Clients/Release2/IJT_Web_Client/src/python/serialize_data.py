@@ -42,7 +42,12 @@ def _to_jsonable(value: Any) -> Any:
             try:
                 result[slot] = _to_jsonable(getattr(value, slot))
             except Exception as exc:
-                ijt_log.debug("serialize: skipped slot '%s' on %s: %s", slot, type(value).__name__, exc)
+                ijt_log.debug(
+                    "serialize: skipped slot '%s' on %s: %s",
+                    slot,
+                    type(value).__name__,
+                    exc,
+                )
                 continue
         if len(result) > 1:
             return result
@@ -51,7 +56,9 @@ def _to_jsonable(value: Any) -> Any:
 
 def serialize_tuple(list_of_tuples: list[tuple[str, Any]]) -> str:
     """Serialize a zipped list of key/value tuples as JSON string."""
-    return json.dumps({k: _to_jsonable(v) for k, v in list_of_tuples}, ensure_ascii=False)
+    return json.dumps(
+        {k: _to_jsonable(v) for k, v in list_of_tuples}, ensure_ascii=False
+    )
 
 
 def serialize_value(value: Any) -> str:
@@ -90,6 +97,11 @@ def serialize_class_instance_as_dict(obj: Any) -> dict:
                 if slot != "_freeze":
                     result[slot] = _to_jsonable(getattr(obj, slot))
             except Exception as exc:
-                ijt_log.debug("serialize: skipped slot '%s' on %s: %s", slot, type(obj).__name__, exc)
+                ijt_log.debug(
+                    "serialize: skipped slot '%s' on %s: %s",
+                    slot,
+                    type(obj).__name__,
+                    exc,
+                )
                 continue
     return result

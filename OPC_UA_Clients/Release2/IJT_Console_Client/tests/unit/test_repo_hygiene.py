@@ -7,6 +7,7 @@ Repository hygiene tests.
 - requirements.txt exists and is non-empty
 - All .py files have at most 500 lines (complexity gate)
 """
+
 import subprocess
 from pathlib import Path
 
@@ -23,6 +24,7 @@ _LINE_COUNT_EXCLUDED = {"setup_client.py"}
 # ---------------------------------------------------------------------------
 # Line count gate (complexity)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "source_file",
@@ -66,6 +68,7 @@ def test_no_hardcoded_absolute_paths(source_file):
 # requirements.txt
 # ---------------------------------------------------------------------------
 
+
 def test_requirements_txt_exists():
     assert (_CONSOLE_ROOT / "requirements.txt").exists()
 
@@ -78,6 +81,7 @@ def test_requirements_txt_is_nonempty():
 # ---------------------------------------------------------------------------
 # Git hygiene — no compiled artifacts tracked
 # ---------------------------------------------------------------------------
+
 
 def _git_is_available() -> bool:
     try:
@@ -103,9 +107,7 @@ def test_no_pycache_tracked_in_console_client():
         capture_output=True,
         text=True,
     )
-    assert result.returncode != 0, (
-        "__pycache__ should not be tracked by git"
-    )
+    assert result.returncode != 0, "__pycache__ should not be tracked by git"
 
 
 @pytest.mark.skipif(not _GIT_AVAILABLE, reason="git not available")
@@ -117,6 +119,4 @@ def test_no_pytest_cache_tracked():
         capture_output=True,
         text=True,
     )
-    assert result.returncode != 0, (
-        ".pytest_cache should not be tracked by git"
-    )
+    assert result.returncode != 0, ".pytest_cache should not be tracked by git"

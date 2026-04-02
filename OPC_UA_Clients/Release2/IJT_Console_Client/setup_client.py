@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import shlex
+
 # Suppress __pycache__ / .pyc generation — matches Docker/CI behavior
 os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
 import shutil
@@ -25,6 +26,7 @@ def _detect_repo_root(start_dir: Path) -> Path:
         ).exists():
             return candidate
     return start_dir
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,7 +55,9 @@ def _python_in_venv() -> Path:
     return VENV_DIR / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
 
 
-def _run_command(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess | None:
+def _run_command(
+    cmd: list[str], check: bool = True
+) -> subprocess.CompletedProcess | None:
     if check:
         subprocess.check_call(cmd)  # nosec B603 — cmd is a hardcoded list, no user input
         return None
@@ -111,16 +115,26 @@ def _find_latest_python_executable() -> tuple[list[str], str]:
     for minor in range(20, 9, -1):
         exe = f"python3.{minor}"
         try:
-            subprocess.check_call([exe, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # nosec B603 B607 — hardcoded command, not user input
+            subprocess.check_call(
+                [exe, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )  # nosec B603 B607 — hardcoded command, not user input
             return ([exe], f"3.{minor}")
         except Exception as exc:  # nosec B112 — executable check failure; skip this candidate
             log.debug("Skipping Python executable '%s': %s", exe, exc)
             continue
 
     try:
-        subprocess.check_call(["python3", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # nosec B603 B607 — hardcoded command, not user input
+        subprocess.check_call(
+            ["python3", "--version"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )  # nosec B603 B607 — hardcoded command, not user input
         version = subprocess.check_output(  # nosec B603 B607 — hardcoded command, not user input
-            ["python3", "-c", "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+            [
+                "python3",
+                "-c",
+                "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')",
+            ],
             text=True,
         ).strip()
         return (["python3"], version)
@@ -137,7 +151,11 @@ def _relaunch_under_latest_python() -> None:
         return
 
     cmd = latest_cmd + [__file__] + sys.argv[1:]
-    log.info("Re-launching with Python %s: %s", latest_ver, " ".join(shlex.quote(c) for c in cmd))
+    log.info(
+        "Re-launching with Python %s: %s",
+        latest_ver,
+        " ".join(shlex.quote(c) for c in cmd),
+    )
     os.execvp(cmd[0], cmd)  # nosec B606 — cmd[0] is a Python interpreter path, not user input
 
 
@@ -151,7 +169,9 @@ def _require_python_314_or_newer(version_string: str | None = None) -> None:
         major, minor = sys.version_info[0], sys.version_info[1]
 
     if (major, minor) < (3, 14):
-        log.error("Python 3.14 or newer is required. Current interpreter: %s.%s", major, minor)
+        log.error(
+            "Python 3.14 or newer is required. Current interpreter: %s.%s", major, minor
+        )
         sys.exit(1)
 
 
@@ -188,7 +208,9 @@ def _resolve_python_executable(latest_cmd: list[str]) -> str:
             text=True,
         ).strip()
     except Exception as exc:
-        log.error("Failed to resolve Python executable from %s: %s", " ".join(latest_cmd), exc)
+        log.error(
+            "Failed to resolve Python executable from %s: %s", " ".join(latest_cmd), exc
+        )
         sys.exit(1)
 
     if not exe:
@@ -197,7 +219,9 @@ def _resolve_python_executable(latest_cmd: list[str]) -> str:
     return exe
 
 
-def _check_internet(host: str = "8.8.8.8", port: int = 53, timeout: float = 3.0) -> bool:
+def _check_internet(
+    host: str = "8.8.8.8", port: int = 53, timeout: float = 3.0
+) -> bool:
     sock = None
     try:
         socket.setdefaulttimeout(timeout)
@@ -286,7 +310,9 @@ def _find_simulator_executable() -> Path | None:
     return matches[0] if matches else None
 
 
-def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: bool = True) -> bool:
+def _ensure_opc_server_running(
+    endpoint: str, *, context: str, allow_launch: bool = True
+) -> bool:
     startup_timeout = _env_float("OPCUA_STARTUP_TIMEOUT_SEC", 45.0, 1.0)
     startup_poll = _env_float("OPCUA_STARTUP_POLL_SEC", 0.5, 0.1)
     if _wait_for_endpoint_ready(
@@ -301,7 +327,9 @@ def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: boo
         exe = _find_simulator_executable()
         if exe:
             if _is_simulator_process_running():
-                log.info("OPC UA simulator is already running. Reusing existing process.")
+                log.info(
+                    "OPC UA simulator is already running. Reusing existing process."
+                )
             else:
                 try:
                     log.info("Launching OPC UA simulator in separate terminal: %s", exe)
@@ -326,7 +354,9 @@ def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: boo
                     log.warning("Failed to launch OPC UA simulator '%s': %s", exe, exc)
 
     if allow_launch and IS_DOCKER:
-        log.info("Docker mode detected (IS_DOCKER=true). Skipping local OPC UA simulator launch.")
+        log.info(
+            "Docker mode detected (IS_DOCKER=true). Skipping local OPC UA simulator launch."
+        )
 
     if _wait_for_endpoint_ready(
         endpoint,
@@ -342,6 +372,7 @@ def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: boo
         endpoint,
     )
     return False
+
 
 def _get_environment_age_days() -> float | None:
     try:
@@ -371,6 +402,7 @@ def _update_setup_timestamp() -> None:
 
 def _create_virtualenv(latest_cmd: list[str]) -> None:
     if VENV_DIR.exists():
+
         def _on_rm_error(func, path, _exc):
             try:
                 os.chmod(path, 0o700)
@@ -387,7 +419,9 @@ def _create_virtualenv(latest_cmd: list[str]) -> None:
     log.info("Creating virtual environment with interpreter: %s", target_exe)
 
     try:
-        subprocess.check_call([target_exe, "-m", "venv", "--without-pip", str(VENV_DIR)])  # nosec B603 B607 — hardcoded command, not user input
+        subprocess.check_call(
+            [target_exe, "-m", "venv", "--without-pip", str(VENV_DIR)]
+        )  # nosec B603 B607 — hardcoded command, not user input
     except subprocess.CalledProcessError as exc:
         log.error("Venv creation failed: %s", exc)
         sys.exit(1)
@@ -429,18 +463,22 @@ def _install_python_packages() -> None:
 
     log.info("Using Python executable: %s", python)
     subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip"])  # nosec B603 B607 — hardcoded command, not user input
-    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_file)])  # nosec B603 B607 — hardcoded command, not user input
+    subprocess.check_call(
+        [str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_file)]
+    )  # nosec B603 B607 — hardcoded command, not user input
 
     try:
-        subprocess.check_call([  # nosec B603 B607 — hardcoded command, not user input
-            str(python),
-            "-m",
-            "pip",
-            "install",
-            "--upgrade",
-            "cryptography",
-            "pyOpenSSL",
-        ])
+        subprocess.check_call(
+            [  # nosec B603 B607 — hardcoded command, not user input
+                str(python),
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "cryptography",
+                "pyOpenSSL",
+            ]
+        )
     except Exception as exc:
         log.debug("Optional crypto stack upgrade skipped: %s", exc)
 
@@ -448,16 +486,20 @@ def _install_python_packages() -> None:
     # asyncua 1.2b2+ is required for Python 3.14 support. Always install with --pre so pip
     # can find the current pre-release. --pre does NOT force a pre-release: once asyncua
     # 1.2.x stable is published, pip automatically picks that as the highest matching version.
-    log.info("Installing asyncua (--pre enabled for 1.2b2+ / Python 3.14): %s", asyncua_spec)
-    subprocess.check_call([  # nosec B603 B607 — hardcoded command, not user input
-        str(python),
-        "-m",
-        "pip",
-        "install",
-        "--upgrade",
-        "--pre",
-        asyncua_spec,
-    ])
+    log.info(
+        "Installing asyncua (--pre enabled for 1.2b2+ / Python 3.14): %s", asyncua_spec
+    )
+    subprocess.check_call(
+        [  # nosec B603 B607 — hardcoded command, not user input
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "--pre",
+            asyncua_spec,
+        ]
+    )
 
     # Verify the installed asyncua satisfies the minimum version.
     try:
@@ -467,6 +509,7 @@ def _install_python_packages() -> None:
         ).strip()
         log.info("asyncua installed version: %s", installed)
         from packaging.version import Version
+
         if Version(installed) < Version("1.2b2"):
             log.error(
                 "asyncua %s is too old for Python 3.14. Minimum required: 1.2b2. "
@@ -493,7 +536,9 @@ def _is_runtime_ready() -> bool:
     try:
         _run_command([str(python), "-c", _dep_check_cmd])
     except Exception:
-        log.info("Runtime dependency check failed in %s. Triggering full setup.", python)
+        log.info(
+            "Runtime dependency check failed in %s. Triggering full setup.", python
+        )
         return False
 
     env_max_age = int(os.getenv("ENV_MAX_AGE_DAYS", "14"))
@@ -526,7 +571,10 @@ def _validate_url_or_default(url: str | None) -> str:
     if url.startswith("opc.tcp://"):
         return url
 
-    log.warning("Invalid OPC UA URL (must start with 'opc.tcp://'). Using default: %s", default_url)
+    log.warning(
+        "Invalid OPC UA URL (must start with 'opc.tcp://'). Using default: %s",
+        default_url,
+    )
     return default_url
 
 
@@ -544,7 +592,9 @@ def _run_client(url_arg: str, passthrough: list[str] | None) -> None:
     try:
         subprocess.call(cmd)  # nosec B603 — cmd is a hardcoded list, no user input
     except KeyboardInterrupt:
-        log.info("KeyboardInterrupt received in setup wrapper while waiting for console client. Exiting cleanly.")
+        log.info(
+            "KeyboardInterrupt received in setup wrapper while waiting for console client. Exiting cleanly."
+        )
 
 
 def main() -> None:
@@ -575,13 +625,17 @@ def main() -> None:
 
     if not force_full and _is_runtime_ready():
         url_arg = _validate_url_or_default(args.url)
-        _ensure_opc_server_running(url_arg, context="Startup pre-check", allow_launch=True)
+        _ensure_opc_server_running(
+            url_arg, context="Startup pre-check", allow_launch=True
+        )
         _run_client(url_arg, passthrough=unknown)
         return
 
     log.info("Starting full client setup...")
     if not _check_internet():
-        log.error("No internet connection. Please connect to the internet and try again.")
+        log.error(
+            "No internet connection. Please connect to the internet and try again."
+        )
         sys.exit(1)
 
     log.info("Newest Python detected on this system: %s", latest_ver)

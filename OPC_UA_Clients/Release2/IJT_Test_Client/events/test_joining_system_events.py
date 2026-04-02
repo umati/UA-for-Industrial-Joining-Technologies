@@ -3,18 +3,23 @@ Integration tests for JoiningSystem OPC UA events.
 subscription_client handles event subscriptions; opcua_client calls simulation
 methods so the two connection purposes stay separated.
 """
+
 import pytest
 from asyncua import ua
+
+from helpers.event_collector import EventCollector
 from helpers.namespaces import (
+    BN,
     NS_APP,
     NS_IJT_BASE,
-    BN,
     IJTTypes,
     ResultType,
 )
-from helpers.node_discovery import find_joining_system, find_child_by_browse_name
-from helpers.event_collector import EventCollector
+from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+
 pytestmark = [pytest.mark.live, pytest.mark.events]
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -26,6 +31,8 @@ async def _find_result_management(client, ns_mr):
     if rm is None:
         pytest.skip("ResultManagement not found")
     return rm
+
+
 async def _simulate_single(client, ns_indices):
     ns_app = ns_indices[NS_APP]
     js = await find_joining_system(client)
@@ -43,8 +50,10 @@ async def _simulate_single(client, ns_indices):
     await sf.call_method(
         method.nodeid,
         ua.Variant(ResultType.SIMPLE_OK_RESULT, ua.VariantType.UInt32),
-        ua.Variant(True, ua.VariantType.Boolean),   # include_traces = TRUE
+        ua.Variant(True, ua.VariantType.Boolean),  # include_traces = TRUE
     )
+
+
 async def _subscribe_result_ready(sub_client, ns_ijt):
     event_type_node = sub_client.get_node(
         ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt)
@@ -53,6 +62,8 @@ async def _subscribe_result_ready(sub_client, ns_ijt):
     srv_node = sub_client.nodes.server
     await collector.subscribe(srv_node, event_type_nodes=[event_type_node])
     return collector
+
+
 # ---------------------------------------------------------------------------
 # Subscription infrastructure
 # ---------------------------------------------------------------------------
@@ -66,6 +77,8 @@ async def test_server_supports_event_subscription(subscription_client, ns_indice
     # Must not raise
     await collector.subscribe(srv_node, event_type_nodes=[event_type_node])
     await collector.unsubscribe()
+
+
 # ---------------------------------------------------------------------------
 # Event firing
 # ---------------------------------------------------------------------------
@@ -83,6 +96,8 @@ async def test_simulate_fires_result_ready_event(
         "At least one JoiningSystemResultReadyEvent must be received "
         "after SimulateSingleResult"
     )
+
+
 # ---------------------------------------------------------------------------
 # Base OPC UA event field checks
 # ---------------------------------------------------------------------------
@@ -97,6 +112,8 @@ async def _collect_one_event(sub_client, caller_client, ns_indices):
     if not events:
         pytest.skip("No events received within timeout — skipping field check")
     return events[0]
+
+
 async def test_event_has_source_name(subscription_client, opcua_client, ns_indices):
     event = await _collect_one_event(subscription_client, opcua_client, ns_indices)
     try:
@@ -106,6 +123,8 @@ async def test_event_has_source_name(subscription_client, opcua_client, ns_indic
     assert source_name is not None and isinstance(source_name, str), (
         f"Event.SourceName must be a non-None string, got {source_name!r}"
     )
+
+
 async def test_event_has_message(subscription_client, opcua_client, ns_indices):
     event = await _collect_one_event(subscription_client, opcua_client, ns_indices)
     try:
@@ -113,6 +132,8 @@ async def test_event_has_message(subscription_client, opcua_client, ns_indices):
     except AttributeError:
         pytest.skip("Event has no 'Message' field")
     assert message is not None, "Event.Message must not be None"
+
+
 async def test_event_has_severity(subscription_client, opcua_client, ns_indices):
     event = await _collect_one_event(subscription_client, opcua_client, ns_indices)
     try:
@@ -122,13 +143,13 @@ async def test_event_has_severity(subscription_client, opcua_client, ns_indices)
     assert isinstance(severity, int), (
         f"Event.Severity must be an int, got {type(severity)}"
     )
-    assert 0 <= severity <= 1000, (
-        f"Event.Severity must be in [0, 1000], got {severity}"
-    )
+    assert 0 <= severity <= 1000, f"Event.Severity must be in [0, 1000], got {severity}"
+
+
 async def test_event_has_time(subscription_client, opcua_client, ns_indices):
     event = await _collect_one_event(subscription_client, opcua_client, ns_indices)
     try:
         time_val = event.Time
     except AttributeError:
         pytest.skip("Event has no 'Time' field")
-    assert time_val is not None, "Event.Time must not be None"
+    assert time_val is not None, "Event.Time must not be None"

@@ -22,14 +22,21 @@ import pytest
 
 _CONSOLE_ROOT = Path(__file__).resolve().parent.parent.parent  # = IJT_Console_Client
 
-_SKIP_DIRS = {"venv", ".venv", ".venv-wsl", ".state", "__pycache__", "node_modules", ".git"}
+_SKIP_DIRS = {
+    "venv",
+    ".venv",
+    ".venv-wsl",
+    ".state",
+    "__pycache__",
+    "node_modules",
+    ".git",
+}
 
 
 def _all_py_files(root: Path) -> list[Path]:
     """All .py files in the project, excluding generated/dependency dirs."""
     return [
-        f for f in root.rglob("*.py")
-        if not any(part in _SKIP_DIRS for part in f.parts)
+        f for f in root.rglob("*.py") if not any(part in _SKIP_DIRS for part in f.parts)
     ]
 
 
@@ -37,13 +44,17 @@ _PYLINT_AVAILABLE = shutil.which("pylint") is not None or (
     subprocess.run(
         [sys.executable, "-m", "pylint", "--version"],
         capture_output=True,
-    ).returncode == 0
+    ).returncode
+    == 0
 )
 
-_BANDIT_AVAILABLE = subprocess.run(
-    [sys.executable, "-m", "bandit", "--version"],
-    capture_output=True,
-).returncode == 0
+_BANDIT_AVAILABLE = (
+    subprocess.run(
+        [sys.executable, "-m", "bandit", "--version"],
+        capture_output=True,
+    ).returncode
+    == 0
+)
 
 
 def _parse_pylint_score(output: str) -> float | None:
@@ -74,7 +85,8 @@ def test_pylint_score_above_threshold():
             "--fail-under=7.0",
             "--output-format=text",
             "--score=yes",
-        ] + all_files,
+        ]
+        + all_files,
         cwd=str(_CONSOLE_ROOT),
         capture_output=True,
         text=True,
@@ -132,9 +144,19 @@ def test_no_unused_imports_in_source():
     """pylint must find no unused imports (W0611) across all project Python files."""
     all_files = [str(f) for f in _all_py_files(_CONSOLE_ROOT)]
     result = subprocess.run(
-        [sys.executable, "-m", "pylint", *all_files,
-         "--disable=all", "--enable=W0611", "--score=no", "--output-format=text"],
-        capture_output=True, text=True, cwd=str(_CONSOLE_ROOT)
+        [
+            sys.executable,
+            "-m",
+            "pylint",
+            *all_files,
+            "--disable=all",
+            "--enable=W0611",
+            "--score=no",
+            "--output-format=text",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(_CONSOLE_ROOT),
     )
     assert result.returncode == 0, f"Unused imports found:\n{result.stdout}"
 
@@ -167,9 +189,11 @@ def test_no_empty_except_blocks():
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler):
-                if (len(node.body) == 1
-                        and isinstance(node.body[0], ast.Pass)
-                        and _is_broad_except(node)):
+                if (
+                    len(node.body) == 1
+                    and isinstance(node.body[0], ast.Pass)
+                    and _is_broad_except(node)
+                ):
                     issues.append(f"{py_file}:{node.lineno}: empty except block")
     assert not issues, "Empty except blocks found:\n" + "\n".join(issues)
 
@@ -180,8 +204,11 @@ def test_no_empty_except_blocks():
 # ===========================================================================
 
 _TOKEN_SKIP = {
-    tokenize.NEWLINE, tokenize.NL, tokenize.COMMENT,
-    tokenize.INDENT, tokenize.DEDENT,
+    tokenize.NEWLINE,
+    tokenize.NL,
+    tokenize.COMMENT,
+    tokenize.INDENT,
+    tokenize.DEDENT,
 }
 
 
@@ -218,7 +245,9 @@ def test_no_implicit_string_concat_in_lists():
     for py_file in _all_py_files(_CONSOLE_ROOT):
         source = py_file.read_text(encoding="utf-8")
         for lineno in _find_implicit_concat_in_lists(source):
-            issues.append(f"{py_file}:{lineno}: implicit string concat inside list literal")
+            issues.append(
+                f"{py_file}:{lineno}: implicit string concat inside list literal"
+            )
     assert not issues, "Implicit string concatenation in lists:\n" + "\n".join(issues)
 
 
@@ -227,8 +256,14 @@ def test_no_implicit_string_concat_in_lists():
 # ===========================================================================
 
 _SKIP_METHOD_NAMES = {
-    "__init__", "__del__", "__set__", "__setattr__",
-    "__setitem__", "__delitem__", "__enter__", "__exit__",
+    "__init__",
+    "__del__",
+    "__set__",
+    "__setattr__",
+    "__setitem__",
+    "__delitem__",
+    "__enter__",
+    "__exit__",
 }
 
 
@@ -448,12 +483,13 @@ def test_no_unused_global_declarations():
                         f"{py_file}:{node.lineno}: "
                         f"'{name}' declared global but never used in {node.name}()"
                     )
-        for lineno, name in _find_unused_module_globals(source, tree, cross_file_exports):
+        for lineno, name in _find_unused_module_globals(
+            source, tree, cross_file_exports
+        ):
             issues.append(
                 f"{py_file}:{lineno}: module-level '{name}' assigned but never read"
             )
     assert not issues, "Unused global declarations:\n" + "\n".join(issues)
-
 
 
 # ===========================================================================
@@ -530,9 +566,12 @@ def _find_unused_importorskip_assignments(source: str) -> list[str]:
 
     Excludes '_' which is the Python discard convention for intentionally unused values.
     """
-    assignments = re.findall(r"^(\w+)\s*=\s*pytest\.importorskip\(", source, re.MULTILINE)
+    assignments = re.findall(
+        r"^(\w+)\s*=\s*pytest\.importorskip\(", source, re.MULTILINE
+    )
     return [
-        name for name in assignments
+        name
+        for name in assignments
         if name != "_" and not re.search(r"\b" + re.escape(name) + r"\.", source)
     ]
 
@@ -565,9 +604,19 @@ def test_no_unused_local_variables():
     """pylint must find no unused local variables (W0612) across all project Python files."""
     all_files = [str(f) for f in _all_py_files(_CONSOLE_ROOT)]
     result = subprocess.run(
-        [sys.executable, "-m", "pylint", *all_files,
-         "--disable=all", "--enable=W0612", "--score=no", "--output-format=text"],
-        capture_output=True, text=True, cwd=str(_CONSOLE_ROOT)
+        [
+            sys.executable,
+            "-m",
+            "pylint",
+            *all_files,
+            "--disable=all",
+            "--enable=W0612",
+            "--score=no",
+            "--output-format=text",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(_CONSOLE_ROOT),
     )
     assert result.returncode == 0, f"Unused local variables found:\n{result.stdout}"
 

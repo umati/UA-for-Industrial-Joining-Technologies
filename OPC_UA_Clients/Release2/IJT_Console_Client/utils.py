@@ -1,12 +1,13 @@
-import pytz
-import traceback
-import aiofiles
 import re
+import traceback
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
+
+import aiofiles
+import pytz
 from asyncua import Client, ua
 from asyncua.ua import String
-from pathlib import Path
 
 # ---- START: robust JSON import (fallback if orjson is missing) ----
 try:
@@ -20,7 +21,9 @@ def _to_json_str(obj) -> str:
         try:
             return orjson.dumps(obj).decode("utf-8")
         except Exception as exc:
-            ijt_log.debug(f"orjson serialization failed; using stdlib json fallback: {exc}")
+            ijt_log.debug(
+                f"orjson serialization failed; using stdlib json fallback: {exc}"
+            )
 
     import json
 
@@ -34,9 +37,9 @@ def _to_json_bytes(obj) -> bytes:
 
 # ---- END: robust JSON import ----
 
+from client_config import ENABLE_RESULT_FILE_LOGGING
 from ijt_logger import ijt_log
 from serialize_data import serialize_full_event
-from client_config import ENABLE_RESULT_FILE_LOGGING
 
 
 def log_field(label: str, value: str, label_width: int = 35):

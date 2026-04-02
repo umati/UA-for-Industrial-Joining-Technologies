@@ -24,6 +24,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Wine + VC++ 2022 runtime pre-installed. Rebuilt monthly via build-wine-base.yml.
+# hadolint ignore=DL3007
 FROM ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-wine-base:latest
 
 # ── Application files ─────────────────────────────────────────────────────────

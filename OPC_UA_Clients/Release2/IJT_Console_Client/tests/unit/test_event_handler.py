@@ -24,12 +24,15 @@ from event_handler import EventHandler
 def _make_handler():
     ws = AsyncMock()
     client = MagicMock()
-    return EventHandler(websocket=ws, server_url="opc.tcp://localhost:4840", client=client)
+    return EventHandler(
+        websocket=ws, server_url="opc.tcp://localhost:4840", client=client
+    )
 
 
 # ---------------------------------------------------------------------------
 # Initialization
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_event_handler_creates_queue_task():
@@ -42,6 +45,7 @@ async def test_event_handler_creates_queue_task():
 # ---------------------------------------------------------------------------
 # Regression: Ctrl+C must NOT produce "Exception ignored while closing generator"
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_handle_queue_exits_cleanly_on_cancellation():
@@ -73,6 +77,7 @@ async def test_handle_queue_exits_on_sentinel():
 # ---------------------------------------------------------------------------
 # shutdown / close
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_shutdown_puts_sentinel():
@@ -108,6 +113,7 @@ async def test_close_is_idempotent():
 # ---------------------------------------------------------------------------
 # event_notification skips when closed
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_event_notification_skips_when_closed():

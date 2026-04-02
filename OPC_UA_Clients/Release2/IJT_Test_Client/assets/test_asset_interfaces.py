@@ -19,21 +19,34 @@ Interface placement (authoritative — from asset_management_t.cpp + NodeSet):
 
 Source of truth: NodesetFiles/ in monorepo, cross-checked with namespace_helper_t.h.
 """
+
 import pytest
+
 from helpers.namespaces import (
-    NS_IJT_BASE, NS_IJT_TIGHTENING, NS_DI, BN,
-    IJTTypes, IJTTighteningTypes,
+    BN,
+    NS_DI,
+    NS_IJT_BASE,
+    NS_IJT_TIGHTENING,
+    IJTTighteningTypes,
+    IJTTypes,
 )
 from helpers.node_discovery import (
-    find_child_by_browse_name, browse_folder_instances,
-    has_interface, get_interface_types, _browse_refs, _node_from_ref,
+    _browse_refs,
+    _node_from_ref,
+    browse_folder_instances,
+    find_child_by_browse_name,
+    get_interface_types,
+    has_interface,
 )
 
 pytestmark = [pytest.mark.live, pytest.mark.structure]
 
 # ─── Internal helpers ────────────────────────────────────────────────────────
 
-async def _assert_all_have_interface(instances, ns_idx: int, type_id: int, type_name: str):
+
+async def _assert_all_have_interface(
+    instances, ns_idx: int, type_id: int, type_name: str
+):
     for name, node in instances:
         ok = await has_interface(node, ns_idx, type_id)
         assert ok, (
@@ -41,15 +54,20 @@ async def _assert_all_have_interface(instances, ns_idx: int, type_id: int, type_
             f"(ns={ns_idx}, id={type_id}) via HasInterface"
         )
 
+
 async def _instances_from(folder, label: str):
     instances = await browse_folder_instances(folder)
     if not instances:
         pytest.skip(f"{label} folder has no instances")
     return instances
 
+
 # ─── Concrete per-asset-type interface tests ─────────────────────────────────
 
-async def test_controllers_implement_i_controller_type(controllers_instances, ns_indices):
+
+async def test_controllers_implement_i_controller_type(
+    controllers_instances, ns_indices
+):
     """Every controller must implement IControllerType (IJT Base i=1003).
     IControllerType is a subtype of IJoiningSystemAssetType per the NodeSet.
     """
@@ -60,6 +78,7 @@ async def test_controllers_implement_i_controller_type(controllers_instances, ns
         controllers_instances, ns_ijt, IJTTypes.ICONTROLLER_TYPE, "IControllerType"
     )
 
+
 async def test_tools_implement_i_tool_type(tools_instances, ns_indices):
     """Every tool must implement IToolType (IJT Base i=1004)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -69,15 +88,21 @@ async def test_tools_implement_i_tool_type(tools_instances, ns_indices):
         tools_instances, ns_ijt, IJTTypes.ITOOL_TYPE, "IToolType"
     )
 
+
 async def test_servos_implement_i_servo_type(servos_folder, ns_indices):
     """Every servo must implement IServoType (IJT Base i=1008)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered")
     instances = await _instances_from(servos_folder, "Servos")
-    await _assert_all_have_interface(instances, ns_ijt, IJTTypes.ISERVO_TYPE, "IServoType")
+    await _assert_all_have_interface(
+        instances, ns_ijt, IJTTypes.ISERVO_TYPE, "IServoType"
+    )
 
-async def test_power_supplies_implement_i_power_supply_type(power_supplies_folder, ns_indices):
+
+async def test_power_supplies_implement_i_power_supply_type(
+    power_supplies_folder, ns_indices
+):
     """Every power supply must implement IPowerSupplyType (IJT Base i=1009)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
@@ -87,13 +112,17 @@ async def test_power_supplies_implement_i_power_supply_type(power_supplies_folde
         instances, ns_ijt, IJTTypes.IPOWER_SUPPLY_TYPE, "IPowerSupplyType"
     )
 
+
 async def test_batteries_implement_i_battery_type(batteries_folder, ns_indices):
     """Every battery must implement IBatteryType (IJT Base i=1010)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered")
     instances = await _instances_from(batteries_folder, "Batteries")
-    await _assert_all_have_interface(instances, ns_ijt, IJTTypes.IBATTERY_TYPE, "IBatteryType")
+    await _assert_all_have_interface(
+        instances, ns_ijt, IJTTypes.IBATTERY_TYPE, "IBatteryType"
+    )
+
 
 async def test_sensors_implement_i_sensor_type(sensors_folder, ns_indices):
     """Every sensor must implement ISensorType (IJT Base i=1011)."""
@@ -101,7 +130,10 @@ async def test_sensors_implement_i_sensor_type(sensors_folder, ns_indices):
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered")
     instances = await _instances_from(sensors_folder, "Sensors")
-    await _assert_all_have_interface(instances, ns_ijt, IJTTypes.ISENSOR_TYPE, "ISensorType")
+    await _assert_all_have_interface(
+        instances, ns_ijt, IJTTypes.ISENSOR_TYPE, "ISensorType"
+    )
+
 
 async def test_feeders_implement_i_feeder_type(feeders_folder, ns_indices):
     """Every feeder must implement IFeederType (IJT Base i=1012)."""
@@ -109,9 +141,14 @@ async def test_feeders_implement_i_feeder_type(feeders_folder, ns_indices):
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered")
     instances = await _instances_from(feeders_folder, "Feeders")
-    await _assert_all_have_interface(instances, ns_ijt, IJTTypes.IFEEDER_TYPE, "IFeederType")
+    await _assert_all_have_interface(
+        instances, ns_ijt, IJTTypes.IFEEDER_TYPE, "IFeederType"
+    )
 
-async def test_memory_devices_implement_i_memory_device_type(memory_devices_folder, ns_indices):
+
+async def test_memory_devices_implement_i_memory_device_type(
+    memory_devices_folder, ns_indices
+):
     """Every memory device must implement IMemoryDeviceType (IJT Base i=1013)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
@@ -121,13 +158,17 @@ async def test_memory_devices_implement_i_memory_device_type(memory_devices_fold
         instances, ns_ijt, IJTTypes.IMEMORY_DEVICE_TYPE, "IMemoryDeviceType"
     )
 
+
 async def test_cables_implement_i_cable_type(cables_folder, ns_indices):
     """Every cable must implement ICableType (IJT Base i=1014)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered")
     instances = await _instances_from(cables_folder, "Cables")
-    await _assert_all_have_interface(instances, ns_ijt, IJTTypes.ICABLE_TYPE, "ICableType")
+    await _assert_all_have_interface(
+        instances, ns_ijt, IJTTypes.ICABLE_TYPE, "ICableType"
+    )
+
 
 async def test_accessories_implement_i_accessory_type(accessories_folder, ns_indices):
     """Every accessory must implement IAccessoryType (IJT Base i=1015)."""
@@ -139,7 +180,10 @@ async def test_accessories_implement_i_accessory_type(accessories_folder, ns_ind
         instances, ns_ijt, IJTTypes.IACCESSORY_TYPE, "IAccessoryType"
     )
 
-async def test_sub_components_implement_i_sub_component_type(sub_components_folder, ns_indices):
+
+async def test_sub_components_implement_i_sub_component_type(
+    sub_components_folder, ns_indices
+):
     """Every sub-component must implement ISubComponentType (IJT Base i=1016)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
@@ -149,7 +193,10 @@ async def test_sub_components_implement_i_sub_component_type(sub_components_fold
         instances, ns_ijt, IJTTypes.ISUB_COMPONENT_TYPE, "ISubComponentType"
     )
 
-async def test_software_components_implement_i_software_type(software_components_folder, ns_indices):
+
+async def test_software_components_implement_i_software_type(
+    software_components_folder, ns_indices
+):
     """Every software component must implement ISoftwareType (IJT Base i=1019).
     Software exposes limited Identification only: ProductInstanceUri, Manufacturer,
     ManufacturerUri, Model, SoftwareRevision, ComponentName, ProductCode, SerialNumber,
@@ -159,9 +206,14 @@ async def test_software_components_implement_i_software_type(software_components
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered")
     instances = await _instances_from(software_components_folder, "SoftwareComponents")
-    await _assert_all_have_interface(instances, ns_ijt, IJTTypes.ISOFTWARE_TYPE, "ISoftwareType")
+    await _assert_all_have_interface(
+        instances, ns_ijt, IJTTypes.ISOFTWARE_TYPE, "ISoftwareType"
+    )
 
-async def test_virtual_stations_implement_i_virtual_station_type(virtual_stations_folder, ns_indices):
+
+async def test_virtual_stations_implement_i_virtual_station_type(
+    virtual_stations_folder, ns_indices
+):
     """Every virtual station must implement IVirtualStationType (IJT Base i=1031).
     VirtualStation exposes limited Identification only: ProductInstanceUri, Manufacturer,
     ManufacturerUri, ComponentName, JoiningTechnology, SerialNumber (may be empty string).
@@ -175,7 +227,9 @@ async def test_virtual_stations_implement_i_virtual_station_type(virtual_station
         instances, ns_ijt, IJTTypes.IVIRTUAL_STATION_TYPE, "IVirtualStationType"
     )
 
+
 # ─── Interface namespace validation ──────────────────────────────────────────
+
 
 async def test_controller_interface_node_ids_are_in_ijt_base_namespace(
     controllers_instances, ns_indices
@@ -194,7 +248,9 @@ async def test_controller_interface_node_ids_are_in_ijt_base_namespace(
             f"expected IJT Base ns={ns_ijt}"
         )
 
+
 # ─── Identification interface tests ─────────────────────────────────────────
+
 
 async def test_tool_parameters_implement_i_tightening_tool_parameters_type(
     tools_instances, ns_indices
@@ -220,6 +276,7 @@ async def test_tool_parameters_implement_i_tightening_tool_parameters_type(
             f"id={IJTTighteningTypes.ITIGHTENING_TOOL_PARAMETERS_TYPE})"
         )
 
+
 async def test_all_asset_identification_implements_i_joining_additional_information_type(
     assets_folder, ns_indices
 ):
@@ -244,7 +301,9 @@ async def test_all_asset_identification_implements_i_joining_additional_informat
             ident = await find_child_by_browse_name(node, BN.IDENTIFICATION, ns_di)
             if ident is None:
                 continue
-            ok = await has_interface(ident, ns_ijt, IJTTypes.IJOINING_ADDITIONAL_INFORMATION_TYPE)
+            ok = await has_interface(
+                ident, ns_ijt, IJTTypes.IJOINING_ADDITIONAL_INFORMATION_TYPE
+            )
             assert ok, (
                 f"'{name}' Identification does not implement "
                 f"IJoiningAdditionalInformationType "
@@ -252,4 +311,4 @@ async def test_all_asset_identification_implements_i_joining_additional_informat
             )
             checked += 1
     if checked == 0:
-        pytest.skip("No asset instances with Identification nodes found")
+        pytest.skip("No asset instances with Identification nodes found")

@@ -1,17 +1,19 @@
 import asyncio
-import os
 import logging
-import traceback
+import os
 import socket
 import time
+import traceback
 from pathlib import Path
-from asyncua.ua.uaerrors import UaError
+
 from asyncua import Client
-from result_event_handler import ResultEventHandler
+from asyncua.ua.uaerrors import UaError
+
 from event_handler import EventHandler
-from ijt_logger import ijt_log
 from event_types import get_event_types
+from ijt_logger import ijt_log
 from method_caller import OPCUAMethodCaller
+from result_event_handler import ResultEventHandler
 
 _OPCUA_TIMEOUT_S = 60
 _SUBSCRIPTION_PERIOD_MS = 100
@@ -51,9 +53,16 @@ class OPCUAClient:
         await self.clear_old_logs()
         self.setup_client_metadata()
 
-        max_attempts = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT)))
-        base_backoff = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT)))
-        max_backoff = max(base_backoff, float(os.getenv("OPCUA_CONNECT_MAX_DELAY_SEC", _CONNECT_MAX_DELAY_DEFAULT)))
+        max_attempts = max(
+            1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT))
+        )
+        base_backoff = max(
+            0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT))
+        )
+        max_backoff = max(
+            base_backoff,
+            float(os.getenv("OPCUA_CONNECT_MAX_DELAY_SEC", _CONNECT_MAX_DELAY_DEFAULT)),
+        )
         for attempt in range(1, max_attempts + 1):
             try:
                 start_time = time.time()
@@ -83,7 +92,9 @@ class OPCUAClient:
         try:
             # Handlers are created here (async context) so asyncio.create_task() works.
             self.handler_result_event = ResultEventHandler(self.server_url)
-            self.handler_joining_event = EventHandler(None, self.server_url, self.client)
+            self.handler_joining_event = EventHandler(
+                None, self.server_url, self.client
+            )
 
             root = self.client.get_root_node()
             server_node = await root.get_child(["0:Objects", "0:Server"])

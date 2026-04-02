@@ -1,6 +1,8 @@
-from asyncua import ua
-from ijt_logger import ijt_log
 import traceback
+
+from asyncua import ua
+
+from ijt_logger import ijt_log
 from utils import read_tool_identifier
 
 
@@ -18,7 +20,9 @@ class OPCUAMethodCaller:
                 try:
                     status = int(ret[0])
                 except (ValueError, TypeError) as e:
-                    ijt_log.warning(f"Could not parse method return status from {ret[0]!r}: {e}")
+                    ijt_log.warning(
+                        f"Could not parse method return status from {ret[0]!r}: {e}"
+                    )
                     status = None
             if len(ret) >= 2:
                 msg = ret[1]

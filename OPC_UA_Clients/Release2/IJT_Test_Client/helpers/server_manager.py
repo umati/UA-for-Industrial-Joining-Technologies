@@ -6,6 +6,7 @@ Supports two workflows:
     OPCUA_SIMULATOR_EXE environment variable or well-known install paths.
 Only terminates the simulator process if this manager started it.
 """
+
 import asyncio
 import logging
 import os
@@ -13,7 +14,10 @@ import socket
 import subprocess
 import time
 from typing import Optional
+
 logger = logging.getLogger(__name__)
+
+
 def is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
     """Return True if a TCP connection to host:port succeeds within *timeout* seconds."""
     try:
@@ -21,6 +25,8 @@ def is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
             return True
     except (socket.timeout, ConnectionRefusedError, OSError):
         return False
+
+
 def wait_for_port(host: str, port: int, timeout_s: float = 30.0) -> bool:
     """
     Poll host:port until it accepts connections or *timeout_s* elapses.
@@ -32,9 +38,12 @@ def wait_for_port(host: str, port: int, timeout_s: float = 30.0) -> bool:
             return True
         time.sleep(0.5)
     return False
+
+
 async def _opcua_probe(url: str, timeout: float) -> bool:
     """Attempt a real OPC UA connect/disconnect with a short timeout."""
     from asyncua import Client
+
     client = Client(url, timeout=timeout)
     try:
         await asyncio.wait_for(client.connect(), timeout=timeout)
@@ -42,6 +51,8 @@ async def _opcua_probe(url: str, timeout: float) -> bool:
         return True
     except Exception:
         return False
+
+
 def wait_for_opcua_ready(url: str, timeout_s: float = 30.0) -> bool:
     """
     Poll the OPC UA server until it completes the OPC UA handshake or
@@ -62,6 +73,8 @@ def wait_for_opcua_ready(url: str, timeout_s: float = 30.0) -> bool:
             logger.debug("OPC UA probe attempt failed: %s", exc)
         time.sleep(0.5)
     return False
+
+
 class ServerManager:
     """
     Manages the OPC UA simulator process lifecycle.
@@ -71,6 +84,7 @@ class ServerManager:
     If the server is already running when ensure_running() is called,
     no subprocess is spawned and teardown() is a no-op.
     """
+
     WELL_KNOWN_PATHS: list = [
         # Windows — built from windows_app VS project
         r"C:\DDrive\SourceControl\monorepo\ProtocolAdaptersExternal\OPCUAProtocolAdapter\OPC_UA\SDK_Application\windows_app\bin\x64\Release\opcua_ijt_demo_application.exe",
@@ -82,10 +96,12 @@ class ServerManager:
         # Linux
         "/usr/local/bin/opcua_ijt_demo_application",
     ]
+
     def __init__(self, host: str = "localhost", port: int = 40451) -> None:
         self._host = host
         self._port = port
         self._process: Optional[subprocess.Popen] = None
+
     def ensure_running(self) -> bool:
         """
         Ensure the OPC UA server is accepting connections on host:port.
@@ -94,19 +110,26 @@ class ServerManager:
         """
         server_url = f"opc.tcp://{self._host}:{self._port}"
         if is_port_open(self._host, self._port):
-            logger.info("OPC UA server TCP port open at %s:%d — waiting for OPC UA handshake", self._host, self._port)
+            logger.info(
+                "OPC UA server TCP port open at %s:%d — waiting for OPC UA handshake",
+                self._host,
+                self._port,
+            )
             ready = wait_for_opcua_ready(server_url, timeout_s=30.0)
             if ready:
                 logger.info("OPC UA server ready at %s:%d", self._host, self._port)
             else:
-                logger.warning("OPC UA server TCP is open but OPC UA handshake timed out after 30 s")
+                logger.warning(
+                    "OPC UA server TCP is open but OPC UA handshake timed out after 30 s"
+                )
             return ready
         exe_path = self._find_simulator_exe()
         if exe_path is None:
             logger.warning(
                 "OPC UA server not running at %s:%d and no simulator executable found. "
                 "Set OPCUA_SIMULATOR_EXE env var or start the server manually.",
-                self._host, self._port,
+                self._host,
+                self._port,
             )
             return False
         logger.info("Launching OPC UA simulator: %s", exe_path)
@@ -129,19 +152,19 @@ class ServerManager:
             self._process.terminate()
             self._process = None
         return available
+
     def _find_simulator_exe(self) -> Optional[str]:
         """Return the first usable simulator executable path, or None."""
         env_exe = os.environ.get("OPCUA_SIMULATOR_EXE")
         if env_exe:
             if os.path.isfile(env_exe):
                 return env_exe
-            logger.warning(
-                "OPCUA_SIMULATOR_EXE='%s' set but file not found", env_exe
-            )
+            logger.warning("OPCUA_SIMULATOR_EXE='%s' set but file not found", env_exe)
         for path in self.WELL_KNOWN_PATHS:
             if os.path.isfile(path):
                 return path
         return None
+
     def teardown(self) -> None:
         """Terminate the simulator process if this manager started it."""
         if self._process is not None:
@@ -152,4 +175,4 @@ class ServerManager:
             except subprocess.TimeoutExpired:
                 logger.warning("Simulator did not exit cleanly; killing it")
                 self._process.kill()
-            self._process = None
+            self._process = None

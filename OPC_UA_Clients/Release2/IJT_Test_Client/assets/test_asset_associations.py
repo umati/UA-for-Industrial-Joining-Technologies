@@ -4,9 +4,14 @@ Verifies that controller and tool instances are connected via symmetric
 AssociatedWith (ref type 24137) references, and that all referenced target
 nodes are valid and reachable.
 """
+
 import pytest
+
 from helpers.node_discovery import get_associated_assets
+
 pytestmark = [pytest.mark.live, pytest.mark.structure]
+
+
 async def test_assets_have_associated_with_reference(controllers_instances):
     """First controller must have at least one AssociatedWith reference target."""
     controller_node = controllers_instances[0][1]
@@ -15,6 +20,8 @@ async def test_assets_have_associated_with_reference(controllers_instances):
         "First controller has no AssociatedWith references; "
         "expected at least one associated asset (e.g. a tool)"
     )
+
+
 async def test_associated_with_is_symmetric(controllers_instances, tools_instances):
     """
     AssociatedWith must be symmetric: if controller C references tool T,
@@ -23,7 +30,9 @@ async def test_associated_with_is_symmetric(controllers_instances, tools_instanc
     controller_node = controllers_instances[0][1]
     associated_from_controller = await get_associated_assets(controller_node)
     if not associated_from_controller:
-        pytest.skip("First controller has no AssociatedWith targets; skipping symmetry check")
+        pytest.skip(
+            "First controller has no AssociatedWith targets; skipping symmetry check"
+        )
     controller_node_id = controller_node.nodeid
     for target_node in associated_from_controller:
         back_refs = await get_associated_assets(target_node)
@@ -38,6 +47,8 @@ async def test_associated_with_is_symmetric(controllers_instances, tools_instanc
             f"AssociatedWith is not symmetric: target '{target_bn.Name}' "
             "does not have a back-reference to the first controller"
         )
+
+
 async def test_controller_associated_with_tools(controllers_instances, tools_instances):
     """At least one AssociatedWith target of the first controller must be a known tool instance."""
     controller_node = controllers_instances[0][1]
@@ -56,6 +67,8 @@ async def test_controller_associated_with_tools(controllers_instances, tools_ins
         "None of the first controller's AssociatedWith targets match any known tool instance; "
         "expected at least one controller-to-tool association"
     )
+
+
 async def test_associated_nodes_are_in_same_system(controllers_instances):
     """
     All nodes reachable via AssociatedWith from the first controller must be valid:
@@ -74,4 +87,4 @@ async def test_associated_nodes_are_in_same_system(controllers_instances):
             )
         assert bn is not None, (
             f"read_browse_name() returned None for AssociatedWith target {target_node.nodeid}"
-        )
+        )

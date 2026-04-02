@@ -10,8 +10,8 @@ import contextlib
 import json
 import traceback
 from dataclasses import dataclass
-from typing import Any
 from datetime import datetime
+from typing import Any
 
 import pytz
 import websockets
@@ -135,7 +135,9 @@ class ResultEventHandler:
                 try:
                     await self.websocket.close()
                 except Exception as close_exc:
-                    ijt_log.debug(f"WebSocket close failed during error recovery: {close_exc}")
+                    ijt_log.debug(
+                        f"WebSocket close failed during error recovery: {close_exc}"
+                    )
                 break
             finally:
                 self.queue.task_done()
@@ -158,7 +160,9 @@ class ResultEventHandler:
         await self.shutdown()
         if self._queue_task and not self._queue_task.done():
             try:
-                await asyncio.wait_for(asyncio.shield(self._queue_task), timeout=_SHUTDOWN_TIMEOUT_S)
+                await asyncio.wait_for(
+                    asyncio.shield(self._queue_task), timeout=_SHUTDOWN_TIMEOUT_S
+                )
             except asyncio.TimeoutError:
                 self._queue_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

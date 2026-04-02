@@ -1,4 +1,5 @@
 """Verify IJT_Console_Client has no cross-client dependencies."""
+
 import pathlib
 
 # Only scan production source files, not the tests directory itself

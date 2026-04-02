@@ -20,7 +20,6 @@ from asyncua import ua  # noqa: E402
 
 from result_event_handler import ResultEventHandler, ShortResultEvent  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # ShortResultEvent — construction and to_dict()
 # ---------------------------------------------------------------------------
@@ -97,7 +96,9 @@ def test_short_result_event_to_dict_is_copy_not_reference():
 async def test_result_event_handler_initializes():
     handler = ResultEventHandler("opc.tcp://localhost:40451")
     assert handler.server_url == "opc.tcp://localhost:40451"
-    assert not hasattr(handler, "client"), "client must not be stored — it caused race conditions"
+    assert not hasattr(handler, "client"), (
+        "client must not be stored — it caused race conditions"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +111,9 @@ async def test_process_event_calls_log_result_to_file():
     handler = ResultEventHandler("opc.tcp://localhost:40451")
 
     evt = _make_short_result_event("e-1", "TighteningDone")
-    with patch("result_event_handler.log_result_to_file", new_callable=AsyncMock) as mock_log:
+    with patch(
+        "result_event_handler.log_result_to_file", new_callable=AsyncMock
+    ) as mock_log:
         await handler.process_event(evt)
     mock_log.assert_awaited_once_with(evt)
 
@@ -160,7 +163,11 @@ async def test_event_notification_creates_task_for_process_event():
     event.EventId = b"event-bytes-001"
 
     with (
-        patch("result_event_handler.log_result_event_details", new_callable=AsyncMock, return_value="evt-id-001"),
+        patch(
+            "result_event_handler.log_result_event_details",
+            new_callable=AsyncMock,
+            return_value="evt-id-001",
+        ),
         patch("result_event_handler.log_result_to_file", new_callable=AsyncMock),
     ):
         await handler.event_notification(event)
@@ -185,7 +192,11 @@ async def test_event_notification_builds_short_event_from_raw_event():
         captured.append(evt)
 
     with (
-        patch("result_event_handler.log_result_event_details", new_callable=AsyncMock, return_value="captured-id"),
+        patch(
+            "result_event_handler.log_result_event_details",
+            new_callable=AsyncMock,
+            return_value="captured-id",
+        ),
         patch.object(handler, "process_event", side_effect=_capture),
     ):
         await handler.event_notification(event)
@@ -233,7 +244,9 @@ def test_log_result_event_details_has_no_client_parameter():
     fire many events before returning.
     """
     import inspect
+
     from utils import log_result_event_details
+
     params = list(inspect.signature(log_result_event_details).parameters.keys())
     assert "client" not in params, (
         "log_result_event_details must not take a 'client' parameter — "
@@ -260,7 +273,9 @@ async def test_event_notification_calls_log_without_client():
     event.Message = ua.LocalizedText("Pass", "en")
     event.EventId = b"reg-test-bytes"
 
-    with patch("result_event_handler.log_result_event_details", side_effect=_capture_log):
+    with patch(
+        "result_event_handler.log_result_event_details", side_effect=_capture_log
+    ):
         await handler.event_notification(event)
 
     assert len(call_args_list) == 1
@@ -301,6 +316,7 @@ async def test_concurrent_event_notifications_simulate_job_result():
 # handle_queue processes ShortResultEvent (via process_event path)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_process_event_handles_short_result_event_correctly():
     """process_event correctly processes a ShortResultEvent."""
@@ -311,7 +327,9 @@ async def test_process_event_handles_short_result_event_correctly():
         Message="Completed",
         EventId="q-evt-001",
     )
-    with patch("result_event_handler.log_result_to_file", new_callable=AsyncMock) as mock_log:
+    with patch(
+        "result_event_handler.log_result_to_file", new_callable=AsyncMock
+    ) as mock_log:
         await handler.process_event(evt)
     mock_log.assert_awaited_once_with(evt)
 

@@ -6,6 +6,7 @@ Security tests for IJT_Console_Client.
 - Input validation: extremely long strings do not crash
 - bandit scan (skipped if bandit not installed)
 """
+
 import re
 import subprocess
 import sys
@@ -28,10 +29,13 @@ _SOURCE_FILES = [
     "event_types.py",
 ]
 
-_BANDIT_AVAILABLE = subprocess.run(
-    [sys.executable, "-m", "bandit", "--version"],
-    capture_output=True,
-).returncode == 0
+_BANDIT_AVAILABLE = (
+    subprocess.run(
+        [sys.executable, "-m", "bandit", "--version"],
+        capture_output=True,
+    ).returncode
+    == 0
+)
 
 
 # ---------------------------------------------------------------------------
@@ -55,14 +59,13 @@ def test_no_hardcoded_secrets(filename):
     content = path.read_text(encoding="utf-8")
     for pattern in _SECRET_PATTERNS:
         matches = pattern.findall(content)
-        assert not matches, (
-            f"{filename} contains potential hardcoded secret: {matches}"
-        )
+        assert not matches, f"{filename} contains potential hardcoded secret: {matches}"
 
 
 # ---------------------------------------------------------------------------
 # Endpoint safety — shell metacharacters
 # ---------------------------------------------------------------------------
+
 
 def test_endpoint_with_shell_metacharacters_validate_url():
     """validate_url() must reject endpoints with shell metacharacters."""
@@ -77,6 +80,7 @@ def test_endpoint_with_shell_metacharacters_validate_url():
 def test_endpoint_with_backtick_is_rejected():
     """validate_url() must reject endpoints with backtick characters."""
     from main import validate_url
+
     evil = "opc.tcp://`whoami`:4840"
     result = validate_url(evil)
     assert "`" not in result
@@ -86,9 +90,11 @@ def test_endpoint_with_backtick_is_rejected():
 # Input validation — long strings
 # ---------------------------------------------------------------------------
 
+
 def test_extremely_long_url_does_not_crash_validate_url():
     """A 10 000-char URL must not cause an exception."""
     from main import validate_url
+
     long_url = "A" * 10_000
     result = validate_url(long_url)
     assert isinstance(result, str)
@@ -97,6 +103,7 @@ def test_extremely_long_url_does_not_crash_validate_url():
 def test_extremely_long_string_nodeid_to_str():
     """nodeid_to_str with a 10 000-char string input must not crash."""
     from utils import nodeid_to_str
+
     long_str = "x" * 10_000
     result = nodeid_to_str(long_str)
     assert isinstance(result, str)
@@ -105,6 +112,7 @@ def test_extremely_long_string_nodeid_to_str():
 # ---------------------------------------------------------------------------
 # bandit scan (skip if not available)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(not _BANDIT_AVAILABLE, reason="bandit not installed")
 def test_bandit_scan_no_medium_severity():

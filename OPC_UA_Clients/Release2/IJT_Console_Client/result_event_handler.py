@@ -1,12 +1,13 @@
 import asyncio
 import traceback
-import pytz
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from dataclasses import dataclass
+
+import pytz
 
 from ijt_logger import ijt_log
-from utils import log_result_to_file, log_result_event_details
+from utils import log_result_event_details, log_result_to_file
 
 
 @dataclass

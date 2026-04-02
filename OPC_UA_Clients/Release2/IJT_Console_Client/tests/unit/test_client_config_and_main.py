@@ -8,9 +8,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from client_config import URL_PATTERN, SERVER_URL, ENABLE_RESULT_FILE_LOGGING
+from client_config import ENABLE_RESULT_FILE_LOGGING, SERVER_URL, URL_PATTERN
 from main import validate_url
-
 
 # ---------------------------------------------------------------------------
 # client_config.py
@@ -103,7 +102,9 @@ class TestValidateUrl:
         assert result == env_url
 
     def test_invalid_url_invalid_env_falls_back_to_default(self):
-        with patch.dict(os.environ, {"OPCUA_SERVER_URL": "not-valid-either"}, clear=False):
+        with patch.dict(
+            os.environ, {"OPCUA_SERVER_URL": "not-valid-either"}, clear=False
+        ):
             # Remove OPCUA_SERVER_URL if set elsewhere and set to invalid
             result = validate_url("also-invalid")
         # Falls back to DEFAULT_SERVER_URL = SERVER_URL

@@ -3,17 +3,22 @@ Structural tests for IJT event types defined in the address space.
 Verifies that the event type nodes exist and have the expected namespace and
 inheritance hierarchy.
 """
+
 import pytest
 from asyncua import ua
+
 from helpers.namespaces import (
-    NS_OPC_UA,
     NS_IJT_BASE,
     NS_MACH_RESULT,
+    NS_OPC_UA,
     IJTTypes,
     MachineryResultTypes,
     RefTypes,
 )
+
 pytestmark = [pytest.mark.live, pytest.mark.structure]
+
+
 # ---------------------------------------------------------------------------
 # Node existence
 # ---------------------------------------------------------------------------
@@ -30,6 +35,8 @@ async def test_joining_system_event_type_exists(session_client, ns_indices):
             f"JoiningSystemEventType (ns={ns_ijt}; "
             f"i={IJTTypes.JOINING_SYSTEM_EVENT_TYPE}) is not readable: {exc}"
         )
+
+
 async def test_result_ready_event_type_exists(session_client, ns_indices):
     ns_ijt = ns_indices[NS_IJT_BASE]
     node = session_client.get_node(
@@ -42,6 +49,8 @@ async def test_result_ready_event_type_exists(session_client, ns_indices):
             f"JoiningSystemResultReadyEventType (ns={ns_ijt}; "
             f"i={IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE}) is not readable: {exc}"
         )
+
+
 # ---------------------------------------------------------------------------
 # Namespace index check
 # ---------------------------------------------------------------------------
@@ -54,6 +63,8 @@ async def test_event_type_has_correct_namespace(session_client, ns_indices):
         f"JoiningSystemResultReadyEventType NamespaceIndex must be {ns_ijt} "
         f"(NS_IJT_BASE), got {node.nodeid.NamespaceIndex}"
     )
+
+
 # ---------------------------------------------------------------------------
 # Inheritance: ResultReadyEventType must inherit from MachineryResultReadyEventType
 # ---------------------------------------------------------------------------
@@ -68,9 +79,11 @@ async def test_result_ready_inherits_from_joining_system_event(
     are NOT in a parent-child relationship.
     """
     ns_ijt = ns_indices[NS_IJT_BASE]
-    ns_mr  = ns_indices.get(NS_MACH_RESULT)
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered — cannot verify parent type")
+        pytest.skip(
+            "Machinery/Result namespace not registered — cannot verify parent type"
+        )
     result_ready_node = session_client.get_node(
         ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt)
     )
@@ -89,4 +102,4 @@ async def test_result_ready_inherits_from_joining_system_event(
         f"JoiningSystemResultReadyEventType must inherit (HasSubtype) from "
         f"MachineryResultReadyEventType ({expected_parent}); "
         f"found parents: {parent_node_ids}"
-    )
+    )

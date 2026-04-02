@@ -17,6 +17,7 @@ Exit codes:
     1 — one or more checks failed
     2 — server not reachable (TCP probe failed)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,11 +29,11 @@ import time
 from typing import Any
 
 # -- Namespace URIs (from OPC UA IJT companion specs) -------------------------
-_NS_IJT_BASE       = "http://opcfoundation.org/UA/IJT/Base/"
+_NS_IJT_BASE = "http://opcfoundation.org/UA/IJT/Base/"
 _NS_IJT_TIGHTENING = "http://opcfoundation.org/UA/IJT/Tightening/"
-_NS_MACHINERY      = "http://opcfoundation.org/UA/Machinery/"
+_NS_MACHINERY = "http://opcfoundation.org/UA/Machinery/"
 _NS_MACHINERY_RESULT = "http://opcfoundation.org/UA/Machinery/Result/"
-_NS_IJT_SERVER     = "urn:AtlasCopco:IJT:Tightening:Server/"
+_NS_IJT_SERVER = "urn:AtlasCopco:IJT:Tightening:Server/"
 
 _PASS = "PASS"
 _FAIL = "FAIL"
@@ -64,6 +65,7 @@ def _parse_endpoint(endpoint: str) -> tuple[str, int]:
 
 # -- Individual checks ---------------------------------------------------------
 
+
 async def check_tcp_port(host: str, port: int, wait_s: float) -> tuple[str, str]:
     """Poll TCP port until the server accepts connections or timeout."""
     deadline = time.monotonic() + wait_s
@@ -90,8 +92,8 @@ async def check_opc_connection(client: Any) -> tuple[str, str]:
 
 async def check_server_time(client: Any) -> tuple[str, str]:
     try:
-        node = client.get_node("ns=0;i=2258")   # Server/ServerStatus/CurrentTime
-        val  = await node.read_value()
+        node = client.get_node("ns=0;i=2258")  # Server/ServerStatus/CurrentTime
+        val = await node.read_value()
         return _PASS, f"CurrentTime = {val}"
     except Exception as exc:
         return _FAIL, str(exc)
@@ -101,8 +103,13 @@ async def check_namespaces(client: Any) -> tuple[str, str]:
     try:
         ns_array = await client.get_namespace_array()
         missing = [
-            uri for uri in (_NS_IJT_BASE, _NS_IJT_TIGHTENING,
-                            _NS_MACHINERY, _NS_MACHINERY_RESULT)
+            uri
+            for uri in (
+                _NS_IJT_BASE,
+                _NS_IJT_TIGHTENING,
+                _NS_MACHINERY,
+                _NS_MACHINERY_RESULT,
+            )
             if uri not in ns_array
         ]
         if missing:
@@ -118,7 +125,7 @@ async def check_tightening_system(client: Any) -> tuple[str, str]:
         node = await client.nodes.root.get_child(
             ["0:Objects", f"{ns1}:TighteningSystem"]
         )
-        bn   = await node.read_browse_name()
+        bn = await node.read_browse_name()
         return _PASS, f"TighteningSystem found ({bn})"
     except Exception as exc:
         return _FAIL, str(exc)
@@ -138,7 +145,7 @@ async def check_simulations_node(client: Any) -> tuple[str, str]:
 
 async def check_result_management(client: Any) -> tuple[str, str]:
     try:
-        ns1  = await client.get_namespace_index(_NS_IJT_SERVER)
+        ns1 = await client.get_namespace_index(_NS_IJT_SERVER)
         ns_r = await client.get_namespace_index(_NS_MACHINERY_RESULT)
         node = await client.nodes.root.get_child(
             ["0:Objects", f"{ns1}:TighteningSystem", f"{ns_r}:ResultManagement"]
@@ -151,7 +158,7 @@ async def check_result_management(client: Any) -> tuple[str, str]:
 
 async def check_asset_management(client: Any) -> tuple[str, str]:
     try:
-        ns1  = await client.get_namespace_index(_NS_IJT_SERVER)
+        ns1 = await client.get_namespace_index(_NS_IJT_SERVER)
         ns_j = await client.get_namespace_index(_NS_IJT_BASE)
         node = await client.nodes.root.get_child(
             ["0:Objects", f"{ns1}:TighteningSystem", f"{ns_j}:AssetManagement"]
@@ -164,6 +171,7 @@ async def check_asset_management(client: Any) -> tuple[str, str]:
 
 # -- Main runner ---------------------------------------------------------------
 
+
 async def _run(endpoint: str, wait_s: float) -> int:
     try:
         from asyncua import Client
@@ -172,10 +180,10 @@ async def _run(endpoint: str, wait_s: float) -> int:
         return 1
 
     host, port = _parse_endpoint(endpoint)
-    checks: list[tuple[str, str, str]] = []   # (status, name, detail)
+    checks: list[tuple[str, str, str]] = []  # (status, name, detail)
     failures = 0
 
-    print(f"\nOPC UA IJT Server — Smoke Tests")
+    print("\nOPC UA IJT Server — Smoke Tests")
     print(f"  Endpoint : {endpoint}")
     print(f"  Timeout  : {wait_s:.0f}s")
     print("-" * 60)
@@ -194,18 +202,24 @@ async def _run(endpoint: str, wait_s: float) -> int:
         status, detail = await check_opc_connection(client)
         checks.append((status, "OPC UA session", detail))
         if status != _PASS:
-            checks += [(_SKIP, name, "server unreachable") for name in (
-                "Server CurrentTime", "Namespace array",
-                "TighteningSystem node", "Simulations node",
-                "ResultManagement node", "AssetManagement node",
-            )]
+            checks += [
+                (_SKIP, name, "server unreachable")
+                for name in (
+                    "Server CurrentTime",
+                    "Namespace array",
+                    "TighteningSystem node",
+                    "Simulations node",
+                    "ResultManagement node",
+                    "AssetManagement node",
+                )
+            ]
         else:
             for fn, label in [
-                (check_server_time,      "Server CurrentTime"),
-                (check_namespaces,       "Namespace array"),
-                (check_tightening_system,"TighteningSystem node"),
+                (check_server_time, "Server CurrentTime"),
+                (check_namespaces, "Namespace array"),
+                (check_tightening_system, "TighteningSystem node"),
                 (check_simulations_node, "Simulations node"),
-                (check_result_management,"ResultManagement node"),
+                (check_result_management, "ResultManagement node"),
                 (check_asset_management, "AssetManagement node"),
             ]:
                 s, d = await fn(client)
@@ -220,7 +234,7 @@ async def _run(endpoint: str, wait_s: float) -> int:
         if status == _FAIL:
             failures += 1
 
-    total  = sum(1 for s, _, _ in checks if s != _SKIP)
+    total = sum(1 for s, _, _ in checks if s != _SKIP)
     passed = sum(1 for s, _, _ in checks if s == _PASS)
     skipped = sum(1 for s, _, _ in checks if s == _SKIP)
 
@@ -241,12 +255,15 @@ def main() -> None:
         description="Smoke-test the OPC UA IJT Server Simulator."
     )
     parser.add_argument(
-        "--endpoint", default="opc.tcp://localhost:40451",
-        help="OPC UA endpoint URL (default: opc.tcp://localhost:40451)"
+        "--endpoint",
+        default="opc.tcp://localhost:40451",
+        help="OPC UA endpoint URL (default: opc.tcp://localhost:40451)",
     )
     parser.add_argument(
-        "--timeout", type=float, default=30.0,
-        help="Seconds to wait for TCP port to open (default: 30)"
+        "--timeout",
+        type=float,
+        default=30.0,
+        help="Seconds to wait for TCP port to open (default: 30)",
     )
     args = parser.parse_args()
     sys.exit(asyncio.run(_run(args.endpoint, args.timeout)))
@@ -254,5 +271,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-

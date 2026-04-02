@@ -13,11 +13,14 @@ Design rule: never call get_children() directly — it can hang on nodes with
 complex or large subtrees. Use _browse_refs() which calls get_references() with
 HierarchicalReferences (id=33) and an asyncio.wait_for timeout instead.
 """
+
 import asyncio
 import logging
+
 from asyncua import ua
 from asyncua.common.node import Node as UANode
-from helpers.namespaces import NS_OPC_UA, NS_IJT_BASE, IJTTypes, RefTypes
+
+from helpers.namespaces import NS_IJT_BASE, NS_OPC_UA, IJTTypes, RefTypes
 
 logger = logging.getLogger(__name__)
 _BROWSE_TIMEOUT = 15.0  # seconds — applies to all browse/reference calls
@@ -100,7 +103,9 @@ async def find_child_by_browse_name(
     return None
 
 
-async def browse_folder_instances(folder_node: UANode, timeout: float = _BROWSE_TIMEOUT) -> list:
+async def browse_folder_instances(
+    folder_node: UANode, timeout: float = _BROWSE_TIMEOUT
+) -> list:
     """
     Return a list of (browse_name_str, Node) tuples for all children of folder_node.
     browse_name_str is formatted as "{ns_index}:{Name}" (e.g. "3:MyController").
@@ -112,11 +117,15 @@ async def browse_folder_instances(folder_node: UANode, timeout: float = _BROWSE_
     except Exception:
         return results
     for ref in refs:
-        results.append((
-            f"{ref.BrowseName.NamespaceIndex}:{ref.BrowseName.Name}",
-            _node_from_ref(folder_node, ref.NodeId),
-        ))
+        results.append(
+            (
+                f"{ref.BrowseName.NamespaceIndex}:{ref.BrowseName.Name}",
+                _node_from_ref(folder_node, ref.NodeId),
+            )
+        )
     return results
+
+
 async def get_type_definition(node: UANode, ns_opc_ua: int = 0):
     """
     Return the HasTypeDefinition NodeId for the given node, or None.
@@ -135,6 +144,8 @@ async def get_type_definition(node: UANode, ns_opc_ua: int = 0):
     except Exception as exc:
         logger.debug("get_type_definition failed: %s", exc)
     return None
+
+
 async def get_interface_types(node: UANode, ns_opc_ua: int = 0) -> list:
     """
     Return a list of NodeIds from HasInterface references on node.
@@ -150,7 +161,11 @@ async def get_interface_types(node: UANode, ns_opc_ua: int = 0) -> list:
         return [ref.NodeId for ref in refs]
     except Exception:
         return []
-async def has_interface(node: UANode, ns_index: int, type_local_id: int, ns_opc_ua: int = 0) -> bool:
+
+
+async def has_interface(
+    node: UANode, ns_index: int, type_local_id: int, ns_opc_ua: int = 0
+) -> bool:
     """
     Check whether node has a HasInterface reference pointing to the given type.
     ns_opc_ua defaults to 0 — guaranteed by OPC UA specification §8.2.3.
@@ -158,9 +173,14 @@ async def has_interface(node: UANode, ns_index: int, type_local_id: int, ns_opc_
     target = ua.NodeId(type_local_id, ns_index)
     iface_types = await get_interface_types(node, ns_opc_ua)
     for nid in iface_types:
-        if nid.Identifier == target.Identifier and nid.NamespaceIndex == target.NamespaceIndex:
+        if (
+            nid.Identifier == target.Identifier
+            and nid.NamespaceIndex == target.NamespaceIndex
+        ):
             return True
     return False
+
+
 async def get_associated_assets(node: UANode, ns_opc_ua: int = 0) -> list:
     """
     Return a list of Nodes referenced via AssociatedWith from node.
@@ -176,7 +196,11 @@ async def get_associated_assets(node: UANode, ns_opc_ua: int = 0) -> list:
         return [_node_from_ref(node, ref.NodeId) for ref in refs]
     except Exception:
         return []
-async def get_children_by_reference(node: UANode, ref_type_id: int, ns_opc_ua: int = 0) -> list:
+
+
+async def get_children_by_reference(
+    node: UANode, ref_type_id: int, ns_opc_ua: int = 0
+) -> list:
     """
     Return Nodes reachable from node via the given reference type.
     ns_opc_ua defaults to 0 — guaranteed by OPC UA specification §8.2.3.
@@ -191,6 +215,8 @@ async def get_children_by_reference(node: UANode, ref_type_id: int, ns_opc_ua: i
         return [_node_from_ref(node, ref.NodeId) for ref in refs]
     except Exception:
         return []
+
+
 async def find_method_node(
     parent: UANode, method_browse_name: str, method_ns_index: int
 ) -> UANode:
@@ -199,9 +225,11 @@ async def find_method_node(
     Returns the method Node or None if not found.
     """
     return await find_child_by_browse_name(parent, method_browse_name, method_ns_index)
+
+
 async def get_add_in_nodes(node: UANode, ns_opc_ua: int = 0) -> list:
     """
     Return Nodes reachable via HasAddIn from the given node.
     ns_opc_ua defaults to 0 — guaranteed by OPC UA specification §8.2.3.
     """
-    return await get_children_by_reference(node, RefTypes.HAS_ADD_IN, ns_opc_ua)
+    return await get_children_by_reference(node, RefTypes.HAS_ADD_IN, ns_opc_ua)

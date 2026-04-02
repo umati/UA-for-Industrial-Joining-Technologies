@@ -41,7 +41,7 @@ _WS_PORT    = 8001
 # UaClient.call() passes no timeout → falls back to 1 s; heavy calls fail.
 # Fix: substitute self._timeout (set from Client(timeout=60)) when none given.
 def _patch_asyncua_send_timeout() -> None:
-    try:
+    with contextlib.suppress(ImportError):
         import asyncua.client.ua_client as _uc
         from asyncua import ua
 
@@ -54,8 +54,6 @@ def _patch_asyncua_send_timeout() -> None:
             return await _orig(self, request, timeout, message_type)
 
         _uc.UaClient._send_request = _fixed
-    except ImportError:
-        pass  # patch not needed on all asyncua versions
 
 
 _patch_asyncua_send_timeout()
