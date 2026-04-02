@@ -31,8 +31,6 @@ from helpers.node_discovery import (
 
 pytestmark = [pytest.mark.live, pytest.mark.structure]
 
-pytestmark = [pytest.mark.live, pytest.mark.structure]
-
 # ─── Internal helpers ────────────────────────────────────────────────────────
 
 async def _assert_all_have_interface(instances, ns_idx: int, type_id: int, type_name: str):

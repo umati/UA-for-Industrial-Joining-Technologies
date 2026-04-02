@@ -114,8 +114,13 @@ class Connection:
         """
         self.terminated = False
 
+        # Idempotent: if the channel is already open, return success without
+        # opening a second session (which would waste a server slot and could
+        # trigger BadTooManySessions when many tests run in parallel).
+        if await self.is_connection_open():
+            return {"command": "connection established", "endpoint": self.server_url}
 
-        # --- Docker-aware URL rewrite (keep this if you added it elsewhere) ---
+
         server_url = self.server_url
         if os.getenv("IS_DOCKER") == "true" and server_url:
             if "://127.0.0.1" in server_url or "://localhost" in server_url:

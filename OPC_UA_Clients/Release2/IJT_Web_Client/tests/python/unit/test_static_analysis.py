@@ -24,7 +24,7 @@ import pytest
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]  # = IJT_Web_Client root
 _SRC_PYTHON = _PROJECT_ROOT / "src" / "python"
 
-_SKIP_DIRS = {"venv", ".state", "__pycache__", "node_modules", ".git"}
+_SKIP_DIRS = {"venv", ".venv", "env", ".env", "__pycache__", "node_modules", ".git", ".state"}
 
 
 def _all_py_files(root: Path) -> list[Path]:

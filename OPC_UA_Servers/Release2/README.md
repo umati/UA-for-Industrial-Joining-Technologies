@@ -11,26 +11,42 @@
 
 ### Windows 10 or Later
 #### Prerequisites
-- **Install** Visual C++ Runtime [**VC-Redist**](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+- **Install** Visual C++ Runtime [**VC-Redist**](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-180)
 #### Running the application
 - **Launch** the **binary** file (**`opcua_ijt_demo_application.exe`**). Ensure that it is Run as **Adminstrator** or at least **Read/Write** access to the directory.
 
-### Docker Image
-#### Build the docker
-- **`docker build -t opcua_ijt_demo_application .`**
-#### Running the application
-- **`docker run --rm -p 40451:40451 opcua_ijt_demo_application`**
-- or
-- **`docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=127.0.0.1 opcua_ijt_demo_application`**
-	- The Hostname or IP Address of the Host where the docker is deployed can be passed using OPCUA_HOSTNAME flag.
+### Docker
+- The `Dockerfile` is in the **`Release2/`** directory — run all Docker commands from there.
+- **Recommended:**
+  ```
+  docker compose up
+  ```
+- **Or manually:**
+  ```
+  docker build -t opcua-ijt-server .
+  docker run --rm -p 40451:40451 opcua-ijt-server
+  ```
+- **For remote clients** — pass your host IP so OPC UA clients outside the container can connect:
+  ```
+  docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=192.168.1.10 opcua-ijt-server
+  ```
+- **Verify the server is responding** (requires `asyncua`):
+  ```
+  pip install asyncua
+  python tests/smoke_test.py
+  ```
 
 ### General Usage
 - Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
 
 # Change Log
 **2026-04-02:** Following Changes.
-1. **Added** missing interface for Asset.Identification IJoiningAdditionalInformationType.
-2. **Multiple** bugs, refactoring and optimizations.
+1. **Moved** `Dockerfile` and added `docker-compose.yml` to the `Release2/` directory (previously was inside the binary subfolder).
+2. **Embedded** the Docker entrypoint script inline in the Dockerfile — single-file Docker configuration, no extra scripts to manage.
+3. **Added** `tests/smoke_test.py` — 8-check OPC UA sanity test (TCP, session, namespaces, TighteningSystem, Simulations, ResultManagement, AssetManagement).
+4. **Added** `.dockerignore` to keep Docker image lean (excludes zip archives, PDFs, docs).
+5. **Added** missing interface for Asset.Identification IJoiningAdditionalInformationType.
+6. **Multiple** bugs, refactoring and optimizations.
 
 **2026-02-06:** Following Changes.
 1. **Added** appropriate logs when the binary path is too long on Windows.

@@ -11,11 +11,15 @@ from python.connection import Connection
 def opcua_endpoint() -> str:
     endpoint = os.getenv("OPCUA_TEST_ENDPOINT")
     if not endpoint:
-        pytest.skip("Set OPCUA_TEST_ENDPOINT to run integration tests.")
+        pytest.fail(
+            "OPCUA_TEST_ENDPOINT is not set and the auto-start fixture failed to "
+            "start the OPC UA server. Check ensure_integration_servers in conftest.py."
+        )
 
     if not endpoint_reachable(endpoint):
-        pytest.skip(
-            f"OPC UA endpoint {endpoint} is not reachable. Start the simulator/server and rerun."
+        pytest.fail(
+            f"OPC UA endpoint {endpoint} is not reachable. "
+            f"The server should have been auto-started by conftest.py."
         )
 
     return endpoint

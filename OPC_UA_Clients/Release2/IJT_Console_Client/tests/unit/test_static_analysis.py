@@ -22,7 +22,7 @@ import pytest
 
 _CONSOLE_ROOT = Path(__file__).resolve().parent.parent.parent  # = IJT_Console_Client
 
-_SKIP_DIRS = {"venv", ".state", "__pycache__", "node_modules", ".git"}
+_SKIP_DIRS = {"venv", ".venv", ".venv-wsl", ".state", "__pycache__", "node_modules", ".git"}
 
 
 def _all_py_files(root: Path) -> list[Path]:
@@ -111,7 +111,7 @@ def test_bandit_no_high_severity():
             ".",
             "-ll",
             "--exclude",
-            "./tests,./venv,./.state",
+            "./tests,./venv,./.venv,./.venv-wsl,./.state",
         ],
         cwd=str(_CONSOLE_ROOT),
         capture_output=True,

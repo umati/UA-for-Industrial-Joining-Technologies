@@ -99,7 +99,7 @@ async def test_cu_result_management_get_latest_result(opcua_client, simulate_res
     if ns_app is None:
         pytest.skip("App namespace not registered on server")
     rm = await _get_result_management(opcua_client, ns_mr)
-    _handle, _data = await _simulate_and_get_latest(opcua_client, rm, ns_mr, ns_app, simulate_results_folder)
+    await _simulate_and_get_latest(opcua_client, rm, ns_mr, ns_app, simulate_results_folder)
     glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
     assert glr_node is not None, (
         f"Method '{BN.GET_LATEST_RESULT}' not found in ResultManagement (ns_mr={ns_mr})"

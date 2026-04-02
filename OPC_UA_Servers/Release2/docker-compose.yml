@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# OPC UA IJT Server Simulator — Docker Compose
+#
+# Quick start:
+#   docker compose up            # start in foreground (Ctrl-C to stop)
+#   docker compose up -d         # start detached
+#   docker compose down          # stop and remove container
+#
+# Override advertised hostname (e.g. for remote clients):
+#   OPCUA_HOSTNAME=192.168.1.10 docker compose up
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  opcua-ijt-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: opcua-ijt-server:latest
+    container_name: opcua_ijt_server
+    ports:
+      - "40451:40451"
+    environment:
+      # Set to your host IP if remote OPC UA clients need to connect.
+      # Leave blank to auto-detect (works for local / Docker Desktop setups).
+      OPCUA_HOSTNAME: ${OPCUA_HOSTNAME:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 40451 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 6
+    # Resource limits — the simulator is lightweight
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M

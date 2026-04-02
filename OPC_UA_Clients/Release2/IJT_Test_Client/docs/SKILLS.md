@@ -1,11 +1,21 @@
-# IJT_Test_Client — AI Agent Context
+﻿# IJT_Test_Client — AI Agent Context
 
 This file is the primary entry point for any AI assistant (GitHub Copilot, Claude,
 ChatGPT/GPT-4o, etc.) working on this project. Read it before making any changes.
-Full technical reference: [`docs/opc-ua-server-context.md`](docs/opc-ua-server-context.md)
+Full technical reference: [`opc-ua-server-context.md`](opc-ua-server-context.md)
 
 ---
 
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | OPC UA server endpoint URL |
+| `OPCUA_SIMULATOR_EXE` | (none) | Path to simulator binary for auto-launch |
+| `OPCUA_STARTUP_TIMEOUT_SEC` | `30` | Seconds to wait for server OPC UA readiness |
+| `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install on run_tests.py |
+
+---
 ## What This Project Is
 
 A **Python pytest suite** that validates an OPC UA server implementing the
@@ -205,6 +215,16 @@ assert len(events) >= 1
 
 ---
 
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | OPC UA server endpoint URL |
+| `OPCUA_SIMULATOR_EXE` | (none) | Path to simulator binary for auto-launch |
+| `OPCUA_STARTUP_TIMEOUT_SEC` | `30` | Seconds to wait for server OPC UA readiness |
+| `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install on run_tests.py |
+
+---
 ## What This Project Is
 
 A **Python pytest suite** that tests any OPC UA server implementing the

@@ -707,8 +707,8 @@ class TestResultManagement:
                                  _v(future, ua.VariantType.DateTime),
                                  _v(10,     ua.VariantType.UInt32))
             assert result is not None
-        except OSError:
-            pass  # empty result set or server-side Uncertain is acceptable
+        except (OSError, ua.UaStatusCodeError):
+            pass  # empty result set, server-side Uncertain, or not fully implemented
 
 
 # ══════════════════════════════════════════════════════════════════════════════

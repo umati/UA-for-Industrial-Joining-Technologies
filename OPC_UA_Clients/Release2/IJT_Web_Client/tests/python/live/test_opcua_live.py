@@ -30,7 +30,32 @@ import socket
 import time
 import pytest_asyncio
 
+import asyncua.client.ua_client as _uc
+from asyncua import ua
 import pytest
+
+# All async tests in this file share the module-scoped event loop so they can
+# use the module-scoped opcua_client fixture without cross-loop I/O hangs.
+pytestmark = pytest.mark.asyncio(loop_scope="module")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# asyncua 1.2b2 bug-fix: UaClient.call() calls _send_request without a
+# timeout, falling back to a 1-second default. Heavy calls (load_data_type_
+# definitions, browse-heavy operations) exceed 1s and raise spurious timeouts.
+# Fix: replace _send_request so it uses self._timeout when none is given.
+# ─────────────────────────────────────────────────────────────────────────────
+def _patch_asyncua_send_timeout() -> None:
+    _orig = _uc.UaClient._send_request
+
+    async def _fixed(self, request, timeout=None,
+                     message_type=ua.MessageType.SecureMessage):
+        if timeout is None:
+            timeout = self._timeout
+        return await _orig(self, request, timeout, message_type)
+
+    _uc.UaClient._send_request = _fixed
+
+_patch_asyncua_send_timeout()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Module-level loop scope so all async fixtures and tests share one event loop.
@@ -76,17 +101,23 @@ skip_no_ws = pytest.mark.skipif(
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def opcua_client():
-    """Connected asyncua Client — shared across all tests in this module."""
+    """Connected asyncua Client — shared across all tests in this module.
+
+    Type definitions are NOT pre-loaded here: load_data_type_definitions()
+    makes 200+ sequential requests that can saturate the server and cause
+    subsequent simple reads to time out. Tests that need structured event
+    types should call client.load_data_type_definitions() themselves.
+    """
     try:
         from asyncua import Client
     except ImportError:
         pytest.skip("asyncua not installed")
 
-    client = Client(OPCUA_ENDPOINT, timeout=10)
+    client = Client(OPCUA_ENDPOINT, timeout=60)
     await client.connect()
-    await client.load_data_type_definitions()
     yield client
-    await client.disconnect()
+    with contextlib.suppress(Exception):
+        await client.disconnect()
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -131,7 +162,7 @@ class TestOpcuaDirectConnection:
     async def test_connect_and_disconnect(self):
         """Connection to the IJT server must succeed."""
         from asyncua import Client
-        client = Client(OPCUA_ENDPOINT, timeout=10)
+        client = Client(OPCUA_ENDPOINT, timeout=30)
         await client.connect()
         assert client is not None
         await client.disconnect()
@@ -335,15 +366,17 @@ class TestBackendWebSocket:
     async def test_namespaces_returns_list(self, ws_client):
         await ws_client.send_recv("connect to")
         resp = await ws_client.send_recv("namespaces")
-        assert resp.get("data") is not None
-        ns = resp["data"]
-        assert isinstance(ns, list), f"Expected list, got {type(ns)}"
+        data = resp.get("data", {})
+        # Backend returns {"namespaces": [...]}
+        ns = data.get("namespaces") if isinstance(data, dict) else data
+        assert isinstance(ns, list), f"Expected list, got {type(ns)}: {data}"
         assert len(ns) > 0
 
     async def test_namespaces_contains_ijt_uri(self, ws_client):
         await ws_client.send_recv("connect to")
         resp = await ws_client.send_recv("namespaces")
-        ns = resp["data"]
+        data = resp.get("data", {})
+        ns = data.get("namespaces") if isinstance(data, dict) else data
         flat = " ".join(str(n) for n in ns)
         assert "IJT" in flat or "ijt" in flat.lower() or "joining" in flat.lower(), (
             f"IJT not found in namespaces: {ns}"
@@ -359,8 +392,10 @@ class TestBackendWebSocket:
     async def test_browse_objects_returns_children(self, ws_client):
         await ws_client.send_recv("connect to")
         resp = await ws_client.send_recv("browse", {"nodeid": "ns=0;i=85"})
-        assert "exception" not in resp.get("data", {})
-        nodes = resp.get("data", [])
+        data = resp.get("data", {})
+        assert "exception" not in (data if isinstance(data, dict) else {})
+        # Backend returns {"nodes": [...]}
+        nodes = data.get("nodes") if isinstance(data, dict) else data
         assert isinstance(nodes, list)
         assert len(nodes) > 0, "Browse Objects must return at least one child"
 

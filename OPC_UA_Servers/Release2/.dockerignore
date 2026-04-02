@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore — exclude files that must NOT go into the Docker build context.
+# Keeps the image small and avoids leaking documentation / certificates.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Distribution archives — binary files are already extracted in the subdirectory
+*.zip
+
+# Documentation — not needed at runtime
+*.pdf
+*.docx
+*.md
+
+# PKI certificates — the server generates its own at first run;
+# pre-seeding certs is optional and handled explicitly in the Dockerfile COPY.
+OPC_UA_IJT_Server_Simulator/pki/
+
+# Dev / test tooling — not part of the runtime image
+tests/
+docker/
+
+# Git metadata
+.git/
+.gitignore

@@ -118,7 +118,7 @@ def test_bandit_scan_no_medium_severity():
             ".",
             "-ll",
             "--exclude",
-            "./tests,./venv,./.state",
+            "./tests,./venv,./.venv,./.venv-wsl,./.state",
         ],
         cwd=str(_CONSOLE_ROOT),
         capture_output=True,

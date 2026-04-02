@@ -227,7 +227,7 @@ export default class ModelToHTML {
     } else if (obj.pythonclass === 'LocalizedText') {
       return obj.Text
     } else {
-      if (typeof obj === 'object' && obj && Object.keys(obj).length === 0) {
+      if (Object.keys(obj).length === 0) {
         return '{}'
       }
       let typeOfClass = ''

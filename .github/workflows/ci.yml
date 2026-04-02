@@ -9,7 +9,8 @@
 #   console-client  Release2 / IJT Console Client Python pytest · Bandit
 #   node-client     Release1 / IJT Node Client   Vitest · ESLint · npm audit
 #   docker-smoke    Release2 / IJT Web Client    Docker build + HTTP/WS readiness
-#   report          Combined summary (always runs after all four)
+#   test-client     Release2 / IJT Test Client   pytest collect-only · Bandit
+#   report          Combined summary (always runs after all five)
 #
 # Standards used:
 #   Python security : bandit    (pyproject.toml [tool.bandit]  ·  -c pyproject.toml)
@@ -332,13 +333,252 @@ jobs:
         run: docker compose down -v
 
   # ───────────────────────────────────────────────────────────────────────────
+  # Release2 / IJT Test Client
+  #   Python: pytest collect-only (no live server needed) + bandit
+  # ───────────────────────────────────────────────────────────────────────────
+  test-client:
+    name: "Release2 / IJT Test Client"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: OPC_UA_Clients/Release2/IJT_Test_Client/requirements.txt
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - run: mkdir -p test-results
+
+      - name: Pytest Collect (verify imports + test structure)
+        id: pytest_collect
+        run: python -m pytest --collect-only -q --tb=no 2>&1 | tee test-results/collect.txt || true
+
+      - name: Bandit (Python Security)
+        id: bandit
+        continue-on-error: true
+        run: python -m bandit -r . -c pyproject.toml --severity-level medium -f json -o test-results/bandit.json
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: results-test-client
+          path: OPC_UA_Clients/Release2/IJT_Test_Client/test-results/
+
+      - name: Fail if Bandit Failed
+        if: always() && steps.bandit.outcome == 'failure'
+        run: |
+          echo "Bandit security check failed:"
+          echo "  bandit -> ${{ steps.bandit.outcome }}"
+          exit 1
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # OPC UA Server — Smoke Tests (two parallel scenarios, both must pass)
+  #
+  # Scenario 1 — Windows native (windows-latest)
+  #   Extract OPC_UA_IJT_Server_Simulator.zip, launch the EXE directly,
+  #   wait for TCP 40451, run all 8 smoke checks, kill the process.
+  #
+  # Scenario 2 — Docker / Linux (ubuntu-latest)
+  #   Extract the ZIP to satisfy the COPY instructions in the Dockerfile,
+  #   build the Wine-based Docker image (layer-cached via GitHub Actions cache),
+  #   start the container, wait for TCP 40451, run all 8 smoke checks, tear down.
+  #
+  # The server auto-creates its PKI directory (certificates) on first launch —
+  # no pre-seeded certificates are needed.
+  # ───────────────────────────────────────────────────────────────────────────
+
+  server-smoke-windows:
+    name: "Release2 / OPC UA Server — Windows Smoke"
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Extract server ZIP
+        run: |
+          Expand-Archive `
+            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+            -DestinationPath "OPC_UA_Servers\Release2\" `
+            -Force
+          Write-Host "Extracted ZIP contents:"
+          Get-ChildItem "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\" | Select-Object Name
+
+      - name: Start OPC UA Server (background)
+        run: |
+          $proc = Start-Process `
+            -FilePath "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\opcua_ijt_demo_application.exe" `
+            -WorkingDirectory "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\" `
+            -PassThru -WindowStyle Hidden
+          Write-Host "Server PID: $($proc.Id)"
+          echo "SERVER_PID=$($proc.Id)" >> $env:GITHUB_ENV
+
+      - name: Wait for OPC UA port 40451
+        run: |
+          $timeout = 60
+          $start   = Get-Date
+          while (((Get-Date) - $start).TotalSeconds -lt $timeout) {
+            if (Test-NetConnection -ComputerName localhost -Port 40451 `
+                  -InformationLevel Quiet -WarningAction SilentlyContinue) {
+              Write-Host "Port 40451 is open"
+              exit 0
+            }
+            Write-Host "Waiting for server..."
+            Start-Sleep -Seconds 3
+          }
+          Write-Host "ERROR: Timeout waiting for port 40451"
+          exit 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install smoke test dependencies
+        run: pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
+
+      - name: Run smoke test (8 checks)
+        run: python OPC_UA_Servers/Release2/tests/smoke_test.py --timeout 30
+
+      # ── Integration tests ──────────────────────────────────────────────────
+      # The OPC UA server is already running on port 40451.
+      # Start the Web Client WebSocket server (python index.py → port 8001),
+      # then run all 13 integration tests.  conftest.py auto-starts both servers
+      # if not running, so no manual env-var wiring is needed.
+      - name: Install Web Client Python dependencies
+        run: pip install -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
+
+      - name: Start Web Client WebSocket server (background)
+        shell: pwsh
+        run: |
+          $proc = Start-Process python `
+            -ArgumentList "index.py" `
+            -WorkingDirectory "OPC_UA_Clients\Release2\IJT_Web_Client" `
+            -PassThru -WindowStyle Hidden
+          Write-Host "Web server PID: $($proc.Id)"
+          echo "WS_SERVER_PID=$($proc.Id)" >> $env:GITHUB_ENV
+
+      - name: Wait for WebSocket port 8001
+        shell: pwsh
+        run: |
+          $start = Get-Date
+          while (((Get-Date)-$start).TotalSeconds -lt 30) {
+            if (Test-NetConnection -ComputerName localhost -Port 8001 `
+                  -InformationLevel Quiet -WarningAction SilentlyContinue) {
+              Write-Host "Port 8001 is open"; exit 0
+            }
+            Start-Sleep -Seconds 2
+          }
+          Write-Host "ERROR: WebSocket server did not start on port 8001"; exit 1
+
+      - name: Run Web Client integration tests (13 tests, 0 skips)
+        env:
+          OPCUA_TEST_ENDPOINT: opc.tcp://localhost:40451
+          OPCUA_WS_URL: ws://localhost:8001
+        run: |
+          pip install -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
+          python -m pytest OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/ `
+            -v --tb=short --timeout=60
+
+      - name: Stop OPC UA Server
+        if: always()
+        run: |
+          if ($env:SERVER_PID) {
+            Stop-Process -Id $env:SERVER_PID -Force -ErrorAction SilentlyContinue
+            Write-Host "OPC UA server stopped"
+          }
+          if ($env:WS_SERVER_PID) {
+            Stop-Process -Id $env:WS_SERVER_PID -Force -ErrorAction SilentlyContinue
+            Write-Host "Web server stopped"
+          }
+
+  server-smoke-docker:
+    name: "Release2 / OPC UA Server — Docker Smoke"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Extract server ZIP (required for Docker COPY instructions)
+        working-directory: OPC_UA_Servers/Release2
+        run: |
+          unzip -q OPC_UA_IJT_Server_Simulator.zip
+          echo "Extracted: $(ls OPC_UA_IJT_Server_Simulator/)"
+
+      - name: Lint Dockerfile (hadolint)
+        run: |
+          docker run --rm -i hadolint/hadolint hadolint \
+            --ignore DL3008 --ignore DL3009 \
+            - < OPC_UA_Servers/Release2/Dockerfile
+          echo "Dockerfile lint OK"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (layer cache via GHA)
+        uses: docker/build-push-action@v6
+        with:
+          context: OPC_UA_Servers/Release2
+          tags: opcua-ijt-server:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start OPC UA Server container
+        run: |
+          docker run -d --name opcua-server -p 40451:40451 opcua-ijt-server:ci
+          echo "Container started"
+
+      - name: Wait for OPC UA port 40451
+        # Wine + server init takes ~40 s; allow up to 2 min total.
+        run: |
+          for i in $(seq 1 24); do
+            if nc -z localhost 40451 2>/dev/null; then
+              echo "Port 40451 open after $((i * 5)) s"
+              exit 0
+            fi
+            echo "Waiting... attempt $i/24"
+            sleep 5
+          done
+          echo "ERROR: Timeout — dumping container logs:"
+          docker logs opcua-server --tail 60
+          exit 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install smoke test dependencies
+        run: pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
+
+      - name: Run smoke test (8 checks)
+        run: python OPC_UA_Servers/Release2/tests/smoke_test.py --timeout 30
+
+      - name: Dump container logs
+        if: always()
+        run: docker logs opcua-server --tail 60 || true
+
+      - name: Teardown container
+        if: always()
+        run: docker rm -f opcua-server || true
+
+  # ───────────────────────────────────────────────────────────────────────────
   # Combined Report — always runs after all jobs.
   # Writes the root-level summary table to the Actions Summary page.
   # ───────────────────────────────────────────────────────────────────────────
   report:
     name: "📋 Test Report"
     runs-on: ubuntu-latest
-    needs: [web-client, console-client, node-client, docker-smoke]
+    needs: [web-client, console-client, node-client, docker-smoke, test-client, server-smoke-windows, server-smoke-docker]
     if: always()
     permissions:
       contents: read
@@ -355,6 +595,9 @@ jobs:
           CONSOLE_RESULT: ${{ needs.console-client.result }}
           NODE_RESULT:    ${{ needs.node-client.result }}
           DOCKER_RESULT:  ${{ needs.docker-smoke.result }}
+          TC_RESULT:      ${{ needs.test-client.result }}
+          SS_WIN_RESULT:  ${{ needs.server-smoke-windows.result }}
+          SS_DOCK_RESULT: ${{ needs.server-smoke-docker.result }}
         run: |
           python3 - << 'PYEOF'
           import xml.etree.ElementTree as ET, json, os, glob
@@ -443,17 +686,25 @@ jobs:
           nod_esl = parse_eslint_json("all-results/results-node-client/eslint.json")
           nod_npm = parse_npm_audit  ("all-results/results-node-client/npm-audit.json")
 
-          web_r    = os.environ.get("WEB_RESULT",     "unknown")
-          con_r    = os.environ.get("CONSOLE_RESULT", "unknown")
-          nod_r    = os.environ.get("NODE_RESULT",    "unknown")
-          docker_r = os.environ.get("DOCKER_RESULT",  "unknown")
+          tc_ban  = parse_bandit     ("all-results/results-test-client/bandit.json")
 
-          overall = "✅ All Passed" if all(r == "success" for r in [web_r, con_r, nod_r, docker_r]) else "❌ Some Failed"
+          web_r      = os.environ.get("WEB_RESULT",     "unknown")
+          con_r      = os.environ.get("CONSOLE_RESULT", "unknown")
+          nod_r      = os.environ.get("NODE_RESULT",    "unknown")
+          docker_r   = os.environ.get("DOCKER_RESULT",  "unknown")
+          tc_r       = os.environ.get("TC_RESULT",      "unknown")
+          ss_win_r   = os.environ.get("SS_WIN_RESULT",  "unknown")
+          ss_dock_r  = os.environ.get("SS_DOCK_RESULT", "unknown")
+
+          overall = "✅ All Passed" if all(r == "success" for r in [web_r, con_r, nod_r, docker_r, tc_r, ss_win_r, ss_dock_r]) else "❌ Some Failed"
 
           rows = [
               f"| **Release2 / IJT Web Client**     | {job_icon(web_r)} `{web_r}` | {fmt_tests(*web_py)} | {fmt_tests(*web_js)} | {fmt_eslint(web_esl)} | {fmt_bandit(*web_ban)} | {fmt_npm(*web_npm)} | {fmt_docker(docker_r)} |",
               f"| **Release2 / IJT Console Client** | {job_icon(con_r)} `{con_r}` | {fmt_tests(*con_py)} | — | — | {fmt_bandit(*con_ban)} | — | — |",
               f"| **Release1 / IJT Node Client**    | {job_icon(nod_r)} `{nod_r}` | — | {fmt_tests(*nod_js)} | {fmt_eslint(nod_esl)} | — | {fmt_npm(*nod_npm)} | — |",
+              f"| **Release2 / IJT Test Client**    | {job_icon(tc_r)} `{tc_r}` | — | — | — | {fmt_bandit(*tc_ban)} | — | — |",
+              f"| **Release2 / OPC UA Server (Win)**  | {job_icon(ss_win_r)} `{ss_win_r}` | — | — | — | — | — | — |",
+              f"| **Release2 / OPC UA Server (Docker)** | {job_icon(ss_dock_r)} `{ss_dock_r}` | — | — | — | — | — | — |",
           ]
 
           lines = [

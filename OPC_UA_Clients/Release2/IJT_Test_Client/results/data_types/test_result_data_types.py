@@ -54,16 +54,17 @@ async def _get_result(client, ns_indices, result_type=ResultType.SIMPLE_OK_RESUL
     result_data = raw[1] if isinstance(raw, (list, tuple)) and len(raw) > 1 else raw
     return result_data
 def _require_attr(obj, attr_name, context=""):
-    """Return attribute value or skip the test if the attribute is missing."""
+    """Return attribute value, or skip the test if the attribute is missing."""
+    value = None
     try:
-        return getattr(obj, attr_name)
+        value = getattr(obj, attr_name)
     except AttributeError:
         msg = f"'{attr_name}' not found"
         if context:
             msg = f"{context}: {msg}"
         msg += " — data type definitions may not be loaded"
         pytest.skip(msg)
-        return None  # unreachable: pytest.skip() always raises
+    return value
 # ---------------------------------------------------------------------------
 # JoiningResultDataType top-level fields
 # ---------------------------------------------------------------------------
@@ -89,7 +90,7 @@ async def test_result_meta_data_type_fields(opcua_client, ns_indices):
     assert evaluation is not None, "ResultMetaDataType.ResultEvaluation must not be None"
     # ResultType carries the classification value — field is named "Classification"
     classification = _require_attr(meta, "Classification", "ResultMetaDataType")
-    assert classification is not None, "ResultMetaDataType.ResultType must not be None"
+    assert classification is not None, "ResultMetaDataType.Classification must not be None"
 # ---------------------------------------------------------------------------
 # StepResultDataType — requires a multi-step result
 # ---------------------------------------------------------------------------
