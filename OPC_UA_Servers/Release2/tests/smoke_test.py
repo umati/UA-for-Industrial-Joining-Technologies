@@ -58,7 +58,7 @@ def _port_open(host: str, port: int, timeout: float = 2.0) -> bool:
 
 def _parse_endpoint(endpoint: str) -> tuple[str, int]:
     """Return (host, port) from 'opc.tcp://host:port'."""
-    without_scheme = endpoint.replace("opc.tcp://", "").replace("opc.tcp://", "")
+    without_scheme = endpoint.replace("opc.tcp://", "")
     host, _, port_str = without_scheme.partition(":")
     return host, int(port_str or "40451")
 

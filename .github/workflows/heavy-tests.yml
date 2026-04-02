@@ -6,8 +6,8 @@
 # because they take 20-30 minutes (Docker build + 13 integration tests).
 #
 # Jobs:
-#   server-smoke-docker  Release2 / OPC UA Server   Linux native Docker build + smoke
-#   integration-tests    Release2 / Integration Tests  Windows: OPC UA + WebSocket
+#   server-smoke-docker  Release2 / OPC UA Server        Linux native Docker build + smoke
+#   integration-tests    Release2 / Integration Tests     Windows: OPC UA + Test Client + WebSocket
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: Heavy Tests
@@ -21,6 +21,7 @@ on:
     paths:
       - 'OPC_UA_Servers/**'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
+      - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
 
 permissions:
   contents: read
@@ -113,8 +114,8 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Release2 / Integration Tests (Windows)
-  #   OPC UA Server running natively + Web Client WebSocket server.
-  #   Runs the full 13-test integration suite.
+  #   OPC UA Server running natively + IJT Test Client full suite + Web Client.
+  #   All tests run against opc.tcp://localhost:40451.
   # ───────────────────────────────────────────────────────────────────────────
   integration-tests:
     name: "Release2 / Integration Tests (Windows)"
@@ -166,6 +167,17 @@ jobs:
 
       - name: Run smoke test (8 checks)
         run: python OPC_UA_Servers/Release2/tests/smoke_test.py --timeout 30
+
+      - name: Install IJT Test Client dependencies
+        run: pip install -r OPC_UA_Clients/Release2/IJT_Test_Client/requirements.txt
+
+      - name: Run IJT Test Client tests (all tests)
+        env:
+          OPCUA_SERVER_URL: opc.tcp://localhost:40451
+        run: |
+          python -m pytest OPC_UA_Clients/Release2/IJT_Test_Client/ `
+            -v --tb=short --timeout=120 `
+            --junitxml=OPC_UA_Clients/Release2/IJT_Test_Client/test-results/pytest.xml
 
       - name: Install Web Client Python dependencies
         run: pip install -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt

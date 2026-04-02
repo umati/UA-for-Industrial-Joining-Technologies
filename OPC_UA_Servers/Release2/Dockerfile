@@ -54,9 +54,10 @@ RUN printf '%s\n' \
     '' \
     '# Resolve OPCUA_HOSTNAME: explicit env > host.docker.internal > default route > 0.0.0.0' \
     'if [ -z "${OPCUA_HOSTNAME:-}" ]; then' \
-    '  OPCUA_HOSTNAME=$(getent hosts host.docker.internal 2>/dev/null | awk "{ print \$1; exit }") || true' \
+    '  OPCUA_HOSTNAME=$(getent hosts host.docker.internal 2>/dev/null | awk "{print \$1}" | head -1) || true' \
     '  if [ -z "$OPCUA_HOSTNAME" ]; then' \
-    '    OPCUA_HOSTNAME=$(ip route get 1.0.0.0 2>/dev/null | awk "/src/{for(i=1;i<=NF;i++) if(\$i==\"src\") print \$(i+1)}") || true' \
+    '    # Extract src IP from: "1.0.0.0 via <gw> dev <if> src <ip> uid 0"' \
+    '    OPCUA_HOSTNAME=$(ip route get 1.0.0.0 2>/dev/null | grep -oP "src \K\S+") || true' \
     '  fi' \
     '  OPCUA_HOSTNAME="${OPCUA_HOSTNAME:-0.0.0.0}"' \
     'fi' \
