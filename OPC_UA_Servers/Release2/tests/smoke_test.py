@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import socket
 import sys
 import time
@@ -113,7 +114,7 @@ async def check_namespaces(client: Any) -> tuple[str, str]:
 
 async def check_tightening_system(client: Any) -> tuple[str, str]:
     try:
-        ns1 = await client.get_namespace_index("urn:AtlasCopco:IJT:Tightening:Server/")
+        ns1 = await client.get_namespace_index(_NS_IJT_SERVER)
         node = await client.nodes.root.get_child(
             ["0:Objects", f"{ns1}:TighteningSystem"]
         )
@@ -125,7 +126,7 @@ async def check_tightening_system(client: Any) -> tuple[str, str]:
 
 async def check_simulations_node(client: Any) -> tuple[str, str]:
     try:
-        ns1 = await client.get_namespace_index("urn:AtlasCopco:IJT:Tightening:Server/")
+        ns1 = await client.get_namespace_index(_NS_IJT_SERVER)
         node = await client.nodes.root.get_child(
             ["0:Objects", f"{ns1}:TighteningSystem", f"{ns1}:Simulations"]
         )
@@ -137,7 +138,7 @@ async def check_simulations_node(client: Any) -> tuple[str, str]:
 
 async def check_result_management(client: Any) -> tuple[str, str]:
     try:
-        ns1  = await client.get_namespace_index("urn:AtlasCopco:IJT:Tightening:Server/")
+        ns1  = await client.get_namespace_index(_NS_IJT_SERVER)
         ns_r = await client.get_namespace_index(_NS_MACHINERY_RESULT)
         node = await client.nodes.root.get_child(
             ["0:Objects", f"{ns1}:TighteningSystem", f"{ns_r}:ResultManagement"]
@@ -150,7 +151,7 @@ async def check_result_management(client: Any) -> tuple[str, str]:
 
 async def check_asset_management(client: Any) -> tuple[str, str]:
     try:
-        ns1  = await client.get_namespace_index("urn:AtlasCopco:IJT:Tightening:Server/")
+        ns1  = await client.get_namespace_index(_NS_IJT_SERVER)
         ns_j = await client.get_namespace_index(_NS_IJT_BASE)
         node = await client.nodes.root.get_child(
             ["0:Objects", f"{ns1}:TighteningSystem", f"{ns_j}:AssetManagement"]
@@ -210,10 +211,8 @@ async def _run(endpoint: str, wait_s: float) -> int:
                 s, d = await fn(client)
                 checks.append((s, label, d))
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await client.disconnect()
-        except Exception:
-            pass
 
     # -- Report ----------------------------------------------------------------
     for status, name, detail in checks:

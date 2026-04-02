@@ -55,7 +55,7 @@ def _patch_asyncua_send_timeout() -> None:
 
         _uc.UaClient._send_request = _fixed
     except ImportError:
-        pass
+        pass  # patch not needed on all asyncua versions
 
 
 _patch_asyncua_send_timeout()
