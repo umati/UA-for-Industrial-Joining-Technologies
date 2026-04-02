@@ -28,6 +28,10 @@
 - Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
 
 # Change Log
+**2026-04-02:** Following Changes.
+1. **Added** missing interface for Asset.Identification IJoiningAdditionalInformationType.
+2. **Multiple** bugs, refactoring and optimizations.
+
 **2026-02-06:** Following Changes.
 1. **Added** appropriate logs when the binary path is too long on Windows.
 
