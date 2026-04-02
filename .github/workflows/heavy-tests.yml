@@ -101,8 +101,11 @@ jobs:
 
       - name: Start OPC UA Server container
         run: |
-          # SYS_PTRACE is required for Wine's internal exception handling (wineserver uses ptrace).
-          docker run -d --name opcua-server --cap-add SYS_PTRACE -p 40451:40451 opcua-ijt-server:ci
+          # PKI certs are pre-baked in the image (no cert gen at runtime).
+          # seccomp=unconfined allows Wine's full syscall range on Azure runners.
+          docker run -d --name opcua-server \
+            --security-opt seccomp=unconfined \
+            -p 40451:40451 opcua-ijt-server:ci
           echo "Container started"
 
       - name: Wait for OPC UA port 40451
