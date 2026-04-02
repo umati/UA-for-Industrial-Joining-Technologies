@@ -76,8 +76,12 @@ RUN printf '%s\n' \
     '' \
     '[ -f opcua_ijt_demo_application.exe ] || { echo "[ERROR] EXE not found in $(pwd)" >&2; exit 1; }' \
     '' \
-    '# Run wine headlessly: DISPLAY=nonexistent:0 tells Wine to skip X11 initialisation.' \
-    '# This avoids Wine X11 driver issues on CI runners while cert gen / networking work fine.' \
+    '# Wine 11+ requires a real X11 display (DISPLAY=nonexistent:0 causes early crash).' \
+    '# Start Xvfb, wait 5 s for it to be ready, then run Wine.' \
+    'Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &>/dev/null &' \
+    'sleep 5' \
+    'export DISPLAY=:99' \
+    '' \
     'exec wine opcua_ijt_demo_application.exe' \
     > /entrypoint.sh && chmod +x /entrypoint.sh
 
@@ -86,7 +90,6 @@ EXPOSE 40451
 
 ENV RUNNING_IN_DOCKER=1 \
     WINEDEBUG=-all \
-    DISPLAY=nonexistent:0 \
     OPCUA_HOSTNAME=""
 
 # TCP readiness probe. start-period covers Wine JIT + server init (~40 s total).
