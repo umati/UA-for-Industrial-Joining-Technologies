@@ -48,9 +48,10 @@ RUN apt-get update && \
 ENV WINEARCH=win64 \
     WINEPREFIX=/root/.wine
 
-RUN wineboot --init 2>/dev/null || true && \
-    Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &>/dev/null & \
+RUN Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &>/dev/null & \
     XVFB_PID=$! && sleep 3 && \
+    rm -rf "$WINEPREFIX" && \
+    DISPLAY=:99 wineboot --init && \
     DISPLAY=:99 winetricks --unattended vcrun2022 && \
     kill "$XVFB_PID" 2>/dev/null || true && \
     rm -rf /tmp/.wine-* /root/.wine/drive_c/windows/Temp/* /tmp/.X99-lock
