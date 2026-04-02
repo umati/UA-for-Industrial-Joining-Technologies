@@ -74,11 +74,17 @@ async def check_tcp_port(host: str, port: int, wait_s: float) -> tuple[str, str]
 
 
 async def check_opc_connection(client: Any) -> tuple[str, str]:
-    try:
-        await client.connect()
-        return _PASS, "OPC UA session established"
-    except Exception as exc:
-        return _FAIL, str(exc)
+    """Try to establish an OPC UA session, retrying briefly after TCP is open."""
+    last_exc: Exception | None = None
+    for attempt in range(5):
+        try:
+            await client.connect()
+            return _PASS, "OPC UA session established"
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if attempt < 4:
+                await asyncio.sleep(3)
+    return _FAIL, str(last_exc)
 
 
 async def check_server_time(client: Any) -> tuple[str, str]:

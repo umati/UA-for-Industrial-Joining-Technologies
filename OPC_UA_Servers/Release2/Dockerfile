@@ -72,6 +72,7 @@ RUN mkdir -p /app/pki
 # Kept inline (heredoc) so the entire Docker configuration lives in one file.
 # Shell is the right choice here: bash is guaranteed in every Linux container,
 # and the script only does hostname detection + exec — no need for Python.
+# hadolint ignore=SC2016
 RUN printf '%s\n' \
     '#!/bin/bash' \
     'set -euo pipefail' \
