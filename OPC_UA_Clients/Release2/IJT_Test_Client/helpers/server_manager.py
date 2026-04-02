@@ -6,6 +6,7 @@ Supports two workflows:
     OPCUA_SIMULATOR_EXE environment variable or well-known install paths.
 Only terminates the simulator process if this manager started it.
 """
+import asyncio
 import logging
 import os
 import socket
@@ -29,6 +30,36 @@ def wait_for_port(host: str, port: int, timeout_s: float = 30.0) -> bool:
     while time.monotonic() < deadline:
         if is_port_open(host, port):
             return True
+        time.sleep(0.5)
+    return False
+async def _opcua_probe(url: str, timeout: float) -> bool:
+    """Attempt a real OPC UA connect/disconnect with a short timeout."""
+    from asyncua import Client
+    client = Client(url, timeout=timeout)
+    try:
+        await asyncio.wait_for(client.connect(), timeout=timeout)
+        await client.disconnect()
+        return True
+    except Exception:
+        return False
+def wait_for_opcua_ready(url: str, timeout_s: float = 30.0) -> bool:
+    """
+    Poll the OPC UA server until it completes the OPC UA handshake or
+    *timeout_s* elapses.  TCP-open alone is not sufficient — the OPC UA
+    stack may still be initialising after the port becomes reachable.
+    Returns True if the server accepted an OPC UA connection within the
+    timeout, False otherwise.
+    """
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        remaining = deadline - time.monotonic()
+        probe_timeout = min(3.0, max(0.5, remaining))
+        try:
+            ready = asyncio.run(_opcua_probe(url, probe_timeout))
+            if ready:
+                return True
+        except Exception:
+            pass
         time.sleep(0.5)
     return False
 class ServerManager:
@@ -61,9 +92,15 @@ class ServerManager:
         Returns True if the server is available (already running or started
         successfully), False if it cannot be reached and no executable was found.
         """
+        server_url = f"opc.tcp://{self._host}:{self._port}"
         if is_port_open(self._host, self._port):
-            logger.info("OPC UA server already running at %s:%d", self._host, self._port)
-            return True
+            logger.info("OPC UA server TCP port open at %s:%d — waiting for OPC UA handshake", self._host, self._port)
+            ready = wait_for_opcua_ready(server_url, timeout_s=30.0)
+            if ready:
+                logger.info("OPC UA server ready at %s:%d", self._host, self._port)
+            else:
+                logger.warning("OPC UA server TCP is open but OPC UA handshake timed out after 30 s")
+            return ready
         exe_path = self._find_simulator_exe()
         if exe_path is None:
             logger.warning(
@@ -83,11 +120,11 @@ class ServerManager:
         except OSError as exc:
             logger.error("Failed to launch simulator '%s': %s", exe_path, exc)
             return False
-        available = wait_for_port(self._host, self._port, timeout_s=30.0)
+        available = wait_for_opcua_ready(server_url, timeout_s=30.0)
         if not available:
             logger.error(
-                "Simulator launched (pid=%d) but port %d did not open within 30 s",
-                self._process.pid, self._port,
+                "Simulator launched (pid=%d) but OPC UA did not become ready within 30 s",
+                self._process.pid,
             )
             self._process.terminate()
             self._process = None
