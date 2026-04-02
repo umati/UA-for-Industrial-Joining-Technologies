@@ -52,7 +52,7 @@ COPY OPC_UA_IJT_Server_Simulator/Opc.Ua.Ijt.Tightening.Server.xml    ./
 # existing certificates and skips generation entirely on every subsequent run.
 # Docker BuildKit runs in a less-restricted context than a plain docker run,
 # so the same cert generation that crashes at runtime succeeds here.
-# hadolint ignore=DL4006
+# hadolint ignore=DL4006,SC2016
 RUN mkdir -p /app/pki && \
     printf '%s\n' \
         'Xvfb :98 -screen 0 1024x768x24 -nolisten tcp &>/dev/null &' \
