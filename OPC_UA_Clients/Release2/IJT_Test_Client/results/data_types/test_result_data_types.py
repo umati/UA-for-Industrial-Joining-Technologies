@@ -63,6 +63,7 @@ def _require_attr(obj, attr_name, context=""):
             msg = f"{context}: {msg}"
         msg += " — data type definitions may not be loaded"
         pytest.skip(msg)
+        return None  # unreachable: pytest.skip() always raises
 # ---------------------------------------------------------------------------
 # JoiningResultDataType top-level fields
 # ---------------------------------------------------------------------------

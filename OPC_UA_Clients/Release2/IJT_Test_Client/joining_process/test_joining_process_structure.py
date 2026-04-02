@@ -63,11 +63,10 @@ async def test_enable_asset_method_exists(asset_management, ns_indices):
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
-    from helpers.node_discovery import find_child_by_browse_name as _find
-    method_set = await _find(asset_management, BN.METHOD_SET, ns_ijt)
+    method_set = await find_child_by_browse_name(asset_management, BN.METHOD_SET, ns_ijt)
     if method_set is None:
         pytest.skip("AssetManagement MethodSet not found")
-    node = await _find(method_set, BN.ENABLE_ASSET, ns_ijt)
+    node = await find_child_by_browse_name(method_set, BN.ENABLE_ASSET, ns_ijt)
     assert node is not None, (
         f"Method '{BN.ENABLE_ASSET}' not found in AssetManagement MethodSet (ns={ns_ijt})"
     )
@@ -77,11 +76,10 @@ async def test_disable_asset_method_exists(asset_management, ns_indices):
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
-    from helpers.node_discovery import find_child_by_browse_name as _find
-    method_set = await _find(asset_management, BN.METHOD_SET, ns_ijt)
+    method_set = await find_child_by_browse_name(asset_management, BN.METHOD_SET, ns_ijt)
     if method_set is None:
         pytest.skip("AssetManagement MethodSet not found")
-    enable_node = await _find(method_set, BN.ENABLE_ASSET, ns_ijt)
+    enable_node = await find_child_by_browse_name(method_set, BN.ENABLE_ASSET, ns_ijt)
     assert enable_node is not None, (
         "EnableAsset method not found in AssetManagement MethodSet — "
         "required for both enable and disable (DisableAsset = EnableAsset with False)"
