@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1
+# ─────────────────────────────────────────────────────────────────────────────
+# OPC UA IJT Server — Wine Base Image
+#
+# Pre-built once and stored on GHCR (GitHub Container Registry).
+# The application Dockerfile uses this as its FROM so that the 20-minute
+# Wine + winetricks installation never runs in regular CI.
+#
+# Contains:
+#   - scottyhardy/docker-wine (Wine 64-bit)
+#   - System utilities: iproute2, net-tools, netcat-openbsd, xvfb
+#   - Wine 64-bit prefix pre-initialised
+#   - VC++ 2015-2022 runtime (vcrun2022 via winetricks)
+#     → msvcp140.dll + vcruntime140.dll required by the OPC UA EXE
+#
+# Rebuilt automatically by .github/workflows/build-wine-base.yml:
+#   - Monthly (1st of month)
+#   - Manually via workflow_dispatch
+#   - When this file changes
+#
+# To rebuild locally:
+#   docker build -f Dockerfile.wine-base \
+#     -t ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-wine-base:latest \
+#     OPC_UA_Servers/Release2
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM scottyhardy/docker-wine:stable
+
+# ── System utilities ──────────────────────────────────────────────────────────
+# iproute2 / net-tools  : IP address detection for OPCUA_HOSTNAME auto-resolve
+# netcat-openbsd        : TCP probe used in HEALTHCHECK
+# xvfb                  : virtual display required by the winetricks installer
+# hadolint ignore=DL3008,DL3009
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        iproute2 \
+        net-tools \
+        netcat-openbsd \
+        xvfb && \
+    rm -rf /var/lib/apt/lists/*
+
+# ── Wine: 64-bit prefix + VC++ 2015-2022 runtime ─────────────────────────────
+# The EXE is x64, so WINEARCH must be win64.
+# vcrun2022 installs the genuine Microsoft msvcp140.dll + vcruntime140.dll —
+# the same DLLs shipped in the VC++ 2015-2022 Redistributable package.
+# Pre-initialising the Wine prefix here avoids a cold-start penalty on every
+# container launch.
+ENV WINEARCH=win64 \
+    WINEPREFIX=/root/.wine
+
+RUN wineboot --init 2>/dev/null || true && \
+    xvfb-run --auto-servernum winetricks --unattended vcrun2022 && \
+    rm -rf /tmp/.wine-* /root/.wine/drive_c/windows/Temp/*

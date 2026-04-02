@@ -1,0 +1,78 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Build Wine Base Image → GHCR
+#
+# Builds OPC_UA_Servers/Release2/Dockerfile.wine-base and pushes the result
+# to GitHub Container Registry as:
+#   ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-wine-base:latest
+#
+# This pre-built image is used by the application Dockerfile (Dockerfile) so
+# that Wine + winetricks never run in regular CI — cutting Docker build time
+# from ~20 minutes to ~30 seconds.
+#
+# Triggers:
+#   - Monthly (1st of month at 03:00 UTC) — keeps the image fresh
+#   - Manual (workflow_dispatch)
+#   - Push to main when Dockerfile.wine-base itself changes
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Build Wine Base Image
+
+on:
+  schedule:
+    - cron: '0 3 1 * *'   # monthly: 1st of month at 3am UTC
+  workflow_dispatch:        # manual trigger
+  push:
+    branches: [main]
+    paths:
+      - 'OPC_UA_Servers/Release2/Dockerfile.wine-base'
+
+permissions:
+  contents: read
+  packages: write   # required to push to GHCR
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  IMAGE_NAME: ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-wine-base
+
+concurrency:
+  group: wine-base-${{ github.ref }}
+  cancel-in-progress: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  build-and-push:
+    name: "Build & Push Wine Base Image → GHCR"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: OPC_UA_Servers/Release2
+          file: OPC_UA_Servers/Release2/Dockerfile.wine-base
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64

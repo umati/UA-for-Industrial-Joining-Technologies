@@ -1,0 +1,221 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Heavy Tests — OPC UA Server Docker Smoke + Integration Tests
+#
+# Runs nightly, on manual trigger, or when OPC UA Server / Web Client code
+# changes are pushed to main. These jobs are excluded from the fast CI path
+# because they take 20-30 minutes (Wine Docker build + 13 integration tests).
+#
+# Jobs:
+#   server-smoke-docker  Release2 / OPC UA Server   Wine Docker build + smoke
+#   integration-tests    Release2 / Integration Tests  Windows: OPC UA + WebSocket
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Heavy Tests
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # nightly at 2am UTC
+  workflow_dispatch:        # manual trigger
+  push:
+    branches: [main]
+    paths:
+      - 'OPC_UA_Servers/**'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
+
+permissions:
+  contents: read
+  checks: write
+  packages: read    # pull pre-built Wine base image from GHCR
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: heavy-${{ github.ref }}
+  cancel-in-progress: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Release2 / OPC UA Server — Docker Smoke
+  #   Extract the ZIP to satisfy the COPY instructions in the Dockerfile,
+  #   build the Wine-based Docker image (layer-cached via GitHub Actions cache),
+  #   start the container, wait for TCP 40451, run all 8 smoke checks, tear down.
+  # ───────────────────────────────────────────────────────────────────────────
+  server-smoke-docker:
+    name: "Release2 / OPC UA Server — Docker Smoke"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Extract server ZIP (required for Docker COPY instructions)
+        working-directory: OPC_UA_Servers/Release2
+        run: |
+          unzip -q OPC_UA_IJT_Server_Simulator.zip
+          echo "Extracted: $(ls OPC_UA_IJT_Server_Simulator/)"
+
+      - name: Lint Dockerfile (hadolint)
+        run: |
+          docker run --rm -i hadolint/hadolint hadolint \
+            --ignore DL3008 --ignore DL3009 \
+            - < OPC_UA_Servers/Release2/Dockerfile
+          echo "Dockerfile lint OK"
+
+      - name: Log in to GHCR (pull pre-built Wine base image)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (uses pre-built Wine base from GHCR)
+        uses: docker/build-push-action@v6
+        with:
+          context: OPC_UA_Servers/Release2
+          tags: opcua-ijt-server:ci
+          load: true
+
+      - name: Start OPC UA Server container
+        run: |
+          docker run -d --name opcua-server -p 40451:40451 opcua-ijt-server:ci
+          echo "Container started"
+
+      - name: Wait for OPC UA port 40451
+        # Wine + server init takes ~40 s; allow up to 2 min total.
+        run: |
+          for i in $(seq 1 24); do
+            if nc -z localhost 40451 2>/dev/null; then
+              echo "Port 40451 open after $((i * 5)) s"
+              exit 0
+            fi
+            echo "Waiting... attempt $i/24"
+            sleep 5
+          done
+          echo "ERROR: Timeout — dumping container logs:"
+          docker logs opcua-server --tail 60
+          exit 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install smoke test dependencies
+        run: pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
+
+      - name: Run smoke test (8 checks)
+        run: python OPC_UA_Servers/Release2/tests/smoke_test.py --timeout 30
+
+      - name: Dump container logs
+        if: always()
+        run: docker logs opcua-server --tail 60 || true
+
+      - name: Teardown container
+        if: always()
+        run: docker rm -f opcua-server || true
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Release2 / Integration Tests (Windows)
+  #   OPC UA Server running natively + Web Client WebSocket server.
+  #   Runs the full 13-test integration suite.
+  # ───────────────────────────────────────────────────────────────────────────
+  integration-tests:
+    name: "Release2 / Integration Tests (Windows)"
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Extract server ZIP
+        run: |
+          Expand-Archive `
+            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+            -DestinationPath "OPC_UA_Servers\Release2\" `
+            -Force
+          Write-Host "Extracted ZIP contents:"
+          Get-ChildItem "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\" | Select-Object Name
+
+      - name: Start OPC UA Server (background)
+        run: |
+          $proc = Start-Process `
+            -FilePath "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\opcua_ijt_demo_application.exe" `
+            -WorkingDirectory "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\" `
+            -PassThru -WindowStyle Hidden
+          Write-Host "Server PID: $($proc.Id)"
+          echo "SERVER_PID=$($proc.Id)" >> $env:GITHUB_ENV
+
+      - name: Wait for OPC UA port 40451
+        run: |
+          $timeout = 60
+          $start   = Get-Date
+          while (((Get-Date) - $start).TotalSeconds -lt $timeout) {
+            if (Test-NetConnection -ComputerName localhost -Port 40451 `
+                  -InformationLevel Quiet -WarningAction SilentlyContinue) {
+              Write-Host "Port 40451 is open"
+              exit 0
+            }
+            Write-Host "Waiting for server..."
+            Start-Sleep -Seconds 3
+          }
+          Write-Host "ERROR: Timeout waiting for port 40451"
+          exit 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install smoke test dependencies
+        run: pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
+
+      - name: Run smoke test (8 checks)
+        run: python OPC_UA_Servers/Release2/tests/smoke_test.py --timeout 30
+
+      - name: Install Web Client Python dependencies
+        run: pip install -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
+
+      - name: Start Web Client WebSocket server (background)
+        shell: pwsh
+        run: |
+          $proc = Start-Process python `
+            -ArgumentList "index.py" `
+            -WorkingDirectory "OPC_UA_Clients\Release2\IJT_Web_Client" `
+            -PassThru -WindowStyle Hidden
+          Write-Host "Web server PID: $($proc.Id)"
+          echo "WS_SERVER_PID=$($proc.Id)" >> $env:GITHUB_ENV
+
+      - name: Wait for WebSocket port 8001
+        shell: pwsh
+        run: |
+          $start = Get-Date
+          while (((Get-Date)-$start).TotalSeconds -lt 30) {
+            if (Test-NetConnection -ComputerName localhost -Port 8001 `
+                  -InformationLevel Quiet -WarningAction SilentlyContinue) {
+              Write-Host "Port 8001 is open"; exit 0
+            }
+            Start-Sleep -Seconds 2
+          }
+          Write-Host "ERROR: WebSocket server did not start on port 8001"; exit 1
+
+      - name: Run Web Client integration tests (13 tests, 0 skips)
+        env:
+          OPCUA_TEST_ENDPOINT: opc.tcp://localhost:40451
+          OPCUA_WS_URL: ws://localhost:8001
+        run: |
+          pip install -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
+          python -m pytest OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/ -v --tb=short --timeout=60
+
+      - name: Stop servers
+        if: always()
+        run: |
+          if ($env:SERVER_PID) {
+            Stop-Process -Id $env:SERVER_PID -Force -ErrorAction SilentlyContinue
+            Write-Host "OPC UA server stopped"
+          }
+          if ($env:WS_SERVER_PID) {
+            Stop-Process -Id $env:WS_SERVER_PID -Force -ErrorAction SilentlyContinue
+            Write-Host "Web server stopped"
+          }

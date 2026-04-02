@@ -6,7 +6,11 @@
 #   - Built with VS 2022 toolset (v145), C++17, Release|x64
 #   - All libraries statically linked (mbedTLS, OPC UA SDK, WolfMQTT)
 #   - Dynamic CRT (/MD) — requires msvcp140.dll + vcruntime140.dll at runtime
-#     (installed via winetricks vcrun2022 during this build)
+#
+# Uses a pre-built Wine base image from GHCR so that Wine + winetricks never
+# run in regular CI (build time: ~30 s instead of ~20 min).
+# The base image is rebuilt monthly and on changes to Dockerfile.wine-base
+# via .github/workflows/build-wine-base.yml.
 #
 # Build (from this Release2/ directory):
 #   docker build -t opcua-ijt-server .
@@ -19,32 +23,8 @@
 #   docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=192.168.1.10 opcua-ijt-server
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM scottyhardy/docker-wine:stable
-
-# ── System utilities ──────────────────────────────────────────────────────────
-# iproute2 / net-tools  : IP address detection for OPCUA_HOSTNAME auto-resolve
-# netcat-openbsd        : TCP probe used in HEALTHCHECK
-# xvfb                  : virtual display required by the winetricks installer
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        iproute2 \
-        net-tools \
-        netcat-openbsd \
-        xvfb && \
-    rm -rf /var/lib/apt/lists/*
-
-# ── Wine: 64-bit prefix + VC++ 2015-2022 runtime ─────────────────────────────
-# The EXE is x64, so WINEARCH must be win64.
-# vcrun2022 installs the genuine Microsoft msvcp140.dll + vcruntime140.dll —
-# the same DLLs shipped in the VC++ 2015-2022 Redistributable package.
-# Pre-initialising the Wine prefix here avoids a 15-20 s cold-start penalty
-# on every container launch.
-ENV WINEARCH=win64 \
-    WINEPREFIX=/root/.wine
-
-RUN wineboot --init 2>/dev/null || true && \
-    xvfb-run --auto-servernum winetricks --unattended vcrun2022 && \
-    rm -rf /tmp/.wine-* /root/.wine/drive_c/windows/Temp/*
+# Wine + VC++ 2022 runtime pre-installed. Rebuilt monthly via build-wine-base.yml.
+FROM ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-wine-base:latest
 
 # ── Application files ─────────────────────────────────────────────────────────
 # Copy only what the server needs at runtime.
