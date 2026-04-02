@@ -2,9 +2,11 @@
 # OPC UA IJT Server Simulator — Docker Image (Linux native)
 #
 # The server is a Linux x64 ELF binary (statically linked C++ runtime):
-#   - Built with CMake/WSL2 toolset, C++17, Release|x64
-#   - Statically linked C++ runtime; only depends on glibc (2.17+)
+#   - Built with CMake/WSL2 toolset on Ubuntu 24.04, C++17, Release|x64
+#   - Requires glibc 2.38+ (built on Ubuntu 24.04 / glibc 2.39)
 #   - No Wine, no Xvfb, no DISPLAY needed
+#
+# Base image: ubuntu:24.04 — matches build machine glibc (2.39)
 #
 # Build (from this Release2/ directory):
 #   docker build -t opcua-ijt-server .
@@ -17,7 +19,7 @@
 #   docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=192.168.1.10 opcua-ijt-server
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM debian:bookworm-slim
+FROM ubuntu:24.04
 
 WORKDIR /app
 
