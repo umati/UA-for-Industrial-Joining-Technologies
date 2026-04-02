@@ -9,11 +9,13 @@ Spec coverage:
 Layer: methods (reads result data; simulation called to ensure data exists).
 """
 import asyncio
+import logging
 import pytest
 from asyncua import ua
-from helpers.namespaces import NS_MACH_RESULT, NS_APP, NS_IJT_BASE, BN, ResultType
+from helpers.namespaces import NS_MACH_RESULT, NS_APP, BN, ResultType
 from helpers.node_discovery import find_child_by_browse_name
 
+logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.methods]
 
 _METHOD_TIMEOUT = 15  # seconds for any single method call or browse
@@ -40,8 +42,8 @@ async def _prepare_result(opcua_client, simulate_results_folder, result_manageme
                     ),
                     timeout=_METHOD_TIMEOUT,
                 )
-            except asyncio.TimeoutError:
-                pass  # non-fatal — continue with whatever results exist
+            except asyncio.TimeoutError as exc:
+                logger.debug("Pre-flight SimulateSingleResult timed out (non-fatal): %s", exc)
     return rm
 
 

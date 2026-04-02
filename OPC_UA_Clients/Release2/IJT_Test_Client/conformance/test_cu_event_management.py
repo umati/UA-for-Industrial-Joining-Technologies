@@ -3,7 +3,6 @@ Conformance unit tests for EventManagement — §11.1 CU-EM-001 through CU-EM-00
 Tests cover event type hierarchy, subscription support, mandatory base OPC UA
 event fields, IJT-specific event fields, and event timestamp freshness.
 """
-import asyncio
 import datetime
 import pytest
 from asyncua import ua

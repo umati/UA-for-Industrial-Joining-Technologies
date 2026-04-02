@@ -6,7 +6,6 @@ opcua_client is used to call simulation methods.
 import pytest
 from asyncua import ua
 from helpers.namespaces import (
-    NS_MACH_RESULT,
     NS_IJT_BASE,
     NS_APP,
     BN,
@@ -139,7 +138,6 @@ async def test_result_ready_event_has_result_classification(
 async def test_batch_result_fires_multiple_events(
     subscription_client, opcua_client, ns_indices
 ):
-    ns_mr = ns_indices[NS_MACH_RESULT]
     ns_app = ns_indices[NS_APP]
     ns_ijt = ns_indices[NS_IJT_BASE]
     event_type_node = subscription_client.get_node(

@@ -3,7 +3,6 @@ Structural tests for ResultManagement — verifies that the expected folder,
 methods and child nodes are present and browsable.
 """
 import pytest
-from asyncua import ua
 from helpers.namespaces import (
     NS_MACH_RESULT,
     NS_IJT_BASE,

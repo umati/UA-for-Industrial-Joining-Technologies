@@ -10,16 +10,14 @@ Design rules enforced here:
   - Namespace indices are resolved once and cached in ns_indices dict.
   - Two separate client fixtures prevent asyncua concurrency issues with subscriptions.
 """
-import asyncio
 import logging
 import os
 import pytest
 import pytest_asyncio
-from asyncua import Client, ua
+from asyncua import Client
 from helpers.namespaces import (
-    NS_OPC_UA, NS_DI, NS_AMB, NS_IA, NS_MACHINERY, NS_MACH_RESULT,
-    NS_IJT_BASE, NS_IJT_TIGHTENING, NS_APP,
-    ALL_NAMESPACE_URIS, BN, RefTypes, IJTTypes, MachineryResultTypes,
+    NS_MACH_RESULT, NS_IJT_BASE, NS_APP,
+    ALL_NAMESPACE_URIS, BN,
 )
 from helpers.node_discovery import (
     find_joining_system,
@@ -44,8 +42,8 @@ def pytest_sessionstart(session) -> None:
             parts = url.replace("opc.tcp://", "").split(":")
             host = parts[0]
             port = int(parts[1]) if len(parts) > 1 else 40451
-        except Exception:
-            pass
+        except (ValueError, IndexError) as exc:
+            logger.debug("OPCUA_SERVER_URL parse error, using defaults: %s", exc)
     try:
         with socket.create_connection((host, port), timeout=2.0):
             reachable = True
@@ -120,8 +118,8 @@ async def session_client(managed_server):
     yield client
     try:
         await client.disconnect()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("session_client disconnect failed (ignored): %s", exc)
 # ─── Namespace indices ────────────────────────────────────────────────────────
 @pytest_asyncio.fixture(scope="session")
 async def ns_indices(session_client) -> dict:
@@ -416,8 +414,8 @@ async def opcua_client(managed_server):
     yield client
     try:
         await client.disconnect()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("opcua_client disconnect failed (ignored): %s", exc)
 @pytest_asyncio.fixture(scope="function")
 async def subscription_client(managed_server):
     """
@@ -439,5 +437,5 @@ async def subscription_client(managed_server):
     yield client
     try:
         await client.disconnect()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("subscription_client disconnect failed (ignored): %s", exc)

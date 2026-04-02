@@ -3,6 +3,7 @@ Conformance unit tests for JoiningProcessManagement — §11.1 CU-JP-001 through
 Structure tests use session fixtures. Method call tests use a fresh opcua_client
 combined with session-scoped controllers_instances for asset NodeId resolution.
 """
+import logging
 import pytest
 from asyncua import ua
 from helpers.namespaces import NS_IJT_BASE, NS_DI, BN
@@ -10,6 +11,7 @@ from helpers.node_discovery import (
     find_joining_system,
     find_child_by_browse_name,
 )
+logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
 # ---------------------------------------------------------------------------
 # Helper
@@ -84,8 +86,8 @@ async def test_cu_joining_process_enable_disable_asset_callable(
                 pi_node = await find_child_by_browse_name(ident, "ProductInstanceUri", ns_di)
                 if pi_node is not None:
                     pi_uri = str(await pi_node.read_value() or "")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Could not read ProductInstanceUri from tool (using empty string): %s", exc)
     # Enable then disable using EnableAsset(PI, True/False)
     for enable_flag in (True, False):
         try:

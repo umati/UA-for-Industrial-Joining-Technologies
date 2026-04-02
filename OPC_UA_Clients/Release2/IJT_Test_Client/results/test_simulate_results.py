@@ -22,9 +22,9 @@ import pytest
 from asyncua import ua
 from helpers.namespaces import (
     NS_MACH_RESULT, NS_APP, NS_IJT_BASE, BN, ResultType,
-    IJTTypes, MachineryResultTypes,
+    IJTTypes,
 )
-from helpers.node_discovery import find_child_by_browse_name, _browse_refs, _node_from_ref
+from helpers.node_discovery import find_child_by_browse_name
 from helpers.event_collector import EventCollector
 
 pytestmark = [pytest.mark.live, pytest.mark.methods]

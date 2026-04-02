@@ -14,10 +14,12 @@ complex or large subtrees. Use _browse_refs() which calls get_references() with
 HierarchicalReferences (id=33) and an asyncio.wait_for timeout instead.
 """
 import asyncio
+import logging
 from asyncua import ua
 from asyncua.common.node import Node as UANode
 from helpers.namespaces import NS_OPC_UA, NS_IJT_BASE, IJTTypes, RefTypes
 
+logger = logging.getLogger(__name__)
 _BROWSE_TIMEOUT = 15.0  # seconds — applies to all browse/reference calls
 
 
@@ -130,8 +132,8 @@ async def get_type_definition(node: UANode, ns_opc_ua: int = 0):
         )
         if refs:
             return refs[0].NodeId
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("get_type_definition failed: %s", exc)
     return None
 async def get_interface_types(node: UANode, ns_opc_ua: int = 0) -> list:
     """

@@ -5,7 +5,6 @@ carry IJT-specific fields beyond the standard OPC UA base event fields.
 import pytest
 from asyncua import ua
 from helpers.namespaces import (
-    NS_MACH_RESULT,
     NS_APP,
     NS_IJT_BASE,
     BN,
@@ -83,14 +82,10 @@ async def test_joining_system_event_content_type_structure(
         assert True  # Result field present — IJT-specific data confirmed
         return
     # Fallback: check for any non-base non-None non-callable attribute
-    base_fields = {
-        "EventId", "EventType", "SourceNode", "SourceName",
-        "Time", "ReceiveTime", "LocalTime", "Message", "Severity",
-    }
     ijt_fields = [
         attr for attr in dir(event)
         if not attr.startswith("_")
-        and attr not in base_fields
+        and attr not in standard_fields
         and not callable(getattr(event, attr, None))
         and getattr(event, attr, None) is not None
     ]

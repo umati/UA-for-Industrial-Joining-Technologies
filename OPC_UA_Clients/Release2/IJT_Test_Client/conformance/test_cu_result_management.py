@@ -5,7 +5,7 @@ Method call tests use function-scoped opcua_client to re-discover nodes on a
 fresh connection, ensuring state isolation between tests.
 """
 import asyncio
-import datetime
+import logging
 import pytest
 from asyncua import ua
 from helpers.namespaces import (
@@ -14,6 +14,7 @@ from helpers.namespaces import (
 )
 from helpers.node_discovery import find_joining_system, find_child_by_browse_name
 from helpers.event_collector import EventCollector
+logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
 
 _METHOD_TIMEOUT = 15  # seconds
@@ -47,8 +48,8 @@ async def _simulate_and_get_latest(client, rm, ns_mr, ns_app, simulate_results_f
                     ),
                     timeout=_METHOD_TIMEOUT,
                 )
-            except (ua.UaError, asyncio.TimeoutError):
-                pass
+            except (ua.UaError, asyncio.TimeoutError) as exc:
+                logger.debug("Pre-flight simulation failed (non-fatal): %s", exc)
     glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
     if glr_node is None:
         return None, None
@@ -163,8 +164,8 @@ async def test_cu_result_management_result_meta_data_structure(opcua_client, sim
                     ),
                     timeout=_METHOD_TIMEOUT,
                 )
-            except (ua.UaError, asyncio.TimeoutError):
-                pass
+            except (ua.UaError, asyncio.TimeoutError) as exc:
+                logger.debug("Pre-flight simulation failed (non-fatal): %s", exc)
     glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
     if glr_node is None:
         pytest.skip("GetLatestResult not available")
@@ -212,8 +213,8 @@ async def test_cu_result_management_result_content_structure(opcua_client, simul
                     ),
                     timeout=_METHOD_TIMEOUT,
                 )
-            except (ua.UaError, asyncio.TimeoutError):
-                pass
+            except (ua.UaError, asyncio.TimeoutError) as exc:
+                logger.debug("Pre-flight simulation failed (non-fatal): %s", exc)
     glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
     if glr_node is None:
         pytest.skip("GetLatestResult not available")
@@ -321,4 +322,4 @@ async def test_cu_result_management_result_classification_values(opcua_client, s
     assert classification_int in ResultClassification.VALID_VALUES, (
         f"ResultClassification value {classification_int} is not in valid set "
         f"{ResultClassification.VALID_VALUES}"
-    )
+    )

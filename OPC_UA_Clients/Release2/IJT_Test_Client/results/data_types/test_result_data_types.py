@@ -73,7 +73,7 @@ async def test_result_data_type_has_result_meta_data(opcua_client, ns_indices):
 async def test_result_data_type_has_result_content(opcua_client, ns_indices):
     result = await _get_result(opcua_client, ns_indices)
     # ResultContent may be an empty list for a simple OK result — that is valid
-    _content = _require_attr(result, "ResultContent", "JoiningResultDataType")
+    _require_attr(result, "ResultContent", "JoiningResultDataType")
 # ---------------------------------------------------------------------------
 # ResultMetaDataType fields
 # ---------------------------------------------------------------------------

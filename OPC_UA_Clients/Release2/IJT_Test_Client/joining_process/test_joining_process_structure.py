@@ -83,8 +83,8 @@ async def test_disable_asset_method_exists(asset_management, ns_indices):
         pytest.skip("AssetManagement MethodSet not found")
     enable_node = await _find(method_set, BN.ENABLE_ASSET, ns_ijt)
     assert enable_node is not None, (
-        f"EnableAsset method not found in AssetManagement MethodSet — "
-        f"required for both enable and disable (DisableAsset = EnableAsset with False)"
+        "EnableAsset method not found in AssetManagement MethodSet — "
+        "required for both enable and disable (DisableAsset = EnableAsset with False)"
     )
 async def test_abort_joining_process_method_exists(
     joining_process_management, ns_indices

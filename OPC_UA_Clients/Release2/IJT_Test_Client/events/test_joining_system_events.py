@@ -6,7 +6,6 @@ methods so the two connection purposes stay separated.
 import pytest
 from asyncua import ua
 from helpers.namespaces import (
-    NS_MACH_RESULT,
     NS_APP,
     NS_IJT_BASE,
     BN,

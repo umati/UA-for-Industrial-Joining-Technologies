@@ -11,7 +11,6 @@ from helpers.namespaces import (
     NS_DI, NS_AMB, NS_IA, NS_MACHINERY, NS_MACH_RESULT,
     NS_IJT_BASE, NS_IJT_TIGHTENING,
     NS_APP,
-    ALL_NAMESPACE_URIS,
 )
 pytestmark = pytest.mark.live
 _COMPANION_NAMESPACES = [

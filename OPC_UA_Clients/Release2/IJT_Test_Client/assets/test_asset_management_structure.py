@@ -11,7 +11,7 @@ Verifies the structural layout of the AssetManagement AddIn:
 import pytest
 from asyncua import ua
 from helpers.namespaces import (
-    NS_DI, NS_IJT_BASE,
+    NS_IJT_BASE,
     BN, IJTTypes,
 )
 from helpers.node_discovery import (

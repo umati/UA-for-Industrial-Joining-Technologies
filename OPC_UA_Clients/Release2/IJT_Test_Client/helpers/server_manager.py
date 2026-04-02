@@ -58,8 +58,8 @@ def wait_for_opcua_ready(url: str, timeout_s: float = 30.0) -> bool:
             ready = asyncio.run(_opcua_probe(url, probe_timeout))
             if ready:
                 return True
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("OPC UA probe attempt failed: %s", exc)
         time.sleep(0.5)
     return False
 class ServerManager:
