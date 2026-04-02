@@ -45,38 +45,7 @@ COPY OPC_UA_IJT_Server_Simulator/Opc.Ua.Ijt.Base.NodeSet2.xml        ./
 COPY OPC_UA_IJT_Server_Simulator/Opc.Ua.Ijt.Tightening.NodeSet2.xml  ./
 COPY OPC_UA_IJT_Server_Simulator/Opc.Ua.Ijt.Tightening.Server.xml    ./
 
-# ── Pre-generate PKI certificates at build time ──────────────────────────────
-# Wine 11+ on some Linux kernels (e.g. Azure CI) crashes (ucrtbase memset fault)
-# when the server generates self-signed certificates on first launch.
-# Pre-baking the PKI at image build time avoids the crash: the server finds
-# existing certificates and skips generation entirely on every subsequent run.
-# Docker BuildKit runs in a less-restricted context than a plain docker run,
-# so the same cert generation that crashes at runtime succeeds here.
-# hadolint ignore=DL4006,SC2016
-RUN mkdir -p /app/pki && \
-    printf '%s\n' \
-        'Xvfb :98 -screen 0 1024x768x24 -nolisten tcp &>/dev/null &' \
-        'sleep 3' \
-        'export DISPLAY=:98' \
-        'wine opcua_ijt_demo_application.exe &>/tmp/pregen.log &' \
-        'APP_PID=$!' \
-        'CERT_FOUND=0' \
-        'for i in $(seq 1 90); do' \
-        '  if find /app/pki -name "*.der" 2>/dev/null | grep -q .; then' \
-        '    CERT_FOUND=1; echo "PKI cert ready after ${i}s"; break' \
-        '  fi' \
-        '  sleep 1' \
-        'done' \
-        'kill "$APP_PID" 2>/dev/null || true' \
-        'wineserver -k 2>/dev/null || true' \
-        'pkill -f "Xvfb :98" 2>/dev/null || true' \
-        'rm -f /tmp/.X98-lock' \
-        'echo "=== Build-time server log ===" && cat /tmp/pregen.log || true' \
-        'find /app/pki -type f 2>/dev/null || true' \
-        '[ "$CERT_FOUND" = "1" ] || { echo "ERROR: No PKI certs generated at build time"; exit 1; }' \
-        > /tmp/prebake_certs.sh && \
-    bash /tmp/prebake_certs.sh && \
-    rm /tmp/prebake_certs.sh
+RUN mkdir -p /app/pki
 
 # ── Entrypoint — inline shell script written to /entrypoint.sh ───────────────
 # Kept inline (heredoc) so the entire Docker configuration lives in one file.
@@ -105,8 +74,7 @@ RUN printf '%s\n' \
     '' \
     '[ -f opcua_ijt_demo_application.exe ] || { echo "[ERROR] EXE not found in $(pwd)" >&2; exit 1; }' \
     '' \
-    '# PKI certs were pre-baked at image build time; no cert generation needed at runtime.' \
-    '# Wine 11+ requires a real X11 display; start Xvfb before running Wine.' \
+    '# Start Xvfb virtual display (required by Wine on Linux).' \
     'Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &>/dev/null &' \
     'sleep 5' \
     'export DISPLAY=:99' \

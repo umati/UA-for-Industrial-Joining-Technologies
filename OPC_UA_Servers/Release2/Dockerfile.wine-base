@@ -7,7 +7,7 @@
 # Wine + winetricks installation never runs in regular CI.
 #
 # Contains:
-#   - scottyhardy/docker-wine (Wine 64-bit)
+#   - scottyhardy/docker-wine:stable-9.0 (Wine 9.0, pinned — avoids Wine 11.0 rsaenh regression)
 #   - System utilities: iproute2, net-tools, netcat-openbsd, xvfb
 #   - Wine 64-bit prefix pre-initialised
 #   - VC++ 2015-2022 runtime (vcrun2022 via winetricks)
@@ -24,7 +24,7 @@
 #     OPC_UA_Servers/Release2
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM scottyhardy/docker-wine:stable
+FROM scottyhardy/docker-wine:stable-9.0
 
 # ── System utilities ──────────────────────────────────────────────────────────
 # iproute2 / net-tools  : IP address detection for OPCUA_HOSTNAME auto-resolve

@@ -101,10 +101,7 @@ jobs:
 
       - name: Start OPC UA Server container
         run: |
-          # PKI certs are pre-baked in the image (no cert gen at runtime).
-          # seccomp=unconfined allows Wine's full syscall range on Azure runners.
           docker run -d --name opcua-server \
-            --security-opt seccomp=unconfined \
             -p 40451:40451 opcua-ijt-server:ci
           echo "Container started"
 
