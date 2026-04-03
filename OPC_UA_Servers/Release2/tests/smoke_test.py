@@ -10,7 +10,7 @@ Usage:
     # Prerequisites: pip install asyncua
     python tests/smoke_test.py                        # default localhost:40451
     python tests/smoke_test.py --endpoint opc.tcp://192.168.1.10:40451
-    python tests/smoke_test.py --timeout 60           # longer start-up wait
+    python tests/smoke_test.py --tcp-timeout 60       # longer start-up wait
 
 Exit codes:
     0 — all checks passed
@@ -28,9 +28,10 @@ import sys
 import time
 from typing import Any
 
-# asyncua is a required dependency — import its exception base at module level
-# so all check functions can catch specific OPC UA errors.
+# asyncua is a required dependency — all asyncua symbols are imported here so
+# that a missing package is caught immediately with a clear error message.
 try:
+    from asyncua import Client as _Client
     from asyncua import ua as _ua
     _OpcUaError = _ua.UaError
 except ImportError as exc:
@@ -183,12 +184,6 @@ async def check_asset_management(client: Any) -> tuple[str, str]:
 
 
 async def _run(endpoint: str, wait_s: float) -> int:
-    try:
-        from asyncua import Client
-    except ImportError:
-        print("ERROR: 'asyncua' not installed.  Run: pip install asyncua")
-        return 1
-
     host, port = _parse_endpoint(endpoint)
     checks: list[tuple[str, str, str]] = []  # (status, name, detail)
     failures = 0
@@ -207,7 +202,7 @@ async def _run(endpoint: str, wait_s: float) -> int:
         return 2
 
     # 2–8: OPC UA layer checks
-    client = Client(endpoint, timeout=30)
+    client = _Client(endpoint, timeout=30)
     try:
         status, detail = await check_opc_connection(client)
         checks.append((status, "OPC UA session", detail))
@@ -270,13 +265,15 @@ def main() -> None:
         help="OPC UA endpoint URL (default: opc.tcp://localhost:40451)",
     )
     parser.add_argument(
-        "--timeout",
+        "--tcp-timeout",
         type=float,
         default=30.0,
-        help="Seconds to wait for TCP port to open (default: 30)",
+        dest="tcp_timeout",
+        help="Seconds to wait for the TCP port to open (default: 30). "
+             "Does not affect the OPC UA session timeout (fixed at 30 s).",
     )
     args = parser.parse_args()
-    sys.exit(asyncio.run(_run(args.endpoint, args.timeout)))
+    sys.exit(asyncio.run(_run(args.endpoint, args.tcp_timeout)))
 
 
 if __name__ == "__main__":

@@ -22,9 +22,9 @@ from python.ijt_logger import ijt_log
 from python.result_event_handler import ResultEventHandler
 from python.serialize_data import serialize_full_event, serialize_tuple, serialize_value
 
-_OPCUA_TIMEOUT_S = 60
-_OPCUA_TIMEOUT_SHORT_S = 15
-_OPCUA_TIMEOUT_BROWSE_S = 30
+_OPCUA_TIMEOUT_S = 60          # per-request timeout for long-running operations (method calls, reads)
+_OPCUA_TIMEOUT_SHORT_S = 15    # wall-clock limit for OPC UA session establishment (SecureChannel + Session handshake)
+_OPCUA_TIMEOUT_BROWSE_S = 30   # wall-clock limit for type-definition loading (load_type_definitions)
 _SUBSCRIPTION_PERIOD_MS = 100
 _CONNECT_RETRIES_DEFAULT = "8"
 _CONNECT_DELAY_DEFAULT = "1.0"
@@ -176,6 +176,9 @@ class Connection:
                 self.client.application_uri = f"urn:{computer_name}:IJT:WebClient"
                 self.client.product_uri = "urn:IJT:WebClient"
 
+                # _OPCUA_TIMEOUT_SHORT_S caps the connection handshake itself;
+                # _OPCUA_TIMEOUT_S (set on the Client above) governs subsequent
+                # per-request operations such as method calls and reads.
                 await asyncio.wait_for(
                     self.client.connect(), timeout=_OPCUA_TIMEOUT_SHORT_S
                 )
@@ -197,6 +200,7 @@ class Connection:
                     )
                     sub_client_name = f"urn:{computer_name}:IJT:WebClient:Sub"
                     self.subscription_client.name = sub_client_name
+                    self.subscription_client.description = sub_client_name
                     self.subscription_client.application_uri = sub_client_name
                     await asyncio.wait_for(
                         self.subscription_client.connect(),
@@ -210,7 +214,10 @@ class Connection:
                     ijt_log.info("Subscription client connected.")
                 except Exception as sub_err:
                     ijt_log.warning(
-                        f"Subscription client failed to connect (events may not work): {sub_err}"
+                        "Subscription client failed to connect — falling back to "
+                        "single-session mode; OPC UA events will not be received. "
+                        "Check server connectivity and session limits. Error: %s",
+                        sub_err,
                     )
                     self.subscription_client = None
 
@@ -421,7 +428,8 @@ class Connection:
                 ]
             )
 
-            await sub_client.load_data_type_definitions()
+            # Type definitions are already loaded during connect() for both
+            # self.client and self.subscription_client — no need to reload here.
 
             event_type = data.get("eventtype", "").lower().strip()
 

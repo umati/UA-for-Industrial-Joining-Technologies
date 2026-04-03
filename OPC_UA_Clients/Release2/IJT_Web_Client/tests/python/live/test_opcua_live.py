@@ -40,12 +40,25 @@ from asyncua import ua
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# asyncua 1.2b2 bug-fix: UaClient.call() calls _send_request without a
-# timeout, falling back to a 1-second default. Heavy calls (load_data_type_
-# definitions, browse-heavy operations) exceed 1s and raise spurious timeouts.
-# Fix: replace _send_request so it uses self._timeout when none is given.
+# asyncua _send_request timeout patch
+#
+# Affected versions : asyncua 1.2b2 – 1.1.5 (confirmed; see asyncua issue #1)
+# Fixed upstream in : not yet fixed as of asyncua 1.1.5 (pinned: asyncua>=1.2b2,<2)
+# Symptom           : UaClient.call() invokes _send_request(timeout=None),
+#                     which asyncua resolves to a hard-coded 1-second fallback.
+#                     Heavy operations (load_type_definitions, browse-heavy calls)
+#                     exceed 1 s and raise spurious timeout errors.
+# Fix               : Wrap _send_request so that timeout=None inherits the
+#                     client's configured timeout (self._timeout) instead.
+# Compatibility     : If asyncua ever removes or renames _send_request, this
+#                     patch will raise AttributeError at import time — remove it
+#                     and rely on the upstream fix instead.
 # ─────────────────────────────────────────────────────────────────────────────
 def _patch_asyncua_send_timeout() -> None:
+    if not hasattr(_uc.UaClient, "_send_request"):
+        # Upstream has removed or renamed _send_request — patch is no longer needed.
+        return
+
     _orig = _uc.UaClient._send_request
 
     async def _fixed(self, request, timeout=None,
