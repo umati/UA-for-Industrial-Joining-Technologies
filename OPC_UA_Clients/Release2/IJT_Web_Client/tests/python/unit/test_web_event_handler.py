@@ -152,7 +152,7 @@ def test_short_missing_attribute_does_not_raise():
 @pytest.mark.asyncio
 async def test_event_handler_creates_task_on_init():
     ws = AsyncMock()
-    with patch("python.event_handler.log_joining_system_event", new_callable=AsyncMock):
+    with patch("python.event_handler.log_joining_system_event"):
         handler = EventHandler(ws, "opc.tcp://localhost:40451")
     assert not handler._queue_task.done()
     await handler.close()
@@ -225,7 +225,7 @@ async def test_event_notification_ignored_when_closed():
     ws = AsyncMock()
     handler = EventHandler(ws, "opc.tcp://localhost:40451")
     handler.closed = True
-    with patch("python.event_handler.log_joining_system_event", new_callable=AsyncMock):
+    with patch("python.event_handler.log_joining_system_event"):
         await handler.event_notification(_fake_raw_event())
     assert handler.queue.qsize() == 0
     await handler.close()
@@ -242,7 +242,7 @@ async def test_handle_queue_sends_json_with_correct_structure():
     server_url = "opc.tcp://localhost:40451"
 
     with (
-        patch("python.event_handler.log_joining_system_event", new_callable=AsyncMock),
+        patch("python.event_handler.log_joining_system_event"),
         patch("python.event_handler.serialize_full_event", return_value={"key": "value"}),
     ):
         handler = EventHandler(ws, server_url)
@@ -266,7 +266,7 @@ async def test_handle_queue_breaks_on_connection_closed_ok():
     ws.send = AsyncMock(side_effect=websockets.exceptions.ConnectionClosedOK(None, None))
 
     with (
-        patch("python.event_handler.log_joining_system_event", new_callable=AsyncMock),
+        patch("python.event_handler.log_joining_system_event"),
         patch("python.event_handler.serialize_full_event", return_value={"x": 1}),
     ):
         handler = EventHandler(ws, "opc.tcp://localhost:40451")
@@ -280,7 +280,7 @@ async def test_handle_queue_breaks_and_closes_ws_on_exception():
     ws.send = AsyncMock(side_effect=RuntimeError("broken pipe"))
 
     with (
-        patch("python.event_handler.log_joining_system_event", new_callable=AsyncMock),
+        patch("python.event_handler.log_joining_system_event"),
         patch("python.event_handler.serialize_full_event", return_value={"x": 1}),
     ):
         handler = EventHandler(ws, "opc.tcp://localhost:40451")

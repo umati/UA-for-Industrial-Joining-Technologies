@@ -58,25 +58,35 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vitest, ESLint, Docker
-- **Test baseline**: 219 Python pass / 23 skip, 70/70 JS, ESLint clean
+- **Test baseline**: 323 Python pass / 0 skip / 0 warnings, 162 JS pass, ESLint clean
+- **Live tests**: `tests/python/live/` — excluded from default run (`norecursedirs = live`); requires running OPC UA server
 - **One test command**: `python run_all_tests.py`
-- **Primary script**: `setup_project.py` (at project root, restored for backward compatibility)
 - **Docker**: healthy on HTTP:3000 + WS:8001
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Web_Client/SKILLS.md`
 
 ### IJT Console Client (`OPC_UA_Clients/Release2/IJT_Console_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2
+- **Test baseline**: 285 Python pass, 0 skip (unit); live tests auto-skip when no server
 - **One test command**: `python -m pytest tests/ -v`
 - **Entry point**: `python setup_client.py --url="opc.tcp://..."`
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Console_Client/SKILLS.md`
+
+### IJT Test Client (`OPC_UA_Clients/Release2/IJT_Test_Client/`)
+- **Stack**: Python 3.14+, asyncua ≥1.2b2, pytest
+- **Purpose**: OPC UA IJT spec conformance test suite — validates server against OPC 40450-1 / 40451-1
+- **Test baseline**: 214 pass + 3 xfail (requires running OPC UA server on port 40451)
+- **One test command**: `python -m pytest . -v` (from IJT_Test_Client root)
+- **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/SKILLS.md` (if present)
 
 ---
 
 ## OPC UA IJT Server (Simulator)
 
 - **Default endpoint**: `opc.tcp://localhost:40451`
-- **Location**: `OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator.zip`
-- **Start**: run the Windows simulator executable on the host machine
+- **Location**: `OPC_UA_Servers/Release2/` — Windows installer ZIP + Linux binary ZIP + smoke tests
+- **Start (Windows)**: run the installer EXE, then launch the server
+- **Start (Docker/Linux)**: see `OPC_UA_Servers/Release2/README.md`
+- **Smoke tests**: `python OPC_UA_Servers/Release2/tests/smoke_test.py` — 8 checks, fails fast if asyncua missing
 - **Key simulation methods** (all require boolean `IsSimulated` argument):
   - `SimulateResults` — single tightening result
   - `SimulateBulkResults` — multiple results, sent one by one in detached thread
@@ -87,14 +97,30 @@ UA-for-Industrial-Joining-Technologies/
 
 ## CI/CD
 
-**Workflow location**: `OPC_UA_Clients/Release2/IJT_Web_Client/.github/workflows/ijt-web-client-ci.yml`
+**Workflows**: `.github/workflows/ci.yml` and `.github/workflows/heavy-tests.yml` (both at **repo root**)
 
-| Step | Command |
-|------|---------|
-| Python unit | `python -m pytest tests/python/unit` |
-| Python integration | `python -m pytest tests/python/integration -m integration` |
-| JS unit | `npm run test:unit:js` |
-| Action versions | `checkout@v6`, `setup-python@v6`, `setup-node@v6` |
+### Fast CI (`ci.yml`) — triggers on every push/PR to `main`
+| Job | What it tests |
+|-----|--------------|
+| `web-client` | Python unit (323), JS unit (162), ESLint, Bandit, npm audit |
+| `console-client` | Python unit (285), Bandit |
+| `node-client` | JS unit (~152), ESLint, npm audit |
+| `test-client` | pytest collect + import check |
+| `docker-smoke` | docker buildx + compose up + HTTP:3000 readiness |
+| `report` | Combined markdown summary → Actions Summary tab |
+
+Runtime: ~5–7 minutes. Python 3.14, Node.js 24 everywhere.
+Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `upload-artifact@v7`, `download-artifact@v8`
+
+### Heavy Tests (`heavy-tests.yml`) — nightly + path-triggered
+Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJT_Test_Client/**`, or workflow file change.
+| Job | What it tests |
+|-----|--------------|
+| `docker-smoke` | Full Docker build + server smoke (8/8) |
+| `webclient-docker` | Web Client Docker test image (Python 302+8skip, JS 162) + HTTP:3000 production health |
+| `integration-tests` | Live OPC UA integration (214 + 3 xfail) against running server |
+
+Runtime: ~7 minutes. NOT triggered on GUI/JS-only changes (deliberate — keep fast CI fast).
 
 ---
 
@@ -117,12 +143,13 @@ UA-for-Industrial-Joining-Technologies/
 
 | Path | Covers |
 |------|--------|
-| `SKILLS.md` (this file) | Repo-level context, access rules, sub-project summary |
+| `SKILLS.md` (this file) | Repo-level context, access rules, sub-project summary, CI/CD |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/SKILLS.md` | Full Web Client context, file map, bugs, Docker, CI |
 | `OPC_UA_Clients/Release2/IJT_Console_Client/SKILLS.md` | Console Client context, patterns, test commands |
+| `OPC_UA_Clients/Release2/IJT_Test_Client/SKILLS.md` | Test Client conformance suite, test structure, markers |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/USING_AGENTS.md` | Agent workflow and prompt template |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/HEALTH_CHECK.md` | Quick sanity check commands |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/Javascripts/ijt-support/IJT_SUPPORT_AGENT_GUIDE.md` | JS core library contracts |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/Javascripts/ijt-support/Models/MODELS_AGENT_GUIDE.md` | JS model layer |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/Javascripts/ijt-support/Models/Results/RESULT_MODEL_GUIDE.md` | Result model hierarchy |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/Javascripts/Views/VIEWS_AGENT_GUIDE.md` | UI views and screens |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/ijt-support/IJT_SUPPORT_AGENT_GUIDE.md` | JS core library contracts |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/ijt-support/models/MODELS_AGENT_GUIDE.md` | JS model layer |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/ijt-support/models/results/RESULT_MODEL_GUIDE.md` | Result model hierarchy |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/VIEWS_AGENT_GUIDE.md` | UI views and screens |

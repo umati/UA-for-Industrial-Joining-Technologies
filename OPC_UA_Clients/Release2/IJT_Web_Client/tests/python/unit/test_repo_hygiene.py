@@ -141,6 +141,15 @@ class TestGitTrackedArtefacts:
                         f"Possible secret in tracked file {rel_path}: {stripped!r}"
                     )
 
+    def test_no_code_workspace_files_tracked(self):
+        """*.code-workspace files must not be committed (personal IDE workspace files)."""
+        tracked = _git_ls_files("*.code-workspace")
+        assert tracked == [], (
+            "The following *.code-workspace files are tracked by git and must be removed:\n  "
+            + "\n  ".join(tracked)
+            + "\n  Run: git rm --cached <file>  then commit the removal."
+        )
+
 
 # ===========================================================================
 # 2. .gitignore coverage
@@ -241,19 +250,6 @@ class TestConnectionpointsDefault:
             f"The single entry in connectionpoints.json must be the LOCAL endpoint "
             f"(name 'LOCAL' or address 127.0.0.1/localhost), got: name={points[0].get('name')!r}, "
             f"address={address!r}"
-        )
-
-    @pytest.mark.skipif(
-        not _git_available(),
-        reason="git not installed — skipping connectionpoints checks",
-    )
-    def test_no_code_workspace_files_tracked(self):
-        """*.code-workspace files must not be committed (personal IDE workspace files)."""
-        tracked = _git_ls_files("*.code-workspace")
-        assert tracked == [], (
-            "The following *.code-workspace files are tracked by git and must be removed:\n  "
-            + "\n  ".join(tracked)
-            + "\n  Run: git rm --cached <file>  then commit the removal."
         )
 
 
@@ -439,21 +435,22 @@ class TestJsCodeQuality:
 # ===========================================================================
 
 
-def test_no_implicit_string_concatenation_in_lists():
-    """No implicit string concat in source Python files (CodeQL py/implicit-string-concatenation)."""
-    import io
-    import tokenize
-    _src_python = _PROJECT_ROOT / "src" / "python"
-    issues = []
-    for py_file in _src_python.rglob("*.py"):
-        src = py_file.read_text(encoding="utf-8")
-        try:
-            tokens = list(tokenize.generate_tokens(io.StringIO(src).readline))
-        except tokenize.TokenError:
-            continue
-        for i in range(len(tokens) - 1):
-            if (tokens[i].type == tokenize.STRING and
-                    tokens[i + 1].type == tokenize.STRING and
-                    tokens[i].end[0] <= tokens[i + 1].start[0]):
-                issues.append(f"{py_file}:{tokens[i].start[0]}: implicit string concat")
-    assert not issues, "Implicit string concatenation found:\n" + "\n".join(issues)
+class TestImplicitStringConcatenation:
+    def test_no_implicit_string_concatenation_in_lists(self):
+        """No implicit string concat in source Python files (CodeQL py/implicit-string-concatenation)."""
+        import io
+        import tokenize
+        _src_python = _PROJECT_ROOT / "src" / "python"
+        issues = []
+        for py_file in _src_python.rglob("*.py"):
+            src = py_file.read_text(encoding="utf-8")
+            try:
+                tokens = list(tokenize.generate_tokens(io.StringIO(src).readline))
+            except tokenize.TokenError:
+                continue
+            for i in range(len(tokens) - 1):
+                if (tokens[i].type == tokenize.STRING and
+                        tokens[i + 1].type == tokenize.STRING and
+                        tokens[i].end[0] <= tokens[i + 1].start[0]):
+                    issues.append(f"{py_file}:{tokens[i].start[0]}: implicit string concat")
+        assert not issues, "Implicit string concatenation found:\n" + "\n".join(issues)

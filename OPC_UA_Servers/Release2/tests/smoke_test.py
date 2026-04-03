@@ -33,8 +33,10 @@ from typing import Any
 try:
     from asyncua import ua as _ua
     _OpcUaError = _ua.UaError
-except ImportError:  # only happens if asyncua is missing at import time
-    _OpcUaError = Exception  # type: ignore[misc,assignment]
+except ImportError as exc:
+    raise ImportError(
+        "asyncua is required to run smoke tests. Install it with: pip install asyncua"
+    ) from exc
 
 # -- Namespace URIs (from OPC UA IJT companion specs) -------------------------
 _NS_IJT_BASE = "http://opcfoundation.org/UA/IJT/Base/"
