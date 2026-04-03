@@ -24,7 +24,6 @@ from asyncua import ua  # noqa: E402
 
 from python.event_handler import EventHandler, Short  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

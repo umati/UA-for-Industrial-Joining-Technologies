@@ -3,8 +3,8 @@ import os
 
 import pytest
 
-from python.network_utils import endpoint_reachable
 from python.connection import Connection
+from python.network_utils import endpoint_reachable
 
 
 @pytest.fixture

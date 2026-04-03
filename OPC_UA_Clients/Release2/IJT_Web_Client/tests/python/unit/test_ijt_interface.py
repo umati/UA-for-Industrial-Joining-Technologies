@@ -1,13 +1,12 @@
-import json
 import inspect
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 
-from python.ijt_interface import IJTInterface
 from python.connection import Connection
-
+from python.ijt_interface import IJTInterface
 
 # ---------------------------------------------------------------------------
 # CONTRACT: Connection class must expose every command the frontend sends

@@ -18,7 +18,6 @@ pytest.importorskip("asyncua", reason="asyncua not installed")
 
 from python.connection import Connection  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

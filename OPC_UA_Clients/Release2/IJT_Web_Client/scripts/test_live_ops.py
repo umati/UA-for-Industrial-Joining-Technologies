@@ -17,13 +17,13 @@ async def live_test():
         print('[1/5] Testing connect...')
         client = Client(OPCUA_ENDPOINT, timeout=10)
         await client.connect()
-        print(f'  Connect: OK')
+        print('  Connect: OK')
         results['connect'] = True
         
         # Test 2: Load data types
         print('[2/5] Loading data type definitions...')
         await client.load_data_type_definitions()
-        print(f'  Data types loaded: OK')
+        print('  Data types loaded: OK')
         results['data_types'] = True
         
         # Test 3: Get Namespaces

@@ -37,11 +37,13 @@ import asyncio
 import os
 import socket
 import time
+from typing import List
 
 import asyncua.client.ua_client as _uc
-from asyncua import ua
 import pytest
 import pytest_asyncio
+from asyncua import ua
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # asyncua 1.2b2 bug-fix: UaClient.call() calls self._send_request(request)

@@ -28,6 +28,14 @@ import sys
 import time
 from typing import Any
 
+# asyncua is a required dependency — import its exception base at module level
+# so all check functions can catch specific OPC UA errors.
+try:
+    from asyncua import ua as _ua
+    _OpcUaError = _ua.UaError
+except ImportError:  # only happens if asyncua is missing at import time
+    _OpcUaError = Exception  # type: ignore[misc,assignment]
+
 # -- Namespace URIs (from OPC UA IJT companion specs) -------------------------
 _NS_IJT_BASE = "http://opcfoundation.org/UA/IJT/Base/"
 _NS_IJT_TIGHTENING = "http://opcfoundation.org/UA/IJT/Tightening/"
@@ -83,7 +91,7 @@ async def check_opc_connection(client: Any) -> tuple[str, str]:
         try:
             await client.connect()
             return _PASS, "OPC UA session established"
-        except Exception as exc:  # noqa: BLE001
+        except (_OpcUaError, ConnectionError, TimeoutError, OSError) as exc:
             last_exc = exc
             if attempt < 4:
                 await asyncio.sleep(3)
@@ -95,7 +103,7 @@ async def check_server_time(client: Any) -> tuple[str, str]:
         node = client.get_node("ns=0;i=2258")  # Server/ServerStatus/CurrentTime
         val = await node.read_value()
         return _PASS, f"CurrentTime = {val}"
-    except Exception as exc:
+    except (_OpcUaError, AttributeError) as exc:
         return _FAIL, str(exc)
 
 
@@ -115,7 +123,7 @@ async def check_namespaces(client: Any) -> tuple[str, str]:
         if missing:
             return _FAIL, "missing namespaces: " + ", ".join(missing)
         return _PASS, f"{len(ns_array)} namespaces, all IJT URIs present"
-    except Exception as exc:
+    except (_OpcUaError, AttributeError) as exc:
         return _FAIL, str(exc)
 
 
@@ -127,7 +135,7 @@ async def check_tightening_system(client: Any) -> tuple[str, str]:
         )
         bn = await node.read_browse_name()
         return _PASS, f"TighteningSystem found ({bn})"
-    except Exception as exc:
+    except (_OpcUaError, ValueError, AttributeError) as exc:
         return _FAIL, str(exc)
 
 
@@ -139,7 +147,7 @@ async def check_simulations_node(client: Any) -> tuple[str, str]:
         )
         children = await node.get_children()
         return _PASS, f"Simulations node has {len(children)} method(s)"
-    except Exception as exc:
+    except (_OpcUaError, ValueError, AttributeError) as exc:
         return _FAIL, str(exc)
 
 
@@ -152,7 +160,7 @@ async def check_result_management(client: Any) -> tuple[str, str]:
         )
         await node.read_browse_name()
         return _PASS, "ResultManagement node present"
-    except Exception as exc:
+    except (_OpcUaError, ValueError, AttributeError) as exc:
         return _FAIL, str(exc)
 
 
@@ -165,7 +173,7 @@ async def check_asset_management(client: Any) -> tuple[str, str]:
         )
         await node.read_browse_name()
         return _PASS, "AssetManagement node present"
-    except Exception as exc:
+    except (_OpcUaError, ValueError, AttributeError) as exc:
         return _FAIL, str(exc)
 
 
@@ -225,7 +233,7 @@ async def _run(endpoint: str, wait_s: float) -> int:
                 s, d = await fn(client)
                 checks.append((s, label, d))
     finally:
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(_OpcUaError, ConnectionError, OSError):
             await client.disconnect()
 
     # -- Report ----------------------------------------------------------------

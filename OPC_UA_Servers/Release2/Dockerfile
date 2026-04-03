@@ -77,6 +77,10 @@ EXPOSE 40451
 ENV RUNNING_IN_DOCKER=1 \
     OPCUA_HOSTNAME=""
 
+# Run as non-root for security
+RUN useradd -r -s /bin/false opcua && chown -R opcua:opcua /app
+USER opcua
+
 # TCP readiness probe. start-period covers server init (~3 s; no Wine JIT overhead).
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 \
     CMD nc -z localhost 40451 || exit 1

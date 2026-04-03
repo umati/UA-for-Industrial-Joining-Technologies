@@ -28,7 +28,6 @@ from unittest.mock import MagicMock
 sys.path.insert(0, str(Path(__file__).parents[3]))
 import setup_project as sp
 
-
 # =============================================================================
 # _is_endpoint_reachable  (delegates to network_utils.endpoint_reachable)
 # =============================================================================
@@ -149,7 +148,8 @@ def test_extract_replaces_dir_when_zip_is_newer(tmp_path, monkeypatch):
 
 def test_extract_replaces_dir_logs_info_for_newer_zip(tmp_path, monkeypatch, caplog):
     """Info message is emitted when a newer ZIP triggers a folder replacement."""
-    import os, logging
+    import logging
+    import os
     sim_dir = tmp_path / "sim"
     sim_dir.mkdir()
     zip_path = tmp_path / "sim.zip"

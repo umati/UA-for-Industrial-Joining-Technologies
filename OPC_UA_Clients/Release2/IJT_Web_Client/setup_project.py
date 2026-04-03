@@ -1,21 +1,22 @@
 import os
 import sys
+
 # Suppress __pycache__ / .pyc generation for all child processes (matches Docker behavior)
 os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
-import subprocess
-import shutil
-import logging
+import argparse
 import atexit
 import contextlib
-import webbrowser
-import socket
-import argparse
 import json
-import time
-import shlex
+import logging
 import re
-import zipfile
+import shlex
+import shutil
 import signal
+import socket
+import subprocess
+import time
+import webbrowser
+import zipfile
 from pathlib import Path
 
 # Add src/ to path so "from python.xxx import" works regardless of cwd

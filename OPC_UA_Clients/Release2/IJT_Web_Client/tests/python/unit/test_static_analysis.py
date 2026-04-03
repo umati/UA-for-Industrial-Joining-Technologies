@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import ast
 import io
+import platform
 import re
 import shutil
 import subprocess
 import sys
-import platform
 import tokenize
 from pathlib import Path
 

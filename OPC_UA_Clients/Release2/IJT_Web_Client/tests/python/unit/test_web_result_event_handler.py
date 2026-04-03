@@ -24,7 +24,6 @@ from asyncua import ua  # noqa: E402
 
 from python.result_event_handler import ResultEventHandler, Short  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Short class
 # ---------------------------------------------------------------------------
@@ -256,6 +255,7 @@ def test_log_result_event_details_has_no_client_parameter():
     fire many events before returning.
     """
     import inspect
+
     from python.utils import log_result_event_details
     params = list(inspect.signature(log_result_event_details).parameters.keys())
     assert "client" not in params, (

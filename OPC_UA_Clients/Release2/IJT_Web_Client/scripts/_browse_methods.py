@@ -1,6 +1,7 @@
 """Helper script: browse the live OPC UA server and print all callable methods + args."""
 import asyncio
 import contextlib
+
 from asyncua import Client, ua
 
 

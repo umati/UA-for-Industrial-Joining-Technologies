@@ -75,7 +75,7 @@ async def find_joining_system(client) -> UANode:
     for child in children:
         try:
             sub_refs = await _browse_refs(child)
-        except Exception:
+        except Exception:  # nosec B112 - deliberate continue to try next child node
             continue
         for sr in sub_refs:
             gc = _node_from_ref(child, sr.NodeId)

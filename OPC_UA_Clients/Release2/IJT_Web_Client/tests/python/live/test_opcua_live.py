@@ -28,11 +28,12 @@ import json
 import os
 import socket
 import time
-import pytest_asyncio
+from typing import Any
 
 import asyncua.client.ua_client as _uc
-from asyncua import ua
 import pytest
+import pytest_asyncio
+from asyncua import ua
 
 # All async tests in this file share the module-scoped event loop so they can
 # use the module-scoped opcua_client fixture without cross-loop I/O hangs.

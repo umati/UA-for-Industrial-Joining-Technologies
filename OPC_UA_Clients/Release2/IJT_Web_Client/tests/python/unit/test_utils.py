@@ -8,9 +8,10 @@ Covers:
 - format_list_for_logging(): empty list, single item, multiple items
 """
 
-import pytest
 import uuid
 from datetime import datetime
+
+import pytest
 
 try:
     import pytz  # noqa: E402
@@ -27,7 +28,6 @@ from python.utils import (  # noqa: E402
     localizedtext_to_str,
     nodeid_to_str,
 )
-
 
 # ---------------------------------------------------------------------------
 # nodeid_to_str

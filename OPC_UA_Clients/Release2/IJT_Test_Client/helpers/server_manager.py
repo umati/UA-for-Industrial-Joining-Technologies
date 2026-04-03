@@ -11,7 +11,7 @@ import asyncio
 import logging
 import os
 import socket
-import subprocess
+import subprocess  # nosec B404 - intentional: launches OPC UA simulator binary
 import time
 from typing import Optional
 
@@ -134,7 +134,7 @@ class ServerManager:
             return False
         logger.info("Launching OPC UA simulator: %s", exe_path)
         try:
-            self._process = subprocess.Popen(
+            self._process = subprocess.Popen(  # nosec B603 - exe_path is validated above, not user input
                 [exe_path],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,

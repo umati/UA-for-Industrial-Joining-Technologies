@@ -22,7 +22,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ── Path constants ─────────────────────────────────────────────────────────────
 _INTEGRATION_DIR = Path(__file__).resolve().parent
 _WEB_CLIENT_ROOT = _INTEGRATION_DIR.parents[2]          # …/IJT_Web_Client/

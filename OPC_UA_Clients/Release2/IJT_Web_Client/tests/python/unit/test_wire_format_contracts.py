@@ -21,7 +21,6 @@ from unittest.mock import AsyncMock, MagicMock, patch  # noqa: E402
 
 from python.connection import Connection  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

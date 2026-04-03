@@ -7,8 +7,8 @@ Creates Resources/css/ and tests/legacy/ with the correct content.
 Run once (or let RUN_ALL_TESTS.bat call it automatically):
     python create_structure.py
 """
-from pathlib import Path
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 

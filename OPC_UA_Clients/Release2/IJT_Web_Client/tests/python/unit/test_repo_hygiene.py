@@ -36,7 +36,7 @@ def _git_ls_files(pattern: str) -> list[str]:
     if result.returncode != 0:
         return []
     lines = result.stdout.strip().splitlines()
-    return [l for l in lines if l]
+    return [line for line in lines if line]
 
 
 # ===========================================================================
@@ -53,7 +53,7 @@ class TestGitTrackedArtefacts:
         """No .pyc files should be committed to git."""
         tracked = _git_ls_files("*.pyc")
         assert tracked == [], (
-            f"The following .pyc files are tracked by git:\n  "
+            "The following .pyc files are tracked by git:\n  "
             + "\n  ".join(tracked)
         )
 
@@ -61,7 +61,7 @@ class TestGitTrackedArtefacts:
         """No __pycache__/ directories should be tracked by git."""
         tracked = _git_ls_files("*/__pycache__/*")
         assert tracked == [], (
-            f"Files inside __pycache__/ are tracked by git:\n  "
+            "Files inside __pycache__/ are tracked by git:\n  "
             + "\n  ".join(tracked)
         )
 
@@ -69,7 +69,7 @@ class TestGitTrackedArtefacts:
         """No node_modules/ content should be committed to git."""
         tracked = _git_ls_files("*/node_modules/*")
         assert tracked == [], (
-            f"Files inside node_modules/ are tracked by git:\n  "
+            "Files inside node_modules/ are tracked by git:\n  "
             + "\n  ".join(tracked)
         )
 
@@ -77,7 +77,7 @@ class TestGitTrackedArtefacts:
         """No .pytest_cache/ content should be committed to git."""
         tracked = _git_ls_files("*/.pytest_cache/*")
         assert tracked == [], (
-            f"Files inside .pytest_cache/ are tracked by git:\n  "
+            "Files inside .pytest_cache/ are tracked by git:\n  "
             + "\n  ".join(tracked)
         )
 
@@ -413,8 +413,8 @@ class TestJsCodeQuality:
 
 def test_no_implicit_string_concatenation_in_lists():
     """No implicit string concat in source Python files (CodeQL py/implicit-string-concatenation)."""
-    import tokenize
     import io
+    import tokenize
     _src_python = _PROJECT_ROOT / "src" / "python"
     issues = []
     for py_file in _src_python.rglob("*.py"):
