@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { keyValuePair, LocalizationModel } from '../../../javascripts/ijt-support/models/support-models.mjs'
+import { KeyValuePair, LocalizationModel } from '../../../javascripts/ijt-support/models/support-models.mjs'
 import IJTBaseModel from '../../../javascripts/ijt-support/models/ijt-base-model.mjs'
 
 function makeModelManager () {
@@ -8,20 +8,20 @@ function makeModelManager () {
   }
 }
 
-describe('keyValuePair', () => {
-  it('is exported with camelCase name', () => {
-    expect(keyValuePair).toBeDefined()
+describe('KeyValuePair', () => {
+  it('is exported as a class', () => {
+    expect(KeyValuePair).toBeDefined()
   })
 
   it('extends IJTBaseModel', () => {
     const mm = makeModelManager()
-    const kv = new keyValuePair({ key: 'myKey', value: 'myVal' }, mm)
+    const kv = new KeyValuePair({ key: 'myKey', value: 'myVal' }, mm)
     expect(kv).toBeInstanceOf(IJTBaseModel)
   })
 
   it('has key and value properties after construction', () => {
     const mm = makeModelManager()
-    const kv = new keyValuePair({ key: 'testKey', value: 'testVal' }, mm)
+    const kv = new KeyValuePair({ key: 'testKey', value: 'testVal' }, mm)
     expect(kv.key).toBe('testKey')
     expect(kv.value).toBe('testVal')
   })

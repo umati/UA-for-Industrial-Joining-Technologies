@@ -1,6 +1,6 @@
 import ResultDataType from './result-data-model.mjs'
 import { DefaultNode, BrowseNameDataType, DisplayNameDataType } from './default-node.mjs'
-import { LocalizationModel, keyValuePair } from './support-models.mjs'
+import { LocalizationModel, KeyValuePair } from './support-models.mjs'
 import ProcessingTimesDataType from './processing-times-data-type.mjs'
 import TagDataType from './tag-data-type.mjs'
 import TighteningResultDataType from './tightening-result-data-type.mjs'
@@ -23,7 +23,7 @@ const modelRegistry = {
   TighteningTraceDataType,
   TraceContentDataType,
   TraceValueDataType,
-  keyValuePair
+  KeyValuePair
 }
 
 function eventTypeIdOf (msg) {
