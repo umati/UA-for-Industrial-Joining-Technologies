@@ -19,9 +19,20 @@ on:
   push:
     branches: [main]
     paths:
+      # OPC UA Server — any change needs Docker rebuild + smoke
       - 'OPC_UA_Servers/**'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
+      # Web Client — only OPC UA backend, Docker config, integration tests, and dependencies
+      # GUI/JS/unit-test changes are covered by fast CI and do NOT need live OPC UA testing
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/src/python/**'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/**'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/index.py'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/docker-compose.yaml'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements*.txt'
+      # Test Client — every change is an OPC UA conformance test change
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
+      # Workflow file itself
+      - '.github/workflows/heavy-tests.yml'
 
 permissions:
   contents: read
