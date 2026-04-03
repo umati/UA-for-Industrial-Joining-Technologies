@@ -34,17 +34,17 @@ class MillisecondFormatter(logging.Formatter):
         return ct.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
-formatter = MillisecondFormatter(
+_formatter = MillisecondFormatter(
     "[%(asctime)s] [%(levelname)s] %(filename)s:%(funcName)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S.%f",
 )
 
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
+_handler = logging.StreamHandler()
+_handler.setFormatter(_formatter)
 
 ijt_log = logging.getLogger("ijt_logger")
 ijt_log.setLevel(logging.INFO)
-ijt_log.addHandler(handler)
+ijt_log.addHandler(_handler)
 ijt_log.propagate = False
 
 # Reduce verbosity of external libraries

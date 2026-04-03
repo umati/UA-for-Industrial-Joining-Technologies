@@ -28,7 +28,7 @@ class EventCollector:
 
     def __init__(self, client) -> None:
         self._client = client
-        self._queue: asyncio.Queue = asyncio.Queue(maxsize=0)  # unbounded
+        self._queue: asyncio.Queue = asyncio.Queue(maxsize=1_000)  # bounded; prevents unbounded memory growth in long sessions
         self._subscription = None
 
     # ── asyncua handler interface ──────────────────────────────────────────

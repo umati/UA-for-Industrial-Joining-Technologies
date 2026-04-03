@@ -10,7 +10,7 @@ Handles:
 """
 import argparse
 import shutil
-import subprocess
+import subprocess  # nosec B404 — subprocess used to invoke docker/compose; no user-controlled input
 import sys
 from pathlib import Path
 

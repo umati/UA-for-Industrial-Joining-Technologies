@@ -111,7 +111,7 @@ def _parse_server_url() -> tuple[str, int]:
         try:
             return host, int(port_str)
         except ValueError:
-            pass
+            pass  # port_str not numeric — fall through to return default port below
     return stripped, 40451
 
 

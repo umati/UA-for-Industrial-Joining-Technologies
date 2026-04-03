@@ -45,13 +45,13 @@ _NS_MACHINERY = "http://opcfoundation.org/UA/Machinery/"
 _NS_MACHINERY_RESULT = "http://opcfoundation.org/UA/Machinery/Result/"
 _NS_IJT_SERVER = "urn:AtlasCopco:IJT:Tightening:Server/"
 
-_PASS = "PASS"
+_PASS = "PASS"  # nosec B105 — status constant, not a credential
 _FAIL = "FAIL"
 _SKIP = "SKIP"
 
 
 def _result_line(status: str, name: str, detail: str = "") -> str:
-    icon = {"PASS": "[OK]", "FAIL": "[FAIL]", "SKIP": "[SKIP]"}[status]
+    icon = {_PASS: "[OK]", _FAIL: "[FAIL]", _SKIP: "[SKIP]"}[status]
     line = f"  {icon}  {name}"
     if detail:
         line += f"  ({detail})"

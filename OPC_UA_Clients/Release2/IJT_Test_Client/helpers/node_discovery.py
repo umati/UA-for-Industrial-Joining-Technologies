@@ -65,7 +65,7 @@ async def find_joining_system(client) -> UANode:
     try:
         refs = await _browse_refs(objects)
     except Exception:
-        return None
+        return None  # Objects node unreachable — server has non-standard address space
     children = [_node_from_ref(objects, r.NodeId) for r in refs]
     for child in children:
         type_def = await get_type_definition(child, ns_opc_ua)
@@ -96,7 +96,7 @@ async def find_child_by_browse_name(
     try:
         refs = await _browse_refs(parent_node, timeout=timeout)
     except Exception:
-        return None
+        return None  # Parent node unreachable — caller receives None and skips
     for ref in refs:
         if ref.BrowseName.Name == name and ref.BrowseName.NamespaceIndex == ns_index:
             return _node_from_ref(parent_node, ref.NodeId)
@@ -115,7 +115,7 @@ async def browse_folder_instances(
     try:
         refs = await _browse_refs(folder_node, timeout=timeout)
     except Exception:
-        return results
+        return results  # Folder unreachable — return whatever was collected so far
     for ref in refs:
         results.append(
             (
@@ -160,7 +160,7 @@ async def get_interface_types(node: UANode, ns_opc_ua: int = 0) -> list:
         )
         return [ref.NodeId for ref in refs]
     except Exception:
-        return []
+        return []  # Node has no HasInterface references or is unreachable
 
 
 async def has_interface(
@@ -195,7 +195,7 @@ async def get_associated_assets(node: UANode, ns_opc_ua: int = 0) -> list:
         )
         return [_node_from_ref(node, ref.NodeId) for ref in refs]
     except Exception:
-        return []
+        return []  # Node has no AssociatedWith references or is unreachable
 
 
 async def get_children_by_reference(
@@ -214,7 +214,7 @@ async def get_children_by_reference(
         )
         return [_node_from_ref(node, ref.NodeId) for ref in refs]
     except Exception:
-        return []
+        return []  # Reference type not present on node or node is unreachable
 
 
 async def find_method_node(

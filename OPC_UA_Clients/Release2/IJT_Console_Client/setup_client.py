@@ -180,7 +180,7 @@ def _warn_if_untested_python(version_string: str | None = None) -> None:
         version_string = f"{sys.version_info[0]}.{sys.version_info[1]}"
     try:
         major, minor = map(int, version_string.split("."))
-    except Exception:
+    except Exception:  # noqa: BLE001 — invalid version string format; skip version check
         return
 
     tested_max_minor_raw = os.getenv("PYTHON_TESTED_MAX_MINOR", "14").strip()
@@ -285,7 +285,7 @@ def _is_simulator_process_running() -> bool:
             stderr=subprocess.DEVNULL,
         )
         return SIMULATOR_EXE_NAME.lower() in output.lower()
-    except Exception:
+    except Exception:  # noqa: BLE001 — tasklist call failed (non-Windows, access denied); assume not running
         return False
 
 

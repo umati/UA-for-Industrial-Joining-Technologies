@@ -33,8 +33,7 @@ npx eslint src/javascripts config.js --config eslint.config.mjs --max-warnings 0
 npx vitest run
 
 # Python unit tests (fast, no server)
-python -m pytest tests/ -q --ignore=tests/test_opcua_methods.py \
-  --ignore=tests/test_opcua_live.py --ignore=tests/test_opcua_integration.py
+python -m pytest tests/python/unit/ -q --timeout=30
 
 # All tests
 python run_all_tests.py

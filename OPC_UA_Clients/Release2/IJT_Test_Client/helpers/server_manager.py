@@ -86,14 +86,10 @@ class ServerManager:
     """
 
     WELL_KNOWN_PATHS: list = [
-        # Windows — built from windows_app VS project
-        r"C:\DDrive\SourceControl\monorepo\ProtocolAdaptersExternal\OPCUAProtocolAdapter\OPC_UA\SDK_Application\windows_app\bin\x64\Release\opcua_ijt_demo_application.exe",
-        r"C:\DDrive\SourceControl\monorepo\ProtocolAdaptersExternal\OPCUAProtocolAdapter\OPC_UA\SDK_Application\windows_app\bin\x64\Debug\opcua_ijt_demo_application.exe",
-        r"C:\DDrive\SourceControl\GIT_HUB\UA-for-Industrial-Joining-Technologies\OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\opcua_ijt_demo_application.exe",
         # Relative paths — if run from repo root or test directory
         "./opcua_ijt_demo_application.exe",
         "./opcua_ijt_demo_application",
-        # Linux
+        # Linux standard install location
         "/usr/local/bin/opcua_ijt_demo_application",
     ]
 

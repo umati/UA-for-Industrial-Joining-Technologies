@@ -3,7 +3,7 @@
 IJT Web Client — Cross-Platform Test Runner
 ============================================
 Works on: Windows, Linux, macOS, Docker, WSL
-Requires: Python 3.11+  (already installed for this project)
+Requires: Python 3.14+  (already installed for this project)
 No PowerShell, no bash, no special shell required.
 
 Usage:

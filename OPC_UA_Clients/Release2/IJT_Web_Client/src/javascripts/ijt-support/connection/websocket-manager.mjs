@@ -12,6 +12,7 @@ import { ijtLog } from '../ijt-logger.mjs'
 const RECONNECT_BASE_MS = 1_000
 const RECONNECT_MAX_MS = 30_000
 const RECONNECT_FACTOR = 2
+const MAX_SEND_QUEUE = 500  // cap outbound buffer to prevent unbounded memory growth during prolonged disconnects
 
 export class WebSocketManager {
   constructor (establishedCallback, websocketUrl) {
@@ -141,6 +142,10 @@ export class WebSocketManager {
 
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
       ijtLog.info('WebSocket not ready — queuing message and triggering reconnect')
+      if (this._sendQueue.length >= MAX_SEND_QUEUE) {
+        ijtLog.warn(`Send queue full (${MAX_SEND_QUEUE}); dropping oldest message`)
+        this._sendQueue.shift()
+      }
       this._sendQueue.push(serialized)
       if (!this.connection && !this._reconnecting) {
         this._scheduleReconnect()

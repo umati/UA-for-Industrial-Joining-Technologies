@@ -26,6 +26,10 @@ class Short:
     Extracts and normalises a small subset of fields from the raw asyncua
     event object so that the rest of the pipeline can work with plain Python
     types rather than asyncua-specific objects.
+
+    Attribute names use OPC UA PascalCase convention (e.g. ``EventType``,
+    ``Message``) to match the field names on asyncua event objects directly,
+    avoiding an extra mapping layer.
     """
 
     def __init__(self, event: Any) -> None:

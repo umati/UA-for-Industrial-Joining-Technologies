@@ -71,7 +71,10 @@ async def test_subscribe_to_events_and_receive_within_30s():
                 break
             await asyncio.sleep(1.0)
 
-        # subscriptions were set up successfully if we got here
-        assert True
+        # At least one event handler must have been registered within the deadline.
+        assert (
+            client.handler_result_event is not None
+            or client.handler_joining_event is not None
+        ), "No event handler was registered within 30 seconds"
     finally:
         await client.cleanup()

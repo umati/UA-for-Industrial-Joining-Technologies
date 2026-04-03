@@ -330,8 +330,11 @@ class Connection:
             try:
                 if hasattr(self.sub_result_event, "subscription_id"):
                     ijt_log.info("Deleting ResultEvent subscription.")
-                    await delete_client.delete_subscriptions(
-                        [self.sub_result_event.subscription_id]
+                    await asyncio.wait_for(
+                        delete_client.delete_subscriptions(
+                            [self.sub_result_event.subscription_id]
+                        ),
+                        timeout=5.0,
                     )
             except Exception as e:
                 ijt_log.warning(
@@ -344,8 +347,11 @@ class Connection:
             try:
                 if hasattr(self.sub_joining_event, "subscription_id"):
                     ijt_log.info("Deleting JoiningEvent subscription.")
-                    await delete_client.delete_subscriptions(
-                        [self.sub_joining_event.subscription_id]
+                    await asyncio.wait_for(
+                        delete_client.delete_subscriptions(
+                            [self.sub_joining_event.subscription_id]
+                        ),
+                        timeout=5.0,
                     )
             except Exception as e:
                 ijt_log.warning(

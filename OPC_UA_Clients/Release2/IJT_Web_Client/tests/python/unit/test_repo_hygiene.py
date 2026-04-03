@@ -38,7 +38,7 @@ def _find_git_root() -> Path:
         if result.returncode == 0:
             return Path(result.stdout.strip())
     except FileNotFoundError:
-        pass
+        pass  # git not on PATH — fall through to path-arithmetic fallback below
     # Path-arithmetic fallback: three levels up from IJT_Web_Client root.
     try:
         return _PROJECT_ROOT.parents[2]

@@ -5,7 +5,7 @@ export class LocalizationModel extends IJTBaseModel {
 }
 
 // The purpose of this class is to represent the simplest type of name-value pairs
-export class keyValuePair extends IJTBaseModel {
+export class KeyValuePair extends IJTBaseModel {
   toHTML (brief, parentName) {
     const container = document.createElement('li')
     const li1 = document.createElement('li')

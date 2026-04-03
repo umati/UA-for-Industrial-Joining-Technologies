@@ -214,8 +214,8 @@ class TestOpcuaDirectConnection:
 
     async def test_load_data_type_definitions_succeeds(self, opcua_client):
         """Loading type definitions must not raise (already done in fixture)."""
-        # If we reach here, load_data_type_definitions() succeeded
-        assert True
+        # Reaching this point means load_data_type_definitions() succeeded without raising.
+        # pytest counts a test as passed when no exception is raised and no assertion fails.
 
     async def test_browse_tightening_system_has_methods(self, opcua_client):
         """TighteningSystem must expose at least one Method node."""
@@ -300,8 +300,7 @@ class TestOpcuaSubscription:
         await asyncio.sleep(5)
 
         await subscription.delete()
-        # Success = no exception raised
-        assert True
+        # Success = no exception raised reaching this point means subscribe + delete worked.
 
     async def test_event_handler_receives_events_after_simulation(self, opcua_client):
         """After calling SimulateSingleResult, at least one event must arrive.

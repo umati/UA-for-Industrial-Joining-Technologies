@@ -97,7 +97,7 @@ async def test_joining_system_event_content_type_structure(
     # IJT fields live under event.Result (JoiningResultDataType) — check for that
     result = getattr(event, "Result", None)
     if result is not None:
-        assert True  # Result field present — IJT-specific data confirmed
+        # Result field present — IJT-specific JoiningResultDataType confirmed present on event
         return
     # Fallback: check for any non-base non-None non-callable attribute
     ijt_fields = [

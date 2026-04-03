@@ -33,7 +33,6 @@
 UA-for-Industrial-Joining-Technologies/
 ├── README.md                        # Project overview and links
 ├── SKILLS.md                        # ← THIS FILE: root-level agent context
-├── SESSION_NOTES.md                 # Developer session notes
 ├── renovate.json                    # Dependency update config
 │
 ├── IJT_Documents/                   # Spec presentations and reference docs
@@ -45,10 +44,10 @@ UA-for-Industrial-Joining-Technologies/
     └── Release2/
         ├── README.md
         ├── IJT_Web_Client/          # ★ PRIMARY — Python + Node.js browser client
-        │   ├── SKILLS.md            # Comprehensive agent context for Web Client
+        │   ├── docs/SKILLS.md       # Comprehensive agent context for Web Client
         │   └── ...
         └── IJT_Console_Client/      # ★ SECONDARY — Python console client
-            ├── SKILLS.md            # Agent context for Console Client
+            ├── docs/SKILLS.md       # Agent context for Console Client
             └── ...
 ```
 
@@ -58,7 +57,7 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vitest, ESLint, Docker
-- **Test baseline**: 323 Python pass / 0 skip / 0 warnings, 162 JS pass, ESLint clean
+- **Test baseline**: 310 Python pass / 0 skip / 0 warnings, 162 JS pass, ESLint clean
 - **Live tests**: `tests/python/live/` — excluded from default run (`norecursedirs = live`); requires running OPC UA server
 - **One test command**: `python run_all_tests.py`
 - **Docker**: healthy on HTTP:3000 + WS:8001
@@ -102,7 +101,7 @@ UA-for-Industrial-Joining-Technologies/
 ### Fast CI (`ci.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
 |-----|--------------|
-| `web-client` | Python unit (323), JS unit (162), ESLint, Bandit, npm audit |
+| `web-client` | Python unit (310), JS unit (162), ESLint, Bandit, npm audit |
 | `console-client` | Python unit (285), Bandit |
 | `node-client` | JS unit (~152), ESLint, npm audit |
 | `test-client` | pytest collect + import check |
@@ -144,12 +143,12 @@ Runtime: ~7 minutes. NOT triggered on GUI/JS-only changes (deliberate — keep f
 | Path | Covers |
 |------|--------|
 | `SKILLS.md` (this file) | Repo-level context, access rules, sub-project summary, CI/CD |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/SKILLS.md` | Full Web Client context, file map, bugs, Docker, CI |
-| `OPC_UA_Clients/Release2/IJT_Console_Client/SKILLS.md` | Console Client context, patterns, test commands |
-| `OPC_UA_Clients/Release2/IJT_Test_Client/SKILLS.md` | Test Client conformance suite, test structure, markers |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/USING_AGENTS.md` | Agent workflow and prompt template |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md` | Full Web Client context, file map, bugs, Docker, CI |
+| `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md` | Console Client context, patterns, test commands |
+| `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md` | Test Client conformance suite, test structure, markers |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/AGENT_GUIDE.md` | Agent workflow and prompt template |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/HEALTH_CHECK.md` | Quick sanity check commands |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/ijt-support/IJT_SUPPORT_AGENT_GUIDE.md` | JS core library contracts |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/ijt-support/models/MODELS_AGENT_GUIDE.md` | JS model layer |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/ijt-support/models/results/RESULT_MODEL_GUIDE.md` | Result model hierarchy |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/VIEWS_AGENT_GUIDE.md` | UI views and screens |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/ijt-support-guide.md` | JS core library contracts |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/models-guide.md` | JS model layer |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/result-model-guide.md` | Result model hierarchy |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/views-guide.md` | UI views and screens |

@@ -47,6 +47,12 @@ def log_field(label: str, value: str, label_width: int = 35):
 
 
 def log_separator(label_width: int = 35) -> None:
+    """Emit a horizontal separator line to the log at INFO level.
+
+    Args:
+        label_width: Width of label column (default 35) — separator spans
+            this width plus 40 extra characters.
+    """
     ijt_log.info("-" * (label_width + 40))
 
 

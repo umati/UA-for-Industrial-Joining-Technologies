@@ -21,6 +21,21 @@ from python.ijt_logger import ijt_log
 class IJTInterface:
     """OPC UA interface used by one websocket client session."""
 
+    # Allowlist of Connection methods that may be dispatched via call_connection.
+    # Prevents arbitrary method invocation if an unexpected command arrives.
+    # Keep in sync with Connection's public async methods.
+    _ALLOWED_METHODS: frozenset = frozenset({
+        "connect",
+        "disconnect",
+        "subscribe",
+        "read",
+        "browse",
+        "namespaces",
+        "pathtoid",
+        "methodcall",
+        "read_product_instance_uri",
+    })
+
     # Resolve Resources/ relative to this file so the server works regardless
     # of which directory the process was started from.
     _RESOURCES_DIR: Path = Path(__file__).resolve().parent.parent / "Resources"
@@ -78,6 +93,10 @@ class IJTInterface:
 
         if not await self.ensure_connection_open(connection):
             return {"exception": "Failed to ensure connection is open"}
+
+        if func not in self._ALLOWED_METHODS:
+            ijt_log.error(f"Method '{func}' is not in the allowed method list.")
+            return {"exception": f"Method '{func}' not allowed"}
 
         try:
             method = getattr(connection, func)

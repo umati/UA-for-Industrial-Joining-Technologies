@@ -27,7 +27,7 @@ on:
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/**'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/index.py'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/docker-compose.yaml'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/docker-compose.yml'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements*.txt'
       # Test Client — every change is an OPC UA conformance test change
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
@@ -112,14 +112,16 @@ jobs:
           python-version: "3.14"
 
       - name: Install smoke test dependencies
-        run: pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Run smoke test (8 checks)
         run: python OPC_UA_Servers/Release2/tests/smoke_test.py --timeout 30
 
       - name: Dump container logs
         if: always()
-        run: docker logs opcua-server --tail 60 || true
+        run: docker logs opcua-server --tail 60 || true  # diagnostic only; ignore errors if container already gone
 
       - name: Teardown container
         if: always()
@@ -247,14 +249,18 @@ jobs:
           python-version: "3.14"
 
       - name: Install smoke test dependencies
-        run: pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Run smoke test (8 checks)
         run: python OPC_UA_Servers/Release2/tests/smoke_test.py --timeout 30
 
       - name: Install IJT Test Client dependencies
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run IJT Test Client tests (all tests)
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
@@ -270,6 +276,7 @@ jobs:
           OPCUA_TEST_ENDPOINT: opc.tcp://localhost:40451
           OPCUA_WS_URL: ws://localhost:8001
         run: |
+          python -m pip install --upgrade pip
           pip install -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt `
                       -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
           python -m pytest OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/ `

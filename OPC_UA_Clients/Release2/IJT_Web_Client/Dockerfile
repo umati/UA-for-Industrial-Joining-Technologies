@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # once 1.2.x stable ships pip will prefer it automatically.
 RUN pip install --upgrade pip --no-cache-dir && \
     pip install --no-cache-dir --pre \
-        "asyncua>=1.2b2" \
+        "asyncua>=1.2b2,<2" \
         python-dotenv \
         websockets \
         packaging

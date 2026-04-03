@@ -16,25 +16,25 @@ class MillisecondFormatter(logging.Formatter):
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(filename)s:%(funcName)s - %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 
-formatter = MillisecondFormatter(LOG_FORMAT, datefmt=DATE_FORMAT)
+_formatter = MillisecondFormatter(LOG_FORMAT, datefmt=DATE_FORMAT)
 
 # Console handler
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(formatter)
+_console_handler = logging.StreamHandler()
+_console_handler.setFormatter(_formatter)
 
 # File handler with daily rotation
-log_dir = Path("logs")
-log_dir.mkdir(exist_ok=True)
-file_handler = TimedRotatingFileHandler(
-    log_dir / "client.log", when="midnight", backupCount=7, encoding="utf-8"
+_log_dir = Path("logs")
+_log_dir.mkdir(exist_ok=True)
+_file_handler = TimedRotatingFileHandler(
+    _log_dir / "client.log", when="midnight", backupCount=7, encoding="utf-8"
 )
-file_handler.setFormatter(formatter)
+_file_handler.setFormatter(_formatter)
 
 # Logger setup
 ijt_log = logging.getLogger("ijt_logger")
 ijt_log.setLevel(logging.INFO)
-ijt_log.addHandler(console_handler)
-ijt_log.addHandler(file_handler)
+ijt_log.addHandler(_console_handler)
+ijt_log.addHandler(_file_handler)
 ijt_log.propagate = False
 
 # Reduce verbosity of external libraries

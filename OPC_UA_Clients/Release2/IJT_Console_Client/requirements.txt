@@ -1,9 +1,9 @@
 # Python 3.14+ compatible requirements
 # asyncua >= 1.2b2 is required for Python 3.14 support; installed with --pre via setup_client.py
 # so pre-releases are found now; once asyncua 1.2.x stable ships pip picks that automatically.
-asyncua>=1.2b2
-pytz
-aiofiles
-orjson
-cryptography         # Needed because asyncua requires updated crypto stack [2](https://github.com/FreeOpcUa/opcua-client-gui)
-pyOpenSSL            # Same reason (dependency bump) [2](https://github.com/FreeOpcUa/opcua-client-gui)
+asyncua>=1.2b2,<2.0
+pytz>=2026.1,<2027
+aiofiles>=25.1.0,<26
+orjson>=3.9.0,<4
+cryptography>=41.0.0,<46    # Needed because asyncua requires updated crypto stack
+pyOpenSSL>=23.0.0,<25       # Same reason (dependency bump)

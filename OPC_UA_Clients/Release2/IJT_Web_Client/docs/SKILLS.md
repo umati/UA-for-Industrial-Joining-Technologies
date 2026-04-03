@@ -14,7 +14,7 @@
 | **Purpose** | Reference OPC UA IJT client: Python WebSocket backend + Node.js browser frontend |
 | **Stack** | Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vite/Vitest, ESLint |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
-| **Test baseline** | 219 Python pass / 23 skip, 70/70 JS, ESLint clean |
+| **Test baseline** | 310 Python / 0 skip, 162 JS, ESLint clean |
 | **Docker** | Container healthy on HTTP:3000 + WS:8001 (non-root `appuser`) |
 
 ---
@@ -36,7 +36,7 @@ IJT_Web_Client/
 ├── index.py                # Python WebSocket backend (asyncio + websockets, port 8001)
 ├── config.js               # Shared JS config (WS_PORT, endpoints, timeouts)
 ├── run_all_tests.py        # PRIMARY TEST RUNNER — one command for everything
-├── pytest.ini              # pytest settings: asyncio_mode=auto, timeout=120
+├── pytest.ini              # pytest settings: asyncio_mode=auto, timeout=30
 ├── vitest.config.mjs       # Vitest config for JS unit tests
 ├── eslint.config.mjs       # ESLint flat config
 ├── requirements.txt        # Python runtime deps

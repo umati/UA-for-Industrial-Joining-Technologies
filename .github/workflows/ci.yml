@@ -543,7 +543,8 @@ jobs:
           def parse_bandit(pattern):
               for path in glob.glob(pattern, recursive=True):
                   try:
-                      r = json.load(open(path)).get("results", [])
+                      with open(path) as _f:
+                          r = json.load(_f).get("results", [])
                       return (
                           sum(1 for i in r if i["issue_severity"] == "HIGH"),
                           sum(1 for i in r if i["issue_severity"] == "MEDIUM"),
@@ -555,7 +556,8 @@ jobs:
           def parse_npm_audit(pattern):
               for path in glob.glob(pattern, recursive=True):
                   try:
-                      v = json.load(open(path)).get("metadata", {}).get("vulnerabilities", {})
+                      with open(path) as _f:
+                          v = json.load(_f).get("metadata", {}).get("vulnerabilities", {})
                       return v.get("critical", 0), v.get("high", 0)
                   except Exception:
                       pass
@@ -564,7 +566,8 @@ jobs:
           def parse_eslint_json(pattern):
               for path in glob.glob(pattern, recursive=True):
                   try:
-                      data = json.load(open(path))
+                      with open(path) as _f:
+                          data = json.load(_f)
                       return sum(r.get("errorCount", 0) for r in data)
                   except Exception:
                       pass

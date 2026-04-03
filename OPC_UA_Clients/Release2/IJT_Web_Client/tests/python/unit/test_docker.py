@@ -1,6 +1,6 @@
 """Docker / container configuration tests.
 
-These tests parse Dockerfile and docker-compose.yaml without executing Docker
+These tests parse Dockerfile and docker-compose.yml without executing Docker
 and verify that key instructions are present and correct:
   - Correct base image stage names
   - WORKDIR is /app
@@ -23,7 +23,7 @@ _YAML_AVAILABLE = importlib.util.find_spec("yaml") is not None
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _DOCKERFILE = _PROJECT_ROOT / "Dockerfile"
-_COMPOSE_FILE = _PROJECT_ROOT / "docker-compose.yaml"
+_COMPOSE_FILE = _PROJECT_ROOT / "docker-compose.yml"
 
 
 # ---------------------------------------------------------------------------
@@ -140,15 +140,15 @@ class TestDockerfileInstructions:
 
 
 # ===========================================================================
-# 2. docker-compose.yaml
+# 2. docker-compose.yml
 # ===========================================================================
 
 
 class TestDockerCompose:
     def test_compose_file_exists(self):
-        """docker-compose.yaml must exist at the project root."""
+        """docker-compose.yml must exist at the project root."""
         assert _COMPOSE_FILE.exists(), (
-            f"docker-compose.yaml not found at {_COMPOSE_FILE}"
+            f"docker-compose.yml not found at {_COMPOSE_FILE}"
         )
 
     @pytest.mark.skipif(
@@ -156,7 +156,7 @@ class TestDockerCompose:
         reason="PyYAML not installed — skipping docker-compose YAML parsing",
     )
     def test_compose_has_ijt_web_client_service(self):
-        """docker-compose.yaml must define the ijt_web_client service."""
+        """docker-compose.yml must define the ijt_web_client service."""
         import yaml
         content = yaml.safe_load(_COMPOSE_FILE.read_text(encoding="utf-8"))
         services = content.get("services", {})
@@ -193,18 +193,18 @@ class TestDockerCompose:
         )
 
     def test_compose_file_ports_raw_text_includes_3000(self):
-        """Raw text of docker-compose.yaml must reference port 3000."""
+        """Raw text of docker-compose.yml must reference port 3000."""
         text = _COMPOSE_FILE.read_text(encoding="utf-8")
-        assert "3000" in text, "Port 3000 not found in docker-compose.yaml"
+        assert "3000" in text, "Port 3000 not found in docker-compose.yml"
 
     def test_compose_file_ports_raw_text_includes_8001(self):
-        """Raw text of docker-compose.yaml must reference port 8001."""
+        """Raw text of docker-compose.yml must reference port 8001."""
         text = _COMPOSE_FILE.read_text(encoding="utf-8")
-        assert "8001" in text, "Port 8001 not found in docker-compose.yaml"
+        assert "8001" in text, "Port 8001 not found in docker-compose.yml"
 
     def test_compose_file_not_contains_serve_flag(self):
-        """docker-compose.yaml must not use the --serve flag."""
+        """docker-compose.yml must not use the --serve flag."""
         text = _COMPOSE_FILE.read_text(encoding="utf-8")
         assert "--serve" not in text, (
-            "docker-compose.yaml contains --serve (invalid flag from a previous bug)"
+            "docker-compose.yml contains --serve (invalid flag from a previous bug)"
         )
