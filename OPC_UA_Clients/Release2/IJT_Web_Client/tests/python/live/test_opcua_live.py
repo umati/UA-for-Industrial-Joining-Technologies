@@ -215,7 +215,8 @@ class TestOpcuaDirectConnection:
     async def test_load_data_type_definitions_succeeds(self, opcua_client):
         """Loading type definitions must not raise (already done in fixture)."""
         # Reaching this point means load_data_type_definitions() succeeded without raising.
-        # pytest counts a test as passed when no exception is raised and no assertion fails.
+        # The explicit assertion below makes the passing condition unambiguous.
+        assert opcua_client is not None
 
     async def test_browse_tightening_system_has_methods(self, opcua_client):
         """TighteningSystem must expose at least one Method node."""

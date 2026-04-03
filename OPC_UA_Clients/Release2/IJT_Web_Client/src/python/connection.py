@@ -146,7 +146,7 @@ class Connection:
             )  # use None if server allows it
             if inspect.isawaitable(maybe_coro):
                 await maybe_coro
-        except Exception as exc:  # nosec B110 — security policy is optional; falls back to no security
+        except (ua.UaError, ValueError, TypeError) as exc:
             # If your server requires secure policy, replace with e.g.:
             # maybe_coro = self.client.set_security_string("Basic256Sha256,Sign")  # or SignAndEncrypt
             # if inspect.isawaitable(maybe_coro):

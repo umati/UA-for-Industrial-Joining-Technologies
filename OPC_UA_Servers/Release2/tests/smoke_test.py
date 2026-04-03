@@ -45,13 +45,13 @@ _NS_MACHINERY = "http://opcfoundation.org/UA/Machinery/"
 _NS_MACHINERY_RESULT = "http://opcfoundation.org/UA/Machinery/Result/"
 _NS_IJT_SERVER = "urn:AtlasCopco:IJT:Tightening:Server/"
 
-_PASS = "PASS"  # nosec B105 — status constant, not a credential
-_FAIL = "FAIL"
-_SKIP = "SKIP"
+_STATUS_PASS = "PASS"
+_STATUS_FAIL = "FAIL"
+_STATUS_SKIP = "SKIP"
 
 
 def _result_line(status: str, name: str, detail: str = "") -> str:
-    icon = {_PASS: "[OK]", _FAIL: "[FAIL]", _SKIP: "[SKIP]"}[status]
+    icon = {_STATUS_PASS: "[OK]", _STATUS_FAIL: "[FAIL]", _STATUS_SKIP: "[SKIP]"}[status]
     line = f"  {icon}  {name}"
     if detail:
         line += f"  ({detail})"
@@ -81,9 +81,9 @@ async def check_tcp_port(host: str, port: int, wait_s: float) -> tuple[str, str]
     deadline = time.monotonic() + wait_s
     while time.monotonic() < deadline:
         if _port_open(host, port, timeout=1.0):
-            return _PASS, f"port {port} is open"
+            return _STATUS_PASS, f"port {port} is open"
         await asyncio.sleep(1.0)
-    return _FAIL, f"port {port} not reachable after {wait_s:.0f}s"
+    return _STATUS_FAIL, f"port {port} not reachable after {wait_s:.0f}s"
 
 
 async def check_opc_connection(client: Any) -> tuple[str, str]:
@@ -92,21 +92,21 @@ async def check_opc_connection(client: Any) -> tuple[str, str]:
     for attempt in range(5):
         try:
             await client.connect()
-            return _PASS, "OPC UA session established"
+            return _STATUS_PASS, "OPC UA session established"
         except (_OpcUaError, ConnectionError, TimeoutError, OSError) as exc:
             last_exc = exc
             if attempt < 4:
                 await asyncio.sleep(3)
-    return _FAIL, str(last_exc)
+    return _STATUS_FAIL, str(last_exc)
 
 
 async def check_server_time(client: Any) -> tuple[str, str]:
     try:
         node = client.get_node("ns=0;i=2258")  # Server/ServerStatus/CurrentTime
         val = await node.read_value()
-        return _PASS, f"CurrentTime = {val}"
+        return _STATUS_PASS, f"CurrentTime = {val}"
     except (_OpcUaError, AttributeError) as exc:
-        return _FAIL, str(exc)
+        return _STATUS_FAIL, str(exc)
 
 
 async def check_namespaces(client: Any) -> tuple[str, str]:
@@ -123,10 +123,10 @@ async def check_namespaces(client: Any) -> tuple[str, str]:
             if uri not in ns_array
         ]
         if missing:
-            return _FAIL, "missing namespaces: " + ", ".join(missing)
-        return _PASS, f"{len(ns_array)} namespaces, all IJT URIs present"
+            return _STATUS_FAIL, "missing namespaces: " + ", ".join(missing)
+        return _STATUS_PASS, f"{len(ns_array)} namespaces, all IJT URIs present"
     except (_OpcUaError, AttributeError) as exc:
-        return _FAIL, str(exc)
+        return _STATUS_FAIL, str(exc)
 
 
 async def check_tightening_system(client: Any) -> tuple[str, str]:
@@ -136,9 +136,9 @@ async def check_tightening_system(client: Any) -> tuple[str, str]:
             ["0:Objects", f"{ns1}:TighteningSystem"]
         )
         bn = await node.read_browse_name()
-        return _PASS, f"TighteningSystem found ({bn})"
+        return _STATUS_PASS, f"TighteningSystem found ({bn})"
     except (_OpcUaError, ValueError, AttributeError) as exc:
-        return _FAIL, str(exc)
+        return _STATUS_FAIL, str(exc)
 
 
 async def check_simulations_node(client: Any) -> tuple[str, str]:
@@ -148,9 +148,9 @@ async def check_simulations_node(client: Any) -> tuple[str, str]:
             ["0:Objects", f"{ns1}:TighteningSystem", f"{ns1}:Simulations"]
         )
         children = await node.get_children()
-        return _PASS, f"Simulations node has {len(children)} method(s)"
+        return _STATUS_PASS, f"Simulations node has {len(children)} method(s)"
     except (_OpcUaError, ValueError, AttributeError) as exc:
-        return _FAIL, str(exc)
+        return _STATUS_FAIL, str(exc)
 
 
 async def check_result_management(client: Any) -> tuple[str, str]:
@@ -161,9 +161,9 @@ async def check_result_management(client: Any) -> tuple[str, str]:
             ["0:Objects", f"{ns1}:TighteningSystem", f"{ns_r}:ResultManagement"]
         )
         await node.read_browse_name()
-        return _PASS, "ResultManagement node present"
+        return _STATUS_PASS, "ResultManagement node present"
     except (_OpcUaError, ValueError, AttributeError) as exc:
-        return _FAIL, str(exc)
+        return _STATUS_FAIL, str(exc)
 
 
 async def check_asset_management(client: Any) -> tuple[str, str]:
@@ -174,9 +174,9 @@ async def check_asset_management(client: Any) -> tuple[str, str]:
             ["0:Objects", f"{ns1}:TighteningSystem", f"{ns_j}:AssetManagement"]
         )
         await node.read_browse_name()
-        return _PASS, "AssetManagement node present"
+        return _STATUS_PASS, "AssetManagement node present"
     except (_OpcUaError, ValueError, AttributeError) as exc:
-        return _FAIL, str(exc)
+        return _STATUS_FAIL, str(exc)
 
 
 # -- Main runner ---------------------------------------------------------------
@@ -201,7 +201,7 @@ async def _run(endpoint: str, wait_s: float) -> int:
     # 1. TCP reachability (polls until ready — useful right after docker start)
     status, detail = await check_tcp_port(host, port, wait_s)
     checks.append((status, "TCP port reachable", detail))
-    if status != _PASS:
+    if status != _STATUS_PASS:
         print(_result_line(status, "TCP port reachable", detail))
         print("\n[ABORT] Server not reachable — skipping OPC UA checks.")
         return 2
@@ -211,9 +211,9 @@ async def _run(endpoint: str, wait_s: float) -> int:
     try:
         status, detail = await check_opc_connection(client)
         checks.append((status, "OPC UA session", detail))
-        if status != _PASS:
+        if status != _STATUS_PASS:
             checks += [
-                (_SKIP, name, "server unreachable")
+                (_STATUS_SKIP, name, "server unreachable")
                 for name in (
                     "Server CurrentTime",
                     "Namespace array",
@@ -241,12 +241,12 @@ async def _run(endpoint: str, wait_s: float) -> int:
     # -- Report ----------------------------------------------------------------
     for status, name, detail in checks:
         print(_result_line(status, name, detail))
-        if status == _FAIL:
+        if status == _STATUS_FAIL:
             failures += 1
 
-    total = sum(1 for s, _, _ in checks if s != _SKIP)
-    passed = sum(1 for s, _, _ in checks if s == _PASS)
-    skipped = sum(1 for s, _, _ in checks if s == _SKIP)
+    total = sum(1 for s, _, _ in checks if s != _STATUS_SKIP)
+    passed = sum(1 for s, _, _ in checks if s == _STATUS_PASS)
+    skipped = sum(1 for s, _, _ in checks if s == _STATUS_SKIP)
 
     print("-" * 60)
     summary = f"  {passed}/{total} passed"

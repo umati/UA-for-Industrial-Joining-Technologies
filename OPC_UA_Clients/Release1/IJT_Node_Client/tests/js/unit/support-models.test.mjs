@@ -56,7 +56,7 @@ describe('IJTBaseModel', () => {
     expect(model.debugValues).toBe(params)
   })
 
-  it('uses Array constructor check (Array === value.constructor) for arrays', () => {
+  it('maps array properties by calling factory for each element', () => {
     const mm = { factory: vi.fn((_key, val) => val) }
     const params = { items: [1, 2, 3] }
     const model = new IJTBaseModel(params, mm)
