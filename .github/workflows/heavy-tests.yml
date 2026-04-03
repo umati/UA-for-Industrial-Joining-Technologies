@@ -72,6 +72,8 @@ jobs:
           context: OPC_UA_Servers/Release2
           tags: opcua-ijt-server:ci
           load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Start OPC UA Server container
         run: |
@@ -181,39 +183,25 @@ jobs:
             -v --tb=short --timeout=120 `
             --junitxml=test-results/pytest.xml
 
-      - name: Install Web Client Python dependencies
-        run: pip install -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
-
-      - name: Start Web Client WebSocket server (background)
-        shell: pwsh
-        run: |
-          $proc = Start-Process python `
-            -ArgumentList "index.py" `
-            -WorkingDirectory "OPC_UA_Clients\Release2\IJT_Web_Client" `
-            -PassThru -WindowStyle Hidden
-          Write-Host "Web server PID: $($proc.Id)"
-          echo "WS_SERVER_PID=$($proc.Id)" >> $env:GITHUB_ENV
-
-      - name: Wait for WebSocket port 8001
-        shell: pwsh
-        run: |
-          $start = Get-Date
-          while (((Get-Date)-$start).TotalSeconds -lt 30) {
-            if (Test-NetConnection -ComputerName localhost -Port 8001 `
-                  -InformationLevel Quiet -WarningAction SilentlyContinue) {
-              Write-Host "Port 8001 is open"; exit 0
-            }
-            Start-Sleep -Seconds 2
-          }
-          Write-Host "ERROR: WebSocket server did not start on port 8001"; exit 1
-
       - name: Run Web Client integration tests (13 tests, 0 skips)
         env:
           OPCUA_TEST_ENDPOINT: opc.tcp://localhost:40451
           OPCUA_WS_URL: ws://localhost:8001
         run: |
-          pip install -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
-          python -m pytest OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/ -v --tb=short --timeout=60
+          pip install -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt `
+                      -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
+          python -m pytest OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/ `
+            -v --tb=short --timeout=60 `
+            --junitxml=OPC_UA_Clients/Release2/IJT_Web_Client/test-results/pytest-integration.xml
+
+      - name: Upload Integration Test Results
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: results-integration-tests
+          path: |
+            OPC_UA_Clients/Release2/IJT_Test_Client/test-results/
+            OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
 
       - name: Stop servers
         if: always()

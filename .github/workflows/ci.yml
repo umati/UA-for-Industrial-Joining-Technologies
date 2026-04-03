@@ -109,7 +109,7 @@ jobs:
       - name: Ruff (Python Linting)
         id: pylint
         continue-on-error: true
-        run: python -m ruff check src/python --output-format=github
+        run: python -m ruff check . --output-format=github
 
       - name: npm Audit (JS Security)
         id: npm_audit
@@ -367,18 +367,24 @@ jobs:
         with:
           python-version: "3.14"
           cache: pip
-          cache-dependency-path: OPC_UA_Clients/Release2/IJT_Test_Client/requirements.txt
+          cache-dependency-path: |
+            OPC_UA_Clients/Release2/IJT_Test_Client/requirements.txt
+            OPC_UA_Clients/Release2/IJT_Test_Client/requirements-dev.txt
 
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.txt -r requirements-dev.txt
 
       - run: mkdir -p test-results
 
       - name: Pytest Collect (verify imports + test structure)
         id: pytest_collect
-        run: python -m pytest --collect-only -q --tb=no 2>&1 | tee test-results/collect.txt || true
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest --collect-only -q --tb=short 2>&1 | tee test-results/collect.txt
 
       - name: Bandit (Python Security)
         id: bandit
@@ -399,12 +405,14 @@ jobs:
 
       - name: Fail if Any Check Failed
         if: always() && (
-          steps.bandit.outcome  == 'failure' ||
-          steps.pylint.outcome  == 'failure')
+          steps.pytest_collect.outcome == 'failure' ||
+          steps.bandit.outcome         == 'failure' ||
+          steps.pylint.outcome         == 'failure')
         run: |
           echo "One or more checks failed:"
-          echo "  bandit  -> ${{ steps.bandit.outcome }}"
-          echo "  ruff    -> ${{ steps.pylint.outcome }}"
+          echo "  pytest collect -> ${{ steps.pytest_collect.outcome }}"
+          echo "  bandit         -> ${{ steps.bandit.outcome }}"
+          echo "  ruff           -> ${{ steps.pylint.outcome }}"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -488,6 +496,10 @@ jobs:
       contents: read
 
     steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
       - name: Download All Test Artifacts
         uses: actions/download-artifact@v8
         with:
