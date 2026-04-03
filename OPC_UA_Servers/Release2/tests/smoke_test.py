@@ -68,10 +68,35 @@ def _port_open(host: str, port: int, timeout: float = 2.0) -> bool:
 
 
 def _parse_endpoint(endpoint: str) -> tuple[str, int]:
-    """Return (host, port) from 'opc.tcp://host:port'."""
-    without_scheme = endpoint.replace("opc.tcp://", "")
-    host, _, port_str = without_scheme.partition(":")
-    return host, int(port_str or "40451")
+    """Return (host, port) from 'opc.tcp://host:port'.
+
+    Raises:
+        ValueError: If the endpoint is not in the expected format or the port
+            is not a valid integer.
+    """
+    expected_scheme = "opc.tcp://"
+    if not endpoint.startswith(expected_scheme):
+        raise ValueError(f"Invalid OPC UA endpoint '{endpoint}': expected scheme '{expected_scheme}'.")
+
+    without_scheme = endpoint[len(expected_scheme) :]
+    host, sep, port_str = without_scheme.partition(":")
+
+    if not host:
+        raise ValueError(f"Invalid OPC UA endpoint '{endpoint}': host is missing.")
+
+    if sep and port_str:
+        # Port was provided explicitly; validate that it is numeric to avoid
+        # exposing a generic ValueError from int().
+        if not port_str.isdigit():
+            raise ValueError(
+                f"Invalid OPC UA endpoint '{endpoint}': port '{port_str}' is not a valid integer."
+            )
+        port = int(port_str)
+    else:
+        # No port specified; default to the well-known port used by these tests.
+        port = 40451
+
+    return host, port
 
 
 # -- Individual checks ---------------------------------------------------------
@@ -230,8 +255,13 @@ async def _run(endpoint: str, wait_s: float) -> int:
                 s, d = await fn(client)
                 checks.append((s, label, d))
     finally:
-        with contextlib.suppress(_OpcUaError, ConnectionError, OSError):
+        try:
             await client.disconnect()
+        except (_OpcUaError, ConnectionError, OSError) as exc:
+            print(
+                f"[WARN] OPC UA client disconnect failed: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
 
     # -- Report ----------------------------------------------------------------
     for status, name, detail in checks:
