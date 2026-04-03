@@ -123,7 +123,7 @@ async def check_opc_connection(client: Any) -> tuple[str, str]:
             return _STATUS_PASS, "OPC UA session established"
         except (_OpcUaError, ConnectionError, TimeoutError, OSError) as exc:
             last_exc = exc
-            if attempt < 4:
+            if attempt < _OPC_CONNECTION_RETRY_COUNT - 1:
                 await asyncio.sleep(_OPC_CONNECTION_RETRY_DELAY)
     return _STATUS_FAIL, str(last_exc)
 
