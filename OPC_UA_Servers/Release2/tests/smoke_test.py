@@ -49,6 +49,9 @@ _STATUS_PASS = "PASS"
 _STATUS_FAIL = "FAIL"
 _STATUS_SKIP = "SKIP"
 
+_OPC_CONNECTION_RETRY_COUNT = 5
+_OPC_CONNECTION_RETRY_DELAY = 3.0
+
 
 def _result_line(status: str, name: str, detail: str = "") -> str:
     icon = {_STATUS_PASS: "[OK]", _STATUS_FAIL: "[FAIL]", _STATUS_SKIP: "[SKIP]"}[status]
@@ -114,14 +117,14 @@ async def check_tcp_port(host: str, port: int, wait_s: float) -> tuple[str, str]
 async def check_opc_connection(client: Any) -> tuple[str, str]:
     """Try to establish an OPC UA session, retrying briefly after TCP is open."""
     last_exc: Exception | None = None
-    for attempt in range(5):
+    for attempt in range(_OPC_CONNECTION_RETRY_COUNT):
         try:
             await client.connect()
             return _STATUS_PASS, "OPC UA session established"
         except (_OpcUaError, ConnectionError, TimeoutError, OSError) as exc:
             last_exc = exc
             if attempt < 4:
-                await asyncio.sleep(3)
+                await asyncio.sleep(_OPC_CONNECTION_RETRY_DELAY)
     return _STATUS_FAIL, str(last_exc)
 
 
