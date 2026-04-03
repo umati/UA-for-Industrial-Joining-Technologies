@@ -117,7 +117,7 @@ jobs:
           pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Run smoke test (8 checks)
-        run: python OPC_UA_Servers/Release2/tests/smoke_test.py --timeout 30
+        run: python OPC_UA_Servers/Release2/tests/smoke_test.py --tcp-timeout 30
 
       - name: Dump container logs
         if: always()
@@ -254,7 +254,7 @@ jobs:
           pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Run smoke test (8 checks)
-        run: python OPC_UA_Servers/Release2/tests/smoke_test.py --timeout 30
+        run: python OPC_UA_Servers/Release2/tests/smoke_test.py --tcp-timeout 30
 
       - name: Install IJT Test Client dependencies
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client

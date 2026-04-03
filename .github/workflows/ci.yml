@@ -482,7 +482,7 @@ jobs:
         run: pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Run smoke test (8 checks)
-        run: python OPC_UA_Servers/Release2/tests/smoke_test.py --timeout 30
+        run: python OPC_UA_Servers/Release2/tests/smoke_test.py --tcp-timeout 30
 
       - name: Stop OPC UA Server
         if: always()
