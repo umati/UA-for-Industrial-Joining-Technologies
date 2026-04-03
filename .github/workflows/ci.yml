@@ -309,11 +309,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
       - name: Build Docker Image
-        run: docker build -t ijt_web_client .
+        uses: docker/build-push-action@v7
+        with:
+          context: OPC_UA_Clients/Release2/IJT_Web_Client
+          tags: ijt_web_client:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Start Compose Stack
-        run: docker compose up -d
+        run: docker compose up -d --no-build
 
       - name: Wait for HTTP Readiness
         shell: bash

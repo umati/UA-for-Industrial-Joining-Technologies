@@ -17,8 +17,36 @@ from pathlib import Path
 import pytest
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
-# The git repo root is three levels up from the IJT_Web_Client directory
-_GIT_ROOT = _PROJECT_ROOT.parents[2]  # UA-for-Industrial-Joining-Technologies/
+
+
+def _find_git_root() -> Path:
+    """Locate the repository root.
+
+    Tries ``git rev-parse --show-toplevel`` first so the result is always
+    correct regardless of where this file lives (native checkout, Docker,
+    WSL, …).  Falls back to path arithmetic for environments without git,
+    and ultimately to *_PROJECT_ROOT* if arithmetic also fails (e.g. the
+    project is installed directly under ``/app`` in Docker).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            cwd=str(_PROJECT_ROOT),
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    except FileNotFoundError:
+        pass
+    # Path-arithmetic fallback: three levels up from IJT_Web_Client root.
+    try:
+        return _PROJECT_ROOT.parents[2]
+    except IndexError:
+        return _PROJECT_ROOT
+
+
+_GIT_ROOT = _find_git_root()
 
 
 def _git_available() -> bool:

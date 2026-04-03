@@ -115,6 +115,77 @@ jobs:
         run: docker rm -f opcua-server || true
 
   # ───────────────────────────────────────────────────────────────────────────
+  # Release2 / IJT Web Client — Docker Tests
+  #   Builds both the 'test' target (Python unit + JS vitest inside container)
+  #   and the 'production' target (HTTP health check on port 3000).
+  # ───────────────────────────────────────────────────────────────────────────
+  webclient-docker:
+    name: "Release2 / IJT Web Client — Docker Tests"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Web Client Docker image (test target)
+        uses: docker/build-push-action@v7
+        with:
+          context: OPC_UA_Clients/Release2/IJT_Web_Client
+          target: test
+          tags: ijt-web-client:test-ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Python unit tests inside Docker
+        run: |
+          docker run --rm ijt-web-client:test-ci \
+            python -m pytest tests/python/unit/ \
+              -v --tb=short --no-header \
+              --junitxml=/tmp/pytest-unit.xml
+          docker cp $(docker create --rm ijt-web-client:test-ci true):/tmp/pytest-unit.xml \
+            pytest-unit.xml 2>/dev/null || true
+
+      - name: Run JS unit tests (vitest) inside Docker
+        run: |
+          docker run --rm ijt-web-client:test-ci npx vitest run
+
+      - name: Build Web Client Docker image (production target)
+        uses: docker/build-push-action@v7
+        with:
+          context: OPC_UA_Clients/Release2/IJT_Web_Client
+          target: production
+          tags: ijt-web-client:prod-ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start production container and verify HTTP health
+        run: |
+          docker run -d --name ijt-web-prod \
+            -p 3000:3000 \
+            -e IS_DOCKER=true \
+            ijt-web-client:prod-ci
+          echo "Waiting for HTTP on port 3000..."
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:3000 >/dev/null 2>&1; then
+              echo "HTTP 200 OK after $((i * 3))s"
+              exit 0
+            fi
+            echo "Attempt $i/20..."
+            sleep 3
+          done
+          echo "ERROR: HTTP health check timed out. Container logs:"
+          docker logs ijt-web-prod --tail 40
+          exit 1
+
+      - name: Teardown Web Client container
+        if: always()
+        run: docker rm -f ijt-web-prod || true
+
+  # ───────────────────────────────────────────────────────────────────────────
   # Release2 / Integration Tests (Windows)
   #   OPC UA Server running natively + IJT Test Client full suite + Web Client.
   #   All tests run against opc.tcp://localhost:40451.
@@ -172,7 +243,7 @@ jobs:
 
       - name: Install IJT Test Client dependencies
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run IJT Test Client tests (all tests)
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
