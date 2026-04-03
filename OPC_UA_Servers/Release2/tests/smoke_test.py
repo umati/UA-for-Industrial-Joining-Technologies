@@ -230,8 +230,13 @@ async def _run(endpoint: str, wait_s: float) -> int:
                 s, d = await fn(client)
                 checks.append((s, label, d))
     finally:
-        with contextlib.suppress(_OpcUaError, ConnectionError, OSError):
+        try:
             await client.disconnect()
+        except (_OpcUaError, ConnectionError, OSError) as exc:
+            print(
+                f"[WARN] OPC UA client disconnect failed: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
 
     # -- Report ----------------------------------------------------------------
     for status, name, detail in checks:
