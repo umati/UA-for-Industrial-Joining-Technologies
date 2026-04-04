@@ -27,6 +27,8 @@ import sys
 import time
 from typing import Any
 
+_OPC_SESSION_TIMEOUT_S = 30.0
+
 # asyncua is a required dependency — all asyncua symbols are imported here so
 # that a missing package is caught immediately with a clear error message.
 try:
@@ -301,8 +303,10 @@ def main() -> None:
         type=float,
         default=30.0,
         dest="tcp_timeout",
-        help="Seconds to wait for the TCP port to open (default: 30). "
-             "Does not affect the OPC UA session timeout (fixed at 30 s).",
+        help=(
+            "Seconds to wait for the TCP port to open (default: 30). "
+            f"Does not affect the OPC UA session timeout (fixed at {_OPC_SESSION_TIMEOUT_S:.0f} s)."
+        ),
     )
     args = parser.parse_args()
     sys.exit(asyncio.run(_run(args.endpoint, args.tcp_timeout)))
