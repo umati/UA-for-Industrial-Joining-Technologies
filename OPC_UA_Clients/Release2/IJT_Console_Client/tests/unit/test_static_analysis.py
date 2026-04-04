@@ -35,9 +35,7 @@ _SKIP_DIRS = {
 
 def _all_py_files(root: Path) -> list[Path]:
     """All .py files in the project, excluding generated/dependency dirs."""
-    return [
-        f for f in root.rglob("*.py") if not any(part in _SKIP_DIRS for part in f.parts)
-    ]
+    return [f for f in root.rglob("*.py") if not any(part in _SKIP_DIRS for part in f.parts)]
 
 
 _PYLINT_AVAILABLE = shutil.which("pylint") is not None or (
@@ -95,14 +93,11 @@ def test_pylint_score_above_threshold():
     score = _parse_pylint_score(combined)
 
     if score is not None:
-        assert score >= 7.0, (
-            f"pylint score {score:.2f}/10 is below threshold 7.0:\n{result.stdout}"
-        )
+        assert score >= 7.0, f"pylint score {score:.2f}/10 is below threshold 7.0:\n{result.stdout}"
     else:
         # Couldn't parse score — only fail on fatal/usage errors (exit codes 1, 32)
         assert result.returncode not in (1, 32), (
-            f"pylint failed with exit code {result.returncode}:\n"
-            f"{result.stdout}\n{result.stderr}"
+            f"pylint failed with exit code {result.returncode}:\n{result.stdout}\n{result.stderr}"
         )
 
 
@@ -129,9 +124,7 @@ def test_bandit_no_high_severity():
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, (
-        f"bandit found security issues:\n{result.stdout}\n{result.stderr}"
-    )
+    assert result.returncode == 0, f"bandit found security issues:\n{result.stdout}\n{result.stderr}"
 
 
 # ===========================================================================
@@ -189,11 +182,7 @@ def test_no_empty_except_blocks():
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler):
-                if (
-                    len(node.body) == 1
-                    and isinstance(node.body[0], ast.Pass)
-                    and _is_broad_except(node)
-                ):
+                if len(node.body) == 1 and isinstance(node.body[0], ast.Pass) and _is_broad_except(node):
                     issues.append(f"{py_file}:{node.lineno}: empty except block")
     assert not issues, "Empty except blocks found:\n" + "\n".join(issues)
 
@@ -214,7 +203,7 @@ _TOKEN_SKIP = {
 
 def _find_implicit_concat_in_lists(source: str) -> list[int]:
     """Return line numbers with adjacent string literals inside list brackets."""
-    found = []
+    found: list[int] = []
     try:
         tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
     except tokenize.TokenError:
@@ -245,9 +234,7 @@ def test_no_implicit_string_concat_in_lists():
     for py_file in _all_py_files(_CONSOLE_ROOT):
         source = py_file.read_text(encoding="utf-8")
         for lineno in _find_implicit_concat_in_lists(source):
-            issues.append(
-                f"{py_file}:{lineno}: implicit string concat inside list literal"
-            )
+            issues.append(f"{py_file}:{lineno}: implicit string concat inside list literal")
     assert not issues, "Implicit string concatenation in lists:\n" + "\n".join(issues)
 
 
@@ -351,9 +338,7 @@ def test_no_mixed_return_statements():
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if _has_mixed_returns(node):
-                    issues.append(
-                        f"{py_file}:{node.lineno}: {node.name}() — mixed return statements"
-                    )
+                    issues.append(f"{py_file}:{node.lineno}: {node.name}() — mixed return statements")
     assert not issues, "Mixed return statements found:\n" + "\n".join(issues)
 
 
@@ -411,7 +396,7 @@ def _collect_all_imported_names(root: Path) -> set[str]:
         try:
             src = py_file.read_text(encoding="utf-8")
             tree = ast.parse(src)
-        except (SyntaxError, OSError):
+        except SyntaxError, OSError:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
@@ -479,16 +464,9 @@ def test_no_unused_global_declarations():
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 for name in _find_unused_global_decls(node):
-                    issues.append(
-                        f"{py_file}:{node.lineno}: "
-                        f"'{name}' declared global but never used in {node.name}()"
-                    )
-        for lineno, name in _find_unused_module_globals(
-            source, tree, cross_file_exports
-        ):
-            issues.append(
-                f"{py_file}:{lineno}: module-level '{name}' assigned but never read"
-            )
+                    issues.append(f"{py_file}:{node.lineno}: '{name}' declared global but never used in {node.name}()")
+        for lineno, name in _find_unused_module_globals(source, tree, cross_file_exports):
+            issues.append(f"{py_file}:{lineno}: module-level '{name}' assigned but never read")
     assert not issues, "Unused global declarations:\n" + "\n".join(issues)
 
 
@@ -548,10 +526,7 @@ def test_no_multiple_definitions():
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 for name, lineno in _find_multiple_defs(node):
-                    issues.append(
-                        f"{py_file}:{lineno}: "
-                        f"'{name}' assigned again without use in {node.name}()"
-                    )
+                    issues.append(f"{py_file}:{lineno}: '{name}' assigned again without use in {node.name}()")
     assert not issues, "Multiple definitions found:\n" + "\n".join(issues)
 
 
@@ -566,14 +541,8 @@ def _find_unused_importorskip_assignments(source: str) -> list[str]:
 
     Excludes '_' which is the Python discard convention for intentionally unused values.
     """
-    assignments = re.findall(
-        r"^(\w+)\s*=\s*pytest\.importorskip\(", source, re.MULTILINE
-    )
-    return [
-        name
-        for name in assignments
-        if name != "_" and not re.search(r"\b" + re.escape(name) + r"\.", source)
-    ]
+    assignments = re.findall(r"^(\w+)\s*=\s*pytest\.importorskip\(", source, re.MULTILINE)
+    return [name for name in assignments if name != "_" and not re.search(r"\b" + re.escape(name) + r"\.", source)]
 
 
 def test_no_unused_importorskip_assignments():
@@ -587,10 +556,7 @@ def test_no_unused_importorskip_assignments():
     for py_file in _all_py_files(_CONSOLE_ROOT):
         source = py_file.read_text(encoding="utf-8")
         for name in _find_unused_importorskip_assignments(source):
-            issues.append(
-                f"{py_file}: '{name} = pytest.importorskip(...)'"
-                f" — '{name}' never used as attribute access"
-            )
+            issues.append(f"{py_file}: '{name} = pytest.importorskip(...)' — '{name}' never used as attribute access")
     assert not issues, "Unused importorskip assignments:\n" + "\n".join(issues)
 
 

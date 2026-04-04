@@ -1,5 +1,7 @@
 #nullable enable
 
+using IJT_CSharp_Client.Helpers;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 
@@ -16,6 +18,7 @@ namespace IJT_CSharp_Client.Client;
 /// </summary>
 public sealed class EventSubscriber : IDisposable
 {
+    private readonly ILogger<EventSubscriber> _log = IjtLog.For<EventSubscriber>();
     private readonly IjtSession _s;
     private Subscription?       _eventSubscription;
 
@@ -32,24 +35,25 @@ public sealed class EventSubscriber : IDisposable
     /// <summary>Event data for ResultReady / JoiningSystemResultReady events.</summary>
     public sealed class ResultReadyEventArgs : EventArgs
     {
+        // Quick-access summary fields (extracted from Result.ResultMetaData)
         /// <summary>Unique result identifier from ResultMetaData.</summary>
-        public string?  ResultId         { get; init; }
+        public string?   ResultId         { get; init; }
         /// <summary>Result classification (OK/NOK/…).</summary>
-        public string?  Classification   { get; init; }
+        public string?   Classification   { get; init; }
         /// <summary>Joining program name from ResultMetaData.</summary>
-        public string?  Name             { get; init; }
+        public string?   Name             { get; init; }
         /// <summary>Monotonic sequence number within the session.</summary>
-        public int      SequenceNumber   { get; init; }
+        public int       SequenceNumber   { get; init; }
         /// <summary>Assembly type identifier.</summary>
-        public string?  AssemblyType     { get; init; }
+        public string?   AssemblyType     { get; init; }
         /// <summary>Overall status — same as Classification for IJT.</summary>
-        public string?  OverallStatus    { get; init; }
+        public string?   OverallStatus    { get; init; }
         /// <summary>Discriminates between ResultReadyEventType and JoiningSystemResultReadyEventType.</summary>
-        public string   EventTypeName    { get; init; } = "";
+        public string    EventTypeName    { get; init; } = "";
         /// <summary>Server-side event time.</summary>
-        public DateTime EventTime        { get; init; }
-        /// <summary>Raw ResultContent ExtensionObject for further decoding.</summary>
-        public object?  ResultContent    { get; init; }
+        public DateTime  EventTime        { get; init; }
+        /// <summary>Full decoded ResultDataType — contains ResultMetaData + ResultContent.</summary>
+        public UAModel.MachineryResult.ResultDataType? Result { get; init; }
         /// <summary>All event fields as received, keyed by field name.</summary>
         public IReadOnlyList<KeyValuePair<string, object?>> AllFields { get; init; } = [];
     }
@@ -63,6 +67,10 @@ public sealed class EventSubscriber : IDisposable
         public string?  EventText          { get; init; }
         /// <summary>Joining technology identifier (e.g. "Tightening").</summary>
         public string?  JoiningTechnology  { get; init; }
+        /// <summary>Assets associated with this event (may be empty).</summary>
+        public UAModel.IJTBase.EntityDataType[]? AssociatedEntities { get; init; }
+        /// <summary>Reported measurement values attached to this event (may be empty).</summary>
+        public UAModel.IJTBase.ReportedValueDataType[]? ReportedValues { get; init; }
         /// <summary>Server-side event time.</summary>
         public DateTime EventTime          { get; init; }
         /// <summary>All event fields as received, keyed by field name.</summary>
@@ -88,11 +96,11 @@ public sealed class EventSubscriber : IDisposable
     {
         if (_eventSubscription != null)
         {
-            Console.WriteLine("  ⚠ Event subscription already active.");
+            _log.LogWarning("⚠ Event subscription already active.");
             return;
         }
 
-        Console.WriteLine("\n── Subscribing to IJT events ───────────────────────");
+        _log.LogInformation("── Subscribing to IJT events ───────────────────────");
 
         _eventSubscription = new Subscription(_s.Session.DefaultSubscription)
         {
@@ -134,7 +142,7 @@ public sealed class EventSubscriber : IDisposable
         _s.Session.AddSubscription(_eventSubscription);
         _eventSubscription.Create();
 
-        Console.WriteLine($"  ✓ Event subscription created (SubId={_eventSubscription.Id}).");
+        _log.LogInformation("✓ Event subscription created (SubId={SubId}).", _eventSubscription.Id);
     }
 
     /// <summary>Removes and disposes the event subscription.</summary>
@@ -148,24 +156,27 @@ public sealed class EventSubscriber : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ⚠ Unsubscribe warning: {ex.Message}");
+            _log.LogWarning(ex, "⚠ Unsubscribe warning");
         }
         finally
         {
             _eventSubscription?.Dispose();
             _eventSubscription = null;
-            Console.WriteLine("  ✓ Event subscription removed.");
+            _log.LogInformation("✓ Event subscription removed.");
         }
     }
 
     /// <inheritdoc/>
-    public void Dispose() => Unsubscribe();
+    public void Dispose()
+    {
+        Unsubscribe();
+        GC.SuppressFinalize(this);
+    }
 
     // ── Event filter builders ─────────────────────────────────────────────────
 
     //  Select-clause indices for result events:
-    //  0=EventId, 1=EventType, 2=Time, 3=Message, 4=SourceName,
-    //  5=ResultId, 6=Classification, 7=Name, 8=SequenceNumber, 9=AssemblyType, 10=ResultContent
+    //  0=EventId, 1=EventType, 2=Time, 3=Message, 4=SourceName, 5=Result (full ResultDataType)
 
     private EventFilter BuildResultEventFilter()
     {
@@ -184,13 +195,8 @@ public sealed class EventSubscriber : IDisposable
         AddSelectClause(filter, ObjectTypeIds.BaseEventType,  0, "Message");
         AddSelectClause(filter, ObjectTypeIds.BaseEventType,  0, "SourceName");
 
-        // JoiningSystemResultReadyEventType-specific fields
-        AddSelectClause(filter, jsResultReadyTypeId, ijtNs, "Result", "ResultMetaData", "ResultId");
-        AddSelectClause(filter, jsResultReadyTypeId, ijtNs, "Result", "ResultMetaData", "Classification");
-        AddSelectClause(filter, jsResultReadyTypeId, ijtNs, "Result", "ResultMetaData", "Name");
-        AddSelectClause(filter, jsResultReadyTypeId, ijtNs, "Result", "ResultMetaData", "SequenceNumber");
-        AddSelectClause(filter, jsResultReadyTypeId, ijtNs, "Result", "ResultMetaData", "AssemblyType");
-        AddSelectClause(filter, jsResultReadyTypeId, ijtNs, "Result", "ResultContent");
+        // Full Result object — ResultDataType with ResultMetaData (all 31+ properties) + ResultContent
+        AddSelectClause(filter, jsResultReadyTypeId, ijtNs, "Result");
 
         // WhereClause: OfType ResultReadyEventType (base type catches both variants)
         filter.WhereClause = new ContentFilter();
@@ -200,12 +206,11 @@ public sealed class EventSubscriber : IDisposable
     }
 
     private static readonly string[] ResultFieldNames =
-        ["EventId", "EventType", "Time", "Message", "SourceName",
-         "ResultId", "Classification", "Name", "SequenceNumber", "AssemblyType", "ResultContent"];
+        ["EventId", "EventType", "Time", "Message", "SourceName", "Result"];
 
     //  Select-clause indices for JoiningSystem events:
     //  0=EventId, 1=EventType, 2=Time, 3=Message, 4=SourceName,
-    //  5=EventCode, 6=EventText, 7=JoiningTechnology
+    //  5=EventCode, 6=EventText, 7=JoiningTechnology, 8=AssociatedEntities, 9=ReportedValues
 
     private EventFilter BuildJoiningSystemEventFilter()
     {
@@ -214,14 +219,16 @@ public sealed class EventSubscriber : IDisposable
 
         var filter = new EventFilter();
 
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0,      "EventId");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0,      "EventType");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0,      "Time");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0,      "Message");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0,      "SourceName");
-        AddSelectClause(filter, sysTypeId,                   ijtNs,  "JoiningSystemEventContent", "EventCode");
-        AddSelectClause(filter, sysTypeId,                   ijtNs,  "JoiningSystemEventContent", "EventText");
-        AddSelectClause(filter, sysTypeId,                   ijtNs,  "JoiningSystemEventContent", "JoiningTechnology");
+        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0,     "EventId");
+        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0,     "EventType");
+        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0,     "Time");
+        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0,     "Message");
+        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0,     "SourceName");
+        AddSelectClause(filter, sysTypeId,                   ijtNs, "JoiningSystemEventContent", "EventCode");
+        AddSelectClause(filter, sysTypeId,                   ijtNs, "JoiningSystemEventContent", "EventText");
+        AddSelectClause(filter, sysTypeId,                   ijtNs, "JoiningSystemEventContent", "JoiningTechnology");
+        AddSelectClause(filter, sysTypeId,                   ijtNs, "JoiningSystemEventContent", "AssociatedEntities");
+        AddSelectClause(filter, sysTypeId,                   ijtNs, "JoiningSystemEventContent", "ReportedValues");
 
         filter.WhereClause = new ContentFilter();
         filter.WhereClause.Push(FilterOperator.OfType, new LiteralOperand(sysTypeId));
@@ -231,7 +238,7 @@ public sealed class EventSubscriber : IDisposable
 
     private static readonly string[] SysFieldNames =
         ["EventId", "EventType", "Time", "Message", "SourceName",
-         "EventCode", "EventText", "JoiningTechnology"];
+         "EventCode", "EventText", "JoiningTechnology", "AssociatedEntities", "ReportedValues"];
 
     // ── Notification handlers ─────────────────────────────────────────────────
 
@@ -242,25 +249,42 @@ public sealed class EventSubscriber : IDisposable
             var fields = notification.EventFields;
             try
             {
-                var map   = BuildFieldMap(fields, ResultFieldNames);
-                var args  = new ResultReadyEventArgs
+                var map = BuildFieldMap(fields, ResultFieldNames);
+
+                // Decode full Result (ResultDataType)
+                UAModel.MachineryResult.ResultDataType? result = null;
+                var rawResult = map.GetValueOrDefault("Result");
+                if (rawResult is ExtensionObject eo)
+                    result = eo.Body as UAModel.MachineryResult.ResultDataType;
+                else
+                    result = rawResult as UAModel.MachineryResult.ResultDataType;
+
+                // Extract summary fields from JoiningResultMetaDataType (subtype of ResultMetaDataType)
+                var jMeta    = result?.ResultMetaData as UAModel.IJTBase.JoiningResultMetaDataType;
+                var baseMeta = result?.ResultMetaData;
+
+                var args = new ResultReadyEventArgs
                 {
                     EventTypeName  = AsString(map, "EventType") ?? "",
                     EventTime      = AsDateTime(map, "Time"),
-                    ResultId       = AsString(map, "ResultId"),
-                    Classification = AsString(map, "Classification"),
-                    Name           = AsString(map, "Name"),
-                    SequenceNumber = AsInt(map, "SequenceNumber"),
-                    AssemblyType   = AsString(map, "AssemblyType"),
-                    OverallStatus  = AsString(map, "Classification"),
-                    ResultContent  = map.GetValueOrDefault("ResultContent"),
+                    Result         = result,
+                    ResultId       = baseMeta?.ResultId,
+                    Classification = jMeta?.Classification.ToString() ?? baseMeta?.ResultEvaluation.ToString(),
+                    Name           = jMeta?.Name,
+                    SequenceNumber = (int)(jMeta?.SequenceNumber ?? 0),
+                    AssemblyType   = jMeta?.AssemblyType.ToString(),
+                    OverallStatus  = baseMeta?.ResultEvaluation.ToString(),
                     AllFields      = [..map.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value))],
                 };
                 OnResultReady?.Invoke(this, args);
             }
+            catch (Opc.Ua.ServiceResultException srex)
+            {
+                _log.LogError("✗ OPC UA error processing event: {Status}", srex.StatusCode);
+            }
             catch (Exception ex)
             {
-                Console.WriteLine($"  ✗ Result event processing error: {ex.Message}");
+                _log.LogError(ex, "✗ Unexpected error processing event");
             }
         }
     }
@@ -279,13 +303,21 @@ public sealed class EventSubscriber : IDisposable
                     EventCode          = AsString(map, "EventCode"),
                     EventText          = AsString(map, "EventText"),
                     JoiningTechnology  = AsString(map, "JoiningTechnology"),
+                    AssociatedEntities = AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(
+                                             map, "AssociatedEntities"),
+                    ReportedValues     = AsExtensionObjectArray<UAModel.IJTBase.ReportedValueDataType>(
+                                             map, "ReportedValues"),
                     AllFields          = [..map.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value))],
                 };
                 OnJoiningSystemEvent?.Invoke(this, args);
             }
+            catch (Opc.Ua.ServiceResultException srex)
+            {
+                _log.LogError("✗ OPC UA error processing event: {Status}", srex.StatusCode);
+            }
             catch (Exception ex)
             {
-                Console.WriteLine($"  ✗ JoiningSystem event processing error: {ex.Message}");
+                _log.LogError(ex, "✗ Unexpected error processing event");
             }
         }
     }
@@ -339,9 +371,38 @@ public sealed class EventSubscriber : IDisposable
         return val is DateTime dt ? dt : DateTime.MinValue;
     }
 
-    private static int AsInt(Dictionary<string, object?> map, string key)
+    /// <summary>
+    /// Decodes an array field from the event field map into a typed array.
+    /// Handles ExtensionObject[], Variant wrapping, and single-item cases.
+    /// Returns null if the field is absent or cannot be decoded.
+    /// </summary>
+    private static T[]? AsExtensionObjectArray<T>(Dictionary<string, object?> map, string key)
+        where T : class
     {
-        if (!map.TryGetValue(key, out var val)) return 0;
-        try { return Convert.ToInt32(val); } catch { return 0; }
+        if (!map.TryGetValue(key, out var raw) || raw is null) return null;
+
+        // Unwrap Variant
+        if (raw is Variant v) raw = v.Value;
+        if (raw is null) return null;
+
+        // Array of ExtensionObject
+        if (raw is ExtensionObject[] eoArr)
+        {
+            var result = eoArr
+                .Select(eo => eo.Body as T)
+                .OfType<T>()
+                .ToArray();
+            return result.Length > 0 ? result : null;
+        }
+
+        // Single ExtensionObject
+        if (raw is ExtensionObject single && single.Body is T t)
+            return [t];
+
+        // Already typed array
+        if (raw is T[] typedArr)
+            return typedArr.Length > 0 ? typedArr : null;
+
+        return null;
     }
 }

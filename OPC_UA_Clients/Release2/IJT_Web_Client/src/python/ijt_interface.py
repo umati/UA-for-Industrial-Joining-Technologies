@@ -24,17 +24,19 @@ class IJTInterface:
     # Allowlist of Connection methods that may be dispatched via call_connection.
     # Prevents arbitrary method invocation if an unexpected command arrives.
     # Keep in sync with Connection's public async methods.
-    _ALLOWED_METHODS: frozenset = frozenset({
-        "connect",
-        "disconnect",
-        "subscribe",
-        "read",
-        "browse",
-        "namespaces",
-        "pathtoid",
-        "methodcall",
-        "read_product_instance_uri",
-    })
+    _ALLOWED_METHODS: frozenset = frozenset(
+        {
+            "connect",
+            "disconnect",
+            "subscribe",
+            "read",
+            "browse",
+            "namespaces",
+            "pathtoid",
+            "methodcall",
+            "read_product_instance_uri",
+        }
+    )
 
     # Resolve Resources/ relative to this file so the server works regardless
     # of which directory the process was started from.
@@ -83,7 +85,7 @@ class IJTInterface:
             The dict returned by the connection method, or
             ``{"exception": "…"}`` on any error.
         """
-        endpoint = data.get("endpoint")
+        endpoint = data.get("endpoint") or ""
         connection = self.connection_list.get(endpoint)
 
         if not connection:
@@ -250,8 +252,8 @@ class IJTInterface:
                 a ``"command"`` key.
         """
         return_values: dict[str, Any] = {}
-        command = data.get("command")
-        endpoint = data.get("endpoint")
+        command = data.get("command") or ""
+        endpoint = data.get("endpoint") or ""
 
         try:
             if command == "get connectionpoints":
@@ -265,9 +267,7 @@ class IJTInterface:
                 await self.handle_set_settings(data)
                 return
             elif command == "read product instance uri":
-                return_values = await self.call_connection(
-                    data, "read_product_instance_uri"
-                )
+                return_values = await self.call_connection(data, "read_product_instance_uri")
             elif command == "connect to":
                 return_values = await self.handle_connect_to(endpoint, websocket)
             elif command == "terminate connection":
@@ -278,9 +278,7 @@ class IJTInterface:
             ijt_log.error(f"Exception in IJTInterface.handle: {exc}")
             return_values = {"exception": str(exc)}
 
-        response = self._build_response(
-            command, endpoint, data.get("uniqueid"), return_values
-        )
+        response = self._build_response(command, endpoint, data.get("uniqueid"), return_values)
         await websocket.send(json.dumps(response))
 
     async def disconnect(self) -> None:
@@ -305,9 +303,7 @@ class IJTInterface:
         self.connection_list.clear()
         ijt_log.info("All OPC UA connections cleaned up.")
 
-    async def _safe_terminate(
-        self, endpoint: str, connection: Optional[Connection]
-    ) -> None:
+    async def _safe_terminate(self, endpoint: str, connection: Optional[Connection]) -> None:
         """Coroutine. Terminate a connection, swallowing exceptions.
 
         Args:

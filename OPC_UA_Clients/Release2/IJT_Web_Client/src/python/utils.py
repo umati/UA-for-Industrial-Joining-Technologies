@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import aiofiles
+import aiofiles  # type: ignore[import-untyped]
 import pytz
 from asyncua import ua
 
@@ -49,9 +49,7 @@ def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:
     return dt.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
-async def log_result_event_details(
-    event: Any, _server_url: str, client_received_time: datetime
-) -> str:
+async def log_result_event_details(event: Any, _server_url: str, client_received_time: datetime) -> str:
     """Coroutine. Log timing and metadata for a received ResultReadyEvent.
 
     Computes the turn-around latency between ``Result.ProcessingTimes.EndTime``
@@ -90,58 +88,36 @@ async def log_result_event_details(
         None,
     )
 
-    creation_time = getattr(
-        getattr(event.Result, "ResultMetaData", None), "CreationTime", None
-    )
+    creation_time = getattr(getattr(event.Result, "ResultMetaData", None), "CreationTime", None)
 
     if end_time and end_time.tzinfo is None:
         end_time = pytz.utc.localize(end_time)
 
-    latency_ms = (
-        (client_received_time - end_time).total_seconds() * 1000 if end_time else None
-    )
+    latency_ms = (client_received_time - end_time).total_seconds() * 1000 if end_time else None
 
-    formatted_event_time = (
-        format_local_time(event_time) if event_time else "Unavailable"
-    )
+    formatted_event_time = format_local_time(event_time) if event_time else "Unavailable"
     formatted_client_time = format_local_time(client_received_time)
-    formatted_server_time = (
-        format_local_time(server_time) if server_time else "Unavailable"
-    )
-    formatted_start_time = (
-        format_local_time(start_time) if start_time else "Unavailable"
-    )
+    formatted_server_time = format_local_time(server_time) if server_time else "Unavailable"
+    formatted_start_time = format_local_time(start_time) if start_time else "Unavailable"
     formatted_end_time = format_local_time(end_time) if end_time else "Unavailable"
-    formatted_creation_time = (
-        format_local_time(creation_time) if creation_time else "Unavailable"
-    )
+    formatted_creation_time = format_local_time(creation_time) if creation_time else "Unavailable"
 
     message = getattr(event.Message, "Text", "Unavailable")
 
     label_width = 40
     ijt_log.info("-" * 80)
     ijt_log.info(f"{'RESULT EVENT RECEIVED':<{label_width}} : {message}")
-    ijt_log.info(
-        f"{'1. StartTime of Tightening':<{label_width}} : {formatted_start_time}"
-    )
+    ijt_log.info(f"{'1. StartTime of Tightening':<{label_width}} : {formatted_start_time}")
     ijt_log.info(f"{'2. EndTime of Tightening':<{label_width}} : {formatted_end_time}")
-    ijt_log.info(
-        f"{'3. Result Creation Time':<{label_width}} : {formatted_creation_time}"
-    )
-    ijt_log.info(
-        f"{'4. Result Event Generated Time':<{label_width}} : {formatted_event_time}"
-    )
+    ijt_log.info(f"{'3. Result Creation Time':<{label_width}} : {formatted_creation_time}")
+    ijt_log.info(f"{'4. Result Event Generated Time':<{label_width}} : {formatted_event_time}")
     ijt_log.info(f"{'5. Client Time':<{label_width}} : {formatted_client_time}")
     ijt_log.info(f"{'6. Server Time':<{label_width}} : {formatted_server_time}")
 
     if latency_ms is not None:
-        ijt_log.info(
-            f"{'*** Turn around Time (EndTime → Client)':<{label_width}} : {abs(latency_ms):.3f} ms"
-        )
+        ijt_log.info(f"{'*** Turn around Time (EndTime → Client)':<{label_width}} : {abs(latency_ms):.3f} ms")
     else:
-        ijt_log.info(
-            f"{'*** Turn around Time (EndTime → Client)':<{label_width}} : Unavailable"
-        )
+        ijt_log.info(f"{'*** Turn around Time (EndTime → Client)':<{label_width}} : Unavailable")
     ijt_log.info("-" * 80)
     return event_id
 
@@ -186,9 +162,7 @@ def log_joining_system_event(event: Any) -> None:
             getattr(getattr(rv, "PreviousValue", None), "Value", ""),
             label_width,
         )
-        log_field(
-            "  PhysicalQuantity", getattr(rv, "PhysicalQuantity", ""), label_width
-        )
+        log_field("  PhysicalQuantity", getattr(rv, "PhysicalQuantity", ""), label_width)
         log_field("  LowLimit", getattr(rv, "LowLimit", ""), label_width)
         log_field("  HighLimit", getattr(rv, "HighLimit", ""), label_width)
         log_field("  Units", eu_display, label_width)
@@ -223,14 +197,10 @@ def log_joining_system_event(event: Any) -> None:
     subclass_ids = [nodeid_to_str(nid) for nid in event.ConditionSubClassId]
     subclass_names = [localizedtext_to_str(lt) for lt in event.ConditionSubClassName]
 
-    for line in format_list_for_logging(
-        "ConditionSubClassId", subclass_ids, label_width
-    ):
+    for line in format_list_for_logging("ConditionSubClassId", subclass_ids, label_width):
         ijt_log.info(line)
 
-    for line in format_list_for_logging(
-        "ConditionSubClassName", subclass_names, label_width
-    ):
+    for line in format_list_for_logging("ConditionSubClassName", subclass_names, label_width):
         ijt_log.info(line)
 
     log_field("EventCode", event.EventCode, label_width)
@@ -244,7 +214,7 @@ def log_joining_system_event(event: Any) -> None:
             try:
                 log_entity(entity, label_width)
             except (AttributeError, TypeError) as e:
-                log_field("Error logging entity", e, label_width)
+                log_field("Error logging entity", str(e), label_width)
     else:
         log_field("AssociatedEntities", event.AssociatedEntities, label_width)
 
@@ -255,7 +225,7 @@ def log_joining_system_event(event: Any) -> None:
             try:
                 log_reported_value(rv, label_width)
             except (AttributeError, TypeError) as e:
-                log_field("Error logging reported value", e, label_width)
+                log_field("Error logging reported value", str(e), label_width)
     else:
         log_field("ReportedValues", event.ReportedValues, label_width)
 
@@ -277,16 +247,12 @@ async def log_result_to_file(event: Any) -> None:
     # This logic can be used to parse the Result and use it accordingly.
     if ENABLE_RESULT_FILE_LOGGING:
         try:
-            json_str = json.dumps(
-                serialize_full_event(event.Result), ensure_ascii=False
-            )
+            json_str = json.dumps(serialize_full_event(event.Result), ensure_ascii=False)
 
             log_dir = Path("logs/results")
             log_dir.mkdir(parents=True, exist_ok=True)
 
-            safe_message = re.sub(
-                r"[^\w\-_\. ]", "_", str(event.Message.Text).replace(":", "_")
-            )
+            safe_message = re.sub(r"[^\w\-_\. ]", "_", str(event.Message.Text).replace(":", "_"))
             temp_file = log_dir / f"{safe_message}.tmp"
             final_file = log_dir / f"{safe_message}.json"
 
@@ -326,13 +292,13 @@ def nodeid_to_str(nodeid: ua.NodeId) -> str:
                 ua.NodeIdType.TwoByte,
                 ua.NodeIdType.FourByte,
             ):
-                return f"ns={ns};i={identifier}"
+                return f"ns={ns};i={identifier}"  # type: ignore[str-bytes-safe]
             if nodeid_type == ua.NodeIdType.String:
-                return f"ns={ns};s={identifier}"
+                return f"ns={ns};s={identifier}"  # type: ignore[str-bytes-safe]
             if nodeid_type == ua.NodeIdType.Guid:
-                return f"ns={ns};g={identifier}"
+                return f"ns={ns};g={identifier}"  # type: ignore[str-bytes-safe]
             # ByteString / Opaque
-            return f"ns={ns};b={identifier}"
+            return f"ns={ns};b={identifier}"  # type: ignore[str-bytes-safe]
     except Exception as exc:
         ijt_log.debug(f"Failed to format node id, falling back to str(): {exc}")
     return str(nodeid)
@@ -358,9 +324,7 @@ def localizedtext_to_str(lt: ua.LocalizedText) -> str:
     return str(lt)
 
 
-def format_list_for_logging(
-    label: str, items: list[str], label_width: int = 35
-) -> list[str]:
+def format_list_for_logging(label: str, items: list[str], label_width: int = 35) -> list[str]:
     """Format a list of strings as indented log lines under a labelled header.
 
     Args:

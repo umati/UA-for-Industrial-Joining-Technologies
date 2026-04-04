@@ -1,5 +1,6 @@
 #nullable enable
 
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using UAModel.IJTBase;
 
@@ -11,6 +12,8 @@ namespace IJT_CSharp_Client.Helpers;
 /// </summary>
 public static class ExtensionObjectHelper
 {
+    private static readonly ILogger _log = IjtLog.ForCategory(nameof(ExtensionObjectHelper));
+
     // ── JoiningProcessIdentificationDataType ──────────────────────────────────
 
     /// <summary>
@@ -176,16 +179,16 @@ public static class ExtensionObjectHelper
     }
 
     /// <summary>
-    /// Prints all method output arguments to console with index and formatted value.
+    /// Logs all method output arguments at Information level with index and formatted value.
     /// </summary>
     public static void PrintOutputArguments(IList<object> outputs)
     {
         if (outputs.Count == 0)
         {
-            Console.WriteLine("  [DATA] No output arguments returned.");
+            _log.LogInformation("[DATA] No output arguments returned.");
             return;
         }
         for (int i = 0; i < outputs.Count; i++)
-            Console.WriteLine($"  [DATA] Output[{i}]: {FormatVariantValue(outputs[i])}");
+            _log.LogInformation("[DATA] Output[{Index}]: {Value}", i, FormatVariantValue(outputs[i]));
     }
 }

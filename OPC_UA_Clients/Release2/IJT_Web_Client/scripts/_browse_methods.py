@@ -1,4 +1,5 @@
 """Helper script: browse the live OPC UA server and print all callable methods + args."""
+
 import asyncio
 import contextlib
 
@@ -33,17 +34,17 @@ async def main():
                             pbn = await prop.read_browse_name()
                             if pbn.Name == "InputArguments":
                                 for a in await prop.get_value():
-                                    args_info.append(
-                                        f"{a.Name}(type={a.DataType.Identifier})"
-                                    )
-                    methods.append({
-                        "name": bn.Name,
-                        "nodeid": str(child.nodeid),
-                        "parent_nodeid": str(parent.nodeid),
-                        "parent_name": parent_bn.Name,
-                        "path": child_path,
-                        "args": args_info,
-                    })
+                                    args_info.append(f"{a.Name}(type={a.DataType.Identifier})")
+                    methods.append(
+                        {
+                            "name": bn.Name,
+                            "nodeid": str(child.nodeid),
+                            "parent_nodeid": str(parent.nodeid),
+                            "parent_name": parent_bn.Name,
+                            "path": child_path,
+                            "args": args_info,
+                        }
+                    )
                 elif nc in (ua.NodeClass.Object, ua.NodeClass.ObjectType):
                     await recurse(child, child_path, depth + 1)
             except Exception:

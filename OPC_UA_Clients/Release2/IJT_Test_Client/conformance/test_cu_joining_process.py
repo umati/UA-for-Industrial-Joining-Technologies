@@ -40,43 +40,28 @@ async def test_cu_joining_process_joining_process_management_addin(
     joining_process_management,
 ):
     # §11.1 CU-JP-001: JoiningSystem must expose a JoiningProcessManagement AddIn
-    assert joining_process_management is not None, (
-        "JoiningProcessManagement AddIn node must not be None"
-    )
+    assert joining_process_management is not None, "JoiningProcessManagement AddIn node must not be None"
 
 
-async def test_cu_joining_process_required_methods_present(
-    joining_process_management, asset_management, ns_indices
-):
+async def test_cu_joining_process_required_methods_present(joining_process_management, asset_management, ns_indices):
     # §11.1 CU-JP-002: SelectJoiningProcess and StartSelectedJoining must be present in JoiningProcessManagement;
     # EnableAsset is on AssetManagement MethodSet (IJT Base ns)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     for method_name in [BN.SELECT_JOINING_PROCESS, BN.START_SELECTED_JOINING]:
-        node = await find_child_by_browse_name(
-            joining_process_management, method_name, ns_ijt
-        )
-        assert node is not None, (
-            f"Required method '{method_name}' not found in JoiningProcessManagement "
-            f"(ns={ns_ijt})"
-        )
+        node = await find_child_by_browse_name(joining_process_management, method_name, ns_ijt)
+        assert node is not None, f"Required method '{method_name}' not found in JoiningProcessManagement (ns={ns_ijt})"
     # EnableAsset is on AssetManagement MethodSet
-    method_set = await find_child_by_browse_name(
-        asset_management, BN.METHOD_SET, ns_ijt
-    )
+    method_set = await find_child_by_browse_name(asset_management, BN.METHOD_SET, ns_ijt)
     if method_set is None:
         pytest.skip("AssetManagement MethodSet not found — cannot verify EnableAsset")
     enable_node = await find_child_by_browse_name(method_set, BN.ENABLE_ASSET, ns_ijt)
     if enable_node is None:
-        pytest.skip(
-            "EnableAsset not found in AssetManagement MethodSet — not implemented on this server"
-        )
+        pytest.skip("EnableAsset not found in AssetManagement MethodSet — not implemented on this server")
 
 
-async def test_cu_joining_process_enable_disable_asset_callable(
-    opcua_client, ns_indices, tools_instances
-):
+async def test_cu_joining_process_enable_disable_asset_callable(opcua_client, ns_indices, tools_instances):
     # §11.1 CU-JP-003: EnableAsset on AssetManagement/MethodSet — enable then disable
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     ns_di = ns_indices.get(NS_DI)
@@ -101,9 +86,7 @@ async def test_cu_joining_process_enable_disable_asset_callable(
         try:
             ident = await find_child_by_browse_name(tool_node, BN.IDENTIFICATION, ns_di)
             if ident is not None:
-                pi_node = await find_child_by_browse_name(
-                    ident, "ProductInstanceUri", ns_di
-                )
+                pi_node = await find_child_by_browse_name(ident, "ProductInstanceUri", ns_di)
                 if pi_node is not None:
                     pi_uri = str(await pi_node.read_value() or "")
         except Exception as exc:
@@ -121,10 +104,7 @@ async def test_cu_joining_process_enable_disable_asset_callable(
             )
         except ua.UaError as exc:
             status_str = str(exc)
-            if any(
-                s in status_str
-                for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound")
-            ):
+            if any(s in status_str for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound")):
                 pass  # Expected on some simulator configurations
             else:
                 raise
@@ -138,9 +118,7 @@ async def test_cu_joining_process_abort_process_callable(opcua_client, ns_indice
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await find_child_by_browse_name(jpm, BN.ABORT_JOINING_PROCESS, ns_ijt)
     if method_node is None:
-        pytest.skip(
-            f"'{BN.ABORT_JOINING_PROCESS}' method not found on JoiningProcessManagement"
-        )
+        pytest.skip(f"'{BN.ABORT_JOINING_PROCESS}' method not found on JoiningProcessManagement")
     try:
         await jpm.call_method(method_node.nodeid)
     except ua.UaError as exc:

@@ -25,9 +25,7 @@ _console_handler.setFormatter(_formatter)
 # File handler with daily rotation
 _log_dir = Path("logs")
 _log_dir.mkdir(exist_ok=True)
-_file_handler = TimedRotatingFileHandler(
-    _log_dir / "client.log", when="midnight", backupCount=7, encoding="utf-8"
-)
+_file_handler = TimedRotatingFileHandler(_log_dir / "client.log", when="midnight", backupCount=7, encoding="utf-8")
 _file_handler.setFormatter(_formatter)
 
 # Logger setup

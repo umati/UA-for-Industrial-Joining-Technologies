@@ -35,9 +35,7 @@ async def _find_rm(client, ns_mr):
 async def _simulate_and_collect(sub_client, caller_client, ns_indices, count=1):
     ns_app = ns_indices[NS_APP]
     ns_ijt = ns_indices[NS_IJT_BASE]
-    event_type_node = sub_client.get_node(
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt)
-    )
+    event_type_node = sub_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
     collector = EventCollector(sub_client)
     srv_node = sub_client.nodes.server
     await collector.subscribe(srv_node, event_type_nodes=[event_type_node])
@@ -48,9 +46,7 @@ async def _simulate_and_collect(sub_client, caller_client, ns_indices, count=1):
         sim_node = await find_child_by_browse_name(js, BN.SIMULATIONS, ns_app)
         if sim_node is None:
             pytest.skip("Simulations node not found")
-        sf = await find_child_by_browse_name(
-            sim_node, BN.SIMULATE_RESULTS_FOLDER, ns_app
-        )
+        sf = await find_child_by_browse_name(sim_node, BN.SIMULATE_RESULTS_FOLDER, ns_app)
         if sf is None:
             pytest.skip("SimulateResults folder not found")
         method = await find_child_by_browse_name(sf, BN.SIMULATE_SINGLE_RESULT, ns_app)
@@ -72,9 +68,7 @@ async def _simulate_and_collect(sub_client, caller_client, ns_indices, count=1):
 # ---------------------------------------------------------------------------
 # IJT-specific content
 # ---------------------------------------------------------------------------
-async def test_joining_system_event_content_type_structure(
-    subscription_client, opcua_client, ns_indices
-):
+async def test_joining_system_event_content_type_structure(subscription_client, opcua_client, ns_indices):
     """
     After receiving a JoiningSystemResultReadyEvent, confirm that the event
     carries at least one IJT-specific field beyond the standard OPC UA base
@@ -113,9 +107,7 @@ async def test_joining_system_event_content_type_structure(
             "No IJT-specific event fields found on received event. "
             "The server may not include extended fields in the notification."
         )
-    assert len(ijt_fields) >= 1, (
-        "At least one IJT-specific field must be present in the event content"
-    )
+    assert len(ijt_fields) >= 1, "At least one IJT-specific field must be present in the event content"
 
 
 async def test_event_has_asset_id_field(subscription_client, opcua_client, ns_indices):
@@ -136,11 +128,6 @@ async def test_event_has_asset_id_field(subscription_client, opcua_client, ns_in
     # Fall back to SourceNode, which is always present in OPC UA events
     try:
         source_node = event.SourceNode
-        assert source_node is not None, (
-            "Event.SourceNode must not be None when no dedicated AssetId field exists"
-        )
+        assert source_node is not None, "Event.SourceNode must not be None when no dedicated AssetId field exists"
     except AttributeError:
-        pytest.skip(
-            "Event has neither an AssetId-like field nor a SourceNode — "
-            "cannot verify asset identification"
-        )
+        pytest.skip("Event has neither an AssetId-like field nor a SourceNode — cannot verify asset identification")

@@ -11,7 +11,7 @@
 ## Prerequisites
 -  **Internet Connection**
 -  **Download** the project directory: **`IJT_Console_Client`** and launch a terminal from the project directory.
--  **Install** **Python 3.14 or higher** from the **official** **website** and **add** the installation directory to the system **PATH**.
+-  **Install** **Python 3.14+** from the **official** **website** and **add** the installation directory to the system **PATH**.
 -  A running **OPC UA IJT Server** — see [OPC UA IJT Server Simulator](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2).
 
 ## Run the client application
@@ -28,16 +28,9 @@ python setup_client.py
 
 ## Testing
 
-Run everything with one command — live OPC UA tests auto-skip when no server is available:
-
 ```bash
-python -m pytest tests/
+python run_all_tests.py
 ```
-
-| Stage | Runs when |
-|-------|-----------|
-| Unit tests | Always |
-| Live OPC UA tests | OPC UA server reachable at `opc.tcp://localhost:40451` (auto-detected) |
 
 ## Project Structure
 ```

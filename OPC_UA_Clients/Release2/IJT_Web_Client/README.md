@@ -74,22 +74,4 @@
   ```text
   http://localhost:3000
   ```
-## Testing
 
-Run everything with one command — optional stages (Docker, live OPC UA, Playwright E2E) activate automatically when available and are skipped if not:
-
-```bash
-python run_all_tests.py
-```
-
-| Stage | Runs when |
-|-------|-----------|
-| Python unit + JS unit + Playwright smoke | Always |
-| Live OPC UA tests | OPC UA server reachable at `opc.tcp://localhost:40451` |
-| Playwright E2E | WebSocket backend reachable at `ws://localhost:8001` |
-| Docker smoke (build + start + verify) | Docker daemon is running |
-### Dependencies Versions
-- **Python:** minimum supported version is **3.14**; newer stable Python versions are allowed automatically.
-- **Node.js:** minimum supported version is **24.0.0**.
-- **asyncua:** requires **`asyncua>=1.2b2`** (pre-release for Python 3.14 support); once asyncua 1.2.x stable ships, pip will prefer the stable build automatically.
-- The setup warns (but does **not** fail) when using versions newer than tested baselines.

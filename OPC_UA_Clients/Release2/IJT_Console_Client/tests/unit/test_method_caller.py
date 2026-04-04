@@ -36,7 +36,7 @@ def _make_client(tool_id="urn:tool:001"):
     """Return a mock asyncua Client where get_node returns a callable mock node."""
     client = MagicMock()
 
-    def _get_node(nodeid):
+    def _get_node(_nodeid):
         node = AsyncMock()
         node.call_method = AsyncMock(return_value=(0, _make_localized_text("OK")))
         return node
@@ -108,9 +108,7 @@ async def test_select_joint_returns_none_when_no_tool_identifier():
     client, _ = _make_client()
     caller = OPCUAMethodCaller(client)
 
-    with patch(
-        "method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None
-    ):
+    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None):
         result = await caller.select_joint("obj", "mth", "joint-1")
 
     assert result is None
@@ -121,9 +119,7 @@ async def test_select_joint_happy_path():
     client, tool_id = _make_client("urn:tool:001")
 
     node_mock = AsyncMock()
-    node_mock.call_method = AsyncMock(
-        return_value=(0, _make_localized_text("SelectJoint OK"))
-    )
+    node_mock.call_method = AsyncMock(return_value=(0, _make_localized_text("SelectJoint OK")))
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
@@ -213,9 +209,7 @@ async def test_enable_asset_returns_none_when_no_tool_identifier():
     client, _ = _make_client()
     caller = OPCUAMethodCaller(client)
 
-    with patch(
-        "method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None
-    ):
+    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None):
         result = await caller.enable_asset("obj", "mth", True)
 
     assert result is None
@@ -225,9 +219,7 @@ async def test_enable_asset_returns_none_when_no_tool_identifier():
 async def test_enable_asset_true():
     client, tool_id = _make_client()
     node_mock = AsyncMock()
-    node_mock.call_method = AsyncMock(
-        return_value=(0, _make_localized_text("Asset enabled"))
-    )
+    node_mock.call_method = AsyncMock(return_value=(0, _make_localized_text("Asset enabled")))
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
@@ -250,9 +242,7 @@ async def test_enable_asset_true():
 async def test_enable_asset_false():
     client, tool_id = _make_client()
     node_mock = AsyncMock()
-    node_mock.call_method = AsyncMock(
-        return_value=(0, _make_localized_text("Disabled"))
-    )
+    node_mock.call_method = AsyncMock(return_value=(0, _make_localized_text("Disabled")))
     client.get_node = MagicMock(return_value=node_mock)
 
     caller = OPCUAMethodCaller(client)
@@ -296,9 +286,7 @@ async def test_start_selected_joining_returns_none_when_no_tool_id():
     client, _ = _make_client()
     caller = OPCUAMethodCaller(client)
 
-    with patch(
-        "method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None
-    ):
+    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None):
         result = await caller.start_selected_joining("obj", "mth", True)
 
     assert result is None

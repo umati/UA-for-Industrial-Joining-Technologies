@@ -33,22 +33,33 @@
 UA-for-Industrial-Joining-Technologies/
 ├── README.md                        # Project overview and links
 ├── SKILLS.md                        # ← THIS FILE: root-level agent context
+├── run_all_tests.py                 # Root orchestrator — runs all project suites
 ├── renovate.json                    # Dependency update config
 │
 ├── IJT_Documents/                   # Spec presentations and reference docs
 │
 ├── OPC_UA_Servers/
 │   └── Release2/                    # IJT Server Simulator (Windows installer + source)
+│       └── run_all_tests.py         # Server test runner (hadolint, trivy, smoke)
 │
 └── OPC_UA_Clients/
+    ├── Release1/
+    │   └── IJT_Node_Client/         # Node.js OPC UA browser client
+    │       ├── docs/SKILLS.md
+    │       └── run_all_tests.py
     └── Release2/
         ├── README.md
         ├── IJT_Web_Client/          # ★ PRIMARY — Python + Node.js browser client
         │   ├── docs/SKILLS.md       # Comprehensive agent context for Web Client
-        │   └── ...
-        └── IJT_Console_Client/      # ★ SECONDARY — Python console client
-            ├── docs/SKILLS.md       # Agent context for Console Client
-            └── ...
+        │   └── run_all_tests.py
+        ├── IJT_Console_Client/      # Python console client
+        │   ├── docs/SKILLS.md
+        │   └── run_all_tests.py
+        ├── IJT_Test_Client/         # OPC UA IJT spec conformance test suite
+        │   ├── docs/SKILLS.md
+        │   └── run_all_tests.py
+        └── IJT_CSharp_Client/       # C# .NET OPC UA client
+            └── run_all_tests.py
 ```
 
 ---
@@ -61,21 +72,33 @@ UA-for-Industrial-Joining-Technologies/
 - **Live tests**: `tests/python/live/` — excluded from default run (`norecursedirs = live`); requires running OPC UA server
 - **One test command**: `python run_all_tests.py`
 - **Docker**: healthy on HTTP:3000 + WS:8001
-- **Details**: read `OPC_UA_Clients/Release2/IJT_Web_Client/SKILLS.md`
+- **Details**: read `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md`
 
 ### IJT Console Client (`OPC_UA_Clients/Release2/IJT_Console_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2
 - **Test baseline**: 285 Python pass, 0 skip (unit); live tests auto-skip when no server
-- **One test command**: `python -m pytest tests/ -v`
+- **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Entry point**: `python setup_client.py --url="opc.tcp://..."`
-- **Details**: read `OPC_UA_Clients/Release2/IJT_Console_Client/SKILLS.md`
+- **Details**: read `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md`
 
 ### IJT Test Client (`OPC_UA_Clients/Release2/IJT_Test_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2, pytest
 - **Purpose**: OPC UA IJT spec conformance test suite — validates server against OPC 40450-1 / 40451-1
 - **Test baseline**: 214 pass + 3 xfail (requires running OPC UA server on port 40451)
-- **One test command**: `python -m pytest . -v` (from IJT_Test_Client root)
-- **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/SKILLS.md` (if present)
+- **One test command**: `python run_all_tests.py` (auto-launches server if needed)
+- **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md`
+
+### IJT CSharp Client (`OPC_UA_Clients/Release2/IJT_CSharp_Client/`)
+- **Stack**: C# .NET 10+, OPC Foundation UA SDK
+- **Purpose**: C# reference OPC UA IJT client — asset mgmt, result mgmt, event subscriptions
+- **One test command**: `python run_all_tests.py` (dotnet build + test + NuGet CVE scan)
+- **Live tests**: skipped unless `OPCUA_SERVER_URL` is set or `OPCUA_SIMULATOR_EXE` points to server binary
+
+### IJT Node Client (`OPC_UA_Clients/Release1/IJT_Node_Client/`)
+- **Stack**: Node.js 24+, node-opcua, Socket.io, Vitest
+- **Purpose**: Node.js + browser OPC UA IJT client (Release 1)
+- **One test command**: `python run_all_tests.py` (npm ci + vitest + eslint + npm audit)
+- **Details**: read `OPC_UA_Clients/Release1/IJT_Node_Client/docs/SKILLS.md`
 
 ---
 
@@ -101,15 +124,19 @@ UA-for-Industrial-Joining-Technologies/
 ### Fast CI (`ci.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
 |-----|--------------|
+| `build-server-image` | Builds OPC UA server Docker image → ghcr.io (used by other jobs) |
 | `web-client` | Python unit (310), JS unit (162), ESLint, Bandit, npm audit |
-| `console-client` | Python unit (285), Bandit |
+| `console-client` | Python unit (285), Bandit; Phase 2 with Docker server (port 40453) |
 | `node-client` | JS unit (~152), ESLint, npm audit |
-| `test-client` | pytest collect + import check |
+| `test-client` | pytest collect + import check; Phase 2 with Docker server (port 40454) |
+| `csharp-client` | dotnet build + test + NuGet CVE scan; Phase 2 with server (port 40452) |
 | `docker-smoke` | docker buildx + compose up + HTTP:3000 readiness |
 | `report` | Combined markdown summary → Actions Summary tab |
+| `codeql` | GitHub CodeQL semantic analysis (Python + JS matrix), runs independently |
 
-Runtime: ~5–7 minutes. Python 3.14, Node.js 24 everywhere.
-Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `upload-artifact@v7`, `download-artifact@v8`
+Runtime: ~5–7 minutes. Python 3.14, Node.js 24, .NET 10 everywhere.
+Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `setup-dotnet@v4`, `upload-artifact@v7`, `download-artifact@v8`
+Port assignments: default=40451, csharp-CI=40452, console-CI=40453, test-CI=40454, web-CI=40455
 
 ### Heavy Tests (`heavy-tests.yml`) — nightly + path-triggered
 Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJT_Test_Client/**`, or workflow file change.
@@ -131,7 +158,7 @@ Runtime: ~7 minutes. NOT triggered on GUI/JS-only changes (deliberate — keep f
 | Monkey-patch `_send_request` timeout | asyncua `UaClient.call()` has hardcoded 1s timeout |
 | Subscribe events on Server node, not method nodes | Subscribing on individual nodes causes `BadNoSubscription` under load |
 | Skip venv in Docker (`IS_DOCKER=true`) | Container runs as non-root; `/opt/ijt_venv` not writable |
-| All scripts moved to `scripts/` | Clean root: only standard files at project root |
+| No `scripts/` at repo root | Each project owns its own helpers; nothing shared at root level |
 | `Python/network_utils.py` canonical | Moved from root; all imports use `from Python.network_utils import ...` |
 | `SimulateBulkResults` retry loop | Server `BULK_RESULTS_IN_PROGRESS` flag → `BadTooManyOperations` on concurrent calls |
 | No custom EventFilter | Full `ResultDataType` payload arrives in event without custom filter |
@@ -146,6 +173,7 @@ Runtime: ~7 minutes. NOT triggered on GUI/JS-only changes (deliberate — keep f
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md` | Full Web Client context, file map, bugs, Docker, CI |
 | `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md` | Console Client context, patterns, test commands |
 | `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md` | Test Client conformance suite, test structure, markers |
+| `OPC_UA_Clients/Release1/IJT_Node_Client/docs/SKILLS.md` | Node Client architecture, socket protocol, test commands |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/AGENT_GUIDE.md` | Agent workflow and prompt template |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/HEALTH_CHECK.md` | Quick sanity check commands |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/ijt-support-guide.md` | JS core library contracts |

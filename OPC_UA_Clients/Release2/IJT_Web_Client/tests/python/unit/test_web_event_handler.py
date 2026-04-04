@@ -288,4 +288,3 @@ async def test_handle_queue_breaks_and_closes_ws_on_exception():
         await asyncio.wait_for(handler._queue_task, timeout=2.0)
 
     ws.close.assert_awaited()
-

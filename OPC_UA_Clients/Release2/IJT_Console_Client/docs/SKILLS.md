@@ -28,6 +28,7 @@
 
 ```
 IJT_Console_Client/
+├── run_all_tests.py         # PRIMARY TEST RUNNER — one command for everything
 ├── setup_client.py          # Entry point: creates venv, installs deps, runs main.py
 ├── main.py                  # Async main: connect, subscribe events, call methods
 ├── client_config.py         # SERVER_URL, URL_PATTERN, ENABLE_RESULT_FILE_LOGGING
@@ -58,7 +59,10 @@ IJT_Console_Client/
 ## Test Commands
 
 ```bash
-# All unit tests
+# Full suite — OPC UA server auto-launched if needed
+python run_all_tests.py
+
+# Unit tests only (no server)
 python -m pytest tests/ -v
 
 # With live OPC UA server
@@ -68,6 +72,12 @@ python -m pytest tests/ -m live -v
 # Install test deps first (if needed)
 pip install pytest pytest-asyncio
 ```
+
+## Zero-Escape Testing Tools (run_all_tests.py Phase 1)
+
+All auto-detected — present=run, absent=skip with install hint.
+`ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
+`vulture` (dead code), `semgrep` (AI rules), `pyright` (AI types), `detect-secrets` (secrets).
 
 ---
 

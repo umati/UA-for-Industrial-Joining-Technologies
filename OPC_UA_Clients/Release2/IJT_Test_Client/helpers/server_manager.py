@@ -12,7 +12,9 @@ import logging
 import os
 import socket
 import subprocess  # nosec B404 - intentional: launches OPC UA simulator binary
+import sys
 import time
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,7 @@ def is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
-    except (socket.timeout, ConnectionRefusedError, OSError):
+    except socket.timeout, ConnectionRefusedError, OSError:
         return False
 
 
@@ -75,6 +77,31 @@ def wait_for_opcua_ready(url: str, timeout_s: float = 30.0) -> bool:
     return False
 
 
+def _find_server_executable() -> Optional[str]:
+    """Find server executable: env var → well-known repo path."""
+    # 1. Env var
+    from_env = os.environ.get("OPCUA_SIMULATOR_EXE")
+    if from_env and Path(from_env).is_file():
+        return from_env
+
+    # 2. Walk up from this file's location to find repo root
+    current = Path(__file__).resolve().parent
+    while current != current.parent:
+        candidate_win = (
+            current / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe"
+        )
+        candidate_lin = (
+            current / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
+        )
+        if sys.platform == "win32" and candidate_win.is_file():
+            return str(candidate_win)
+        if sys.platform != "win32" and candidate_lin.is_file():
+            return str(candidate_lin)
+        current = current.parent
+
+    return None
+
+
 class ServerManager:
     """
     Manages the OPC UA simulator process lifecycle.
@@ -115,9 +142,7 @@ class ServerManager:
             if ready:
                 logger.info("OPC UA server ready at %s:%d", self._host, self._port)
             else:
-                logger.warning(
-                    "OPC UA server TCP is open but OPC UA handshake timed out after 30 s"
-                )
+                logger.warning("OPC UA server TCP is open but OPC UA handshake timed out after 30 s")
             return ready
         exe_path = self._find_simulator_exe()
         if exe_path is None:
@@ -151,10 +176,11 @@ class ServerManager:
 
     def _find_simulator_exe(self) -> Optional[str]:
         """Return the first usable simulator executable path, or None."""
+        result = _find_server_executable()
+        if result is not None:
+            return result
         env_exe = os.environ.get("OPCUA_SIMULATOR_EXE")
         if env_exe:
-            if os.path.isfile(env_exe):
-                return env_exe
             logger.warning("OPCUA_SIMULATOR_EXE='%s' set but file not found", env_exe)
         for path in self.WELL_KNOWN_PATHS:
             if os.path.isfile(path):

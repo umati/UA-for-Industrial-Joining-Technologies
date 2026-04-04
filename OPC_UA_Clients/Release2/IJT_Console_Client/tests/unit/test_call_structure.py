@@ -5,6 +5,7 @@ NOTE: call_structure.py does not exist in this codebase.
 The method-call building logic lives in method_caller.py (OPCUAMethodCaller).
 These tests verify naming conventions and ensure no legacy camelCase aliases exist.
 """
+# pylint: disable=protected-access
 
 import inspect
 import sys
@@ -38,9 +39,7 @@ def test_method_caller_methods_are_snake_case():
     for name in dir(OPCUAMethodCaller):
         if name.startswith("_"):
             continue
-        assert name == name.lower() or "_" in name, (
-            f"Method {name!r} on OPCUAMethodCaller is not snake_case"
-        )
+        assert name == name.lower() or "_" in name, f"Method {name!r} on OPCUAMethodCaller is not snake_case"
 
 
 def test_no_camelcase_alias_createcallstructure():

@@ -18,8 +18,7 @@ def opcua_endpoint() -> str:
 
     if not endpoint_reachable(endpoint):
         pytest.fail(
-            f"OPC UA endpoint {endpoint} is not reachable. "
-            f"The server should have been auto-started by conftest.py."
+            f"OPC UA endpoint {endpoint} is not reachable. The server should have been auto-started by conftest.py."
         )
 
     return endpoint
@@ -166,9 +165,7 @@ async def test_subscribe_and_receive_event(opcua_endpoint):
         handler = _SimpleHandler()
         sub_result = await conn.subscribe({"handler": handler})
         # A successful subscription returns no 'exception' key
-        assert "exception" not in sub_result, (
-            f"Subscription failed: {sub_result.get('exception')}"
-        )
+        assert "exception" not in sub_result, f"Subscription failed: {sub_result.get('exception')}"
         # Wait briefly for any queued events from the live simulator
         await asyncio.sleep(1.0)
         # We don't assert on received count because the simulator may not

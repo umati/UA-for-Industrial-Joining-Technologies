@@ -148,10 +148,9 @@ async def main():
             try:
                 loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown()))
             except NotImplementedError:
-                ijt_log.warning(
-                    f"Signal handling not supported for {sig} on this platform."
-                )
+                ijt_log.warning(f"Signal handling not supported for {sig} on this platform.")
     else:
+
         def _schedule_shutdown_from_signal(signum, _frame):
             ijt_log.info(f"Windows signal received ({signum}). Scheduling graceful shutdown.")
             loop.call_soon_threadsafe(lambda: asyncio.create_task(shutdown()))

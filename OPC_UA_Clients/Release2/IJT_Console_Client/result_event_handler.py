@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-import pytz
+import pytz  # type: ignore[import-untyped]
 
 from ijt_logger import ijt_log
 from utils import log_result_event_details, log_result_to_file
@@ -50,9 +50,7 @@ class ResultEventHandler:
     async def event_notification(self, event: Any) -> None:
         try:
             client_received_time = datetime.now(pytz.utc)
-            event_id = await log_result_event_details(
-                event, self.server_url, client_received_time
-            )
+            event_id = await log_result_event_details(event, self.server_url, client_received_time)
             filtered_event = ShortResultEvent(
                 EventType=str(event.EventType),
                 Result=event.Result,

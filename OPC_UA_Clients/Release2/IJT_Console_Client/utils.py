@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import aiofiles
-import pytz
+import aiofiles  # type: ignore[import-untyped]
+import pytz  # type: ignore[import-untyped]
 from asyncua import Client, ua
 from asyncua.ua import String
 
@@ -13,7 +13,7 @@ from asyncua.ua import String
 try:
     import orjson  # fast path
 except ImportError:
-    orjson = None
+    orjson = None  # type: ignore[assignment]
 
 
 def _to_json_str(obj) -> str:
@@ -21,9 +21,7 @@ def _to_json_str(obj) -> str:
         try:
             return orjson.dumps(obj).decode("utf-8")
         except Exception as exc:
-            ijt_log.debug(
-                f"orjson serialization failed; using stdlib json fallback: {exc}"
-            )
+            ijt_log.debug(f"orjson serialization failed; using stdlib json fallback: {exc}")
 
     import json
 
@@ -68,7 +66,7 @@ def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str: 
 
 async def read_server_time(client: Client) -> datetime | None:
     try:
-        node = client.get_node(ua.NodeId(2258, 0))  # ServerStatus.CurrentTime
+        node = client.get_node(ua.NodeId(2258, 0))  # type: ignore[arg-type]  # ServerStatus.CurrentTime
         return await node.read_value()
     except Exception as e:
         ijt_log.warning(f"{'Server Time Read Failed':<40} : {e}")
@@ -79,8 +77,8 @@ async def read_tool_identifier(client: Client) -> String | None:
     try:
         node = client.get_node(
             ua.NodeId(
-                "TighteningSystem/AssetManagement/Assets/Tools/TighteningTool/Identification/ProductInstanceUri",
-                1,
+                "TighteningSystem/AssetManagement/Assets/Tools/TighteningTool/Identification/ProductInstanceUri",  # type: ignore[arg-type]
+                1,  # type: ignore[arg-type]
             )
         )  # ns=1;s=TighteningSystem/AssetManagement/Assets/Tools/TighteningTool/Identification/ProductInstanceUri
         return await node.read_value()
@@ -89,9 +87,7 @@ async def read_tool_identifier(client: Client) -> String | None:
         return None
 
 
-async def log_result_event_details(
-    event, _server_url: str, client_received_time: datetime
-) -> str:
+async def log_result_event_details(event, _server_url: str, client_received_time: datetime) -> str:
     try:
         # Do NOT perform OPC UA reads here — this callback fires concurrently with
         # pending method calls and concurrent OPC UA requests on the same client
@@ -109,11 +105,7 @@ async def log_result_event_details(
         if end_time and end_time.tzinfo is None:
             end_time = pytz.utc.localize(end_time)
 
-        latency_ms = (
-            (client_received_time - end_time).total_seconds() * 1000
-            if end_time
-            else None
-        )
+        latency_ms = (client_received_time - end_time).total_seconds() * 1000 if end_time else None
 
         label_width = 35
 
@@ -143,9 +135,7 @@ async def log_result_event_details(
             format_local_time(event_time) if event_time else "Unavailable",
             label_width,
         )
-        log_field(
-            "5. Client Time", format_local_time(client_received_time), label_width
-        )
+        log_field("5. Client Time", format_local_time(client_received_time), label_width)
         log_field(
             "6. Server Time",
             format_local_time(server_time) if server_time else "Unavailable",
@@ -159,9 +149,7 @@ async def log_result_event_details(
                 label_width,
             )
         else:
-            log_field(
-                "*** Turn around Time (EndTime -> Client)", "Unavailable", label_width
-            )
+            log_field("*** Turn around Time (EndTime -> Client)", "Unavailable", label_width)
 
         log_separator(label_width)
         return event_id
@@ -268,9 +256,7 @@ def log_reported_value(rv: Any) -> None:
     eu_desc = getattr(eu, "Description", "")
 
     log_field("Name", getattr(rv, "Name", ""), label_width)
-    log_field(
-        "Current", getattr(getattr(rv, "CurrentValue", None), "Value", ""), label_width
-    )
+    log_field("Current", getattr(getattr(rv, "CurrentValue", None), "Value", ""), label_width)
     log_field(
         "Previous",
         getattr(getattr(rv, "PreviousValue", None), "Value", ""),
@@ -294,13 +280,13 @@ def nodeid_to_str(nodeid: ua.NodeId) -> str:
                 ua.NodeIdType.TwoByte,
                 ua.NodeIdType.FourByte,
             ):
-                return f"ns={ns};i={identifier}"
+                return f"ns={ns};i={identifier}"  # type: ignore[str-bytes-safe]
             if nodeid.NodeIdType == ua.NodeIdType.String:
-                return f"ns={ns};s={identifier}"
+                return f"ns={ns};s={identifier}"  # type: ignore[str-bytes-safe]
             if nodeid.NodeIdType == ua.NodeIdType.Guid:
-                return f"ns={ns};g={identifier}"
+                return f"ns={ns};g={identifier}"  # type: ignore[str-bytes-safe]
             # ByteString / Opaque
-            return f"ns={ns};b={identifier}"
+            return f"ns={ns};b={identifier}"  # type: ignore[str-bytes-safe]
     except Exception as exc:
         ijt_log.debug(f"Failed to format node id, falling back to str(): {exc}")
     return str(nodeid)
@@ -316,9 +302,7 @@ def localizedtext_to_str(lt: ua.LocalizedText) -> str:
     return str(lt)
 
 
-def format_list_for_logging(
-    label: str, items: list[str], label_width: int = 35
-) -> list[str]:
+def format_list_for_logging(label: str, items: list[str], label_width: int = 35) -> list[str]:
     lines = [f"{label:<{label_width}} :"]
     for item in items:
         lines.append(f"{'':<{label_width}} {item}")
@@ -334,9 +318,7 @@ async def log_result_to_file(event: Any) -> None:
             log_dir = Path("logs") / "results"
             log_dir.mkdir(exist_ok=True)
 
-            safe_message = re.sub(
-                r"[^\w\-_\. ]", "_", str(event.Message).replace(":", "_")
-            )
+            safe_message = re.sub(r"[^\w\-_\. ]", "_", str(event.Message).replace(":", "_"))
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
             event_id = getattr(event, "EventId", "unknown")
 

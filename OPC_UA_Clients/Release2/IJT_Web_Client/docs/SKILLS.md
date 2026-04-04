@@ -50,7 +50,7 @@ IJT_Web_Client/
 ├── scripts/                # All helper scripts
 │   ├── test_live_ops.py    # Standalone live OPC UA smoke test (asyncio.run)
 │   ├── run_docker_tests.py # Docker smoke + build + compose tests
-│   ├── run_all_tests_bootstrap.ps1  # Windows PS7 full bootstrap
+│   ├── run_cross_client_regression.py  # cross-client regression runner
 │   ├── run_regression.py   # WS regression test runner
 │   ├── bootstrap_wsl.sh    # WSL Ubuntu dependency installer
 │   ├── venv_bootstrap.py   # Venv utilities
@@ -128,11 +128,11 @@ IJT_Web_Client/
 ## Test Commands
 
 ```bash
-# ONE-STOP: all Python + JS tests
+# Full suite — OPC UA server auto-launched if needed
 python run_all_tests.py
 
-# Python only (all, with timeout)
-python -m pytest tests/ --timeout=120 -q --ignore=tests/python/live
+# Python unit tests only (no server)
+python -m pytest tests/ -v --ignore=tests/python/live
 
 # JS unit only
 npx vitest run
@@ -150,6 +150,27 @@ python scripts/run_docker_tests.py
 # Docker live build+run test
 python scripts/run_docker_tests.py --live-docker
 ```
+
+## Zero-Escape Testing Tools (run_all_tests.py Phase 1)
+
+All auto-detected — present=run, absent=skip with install hint.
+
+| Tool | What it checks |
+|------|---------------|
+| `ruff` | Python lint + formatting |
+| `mypy` | Static type checking |
+| `bandit` | Python security (SAST) |
+| `pip-audit` | CVE scan of Python dependencies |
+| `vulture` | Dead code detection |
+| `semgrep` | AI-powered pattern + security rules |
+| `pyright` | AI type inference (stricter than mypy) |
+| `detect-secrets` | Hardcoded secrets/tokens |
+| `eslint` | JS lint |
+| `prettier` | JS formatting |
+| `npm audit` | CVE scan of JS dependencies |
+| `depcheck` | Unused JS dependencies |
+| `hadolint` | Dockerfile lint |
+| `yamllint` | YAML validation |
 
 ---
 
@@ -265,7 +286,7 @@ Same pattern applies to test files outside the package root.
 
 ## CI/CD Workflow
 
-**File:** `.github/workflows/ijt-web-client-ci.yml`
+**File:** `.github/workflows/ci.yml`
 
 | Step | Command |
 |------|---------|
@@ -328,6 +349,7 @@ Only standard files at root: `index.html`, `index.py`, `config.js`, `run_all_tes
 - `nodeStyle.css` → `src/resources/css/nodeStyle.css`
 - `conftest.py` (root no-op stub) — deleted
 - `run_tests.sh`, `RUN_ALL_TESTS.bat`, `run_all_tests_bootstrap.ps1` (root) — deleted
+- `scripts/run_all_tests_bootstrap.py` — deleted (superseded by `run_all_tests.py` at project root)
 - `scripts/run_tests.py` — deleted (orphaned)
 - `Pytest/` directory — deleted (content in `tests/legacy/`)
 

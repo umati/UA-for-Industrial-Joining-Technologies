@@ -2,6 +2,7 @@
 # Run pylint from the IJT_Console_Client directory.
 # asyncua members are generated at runtime from OPC UA NodeSet XML, and
 # orjson is a C-extension whose .dumps member is not visible to pylint.
+ignore-paths = \.venv.*,venv,\.venv-wsl.*
 
 [MESSAGES CONTROL]
 disable =
@@ -36,6 +37,9 @@ disable =
     # C0415: import-outside-toplevel — intentional where used.
     import-outside-toplevel,
 
+    # C0104: disallowed-name — test scaffolding uses short names.
+    disallowed-name,
+
     # C0114 / C0115 / C0116: missing-module/class/function-docstring
     #   Console Client is a smaller internal tool; docstrings are tracked
     #   as a future improvement (separate from quality gate).
@@ -62,6 +66,22 @@ disable =
     too-many-branches,
     too-many-locals,
     too-many-statements,
+
+    # W0613: unused-argument — pytest fixtures are injected by name, can't use _.
+    unused-argument,
+
+    # W0212: protected-access — tests legitimately access private methods.
+    protected-access,
+
+    # W1510: subprocess-run-check — test helpers use check= explicitly where needed.
+    subprocess-run-check,
+
+    # R1732: consider-using-with — subprocess management is intentionally manual.
+    consider-using-with,
+
+    # R0913/R0917: too many args — runner/setup functions need many params.
+    too-many-arguments,
+    too-many-positional-arguments,
 
 [FORMAT]
 max-line-length = 120

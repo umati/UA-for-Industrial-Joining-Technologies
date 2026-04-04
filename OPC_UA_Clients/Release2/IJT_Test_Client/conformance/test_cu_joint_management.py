@@ -37,9 +37,7 @@ async def test_cu_joint_management_joint_management_addin(joint_management):
     assert joint_management is not None, "JointManagement AddIn node must not be None"
 
 
-async def test_cu_joint_management_required_methods_present(
-    joint_management, ns_indices
-):
+async def test_cu_joint_management_required_methods_present(joint_management, ns_indices):
     # §11.1 CU-JT-002: GetJoint, GetJointList, SelectJoint, SendJoint, DeleteJoint must all be present
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
@@ -53,9 +51,7 @@ async def test_cu_joint_management_required_methods_present(
     ]
     for method_name in required_methods:
         node = await find_child_by_browse_name(joint_management, method_name, ns_ijt)
-        assert node is not None, (
-            f"Required method '{method_name}' not found in JointManagement (ns={ns_ijt})"
-        )
+        assert node is not None, f"Required method '{method_name}' not found in JointManagement (ns={ns_ijt})"
 
 
 async def _get_tool_product_instance_uri(client, ns_ijt, ns_di):
@@ -101,9 +97,7 @@ async def test_cu_joint_management_get_joint_list_callable(opcua_client, ns_indi
         pytest.skip(f"'{BN.GET_JOINT_LIST}' method not found on JointManagement")
     pi_uri = await _get_tool_product_instance_uri(opcua_client, ns_ijt, ns_di)
     if pi_uri is None:
-        pytest.skip(
-            "Could not read ProductInstanceUri from first tool — required for GetJointList"
-        )
+        pytest.skip("Could not read ProductInstanceUri from first tool — required for GetJointList")
     try:
         result = await jm.call_method(
             method_node.nodeid,
@@ -140,9 +134,7 @@ async def test_cu_joint_management_joint_data_type_structure(opcua_client, ns_in
         pytest.skip(f"'{BN.GET_JOINT_LIST}' method not found on JointManagement")
     pi_uri = await _get_tool_product_instance_uri(opcua_client, ns_ijt, ns_di)
     if pi_uri is None:
-        pytest.skip(
-            "Could not read ProductInstanceUri from first tool — required for GetJointList"
-        )
+        pytest.skip("Could not read ProductInstanceUri from first tool — required for GetJointList")
     try:
         joint_list = await jm.call_method(
             list_node.nodeid,
@@ -157,9 +149,7 @@ async def test_cu_joint_management_joint_data_type_structure(opcua_client, ns_in
         # Attempt to populate via SendJoint, then re-query
         send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
         if send_node is None:
-            pytest.skip(
-                "Joint list is empty and SendJoint is not available — cannot verify structure"
-            )
+            pytest.skip("Joint list is empty and SendJoint is not available — cannot verify structure")
         joint_type = getattr(ua, "JointDataType", None)
         if joint_type is None:
             pytest.skip("JointDataType not available — cannot construct test joint")
@@ -187,21 +177,16 @@ async def test_cu_joint_management_joint_data_type_structure(opcua_client, ns_in
         except ua.UaError as exc:
             pytest.skip(f"GetJointList failed after SendJoint: {exc}")
     if not joint_list:
-        pytest.skip(
-            "Joint list is still empty after SendJoint — cannot verify data type structure"
-        )
+        pytest.skip("Joint list is still empty after SendJoint — cannot verify data type structure")
     first_item = joint_list[0] if isinstance(joint_list, (list, tuple)) else joint_list
     # asyncua may decode JointDataType as a named object OR as a raw list of field values.
     # JointDataType field 0 = JointId (TrimmedString/String) per NodeSet definition.
     if isinstance(first_item, (list, tuple)):
         assert len(first_item) > 0, "JointDataType decoded as list but is empty"
-        assert first_item[0] is not None, (
-            "JointDataType field[0] (JointId) must not be None"
-        )
+        assert first_item[0] is not None, "JointDataType field[0] (JointId) must not be None"
     else:
         has_id_field = any(
-            getattr(first_item, field, None) is not None
-            for field in ("JointId", "Id", "Name", "JointName")
+            getattr(first_item, field, None) is not None for field in ("JointId", "Id", "Name", "JointName")
         )
         assert has_id_field, (
             f"First joint item has no recognisable identifier field "

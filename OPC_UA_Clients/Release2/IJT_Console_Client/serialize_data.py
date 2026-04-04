@@ -6,7 +6,7 @@ from ijt_logger import ijt_log
 try:
     import orjson
 except ImportError:
-    orjson = None
+    orjson = None  # type: ignore[assignment]
 
 
 def _json_dumps(obj: Any) -> str:
@@ -19,9 +19,7 @@ def _json_dumps(obj: Any) -> str:
 
 
 def is_instance_of_user_class(obj: Any) -> bool:
-    return str(type(obj)).startswith("<class") and (
-        hasattr(obj, "__weakref__") or hasattr(obj, "__dict__")
-    )
+    return str(type(obj)).startswith("<class") and (hasattr(obj, "__weakref__") or hasattr(obj, "__dict__"))
 
 
 def serialize_value(value: Any) -> Any:

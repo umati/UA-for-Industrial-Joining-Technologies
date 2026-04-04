@@ -26,6 +26,7 @@ REQUIRED_CONNECTION_METHODS = [
     "is_connection_open",
 ]
 
+
 @pytest.mark.parametrize("method_name", REQUIRED_CONNECTION_METHODS)
 def test_connection_has_required_method(method_name):
     """Every command the frontend sends must have a corresponding async method on Connection."""
@@ -35,9 +36,7 @@ def test_connection_has_required_method(method_name):
         f"Check connection.py for a dropped 'async def' line."
     )
     if method_name not in ("is_connection_open",):
-        assert inspect.iscoroutinefunction(method), (
-            f"Connection.{method_name} must be async"
-        )
+        assert inspect.iscoroutinefunction(method), f"Connection.{method_name} must be async"
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +51,7 @@ REQUIRED_STATIC_ASSETS = [
     "src/resources/connectionpoints.json",
     "node_modules/chart.js/dist/chart.umd.js",
 ]
+
 
 @pytest.mark.parametrize("asset_path", REQUIRED_STATIC_ASSETS)
 def test_required_static_asset_exists(asset_path):
@@ -69,6 +69,7 @@ def test_required_static_asset_exists(asset_path):
 # ---------------------------------------------------------------------------
 
 JS_SRC_ROOT = WEB_CLIENT_ROOT / "src" / "javascripts"
+
 
 def test_jointdemo_uses_absolute_image_path():
     """joint-demo.mjs must use /src/resources/ (absolute) for the digital_twin image.
@@ -89,6 +90,7 @@ def test_no_js_uses_stale_three_level_node_modules_path():
     """After src/ reorganization chart.js must use 4 levels of '../' not 3.
     '../../../../node_modules/' is correct; '../../../node_modules/' as a standalone import is wrong."""
     import re
+
     # Match only exactly 3 levels: quote or space then ../../../node_modules/ (not preceded by another ../)
     pattern = re.compile(r"""['"`\s]\.\.\/\.\.\/\.\.\/node_modules\/""")
     for js_file in JS_SRC_ROOT.rglob("*.mjs"):
@@ -98,7 +100,6 @@ def test_no_js_uses_stale_three_level_node_modules_path():
             f"{js_file.relative_to(WEB_CLIENT_ROOT)} uses '../../../node_modules/' "
             f"which is wrong after src/ reorganization. Use '../../../../node_modules/' instead."
         )
-
 
 
 @pytest.mark.asyncio
@@ -359,4 +360,3 @@ async def test_handle_missing_endpoint_returns_exception(fake_websocket, decode_
     payload = decode_last_message(fake_websocket)
     assert "exception" in payload["data"]
     assert payload["error"]["code"] == "OPCUA_REQUEST_FAILED"
-

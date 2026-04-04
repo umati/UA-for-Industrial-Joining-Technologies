@@ -6,17 +6,28 @@ Full technical reference: [`opc-ua-server-context.md`](opc-ua-server-context.md)
 
 ---
 
-## Environment Variables
+## Running Tests
+
+```bash
+# Full suite — OPC UA server auto-launched if needed
+python run_all_tests.py
+```
+
+Note: `run_tests.py` was merged into `run_all_tests.py` and deleted. Use `run_all_tests.py` only.
+
+### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
 | `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | OPC UA server endpoint URL |
 | `OPCUA_SIMULATOR_EXE` | (none) | Path to simulator binary for auto-launch |
 | `OPCUA_STARTUP_TIMEOUT_SEC` | `30` | Seconds to wait for server OPC UA readiness |
-| `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install on run_tests.py |
+| `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install |
 
----
-## What This Project Is
+### Zero-Escape Testing Tools (Phase 1, auto-detected)
+
+`ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
+`vulture` (dead code), `semgrep` (AI rules), `pyright` (AI types), `detect-secrets` (secrets).
 
 A **Python pytest suite** that validates an OPC UA server implementing the
 [OPC UA Industrial Joining Technologies (IJT)](https://reference.opcfoundation.org/IJT/Base/v100/)
@@ -222,5 +233,5 @@ assert len(events) >= 1
 | `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | OPC UA server endpoint URL |
 | `OPCUA_SIMULATOR_EXE` | (none) | Path to simulator binary for auto-launch |
 | `OPCUA_STARTUP_TIMEOUT_SEC` | `30` | Seconds to wait for server OPC UA readiness |
-| `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install on run_tests.py |
+| `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install on run_all_tests.py |
 

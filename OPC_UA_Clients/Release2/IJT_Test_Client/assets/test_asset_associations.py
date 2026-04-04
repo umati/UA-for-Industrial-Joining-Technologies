@@ -17,8 +17,7 @@ async def test_assets_have_associated_with_reference(controllers_instances):
     controller_node = controllers_instances[0][1]
     associated = await get_associated_assets(controller_node)
     assert len(associated) > 0, (
-        "First controller has no AssociatedWith references; "
-        "expected at least one associated asset (e.g. a tool)"
+        "First controller has no AssociatedWith references; expected at least one associated asset (e.g. a tool)"
     )
 
 
@@ -30,16 +29,13 @@ async def test_associated_with_is_symmetric(controllers_instances, tools_instanc
     controller_node = controllers_instances[0][1]
     associated_from_controller = await get_associated_assets(controller_node)
     if not associated_from_controller:
-        pytest.skip(
-            "First controller has no AssociatedWith targets; skipping symmetry check"
-        )
+        pytest.skip("First controller has no AssociatedWith targets; skipping symmetry check")
     controller_node_id = controller_node.nodeid
     for target_node in associated_from_controller:
         back_refs = await get_associated_assets(target_node)
         back_node_ids = [n.nodeid for n in back_refs]
         found_back = any(
-            nid.Identifier == controller_node_id.Identifier
-            and nid.NamespaceIndex == controller_node_id.NamespaceIndex
+            nid.Identifier == controller_node_id.Identifier and nid.NamespaceIndex == controller_node_id.NamespaceIndex
             for nid in back_node_ids
         )
         target_bn = await target_node.read_browse_name()
@@ -55,14 +51,8 @@ async def test_controller_associated_with_tools(controllers_instances, tools_ins
     associated = await get_associated_assets(controller_node)
     if not associated:
         pytest.skip("First controller has no AssociatedWith references")
-    tool_node_ids = {
-        (node.nodeid.Identifier, node.nodeid.NamespaceIndex)
-        for _, node in tools_instances
-    }
-    matched = any(
-        (n.nodeid.Identifier, n.nodeid.NamespaceIndex) in tool_node_ids
-        for n in associated
-    )
+    tool_node_ids = {(node.nodeid.Identifier, node.nodeid.NamespaceIndex) for _, node in tools_instances}
+    matched = any((n.nodeid.Identifier, n.nodeid.NamespaceIndex) in tool_node_ids for n in associated)
     assert matched, (
         "None of the first controller's AssociatedWith targets match any known tool instance; "
         "expected at least one controller-to-tool association"
@@ -82,9 +72,5 @@ async def test_associated_nodes_are_in_same_system(controllers_instances):
         try:
             bn = await target_node.read_browse_name()
         except Exception as exc:
-            pytest.fail(
-                f"AssociatedWith target node {target_node.nodeid} is not reachable: {exc}"
-            )
-        assert bn is not None, (
-            f"read_browse_name() returned None for AssociatedWith target {target_node.nodeid}"
-        )
+            pytest.fail(f"AssociatedWith target node {target_node.nodeid} is not reachable: {exc}")
+        assert bn is not None, f"read_browse_name() returned None for AssociatedWith target {target_node.nodeid}"

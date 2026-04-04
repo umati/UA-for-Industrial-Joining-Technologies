@@ -102,9 +102,7 @@ class TestValidateUrl:
         assert result == env_url
 
     def test_invalid_url_invalid_env_falls_back_to_default(self):
-        with patch.dict(
-            os.environ, {"OPCUA_SERVER_URL": "not-valid-either"}, clear=False
-        ):
+        with patch.dict(os.environ, {"OPCUA_SERVER_URL": "not-valid-either"}, clear=False):
             # Remove OPCUA_SERVER_URL if set elsewhere and set to invalid
             result = validate_url("also-invalid")
         # Falls back to DEFAULT_SERVER_URL = SERVER_URL

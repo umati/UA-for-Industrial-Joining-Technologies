@@ -36,17 +36,13 @@ _COMPANION_NAMESPACES = [
 async def test_all_companion_namespaces_registered(uri, ns_indices):
     """Every required companion specification namespace must have a non-None index."""
     index = ns_indices.get(uri)
-    assert index is not None, (
-        f"Required companion namespace not registered on server: {uri}"
-    )
+    assert index is not None, f"Required companion namespace not registered on server: {uri}"
 
 
 async def test_app_namespace_registered(ns_indices):
     """The application namespace (NS_APP) must be registered on the server."""
     index = ns_indices.get(NS_APP)
-    assert index is not None, (
-        f"Application namespace not registered on server: {NS_APP}"
-    )
+    assert index is not None, f"Application namespace not registered on server: {NS_APP}"
 
 
 async def test_namespace_indices_are_positive(ns_indices):

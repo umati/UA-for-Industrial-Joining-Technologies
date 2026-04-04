@@ -1,5 +1,6 @@
 #nullable enable
 
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
@@ -55,6 +56,11 @@ public sealed class IjtSession : IAsyncDisposable
 
     // ── Construction / connection ─────────────────────────────────────────────
 
+    private const int KeepAliveIntervalMs        = 5_000;
+    private const int EndpointDiscoveryTimeoutMs = 15_000;
+
+    private readonly ILogger<IjtSession> _log = IjtLog.For<IjtSession>();
+
     private IjtSession(ISession session, ClientConfig config)
     {
         Session = session;
@@ -70,32 +76,38 @@ public sealed class IjtSession : IAsyncDisposable
         ClientConfig config,
         CancellationToken ct = default)
     {
+        var log = IjtLog.For<IjtSession>();
+
         var appConfig = BuildApplicationConfig(config);
         await appConfig.Validate(ApplicationType.Client).ConfigureAwait(false);
 
         if (config.AutoAcceptServerCertificate)
-            appConfig.CertificateValidator.CertificateValidation += (_, e) => e.Accept = true;
+            appConfig.CertificateValidator.CertificateValidation += (_, e) =>
+            {
+                log.LogWarning("DEV ONLY — accepting untrusted certificate: {Subject}", e.Certificate?.Subject);
+                e.Accept = true;
+            };
 
-        Console.WriteLine($"  Discovering endpoints at {config.ServerUrl} …");
-        var session = await DiscoverAndConnectAsync(appConfig, config, ct).ConfigureAwait(false);
+        log.LogInformation("Discovering endpoints at {Url} …", config.ServerUrl);
+        var session = await DiscoverAndConnectAsync(appConfig, config, log, ct).ConfigureAwait(false);
 
         // Register all IJT encodeable types so the SDK can encode/decode ExtensionObjects
         session.MessageContext.Factory.AddEncodeableTypes(
             typeof(UAModel.IJTBase.EntityDataType).Assembly);
 
         var wrapper = new IjtSession(session, config);
-        session.KeepAliveInterval = 5_000;
+        session.KeepAliveInterval = KeepAliveIntervalMs;
         session.KeepAlive        += wrapper.OnKeepAlive;
 
         wrapper.ResolveNamespaceIndices();
         wrapper.DiscoverJoiningSystem();
         wrapper.InitManagement();
 
-        Console.WriteLine($"  ✓ Connected — IJTBase ns={wrapper.IjtBaseNsIdx}, " +
-                          $"IJTTightening ns={wrapper.IjtTighteningNsIdx}, " +
-                          $"MachineryResult ns={wrapper.MachineryResultNsIdx}");
+        log.LogInformation(
+            "Connected — IJTBase ns={IjtBase}, IJTTightening ns={IjtTightening}, MachineryResult ns={MachineryResult}",
+            wrapper.IjtBaseNsIdx, wrapper.IjtTighteningNsIdx, wrapper.MachineryResultNsIdx);
         if (!wrapper.JoiningSystemNodeId.IsNullNodeId)
-            Console.WriteLine($"  ✓ JoiningSystem node: {wrapper.JoiningSystemNodeId}");
+            log.LogInformation("JoiningSystem node: {NodeId}", wrapper.JoiningSystemNodeId);
 
         return wrapper;
     }
@@ -104,8 +116,8 @@ public sealed class IjtSession : IAsyncDisposable
 
     private static ApplicationConfiguration BuildApplicationConfig(ClientConfig config)
     {
-        // PKI stores are placed under %LocalApplicationData%\IJT_CSharp_Client\PKI
-        const string pkiRoot = "%LocalApplicationData%/IJT_CSharp_Client/PKI";
+        // PKI stores sit next to the executable — keeps the client fully self-contained.
+        var pkiRoot = Path.Combine(AppContext.BaseDirectory, "PKI");
 
         return new ApplicationConfiguration
         {
@@ -117,23 +129,23 @@ public sealed class IjtSession : IAsyncDisposable
                 ApplicationCertificate = new CertificateIdentifier
                 {
                     StoreType   = CertificateStoreType.Directory,
-                    StorePath   = $"{pkiRoot}/own",
+                    StorePath   = Path.Combine(pkiRoot, "own"),
                     SubjectName = config.ApplicationName,
                 },
                 TrustedIssuerCertificates = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = $"{pkiRoot}/issuer",
+                    StorePath = Path.Combine(pkiRoot, "issuer"),
                 },
                 TrustedPeerCertificates = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = $"{pkiRoot}/trusted",
+                    StorePath = Path.Combine(pkiRoot, "trusted"),
                 },
                 RejectedCertificateStore = new CertificateStoreIdentifier
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = $"{pkiRoot}/rejected",
+                    StorePath = Path.Combine(pkiRoot, "rejected"),
                 },
                 AutoAcceptUntrustedCertificates = config.AutoAcceptServerCertificate,
                 AddAppCertToTrustedStore        = true,
@@ -149,16 +161,17 @@ public sealed class IjtSession : IAsyncDisposable
     private static async Task<ISession> DiscoverAndConnectAsync(
         ApplicationConfiguration appConfig,
         ClientConfig config,
+        ILogger log,
         CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         var endpointDesc = CoreClientUtils.SelectEndpoint(
-            appConfig, config.ServerUrl, useSecurity: false, discoverTimeout: 15_000);
+            appConfig, config.ServerUrl, useSecurity: false, discoverTimeout: EndpointDiscoveryTimeoutMs);
 
         var endpoint = new ConfiguredEndpoint(
             null, endpointDesc, EndpointConfiguration.Create(appConfig));
 
-        Console.WriteLine("  Opening session …");
+        log.LogInformation("Opening session …");
         ct.ThrowIfCancellationRequested();
         return await Opc.Ua.Client.Session.Create(
             appConfig, endpoint,
@@ -230,14 +243,18 @@ public sealed class IjtSession : IAsyncDisposable
                 if (nid != ObjectIds.Server && r.BrowseName.Name != "Server")
                 {
                     JoiningSystemNodeId = nid;
-                    Console.WriteLine($"  ⚠ JoiningSystem fallback: {r.BrowseName.Name} ({nid})");
+                    _log.LogWarning("JoiningSystem fallback: {BrowseName} ({NodeId})", r.BrowseName.Name, nid);
                     return;
                 }
             }
         }
+        catch (ServiceResultException ex)
+        {
+            _log.LogError(ex, "Could not discover JoiningSystem node (OPC UA error {StatusCode})", ex.StatusCode);
+        }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ⚠ Could not discover JoiningSystem node: {ex.Message}");
+            _log.LogError(ex, "Could not discover JoiningSystem node");
         }
     }
 
@@ -257,15 +274,19 @@ public sealed class IjtSession : IAsyncDisposable
     {
         if (!ServiceResult.IsBad(e.Status)) return;
 
-        Console.WriteLine($"  ⚠ Keep-alive failed ({e.Status}). Attempting reconnect …");
+        _log.LogWarning("Keep-alive failed ({Status}). Attempting reconnect …", e.Status);
         try
         {
             session.Reconnect();
-            Console.WriteLine("  ✓ Reconnected.");
+            _log.LogInformation("Reconnected.");
+        }
+        catch (ServiceResultException ex)
+        {
+            _log.LogError(ex, "Reconnect failed (OPC UA error {StatusCode})", ex.StatusCode);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ✗ Reconnect failed: {ex.Message}");
+            _log.LogError(ex, "Reconnect failed");
         }
     }
 
@@ -363,6 +384,13 @@ public sealed class IjtSession : IAsyncDisposable
     /// <summary>Closes the OPC UA session and disposes the underlying connection.</summary>
     public async ValueTask DisposeAsync()
     {
+        // Dispose management objects (which may hold subscriptions) before closing the session
+        // so their cleanup calls can still communicate with the server.
+        EventSubscriber.Dispose();
+        ResultManagement.Dispose();
+        AssetManagement.Dispose();
+        JoiningProcessManagement.Dispose();
+
         try
         {
             if (Session.Connected)
@@ -373,7 +401,7 @@ public sealed class IjtSession : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ⚠ Session close warning: {ex.Message}");
+            _log.LogWarning(ex, "Session close warning");
         }
         finally
         {

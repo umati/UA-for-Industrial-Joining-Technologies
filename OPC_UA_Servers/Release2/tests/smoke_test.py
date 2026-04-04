@@ -22,10 +22,23 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import socket
 import sys
 import time
+from pathlib import Path
 from typing import Any
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+
+# Inline helper
+def _is_port_reachable_fallback(host: str, port: int, timeout: float = 2.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 _OPC_SESSION_TIMEOUT_S = 30.0
 
@@ -64,11 +77,7 @@ def _result_line(status: str, name: str, detail: str = "") -> str:
 
 
 def _port_open(host: str, port: int, timeout: float = 2.0) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
+    return _is_port_reachable_fallback(host, port, timeout)
 
 
 def _parse_endpoint(endpoint: str) -> tuple[str, int]:

@@ -65,30 +65,24 @@ class EventHandler:
                     if isinstance(event.EventId, bytes)
                     else str(event.EventId)
                 ),
-                Message=getattr(event, "Message", None),
+                Message=getattr(event, "Message", None),  # type: ignore[arg-type]
                 SourceName=str(getattr(event, "SourceName", "")),
-                SourceNode=nodeid_to_str(getattr(event, "SourceNode", None)),
+                SourceNode=nodeid_to_str(getattr(event, "SourceNode", None)),  # type: ignore[arg-type]
                 Severity=int(getattr(event, "Severity", 0)),
                 Time=getattr(event, "Time", None),
                 ReceiveTime=getattr(event, "ReceiveTime", None),
-                LocalTime=getattr(event, "LocalTime", None),
-                ConditionClassId=getattr(event, "ConditionClassId", None),
-                ConditionClassName=getattr(event, "ConditionClassName", None),
+                LocalTime=getattr(event, "LocalTime", None),  # type: ignore[arg-type]
+                ConditionClassId=getattr(event, "ConditionClassId", None),  # type: ignore[arg-type]
+                ConditionClassName=getattr(event, "ConditionClassName", None),  # type: ignore[arg-type]
                 ConditionSubClassId=getattr(event, "ConditionSubClassId", []),
                 ConditionSubClassName=getattr(event, "ConditionSubClassName", []),
                 EventCode=getattr(event, "JoiningSystemEventContent/EventCode", None),
-                EventText=localizedtext_to_str(
-                    getattr(event, "JoiningSystemEventContent/EventText", None)
+                EventText=localizedtext_to_str(getattr(event, "JoiningSystemEventContent/EventText", None)),  # type: ignore[arg-type]
+                JoiningTechnology=localizedtext_to_str(  # type: ignore[arg-type]
+                    getattr(event, "JoiningSystemEventContent/JoiningTechnology", None)  # type: ignore[arg-type]
                 ),
-                JoiningTechnology=localizedtext_to_str(
-                    getattr(event, "JoiningSystemEventContent/JoiningTechnology", None)
-                ),
-                AssociatedEntities=getattr(
-                    event, "JoiningSystemEventContent/AssociatedEntities", []
-                ),
-                ReportedValues=getattr(
-                    event, "JoiningSystemEventContent/ReportedValues", []
-                ),
+                AssociatedEntities=getattr(event, "JoiningSystemEventContent/AssociatedEntities", []),
+                ReportedValues=getattr(event, "JoiningSystemEventContent/ReportedValues", []),
             )
 
             await log_joining_system_event(short_event)
@@ -112,9 +106,7 @@ class EventHandler:
                     if self.websocket:
                         await self.websocket.send(json_payload)
                     else:
-                        ijt_log.debug(
-                            "WebSocket is None, skipping send. Event processed locally."
-                        )
+                        ijt_log.debug("WebSocket is None, skipping send. Event processed locally.")
 
                 except Exception as e:
                     ijt_log.error(f"Error sending message: {e}")
@@ -123,9 +115,7 @@ class EventHandler:
                         try:
                             await self.websocket.close()
                         except Exception as close_exc:
-                            ijt_log.debug(
-                                f"WebSocket close failed during error recovery: {close_exc}"
-                            )
+                            ijt_log.debug(f"WebSocket close failed during error recovery: {close_exc}")
                     break
                 finally:
                     self.queue.task_done()

@@ -35,9 +35,7 @@ class Short:
     def __init__(self, event: Any) -> None:
         self.EventType = event.EventType
         self.EventId = (
-            event.EventId.decode("utf-8", errors="replace")
-            if isinstance(event.EventId, bytes)
-            else str(event.EventId)
+            event.EventId.decode("utf-8", errors="replace") if isinstance(event.EventId, bytes) else str(event.EventId)
         )
         self.Message = getattr(event, "Message", None)
         self.SourceName = str(getattr(event, "SourceName", None))
@@ -48,31 +46,18 @@ class Short:
         self.LocalTime = getattr(event, "LocalTime", None)
 
         self.ConditionClassId = nodeid_to_str(getattr(event, "ConditionClassId", None))
-        self.ConditionClassName = localizedtext_to_str(
-            getattr(event, "ConditionClassName", None)
-        )
-        self.ConditionSubClassId = [
-            nodeid_to_str(nid) for nid in getattr(event, "ConditionSubClassId", [])
-        ]
-        self.ConditionSubClassName = [
-            localizedtext_to_str(lt)
-            for lt in getattr(event, "ConditionSubClassName", [])
-        ]
+        self.ConditionClassName = localizedtext_to_str(getattr(event, "ConditionClassName", None))
+        self.ConditionSubClassId = [nodeid_to_str(nid) for nid in getattr(event, "ConditionSubClassId", [])]
+        self.ConditionSubClassName = [localizedtext_to_str(lt) for lt in getattr(event, "ConditionSubClassName", [])]
 
         self.EventCode = getattr(event, "JoiningSystemEventContent/EventCode", None)
-        self.EventText = localizedtext_to_str(
-            getattr(event, "JoiningSystemEventContent/EventText", None)
-        )
+        self.EventText = localizedtext_to_str(getattr(event, "JoiningSystemEventContent/EventText", None))
         self.JoiningTechnology = localizedtext_to_str(
             getattr(event, "JoiningSystemEventContent/JoiningTechnology", None)
         )
-        self.AssociatedEntities = getattr(
-            event, "JoiningSystemEventContent/AssociatedEntities", []
-        )
+        self.AssociatedEntities = getattr(event, "JoiningSystemEventContent/AssociatedEntities", [])
 
-        self.ReportedValues = getattr(
-            event, "JoiningSystemEventContent/ReportedValues", []
-        )
+        self.ReportedValues = getattr(event, "JoiningSystemEventContent/ReportedValues", [])
 
 
 class EventHandler:
@@ -82,9 +67,7 @@ class EventHandler:
     :meth:`close` is called (typically during connection teardown).
     """
 
-    def __init__(
-        self, websocket: Any, server_url: str, client: Any | None = None
-    ) -> None:
+    def __init__(self, websocket: Any, server_url: str, client: Any | None = None) -> None:
         """Initialise the handler and start the background queue-worker task.
 
         Args:
@@ -165,9 +148,7 @@ class EventHandler:
                 try:
                     await self.websocket.close()
                 except Exception as close_exc:
-                    ijt_log.debug(
-                        f"WebSocket close failed during error recovery: {close_exc}"
-                    )
+                    ijt_log.debug(f"WebSocket close failed during error recovery: {close_exc}")
                 break
             finally:
                 self.queue.task_done()
@@ -190,9 +171,7 @@ class EventHandler:
         await self.shutdown()
         if self._queue_task and not self._queue_task.done():
             try:
-                await asyncio.wait_for(
-                    asyncio.shield(self._queue_task), timeout=_SHUTDOWN_TIMEOUT_S
-                )
+                await asyncio.wait_for(asyncio.shield(self._queue_task), timeout=_SHUTDOWN_TIMEOUT_S)
             except asyncio.TimeoutError:
                 self._queue_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

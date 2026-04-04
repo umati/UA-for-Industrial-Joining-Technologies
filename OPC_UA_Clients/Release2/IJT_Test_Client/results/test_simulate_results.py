@@ -72,9 +72,7 @@ async def _call(node, method, *args):
         (ResultType.MULTI_STEP_NOK_TOOL_TRIGGER_LOST, "multi_step_nok_trigger_lost"),
     ],
 )
-async def test_simulate_single_result_all_types(
-    result_type, label, opcua_client, simulate_results_folder, ns_indices
-):
+async def test_simulate_single_result_all_types(result_type, label, opcua_client, simulate_results_folder, ns_indices):
     """SimulateSingleResult must complete without exception for each basic result type."""
     ns_app = ns_indices.get(NS_APP)
     if ns_app is None:
@@ -117,9 +115,7 @@ async def test_simulate_single_result_result_appears_in_rm(
         rm.call_method(gl.nodeid, ua.Variant(5000, ua.VariantType.Int32)),
         timeout=_METHOD_TIMEOUT,
     )
-    assert result is not None, (
-        "GetLatestResult returned None after SimulateSingleResult"
-    )
+    assert result is not None, "GetLatestResult returned None after SimulateSingleResult"
 
 
 async def test_simulate_single_result_fires_event(
@@ -130,9 +126,7 @@ async def test_simulate_single_result_fires_event(
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_app is None or ns_ijt is None:
         pytest.skip("Required namespace(s) not registered")
-    event_type_node = subscription_client.get_node(
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt)
-    )
+    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
     server_node = subscription_client.nodes.server
     sf = _sim_folder(opcua_client, simulate_results_folder)
     method = await _find_method(sf, BN.SIMULATE_SINGLE_RESULT, ns_app)
@@ -147,9 +141,7 @@ async def test_simulate_single_result_fires_event(
             ua.Variant(True, ua.VariantType.Boolean),
         )
         events = await collector.collect(count=1, timeout_s=20.0)
-    assert len(events) >= 1, (
-        "No JoiningSystemResultReadyEvent fired after SimulateSingleResult"
-    )
+    assert len(events) >= 1, "No JoiningSystemResultReadyEvent fired after SimulateSingleResult"
 
 
 # ─── SimulateBatch_Or_Sync_Result ────────────────────────────────────────────
@@ -162,9 +154,7 @@ async def test_simulate_single_result_fires_event(
         (_CLASSIFICATION_SYNC, "sync"),
     ],
 )
-async def test_simulate_batch_or_sync_result(
-    classification, label, opcua_client, simulate_results_folder, ns_indices
-):
+async def test_simulate_batch_or_sync_result(classification, label, opcua_client, simulate_results_folder, ns_indices):
     """SimulateBatch_Or_Sync_Result must complete for BATCH (3) and SYNC (2) classifications."""
     ns_app = ns_indices.get(NS_APP)
     if ns_app is None:
@@ -211,9 +201,7 @@ async def test_simulate_job_result(opcua_client, simulate_results_folder, ns_ind
 # ─── SimulateBulkResults ─────────────────────────────────────────────────────
 
 
-async def test_simulate_bulk_results_small_range(
-    opcua_client, simulate_results_folder, ns_indices
-):
+async def test_simulate_bulk_results_small_range(opcua_client, simulate_results_folder, ns_indices):
     """SimulateBulkResults with a 6-result range must complete without error."""
     ns_app = ns_indices.get(NS_APP)
     if ns_app is None:
@@ -273,7 +261,5 @@ async def test_simulate_bulk_results_multiple_types(
                 "BadInvalidArgument",
             )
         ):
-            pytest.xfail(
-                f"SimulateBulkResults({label}) rejected by server (concurrent access limit): {exc}"
-            )
+            pytest.xfail(f"SimulateBulkResults({label}) rejected by server (concurrent access limit): {exc}")
         raise

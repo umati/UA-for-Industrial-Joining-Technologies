@@ -64,17 +64,13 @@ async def test_subscribe_to_events_and_receive_within_30s():
 
         deadline = asyncio.get_event_loop().time() + 30.0
         while asyncio.get_event_loop().time() < deadline:
-            if (
-                client.handler_result_event is not None
-                or client.handler_joining_event is not None
-            ):
+            if client.handler_result_event is not None or client.handler_joining_event is not None:
                 break
             await asyncio.sleep(1.0)
 
         # At least one event handler must have been registered within the deadline.
-        assert (
-            client.handler_result_event is not None
-            or client.handler_joining_event is not None
-        ), "No event handler was registered within 30 seconds"
+        assert client.handler_result_event is not None or client.handler_joining_event is not None, (
+            "No event handler was registered within 30 seconds"
+        )
     finally:
         await client.cleanup()

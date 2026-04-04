@@ -4,7 +4,7 @@ A reference OPC UA IJT client for Release 1, built with Node.js, Express, Socket
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 24+
 - The Release 1 OPC UA server: `OPC_UA_Servers/Release1/IJT_OPC_UA_Server_Simulator/opcua_ijt_demo_application.exe`
 
 > **Note:** The Release 1 server runs on `opc.tcp://localhost:40451`. It cannot run simultaneously with a Release 2 server.
@@ -27,10 +27,11 @@ The client is then available at `http://localhost:3000`.
 ## Test Commands
 
 ```bash
-npm test                    # lint + unit tests
-npx vitest run              # JS unit tests only
-npx vitest run --coverage   # with coverage report
-node ./scripts/smoke-test.mjs       # smoke test (starts server)
+python run_all_tests.py         # preferred: lint + unit tests + smoke test
+npm test                        # lint + unit tests
+npx vitest run                  # JS unit tests only
+npx vitest run --coverage       # with coverage report
+node ./scripts/smoke-test.mjs   # smoke test (starts server)
 ```
 
 ## Project Structure

@@ -1,5 +1,6 @@
 #nullable enable
 
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 
@@ -12,6 +13,7 @@ namespace IJT_CSharp_Client.Helpers;
 /// </summary>
 public sealed class AddressSpaceHelper
 {
+    private static readonly ILogger _log = IjtLog.ForCategory(nameof(AddressSpaceHelper));
     private NodeId? _cachedJoiningSystemId;
     private readonly Dictionary<string, NodeId> _mgmtNodeCache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -21,7 +23,7 @@ public sealed class AddressSpaceHelper
     /// Browses Objects folder (and one level deeper) for the first node whose
     /// TypeDefinition is JoiningSystemType (NodeId 1005, ijtBaseNs). Caches result.
     /// </summary>
-    public async Task<NodeId> FindJoiningSystemAsync(ISession session, ushort ijtBaseNsIdx)
+    public NodeId FindJoiningSystemAsync(ISession session, ushort ijtBaseNsIdx)
     {
         if (_cachedJoiningSystemId is not null && !_cachedJoiningSystemId.IsNullNodeId)
             return _cachedJoiningSystemId;
@@ -41,7 +43,7 @@ public sealed class AddressSpaceHelper
         // Search one level deeper (e.g. inside folder objects)
         foreach (var r in topRefs)
         {
-            if (r.BrowseName.Name == "Server") continue;
+            if (r.BrowseName?.Name == "Server") continue;
             var sub = BrowseChildren(session, (NodeId)r.NodeId, NodeClass.Object);
             foreach (var s in sub)
             {
@@ -57,15 +59,15 @@ public sealed class AddressSpaceHelper
         foreach (var r in topRefs)
         {
             var nid = (NodeId)r.NodeId;
-            if (nid != ObjectIds.Server && r.BrowseName.Name != "Server")
+            if (nid != ObjectIds.Server && r.BrowseName?.Name != "Server")
             {
                 _cachedJoiningSystemId = nid;
-                Console.WriteLine($"  ⚠ JoiningSystem fallback node: {r.BrowseName.Name} ({nid})");
+                _log.LogWarning("⚠ JoiningSystem fallback node: {Name} ({NodeId})", r.BrowseName?.Name, nid);
                 return _cachedJoiningSystemId;
             }
         }
 
-        Console.WriteLine("  ✗ JoiningSystem node not found in address space.");
+        _log.LogError("✗ JoiningSystem node not found in address space.");
         return NodeId.Null;
     }
 
@@ -74,7 +76,7 @@ public sealed class AddressSpaceHelper
     /// for <paramref name="browseName"/>. Optionally filters by namespace index.
     /// Returns <see cref="NodeId.Null"/> when not found.
     /// </summary>
-    public async Task<NodeId> FindChildAsync(
+    public NodeId FindChildAsync(
         ISession session,
         NodeId parentId,
         string browseName,
@@ -82,7 +84,7 @@ public sealed class AddressSpaceHelper
     {
         var refs = BrowseChildren(session, parentId);
         var match = refs.FirstOrDefault(r =>
-            r.BrowseName.Name.Equals(browseName, StringComparison.OrdinalIgnoreCase) &&
+            (r.BrowseName?.Name?.Equals(browseName, StringComparison.OrdinalIgnoreCase) ?? false) &&
             (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
         return match != null ? (NodeId)match.NodeId : NodeId.Null;
     }
@@ -90,7 +92,7 @@ public sealed class AddressSpaceHelper
     /// <summary>
     /// Like <see cref="FindChildAsync"/> but restricted to Method nodes.
     /// </summary>
-    public async Task<NodeId> FindMethodNodeAsync(
+    public NodeId FindMethodNodeAsync(
         ISession session,
         NodeId parentId,
         string methodBrowseName,
@@ -98,7 +100,7 @@ public sealed class AddressSpaceHelper
     {
         var refs = BrowseChildren(session, parentId, NodeClass.Method);
         var match = refs.FirstOrDefault(r =>
-            r.BrowseName.Name.Equals(methodBrowseName, StringComparison.OrdinalIgnoreCase) &&
+            (r.BrowseName?.Name?.Equals(methodBrowseName, StringComparison.OrdinalIgnoreCase) ?? false) &&
             (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
         return match != null ? (NodeId)match.NodeId : NodeId.Null;
     }
@@ -107,7 +109,7 @@ public sealed class AddressSpaceHelper
     /// Cached lookup for management child nodes of the JoiningSystem
     /// (AssetManagement, ResultManagement, JoiningProcessManagement).
     /// </summary>
-    public async Task<NodeId> GetOrFindManagementNodeAsync(
+    public NodeId GetOrFindManagementNodeAsync(
         ISession session,
         NodeId joiningSystemId,
         string mgmtBrowseName,
@@ -116,7 +118,7 @@ public sealed class AddressSpaceHelper
         if (_mgmtNodeCache.TryGetValue(mgmtBrowseName, out var cached))
             return cached;
 
-        var nodeId = await FindChildAsync(session, joiningSystemId, mgmtBrowseName, nsIndex);
+        var nodeId = FindChildAsync(session, joiningSystemId, mgmtBrowseName, nsIndex);
         if (!nodeId.IsNullNodeId)
             _mgmtNodeCache[mgmtBrowseName] = nodeId;
 
@@ -127,14 +129,14 @@ public sealed class AddressSpaceHelper
     /// Browses an asset folder and returns (DisplayName, NodeId) for each instance,
     /// skipping placeholder nodes (browse names that start with '&lt;').
     /// </summary>
-    public async Task<IReadOnlyList<(string DisplayName, NodeId NodeId)>> DiscoverAssetInstancesAsync(
+    public IReadOnlyList<(string DisplayName, NodeId NodeId)> DiscoverAssetInstancesAsync(
         ISession session,
         NodeId assetFolderNodeId)
     {
         var refs = BrowseChildren(session, assetFolderNodeId, NodeClass.Object);
         return refs
-            .Where(r => !r.BrowseName.Name.StartsWith('<'))
-            .Select(r => (r.DisplayName?.Text ?? r.BrowseName.Name, (NodeId)r.NodeId))
+            .Where(r => !(r.BrowseName?.Name?.StartsWith('<') ?? false))
+            .Select(r => (r.DisplayName?.Text ?? r.BrowseName?.Name ?? string.Empty, (NodeId)r.NodeId))
             .ToList();
     }
 
@@ -142,7 +144,7 @@ public sealed class AddressSpaceHelper
     /// Finds the Identification child under an asset instance node.
     /// Prefers the DI namespace; falls back to any namespace.
     /// </summary>
-    public async Task<NodeId> GetIdentificationNodeAsync(
+    public NodeId GetIdentificationNodeAsync(
         ISession session,
         NodeId assetNodeId,
         ushort diNsIndex,
@@ -151,13 +153,13 @@ public sealed class AddressSpaceHelper
         var refs = BrowseChildren(session, assetNodeId, NodeClass.Object);
         // Prefer DI namespace
         var diMatch = refs.FirstOrDefault(r =>
-            r.BrowseName.Name.Equals("Identification", StringComparison.OrdinalIgnoreCase) &&
+            (r.BrowseName?.Name?.Equals("Identification", StringComparison.OrdinalIgnoreCase) ?? false) &&
             r.BrowseName.NamespaceIndex == diNsIndex);
         if (diMatch != null) return (NodeId)diMatch.NodeId;
 
         // Any namespace fallback
         var anyMatch = refs.FirstOrDefault(r =>
-            r.BrowseName.Name.Equals("Identification", StringComparison.OrdinalIgnoreCase));
+            r.BrowseName?.Name?.Equals("Identification", StringComparison.OrdinalIgnoreCase) ?? false);
         return anyMatch != null ? (NodeId)anyMatch.NodeId : NodeId.Null;
     }
 
@@ -204,12 +206,12 @@ public sealed class AddressSpaceHelper
     {
         var refs = BrowseChildren(session, parentId);
         var match = refs.FirstOrDefault(r =>
-            r.BrowseName.Name.Equals(browseName, StringComparison.OrdinalIgnoreCase));
+            r.BrowseName?.Name?.Equals(browseName, StringComparison.OrdinalIgnoreCase) ?? false);
         return match != null ? (NodeId)match.NodeId : NodeId.Null;
     }
 
     /// <summary>
-    /// Walks a dot-separated <paramref name="path"/> from <paramref name="startNodeId"/>,
+    /// Walks a dot-separated<paramref name="path"/> from <paramref name="startNodeId"/>,
     /// returning the terminal <see cref="NodeId"/> or <see cref="NodeId.Null"/>.
     /// Example path: <c>"AssetManagement.Assets.Controllers"</c>
     /// </summary>
@@ -260,7 +262,12 @@ public sealed class AddressSpaceHelper
             var dv = session.ReadValue(nodeId);
             return StatusCode.IsGood(dv.StatusCode) ? dv.Value : null;
         }
-        catch
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogWarning("⚠ Service error {Status}: {Node}", srex.StatusCode, nodeId);
+            return null;
+        }
+        catch (InvalidCastException)
         {
             return null;
         }
@@ -274,7 +281,10 @@ public sealed class AddressSpaceHelper
     {
         var raw = ReadValue(session, nodeId);
         if (raw is T typed) return typed;
-        try { return (T?)Convert.ChangeType(raw, typeof(T)); } catch { return default; }
+        try { return (T?)Convert.ChangeType(raw, typeof(T)); }
+        catch (InvalidCastException) { return default; }
+        catch (FormatException) { return default; }
+        catch (OverflowException) { return default; }
     }
 
     // ── Asset enumeration ──────────────────────────────────────────────────────
@@ -297,8 +307,8 @@ public sealed class AddressSpaceHelper
         var refs = BrowseChildren(session, assetsNode, NodeClass.Object);
         foreach (var r in refs)
         {
-            var name = r.BrowseName.Name;
-            if (!name.StartsWith('<')) // skip placeholder nodes
+            var name = r.BrowseName?.Name;
+            if (name is not null && !name.StartsWith('<')) // skip placeholder nodes
                 result.Add((name, (NodeId)r.NodeId));
         }
         return result;

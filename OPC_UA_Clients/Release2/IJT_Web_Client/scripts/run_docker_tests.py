@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# NOTE: Developer smoke-test for run_docker_setup.py (Docker build/compose).
+# Not part of the standard test suite — run manually with --live-docker when
+# verifying Docker setup changes. For normal testing use: python run_all_tests.py
 import argparse
 import os
 import subprocess

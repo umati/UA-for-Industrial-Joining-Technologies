@@ -28,7 +28,9 @@ class EventCollector:
 
     def __init__(self, client) -> None:
         self._client = client
-        self._queue: asyncio.Queue = asyncio.Queue(maxsize=1_000)  # bounded; prevents unbounded memory growth in long sessions
+        self._queue: asyncio.Queue = asyncio.Queue(
+            maxsize=1_000
+        )  # bounded; prevents unbounded memory growth in long sessions
         self._subscription = None
 
     # ── asyncua handler interface ──────────────────────────────────────────
@@ -67,9 +69,7 @@ class EventCollector:
         self._subscription = await self._client.create_subscription(period_ms, self)
         if not isinstance(event_type_nodes, (list, tuple)):
             event_type_nodes = [event_type_nodes]
-        await self._subscription.subscribe_events(
-            server_node, event_type_nodes, queuesize=queue_size
-        )
+        await self._subscription.subscribe_events(server_node, event_type_nodes, queuesize=queue_size)
 
     async def collect(self, count: int = 1, timeout_s: float = 30.0) -> List:
         """
@@ -105,5 +105,5 @@ class EventCollector:
     async def __aenter__(self) -> "EventCollector":
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb) -> None:
         await self.unsubscribe()

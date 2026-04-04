@@ -73,18 +73,18 @@ def nodeid_to_payload(nodeid: ua.NodeId) -> dict[str, Any]:
 
 def default_arg_value(dtype_identifier: int) -> Any:
     mapping = {
-        1: True,      # Boolean
-        2: 1,         # SByte
-        3: 1,         # Byte
-        4: 1,         # Int16
-        5: 1,         # UInt16
-        6: 1,         # Int32
-        7: 1,         # UInt32
-        8: 1,         # Int64
-        9: 1,         # UInt64
-        10: 1.0,      # Float
-        11: 1.0,      # Double
-        12: "1",     # String
+        1: True,  # Boolean
+        2: 1,  # SByte
+        3: 1,  # Byte
+        4: 1,  # Int16
+        5: 1,  # UInt16
+        6: 1,  # Int32
+        7: 1,  # UInt32
+        8: 1,  # Int64
+        9: 1,  # UInt64
+        10: 1.0,  # Float
+        11: 1.0,  # Double
+        12: "1",  # String
         13: "2026-01-01T00:00:00Z",  # DateTime (string fallback)
         31918: "1",  # TrimmedString
     }
@@ -334,6 +334,7 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
     events: list[dict[str, Any]] = []
 
     async with websockets.connect(ws_url) as ws:
+
         async def send_recv(command: str, payload: dict | None = None):
             msg = dict(payload or {})
             uid = int(time.time() * 1000) % 1000000
@@ -350,7 +351,9 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
                     return rsp
             raise TimeoutError(f"Timeout waiting for response for command '{command}'")
 
-        async def call_method_with_fallback(spec: MethodSpec, override_arguments: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        async def call_method_with_fallback(
+            spec: MethodSpec, override_arguments: list[dict[str, Any]] | None = None
+        ) -> dict[str, Any]:
             arguments = override_arguments if override_arguments is not None else spec.arguments
             payload = {
                 "objectnode": spec.object_node,
@@ -438,8 +441,7 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
                 return False
             for child in content:
                 if isinstance(child, dict) and (
-                    isinstance(child.get("ResultContent"), list)
-                    or child.get("ResultMetaData") is not None
+                    isinstance(child.get("ResultContent"), list) or child.get("ResultMetaData") is not None
                 ):
                     return True
             return False
@@ -543,7 +545,14 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
     for row in report["called_methods"]:
         name = row.get("name")
         status = row.get("status")
-        if name in {"SimulateSingleResult", "SimulateJobResult", "Simulate_Batch_or_SYNC_Result", "SimulateEvents", "SelectJoint", "StartSelectedJoining"}:
+        if name in {
+            "SimulateSingleResult",
+            "SimulateJobResult",
+            "Simulate_Batch_or_SYNC_Result",
+            "SimulateEvents",
+            "SelectJoint",
+            "StartSelectedJoining",
+        }:
             required_ok.append(status == "ok")
 
     report["ok"] = (
@@ -570,7 +579,9 @@ def run_ui_assertions(ui_base_url: str) -> dict[str, Any]:
 
     node_modules = PROJECT_ROOT / "node_modules"
     if not node_modules.exists():
-        install_cmd = [npm, "ci"] if (PROJECT_ROOT / "package-lock.json").exists() else [npm, "install", "--legacy-peer-deps"]
+        install_cmd = (
+            [npm, "ci"] if (PROJECT_ROOT / "package-lock.json").exists() else [npm, "install", "--legacy-peer-deps"]
+        )
         install = subprocess.run(
             install_cmd,
             cwd=str(PROJECT_ROOT),
@@ -622,7 +633,9 @@ def run_ui_assertions(ui_base_url: str) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run functional OPC UA regression against backend websocket + simulator")
+    parser = argparse.ArgumentParser(
+        description="Run functional OPC UA regression against backend websocket + simulator"
+    )
     parser.add_argument("--endpoint", default="opc.tcp://localhost:40451", help="OPC UA endpoint")
     parser.add_argument("--ws-url", default="ws://localhost:8001", help="Backend websocket URL")
     parser.add_argument("--out", default="regression_report.json", help="Output JSON report path")

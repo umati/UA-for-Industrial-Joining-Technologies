@@ -257,6 +257,7 @@ def test_log_result_event_details_has_no_client_parameter():
     import inspect
 
     from python.utils import log_result_event_details
+
     params = list(inspect.signature(log_result_event_details).parameters.keys())
     assert "client" not in params, (
         "log_result_event_details must not take a 'client' parameter — "
@@ -278,8 +279,7 @@ async def test_event_notification_calls_log_without_client():
         call_args_list.append((event, server_url, client_received_time))
         return "evt-regression"
 
-    with patch("python.result_event_handler.log_result_event_details",
-               side_effect=_capture_log):
+    with patch("python.result_event_handler.log_result_event_details", side_effect=_capture_log):
         await handler.event_notification(_make_result_event())
 
     assert len(call_args_list) == 1
@@ -304,15 +304,13 @@ async def test_concurrent_event_notifications_simulate_job_result():
     async def _fast_log(event, server_url, client_received_time):
         return f"evt-{id(event)}"
 
-    with patch("python.result_event_handler.log_result_event_details",
-               side_effect=_fast_log):
+    with patch("python.result_event_handler.log_result_event_details", side_effect=_fast_log):
         # Fire all events concurrently — as asyncua does when a method triggers many events
         await asyncio.gather(*[handler.event_notification(e) for e in events])
 
     # Allow queue to drain
     await asyncio.sleep(0.2)
     assert ws.send.call_count == 12, (
-        f"Expected 12 events sent, got {ws.send.call_count} — "
-        "concurrent event notifications failed"
+        f"Expected 12 events sent, got {ws.send.call_count} — concurrent event notifications failed"
     )
     await handler.close()

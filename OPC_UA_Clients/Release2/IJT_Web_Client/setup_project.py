@@ -18,6 +18,7 @@ import time
 import webbrowser
 import zipfile
 from pathlib import Path
+from typing import Any
 
 # Add src/ to path so "from python.xxx import" works regardless of cwd
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -33,15 +34,14 @@ RESULTS_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 def _detect_repo_root(start_dir: Path) -> Path:
     """
-    Find monorepo root by looking for both OPC_UA_Clients and OPC_UA_Servers.
+    Find repository root by looking for both OPC_UA_Clients and OPC_UA_Servers.
     Falls back to start_dir when running from standalone/container layouts.
     """
     for candidate in [start_dir] + list(start_dir.parents):
-        if (candidate / "OPC_UA_Clients").exists() and (
-            candidate / "OPC_UA_Servers"
-        ).exists():
+        if (candidate / "OPC_UA_Clients").exists() and (candidate / "OPC_UA_Servers").exists():
             return candidate
     return start_dir
+
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -71,12 +71,8 @@ SETUP_TIMESTAMP_FILE = STATE_DIR / "setup_timestamp"
 IS_WINDOWS = os.name == "nt"
 PROJECT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = _detect_repo_root(PROJECT_DIR)
-SIMULATOR_DIR = (
-    REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
-)
-SIMULATOR_ZIP = (
-    REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
-)
+SIMULATOR_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
+SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
 SETUP_LOCK_FILE = STATE_DIR / "setup.lock"
 RUNTIME_STATE_FILE = STATE_DIR / "runtime_processes.json"
@@ -225,13 +221,7 @@ def _find_latest_python_executable():
                 major, minor = version.split(".")
                 local_appdata = os.getenv("LOCALAPPDATA")
                 if local_appdata:
-                    direct_py = (
-                        Path(local_appdata)
-                        / "Programs"
-                        / "Python"
-                        / f"Python{major}{minor}"
-                        / "python.exe"
-                    )
+                    direct_py = Path(local_appdata) / "Programs" / "Python" / f"Python{major}{minor}" / "python.exe"
                     if direct_py.exists():
                         return ([str(direct_py)], version)
             except Exception as exc:
@@ -355,7 +345,7 @@ def _pid_is_running(pid: int) -> bool:
                 return False
             if "No tasks are running" in output:
                 return False
-            return output.startswith("\"")
+            return output.startswith('"')
         except Exception:
             return False
     try:
@@ -401,8 +391,10 @@ def _collect_managed_processes() -> list[tuple[str, int]]:
     for key, label in (("frontend_pid", "frontend"), ("backend_pid", "backend")):
         raw = state.get(key)
         try:
-            pid = int(raw)
-        except Exception:
+            pid = int(raw or 0)
+        except (ValueError, TypeError):
+            continue
+        if pid <= 0:
             continue
         if _pid_is_running(pid):
             managed.append((label, pid))
@@ -465,7 +457,7 @@ def _stop_managed_processes(timeout_sec: float = 8.0) -> None:
                         stderr=subprocess.DEVNULL,
                     )
                 else:
-                    os.kill(pid, signal.SIGKILL)
+                    os.kill(pid, getattr(signal, "SIGKILL", signal.SIGTERM))
                 log.warning("Forced stop for %s process (pid=%s).", label, pid)
             except Exception as e:
                 log.warning("Failed forced stop for %s process (pid=%s): %s", label, pid, e)
@@ -497,19 +489,19 @@ def _should_block_foreground(frontend_proc, backend_proc) -> bool:
 class _SetupLock:
     def __init__(self, path: Path):
         self.path = path
-        self._fh = None
+        self._fh: "IO[str] | None" = None
 
     def acquire(self) -> bool:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._fh = open(self.path, "a+", encoding="utf-8")
         try:
             if IS_WINDOWS:
-                import msvcrt
+                import msvcrt  # type: ignore[import]
 
                 self._fh.seek(0)
                 msvcrt.locking(self._fh.fileno(), msvcrt.LK_NBLCK, 1)
             else:
-                import fcntl
+                import fcntl  # type: ignore[import]
 
                 fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             self._fh.seek(0)
@@ -611,8 +603,7 @@ def _extract_simulator_zip_if_needed() -> None:
         if zip_mtime <= dir_mtime:
             return  # extracted folder is already up-to-date
         log.info(
-            "Newer simulator ZIP detected (zip mtime=%.0f > dir mtime=%.0f). "
-            "Removing old folder: %s",
+            "Newer simulator ZIP detected (zip mtime=%.0f > dir mtime=%.0f). Removing old folder: %s",
             zip_mtime,
             dir_mtime,
             SIMULATOR_DIR,
@@ -636,9 +627,7 @@ def _find_simulator_executable() -> Path | None:
     return matches[0] if matches else None
 
 
-def _ensure_opc_server_running(
-    endpoint: str, *, allow_launch: bool, context: str
-) -> bool:
+def _ensure_opc_server_running(endpoint: str, *, allow_launch: bool, context: str) -> bool:
     # Source of truth is OPC UA endpoint connectivity, not whether a terminal/process exists.
     if _is_endpoint_reachable(endpoint):
         return True
@@ -667,10 +656,10 @@ def _ensure_opc_server_running(
                     endpoint,
                     exe,
                 )
-                popen_kwargs = {"cwd": str(exe.parent)}
+                popen_kwargs: "dict[str, Any]" = {"cwd": str(exe.parent)}
                 if IS_WINDOWS:
                     popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
-                subprocess.Popen([str(exe)], **popen_kwargs)
+                subprocess.Popen([str(exe)], **popen_kwargs)  # nosec B603 B607
                 startup_timeout = _env_float("OPCUA_STARTUP_TIMEOUT_SEC", 45.0, 1.0)
                 startup_poll = _env_float("OPCUA_STARTUP_POLL_SEC", 0.5, 0.1)
                 if _wait_for_endpoint_ready(
@@ -688,9 +677,7 @@ def _ensure_opc_server_running(
             except Exception as e:
                 log.warning("Failed to launch OPC UA simulator '%s': %s", exe, e)
     elif allow_launch and IS_DOCKER:
-        log.info(
-            "Docker mode detected (IS_DOCKER=true). Skipping local OPC UA simulator launch."
-        )
+        log.info("Docker mode detected (IS_DOCKER=true). Skipping local OPC UA simulator launch.")
 
     startup_timeout = _env_float("OPCUA_STARTUP_TIMEOUT_SEC", 45.0, 1.0)
     startup_poll = _env_float("OPCUA_STARTUP_POLL_SEC", 0.5, 0.1)
@@ -788,16 +775,12 @@ def _resolve_python_executable(latest_cmd):
              latest_cmd == ["python3.16"]   -> returns "/usr/bin/python3.16"
     """
     try:
-        exe = subprocess.check_output(
-            latest_cmd + ["-c", "import sys; print(sys.executable)"], text=True
-        ).strip()
+        exe = subprocess.check_output(latest_cmd + ["-c", "import sys; print(sys.executable)"], text=True).strip()
         if not exe:
             raise RuntimeError("Could not resolve target python executable.")
         return exe
     except Exception as e:
-        log.error(
-            "Failed to resolve Python executable from %s: %s", " ".join(latest_cmd), e
-        )
+        log.error("Failed to resolve Python executable from %s: %s", " ".join(latest_cmd), e)
         sys.exit(1)
     return None
 
@@ -858,9 +841,7 @@ def _create_virtualenv(latest_cmd):
         subprocess.check_call([str(py), "-m", "ensurepip", "--upgrade"], env=env)
     except Exception as e:
         log.warning("Failed to ensure pip in virtualenv via ensurepip: %s", e)
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "--python", str(py), "install", "--upgrade", "pip"]
-        )
+        subprocess.check_call([sys.executable, "-m", "pip", "--python", str(py), "install", "--upgrade", "pip"])
 
 
 # ---------------------------------------------------------------------------
@@ -885,9 +866,7 @@ def _install_python_packages():
 
     # Install core from requirements (stable channel)
     log.info("Installing packages from requirements.txt (stable channel)...")
-    subprocess.check_call(
-        [str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_file)]
-    )
+    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_file)])
 
     # Proactively upgrade crypto stack for asyncua (often required by newer wheels)
     # (The asyncua project lists cryptography / pyOpenSSL among dependencies.)
@@ -914,9 +893,7 @@ def _install_python_packages():
     # support.
     asyncua_spec = os.getenv("ASYNCUA_VERSION_SPEC", "asyncua>=1.2b2").strip()
     log.info("Installing asyncua (--pre enabled for 1.2b2+ / Python 3.14): %s", asyncua_spec)
-    subprocess.check_call(
-        [str(python), "-m", "pip", "install", "--upgrade", "--pre", asyncua_spec]
-    )
+    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "--pre", asyncua_spec])
 
     # Verify the installed asyncua satisfies the minimum version.
     try:
@@ -926,6 +903,7 @@ def _install_python_packages():
         ).strip()
         log.info("asyncua installed version: %s", installed)
         from packaging.version import Version
+
         if Version(installed) < Version("1.2b2"):
             log.error(
                 "asyncua %s is too old for Python 3.14. Minimum required: 1.2b2. "
@@ -959,9 +937,7 @@ def _create_nodeenv():
         missing.append("npx")
     if missing:
         log.error("Missing global tools: %s", ", ".join(missing))
-        log.error(
-            "Please install Node.js with npm and npx, and ensure they are in your PATH."
-        )
+        log.error("Please install Node.js with npm and npx, and ensure they are in your PATH.")
         sys.exit(1)
 
     # quick smoke checks
@@ -1028,9 +1004,7 @@ def _install_js_packages(dev_mode: bool = False):
             log.info("Found package-lock.json. Running 'npm ci'...")
             subprocess.check_call([str(npm), "ci"], env=env)
         else:
-            log.warning(
-                "package-lock.json not found. Running 'npm install' with --legacy-peer-deps..."
-            )
+            log.warning("package-lock.json not found. Running 'npm install' with --legacy-peer-deps...")
             subprocess.check_call([str(npm), "install", "--legacy-peer-deps"], env=env)
     except subprocess.CalledProcessError as e:
         log.error("JavaScript package installation failed. Command failed: %s", e.cmd)
@@ -1038,12 +1012,8 @@ def _install_js_packages(dev_mode: bool = False):
 
     # Log a couple of versions to assist troubleshooting
     try:
-        eslint_version = subprocess.check_output(
-            [str(npm), "list", "eslint", "--depth=0"], text=True
-        )
-        neostandard_version = subprocess.check_output(
-            [str(npm), "list", "neostandard", "--depth=0"], text=True
-        )
+        eslint_version = subprocess.check_output([str(npm), "list", "eslint", "--depth=0"], text=True)
+        neostandard_version = subprocess.check_output([str(npm), "list", "neostandard", "--depth=0"], text=True)
         log.info("Installed ESLint version:\n%s", eslint_version)
         log.info("Installed neostandard version:\n%s", neostandard_version)
     except subprocess.CalledProcessError as e:
@@ -1262,9 +1232,7 @@ def main():
             "End users who only run the Web Client should omit this flag."
         ),
     )
-    parser.add_argument(
-        "--silent", action="store_true", help="Show only warnings/errors"
-    )
+    parser.add_argument("--silent", action="store_true", help="Show only warnings/errors")
     parser.add_argument(
         "--run-tests",
         action="store_true",
@@ -1339,9 +1307,7 @@ def main():
     # Full setup path
     log.info("Starting full project setup...")
     if not _check_internet():
-        log.error(
-            "No internet connection. Please connect to the internet and try again."
-        )
+        log.error("No internet connection. Please connect to the internet and try again.")
         sys.exit(1)
 
     latest_cmd, latest_ver = _find_latest_python_executable()

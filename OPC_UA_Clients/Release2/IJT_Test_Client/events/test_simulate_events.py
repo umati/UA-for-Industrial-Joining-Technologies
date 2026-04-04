@@ -48,9 +48,7 @@ async def _call(node, method, *args):
 
 
 @pytest.mark.parametrize("event_type,label", SimulateEventType.REPRESENTATIVE)
-async def test_simulate_event_representative_types(
-    event_type, label, opcua_client, simulate_events_folder, ns_indices
-):
+async def test_simulate_event_representative_types(event_type, label, opcua_client, simulate_events_folder, ns_indices):
     """SimulateEvents must accept representative event types from each category."""
     ns_app = ns_indices.get(NS_APP)
     if ns_app is None:
@@ -95,17 +93,13 @@ async def test_simulate_bulk_events_no_exception(
 # ─── SimulateEvents — subscription-based verification ───────────────────────
 
 
-async def test_simulate_event_fires_notification(
-    opcua_client, subscription_client, simulate_events_folder, ns_indices
-):
+async def test_simulate_event_fires_notification(opcua_client, subscription_client, simulate_events_folder, ns_indices):
     """SimulateEvents must result in at least one JoiningSystemEventType notification."""
     ns_app = ns_indices.get(NS_APP)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_app is None or ns_ijt is None:
         pytest.skip("Required namespace(s) not registered")
-    event_type_node = subscription_client.get_node(
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt)
-    )
+    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt))
     server_node = subscription_client.nodes.server
     ef = _events_folder(opcua_client, simulate_events_folder)
     method = await _find_method(ef, BN.SIMULATE_EVENTS, ns_app)
@@ -119,9 +113,7 @@ async def test_simulate_event_fires_notification(
             ua.Variant(SimulateEventType.TOOL_CONNECTED, ua.VariantType.UInt32),
         )
         events = await collector.collect(count=1, timeout_s=20.0)
-    assert len(events) >= 1, (
-        "No JoiningSystemEventType notification received after SimulateEvents(TOOL_CONNECTED)"
-    )
+    assert len(events) >= 1, "No JoiningSystemEventType notification received after SimulateEvents(TOOL_CONNECTED)"
 
 
 # ─── SimulateBulkEvents — verify count matches expected ─────────────────────
@@ -136,9 +128,7 @@ async def test_simulate_bulk_events_fires_expected_count(
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_app is None or ns_ijt is None:
         pytest.skip("Required namespace(s) not registered")
-    event_type_node = subscription_client.get_node(
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt)
-    )
+    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt))
     server_node = subscription_client.nodes.server
     ef = _events_folder(opcua_client, simulate_events_folder)
     method = await _find_method(ef, BN.SIMULATE_BULK_EVENTS, ns_app)
@@ -154,8 +144,7 @@ async def test_simulate_bulk_events_fires_expected_count(
         )
         events = await collector.collect(count=count, timeout_s=30.0)
     assert len(events) >= count, (
-        f"SimulateBulkEvents(TOOL_STARTED, {count}) produced only "
-        f"{len(events)} events, expected >= {count}"
+        f"SimulateBulkEvents(TOOL_STARTED, {count}) produced only {len(events)} events, expected >= {count}"
     )
 
 
@@ -170,9 +159,7 @@ async def test_bulk_events_exceeds_single_event_count(
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_app is None or ns_ijt is None:
         pytest.skip("Required namespace(s) not registered")
-    event_type_node = subscription_client.get_node(
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt)
-    )
+    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt))
     server_node = subscription_client.nodes.server
     ef = _events_folder(opcua_client, simulate_events_folder)
     single_method = await _find_method(ef, BN.SIMULATE_EVENTS, ns_app)

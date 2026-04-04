@@ -14,5 +14,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['tests/js/unit/**/*.test.mjs'],
+    coverage: {
+      reportsDirectory: 'test-results/coverage',
+      provider: 'v8'
+    }
   },
 })

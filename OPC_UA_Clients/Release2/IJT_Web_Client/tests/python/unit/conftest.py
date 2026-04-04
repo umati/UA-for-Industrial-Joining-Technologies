@@ -5,6 +5,7 @@ On some Windows machines pytest cannot access AppData/Local/Temp/pytest-of-*
 due to ACL restrictions. Using a path inside the repo avoids that problem.
 The directory is cleaned up after each test via a finalizer.
 """
+
 import shutil
 import uuid
 from pathlib import Path

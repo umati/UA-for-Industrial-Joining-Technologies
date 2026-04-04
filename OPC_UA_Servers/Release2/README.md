@@ -47,11 +47,26 @@
   ```
   docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=192.168.1.10 opcua-ijt-server
   ```
+- **Note:** The server always uses port **40451** by default. The `OPCUA_SERVER_PORT` environment variable is available for automated testing scenarios only (running multiple isolated instances in parallel). For normal use, always use the default port.
 - **Verify the server is responding** (requires `asyncua`):
   ```
   pip install asyncua
   python tests/smoke_test.py
   ```
+
+## Testing
+
+Run the server smoke tests (requires Docker and a running server on port 40451):
+
+```bash
+python run_all_tests.py
+```
+
+Individual smoke test (no Docker required — server must already be running):
+
+```bash
+python tests/smoke_test.py
+```
 
 ### General Usage
 - Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).

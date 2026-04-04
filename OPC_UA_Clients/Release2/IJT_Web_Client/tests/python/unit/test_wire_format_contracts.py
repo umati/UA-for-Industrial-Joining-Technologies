@@ -48,25 +48,27 @@ class TestMethodcallWireKeys:
         """
         conn = _make_connection()
         with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=False)):
-            result = await conn.methodcall({
-                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-                "arguments": [],
-            })
+            result = await conn.methodcall(
+                {
+                    "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                    "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                    "arguments": [],
+                }
+            )
         assert "exception" in result
-        assert "Missing" not in result["exception"], (
-            f"Expected 'not connected' error, got: {result['exception']}"
-        )
+        assert "Missing" not in result["exception"], f"Expected 'not connected' error, got: {result['exception']}"
 
     @pytest.mark.asyncio
     async def test_wrong_key_object_node_underscore_triggers_missing_error(self):
         """'object_node' (snake_case) is the WRONG key — must return 'Missing' error."""
         conn = _make_connection()
-        result = await conn.methodcall({
-            "object_node": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-            "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-            "arguments": [],
-        })
+        result = await conn.methodcall(
+            {
+                "object_node": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                "arguments": [],
+            }
+        )
         assert "exception" in result
         assert "Missing" in result["exception"]
         assert "objectnode" in result["exception"]
@@ -75,11 +77,13 @@ class TestMethodcallWireKeys:
     async def test_wrong_key_method_node_underscore_triggers_missing_error(self):
         """'method_node' (snake_case) is the WRONG key — must return 'Missing' error."""
         conn = _make_connection()
-        result = await conn.methodcall({
-            "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-            "method_node": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-            "arguments": [],
-        })
+        result = await conn.methodcall(
+            {
+                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                "method_node": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                "arguments": [],
+            }
+        )
         assert "exception" in result
         assert "Missing" in result["exception"]
         assert "methodnode" in result["exception"]
@@ -93,11 +97,13 @@ class TestMethodcallWireKeys:
         AttributeError: 'NoneType' object has no attribute 'get'.
         """
         conn = _make_connection()
-        result = await conn.methodcall({
-            "object_node": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-            "method_node": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-            "arguments": [],
-        })
+        result = await conn.methodcall(
+            {
+                "object_node": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                "method_node": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                "arguments": [],
+            }
+        )
         assert "exception" in result
         assert "Missing" in result["exception"]
         assert "NoneType" not in result["exception"], (
@@ -108,11 +114,13 @@ class TestMethodcallWireKeys:
     async def test_explicit_none_objectnode_returns_clear_missing_error(self):
         """Explicit None for objectnode → 'Missing' error, not AttributeError crash."""
         conn = _make_connection()
-        result = await conn.methodcall({
-            "objectnode": None,
-            "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-            "arguments": [],
-        })
+        result = await conn.methodcall(
+            {
+                "objectnode": None,
+                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                "arguments": [],
+            }
+        )
         assert "exception" in result
         assert "Missing" in result["exception"]
         assert "NoneType" not in result["exception"]
@@ -121,11 +129,13 @@ class TestMethodcallWireKeys:
     async def test_explicit_none_methodnode_returns_clear_missing_error(self):
         """Explicit None for methodnode → 'Missing' error, not AttributeError crash."""
         conn = _make_connection()
-        result = await conn.methodcall({
-            "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-            "methodnode": None,
-            "arguments": [],
-        })
+        result = await conn.methodcall(
+            {
+                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                "methodnode": None,
+                "arguments": [],
+            }
+        )
         assert "exception" in result
         assert "Missing" in result["exception"]
         assert "NoneType" not in result["exception"]
@@ -144,11 +154,13 @@ class TestMethodcallWireKeys:
         conn = _make_connection()
         # objectnode/methodnode present but connection not open
         with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=False)):
-            result = await conn.methodcall({
-                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-                # "arguments" deliberately omitted
-            })
+            result = await conn.methodcall(
+                {
+                    "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                    "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                    # "arguments" deliberately omitted
+                }
+            )
         assert "exception" in result
         assert "Missing" not in result["exception"]  # keys were found
 
@@ -180,9 +192,7 @@ class TestBrowseNodeidKey:
         """Wrong key 'node_id' is ignored; get_node(None) raises → exception dict."""
         conn = _make_connection()
         conn.client = MagicMock()
-        conn.client.get_node = MagicMock(
-            side_effect=Exception("Cannot get node for id None")
-        )
+        conn.client.get_node = MagicMock(side_effect=Exception("Cannot get node for id None"))
 
         result = await conn.browse({"node_id": "ns=0;i=85"})
         assert "exception" in result
@@ -212,18 +222,14 @@ class TestReadNodeidKey:
         await conn.read({"nodeid": "ns=1;s=TestNode", "node_id": "WRONG_KEY"})
 
         assert len(captured) == 1
-        assert captured[0] == "ns=1;s=TestNode", (
-            f"Expected get_node('ns=1;s=TestNode'), got get_node({captured[0]!r})"
-        )
+        assert captured[0] == "ns=1;s=TestNode", f"Expected get_node('ns=1;s=TestNode'), got get_node({captured[0]!r})"
 
     @pytest.mark.asyncio
     async def test_read_missing_nodeid_returns_exception_not_crash(self):
         """read() with no 'nodeid' → get_node(None) raises → exception dict returned."""
         conn = _make_connection()
         conn.client = MagicMock()
-        conn.client.get_node = MagicMock(
-            side_effect=Exception("Invalid node id: None")
-        )
+        conn.client.get_node = MagicMock(side_effect=Exception("Invalid node id: None"))
 
         result = await conn.read({})
         assert "exception" in result
@@ -250,10 +256,12 @@ class TestPathtoidKeyNames:
         conn.client = MagicMock()
         conn.client.get_node = fake_get_node
 
-        await conn.pathtoid({
-            "nodeid": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-            "path": "[]",
-        })
+        await conn.pathtoid(
+            {
+                "nodeid": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                "path": "[]",
+            }
+        )
 
         assert len(captured) == 1
         assert captured[0] == "ns=1;s=TighteningSystem"

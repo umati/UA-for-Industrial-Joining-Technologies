@@ -3,6 +3,7 @@
 using Opc.Ua;
 using Opc.Ua.Client;
 using IJT_CSharp_Client.Helpers;
+using Microsoft.Extensions.Logging;
 
 namespace IJT_CSharp_Client.Client;
 
@@ -11,8 +12,9 @@ namespace IJT_CSharp_Client.Client;
 /// EnableAsset, SendIdentifiers, SendTextIdentifiers, ResetIdentifiers,
 /// GetIdentifiers, and subscribing to asset Identification variables.
 /// </summary>
-public sealed class AssetManagement
+public sealed class AssetManagement : IDisposable
 {
+    private readonly ILogger<AssetManagement> _log = IjtLog.For<AssetManagement>();
     private readonly IjtSession _s;
     private Subscription?       _assetVarSubscription;
     private NodeId?             _methodSetNodeId;
@@ -45,7 +47,7 @@ public sealed class AssetManagement
         // Fallback: type-definition NodeId
         _methodSetNodeId = _s.IjtBaseObjectId(
             UAModel.IJTBase.Objects.JoiningSystemType_AssetManagement_MethodSet);
-        Console.WriteLine("  ⚠ AssetManagement/MethodSet fallback to type NodeId.");
+        _log.LogWarning("⚠ AssetManagement/MethodSet fallback to type NodeId.");
         return _methodSetNodeId;
     }
 
@@ -57,7 +59,8 @@ public sealed class AssetManagement
     /// </summary>
     public void EnableAsset(string productInstanceUri, bool enable)
     {
-        Console.WriteLine($"\n── EnableAsset ({productInstanceUri}, {enable}) ──────────────");
+        _log.LogInformation("\n── EnableAsset ({Uri}, {Enable}) ──────────────────────",
+            productInstanceUri, enable);
 
         var objectId = GetMethodSetNode();
         var methodId = _s.IjtBaseMethodId(
@@ -65,19 +68,23 @@ public sealed class AssetManagement
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ MethodSet node or EnableAsset method not found.");
+            _log.LogError("✗ MethodSet node or EnableAsset method not found.");
             return;
         }
 
         try
         {
             var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, enable);
-            Console.WriteLine("  ✓ EnableAsset called.");
-            ExtensionObjectHelper.PrintOutputArguments(outputs);
+            _log.LogInformation("✓ EnableAsset called.");
+            IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ✗ EnableAsset error: {ex.Message}");
+            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(EnableAsset));
         }
     }
 
@@ -89,7 +96,7 @@ public sealed class AssetManagement
     /// </summary>
     public void SendIdentifiers(IList<UAModel.IJTBase.EntityDataType> entities)
     {
-        Console.WriteLine($"\n── SendIdentifiers ({entities.Count} entities) ─────────────");
+        _log.LogInformation("\n── SendIdentifiers ({Count} entities) ─────────────", entities.Count);
 
         var objectId = GetMethodSetNode();
         var methodId = _s.IjtBaseMethodId(
@@ -97,7 +104,7 @@ public sealed class AssetManagement
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ MethodSet node or SendIdentifiers method not found.");
+            _log.LogError("✗ MethodSet node or SendIdentifiers method not found.");
             return;
         }
 
@@ -105,12 +112,16 @@ public sealed class AssetManagement
         {
             var extObjects = entities.Select(e => new ExtensionObject(e)).ToArray();
             var outputs    = _s.CallMethod(objectId, methodId, (object)extObjects);
-            Console.WriteLine($"  ✓ SendIdentifiers called ({extObjects.Length} entities).");
-            ExtensionObjectHelper.PrintOutputArguments(outputs);
+            _log.LogInformation("✓ SendIdentifiers called ({Count} entities).", extObjects.Length);
+            IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ✗ SendIdentifiers error: {ex.Message}");
+            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(SendIdentifiers));
         }
     }
 
@@ -122,7 +133,7 @@ public sealed class AssetManagement
     /// </summary>
     public void SendTextIdentifiers(string productInstanceUri, string[] identifiers)
     {
-        Console.WriteLine($"\n── SendTextIdentifiers ({productInstanceUri}) ────────────────");
+        _log.LogInformation("\n── SendTextIdentifiers ({Uri}) ────────────────────", productInstanceUri);
 
         var objectId = GetMethodSetNode();
         var methodId = _s.IjtBaseMethodId(
@@ -130,19 +141,23 @@ public sealed class AssetManagement
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ MethodSet node or SendTextIdentifiers method not found.");
+            _log.LogError("✗ MethodSet node or SendTextIdentifiers method not found.");
             return;
         }
 
         try
         {
             var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, identifiers);
-            Console.WriteLine("  ✓ SendTextIdentifiers called.");
-            ExtensionObjectHelper.PrintOutputArguments(outputs);
+            _log.LogInformation("✓ SendTextIdentifiers called.");
+            IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ✗ SendTextIdentifiers error: {ex.Message}");
+            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(SendTextIdentifiers));
         }
     }
 
@@ -154,7 +169,7 @@ public sealed class AssetManagement
     /// </summary>
     public void ResetIdentifiers(string productInstanceUri)
     {
-        Console.WriteLine($"\n── ResetIdentifiers ({productInstanceUri}) ──────────────────");
+        _log.LogInformation("\n── ResetIdentifiers ({Uri}) ──────────────────────", productInstanceUri);
 
         var objectId = GetMethodSetNode();
         var methodId = _s.IjtBaseMethodId(
@@ -162,19 +177,23 @@ public sealed class AssetManagement
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ MethodSet node or ResetIdentifiers method not found.");
+            _log.LogError("✗ MethodSet node or ResetIdentifiers method not found.");
             return;
         }
 
         try
         {
             var outputs = _s.CallMethod(objectId, methodId, productInstanceUri);
-            Console.WriteLine("  ✓ ResetIdentifiers called.");
-            ExtensionObjectHelper.PrintOutputArguments(outputs);
+            _log.LogInformation("✓ ResetIdentifiers called.");
+            IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ✗ ResetIdentifiers error: {ex.Message}");
+            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(ResetIdentifiers));
         }
     }
 
@@ -186,7 +205,7 @@ public sealed class AssetManagement
     /// </summary>
     public void GetIdentifiers(string productInstanceUri)
     {
-        Console.WriteLine($"\n── GetIdentifiers ({productInstanceUri}) ────────────────────");
+        _log.LogInformation("\n── GetIdentifiers ({Uri}) ────────────────────────", productInstanceUri);
 
         var objectId = GetMethodSetNode();
         var methodId = _s.IjtBaseMethodId(
@@ -194,19 +213,23 @@ public sealed class AssetManagement
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ MethodSet node or GetIdentifiers method not found.");
+            _log.LogError("✗ MethodSet node or GetIdentifiers method not found.");
             return;
         }
 
         try
         {
             var outputs = _s.CallMethod(objectId, methodId, productInstanceUri);
-            Console.WriteLine("  ✓ GetIdentifiers result:");
-            ExtensionObjectHelper.PrintOutputArguments(outputs);
+            _log.LogInformation("✓ GetIdentifiers result:");
+            IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ✗ GetIdentifiers error: {ex.Message}");
+            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(GetIdentifiers));
         }
     }
 
@@ -223,24 +246,24 @@ public sealed class AssetManagement
     {
         if (_assetVarSubscription != null)
         {
-            Console.WriteLine("  ⚠ Asset variable subscription already active.");
+            _log.LogWarning("⚠ Asset variable subscription already active.");
             return;
         }
 
-        Console.WriteLine("\n── Subscribing to Asset Identification variables ────");
+        _log.LogInformation("\n── Subscribing to Asset Identification variables ────");
 
         var assetMgmtNode = _s.BrowseChild(
             _s.JoiningSystemNodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
         if (assetMgmtNode.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ AssetManagement node not found.");
+            _log.LogError("✗ AssetManagement node not found.");
             return;
         }
 
         var assetsNode = _s.BrowseChild(assetMgmtNode, UAModel.IJTBase.BrowseNames.Assets);
         if (assetsNode.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ Assets node not found.");
+            _log.LogError("✗ Assets node not found.");
             return;
         }
 
@@ -278,7 +301,7 @@ public sealed class AssetManagement
 
         if (count == 0)
         {
-            Console.WriteLine("  ⚠ No asset identification variables found.");
+            _log.LogWarning("⚠ No asset identification variables found.");
             _assetVarSubscription.Dispose();
             _assetVarSubscription = null;
             return;
@@ -286,7 +309,7 @@ public sealed class AssetManagement
 
         _s.Session.AddSubscription(_assetVarSubscription);
         _assetVarSubscription.Create();
-        Console.WriteLine($"  ✓ Subscribed to {count} asset identification variable(s).");
+        _log.LogInformation("✓ Subscribed to {Count} asset identification variable(s).", count);
     }
 
     private int AddIdentificationItems(Subscription sub, NodeId idNodeId, string assetPath)
@@ -312,7 +335,8 @@ public sealed class AssetManagement
             item.Notification += (mi, _) =>
             {
                 foreach (var v in mi.DequeueValues())
-                    Console.WriteLine($"  [DATA] {displayName} = {v.Value} (Status={v.StatusCode})");
+                    _log.LogInformation("[{Name}] Status={Status}  Value={Value}",
+                        displayName, v.StatusCode, IjtJsonSerializer.Serialize(v.Value));
             };
 
             sub.AddItem(item);
@@ -330,15 +354,26 @@ public sealed class AssetManagement
             _assetVarSubscription.Delete(silent: true);
             _s.Session.RemoveSubscription(_assetVarSubscription);
         }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+        }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ⚠ Asset subscription stop warning: {ex.Message}");
+            _log.LogWarning(ex, "⚠ Asset subscription stop warning");
         }
         finally
         {
             _assetVarSubscription?.Dispose();
             _assetVarSubscription = null;
-            Console.WriteLine("  ✓ Asset variable subscription stopped.");
+            _log.LogInformation("✓ Asset variable subscription stopped.");
         }
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        StopAssetVariableSubscription();
+        GC.SuppressFinalize(this);
     }
 }

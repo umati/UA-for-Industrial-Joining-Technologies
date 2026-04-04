@@ -10,6 +10,7 @@ Design rules enforced here:
   - Namespace indices are resolved once and cached in ns_indices dict.
   - Two separate client fixtures prevent asyncua concurrency issues with subscriptions.
 """
+# pylint: disable=redefined-outer-name,unused-argument,broad-exception-caught
 
 import logging
 import os
@@ -17,6 +18,25 @@ import os
 import pytest
 import pytest_asyncio
 from asyncua import Client
+
+
+# Inline helpers
+def _parse_opcua_endpoint(url: str) -> tuple[str, int]:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    return parsed.hostname or "localhost", parsed.port or 40451
+
+
+def _is_port_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
+    import socket
+
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
 
 from helpers.namespaces import (
     ALL_NAMESPACE_URIS,
@@ -43,30 +63,12 @@ def pytest_sessionstart(session) -> None:
     warning if the OPC UA server is not reachable so the developer knows what to
     do before any fixture error is reported.
     """
-    import socket
-
-    host, port = "localhost", 40451
-    url = os.environ.get("OPCUA_SERVER_URL", "")
-    if url:
-        try:
-            parts = url.replace("opc.tcp://", "").split(":")
-            host = parts[0]
-            port = int(parts[1]) if len(parts) > 1 else 40451
-        except (ValueError, IndexError) as exc:
-            logger.debug("OPCUA_SERVER_URL parse error, using defaults: %s", exc)
-    try:
-        with socket.create_connection((host, port), timeout=2.0):
-            reachable = True
-    except (socket.timeout, ConnectionRefusedError, OSError):
-        reachable = False
+    _server_url = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
+    host, port = _parse_opcua_endpoint(_server_url)
+    reachable = _is_port_reachable(host, port, timeout=2.0)
     if not reachable:
-        import sys
-
         border = "=" * 70
-        exe = (
-            "OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/"
-            "opcua_ijt_demo_application.exe"
-        )
+        exe = "OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe"
         msg = "\n".join(
             [
                 "",
@@ -87,7 +89,7 @@ def pytest_sessionstart(session) -> None:
                 "",
             ]
         )
-        print(msg, file=sys.stderr)
+        logger.warning(msg)
 
 
 # ─── Server lifecycle ─────────────────────────────────────────────────────────
@@ -103,10 +105,7 @@ def managed_server():
     manager = ServerManager()
     available = manager.ensure_running()
     if not available:
-        pytest.skip(
-            "OPC UA server not available. "
-            "Start the server manually or set OPCUA_SIMULATOR_EXE env var."
-        )
+        pytest.skip("OPC UA server not available. Start the server manually or set OPCUA_SIMULATOR_EXE env var.")
     yield manager
     manager.teardown()
 
@@ -167,9 +166,7 @@ async def joining_system(session_client, ns_indices):
     """
     js = await find_joining_system(session_client)
     if js is None:
-        pytest.skip(
-            "JoiningSystem node not found in address space (by type definition)"
-        )
+        pytest.skip("JoiningSystem node not found in address space (by type definition)")
     return js
 
 
@@ -216,9 +213,7 @@ async def joining_process_management(joining_system, ns_indices):
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered")
-    node = await find_child_by_browse_name(
-        joining_system, BN.JOINING_PROCESS_MANAGEMENT, ns_ijt
-    )
+    node = await find_child_by_browse_name(joining_system, BN.JOINING_PROCESS_MANAGEMENT, ns_ijt)
     if node is None:
         pytest.skip("JoiningProcessManagement node not found on JoiningSystem")
     return node
@@ -254,9 +249,7 @@ async def simulate_results_folder(simulations_node, ns_indices):
     ns_app = ns_indices.get(NS_APP)
     if ns_app is None:
         pytest.skip("App namespace not registered — simulator not available")
-    node = await find_child_by_browse_name(
-        simulations_node, BN.SIMULATE_RESULTS_FOLDER, ns_app
-    )
+    node = await find_child_by_browse_name(simulations_node, BN.SIMULATE_RESULTS_FOLDER, ns_app)
     if node is None:
         pytest.skip("SimulateResults folder not found under Simulations")
     return node
@@ -268,9 +261,7 @@ async def simulate_events_folder(simulations_node, ns_indices):
     ns_app = ns_indices.get(NS_APP)
     if ns_app is None:
         pytest.skip("App namespace not registered — simulator not available")
-    node = await find_child_by_browse_name(
-        simulations_node, BN.SIMULATE_EVENTS_AND_CONDITIONS, ns_app
-    )
+    node = await find_child_by_browse_name(simulations_node, BN.SIMULATE_EVENTS_AND_CONDITIONS, ns_app)
     if node is None:
         pytest.skip("SimulateEventsAndConditions folder not found under Simulations")
     return node
@@ -422,9 +413,7 @@ async def software_components_folder(assets_folder, ns_indices):
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered")
-    node = await find_child_by_browse_name(
-        assets_folder, BN.SOFTWARE_COMPONENTS, ns_ijt
-    )
+    node = await find_child_by_browse_name(assets_folder, BN.SOFTWARE_COMPONENTS, ns_ijt)
     if node is None:
         pytest.skip("SoftwareComponents folder not found in Assets")
     return node

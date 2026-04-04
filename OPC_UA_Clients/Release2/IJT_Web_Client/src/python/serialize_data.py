@@ -16,9 +16,7 @@ def is_instance_of_class(cls: Any) -> bool:
     """Best-effort check for user-defined class instances."""
     # Keep backward-compatible behavior with previous serializer logic:
     # many asyncua objects were detected via __weakref__.
-    return str(type(cls)).startswith("<class") and (
-        hasattr(cls, "__weakref__") or hasattr(cls, "__dict__")
-    )
+    return str(type(cls)).startswith("<class") and (hasattr(cls, "__weakref__") or hasattr(cls, "__dict__"))
 
 
 def _to_jsonable(value: Any) -> Any:
@@ -56,9 +54,7 @@ def _to_jsonable(value: Any) -> Any:
 
 def serialize_tuple(list_of_tuples: list[tuple[str, Any]]) -> str:
     """Serialize a zipped list of key/value tuples as JSON string."""
-    return json.dumps(
-        {k: _to_jsonable(v) for k, v in list_of_tuples}, ensure_ascii=False
-    )
+    return json.dumps({k: _to_jsonable(v) for k, v in list_of_tuples}, ensure_ascii=False)
 
 
 def serialize_value(value: Any) -> str:

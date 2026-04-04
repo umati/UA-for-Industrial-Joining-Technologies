@@ -8,6 +8,7 @@ Covers:
 - shutdown() puts sentinel, close() awaits task completion
 - event_notification() skips enqueue when handler is closed
 """
+# pylint: disable=protected-access
 
 import asyncio
 import sys
@@ -24,9 +25,7 @@ from event_handler import EventHandler
 def _make_handler():
     ws = AsyncMock()
     client = MagicMock()
-    return EventHandler(
-        websocket=ws, server_url="opc.tcp://localhost:4840", client=client
-    )
+    return EventHandler(websocket=ws, server_url="opc.tcp://localhost:4840", client=client)
 
 
 # ---------------------------------------------------------------------------

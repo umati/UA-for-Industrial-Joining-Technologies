@@ -55,9 +55,7 @@ async def _simulate_single(client, ns_indices):
 
 
 async def _subscribe_result_ready(sub_client, ns_ijt):
-    event_type_node = sub_client.get_node(
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt)
-    )
+    event_type_node = sub_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
     collector = EventCollector(sub_client)
     srv_node = sub_client.nodes.server
     await collector.subscribe(srv_node, event_type_nodes=[event_type_node])
@@ -71,9 +69,7 @@ async def test_server_supports_event_subscription(subscription_client, ns_indice
     ns_ijt = ns_indices[NS_IJT_BASE]
     collector = EventCollector(subscription_client)
     srv_node = subscription_client.nodes.server
-    event_type_node = subscription_client.get_node(
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt)
-    )
+    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
     # Must not raise
     await collector.subscribe(srv_node, event_type_nodes=[event_type_node])
     await collector.unsubscribe()
@@ -82,9 +78,7 @@ async def test_server_supports_event_subscription(subscription_client, ns_indice
 # ---------------------------------------------------------------------------
 # Event firing
 # ---------------------------------------------------------------------------
-async def test_simulate_fires_result_ready_event(
-    subscription_client, opcua_client, ns_indices
-):
+async def test_simulate_fires_result_ready_event(subscription_client, opcua_client, ns_indices):
     ns_ijt = ns_indices[NS_IJT_BASE]
     collector = await _subscribe_result_ready(subscription_client, ns_ijt)
     try:
@@ -92,10 +86,7 @@ async def test_simulate_fires_result_ready_event(
         events = await collector.collect(count=1, timeout_s=30)
     finally:
         await collector.unsubscribe()
-    assert len(events) >= 1, (
-        "At least one JoiningSystemResultReadyEvent must be received "
-        "after SimulateSingleResult"
-    )
+    assert len(events) >= 1, "At least one JoiningSystemResultReadyEvent must be received after SimulateSingleResult"
 
 
 # ---------------------------------------------------------------------------
@@ -140,9 +131,7 @@ async def test_event_has_severity(subscription_client, opcua_client, ns_indices)
         severity = event.Severity
     except AttributeError:
         pytest.skip("Event has no 'Severity' field")
-    assert isinstance(severity, int), (
-        f"Event.Severity must be an int, got {type(severity)}"
-    )
+    assert isinstance(severity, int), f"Event.Severity must be an int, got {type(severity)}"
     assert 0 <= severity <= 1000, f"Event.Severity must be in [0, 1000], got {severity}"
 
 

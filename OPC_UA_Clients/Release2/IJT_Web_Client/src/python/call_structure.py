@@ -78,7 +78,7 @@ def create_call_structure(argument: dict[str, Any]) -> Any:
                     f"got {len(value) if isinstance(value, list) else type(value).__name__}"
                 )
                 return ua.Variant(None, ua.VariantType.Null)
-            inp = ua.JoiningProcessIdentificationDataType()
+            inp = ua.JoiningProcessIdentificationDataType()  # type: ignore[attr-defined]
             inp.JoiningProcessId = value[0]["value"]
             inp.JoiningProcessOriginId = value[1]["value"]
             inp.SelectionName = value[2]["value"]
@@ -87,7 +87,7 @@ def create_call_structure(argument: dict[str, Any]) -> Any:
             lst = []
             for row in value:
                 entity_row = row["value"]
-                entity = ua.EntityDataType()
+                entity = ua.EntityDataType()  # type: ignore[attr-defined]
                 entity.Name = entity_row["Name"]
                 entity.Description = entity_row["Description"]
                 entity.EntityId = entity_row["EntityId"]
@@ -101,8 +101,7 @@ def create_call_structure(argument: dict[str, Any]) -> Any:
             variant_type = _BUILTIN_TYPE_MAP.get(data_type)
             if variant_type is None:
                 ijt_log.warning(
-                    f"[create_call_structure] Unknown dataType {data_type!r}; "
-                    "falling back to String Variant."
+                    f"[create_call_structure] Unknown dataType {data_type!r}; falling back to String Variant."
                 )
                 variant_type = ua.VariantType.String
             inp = ua.Variant(value, variant_type)

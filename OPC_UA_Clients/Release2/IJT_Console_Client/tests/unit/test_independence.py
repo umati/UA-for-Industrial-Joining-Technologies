@@ -27,6 +27,4 @@ def test_no_cross_client_imports():
     for py_file in _source_files():
         source = py_file.read_text(encoding="utf-8")
         for forbidden in FORBIDDEN:
-            assert forbidden not in source, (
-                f"{py_file.name} references {forbidden} — clients must be self-contained"
-            )
+            assert forbidden not in source, f"{py_file.name} references {forbidden} — clients must be self-contained"

@@ -22,16 +22,12 @@ def _read_source(filename: str) -> str:
 def test_method_caller_uses_object_nodeid_param():
     """select_joint, enable_asset, start_selected_joining all use 'object_nodeid'."""
     src = _read_source("method_caller.py")
-    assert "object_nodeid" in src, (
-        "method_caller.py must use 'object_nodeid' parameter name — do NOT rename"
-    )
+    assert "object_nodeid" in src, "method_caller.py must use 'object_nodeid' parameter name — do NOT rename"
 
 
 def test_method_caller_uses_method_nodeid_param():
     src = _read_source("method_caller.py")
-    assert "method_nodeid" in src, (
-        "method_caller.py must use 'method_nodeid' parameter name"
-    )
+    assert "method_nodeid" in src, "method_caller.py must use 'method_nodeid' parameter name"
 
 
 def test_no_object_node_key_in_method_caller():
@@ -59,9 +55,7 @@ def test_opcua_client_uses_queue_size():
 def test_opcua_client_subscribe_events_uses_queuesize_kwarg():
     """subscribe_events() must pass queuesize= to cap memory usage."""
     src = _read_source("opcua_client.py")
-    assert "queuesize=" in src, (
-        "subscribe_events() call must pass queuesize= to prevent unbounded memory growth"
-    )
+    assert "queuesize=" in src, "subscribe_events() call must pass queuesize= to prevent unbounded memory growth"
 
 
 # ---------------------------------------------------------------------------

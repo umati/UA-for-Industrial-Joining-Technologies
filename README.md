@@ -23,3 +23,6 @@ The purpose of the **VDMA OPC UA Industrial Joining Technologies (IJT)** Working
    - **IJT Web Client:** OPC_UA_Clients/**Release2**/**IJT_Web_Client** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2/IJT_Web_Client)
    - **IJT Console Client:** OPC_UA_Clients/**Release2**/**IJT_Console_Client** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2/IJT_Console_Client)
    - **IJT Test Client:** OPC_UA_Clients/**Release2**/**IJT_Test_Client** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2/IJT_Test_Client)
+   - **IJT C# Client:** OPC_UA_Clients/**Release2**/**IJT_CSharp_Client** - [**LINK**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2/IJT_CSharp_Client)
+
+

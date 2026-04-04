@@ -29,10 +29,7 @@ _SKIP_DIRS = {"venv", ".venv", "env", ".env", "__pycache__", "node_modules", ".g
 
 def _all_py_files(root: Path) -> list[Path]:
     """All .py files in the project, excluding generated/dependency dirs."""
-    return [
-        f for f in root.rglob("*.py")
-        if not any(part in _SKIP_DIRS for part in f.parts)
-    ]
+    return [f for f in root.rglob("*.py") if not any(part in _SKIP_DIRS for part in f.parts)]
 
 
 def _tool_available(name: str) -> bool:
@@ -75,7 +72,9 @@ def test_pylint_passes_minimum_score():
     all_files = [str(f) for f in _all_py_files(_PROJECT_ROOT)]
     result = subprocess.run(
         [
-            sys.executable, "-m", "pylint",
+            sys.executable,
+            "-m",
+            "pylint",
             *all_files,
             "--fail-under=7.0",
             "--output-format=text",
@@ -86,8 +85,7 @@ def test_pylint_passes_minimum_score():
         cwd=str(_PROJECT_ROOT),
     )
     assert result.returncode == 0, (
-        f"pylint exited with code {result.returncode}.\n"
-        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        f"pylint exited with code {result.returncode}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
 
 
@@ -105,18 +103,19 @@ def test_bandit_no_high_severity_issues():
     result = subprocess.run(
         [
             "bandit",
-            "-r", str(_SRC_PYTHON),
-            "-ll",          # only MEDIUM and above
+            "-r",
+            str(_SRC_PYTHON),
+            "-ll",  # only MEDIUM and above
             "--exit-zero",  # don't fail on LOW — only care about return value
-            "-f", "txt",
+            "-f",
+            "txt",
         ],
         capture_output=True,
         text=True,
         cwd=str(_PROJECT_ROOT),
     )
     assert result.returncode == 0, (
-        f"bandit found HIGH/MEDIUM issues.\n"
-        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        f"bandit found HIGH/MEDIUM issues.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
 
 
@@ -139,8 +138,7 @@ def test_eslint_passes():
         cwd=str(_PROJECT_ROOT),
     )
     assert result.returncode == 0, (
-        f"ESLint failed (exit {result.returncode}).\n"
-        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        f"ESLint failed (exit {result.returncode}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
 
 
@@ -157,9 +155,19 @@ def test_no_unused_imports_in_source():
     """pylint must find no unused imports (W0611) across all project Python files."""
     all_files = [str(f) for f in _all_py_files(_PROJECT_ROOT)]
     result = subprocess.run(
-        [sys.executable, "-m", "pylint", *all_files,
-         "--disable=all", "--enable=W0611", "--score=no", "--output-format=text"],
-        capture_output=True, text=True, cwd=str(_PROJECT_ROOT)
+        [
+            sys.executable,
+            "-m",
+            "pylint",
+            *all_files,
+            "--disable=all",
+            "--enable=W0611",
+            "--score=no",
+            "--output-format=text",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(_PROJECT_ROOT),
     )
     assert result.returncode == 0, f"Unused imports found:\n{result.stdout}"
 
@@ -197,9 +205,7 @@ def test_no_empty_except_blocks():
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler):
-                if (len(node.body) == 1
-                        and isinstance(node.body[0], ast.Pass)
-                        and _is_broad_except(node)):
+                if len(node.body) == 1 and isinstance(node.body[0], ast.Pass) and _is_broad_except(node):
                     issues.append(f"{py_file}:{node.lineno}: empty except block")
     assert not issues, "Empty except blocks found:\n" + "\n".join(issues)
 
@@ -210,8 +216,11 @@ def test_no_empty_except_blocks():
 # ===========================================================================
 
 _TOKEN_SKIP = {
-    tokenize.NEWLINE, tokenize.NL, tokenize.COMMENT,
-    tokenize.INDENT, tokenize.DEDENT,
+    tokenize.NEWLINE,
+    tokenize.NL,
+    tokenize.COMMENT,
+    tokenize.INDENT,
+    tokenize.DEDENT,
 }
 
 
@@ -258,8 +267,14 @@ def test_no_implicit_string_concat_in_lists():
 # ===========================================================================
 
 _SKIP_METHOD_NAMES = {
-    "__init__", "__del__", "__set__", "__setattr__",
-    "__setitem__", "__delitem__", "__enter__", "__exit__",
+    "__init__",
+    "__del__",
+    "__set__",
+    "__setattr__",
+    "__setitem__",
+    "__delitem__",
+    "__enter__",
+    "__exit__",
 }
 
 
@@ -347,9 +362,7 @@ def test_no_mixed_return_statements():
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if _has_mixed_returns(node):
-                    issues.append(
-                        f"{py_file}:{node.lineno}: {node.name}() — mixed return statements"
-                    )
+                    issues.append(f"{py_file}:{node.lineno}: {node.name}() — mixed return statements")
     assert not issues, "Mixed return statements found:\n" + "\n".join(issues)
 
 
@@ -413,7 +426,7 @@ def _collect_all_imported_names(root: Path) -> set[str]:
         try:
             src = py_file.read_text(encoding="utf-8")
             tree = ast.parse(src)
-        except (SyntaxError, OSError):
+        except SyntaxError, OSError:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
@@ -485,15 +498,10 @@ def test_no_unused_global_declarations():
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 for name in _find_unused_global_decls(node):
-                    issues.append(
-                        f"{py_file}:{node.lineno}: "
-                        f"'{name}' declared global but never used in {node.name}()"
-                    )
+                    issues.append(f"{py_file}:{node.lineno}: '{name}' declared global but never used in {node.name}()")
         # Check module-level assignments that are never read (CodeQL py/unused-global-variable)
         for lineno, name in _find_unused_module_globals(source, tree, cross_file_exports):
-            issues.append(
-                f"{py_file}:{lineno}: module-level '{name}' assigned but never read"
-            )
+            issues.append(f"{py_file}:{lineno}: module-level '{name}' assigned but never read")
     assert not issues, "Unused global declarations:\n" + "\n".join(issues)
 
 
@@ -557,10 +565,7 @@ def test_no_multiple_definitions():
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 for name, lineno in _find_multiple_defs(node):
-                    issues.append(
-                        f"{py_file}:{lineno}: "
-                        f"'{name}' assigned again without use in {node.name}()"
-                    )
+                    issues.append(f"{py_file}:{lineno}: '{name}' assigned again without use in {node.name}()")
     assert not issues, "Multiple definitions found:\n" + "\n".join(issues)
 
 
@@ -576,10 +581,7 @@ def _find_unused_importorskip_assignments(source: str) -> list[str]:
     Excludes '_' which is the Python discard convention for intentionally unused values.
     """
     assignments = re.findall(r"^(\w+)\s*=\s*pytest\.importorskip\(", source, re.MULTILINE)
-    return [
-        name for name in assignments
-        if name != "_" and not re.search(r"\b" + re.escape(name) + r"\.", source)
-    ]
+    return [name for name in assignments if name != "_" and not re.search(r"\b" + re.escape(name) + r"\.", source)]
 
 
 def test_no_unused_importorskip_assignments():
@@ -593,10 +595,7 @@ def test_no_unused_importorskip_assignments():
     for py_file in _all_py_files(_PROJECT_ROOT):
         source = py_file.read_text(encoding="utf-8")
         for name in _find_unused_importorskip_assignments(source):
-            issues.append(
-                f"{py_file}: '{name} = pytest.importorskip(...)'"
-                f" — '{name}' never used as attribute access"
-            )
+            issues.append(f"{py_file}: '{name} = pytest.importorskip(...)' — '{name}' never used as attribute access")
     assert not issues, "Unused importorskip assignments:\n" + "\n".join(issues)
 
 
@@ -613,9 +612,19 @@ def test_no_unused_local_variables():
     """pylint must find no unused local variables (W0612) across all project Python files."""
     all_files = [str(f) for f in _all_py_files(_PROJECT_ROOT)]
     result = subprocess.run(
-        [sys.executable, "-m", "pylint", *all_files,
-         "--disable=all", "--enable=W0612", "--score=no", "--output-format=text"],
-        capture_output=True, text=True, cwd=str(_PROJECT_ROOT)
+        [
+            sys.executable,
+            "-m",
+            "pylint",
+            *all_files,
+            "--disable=all",
+            "--enable=W0612",
+            "--score=no",
+            "--output-format=text",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(_PROJECT_ROOT),
     )
     assert result.returncode == 0, f"Unused local variables found:\n{result.stdout}"
 

@@ -103,9 +103,7 @@ async def find_child_by_browse_name(
     return None
 
 
-async def browse_folder_instances(
-    folder_node: UANode, timeout: float = _BROWSE_TIMEOUT
-) -> list:
+async def browse_folder_instances(folder_node: UANode, timeout: float = _BROWSE_TIMEOUT) -> list:
     """
     Return a list of (browse_name_str, Node) tuples for all children of folder_node.
     browse_name_str is formatted as "{ns_index}:{Name}" (e.g. "3:MyController").
@@ -163,9 +161,7 @@ async def get_interface_types(node: UANode, ns_opc_ua: int = 0) -> list:
         return []  # Node has no HasInterface references or is unreachable
 
 
-async def has_interface(
-    node: UANode, ns_index: int, type_local_id: int, ns_opc_ua: int = 0
-) -> bool:
+async def has_interface(node: UANode, ns_index: int, type_local_id: int, ns_opc_ua: int = 0) -> bool:
     """
     Check whether node has a HasInterface reference pointing to the given type.
     ns_opc_ua defaults to 0 — guaranteed by OPC UA specification §8.2.3.
@@ -173,10 +169,7 @@ async def has_interface(
     target = ua.NodeId(type_local_id, ns_index)
     iface_types = await get_interface_types(node, ns_opc_ua)
     for nid in iface_types:
-        if (
-            nid.Identifier == target.Identifier
-            and nid.NamespaceIndex == target.NamespaceIndex
-        ):
+        if nid.Identifier == target.Identifier and nid.NamespaceIndex == target.NamespaceIndex:
             return True
     return False
 
@@ -198,9 +191,7 @@ async def get_associated_assets(node: UANode, ns_opc_ua: int = 0) -> list:
         return []  # Node has no AssociatedWith references or is unreachable
 
 
-async def get_children_by_reference(
-    node: UANode, ref_type_id: int, ns_opc_ua: int = 0
-) -> list:
+async def get_children_by_reference(node: UANode, ref_type_id: int, ns_opc_ua: int = 0) -> list:
     """
     Return Nodes reachable from node via the given reference type.
     ns_opc_ua defaults to 0 — guaranteed by OPC UA specification §8.2.3.
@@ -217,9 +208,7 @@ async def get_children_by_reference(
         return []  # Reference type not present on node or node is unreachable
 
 
-async def find_method_node(
-    parent: UANode, method_browse_name: str, method_ns_index: int
-) -> UANode:
+async def find_method_node(parent: UANode, method_browse_name: str, method_ns_index: int) -> UANode:
     """
     Find a method child of parent matching the given browse name and namespace index.
     Returns the method Node or None if not found.

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# NOTE: Web Client venv management library (fingerprint-based, cached).
+# Imported by run_regression.py and run_cross_client_regression.py.
+# For running tests, use run_all_tests.py at the Web Client root instead.
 import hashlib
 import json
 import os

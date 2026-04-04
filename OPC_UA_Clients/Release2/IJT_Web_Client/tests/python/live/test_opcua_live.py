@@ -39,6 +39,7 @@ from asyncua import ua
 # use the module-scoped opcua_client fixture without cross-loop I/O hangs.
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # asyncua _send_request timeout patch
 #
@@ -61,13 +62,13 @@ def _patch_asyncua_send_timeout() -> None:
 
     _orig = _uc.UaClient._send_request
 
-    async def _fixed(self, request, timeout=None,
-                     message_type=ua.MessageType.SecureMessage):
+    async def _fixed(self, request, timeout=None, message_type=ua.MessageType.SecureMessage):
         if timeout is None:
             timeout = self._timeout
         return await _orig(self, request, timeout, message_type)
 
     _uc.UaClient._send_request = _fixed
+
 
 _patch_asyncua_send_timeout()
 
@@ -94,19 +95,15 @@ def _port_open(host: str, port: int, timeout: float = 2.0) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
-    except (OSError, ConnectionRefusedError):
+    except OSError, ConnectionRefusedError:
         return False
 
 
 OPCUA_UP = _port_open(_OPCUA_HOST, _OPCUA_PORT)
 WS_UP = _port_open("localhost", _WS_PORT)
 
-skip_no_opcua = pytest.mark.skipif(
-    not OPCUA_UP, reason=f"OPC UA server not reachable at {OPCUA_ENDPOINT}"
-)
-skip_no_ws = pytest.mark.skipif(
-    not WS_UP, reason=f"Backend WebSocket not reachable at {WS_URL}"
-)
+skip_no_opcua = pytest.mark.skipif(not OPCUA_UP, reason=f"OPC UA server not reachable at {OPCUA_ENDPOINT}")
+skip_no_ws = pytest.mark.skipif(not WS_UP, reason=f"Backend WebSocket not reachable at {WS_URL}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared asyncua client fixture
@@ -176,6 +173,7 @@ class TestOpcuaDirectConnection:
     async def test_connect_and_disconnect(self):
         """Connection to the IJT server must succeed."""
         from asyncua import Client
+
         client = Client(OPCUA_ENDPOINT, timeout=30)
         await client.connect()
         assert client is not None
@@ -190,9 +188,7 @@ class TestOpcuaDirectConnection:
     async def test_namespaces_contain_ijt(self, opcua_client):
         """Server namespace array must contain the IJT namespace URI."""
         ns_array = await opcua_client.get_namespace_array()
-        assert any(IJT_NAMESPACE_URI in uri for uri in ns_array), (
-            f"IJT namespace not found. Available: {ns_array}"
-        )
+        assert any(IJT_NAMESPACE_URI in uri for uri in ns_array), f"IJT namespace not found. Available: {ns_array}"
 
     async def test_objects_node_is_browseable(self, opcua_client):
         """Objects (ns=0;i=85) must have at least one child node."""
@@ -209,6 +205,7 @@ class TestOpcuaDirectConnection:
     async def test_tightening_system_node_exists(self, opcua_client):
         """TighteningSystem node must exist under Objects."""
         from asyncua import ua
+
         _ = await opcua_client.get_namespace_index(IJT_NAMESPACE_URI)
         objects = await opcua_client.nodes.root.get_child(["0:Objects"])
         children = await objects.get_children()
@@ -220,7 +217,7 @@ class TestOpcuaDirectConnection:
                 if "TighteningSystem" in str(bn.Name):
                     ts_node = child
                     break
-            except (ua.UaError, OSError):
+            except ua.UaError, OSError:
                 continue
 
         assert ts_node is not None, "TighteningSystem node not found under Objects"
@@ -234,6 +231,7 @@ class TestOpcuaDirectConnection:
     async def test_browse_tightening_system_has_methods(self, opcua_client):
         """TighteningSystem must expose at least one Method node."""
         from asyncua import ua
+
         objects = await opcua_client.nodes.root.get_child(["0:Objects"])
         children = await objects.get_children()
 
@@ -257,6 +255,7 @@ class TestOpcuaDirectConnection:
     async def test_simulate_single_result_method_exists(self, opcua_client):
         """SimulateSingleResult method must be discoverable."""
         from asyncua import ua
+
         target_names = {"SimulateSingleResult", "SimulateJobResult"}
         found: set[str] = set()
 
@@ -282,9 +281,7 @@ class TestOpcuaDirectConnection:
                 for child in await node.get_children():
                     queue.append((child, depth + 1))
 
-        assert "SimulateSingleResult" in found, (
-            f"SimulateSingleResult not found. Found: {found}"
-        )
+        assert "SimulateSingleResult" in found, f"SimulateSingleResult not found. Found: {found}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -346,10 +343,12 @@ class TestOpcuaSubscription:
 
             parent = client.get_node(ua.NodeId(_SIM_R_ID, _NS, ua.NodeIdType.String))
             method = client.get_node(ua.NodeId(_SIM_SINGLE_ID, _NS, ua.NodeIdType.String))
-            with contextlib.suppress(ua.UaError, OSError):  # Method call may fail; we validate the event subscription below
+            with contextlib.suppress(
+                ua.UaError, OSError
+            ):  # Method call may fail; we validate the event subscription below
                 await parent.call_method(
                     method.nodeid,
-                    ua.Variant(0, ua.VariantType.UInt32),     # ResultType (SIMPLE_OK)
+                    ua.Variant(0, ua.VariantType.UInt32),  # ResultType (SIMPLE_OK)
                     ua.Variant(True, ua.VariantType.Boolean),  # IncludeTraces
                 )
 
@@ -373,9 +372,7 @@ class TestOpcuaSubscription:
 class TestBackendWebSocket:
     async def test_connect_command_succeeds(self, ws_client):
         resp = await ws_client.send_recv("connect to")
-        assert resp.get("data", {}).get("exception") is None, (
-            f"connect to returned exception: {resp['data']}"
-        )
+        assert resp.get("data", {}).get("exception") is None, f"connect to returned exception: {resp['data']}"
 
     async def test_namespaces_returns_list(self, ws_client):
         await ws_client.send_recv("connect to")
@@ -392,16 +389,12 @@ class TestBackendWebSocket:
         data = resp.get("data", {})
         ns = data.get("namespaces") if isinstance(data, dict) else data
         flat = " ".join(str(n) for n in ns)
-        assert "IJT" in flat or "ijt" in flat.lower() or "joining" in flat.lower(), (
-            f"IJT not found in namespaces: {ns}"
-        )
+        assert "IJT" in flat or "ijt" in flat.lower() or "joining" in flat.lower(), f"IJT not found in namespaces: {ns}"
 
     async def test_read_objects_node(self, ws_client):
         await ws_client.send_recv("connect to")
         resp = await ws_client.send_recv("read", {"nodeid": "ns=0;i=85"})
-        assert "exception" not in resp.get("data", {}), (
-            f"read returned exception: {resp['data']}"
-        )
+        assert "exception" not in resp.get("data", {}), f"read returned exception: {resp['data']}"
 
     async def test_browse_objects_returns_children(self, ws_client):
         await ws_client.send_recv("connect to")
@@ -416,9 +409,7 @@ class TestBackendWebSocket:
     async def test_subscribe_returns_success(self, ws_client):
         await ws_client.send_recv("connect to")
         resp = await ws_client.send_recv("subscribe")
-        assert "exception" not in resp.get("data", {}), (
-            f"subscribe returned exception: {resp['data']}"
-        )
+        assert "exception" not in resp.get("data", {}), f"subscribe returned exception: {resp['data']}"
 
     async def test_read_invalid_node_returns_exception_not_crash(self, ws_client):
         await ws_client.send_recv("connect to")
@@ -429,11 +420,14 @@ class TestBackendWebSocket:
 
     async def test_methodcall_invalid_node_returns_exception_not_crash(self, ws_client):
         await ws_client.send_recv("connect to")
-        resp = await ws_client.send_recv("methodcall", {
-            "objectnode": {"NamespaceIndex": 99, "Identifier": 999999},
-            "methodnode": {"NamespaceIndex": 99, "Identifier": 999998},
-            "arguments": [],
-        })
+        resp = await ws_client.send_recv(
+            "methodcall",
+            {
+                "objectnode": {"NamespaceIndex": 99, "Identifier": 999999},
+                "methodnode": {"NamespaceIndex": 99, "Identifier": 999998},
+                "arguments": [],
+            },
+        )
         assert resp is not None
         data = resp.get("data", {})
         assert "exception" in data, "Invalid methodcall must return exception field"
@@ -467,10 +461,12 @@ class TestBackendWebSocket:
     async def test_terminate_connection_graceful(self, ws_client):
         """Terminate must not raise or crash the backend."""
         await ws_client.send_recv("connect to")
-        payload = json.dumps({
-            "command": "terminate connection",
-            "endpoint": OPCUA_ENDPOINT,
-        })
+        payload = json.dumps(
+            {
+                "command": "terminate connection",
+                "endpoint": OPCUA_ENDPOINT,
+            }
+        )
         await ws_client.send(payload)
         await asyncio.sleep(0.5)
         # No exception = success
@@ -504,18 +500,14 @@ class TestResponseTimeSLA:
     async def test_browse_responds_within_5_seconds(self, ws_client):
         """browse(ns=0;i=85 Objects) must respond within 5 seconds once connected."""
         await ws_client.send_recv("connect to", timeout=30)
-        resp = await ws_client.send_recv(
-            "browse", {"nodeid": "ns=0;i=85"}, timeout=5
-        )
+        resp = await ws_client.send_recv("browse", {"nodeid": "ns=0;i=85"}, timeout=5)
         assert resp is not None
         assert isinstance(resp, dict)
 
     async def test_read_responds_within_3_seconds(self, ws_client):
         """read(ns=0;i=2258 CurrentTime) must respond within 3 seconds once connected."""
         await ws_client.send_recv("connect to", timeout=30)
-        resp = await ws_client.send_recv(
-            "read", {"nodeid": "ns=0;i=2258"}, timeout=3
-        )
+        resp = await ws_client.send_recv("read", {"nodeid": "ns=0;i=2258"}, timeout=3)
         assert resp is not None
         assert isinstance(resp, dict)
 

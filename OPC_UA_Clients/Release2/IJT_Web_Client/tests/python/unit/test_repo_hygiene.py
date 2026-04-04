@@ -80,34 +80,22 @@ class TestGitTrackedArtefacts:
     def test_no_pyc_files_tracked(self):
         """No .pyc files should be committed to git."""
         tracked = _git_ls_files("*.pyc")
-        assert tracked == [], (
-            "The following .pyc files are tracked by git:\n  "
-            + "\n  ".join(tracked)
-        )
+        assert tracked == [], "The following .pyc files are tracked by git:\n  " + "\n  ".join(tracked)
 
     def test_no_pycache_dirs_tracked(self):
         """No __pycache__/ directories should be tracked by git."""
         tracked = _git_ls_files("*/__pycache__/*")
-        assert tracked == [], (
-            "Files inside __pycache__/ are tracked by git:\n  "
-            + "\n  ".join(tracked)
-        )
+        assert tracked == [], "Files inside __pycache__/ are tracked by git:\n  " + "\n  ".join(tracked)
 
     def test_no_node_modules_tracked(self):
         """No node_modules/ content should be committed to git."""
         tracked = _git_ls_files("*/node_modules/*")
-        assert tracked == [], (
-            "Files inside node_modules/ are tracked by git:\n  "
-            + "\n  ".join(tracked)
-        )
+        assert tracked == [], "Files inside node_modules/ are tracked by git:\n  " + "\n  ".join(tracked)
 
     def test_no_pytest_cache_tracked(self):
         """No .pytest_cache/ content should be committed to git."""
         tracked = _git_ls_files("*/.pytest_cache/*")
-        assert tracked == [], (
-            "Files inside .pytest_cache/ are tracked by git:\n  "
-            + "\n  ".join(tracked)
-        )
+        assert tracked == [], "Files inside .pytest_cache/ are tracked by git:\n  " + "\n  ".join(tracked)
 
     def test_no_env_files_with_secrets_tracked(self):
         """Tracked .env files must not contain obvious secrets (passwords/tokens).
@@ -120,11 +108,11 @@ class TestGitTrackedArtefacts:
         real_env_files = [f for f in tracked if not f.endswith(".env.example")]
 
         secret_patterns = [
-            re.compile(r'password\s*=\s*\S+', re.IGNORECASE),
-            re.compile(r'secret\s*=\s*\S+', re.IGNORECASE),
-            re.compile(r'api_key\s*=\s*\S+', re.IGNORECASE),
-            re.compile(r'token\s*=\s*[A-Za-z0-9+/]{16,}', re.IGNORECASE),
-            re.compile(r'private_key\s*=\s*\S+', re.IGNORECASE),
+            re.compile(r"password\s*=\s*\S+", re.IGNORECASE),
+            re.compile(r"secret\s*=\s*\S+", re.IGNORECASE),
+            re.compile(r"api_key\s*=\s*\S+", re.IGNORECASE),
+            re.compile(r"token\s*=\s*[A-Za-z0-9+/]{16,}", re.IGNORECASE),
+            re.compile(r"private_key\s*=\s*\S+", re.IGNORECASE),
         ]
 
         for rel_path in real_env_files:
@@ -137,9 +125,7 @@ class TestGitTrackedArtefacts:
                 if stripped.startswith("#") or not stripped:
                     continue
                 for pat in secret_patterns:
-                    assert not pat.search(stripped), (
-                        f"Possible secret in tracked file {rel_path}: {stripped!r}"
-                    )
+                    assert not pat.search(stripped), f"Possible secret in tracked file {rel_path}: {stripped!r}"
 
     def test_no_code_workspace_files_tracked(self):
         """*.code-workspace files must not be committed (personal IDE workspace files)."""
@@ -222,13 +208,7 @@ class TestConnectionpointsDefault:
         import json
 
         path = (
-            _GIT_ROOT
-            / "OPC_UA_Clients"
-            / "Release2"
-            / "IJT_Web_Client"
-            / "src"
-            / "resources"
-            / "connectionpoints.json"
+            _GIT_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "src" / "resources" / "connectionpoints.json"
         )
         if not path.exists():
             pytest.skip(f"connectionpoints.json not found at {path}")
@@ -268,10 +248,10 @@ _SECRET_PATTERNS = [
 
 # Patterns that are legitimately in source files (not real secrets)
 _ALLOWLIST_PATTERNS = [
-    re.compile(r'password\s*=\s*["\']["\']'),       # empty string
-    re.compile(r'password\s*=\s*None'),
-    re.compile(r'password.*env.*get', re.IGNORECASE),  # from env var
-    re.compile(r'#.*password', re.IGNORECASE),       # comment
+    re.compile(r'password\s*=\s*["\']["\']'),  # empty string
+    re.compile(r"password\s*=\s*None"),
+    re.compile(r"password.*env.*get", re.IGNORECASE),  # from env var
+    re.compile(r"#.*password", re.IGNORECASE),  # comment
 ]
 
 
@@ -305,9 +285,8 @@ class TestNoHardcodedSecrets:
         for py_file in src_python.rglob("*.py"):
             all_violations.extend(self._scan_file(py_file))
 
-        assert not all_violations, (
-            "Possible hardcoded secrets found in Python source:\n  "
-            + "\n  ".join(all_violations)
+        assert not all_violations, "Possible hardcoded secrets found in Python source:\n  " + "\n  ".join(
+            all_violations
         )
 
 
@@ -370,12 +349,9 @@ class TestJsCodeQuality:
             "Use textContent = 'ESTABLISHED' instead to avoid CodeQL XSS warnings."
         )
         assert "innerHTML = 'LOST'" not in content, (
-            "connection-graphics.mjs still uses innerHTML = 'LOST'. "
-            "Use textContent = 'LOST' instead."
+            "connection-graphics.mjs still uses innerHTML = 'LOST'. Use textContent = 'LOST' instead."
         )
-        assert "textContent = 'ESTABLISHED'" in content, (
-            "connection-graphics.mjs must set textContent = 'ESTABLISHED'."
-        )
+        assert "textContent = 'ESTABLISHED'" in content, "connection-graphics.mjs must set textContent = 'ESTABLISHED'."
 
     def test_settings_labels_use_textcontent_not_innerhtml(self):
         """settings.mjs must use textContent not innerHTML for static label text.
@@ -388,11 +364,16 @@ class TestJsCodeQuality:
             pytest.skip(f"settings.mjs not found at {path}")
         content = path.read_text(encoding="utf-8")
         # None of the label assignments should use innerHTML any more
-        for label in ("ProductId", "Button 1 selection", "Button 2 selection",
-                      "Joint 1 identity", "Joint 2 identity", "Default view level"):
+        for label in (
+            "ProductId",
+            "Button 1 selection",
+            "Button 2 selection",
+            "Joint 1 identity",
+            "Joint 2 identity",
+            "Default view level",
+        ):
             assert f"innerHTML = '{label}" not in content, (
-                f"settings.mjs still uses innerHTML for label '{label}'. "
-                "Use textContent instead."
+                f"settings.mjs still uses innerHTML for label '{label}'. Use textContent instead."
             )
 
     def test_joint_demo_thead_uses_dom_not_innerhtml(self):
@@ -407,8 +388,7 @@ class TestJsCodeQuality:
             pytest.skip(f"joint-demo.mjs not found at {path}")
         content = path.read_text(encoding="utf-8")
         assert "thead.innerHTML" not in content, (
-            "joint-demo.mjs still uses thead.innerHTML. "
-            "Replace with DOM createElement/textContent/appendChild calls."
+            "joint-demo.mjs still uses thead.innerHTML. Replace with DOM createElement/textContent/appendChild calls."
         )
 
     def test_address_space_readandstructure_rejects_on_error(self):
@@ -440,6 +420,7 @@ class TestImplicitStringConcatenation:
         """No implicit string concat in source Python files (CodeQL py/implicit-string-concatenation)."""
         import io
         import tokenize
+
         _src_python = _PROJECT_ROOT / "src" / "python"
         issues = []
         for py_file in _src_python.rglob("*.py"):
@@ -449,8 +430,10 @@ class TestImplicitStringConcatenation:
             except tokenize.TokenError:
                 continue
             for i in range(len(tokens) - 1):
-                if (tokens[i].type == tokenize.STRING and
-                        tokens[i + 1].type == tokenize.STRING and
-                        tokens[i].end[0] <= tokens[i + 1].start[0]):
+                if (
+                    tokens[i].type == tokenize.STRING
+                    and tokens[i + 1].type == tokenize.STRING
+                    and tokens[i].end[0] <= tokens[i + 1].start[0]
+                ):
                     issues.append(f"{py_file}:{tokens[i].start[0]}: implicit string concat")
         assert not issues, "Implicit string concatenation found:\n" + "\n".join(issues)

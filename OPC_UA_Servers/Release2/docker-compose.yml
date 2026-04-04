@@ -18,14 +18,18 @@ services:
     image: opcua-ijt-server:latest
     container_name: opcua_ijt_server
     ports:
-      - "40451:40451"
+      - "${OPCUA_SERVER_PORT:-40451}:${OPCUA_SERVER_PORT:-40451}"
     environment:
       # Set to your host IP if remote OPC UA clients need to connect.
       # Leave blank to auto-detect (works for local / Docker Desktop setups).
       OPCUA_HOSTNAME: ${OPCUA_HOSTNAME:-}
+      # Override the server TCP port (default: 40451).
+      # Useful for running multiple isolated server instances in parallel.
+      # Example: OPCUA_SERVER_PORT=40452 docker compose up
+      OPCUA_SERVER_PORT: ${OPCUA_SERVER_PORT:-40451}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 40451 || exit 1"]
+      test: ["CMD-SHELL", "nc -z localhost ${OPCUA_SERVER_PORT:-40451} || exit 1"]
       interval: 10s
       timeout: 5s
       start_period: 20s

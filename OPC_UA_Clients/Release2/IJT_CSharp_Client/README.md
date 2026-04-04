@@ -2,6 +2,9 @@
 
 A C# OPC UA client example for the [IJT Companion Specification](https://github.com/umati/UA-for-Industrial-Joining-Technologies), built with the [OPC Foundation .NET Standard SDK](https://github.com/OPCFoundation/UA-.NETStandard).
 
+## Contact
+- **Author:** Mohit Agarwal: mohit.agarwal@atlascopco.com
+
 ## OPC UA Server
 
 Use the [OPC UA IJT Server Simulator](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2) to test this client.
@@ -12,6 +15,22 @@ Use the [OPC UA IJT Server Simulator](https://github.com/umati/UA-for-Industrial
 dotnet run
 ```
 Connects to `opc.tcp://localhost:40451` by default. Set `IJT_SERVER_URL` to change the endpoint.
+
+## Testing
+
+Run the full test suite — the OPC UA server is launched automatically if needed:
+
+```bash
+python run_all_tests.py
+```
+
+Requires .NET 10 SDK. The runner wraps `dotnet test` and `dotnet format`.
+
+You can also run the .NET test suite directly:
+
+```bash
+dotnet test IJT_CSharp_Client.sln
+```
 
 ## Examples
 

@@ -53,12 +53,8 @@ class OPCUAClient:
         await self.clear_old_logs()
         self.setup_client_metadata()
 
-        max_attempts = max(
-            1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT))
-        )
-        base_backoff = max(
-            0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT))
-        )
+        max_attempts = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT)))
+        base_backoff = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT)))
         max_backoff = max(
             base_backoff,
             float(os.getenv("OPCUA_CONNECT_MAX_DELAY_SEC", _CONNECT_MAX_DELAY_DEFAULT)),
@@ -69,32 +65,24 @@ class OPCUAClient:
                 await self.client.connect()
                 await self.client.load_type_definitions()
                 duration = time.time() - start_time
-                ijt_log.info(
-                    f"Connected to OPC UA server at {self.server_url} in {duration:.2f}s"
-                )
+                ijt_log.info(f"Connected to OPC UA server at {self.server_url} in {duration:.2f}s")
                 return
             except Exception as e:
-                ijt_log.warning(
-                    f"Connection attempt {attempt}/{max_attempts} failed for {self.server_url}: {e}"
-                )
+                ijt_log.warning(f"Connection attempt {attempt}/{max_attempts} failed for {self.server_url}: {e}")
                 ijt_log.error(traceback.format_exc())
                 if attempt < max_attempts:
                     backoff = min(max_backoff, base_backoff * (2 ** (attempt - 1)))
                     ijt_log.info(f"Retrying in {backoff:.1f} seconds...")
                     await asyncio.sleep(backoff)
                 else:
-                    ijt_log.error(
-                        f"All connection attempts failed for {self.server_url} after {max_attempts} tries."
-                    )
+                    ijt_log.error(f"All connection attempts failed for {self.server_url} after {max_attempts} tries.")
                     raise
 
     async def subscribe_to_events(self):
         try:
             # Handlers are created here (async context) so asyncio.create_task() works.
             self.handler_result_event = ResultEventHandler(self.server_url)
-            self.handler_joining_event = EventHandler(
-                None, self.server_url, self.client
-            )
+            self.handler_joining_event = EventHandler(None, self.server_url, self.client)
 
             root = self.client.get_root_node()
             server_node = await root.get_child(["0:Objects", "0:Server"])
@@ -159,9 +147,7 @@ class OPCUAClient:
                         await sub.delete()
                         ijt_log.info(f"{name} subscription deleted.")
                     except Exception as sub_err:
-                        ijt_log.warning(
-                            f"Failed to delete {name} subscription: {sub_err}"
-                        )
+                        ijt_log.warning(f"Failed to delete {name} subscription: {sub_err}")
                         ijt_log.error(traceback.format_exc())
 
             self.sub_result_event = None

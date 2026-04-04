@@ -3,6 +3,7 @@
 using Opc.Ua;
 using Opc.Ua.Client;
 using IJT_CSharp_Client.Helpers;
+using Microsoft.Extensions.Logging;
 
 namespace IJT_CSharp_Client.Client;
 
@@ -14,8 +15,9 @@ namespace IJT_CSharp_Client.Client;
 ///   <item>SubscribeResultVariable — monitor the live result variable via data-change subscription</item>
 /// </list>
 /// </summary>
-public sealed class ResultManagement
+public sealed class ResultManagement : IDisposable
 {
+    private readonly ILogger<ResultManagement> _log = IjtLog.For<ResultManagement>();
     private readonly IjtSession _s;
     private Subscription?       _resultVarSubscription;
 
@@ -41,11 +43,12 @@ public sealed class ResultManagement
 
     /// <summary>
     /// Calls <c>ResultManagement/GetLatestResult</c> (method NodeId 7001).
-    /// Output: [ResultHandle (uint32), Result (ExtensionObject)].
+    /// Output: [ResultHandle (uint32), Result (ExtensionObject), Error (int32)].
     /// </summary>
-    public void GetLatestResult()
+    /// <param name="timeoutMs">Timeout hint for the server in milliseconds (default 5000). Pass 0 for no estimate.</param>
+    public void GetLatestResult(int timeoutMs = 5000)
     {
-        Console.WriteLine("\n── GetLatestResult ──────────────────────────────────");
+        _log.LogInformation("\n── GetLatestResult ──────────────────────────────────");
 
         var objectId = GetResultManagementNode();
         var methodId = _s.IjtBaseMethodId(
@@ -53,18 +56,22 @@ public sealed class ResultManagement
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ ResultManagement node or method not found.");
+            _log.LogError("✗ ResultManagement node or method not found.");
             return;
         }
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId);
+            var outputs = _s.CallMethod(objectId, methodId, (int)timeoutMs);
             PrintResultOutputs(outputs);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ✗ GetLatestResult error: {ex.Message}");
+            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(GetLatestResult));
         }
     }
 
@@ -72,11 +79,13 @@ public sealed class ResultManagement
 
     /// <summary>
     /// Calls <c>ResultManagement/GetResultById</c> (method NodeId 7002).
-    /// Input: ResultId (string). Output: [ResultHandle (uint32), Result (ExtensionObject)].
+    /// Input: ResultId (string), Timeout (int32). Output: [ResultHandle (uint32), Result (ExtensionObject), Error (int32)].
     /// </summary>
-    public void GetResultById(string resultId)
+    /// <param name="resultId">The ResultId string to look up.</param>
+    /// <param name="timeoutMs">Timeout hint for the server in milliseconds (default 5000). Pass 0 for no estimate.</param>
+    public void GetResultById(string resultId, int timeoutMs = 5000)
     {
-        Console.WriteLine($"\n── GetResultById (id={resultId}) ──────────────────────");
+        _log.LogInformation("\n── GetResultById (id={ResultId}) ──────────────────────", resultId);
 
         var objectId = GetResultManagementNode();
         var methodId = _s.IjtBaseMethodId(
@@ -84,18 +93,22 @@ public sealed class ResultManagement
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ ResultManagement node or method not found.");
+            _log.LogError("✗ ResultManagement node or method not found.");
             return;
         }
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, resultId);
+            var outputs = _s.CallMethod(objectId, methodId, resultId, (int)timeoutMs);
             PrintResultOutputs(outputs);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ✗ GetResultById error: {ex.Message}");
+            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(GetResultById));
         }
     }
 
@@ -110,11 +123,11 @@ public sealed class ResultManagement
     {
         if (_resultVarSubscription != null)
         {
-            Console.WriteLine("  ⚠ Result variable subscription already active.");
+            _log.LogWarning("⚠ Result variable subscription already active.");
             return;
         }
 
-        Console.WriteLine("\n── Subscribing to Result variable ───────────────────");
+        _log.LogInformation("\n── Subscribing to Result variable ───────────────────");
 
         var rmNode = GetResultManagementNode();
 
@@ -134,7 +147,7 @@ public sealed class ResultManagement
 
         if (resultVarNode.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ Result variable node not found — skipping subscription.");
+            _log.LogError("✗ Result variable node not found — skipping subscription.");
             return;
         }
 
@@ -157,16 +170,35 @@ public sealed class ResultManagement
         _s.Session.AddSubscription(_resultVarSubscription);
         _resultVarSubscription.Create();
 
-        Console.WriteLine($"  ✓ Subscribed to Result variable ({resultVarNode}).");
+        _log.LogInformation("✓ Subscribed to Result variable ({NodeId}).", resultVarNode);
     }
 
-    private static void OnResultVariableChanged(MonitoredItem item, MonitoredItemNotificationEventArgs e)
+    private void OnResultVariableChanged(MonitoredItem item, MonitoredItemNotificationEventArgs e)
     {
         foreach (var value in item.DequeueValues())
         {
-            Console.WriteLine($"  [DATA] ResultVariable @ {DateTime.Now:HH:mm:ss.fff}  Status={value.StatusCode}");
-            if (value.Value != null)
-                Console.WriteLine($"    Value: {ExtensionObjectHelper.FormatVariantValue(value.Value)}");
+            _log.LogInformation("[DATA] ResultVariable changed @ {Time:HH:mm:ss.fff}  Status={Status}",
+                DateTime.Now, value.StatusCode);
+
+            if (value.Value is null) continue;
+
+            // Unwrap Variant → ExtensionObject → ResultDataType
+            var raw = value.Value is Variant v ? v.Value : value.Value;
+            var rd  = raw is ExtensionObject eo
+                ? eo.Body as UAModel.MachineryResult.ResultDataType
+                : raw as UAModel.MachineryResult.ResultDataType;
+
+            if (rd != null)
+            {
+                var text = IjtResultFormatter.FormatResult(rd, DateTime.UtcNow);
+                IjtFileLogger.WriteResult(text);
+                _log.LogInformation("  ► ResultVariable updated — full payload → {Path}",
+                    IjtFileLogger.ResultLogPath);
+            }
+            else
+            {
+                _log.LogInformation("  Value: {Value}", IjtJsonSerializer.Serialize(value.Value));
+            }
         }
     }
 
@@ -179,22 +211,31 @@ public sealed class ResultManagement
             _resultVarSubscription.Delete(silent: true);
             _s.Session.RemoveSubscription(_resultVarSubscription);
         }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+        }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ⚠ Subscription stop warning: {ex.Message}");
+            _log.LogWarning(ex, "⚠ Subscription stop warning");
         }
         finally
         {
+            _resultVarSubscription?.Dispose();
             _resultVarSubscription = null;
-            Console.WriteLine("  ✓ Result variable subscription stopped.");
+            _log.LogInformation("✓ Result variable subscription stopped.");
         }
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        StopResultVariableSubscription();
+        GC.SuppressFinalize(this);
     }
 
     // ── Output formatting ─────────────────────────────────────────────────────
 
     private static void PrintResultOutputs(IList<object> outputs)
-    {
-        if (outputs.Count == 0) { Console.WriteLine("  [DATA] No output returned."); return; }
-        ExtensionObjectHelper.PrintOutputArguments(outputs);
-    }
+        => IjtJsonSerializer.PrintMethodOutputs("Result", outputs);
 }

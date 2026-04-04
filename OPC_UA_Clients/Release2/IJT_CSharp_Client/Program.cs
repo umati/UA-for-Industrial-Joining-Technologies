@@ -2,194 +2,242 @@
 
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Configuration;
+using IJT_CSharp_Client.Helpers;
+using Microsoft.Extensions.Logging;
 
-// ── Cancellation ──────────────────────────────────────────────────────────────
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-Console.WriteLine("╔══════════════════════════════════════════════════╗");
-Console.WriteLine("║   IJT C# Client — OPC UA IJT Companion Spec     ║");
-Console.WriteLine("╚══════════════════════════════════════════════════╝");
+var _log = IjtLog.ForCategory("IJT.Client");
+var _subscribed = false;
 
-// ── Configuration ─────────────────────────────────────────────────────────────
+PrintBanner();
+
+// ── Configuration & connect ────────────────────────────────────────────────────
 var config = ClientConfig.FromEnvironment();
-Console.WriteLine($"  Server: {config.ServerUrl}");
 
-// ── Connect ───────────────────────────────────────────────────────────────────
 IjtSession? session;
 try
 {
+    _log.LogInformation("Connecting to {Url} …", config.ServerUrl);
     session = await IjtSession.ConnectAsync(config, cts.Token);
+}
+catch (Opc.Ua.ServiceResultException srex)
+{
+    _log.LogError("Connection failed [{Status}]: {Msg}", srex.StatusCode, srex.Message);
+    IjtLog.Shutdown(); return 1;
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"  ✗ Connection failed: {ex.Message}");
-    return 1;
+    _log.LogError(ex, "Connection failed");
+    IjtLog.Shutdown(); return 1;
 }
 
-// ── Main interaction ──────────────────────────────────────────────────────────
 await using (session)
 {
-    var resultMgmt = new ResultManagement(session);
-    var assetMgmt  = new AssetManagement(session);
-    var jpm        = new JoiningProcessManagement(session);
-    var eventSub   = new EventSubscriber(session);
+    using var resultMgmt = new ResultManagement(session);
+    using var assetMgmt  = new AssetManagement(session);
+    using var jpm        = new JoiningProcessManagement(session);
+    using var eventSub   = new EventSubscriber(session);
 
-    // Hook event subscriber to print results
+    // ── Wire up event handlers ─────────────────────────────────────────────────
     eventSub.OnResultReady += (_, e) =>
     {
-        Console.WriteLine(
-            $"\n  [EVENT] ResultReady | Id={e.ResultId} | " +
-            $"Status={e.OverallStatus} | Time={e.EventTime:HH:mm:ss}");
+        // One-liner to logger
+        _log.LogInformation("Result received | {Name} | Seq#{Seq} | {Class} | {Time:HH:mm:ss}",
+            e.Name ?? e.ResultId, e.SequenceNumber, e.Classification, e.EventTime);
+        _log.LogInformation("Result logged to: {Path}", IjtFileLogger.ResultLogPath);
+
+        // Full detail to log file (use full ResultDataType when available, fall back to event fields)
+        var text = e.Result is not null
+            ? IjtResultFormatter.FormatResult(e.Result, e.EventTime)
+            : IjtResultFormatter.FormatResultEventFields(
+                e.ResultId, e.Classification, e.Name, e.SequenceNumber, e.AssemblyType, e.EventTime);
+        IjtFileLogger.WriteResult(text);
     };
+
     eventSub.OnJoiningSystemEvent += (_, e) =>
     {
-        Console.WriteLine(
-            $"\n  [EVENT] JoiningSystem | Code={e.EventCode} | {e.EventText}");
+        // One-liner to logger
+        _log.LogInformation("System event | Code:{Code} | {Text} | {Time:HH:mm:ss}",
+            e.EventCode, e.EventText, e.EventTime);
+        _log.LogInformation("Event logged to: {Path}", IjtFileLogger.EventLogPath);
+
+        // Full detail to log file
+        var text = IjtEventFormatter.FormatJoiningSystemEvent(
+            e.EventCode, e.EventText, e.JoiningTechnology, e.EventTime,
+            e.AssociatedEntities, e.ReportedValues);
+        IjtFileLogger.WriteEvent(text);
     };
 
-    // ── Main menu loop ────────────────────────────────────────────────────────
+    // ── Main menu loop ─────────────────────────────────────────────────────────
     while (!cts.Token.IsCancellationRequested)
     {
-        PrintMenu();
+        PrintMenu(_subscribed, config.ServerUrl);
 
-        ConsoleKeyInfo keyInfo;
-        try { keyInfo = Console.ReadKey(intercept: true); }
-        catch (InvalidOperationException) { break; } // stdin redirected (non-interactive)
+        string raw;
+        try { raw = Console.ReadLine() ?? "0"; }
+        catch (InvalidOperationException) { break; }
 
-        switch (char.ToLowerInvariant(keyInfo.KeyChar))
+        var cmd = raw.Trim();
+
+        switch (cmd)
         {
-            // ── Event subscriptions ────────────────────────────────────────────
-            case '1':
+            // Events
+            case "1":
                 eventSub.Subscribe();
+                _subscribed = true;
+                _log.LogInformation("Subscribed to result and system events.");
+                _log.LogInformation("Result log: {P}", IjtFileLogger.ResultLogPath);
+                _log.LogInformation("Event  log: {P}", IjtFileLogger.EventLogPath);
                 break;
-
-            case '2':
+            case "2":
                 eventSub.Unsubscribe();
+                _subscribed = false;
                 break;
 
-            // ── Result Management ─────────────────────────────────────────────
-            case '3':
+            // Results
+            case "3":
                 resultMgmt.GetLatestResult();
                 break;
-
-            case '4':
-                Console.Write("\n  Enter ResultId: ");
-                var rid = Console.ReadLine() ?? "";
-                resultMgmt.GetResultById(rid);
+            case "4":
+            {
+                var rid = Prompt("Result ID");
+                if (rid != null) resultMgmt.GetResultById(rid);
                 break;
-
-            case '5':
+            }
+            case "5":
                 resultMgmt.SubscribeResultVariable();
                 break;
 
-            // ── Asset Management ──────────────────────────────────────────────
-            case '6':
-                Console.Write("\n  Enter ProductInstanceUri: ");
-                var uri = Console.ReadLine() ?? "";
-                Console.Write("  Enable? (y/n): ");
-                var en = (Console.ReadLine() ?? "y").Trim().ToLowerInvariant() == "y";
-                assetMgmt.EnableAsset(uri, en);
+            // Asset Management
+            case "6":
+            {
+                var uri = Prompt("ProductInstance URI");
+                if (uri is null) break;
+                Console.Write("  Enable? [Y/n]: ");
+                var ynRaw = (Console.ReadLine() ?? "y").Trim();
+                // Reject pathologically long input; default to enable
+                var yn = ynRaw.Length > 10 ? "y" : ynRaw;
+                assetMgmt.EnableAsset(uri, !yn.Equals("n", StringComparison.OrdinalIgnoreCase));
                 break;
-
-            case '7':
-                Console.Write("\n  Enter ProductInstanceUri: ");
-                var piUri = Console.ReadLine() ?? "";
-                assetMgmt.SendTextIdentifiers(piUri, ["ID-001", "Batch-2024"]);
+            }
+            case "7":
+            {
+                var uri = Prompt("ProductInstance URI");
+                if (uri != null) assetMgmt.SendTextIdentifiers(uri, ["ID-001", "Batch-2024"]);
                 break;
-
-            case '8':
-                Console.Write("\n  Enter ProductInstanceUri for GetIdentifiers: ");
-                var piUri2 = Console.ReadLine() ?? "";
-                assetMgmt.GetIdentifiers(piUri2);
+            }
+            case "8":
+            {
+                var uri = Prompt("ProductInstance URI");
+                if (uri != null) assetMgmt.GetIdentifiers(uri);
                 break;
-
-            case '9':
-                Console.Write("\n  Enter ProductInstanceUri for ResetIdentifiers: ");
-                var piUri3 = Console.ReadLine() ?? "";
-                assetMgmt.ResetIdentifiers(piUri3);
+            }
+            case "9":
+            {
+                var uri = Prompt("ProductInstance URI");
+                if (uri != null) assetMgmt.ResetIdentifiers(uri);
                 break;
-
-            case 'a':
+            }
+            case "10":
                 assetMgmt.SubscribeAssetVariables();
                 break;
 
-            // ── Joining Process Management ────────────────────────────────────
-            case 'b':
+            // Joining Process
+            case "11":
                 jpm.GetJoiningProcessList();
                 break;
-
-            case 'c':
-                Console.Write("\n  Enter JoiningProcessId: ");
-                var jpId = Console.ReadLine() ?? "";
-                Console.Write("  SelectionName (optional): ");
-                var snm = Console.ReadLine() ?? "";
-                jpm.SelectJoiningProcess(jpId, selectionName: snm);
+            case "12":
+            {
+                var id   = Prompt("Joining Process ID");
+                if (id is null) break;
+                var name = Prompt("Selection name (optional, press Enter to skip)") ?? "";
+                jpm.SelectJoiningProcess(id, selectionName: name);
                 break;
-
-            case 'd':
+            }
+            case "13":
                 jpm.GetSelectedJoiningProgram();
                 break;
 
-            // ── SendIdentifiers demo ──────────────────────────────────────────
-            case 'e':
-                Console.Write("\n  Enter ProductInstanceUri: ");
-                var piUri4 = Console.ReadLine() ?? "";
-                _ = piUri4; // ProductInstanceUri not used by SendIdentifiers directly
+            // Identifiers demo
+            case "14":
+            {
                 var entities = new List<UAModel.IJTBase.EntityDataType>
                 {
-                    new UAModel.IJTBase.EntityDataType
-                    {
-                        Name          = "Batch-A",
-                        Description   = "Production batch A",
-                        EntityId      = "ENT-001",
-                        EntityOriginId = "",
-                        IsExternal    = false,
-                        EntityType    = 0,
-                    }
+                    new() { Name = "Batch-A", EntityId = "ENT-001", IsExternal = false, EntityType = 0 }
                 };
                 assetMgmt.SendIdentifiers(entities);
                 break;
+            }
 
-            case 'q':
+            case "0":
                 cts.Cancel();
                 break;
 
             default:
-                // Unknown key — just re-display menu
+                _log.LogWarning("Unknown command '{Cmd}'. Enter a number from the menu.", cmd);
                 break;
         }
     }
 }
 
-Console.WriteLine("\n  Disconnected. Goodbye.");
+_log.LogInformation("Disconnected. Goodbye.");
+IjtLog.Shutdown();
 return 0;
 
-// ── Menu ──────────────────────────────────────────────────────────────────────
-static void PrintMenu()
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+static string? Prompt(string label, int maxLen = 256)
 {
-    Console.WriteLine(@"
-┌─────────────────────────────────────────────────────────┐
-│  Events                                                  │
-│  [1] Subscribe to Result + JoiningSystem Events          │
-│  [2] Unsubscribe from Events                             │
-│  Result Management                                       │
-│  [3] GetLatestResult                                     │
-│  [4] GetResultById                                       │
-│  [5] Subscribe ResultVariable                            │
-│  Asset Management                                        │
-│  [6] EnableAsset                                         │
-│  [7] SendTextIdentifiers (demo)                          │
-│  [8] GetIdentifiers                                      │
-│  [9] ResetIdentifiers                                    │
-│  [A] Subscribe Asset Variables (Controller/Tool)         │
-│  Joining Process Management                              │
-│  [B] GetJoiningProcessList                               │
-│  [C] SelectJoiningProcess                                │
-│  [D] GetSelectedJoiningProgram                           │
-│  SendIdentifiers                                         │
-│  [E] SendIdentifiers (EntityDataType demo)               │
-│  [Q] Quit                                                │
-└─────────────────────────────────────────────────────────┘
-  Choice: ");
+    Console.Write($"  {label}: ");
+    var v = Console.ReadLine()?.Trim();
+    if (string.IsNullOrWhiteSpace(v)) return null;
+    if (v.Length > maxLen) { Console.WriteLine($"  Input too long (max {maxLen})."); return null; }
+    return v;
+}
+
+static void PrintBanner()
+{
+    Console.WriteLine();
+    Console.WriteLine("  ╔══════════════════════════════════════════════════╗");
+    Console.WriteLine("  ║   IJT OPC UA Client  —  C# Reference Example    ║");
+    Console.WriteLine("  ║   OPC UA for Industrial Joining Technologies     ║");
+    Console.WriteLine("  ╚══════════════════════════════════════════════════╝");
+    Console.WriteLine();
+}
+
+static void PrintMenu(bool subscribed, string serverUrl)
+{
+    var subStatus = subscribed ? "[active]" : "[inactive]";
+    Console.WriteLine($"""
+
+  Server: {serverUrl}
+  ┌──────────────────────────────────────────────────┐
+  │  EVENTS  (subscription: {subStatus,-10})              │
+  │   1  Subscribe to Result + System events          │
+  │   2  Unsubscribe                                  │
+  │                                                   │
+  │  RESULT MANAGEMENT                                │
+  │   3  Get latest result                            │
+  │   4  Get result by ID                             │
+  │   5  Subscribe result variable                    │
+  │                                                   │
+  │  ASSET MANAGEMENT                                 │
+  │   6  Enable / disable asset                       │
+  │   7  Send text identifiers (demo)                 │
+  │   8  Get identifiers                              │
+  │   9  Reset identifiers                            │
+  │  10  Subscribe asset variables                    │
+  │                                                   │
+  │  JOINING PROCESS                                  │
+  │  11  Get joining process list                     │
+  │  12  Select joining process                       │
+  │  13  Get selected joining program                 │
+  │  14  Send identifiers (EntityDataType demo)       │
+  │                                                   │
+  │   0  Quit                                         │
+  └──────────────────────────────────────────────────┘
+  """);
+    Console.Write("  Command: ");
 }

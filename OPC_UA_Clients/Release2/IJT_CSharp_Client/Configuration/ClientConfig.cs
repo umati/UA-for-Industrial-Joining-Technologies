@@ -22,19 +22,24 @@ public sealed class ClientConfig
     /// When true the client auto-accepts server certificates (development only).
     /// Set to false in production and manage the trust store explicitly.
     /// </summary>
-    public bool AutoAcceptServerCertificate { get; init; } = true;
+    public bool AutoAcceptServerCertificate { get; init; } = false;
 
     /// <summary>
     /// Reads overrides from well-known environment variables so the client can be
     /// configured without recompiling:
     /// <list type="bullet">
-    ///   <item>IJT_SERVER_URL</item>
-    ///   <item>IJT_APP_NAME</item>
+    ///   <item>IJT_SERVER_URL  — OPC UA server endpoint URL</item>
+    ///   <item>IJT_APP_NAME    — application display name sent to the server</item>
+    ///   <item>IJT_AUTO_ACCEPT — set to "true" to accept untrusted certificates (dev only)</item>
+    ///   <item>IJT_LOG_LEVEL   — e.g. "Debug", "Information", "Warning", "Error"</item>
     /// </list>
     /// </summary>
     public static ClientConfig FromEnvironment() => new()
     {
-        ServerUrl        = Environment.GetEnvironmentVariable("IJT_SERVER_URL")  ?? "opc.tcp://localhost:40451",
-        ApplicationName  = Environment.GetEnvironmentVariable("IJT_APP_NAME")    ?? "IJT CSharp Client",
+        ServerUrl                   = Environment.GetEnvironmentVariable("IJT_SERVER_URL") ?? "opc.tcp://localhost:40451",
+        ApplicationName             = Environment.GetEnvironmentVariable("IJT_APP_NAME")   ?? "IJT CSharp Client",
+        AutoAcceptServerCertificate = string.Equals(
+            Environment.GetEnvironmentVariable("IJT_AUTO_ACCEPT"), "true",
+            StringComparison.OrdinalIgnoreCase),
     };
 }

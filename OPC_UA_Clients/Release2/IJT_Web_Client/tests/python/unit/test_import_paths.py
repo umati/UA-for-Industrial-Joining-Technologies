@@ -31,12 +31,7 @@ def _collect_mjs_files() -> list[Path]:
 
 def _collect_directories() -> list[Path]:
     """All directories under src/ (excluding hidden and __pycache__)."""
-    return [
-        p for p in _SRC_DIR.rglob("*")
-        if p.is_dir()
-        and not p.name.startswith(".")
-        and p.name != "__pycache__"
-    ]
+    return [p for p in _SRC_DIR.rglob("*") if p.is_dir() and not p.name.startswith(".") and p.name != "__pycache__"]
 
 
 # ===========================================================================
@@ -54,8 +49,7 @@ def test_all_mjs_filenames_are_kebab_case():
 
     assert not violations, (
         "The following .mjs files have non-kebab/non-lowercase names "
-        "(will break case-sensitive Linux imports):\n  "
-        + "\n  ".join(violations)
+        "(will break case-sensitive Linux imports):\n  " + "\n  ".join(violations)
     )
 
 
@@ -74,8 +68,7 @@ def test_all_src_directories_are_kebab_case():
 
     assert not violations, (
         "The following directories have non-kebab/non-lowercase names "
-        "(will break case-sensitive Linux imports):\n  "
-        + "\n  ".join(violations)
+        "(will break case-sensitive Linux imports):\n  " + "\n  ".join(violations)
     )
 
 
@@ -87,12 +80,8 @@ def test_all_src_directories_are_kebab_case():
 def test_vitest_alias_ijt_support_exists():
     """The 'ijt-support' vitest alias must point to a real directory on disk."""
     alias_target = _SRC_DIR / "javascripts" / "ijt-support"
-    assert alias_target.exists(), (
-        f"vitest alias 'ijt-support' points to {alias_target} which does not exist"
-    )
-    assert alias_target.is_dir(), (
-        f"vitest alias 'ijt-support' target {alias_target} is not a directory"
-    )
+    assert alias_target.exists(), f"vitest alias 'ijt-support' points to {alias_target} which does not exist"
+    assert alias_target.is_dir(), f"vitest alias 'ijt-support' target {alias_target} is not a directory"
 
 
 def test_vitest_config_exists():
@@ -123,6 +112,4 @@ def test_all_python_module_filenames_are_snake_case():
         if not _snake_case_re.match(stem):
             violations.append(str(path.relative_to(_PROJECT_ROOT)))
 
-    assert not violations, (
-        "Python files must use snake_case naming:\n  " + "\n  ".join(violations)
-    )
+    assert not violations, "Python files must use snake_case naming:\n  " + "\n  ".join(violations)

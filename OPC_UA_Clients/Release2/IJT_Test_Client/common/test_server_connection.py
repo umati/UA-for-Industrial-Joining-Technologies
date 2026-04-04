@@ -24,9 +24,7 @@ async def test_server_reachable(session_client):
 async def test_server_supports_opc_ua_binary(session_client):
     """Active server endpoint must use the opc.tcp:// transport scheme."""
     server_url = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
-    assert server_url.startswith("opc.tcp://"), (
-        f"Expected opc.tcp:// transport, got URL: {server_url}"
-    )
+    assert server_url.startswith("opc.tcp://"), f"Expected opc.tcp:// transport, got URL: {server_url}"
 
 
 async def test_load_data_type_definitions_succeeds(opcua_client):
@@ -34,6 +32,4 @@ async def test_load_data_type_definitions_succeeds(opcua_client):
     try:
         await opcua_client.load_data_type_definitions()
     except Exception as exc:
-        pytest.fail(
-            f"load_data_type_definitions() raised an unexpected exception: {exc}"
-        )
+        pytest.fail(f"load_data_type_definitions() raised an unexpected exception: {exc}")

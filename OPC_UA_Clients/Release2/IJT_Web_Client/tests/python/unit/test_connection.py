@@ -218,11 +218,13 @@ async def test_methodcall_returns_exception_when_not_connected():
     conn = _make_connection()
 
     with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=False)):
-        result = await conn.methodcall({
-            "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-            "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateJobResult"},
-            "arguments": [],
-        })
+        result = await conn.methodcall(
+            {
+                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateJobResult"},
+                "arguments": [],
+            }
+        )
 
     assert "exception" in result
 
@@ -258,11 +260,13 @@ async def test_methodcall_valid_keys_connected_reaches_get_node():
 
     with patch("python.connection.serialize_full_event", return_value=[]):
         with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
-            result = await conn.methodcall({
-                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-                "arguments": [],
-            })
+            result = await conn.methodcall(
+                {
+                    "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                    "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                    "arguments": [],
+                }
+            )
 
     assert mock_client.get_node.call_count == 2
     assert "output" in result
@@ -299,11 +303,13 @@ async def test_methodcall_string_argument_type_mapping():
 
     with patch("python.connection.serialize_full_event", return_value=[]):
         with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
-            result = await conn.methodcall({
-                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-                "arguments": [{"dataType": 12, "value": "hello"}],
-            })
+            result = await conn.methodcall(
+                {
+                    "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                    "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                    "arguments": [{"dataType": 12, "value": "hello"}],
+                }
+            )
 
     assert "output" in result
     assert len(captured) == 1
@@ -339,17 +345,17 @@ async def test_methodcall_uint32_negative_value_abs_applied():
 
     with patch("python.connection.serialize_full_event", return_value=[]):
         with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
-            result = await conn.methodcall({
-                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-                "arguments": [{"dataType": 7, "value": -42}],
-            })
+            result = await conn.methodcall(
+                {
+                    "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                    "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                    "arguments": [{"dataType": 7, "value": -42}],
+                }
+            )
 
     assert "output" in result
     assert len(captured) == 1
-    assert captured[0].Value >= 0, (
-        f"Expected non-negative UInt32 value after abs(), got {captured[0].Value}"
-    )
+    assert captured[0].Value >= 0, f"Expected non-negative UInt32 value after abs(), got {captured[0].Value}"
 
 
 @pytest.mark.asyncio
@@ -382,11 +388,13 @@ async def test_methodcall_localized_text_dict_converted_to_ua_type():
 
     with patch("python.connection.serialize_full_event", return_value=[]):
         with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
-            result = await conn.methodcall({
-                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-                "arguments": [{"dataType": 21, "value": {"Text": "Hello", "Locale": "en"}}],
-            })
+            result = await conn.methodcall(
+                {
+                    "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                    "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                    "arguments": [{"dataType": 21, "value": {"Text": "Hello", "Locale": "en"}}],
+                }
+            )
 
     assert "output" in result
     assert len(captured) == 1
@@ -416,11 +424,13 @@ async def test_methodcall_argument_count_mismatch_logs_but_continues():
 
     with patch("python.connection.serialize_full_event", return_value=[]):
         with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
-            result = await conn.methodcall({
-                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-                "arguments": [],  # 0 provided, 1 expected — mismatch
-            })
+            result = await conn.methodcall(
+                {
+                    "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                    "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                    "arguments": [],  # 0 provided, 1 expected — mismatch
+                }
+            )
 
     assert "output" in result or "exception" in result
     assert "NoneType" not in result.get("exception", "")
@@ -432,9 +442,7 @@ async def test_methodcall_missing_input_arguments_node_returns_exception():
     conn = _make_connection()
 
     mock_method = MagicMock()
-    mock_method.get_child = AsyncMock(
-        side_effect=Exception("BadNoMatch: InputArguments not found")
-    )
+    mock_method.get_child = AsyncMock(side_effect=Exception("BadNoMatch: InputArguments not found"))
 
     mock_obj = MagicMock()
     mock_client = MagicMock()
@@ -442,11 +450,13 @@ async def test_methodcall_missing_input_arguments_node_returns_exception():
     conn.client = mock_client
 
     with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
-        result = await conn.methodcall({
-            "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-            "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-            "arguments": [],
-        })
+        result = await conn.methodcall(
+            {
+                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                "arguments": [],
+            }
+        )
 
     assert "exception" in result
     assert "NoneType" not in result["exception"]
@@ -481,11 +491,13 @@ async def test_methodcall_array_argument_creates_list_variant():
 
     with patch("python.connection.serialize_full_event", return_value=[]):
         with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
-            result = await conn.methodcall({
-                "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
-                "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
-                "arguments": [{"dataType": 12, "value": ["a", "b", "c"]}],
-            })
+            result = await conn.methodcall(
+                {
+                    "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                    "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateSingleResult"},
+                    "arguments": [{"dataType": 12, "value": ["a", "b", "c"]}],
+                }
+            )
 
     assert "output" in result
     assert len(captured) == 1

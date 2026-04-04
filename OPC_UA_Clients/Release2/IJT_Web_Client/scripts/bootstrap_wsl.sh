@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# NOTE: System-level WSL bootstrap (apt, Python 3.14, Node 24).
+# Runs once per machine to provision OS dependencies — not related to the
+# Python-level venv management in venv_bootstrap.py or ijt_utils.py.
 set -euo pipefail
 
 # Default: resolve relative to this script so it works in any clone location.

@@ -32,6 +32,7 @@ import setup_project as sp
 # _is_endpoint_reachable  (delegates to network_utils.endpoint_reachable)
 # =============================================================================
 
+
 def test_is_endpoint_reachable_returns_true(monkeypatch):
     monkeypatch.setattr(sp, "endpoint_reachable", lambda ep, timeout=1.0: True)
     assert sp._is_endpoint_reachable("opc.tcp://localhost:40451") is True
@@ -50,6 +51,7 @@ def test_is_endpoint_reachable_handles_unreachable(monkeypatch):
 # =============================================================================
 # _is_port_in_use
 # =============================================================================
+
 
 def test_is_port_in_use_true_when_connection_succeeds(monkeypatch):
     mock_sock = MagicMock()
@@ -72,6 +74,7 @@ def test_is_port_in_use_false_when_connection_refused(monkeypatch):
 # =============================================================================
 # _extract_simulator_zip_if_needed
 # =============================================================================
+
 
 def test_extract_skipped_when_simulator_dir_exists(tmp_path, monkeypatch):
     sim_dir = tmp_path / "sim"
@@ -105,6 +108,7 @@ def test_extract_logs_warning_on_bad_zip(tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
     monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
     import logging
+
     with caplog.at_level(logging.WARNING, logger="setup_project"):
         sp._extract_simulator_zip_if_needed()
     assert any("Failed to extract" in r.message for r in caplog.records)
@@ -113,6 +117,7 @@ def test_extract_logs_warning_on_bad_zip(tmp_path, monkeypatch, caplog):
 def test_extract_skipped_when_dir_is_newer_than_zip(tmp_path, monkeypatch):
     """Dir mtime > zip mtime → already up-to-date, no re-extraction."""
     import os
+
     sim_dir = tmp_path / "sim"
     sim_dir.mkdir()
     zip_path = tmp_path / "sim.zip"
@@ -130,6 +135,7 @@ def test_extract_skipped_when_dir_is_newer_than_zip(tmp_path, monkeypatch):
 def test_extract_replaces_dir_when_zip_is_newer(tmp_path, monkeypatch):
     """Zip mtime > dir mtime → old dir removed, contents re-extracted."""
     import os
+
     sim_dir = tmp_path / "sim"
     sim_dir.mkdir()
     (sim_dir / "old_file.txt").write_text("stale")
@@ -150,6 +156,7 @@ def test_extract_replaces_dir_logs_info_for_newer_zip(tmp_path, monkeypatch, cap
     """Info message is emitted when a newer ZIP triggers a folder replacement."""
     import logging
     import os
+
     sim_dir = tmp_path / "sim"
     sim_dir.mkdir()
     zip_path = tmp_path / "sim.zip"
@@ -167,6 +174,7 @@ def test_extract_replaces_dir_logs_info_for_newer_zip(tmp_path, monkeypatch, cap
 # =============================================================================
 # _find_simulator_executable
 # =============================================================================
+
 
 def test_find_simulator_returns_none_when_dir_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(sp, "SIMULATOR_DIR", tmp_path / "nonexistent")
@@ -203,22 +211,19 @@ def test_find_simulator_returns_none_when_no_exe(tmp_path, monkeypatch):
 # _ensure_opc_server_running — all branches
 # =============================================================================
 
-class TestEnsureOpcServerRunning:
 
+class TestEnsureOpcServerRunning:
     def test_returns_true_when_already_reachable(self, monkeypatch):
         monkeypatch.setattr(sp, "endpoint_reachable", lambda ep, timeout=1.0: True)
-        assert sp._ensure_opc_server_running(
-            "opc.tcp://localhost:40451", allow_launch=True, context="test"
-        ) is True
+        assert sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="test") is True
 
     def test_wsl_returns_false_and_logs_warning(self, monkeypatch, caplog):
         monkeypatch.setattr(sp, "endpoint_reachable", lambda ep, timeout=1.0: False)
         monkeypatch.setattr(sp, "IS_WSL", True)
         import logging
+
         with caplog.at_level(logging.WARNING, logger="setup_project"):
-            result = sp._ensure_opc_server_running(
-                "opc.tcp://localhost:40451", allow_launch=True, context="WSL-test"
-            )
+            result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="WSL-test")
         assert result is False
         assert any("WSL" in r.message for r in caplog.records)
 
@@ -229,9 +234,7 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: None)
         monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda ep, **kw: False)
-        result = sp._ensure_opc_server_running(
-            "opc.tcp://localhost:40451", allow_launch=True, context="docker-test"
-        )
+        result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="docker-test")
         assert result is False
 
     def test_allow_launch_false_skips_launch(self, monkeypatch):
@@ -242,9 +245,7 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: Path("fake.exe"))
         monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda ep, **kw: False)
         monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: launched.append(True))
-        sp._ensure_opc_server_running(
-            "opc.tcp://localhost:40451", allow_launch=False, context="no-launch"
-        )
+        sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=False, context="no-launch")
         assert not launched
 
     def test_auto_launch_succeeds(self, monkeypatch, tmp_path):
@@ -258,9 +259,7 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: exe)
         monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: popen_calls.append(a[0]))
         monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda ep, **kw: True)
-        result = sp._ensure_opc_server_running(
-            "opc.tcp://localhost:40451", allow_launch=True, context="auto-launch"
-        )
+        result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="auto-launch")
         assert result is True
         assert len(popen_calls) == 1
 
@@ -274,9 +273,7 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: exe)
         monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: None)
         monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda ep, **kw: False)
-        result = sp._ensure_opc_server_running(
-            "opc.tcp://localhost:40451", allow_launch=True, context="launch-timeout"
-        )
+        result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="launch-timeout")
         assert result is False
 
     def test_auto_launch_no_exe_found(self, monkeypatch):
@@ -286,9 +283,7 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: None)
         monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda ep, **kw: False)
-        result = sp._ensure_opc_server_running(
-            "opc.tcp://localhost:40451", allow_launch=True, context="no-exe"
-        )
+        result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="no-exe")
         assert result is False
 
     def test_server_becomes_reachable_without_launch(self, monkeypatch):
@@ -297,9 +292,7 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "IS_DOCKER", False)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: None)
         monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda ep, **kw: True)
-        result = sp._ensure_opc_server_running(
-            "opc.tcp://localhost:40451", allow_launch=False, context="wait-ready"
-        )
+        result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=False, context="wait-ready")
         assert result is True
 
     def test_popen_exception_handled_gracefully(self, monkeypatch, tmp_path, caplog):
@@ -313,9 +306,11 @@ class TestEnsureOpcServerRunning:
 
         def _bad_popen(*a, **kw):
             raise OSError("Access denied")
+
         monkeypatch.setattr(subprocess, "Popen", _bad_popen)
         monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda ep, **kw: False)
         import logging
+
         with caplog.at_level(logging.WARNING, logger="setup_project"):
             result = sp._ensure_opc_server_running(
                 "opc.tcp://localhost:40451", allow_launch=True, context="popen-error"
@@ -328,10 +323,11 @@ class TestEnsureOpcServerRunning:
 # _is_runtime_ready — venv scenarios
 # =============================================================================
 
-class TestIsRuntimeReady:
 
-    def _patch_basics(self, monkeypatch, tmp_path, *, venv_exists=True,
-                      npm=True, npx=True, deps_ok=True, age_days=1, docker=False):
+class TestIsRuntimeReady:
+    def _patch_basics(
+        self, monkeypatch, tmp_path, *, venv_exists=True, npm=True, npx=True, deps_ok=True, age_days=1, docker=False
+    ):
         venv = tmp_path / "venv"
         if venv_exists:
             venv.mkdir()
@@ -346,7 +342,10 @@ class TestIsRuntimeReady:
         if deps_ok:
             monkeypatch.setattr(sp, "_run_command", lambda cmd, **kw: None)
         else:
-            def _fail(*a, **kw): raise Exception("missing dep")
+
+            def _fail(*a, **kw):
+                raise Exception("missing dep")
+
             monkeypatch.setattr(sp, "_run_command", _fail)
         monkeypatch.setattr(sp, "_get_last_setup_age_days", lambda: age_days)
         monkeypatch.monkeypatch_env = monkeypatch.setenv("ENV_MAX_AGE_DAYS", "14")
@@ -392,8 +391,8 @@ class TestIsRuntimeReady:
 # Runtime state read/write/clear
 # =============================================================================
 
-class TestRuntimeState:
 
+class TestRuntimeState:
     def test_write_and_read_roundtrip(self, tmp_path, monkeypatch):
         state_file = tmp_path / "runtime_processes.json"
         monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", state_file)
@@ -423,8 +422,8 @@ class TestRuntimeState:
 # _collect_managed_processes — running vs stale PIDs
 # =============================================================================
 
-class TestCollectManagedProcesses:
 
+class TestCollectManagedProcesses:
     def test_returns_running_pids(self, monkeypatch, tmp_path):
         state_file = tmp_path / "runtime_processes.json"
         monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", state_file)
@@ -453,16 +452,18 @@ class TestCollectManagedProcesses:
 # force_full flag — argparse integration
 # =============================================================================
 
-class TestForceFull:
 
+class TestForceFull:
     def test_force_full_flag_parsed(self):
         import argparse
+
         parser = argparse.ArgumentParser()
         parser.add_argument("--force_full", action="store_true")
         assert parser.parse_args(["--force_full"]).force_full is True
 
     def test_no_force_full_flag_defaults_false(self):
         import argparse
+
         parser = argparse.ArgumentParser()
         parser.add_argument("--force_full", action="store_true")
         assert parser.parse_args([]).force_full is False
@@ -498,8 +499,8 @@ class TestForceFull:
 # OPC UA Server re-launch scenario (simulate terminate + relaunch)
 # =============================================================================
 
-class TestOpcUaServerRelaunch:
 
+class TestOpcUaServerRelaunch:
     def test_relaunch_after_termination(self, monkeypatch, tmp_path):
         """1st check: server up. 2nd check: terminated → auto-relaunch → up again."""
         exe = tmp_path / sp.SIMULATOR_EXE_NAME
@@ -561,8 +562,8 @@ class TestOpcUaServerRelaunch:
 # Venv scenarios — fresh / existing / deleted
 # =============================================================================
 
-class TestVenvScenarios:
 
+class TestVenvScenarios:
     def test_fresh_start_no_venv_no_npm(self, monkeypatch, tmp_path):
         monkeypatch.setattr(sp, "VENV_DIR", tmp_path / "venv")
         monkeypatch.setattr(sp, "IS_DOCKER", False)
@@ -596,4 +597,3 @@ class TestVenvScenarios:
         monkeypatch.setattr(sp, "_get_last_setup_age_days", lambda: 1)
         monkeypatch.setenv("ENV_MAX_AGE_DAYS", "14")
         assert sp._is_runtime_ready() is True
-

@@ -34,7 +34,8 @@ on:
 
 permissions:
   contents: read
-  checks: write        # required by dorny/test-reporter
+  checks: write          # required by dorny/test-reporter
+  packages: write        # required to push to ghcr.io
 
 # Opt into Node.js 24 for all actions (suppresses the Node.js 20 deprecation warning)
 env:
@@ -46,6 +47,38 @@ concurrency:
 
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Build & push OPC UA server image to ghcr.io — pulled by all test suites.
+  # One build per commit; downstream jobs pull by SHA tag for reproducibility.
+  # ───────────────────────────────────────────────────────────────────────────
+  build-server-image:
+    name: "Release2 / OPC UA Server — Build & Push Docker Image"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Server Image
+        uses: docker/build-push-action@v7
+        with:
+          context: OPC_UA_Servers/Release2
+          push: true
+          tags: |
+            ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-ijt-server:ci-${{ github.sha }}
+            ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-ijt-server:ci-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ───────────────────────────────────────────────────────────────────────────
   # Release2 / IJT Web Client
@@ -160,6 +193,7 @@ jobs:
   console-client:
     name: "Release2 / IJT Console Client"
     runs-on: ubuntu-latest
+    needs: [build-server-image]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
@@ -180,12 +214,44 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Start OPC UA Server (Docker, port 40453)
+        run: |
+          docker run -d \
+            --name opcua-server-console \
+            -p 40453:40453 \
+            -e OPCUA_SERVER_PORT=40453 \
+            ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-ijt-server:ci-${{ github.sha }}
+          echo "OPCUA_SERVER_URL=opc.tcp://localhost:40453" >> $GITHUB_ENV
+
+      - name: Wait for OPC UA port 40453
+        run: |
+          for i in $(seq 1 20); do
+            if nc -z localhost 40453 2>/dev/null; then
+              echo "Port 40453 is open"
+              exit 0
+            fi
+            echo "Waiting for server... ($i/20)"
+            sleep 3
+          done
+          echo "ERROR: Timeout waiting for port 40453"
+          cat $(docker inspect --format='{{.LogPath}}' opcua-server-console 2>/dev/null) 2>/dev/null | tail -30 || true
+          exit 1
+
       - run: mkdir -p test-results
 
       - name: Python Unit Tests
         id: pytest
         continue-on-error: true
-        run: python -m pytest tests/unit -q --junitxml=test-results/pytest.xml
+        env:
+          OPCUA_SERVER_URL: ${{ env.OPCUA_SERVER_URL }}
+        run: python -m pytest tests/ -q --junitxml=test-results/pytest.xml
 
       - name: Bandit (Python Security)
         id: bandit
@@ -213,6 +279,10 @@ jobs:
         with:
           name: results-console-client
           path: OPC_UA_Clients/Release2/IJT_Console_Client/test-results/
+
+      - name: Stop OPC UA Server
+        if: always()
+        run: docker rm -f opcua-server-console 2>/dev/null || true
 
       - name: Fail if Any Check Failed
         if: always() && (
@@ -359,12 +429,186 @@ jobs:
         run: docker compose down -v
 
   # ───────────────────────────────────────────────────────────────────────────
+  # Release2 / IJT C# Client
+  #   dotnet build (warnaserror) + dotnet test (xUnit) + format check
+  # ───────────────────────────────────────────────────────────────────────────
+  csharp-client:
+    name: "Release2 / IJT C# Client"
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Extract server ZIP
+        working-directory: ${{ github.workspace }}
+        run: |
+          Expand-Archive `
+            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+            -DestinationPath "OPC_UA_Servers\Release2\" `
+            -Force
+
+      - name: Patch server port to 40452
+        working-directory: ${{ github.workspace }}/OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator
+        run: |
+          $cfg = Get-Content server_configuration.json -Raw | ConvertFrom-Json
+          $cfg.serverEndpointTCPPort = 40452
+          $cfg | ConvertTo-Json -Depth 10 | Set-Content server_configuration.json -Encoding UTF8
+          Write-Host "Patched serverEndpointTCPPort to 40452"
+
+      - name: Start OPC UA Server (background)
+        working-directory: ${{ github.workspace }}
+        run: |
+          $proc = Start-Process `
+            -FilePath "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\opcua_ijt_demo_application.exe" `
+            -WorkingDirectory "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\" `
+            -PassThru -WindowStyle Hidden
+          Write-Host "Server PID: $($proc.Id)"
+          echo "SERVER_PID=$($proc.Id)" >> $env:GITHUB_ENV
+          echo "OPCUA_SIMULATOR_EXE=${{ github.workspace }}\OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\opcua_ijt_demo_application.exe" >> $env:GITHUB_ENV
+          echo "OPCUA_SERVER_PORT=40452" >> $env:GITHUB_ENV
+          echo "OPCUA_SERVER_URL=opc.tcp://localhost:40452" >> $env:GITHUB_ENV
+
+      - name: Wait for OPC UA port 40452
+        working-directory: ${{ github.workspace }}
+        run: |
+          $timeout = 60
+          $start   = Get-Date
+          while (((Get-Date) - $start).TotalSeconds -lt $timeout) {
+            if (Test-NetConnection -ComputerName localhost -Port 40452 `
+                  -InformationLevel Quiet -WarningAction SilentlyContinue) {
+              Write-Host "Port 40452 is open"
+              exit 0
+            }
+            Write-Host "Waiting for server..."
+            Start-Sleep -Seconds 3
+          }
+          Write-Host "ERROR: Timeout waiting for port 40452"
+          exit 1
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache NuGet Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore NuGet Packages
+        run: dotnet restore IJT_CSharp_Client.sln
+
+      - name: Build (zero warnings)
+        id: build
+        continue-on-error: true
+        run: dotnet build IJT_CSharp_Client.sln --no-restore -warnaserror --configuration Release
+
+      - name: Run xUnit Tests
+        id: tests
+        continue-on-error: true
+        env:
+          IJT_AUTO_ACCEPT: 'true'
+          OPCUA_SERVER_PORT: '40452'
+          OPCUA_SERVER_URL: ${{ env.OPCUA_SERVER_URL }}
+        run: |
+          New-Item -ItemType Directory -Force -Path test-results | Out-Null
+          dotnet test Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj `
+            --no-restore `
+            --configuration Release `
+            --logger "trx;LogFileName=test-results\tests.trx" `
+            --logger "console;verbosity=normal" `
+            2>&1 | Tee-Object -Variable testOutput
+          $testOutput | Out-File test-results\test-output.txt
+
+      - name: Format Check
+        id: format
+        continue-on-error: true
+        run: dotnet format IJT_CSharp_Client.sln --verify-no-changes --no-restore 2>&1
+
+      - name: Convert TRX to JUnit XML
+        if: always()
+        shell: pwsh
+        run: |
+          $trx = "test-results\tests.trx"
+          $junit = "test-results\tests.xml"
+          if (Test-Path $trx) {
+            [xml]$x = Get-Content $trx
+            $ns = @{ t = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010" }
+            $results = Select-Xml -Xml $x -XPath "//t:UnitTestResult" -Namespace $ns | Select-Object -ExpandProperty Node
+            $passed  = ($results | Where-Object { $_.outcome -eq "Passed"  }).Count
+            $failed  = ($results | Where-Object { $_.outcome -eq "Failed"  }).Count
+            $total   = $results.Count
+            $xml  = '<?xml version="1.0" encoding="UTF-8"?>' + "`n"
+            $xml += "<testsuites tests=`"$total`" failures=`"$failed`">`n"
+            $xml += "  <testsuite name=`"IJT_CSharp_Client.Tests`" tests=`"$total`" failures=`"$failed`">`n"
+            foreach ($r in $results) {
+              $name = [System.Security.SecurityElement]::Escape($r.testName)
+              $outcome = $r.outcome
+              if ($outcome -eq "Passed") {
+                $xml += "    <testcase name=`"$name`" classname=`"IJT`" />`n"
+              } else {
+                $msg = [System.Security.SecurityElement]::Escape($r.Output.ErrorInfo.Message)
+                $xml += "    <testcase name=`"$name`" classname=`"IJT`"><failure>$msg</failure></testcase>`n"
+              }
+            }
+            $xml += "  </testsuite>`n</testsuites>"
+            $xml | Out-File $junit -Encoding UTF8
+            Write-Host "Converted TRX → JUnit: $total tests, $failed failures"
+          } else {
+            Write-Host "No TRX file found — creating empty JUnit"
+            '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests" tests="0"/></testsuites>' | Out-File $junit -Encoding UTF8
+          }
+
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: "C# Client — xUnit Tests"
+          path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/tests.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: results-csharp-client
+          path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
+
+      - name: Stop OPC UA Server
+        if: always()
+        run: |
+          if ($env:SERVER_PID) {
+            Stop-Process -Id $env:SERVER_PID -Force -ErrorAction SilentlyContinue
+            Write-Host "OPC UA server stopped"
+          }
+
+      - name: Fail if Any Check Failed
+        if: always() && (
+          steps.build.outcome  == 'failure' ||
+          steps.tests.outcome  == 'failure' ||
+          steps.format.outcome == 'failure')
+        run: |
+          echo "One or more C# checks failed:"
+          echo "  build  -> ${{ steps.build.outcome }}"
+          echo "  tests  -> ${{ steps.tests.outcome }}"
+          echo "  format -> ${{ steps.format.outcome }}"
+          exit 1
+
+  # ───────────────────────────────────────────────────────────────────────────
   # Release2 / IJT Test Client
-  #   Python: pytest collect-only (no live server needed) + bandit
+  #   Python: pytest (live OPC UA server via Linux binary) + bandit
   # ───────────────────────────────────────────────────────────────────────────
   test-client:
     name: "Release2 / IJT Test Client"
     runs-on: ubuntu-latest
+    needs: [build-server-image]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
@@ -385,15 +629,47 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Start OPC UA Server (Docker, port 40454)
+        run: |
+          docker run -d \
+            --name opcua-server-testclient \
+            -p 40454:40454 \
+            -e OPCUA_SERVER_PORT=40454 \
+            ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-ijt-server:ci-${{ github.sha }}
+          echo "OPCUA_SERVER_URL=opc.tcp://localhost:40454" >> $GITHUB_ENV
+
+      - name: Wait for OPC UA port 40454
+        run: |
+          for i in $(seq 1 20); do
+            if nc -z localhost 40454 2>/dev/null; then
+              echo "Port 40454 is open"
+              exit 0
+            fi
+            echo "Waiting for server... ($i/20)"
+            sleep 3
+          done
+          echo "ERROR: Timeout waiting for port 40454"
+          cat $(docker inspect --format='{{.LogPath}}' opcua-server-testclient 2>/dev/null) 2>/dev/null | tail -30 || true
+          exit 1
+
       - run: mkdir -p test-results
 
-      - name: Pytest Collect (verify imports + test structure)
-        id: pytest_collect
+      - name: Run Tests
+        id: pytest
         continue-on-error: true
         shell: bash
+        env:
+          OPCUA_SERVER_URL: ${{ env.OPCUA_SERVER_URL }}
         run: |
           set -o pipefail
-          python -m pytest --collect-only -q --tb=short 2>&1 | tee test-results/collect.txt
+          python -m pytest -q --tb=short --junitxml=test-results/pytest.xml 2>&1 | tee test-results/test-output.txt
 
       - name: Bandit (Python Security)
         id: bandit
@@ -405,6 +681,16 @@ jobs:
         continue-on-error: true
         run: python -m ruff check . --output-format=github
 
+      - name: Publish Test Reports
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: "Test Client — Tests"
+          path: OPC_UA_Clients/Release2/IJT_Test_Client/test-results/pytest.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7
         if: always()
@@ -412,16 +698,20 @@ jobs:
           name: results-test-client
           path: OPC_UA_Clients/Release2/IJT_Test_Client/test-results/
 
+      - name: Stop OPC UA Server
+        if: always()
+        run: docker rm -f opcua-server-testclient 2>/dev/null || true
+
       - name: Fail if Any Check Failed
         if: always() && (
-          steps.pytest_collect.outcome == 'failure' ||
-          steps.bandit.outcome         == 'failure' ||
-          steps.pylint.outcome         == 'failure')
+          steps.pytest.outcome == 'failure' ||
+          steps.bandit.outcome == 'failure' ||
+          steps.pylint.outcome == 'failure')
         run: |
           echo "One or more checks failed:"
-          echo "  pytest collect -> ${{ steps.pytest_collect.outcome }}"
-          echo "  bandit         -> ${{ steps.bandit.outcome }}"
-          echo "  ruff           -> ${{ steps.pylint.outcome }}"
+          echo "  pytest  -> ${{ steps.pytest.outcome }}"
+          echo "  bandit  -> ${{ steps.bandit.outcome }}"
+          echo "  ruff    -> ${{ steps.pylint.outcome }}"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -499,7 +789,7 @@ jobs:
   report:
     name: "📋 Test Report"
     runs-on: ubuntu-latest
-    needs: [web-client, console-client, node-client, docker-smoke, test-client, server-smoke-windows]
+    needs: [build-server-image, web-client, console-client, node-client, docker-smoke, csharp-client, test-client, server-smoke-windows]
     if: always()
     permissions:
       contents: read
@@ -516,10 +806,12 @@ jobs:
 
       - name: Generate Summary Table
         env:
+          BSI_RESULT:     ${{ needs.build-server-image.result }}
           WEB_RESULT:     ${{ needs.web-client.result }}
           CONSOLE_RESULT: ${{ needs.console-client.result }}
           NODE_RESULT:    ${{ needs.node-client.result }}
           DOCKER_RESULT:  ${{ needs.docker-smoke.result }}
+          CS_RESULT:      ${{ needs.csharp-client.result }}
           TC_RESULT:      ${{ needs.test-client.result }}
           SS_WIN_RESULT:  ${{ needs.server-smoke-windows.result }}
         run: |
@@ -614,21 +906,28 @@ jobs:
           nod_npm = parse_npm_audit  ("all-results/results-node-client/npm-audit.json")
 
           tc_ban  = parse_bandit     ("all-results/results-test-client/bandit.json")
+          tc_py   = parse_junit      ("all-results/results-test-client/pytest.xml")
 
           web_r      = os.environ.get("WEB_RESULT",     "unknown")
           con_r      = os.environ.get("CONSOLE_RESULT", "unknown")
           nod_r      = os.environ.get("NODE_RESULT",    "unknown")
           docker_r   = os.environ.get("DOCKER_RESULT",  "unknown")
+          cs_r       = os.environ.get("CS_RESULT",      "unknown")
           tc_r       = os.environ.get("TC_RESULT",      "unknown")
           ss_win_r   = os.environ.get("SS_WIN_RESULT",  "unknown")
+          bsi_r      = os.environ.get("BSI_RESULT",     "unknown")
 
-          overall = "✅ All Passed" if all(r == "success" for r in [web_r, con_r, nod_r, docker_r, tc_r, ss_win_r]) else "❌ Some Failed"
+          cs_tests = parse_junit("all-results/results-csharp-client/tests.xml")
+
+          overall = "✅ All Passed" if all(r == "success" for r in [bsi_r, web_r, con_r, nod_r, docker_r, cs_r, tc_r, ss_win_r]) else "❌ Some Failed"
 
           rows = [
+              f"| **Release2 / OPC UA Server (Docker Build)** | {job_icon(bsi_r)} `{bsi_r}` | — | — | — | — | — | — |",
               f"| **Release2 / IJT Web Client**     | {job_icon(web_r)} `{web_r}` | {fmt_tests(*web_py)} | {fmt_tests(*web_js)} | {fmt_eslint(web_esl)} | {fmt_bandit(*web_ban)} | {fmt_npm(*web_npm)} | {fmt_docker(docker_r)} |",
               f"| **Release2 / IJT Console Client** | {job_icon(con_r)} `{con_r}` | {fmt_tests(*con_py)} | — | — | {fmt_bandit(*con_ban)} | — | — |",
               f"| **Release1 / IJT Node Client**    | {job_icon(nod_r)} `{nod_r}` | — | {fmt_tests(*nod_js)} | {fmt_eslint(nod_esl)} | — | {fmt_npm(*nod_npm)} | — |",
-              f"| **Release2 / IJT Test Client**    | {job_icon(tc_r)} `{tc_r}` | — | — | — | {fmt_bandit(*tc_ban)} | — | — |",
+              f"| **Release2 / IJT C# Client**      | {job_icon(cs_r)} `{cs_r}` | {fmt_tests(*cs_tests)} | — | — | — | — | — |",
+              f"| **Release2 / IJT Test Client**    | {job_icon(tc_r)} `{tc_r}` | {fmt_tests(*tc_py)} | — | — | {fmt_bandit(*tc_ban)} | — | — |",
               f"| **Release2 / OPC UA Server (Win)**  | {job_icon(ss_win_r)} `{ss_win_r}` | — | — | — | — | — | — |",
           ]
 
@@ -651,3 +950,41 @@ jobs:
           print("Summary written.")
           PYEOF
 
+  # ───────────────────────────────────────────────────────────────────────────
+  # CodeQL Analysis — security semantic analysis (runs independently of tests)
+  # ───────────────────────────────────────────────────────────────────────────
+  codeql:
+    name: CodeQL Analysis (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript, csharp]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up .NET (C# only)
+        if: matrix.language == 'csharp'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.x"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended,security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+          output: codeql-results
+          upload: true

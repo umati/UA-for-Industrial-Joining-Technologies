@@ -25,9 +25,11 @@ Environment variables (all optional):
   WS_TEST_URL           default: ws://localhost:8001
   UI_TEST_BASE_URL      default: http://127.0.0.1:3000
 """
+
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import platform
 import shutil
@@ -39,6 +41,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+# Ensure stdout/stderr use UTF-8 on Windows (cp1252 can't encode box-drawing chars)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -47,6 +55,7 @@ IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 IS_CI = bool(os.getenv("CI"))
 
+
 # ---------------------------------------------------------------------------
 # Colour helpers — ANSI on Linux/macOS/Win10+, plain text fallback
 # ---------------------------------------------------------------------------
@@ -54,37 +63,49 @@ def _enable_ansi_windows() -> bool:
     """Enable virtual terminal processing on Windows 10+."""
     try:
         import ctypes
+
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-        handle = kernel32.GetStdHandle(-11)          # STD_OUTPUT_HANDLE
+        handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
         mode = ctypes.c_ulong()
         if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
             kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
             return True
         return False
-    except (AttributeError, OSError):
+    except AttributeError, OSError:
         return False
 
 
-_USE_COLOUR = sys.stdout.isatty() and (
-    not IS_WINDOWS or _enable_ansi_windows()
-)
+_USE_COLOUR = sys.stdout.isatty() and (not IS_WINDOWS or _enable_ansi_windows())
 
 
 class _C:
-    RESET  = "\033[0m"  if _USE_COLOUR else ""
-    BOLD   = "\033[1m"  if _USE_COLOUR else ""
-    DIM    = "\033[2m"  if _USE_COLOUR else ""
-    GREEN  = "\033[92m" if _USE_COLOUR else ""
-    RED    = "\033[91m" if _USE_COLOUR else ""
+    RESET = "\033[0m" if _USE_COLOUR else ""
+    BOLD = "\033[1m" if _USE_COLOUR else ""
+    DIM = "\033[2m" if _USE_COLOUR else ""
+    GREEN = "\033[92m" if _USE_COLOUR else ""
+    RED = "\033[91m" if _USE_COLOUR else ""
     YELLOW = "\033[93m" if _USE_COLOUR else ""
-    CYAN   = "\033[96m" if _USE_COLOUR else ""
+    CYAN = "\033[96m" if _USE_COLOUR else ""
 
 
-def _ok(msg: str)   -> None: print(f"{_C.GREEN}  [PASS]{_C.RESET} {msg}")
-def _fail(msg: str) -> None: print(f"{_C.RED}  [FAIL]{_C.RESET} {msg}", file=sys.stderr)
-def _info(msg: str) -> None: print(f"{_C.CYAN}  [INFO]{_C.RESET} {msg}")
-def _warn(msg: str) -> None: print(f"{_C.YELLOW}  [WARN]{_C.RESET} {msg}")
-def _skip(msg: str) -> None: print(f"{_C.DIM}  [SKIP]{_C.RESET} {msg}")
+def _ok(msg: str) -> None:
+    print(f"{_C.GREEN}  [PASS]{_C.RESET} {msg}")
+
+
+def _fail(msg: str) -> None:
+    print(f"{_C.RED}  [FAIL]{_C.RESET} {msg}", file=sys.stderr)
+
+
+def _info(msg: str) -> None:
+    print(f"{_C.CYAN}  [INFO]{_C.RESET} {msg}")
+
+
+def _warn(msg: str) -> None:
+    print(f"{_C.YELLOW}  [WARN]{_C.RESET} {msg}")
+
+
+def _skip(msg: str) -> None:
+    print(f"{_C.DIM}  [SKIP]{_C.RESET} {msg}")
 
 
 def _banner(title: str) -> None:
@@ -103,15 +124,60 @@ def _run(
     cwd: Path = ROOT,
     label: str = "",
     env: Optional[dict] = None,
+    timeout: Optional[int] = None,
 ) -> int:
     display = label or " ".join(str(c) for c in cmd[:5])
     print(f"\n{_C.DIM}CMD: {display}{_C.RESET}")
-    result = subprocess.run(
-        [str(c) for c in cmd],
-        cwd=str(cwd),
-        env=env or os.environ.copy(),
-    )
+    try:
+        result = subprocess.run(
+            [str(c) for c in cmd],
+            cwd=str(cwd),
+            env=env or os.environ.copy(),
+            timeout=timeout,
+        )
+        return result.returncode
+    except subprocess.TimeoutExpired:
+        print(f"{_C.YELLOW}[TIMEOUT] {display} exceeded {timeout}s{_C.RESET}")
+        return -1
+
+
+def _run_to_file(
+    cmd: list,
+    output_file: Path,
+    *,
+    cwd: Path = ROOT,
+    label: str = "",
+    env: Optional[dict] = None,
+) -> int:
+    """Run *cmd*, capture stdout to *output_file*, return exit code."""
+    display = label or " ".join(str(c) for c in cmd[:5])
+    print(f"\n{_C.DIM}CMD: {display} → {output_file.name}{_C.RESET}")
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_file, "w", encoding="utf-8") as fh:
+        result = subprocess.run(
+            [str(c) for c in cmd],
+            cwd=str(cwd),
+            env=env or os.environ.copy(),
+            stdout=fh,
+        )
     return result.returncode
+
+
+def _py_module_available(mod: str) -> bool:
+    """Return True if *mod* can be imported in the current interpreter."""
+    return (
+        subprocess.run(
+            [sys.executable, "-c", f"import {mod}"],
+            check=False,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+
+def _cmd_available(cmd: str) -> bool:
+    """Return True if *cmd* is found on PATH."""
+    return shutil.which(cmd) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +229,7 @@ class StageResult:
 # Stages
 # ---------------------------------------------------------------------------
 
+
 def _stage_versions() -> StageResult:
     """Print tool versions for debugging."""
     _banner("STAGE 0  Tool versions")
@@ -184,16 +251,30 @@ def _stage_versions() -> StageResult:
 def _stage_pip_install(python: Path) -> StageResult:
     _banner("STAGE 1  Install / verify Python test dependencies")
     t0 = time.monotonic()
+    if os.getenv("SKIP_VENV_INSTALL") == "1":
+        _info("SKIP_VENV_INSTALL=1 — skipping pip install")
+        return StageResult("pip-install", 0, duration=time.monotonic() - t0, notes=["skipped via SKIP_VENV_INSTALL"])
+    # Upgrade pip first to ensure latest version (avoids stale CVE warnings)
+    _run([python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
+         label="pip self-upgrade")
     rc = _run(
         [
-            python, "-m", "pip", "install",
-            "--quiet", "--disable-pip-version-check", "--pre",
+            python,
+            "-m",
+            "pip",
+            "install",
+            "--quiet",
+            "--disable-pip-version-check",
+            "--pre",
             # asyncua 1.2b2+ for Python 3.14 compat; once stable 1.2.x ships,
             # pip will prefer that automatically over any pre-release.
             "asyncua>=1.2b2",
-            "pytest", "pytest-asyncio",
+            "pytest",
+            "pytest-asyncio",
             "websockets>=16.0",
-            "pytz", "aiofiles", "packaging",
+            "pytz",
+            "aiofiles",
+            "packaging",
             "python-dotenv",
         ],
         label="pip install test deps",
@@ -201,18 +282,276 @@ def _stage_pip_install(python: Path) -> StageResult:
     return StageResult("pip-install", rc, duration=time.monotonic() - t0)
 
 
+def _stage_python_lint(python: Path) -> StageResult:
+    _banner("STAGE 1b  Python static analysis")
+    t0 = time.monotonic()
+    results_dir = ROOT / "test-results"
+    overall_rc = 0
+    notes: list[str] = []
+
+    ruff = shutil.which("ruff") or shutil.which("ruff.exe")
+    if ruff:
+        results_dir.mkdir(parents=True, exist_ok=True)
+        rc = _run(
+            [ruff, "check", ".", "--output-format=json", "--output-file", str(results_dir / "ruff.json")],
+            label="ruff check",
+        )
+        if rc not in (0, 1):  # 0 = clean, 1 = lint findings
+            overall_rc = rc
+        rc_fmt = _run([ruff, "format", "--check", "."], label="ruff format --check")
+        if rc_fmt != 0:
+            overall_rc = rc_fmt
+    else:
+        _skip("ruff not found — pip install ruff")
+        notes.append("ruff not installed")
+
+    if _py_module_available("mypy"):
+        rc = _run(
+            [python, "-m", "mypy", ".", "--ignore-missing-imports"],
+            label="mypy",
+        )
+        if rc != 0:
+            overall_rc = rc
+    else:
+        _skip("mypy not installed — pip install mypy")
+        notes.append("mypy not installed")
+
+    if _py_module_available("bandit"):
+        results_dir.mkdir(parents=True, exist_ok=True)
+        rc = _run(
+            [
+                python,
+                "-m",
+                "bandit",
+                "-r",
+                ".",
+                "-c",
+                "pyproject.toml",
+                "-f",
+                "json",
+                "-o",
+                str(results_dir / "bandit.json"),
+            ],
+            label="bandit",
+        )
+        if rc not in (0, 1):  # 1 = findings (informational), 2+ = error
+            overall_rc = rc
+    else:
+        _skip("bandit not installed — pip install bandit")
+        notes.append("bandit not installed")
+
+    if _py_module_available("pip_audit"):
+        results_dir.mkdir(parents=True, exist_ok=True)
+        rc = _run(
+            [python, "-m", "pip_audit", "--format", "json", "-o", str(results_dir / "pip-audit.json")],
+            label="pip-audit",
+        )
+        if rc not in (0, 1):  # 1 = vulnerabilities found (informational)
+            overall_rc = rc
+    else:
+        _skip("pip-audit not installed — pip install pip-audit")
+        notes.append("pip-audit not installed")
+
+    if _py_module_available("vulture"):
+        rc = _run(
+            [python, "-m", "vulture", ".", "--min-confidence", "80", "--exclude", ".venv,venv,.venv-wsl"],
+            label="vulture",
+        )
+        if rc not in (0, 1):  # 1 = dead code found (informational)
+            overall_rc = rc
+    else:
+        _skip("vulture not installed — pip install vulture")
+        notes.append("vulture not installed")
+
+    if _cmd_available("detect-secrets"):
+        rc = _run(["detect-secrets", "scan"], label="detect-secrets scan")
+        if rc != 0:
+            overall_rc = rc
+    else:
+        _skip("detect-secrets not installed — pip install detect-secrets")
+        notes.append("detect-secrets not installed")
+
+    # Semgrep AI code review
+    if _cmd_available("semgrep"):
+        results_dir.mkdir(parents=True, exist_ok=True)
+        rc = _run(
+            [
+                "semgrep",
+                "--config=p/default",
+                "--json",
+                "--output",
+                str(results_dir / "semgrep.json"),
+                "--exclude=.venv",
+                "--exclude=test-results",
+                ".",
+            ],
+            label="semgrep",
+            timeout=120,
+        )
+        if rc == -1:
+            _skip("semgrep timed out (>120s) — skipped")
+            notes.append("semgrep timed out")
+        else:
+            try:
+                data = json.loads((results_dir / "semgrep.json").read_text(encoding="utf-8"))
+                findings = data.get("results", [])
+                errors = [f for f in findings if f.get("extra", {}).get("severity") == "ERROR"]
+                warns = [f for f in findings if f.get("extra", {}).get("severity") == "WARNING"]
+                if errors:
+                    _fail(f"semgrep: {len(errors)} error(s), {len(warns)} warning(s)")
+                    overall_rc = 1
+                elif warns:
+                    _warn(f"semgrep: 0 errors, {len(warns)} warning(s)")
+                else:
+                    _ok(f"semgrep: {len(findings)} finding(s), none critical")
+            except Exception:
+                _warn("semgrep: could not parse output")
+    else:
+        _skip("semgrep not installed — pip install semgrep")
+        notes.append("semgrep not installed")
+
+    # pyright AI type inference
+    if _cmd_available("pyright") or _py_module_available("pyright"):
+        results_dir.mkdir(parents=True, exist_ok=True)
+        cmd_py = (
+            ["pyright", "--outputjson", "--pythonpath", sys.executable]
+            if _cmd_available("pyright")
+            else [sys.executable, "-m", "pyright", "--outputjson", "--pythonpath", sys.executable]
+        )
+        proc = subprocess.run(cmd_py, check=False, capture_output=True, text=True, cwd=str(ROOT))
+        (results_dir / "pyright.json").write_text(proc.stdout or "{}", encoding="utf-8")
+        try:
+            data = json.loads(proc.stdout or "{}")
+            summary = data.get("summary", {})
+            py_errors = summary.get("errorCount", 0)
+            py_warns = summary.get("warningCount", 0)
+            if py_errors:
+                _fail(f"pyright: {py_errors} error(s), {py_warns} warning(s)")
+                overall_rc = 1
+            elif py_warns:
+                _warn(f"pyright: 0 errors, {py_warns} warning(s)")
+            else:
+                _ok("pyright: 0 errors, 0 warnings")
+        except Exception:
+            _warn("pyright: could not parse output")
+    else:
+        _skip("pyright not installed — pip install pyright")
+        notes.append("pyright not installed")
+
+    return StageResult("python-lint", overall_rc, duration=time.monotonic() - t0, notes=notes)
+
+
 def _stage_python_unit(python: Path) -> StageResult:
     _banner("STAGE 2  Python unit tests (no server needed)")
     t0 = time.monotonic()
-    rc = _run(
-        [
-            python, "-m", "pytest", "tests/",
-            "-m", "not integration and not live and not live_ws",
-            "-v", "--tb=short", "--no-header",
-        ],
-        label="pytest unit",
-    )
+    results_dir = ROOT / "test-results"
+    cmd: list = [
+        python,
+        "-m",
+        "pytest",
+        "tests/",
+        "-m",
+        "not integration and not live and not live_ws",
+        "-v",
+        "--tb=short",
+        "--no-header",
+    ]
+    if _py_module_available("pytest_cov"):
+        results_dir.mkdir(parents=True, exist_ok=True)
+        cmd += [
+            "--cov=.",
+            f"--cov-report=xml:{results_dir / 'coverage-py.xml'}",
+            f"--cov-report=html:{results_dir / 'htmlcov-py'}",
+        ]
+    else:
+        _skip("pytest-cov not installed — coverage skipped (pip install pytest-cov)")
+    rc = _run(cmd, label="pytest unit")
     return StageResult("python-unit", rc, duration=time.monotonic() - t0)
+
+
+def _stage_js_lint() -> StageResult:
+    _banner("STAGE 2b  JavaScript static analysis")
+    t0 = time.monotonic()
+    npm = shutil.which("npm") or shutil.which("npm.cmd")
+    npx = shutil.which("npx") or shutil.which("npx.cmd")
+    if not npx:
+        _skip("npx not found — skipping JS lint")
+        return StageResult("js-lint", 0, skipped=True)
+    if not (ROOT / "node_modules").exists():
+        _skip("node_modules not found — run npm install first")
+        return StageResult("js-lint", 0, skipped=True, notes=["run npm install"])
+
+    results_dir = ROOT / "test-results"
+    overall_rc = 0
+    notes: list[str] = []
+
+    if (ROOT / "node_modules" / "eslint").exists():
+        results_dir.mkdir(parents=True, exist_ok=True)
+        rc = _run(
+            [
+                npx,
+                "eslint",
+                "src/",
+                "--format",
+                "json",
+                "--output-file",
+                str(results_dir / "eslint.json"),
+                "--config",
+                "eslint.config.mjs",
+            ],
+            label="eslint src/",
+        )
+        if rc not in (0, 1):  # 0 = clean, 1 = lint findings
+            overall_rc = rc
+    else:
+        _skip("eslint not in node_modules — npm install")
+        notes.append("eslint not installed")
+
+    if (ROOT / "node_modules" / "prettier").exists():
+        rc = _run([npx, "prettier", "--check", "src/"], label="prettier --check src/")
+        if rc != 0:
+            overall_rc = rc
+    else:
+        _skip("prettier not in node_modules — npm install prettier")
+        notes.append("prettier not installed")
+
+    if npm:
+        results_dir.mkdir(parents=True, exist_ok=True)
+        rc = _run_to_file(
+            [npm, "audit", "--audit-level=high", "--json"],
+            results_dir / "npm-audit.json",
+            label="npm audit",
+        )
+        if rc not in (0, 1):  # 1 = vulnerabilities found (informational)
+            overall_rc = rc
+
+    if (ROOT / "node_modules" / "depcheck").exists() or _cmd_available("depcheck"):
+        results_dir.mkdir(parents=True, exist_ok=True)
+        rc = _run_to_file(
+            [npx, "depcheck", "--json"],
+            results_dir / "depcheck.json",
+            label="depcheck",
+        )
+        if rc not in (0, 1):  # 1 = unused deps found (informational)
+            overall_rc = rc
+    else:
+        _skip("depcheck not installed — npm install -g depcheck")
+        notes.append("depcheck not installed")
+
+    if (ROOT / "node_modules" / "license-checker").exists() or _cmd_available("license-checker"):
+        results_dir.mkdir(parents=True, exist_ok=True)
+        rc = _run_to_file(
+            [npx, "license-checker", "--json"],
+            results_dir / "licenses.json",
+            label="license-checker",
+        )
+        if rc != 0:
+            overall_rc = rc
+    else:
+        _skip("license-checker not installed — npm install -g license-checker")
+        notes.append("license-checker not installed")
+
+    return StageResult("js-lint", overall_rc, duration=time.monotonic() - t0, notes=notes)
 
 
 def _stage_js_unit() -> StageResult:
@@ -227,10 +566,35 @@ def _stage_js_unit() -> StageResult:
         _info("node_modules not found — running npm install")
         rc = _run([npm, "install", "--legacy-peer-deps"], label="npm install")
         if rc != 0:
-            return StageResult("js-unit", rc, duration=time.monotonic() - t0,
-                               notes=["npm install failed"])
+            return StageResult("js-unit", rc, duration=time.monotonic() - t0, notes=["npm install failed"])
 
-    rc = _run([npm, "run", "test:unit:js"], label="vitest")
+    npx = shutil.which("npx") or shutil.which("npx.cmd")
+    results_dir = ROOT / "test-results"
+    has_coverage = (ROOT / "node_modules" / "@vitest" / "coverage-v8").exists() or (
+        ROOT / "node_modules" / "@vitest" / "coverage-istanbul"
+    ).exists()
+
+    if npx and has_coverage:
+        results_dir.mkdir(parents=True, exist_ok=True)
+        vitest_xml = str(results_dir / "vitest.xml").replace("\\", "/")
+        rc = _run(
+            [
+                npx,
+                "vitest",
+                "run",
+                "--reporter=verbose",
+                "--reporter=junit",
+                f"--outputFile.junit={vitest_xml}",
+                "--coverage",
+                "--coverage.reporter=lcov",
+                "--coverage.reporter=json",
+            ],
+            label="vitest --coverage",
+        )
+    else:
+        if npx and not has_coverage:
+            _skip("@vitest/coverage-v8 not installed — coverage skipped (npm install --save-dev @vitest/coverage-v8)")
+        rc = _run([npm, "run", "test:unit:js"], label="vitest")
     return StageResult("js-unit", rc, duration=time.monotonic() - t0)
 
 
@@ -239,8 +603,14 @@ def _stage_python_live(python: Path) -> StageResult:
     t0 = time.monotonic()
     rc = _run(
         [
-            python, "-m", "pytest", "tests/python/live/",
-            "-v", "--tb=short", "--no-header", "--timeout=120",
+            python,
+            "-m",
+            "pytest",
+            "tests/python/live/",
+            "-v",
+            "--tb=short",
+            "--no-header",
+            "--timeout=120",
         ],
         label="pytest live",
     )
@@ -308,19 +678,220 @@ def _stage_playwright_e2e(ws_url: str, ui_url: str) -> StageResult:
     if not npx:
         return StageResult("playwright-e2e", 0, skipped=True)
 
+    results_dir = ROOT / "test-results"
+    results_dir.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["WS_TEST_URL"] = ws_url
     env["PLAYWRIGHT_TEST_BASE_URL"] = ui_url
 
+    env1 = {**env, "PLAYWRIGHT_JUNIT_OUTPUT_FILE": str(results_dir / "playwright-features.xml")}
     rc1 = _run(
-        [npx, "playwright", "test", "--project=features",   "--reporter=line"],
-        env=env, label="playwright features",
+        [npx, "playwright", "test", "--project=features", "--reporter=line", "--reporter=junit"],
+        env=env1,
+        label="playwright features",
     )
+    env2 = {**env, "PLAYWRIGHT_JUNIT_OUTPUT_FILE": str(results_dir / "playwright-regression.xml")}
     rc2 = _run(
-        [npx, "playwright", "test", "--project=regression", "--reporter=line"],
-        env=env, label="playwright regression",
+        [npx, "playwright", "test", "--project=regression", "--reporter=line", "--reporter=junit"],
+        env=env2,
+        label="playwright regression",
     )
     return StageResult("playwright-e2e", max(rc1, rc2), duration=time.monotonic() - t0)
+
+
+def _stage_infra_lint() -> StageResult:
+    _banner("STAGE Infra  Dockerfile / YAML / Compose linting")
+    t0 = time.monotonic()
+    results_dir = ROOT / "test-results"
+    overall_rc = 0
+    notes: list[str] = []
+
+    hadolint = shutil.which("hadolint") or shutil.which("hadolint.exe")
+    dockerfile = ROOT / "Dockerfile"
+    if hadolint and dockerfile.exists():
+        results_dir.mkdir(parents=True, exist_ok=True)
+        rc = _run_to_file(
+            [hadolint, "Dockerfile", "--format", "json"],
+            results_dir / "hadolint.json",
+            label="hadolint Dockerfile",
+        )
+        if rc != 0:
+            overall_rc = rc
+    elif not hadolint:
+        _skip("hadolint not found — see https://github.com/hadolint/hadolint")
+        notes.append("hadolint not installed")
+    else:
+        _skip("Dockerfile not found — skipping hadolint")
+
+    yamllint = shutil.which("yamllint") or shutil.which("yamllint.exe")
+    compose_yml = ROOT / "docker-compose.yml"
+    if yamllint and compose_yml.exists():
+        rc = _run([yamllint, "docker-compose.yml", "-f", "parsable"], label="yamllint docker-compose.yml")
+        if rc != 0:
+            overall_rc = rc
+    elif not yamllint:
+        _skip("yamllint not found — pip install yamllint")
+        notes.append("yamllint not installed")
+
+    docker = shutil.which("docker") or shutil.which("docker.exe")
+    if docker and compose_yml.exists():
+        rc = _run([docker, "compose", "config", "--quiet"], label="docker compose config --quiet")
+        if rc != 0:
+            overall_rc = rc
+    elif not docker:
+        _skip("docker not found — skipping compose config validation")
+
+    return StageResult("infra-lint", overall_rc, duration=time.monotonic() - t0, notes=notes)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — OPC UA server auto-launch helpers
+# ---------------------------------------------------------------------------
+_SERVER_COMPOSE_DIR = ROOT.parent.parent.parent / "OPC_UA_Servers" / "Release2"
+
+_WELL_KNOWN_SIMULATOR_PATHS: list[Path] = [
+    _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe",
+    _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application",
+]
+_SERVER_NATIVE_PORT = 40451
+_CLIENT_DEFAULT_PORT = 40463
+
+
+def _opcua_server_port() -> int:
+    return int(os.getenv("OPCUA_SERVER_PORT", str(_CLIENT_DEFAULT_PORT)))
+
+
+def _maybe_start_opcua_server() -> tuple[bool, bool, Optional[subprocess.Popen]]:
+    """Start the OPC UA server if the target port is not yet open.
+
+    Returns *(started_by_us, port_open, proc)*.
+    *started_by_us* is True when this call launched the server.
+    *proc* is the Popen handle if a binary was started (None for Docker).
+    """
+    import subprocess as _sp
+
+    # If user explicitly set the endpoint, don't auto-launch
+    if os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL"):
+        port = _opcua_server_port()
+        endpoint = os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL", "")
+        host, srv_port = _parse_opcua_host_port(endpoint)
+        open_ = _port_open(host, srv_port)
+        return False, open_, None
+
+    port = _opcua_server_port()
+    if _port_open("localhost", port):
+        _info(f"OPC UA server already listening on port {port}")
+        return False, True, None
+
+    # Check native port as well
+    if _port_open("localhost", _SERVER_NATIVE_PORT):
+        _info(f"OPC UA server already on native port {_SERVER_NATIVE_PORT}")
+        os.environ["OPCUA_TEST_ENDPOINT"] = f"opc.tcp://localhost:{_SERVER_NATIVE_PORT}"
+        return False, True, None
+
+    # Try binary launch first
+    exe: Optional[str] = os.getenv("OPCUA_SIMULATOR_EXE")
+    if not exe:
+        for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
+            if candidate.exists():
+                exe = str(candidate)
+                break
+
+    if exe:
+        _info(f"Launching OPC UA binary: {exe}")
+        try:
+            proc = _sp.Popen([exe], stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+                             cwd=str(Path(exe).parent))
+        except OSError as exc:
+            _warn(f"Failed to launch binary: {exc}")
+            proc = None
+
+        if proc is not None:
+            _info(f"Waiting up to 30s for native port {_SERVER_NATIVE_PORT} ...")
+            for _ in range(30):
+                if _port_open("localhost", _SERVER_NATIVE_PORT, timeout=1.0):
+                    _ok(f"OPC UA server ready on :{_SERVER_NATIVE_PORT}")
+                    os.environ["OPCUA_TEST_ENDPOINT"] = f"opc.tcp://localhost:{_SERVER_NATIVE_PORT}"
+                    return True, True, proc
+                time.sleep(1)
+            _warn(f"Binary did not open port {_SERVER_NATIVE_PORT} within 30s")
+            proc.terminate()
+
+    # Fall back to Docker
+    docker = shutil.which("docker") or shutil.which("docker.exe")
+    if not docker or not _docker_available():
+        _warn("Docker unavailable — cannot auto-launch OPC UA server")
+        return False, False, None
+
+    compose_dir = _SERVER_COMPOSE_DIR
+    if not compose_dir.exists():
+        _warn(f"OPC UA server compose dir not found: {compose_dir}")
+        return False, False, None
+
+    _info(f"Launching OPC UA Docker server from {compose_dir}")
+    rc = _run([docker, "compose", "up", "-d"], cwd=compose_dir, label="docker compose up -d  (OPC UA server)")
+    if rc != 0:
+        _warn("docker compose up failed for OPC UA server")
+        return True, False, None
+
+    _info(f"Waiting up to 60s for OPC UA port {port} ...")
+    for _ in range(30):
+        if _port_open("localhost", port, timeout=1.0):
+            _ok(f"OPC UA server ready on :{port}")
+            return True, True, None
+        time.sleep(2)
+
+    _warn(f"OPC UA server not ready after 60s (port {port})")
+    return True, False, None
+
+
+def _stop_opcua_server(proc: Optional[subprocess.Popen] = None) -> None:
+    if proc is not None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except Exception:
+            proc.kill()
+        os.environ.pop("OPCUA_TEST_ENDPOINT", None)
+        return
+    docker = shutil.which("docker") or shutil.which("docker.exe")
+    if docker and _SERVER_COMPOSE_DIR.exists():
+        _run([docker, "compose", "down"], cwd=_SERVER_COMPOSE_DIR, label="docker compose down  (OPC UA server)")
+
+
+def _stage_python_integration(python: Path) -> StageResult:
+    """Phase 2 — run integration tests against a live OPC UA server.
+
+    Auto-launches the Docker server if the port is not yet open and Docker
+    is available.  Always tears down any container it started.
+    """
+    _banner("STAGE 4b  Python integration tests (Phase 2 — live OPC UA)")
+    t0 = time.monotonic()
+    results_dir = ROOT / "test-results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    started, port_open, server_proc = _maybe_start_opcua_server()
+    try:
+        if not port_open:
+            _skip("OPC UA server unreachable — skipping integration tests")
+            return StageResult("python-integration", 0, skipped=True, notes=["OPC UA server not available"])
+        rc = _run(
+            [
+                python,
+                "-m",
+                "pytest",
+                "tests/python/integration/",
+                "-v",
+                "--tb=short",
+                "--no-header",
+                f"--junitxml={results_dir / 'pytest-integration.xml'}",
+            ],
+            label="pytest integration",
+        )
+        return StageResult("python-integration", rc, duration=time.monotonic() - t0)
+    finally:
+        if started:
+            _stop_opcua_server(server_proc)
 
 
 # ---------------------------------------------------------------------------
@@ -349,19 +920,16 @@ def _stage_docker_smoke() -> StageResult:
     t0 = time.monotonic()
     docker = shutil.which("docker") or shutil.which("docker.exe")
     if not docker:
-        return StageResult("docker-smoke", 0, skipped=True,
-                           notes=["docker not in PATH"])
+        return StageResult("docker-smoke", 0, skipped=True, notes=["docker not in PATH"])
     compose_cmd = [docker, "compose"]
 
     rc = _run([docker, "build", "-t", "ijt_web_client", "."], label="docker build")
     if rc != 0:
-        return StageResult("docker-smoke", rc, duration=time.monotonic() - t0,
-                           notes=["docker build failed"])
+        return StageResult("docker-smoke", rc, duration=time.monotonic() - t0, notes=["docker build failed"])
 
     rc = _run(compose_cmd + ["up", "-d"], label="docker compose up -d")
     if rc != 0:
-        return StageResult("docker-smoke", rc, duration=time.monotonic() - t0,
-                           notes=["docker compose up failed"])
+        return StageResult("docker-smoke", rc, duration=time.monotonic() - t0, notes=["docker compose up failed"])
 
     # Wait up to 180 s for HTTP readiness (60 polls × up to 3 s each: 1 s connect timeout + 2 s sleep)
     _info("Waiting for http://127.0.0.1:3000 ...")
@@ -378,8 +946,9 @@ def _stage_docker_smoke() -> StageResult:
     _run(compose_cmd + ["down", "-v"], label="docker compose down -v")
 
     if not ready:
-        return StageResult("docker-smoke", 1, duration=time.monotonic() - t0,
-                           notes=["HTTP :3000 not ready within 180 s"])
+        return StageResult(
+            "docker-smoke", 1, duration=time.monotonic() - t0, notes=["HTTP :3000 not ready within 180 s"]
+        )
 
     notes = [] if ws_ready else ["WS :8001 not ready — backend may need OPC UA server"]
     return StageResult("docker-smoke", 0, duration=time.monotonic() - t0, notes=notes)
@@ -417,9 +986,19 @@ def _print_summary(results: list[StageResult], total_time: float) -> int:
 # Main
 # ---------------------------------------------------------------------------
 STAGES = [
-    "versions", "pip-install", "python-unit", "js-unit",
-    "python-live", "playwright-install", "playwright-smoke",
-    "playwright-e2e", "docker-smoke",
+    "versions",
+    "pip-install",
+    "python-lint",
+    "python-unit",
+    "js-lint",
+    "js-unit",
+    "infra-lint",
+    "python-live",
+    "python-integration",
+    "playwright-install",
+    "playwright-smoke",
+    "playwright-e2e",
+    "docker-smoke",
 ]
 
 
@@ -429,22 +1008,16 @@ def main() -> int:
         epilog=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--all",          action="store_true",
-                        help="Run every stage (unit + live + E2E)")
-    parser.add_argument("--integration",  action="store_true",
-                        help="Include live OPC UA + WS backend tests")
-    parser.add_argument("--e2e",          action="store_true",
-                        help="Include Playwright smoke + E2E tests")
-    parser.add_argument("--list",         action="store_true",
-                        help="Print available stages and exit")
-    parser.add_argument("--opcua-endpoint",
-                        default=os.getenv("OPCUA_TEST_ENDPOINT",
-                                          "opc.tcp://localhost:40451"))
-    parser.add_argument("--ws-url",
-                        default=os.getenv("WS_TEST_URL", "ws://localhost:8001"))
-    parser.add_argument("--ui-url",
-                        default=os.getenv("UI_TEST_BASE_URL",
-                                          "http://127.0.0.1:3000"))
+    parser.add_argument("--all", action="store_true", help="Run every stage (unit + live + E2E)")
+    parser.add_argument("--integration", action="store_true", help="Include live OPC UA + WS backend tests")
+    parser.add_argument("--e2e", action="store_true", help="Include Playwright smoke + E2E tests")
+    # CI-compatible phase flags (mirrors other project runners)
+    parser.add_argument("--phase1", action="store_true", help="Static/unit tests only — no live/E2E stages (CI use)")
+    parser.add_argument("--phase2", action="store_true", help="Live/E2E stages only — skip static analysis (CI use)")
+    parser.add_argument("--list", action="store_true", help="Print available stages and exit")
+    parser.add_argument("--opcua-endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451"))
+    parser.add_argument("--ws-url", default=os.getenv("WS_TEST_URL", "ws://localhost:8001"))
+    parser.add_argument("--ui-url", default=os.getenv("UI_TEST_BASE_URL", "http://127.0.0.1:3000"))
     args = parser.parse_args()
 
     if args.list:
@@ -453,23 +1026,30 @@ def main() -> int:
             print(f"  {s}")
         return 0
 
-    run_live = args.integration or args.all
-    run_e2e  = args.e2e or args.all
+    run_live = args.integration or args.all or args.phase2
+    run_e2e = args.e2e or args.all or args.phase2
+    skip_static = args.phase2  # --phase2: live/E2E only, skip static analysis
 
     python = Path(sys.executable)
     t_start = time.monotonic()
 
     # Check availability upfront — drives auto-detection of optional stages
     opcua_host, opcua_port = _parse_opcua_host_port(args.opcua_endpoint)
-    ws_host,    ws_port    = _parse_ws_host_port(args.ws_url)
-    opcua_up   = _port_open(opcua_host, opcua_port)
-    ws_up      = _port_open(ws_host, ws_port)
-    docker_up  = _docker_available()
+    ws_host, ws_port = _parse_ws_host_port(args.ws_url)
+    opcua_up = _port_open(opcua_host, opcua_port)
+    ws_up = _port_open(ws_host, ws_port)
+    docker_up = _docker_available()
 
     # Auto-detect optional stages when not explicitly requested
-    run_live   = run_live   or opcua_up
-    run_e2e    = run_e2e    or ws_up
-    run_docker = args.all   or docker_up
+    # --phase1: force off all live/docker stages
+    if args.phase1:
+        run_live = False
+        run_e2e = False
+        run_docker = False
+    else:
+        run_live = run_live or opcua_up
+        run_e2e = run_e2e or ws_up
+        run_docker = args.all or docker_up
 
     _banner("IJT Web Client — Cross-Platform Test Runner")
     _info(f"Python  : {python}")
@@ -486,13 +1066,20 @@ def main() -> int:
 
     results: list[StageResult] = []
 
-    # ── Always run ────────────────────────────────────────────────────────────
-    results.append(_stage_versions())
-    results.append(_stage_pip_install(python))
-    results.append(_stage_python_unit(python))
-    results.append(_stage_js_unit())
+    # Ensure test-results/ directory exists before any stage writes to it
+    (ROOT / "test-results").mkdir(parents=True, exist_ok=True)
 
-    # ── Live tests (optional) ─────────────────────────────────────────────────
+    # ── Static / unit stages (skipped when --phase2) ──────────────────────────
+    if not skip_static:
+        results.append(_stage_versions())
+        results.append(_stage_pip_install(python))
+        results.append(_stage_python_lint(python))
+        results.append(_stage_python_unit(python))
+        results.append(_stage_js_lint())
+        results.append(_stage_js_unit())
+        results.append(_stage_infra_lint())
+
+    # ── Live tests (optional, skipped when --phase1) ──────────────────────────
     if run_live:
         if opcua_up:
             results.append(_stage_python_live(python))
@@ -500,25 +1087,39 @@ def main() -> int:
             _skip("python-live: OPC UA server not reachable")
             results.append(StageResult("python-live", 0, skipped=True))
 
+    # ── Phase 2 — integration tests (auto-launch Docker OPC UA server) ────────
+    if not args.phase1 and (run_live or docker_up):
+        results.append(_stage_python_integration(python))
+    elif not args.phase1:
+        _skip("python-integration: OPC UA server not available and Docker not running")
+        results.append(
+            StageResult("python-integration", 0, skipped=True, notes=["start OPC UA server or Docker to enable"])
+        )
+
+    # Hint: multi-version testing via pyenv
+    if _cmd_available("pyenv"):
+        _info("pyenv detected — multi-version testing available: pyenv local X.Y.Z && python run_all_tests.py")
+
     # ── Playwright (smoke always runs; E2E auto-detected or explicit) ─────────
-    pw_install = _stage_playwright_install()
-    results.append(pw_install)
+    if not args.phase1:
+        pw_install = _stage_playwright_install()
+        results.append(pw_install)
 
-    if not pw_install.skipped and pw_install.rc == 0:
-        # Smoke always runs — catches 404s, JS errors, missing assets
-        results.append(_stage_playwright_smoke())
+        if not pw_install.skipped and pw_install.rc == 0:
+            # Smoke always runs — catches 404s, JS errors, missing assets
+            results.append(_stage_playwright_smoke())
 
-        if run_e2e:
-            if ws_up:
-                results.append(_stage_playwright_e2e(args.ws_url, args.ui_url))
-            else:
-                _skip("playwright-e2e: WebSocket backend not reachable")
-                results.append(StageResult("playwright-e2e", 0, skipped=True))
+            if run_e2e:
+                if ws_up:
+                    results.append(_stage_playwright_e2e(args.ws_url, args.ui_url))
+                else:
+                    _skip("playwright-e2e: WebSocket backend not reachable")
+                    results.append(StageResult("playwright-e2e", 0, skipped=True))
 
     # ── Docker smoke (auto-detected; skipped if Docker unavailable) ───────────
-    if run_docker:
+    if not args.phase1 and run_docker:
         results.append(_stage_docker_smoke())
-    else:
+    elif not args.phase1:
         _skip("docker-smoke: Docker not available")
         results.append(StageResult("docker-smoke", 0, skipped=True))
 

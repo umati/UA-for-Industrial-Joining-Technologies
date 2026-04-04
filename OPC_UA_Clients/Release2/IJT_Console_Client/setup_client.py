@@ -12,18 +12,17 @@ import sys
 import time
 import zipfile
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 
 def _detect_repo_root(start_dir: Path) -> Path:
     """
-    Find monorepo root by looking for both OPC_UA_Clients and OPC_UA_Servers.
+    Find repository root by looking for both OPC_UA_Clients and OPC_UA_Servers.
     Falls back to start_dir when running from standalone/container layouts.
     """
     for candidate in [start_dir] + list(start_dir.parents):
-        if (candidate / "OPC_UA_Clients").exists() and (
-            candidate / "OPC_UA_Servers"
-        ).exists():
+        if (candidate / "OPC_UA_Clients").exists() and (candidate / "OPC_UA_Servers").exists():
             return candidate
     return start_dir
 
@@ -42,12 +41,8 @@ IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 PROJECT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = _detect_repo_root(PROJECT_DIR)
-SIMULATOR_DIR = (
-    REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
-)
-SIMULATOR_ZIP = (
-    REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
-)
+SIMULATOR_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
+SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
 
 
@@ -55,9 +50,7 @@ def _python_in_venv() -> Path:
     return VENV_DIR / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
 
 
-def _run_command(
-    cmd: list[str], check: bool = True
-) -> subprocess.CompletedProcess | None:
+def _run_command(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess | None:
     if check:
         subprocess.check_call(cmd)  # nosec B603 — cmd is a hardcoded list, no user input
         return None
@@ -101,9 +94,7 @@ def _find_latest_python_executable() -> tuple[list[str], str]:
                 log.debug("Skipping Python version '%s': %s", version, exc)
                 continue
         _cur_ver = f"{sys.version_info[0]}.{sys.version_info[1]}"
-        candidates.append(
-            ((sys.version_info[0], sys.version_info[1]), [sys.executable], _cur_ver)
-        )
+        candidates.append(((sys.version_info[0], sys.version_info[1]), [sys.executable], _cur_ver))
 
         if not candidates:
             log.error("Could not find any Python 3.x interpreter.")
@@ -115,9 +106,7 @@ def _find_latest_python_executable() -> tuple[list[str], str]:
     for minor in range(20, 9, -1):
         exe = f"python3.{minor}"
         try:
-            subprocess.check_call(
-                [exe, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )  # nosec B603 B607 — hardcoded command, not user input
+            subprocess.check_call([exe, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # nosec B603 B607 — hardcoded command, not user input
             return ([exe], f"3.{minor}")
         except Exception as exc:  # nosec B112 — executable check failure; skip this candidate
             log.debug("Skipping Python executable '%s': %s", exe, exc)
@@ -169,9 +158,7 @@ def _require_python_314_or_newer(version_string: str | None = None) -> None:
         major, minor = sys.version_info[0], sys.version_info[1]
 
     if (major, minor) < (3, 14):
-        log.error(
-            "Python 3.14 or newer is required. Current interpreter: %s.%s", major, minor
-        )
+        log.error("Python 3.14 or newer is required. Current interpreter: %s.%s", major, minor)
         sys.exit(1)
 
 
@@ -208,9 +195,7 @@ def _resolve_python_executable(latest_cmd: list[str]) -> str:
             text=True,
         ).strip()
     except Exception as exc:
-        log.error(
-            "Failed to resolve Python executable from %s: %s", " ".join(latest_cmd), exc
-        )
+        log.error("Failed to resolve Python executable from %s: %s", " ".join(latest_cmd), exc)
         sys.exit(1)
 
     if not exe:
@@ -219,9 +204,7 @@ def _resolve_python_executable(latest_cmd: list[str]) -> str:
     return exe
 
 
-def _check_internet(
-    host: str = "8.8.8.8", port: int = 53, timeout: float = 3.0
-) -> bool:
+def _check_internet(host: str = "8.8.8.8", port: int = 53, timeout: float = 3.0) -> bool:
     sock = None
     try:
         socket.setdefaulttimeout(timeout)
@@ -310,9 +293,7 @@ def _find_simulator_executable() -> Path | None:
     return matches[0] if matches else None
 
 
-def _ensure_opc_server_running(
-    endpoint: str, *, context: str, allow_launch: bool = True
-) -> bool:
+def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: bool = True) -> bool:
     startup_timeout = _env_float("OPCUA_STARTUP_TIMEOUT_SEC", 45.0, 1.0)
     startup_poll = _env_float("OPCUA_STARTUP_POLL_SEC", 0.5, 0.1)
     if _wait_for_endpoint_ready(
@@ -327,13 +308,11 @@ def _ensure_opc_server_running(
         exe = _find_simulator_executable()
         if exe:
             if _is_simulator_process_running():
-                log.info(
-                    "OPC UA simulator is already running. Reusing existing process."
-                )
+                log.info("OPC UA simulator is already running. Reusing existing process.")
             else:
                 try:
                     log.info("Launching OPC UA simulator in separate terminal: %s", exe)
-                    popen_kwargs = {"cwd": str(exe.parent)}
+                    popen_kwargs: dict[str, Any] = {"cwd": str(exe.parent)}
                     if IS_WINDOWS:
                         popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
                     proc = subprocess.Popen([str(exe)], **popen_kwargs)  # nosec B603 B607 — hardcoded path, not user input  # pylint: disable=consider-using-with
@@ -354,9 +333,7 @@ def _ensure_opc_server_running(
                     log.warning("Failed to launch OPC UA simulator '%s': %s", exe, exc)
 
     if allow_launch and IS_DOCKER:
-        log.info(
-            "Docker mode detected (IS_DOCKER=true). Skipping local OPC UA simulator launch."
-        )
+        log.info("Docker mode detected (IS_DOCKER=true). Skipping local OPC UA simulator launch.")
 
     if _wait_for_endpoint_ready(
         endpoint,
@@ -419,9 +396,7 @@ def _create_virtualenv(latest_cmd: list[str]) -> None:
     log.info("Creating virtual environment with interpreter: %s", target_exe)
 
     try:
-        subprocess.check_call(
-            [target_exe, "-m", "venv", "--without-pip", str(VENV_DIR)]
-        )  # nosec B603 B607 — hardcoded command, not user input
+        subprocess.check_call([target_exe, "-m", "venv", "--without-pip", str(VENV_DIR)])  # nosec B603 B607 — hardcoded command, not user input
     except subprocess.CalledProcessError as exc:
         log.error("Venv creation failed: %s", exc)
         sys.exit(1)
@@ -463,9 +438,7 @@ def _install_python_packages() -> None:
 
     log.info("Using Python executable: %s", python)
     subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip"])  # nosec B603 B607 — hardcoded command, not user input
-    subprocess.check_call(
-        [str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_file)]
-    )  # nosec B603 B607 — hardcoded command, not user input
+    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_file)])  # nosec B603 B607 — hardcoded command, not user input
 
     try:
         subprocess.check_call(
@@ -486,9 +459,7 @@ def _install_python_packages() -> None:
     # asyncua 1.2b2+ is required for Python 3.14 support. Always install with --pre so pip
     # can find the current pre-release. --pre does NOT force a pre-release: once asyncua
     # 1.2.x stable is published, pip automatically picks that as the highest matching version.
-    log.info(
-        "Installing asyncua (--pre enabled for 1.2b2+ / Python 3.14): %s", asyncua_spec
-    )
+    log.info("Installing asyncua (--pre enabled for 1.2b2+ / Python 3.14): %s", asyncua_spec)
     subprocess.check_call(
         [  # nosec B603 B607 — hardcoded command, not user input
             str(python),
@@ -536,9 +507,7 @@ def _is_runtime_ready() -> bool:
     try:
         _run_command([str(python), "-c", _dep_check_cmd])
     except Exception:
-        log.info(
-            "Runtime dependency check failed in %s. Triggering full setup.", python
-        )
+        log.info("Runtime dependency check failed in %s. Triggering full setup.", python)
         return False
 
     env_max_age = int(os.getenv("ENV_MAX_AGE_DAYS", "14"))
@@ -592,9 +561,7 @@ def _run_client(url_arg: str, passthrough: list[str] | None) -> None:
     try:
         subprocess.call(cmd)  # nosec B603 — cmd is a hardcoded list, no user input
     except KeyboardInterrupt:
-        log.info(
-            "KeyboardInterrupt received in setup wrapper while waiting for console client. Exiting cleanly."
-        )
+        log.info("KeyboardInterrupt received in setup wrapper while waiting for console client. Exiting cleanly.")
 
 
 def main() -> None:
@@ -625,17 +592,13 @@ def main() -> None:
 
     if not force_full and _is_runtime_ready():
         url_arg = _validate_url_or_default(args.url)
-        _ensure_opc_server_running(
-            url_arg, context="Startup pre-check", allow_launch=True
-        )
+        _ensure_opc_server_running(url_arg, context="Startup pre-check", allow_launch=True)
         _run_client(url_arg, passthrough=unknown)
         return
 
     log.info("Starting full client setup...")
     if not _check_internet():
-        log.error(
-            "No internet connection. Please connect to the internet and try again."
-        )
+        log.error("No internet connection. Please connect to the internet and try again.")
         sys.exit(1)
 
     log.info("Newest Python detected on this system: %s", latest_ver)

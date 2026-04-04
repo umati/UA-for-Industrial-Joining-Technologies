@@ -42,15 +42,11 @@ async def test_get_joint_list_returns_array(opcua_client, tools_instances, ns_in
         _name, tool_node = tools_instances[0]
         ident = await find_child_by_browse_name(tool_node, BN.IDENTIFICATION, ns_di)
         if ident is not None:
-            pi_node = await find_child_by_browse_name(
-                ident, "ProductInstanceUri", ns_di
-            )
+            pi_node = await find_child_by_browse_name(ident, "ProductInstanceUri", ns_di)
             if pi_node is not None:
                 pi_uri = await pi_node.read_value()
     if pi_uri is None:
-        pytest.skip(
-            "Could not read ProductInstanceUri from first tool — required for GetJointList"
-        )
+        pytest.skip("Could not read ProductInstanceUri from first tool — required for GetJointList")
     try:
         result = await jm.call_method(
             method_node.nodeid,
@@ -121,9 +117,7 @@ async def test_send_joint_with_valid_data(opcua_client, ns_indices):
     try:
         joint_type = getattr(ua, "JointDataType", None)
         if joint_type is None:
-            pytest.skip(
-                "JointDataType not available after load_data_type_definitions()"
-            )
+            pytest.skip("JointDataType not available after load_data_type_definitions()")
         joint_data = joint_type()
         # Populate mandatory string field(s) with a placeholder if discoverable
         if hasattr(joint_data, "JointId"):

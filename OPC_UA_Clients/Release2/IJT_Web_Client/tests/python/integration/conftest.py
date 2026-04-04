@@ -8,6 +8,7 @@ Integration test conftest:
   3. Patches asyncua _send_request so every request uses client.timeout (60 s)
      instead of asyncua's 1-second internal default.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -24,16 +25,16 @@ import pytest
 
 # ── Path constants ─────────────────────────────────────────────────────────────
 _INTEGRATION_DIR = Path(__file__).resolve().parent
-_WEB_CLIENT_ROOT = _INTEGRATION_DIR.parents[2]          # …/IJT_Web_Client/
-_RELEASE2_OPC    = _WEB_CLIENT_ROOT.parent              # …/OPC_UA_Clients/Release2/
-_REPO_ROOT       = _RELEASE2_OPC.parents[1]             # …/UA-for-Industrial-Joining-Technologies/
+_WEB_CLIENT_ROOT = _INTEGRATION_DIR.parents[2]  # …/IJT_Web_Client/
+_RELEASE2_OPC = _WEB_CLIENT_ROOT.parent  # …/OPC_UA_Clients/Release2/
+_REPO_ROOT = _RELEASE2_OPC.parents[1]  # …/UA-for-Industrial-Joining-Technologies/
 _SERVER_RELEASE2 = _REPO_ROOT / "OPC_UA_Servers" / "Release2"
-_SERVER_ZIP      = _SERVER_RELEASE2 / "OPC_UA_IJT_Server_Simulator.zip"
-_SERVER_DIR      = _SERVER_RELEASE2 / "OPC_UA_IJT_Server_Simulator"
-_SERVER_EXE      = _SERVER_DIR / "opcua_ijt_demo_application.exe"
+_SERVER_ZIP = _SERVER_RELEASE2 / "OPC_UA_IJT_Server_Simulator.zip"
+_SERVER_DIR = _SERVER_RELEASE2 / "OPC_UA_IJT_Server_Simulator"
+_SERVER_EXE = _SERVER_DIR / "opcua_ijt_demo_application.exe"
 
 _OPCUA_PORT = 40451
-_WS_PORT    = 8001
+_WS_PORT = 8001
 
 
 # ── asyncua 1.2b2 bug-fix ─────────────────────────────────────────────────────
@@ -46,8 +47,7 @@ def _patch_asyncua_send_timeout() -> None:
 
         _orig = _uc.UaClient._send_request
 
-        async def _fixed(self, request, timeout=None,
-                         message_type=ua.MessageType.SecureMessage):
+        async def _fixed(self, request, timeout=None, message_type=ua.MessageType.SecureMessage):
             if timeout is None:
                 timeout = self._timeout
             return await _orig(self, request, timeout, message_type)

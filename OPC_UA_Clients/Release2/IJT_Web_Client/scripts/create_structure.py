@@ -7,6 +7,7 @@ Creates Resources/css/ and tests/legacy/ with the correct content.
 Run once (or let RUN_ALL_TESTS.bat call it automatically):
     python create_structure.py
 """
+
 import sys
 from pathlib import Path
 
@@ -174,6 +175,7 @@ python -m pytest tests/legacy/TestExample.py -v
 # Setup logic
 # ---------------------------------------------------------------------------
 
+
 def _write(path: Path, content: str, *, description: str) -> None:
     if path.exists():
         print(f"  [SKIP]   {description} — already exists")
@@ -216,10 +218,14 @@ def main() -> int:
     # --- tests/legacy/ ---
     legacy_dir = ROOT / "tests" / "legacy"
     legacy_dir.mkdir(parents=True, exist_ok=True)
-    _write(legacy_dir / "README.md",                  _LEGACY_README_MD,             description="tests/legacy/README.md")
-    _write(legacy_dir / "TestSubscriptionHandler.py", _TEST_SUBSCRIPTION_HANDLER_PY, description="tests/legacy/TestSubscriptionHandler.py")
-    _write(legacy_dir / "TestExample.py",             _TEST_EXAMPLE_PY,             description="tests/legacy/TestExample.py")
-    _write(legacy_dir / "test.json",                  "",                            description="tests/legacy/test.json")
+    _write(legacy_dir / "README.md", _LEGACY_README_MD, description="tests/legacy/README.md")
+    _write(
+        legacy_dir / "TestSubscriptionHandler.py",
+        _TEST_SUBSCRIPTION_HANDLER_PY,
+        description="tests/legacy/TestSubscriptionHandler.py",
+    )
+    _write(legacy_dir / "TestExample.py", _TEST_EXAMPLE_PY, description="tests/legacy/TestExample.py")
+    _write(legacy_dir / "test.json", "", description="tests/legacy/test.json")
 
     print()
     print("  Structure setup complete.")

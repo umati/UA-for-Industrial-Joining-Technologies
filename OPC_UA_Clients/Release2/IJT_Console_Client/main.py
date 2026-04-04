@@ -55,9 +55,7 @@ async def run_method_call(server_url: str, args):
 
         elif args.call == "start_selected_joining":
             if args.deselect not in ("true", "false"):
-                ijt_log.error(
-                    "--deselect must be true|false for start_selected_joining"
-                )
+                ijt_log.error("--deselect must be true|false for start_selected_joining")
                 return
             result = await methods.start_selected_joining(
                 object_nodeid="ns=1;s=TighteningSystem/JoiningProcessManagement",
@@ -74,9 +72,7 @@ async def run_method_call(server_url: str, args):
     finally:
         await client.cleanup()
         ijt_log.info("Client shutdown complete.")
-        ijt_log.info(
-            "Note: Any late server responses after disconnect can be safely ignored."
-        )
+        ijt_log.info("Note: Any late server responses after disconnect can be safely ignored.")
 
 
 async def run_client(server_url: str):
@@ -91,9 +87,7 @@ async def run_client(server_url: str):
     finally:
         await client.cleanup()
     ijt_log.info("Client shutdown complete.")
-    ijt_log.info(
-        "Note: Any late server responses after disconnect can be safely ignored."
-    )
+    ijt_log.info("Note: Any late server responses after disconnect can be safely ignored.")
 
 
 def main():
@@ -106,21 +100,15 @@ def main():
         help="Method to call (select_joint | enable_asset | start_selected_joining)",
     )
     parser.add_argument("--joint-id", type=str, help="SelectJoint: JointId")
-    parser.add_argument(
-        "--origin-id", type=str, help="SelectJoint: JointOriginId (optional)"
-    )
-    parser.add_argument(
-        "--enable", type=str, choices=["true", "false"], help="EnableAsset: true|false"
-    )
+    parser.add_argument("--origin-id", type=str, help="SelectJoint: JointOriginId (optional)")
+    parser.add_argument("--enable", type=str, choices=["true", "false"], help="EnableAsset: true|false")
     parser.add_argument(
         "--deselect",
         type=str,
         choices=["true", "false"],
         help="StartSelectedJoining: true|false",
     )
-    parser.add_argument(
-        "--no-events", action="store_true", help="(ignored in method mode)"
-    )
+    parser.add_argument("--no-events", action="store_true", help="(ignored in method mode)")
 
     args = parser.parse_args()
     server_url = validate_url(args.url)
@@ -138,9 +126,7 @@ def main():
         loop.run_until_complete(task)
     except KeyboardInterrupt:
         ijt_log.info("KeyboardInterrupt received. Cancelling tasks...")
-        ijt_log.info(
-            "Shutdown initiated. Late OPC UA responses may appear in logs but are safe to ignore."
-        )
+        ijt_log.info("Shutdown initiated. Late OPC UA responses may appear in logs but are safe to ignore.")
         task.cancel()
         with contextlib.suppress(Exception):
             loop.run_until_complete(asyncio.gather(task, return_exceptions=True))
@@ -156,9 +142,7 @@ def main():
             for t in pending:
                 t.cancel()
             with contextlib.suppress(Exception):
-                loop.run_until_complete(
-                    asyncio.gather(*pending, return_exceptions=True)
-                )
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
         loop.close()
         ijt_log.info("Event loop closed.")
 

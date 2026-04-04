@@ -43,17 +43,18 @@ class TestEndpointInjection:
     """Unusual endpoint strings must always produce an exception dict, never crash."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("endpoint", [
-        "opc.tcp://localhost; rm -rf /",
-        "opc.tcp://`whoami`:40451",
-        "opc.tcp://$(id):40451",
-        "opc.tcp://127.0.0.1:40451\n\nGET / HTTP/1.1",
-        "opc.tcp://' OR '1'='1",
-        "opc.tcp://<script>alert(1)</script>:40451",
-    ])
-    async def test_shell_metacharacter_endpoint_returns_exception(
-        self, endpoint: str, monkeypatch
-    ):
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            "opc.tcp://localhost; rm -rf /",
+            "opc.tcp://`whoami`:40451",
+            "opc.tcp://$(id):40451",
+            "opc.tcp://127.0.0.1:40451\n\nGET / HTTP/1.1",
+            "opc.tcp://' OR '1'='1",
+            "opc.tcp://<script>alert(1)</script>:40451",
+        ],
+    )
+    async def test_shell_metacharacter_endpoint_returns_exception(self, endpoint: str, monkeypatch):
         """Shell metacharacters/injection patterns in endpoint → exception dict, not crash."""
         monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "1")
         monkeypatch.setenv("OPCUA_CONNECT_DELAY_SEC", "0.01")
@@ -63,9 +64,7 @@ class TestEndpointInjection:
             conn = Connection(endpoint, AsyncMock())
             result = await conn.connect()
 
-        assert "exception" in result, (
-            f"Expected exception dict for malicious endpoint {endpoint!r}, got {result}"
-        )
+        assert "exception" in result, f"Expected exception dict for malicious endpoint {endpoint!r}, got {result}"
 
     @pytest.mark.asyncio
     async def test_empty_string_endpoint_returns_exception(self, monkeypatch):
@@ -109,11 +108,13 @@ class TestOversizedPayloads:
         large_args = [{"dataType": 12, "value": f"arg_{i}"} for i in range(1000)]
 
         with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=False)):
-            result = await conn.methodcall({
-                "objectnode": {"NamespaceIndex": 1, "Identifier": "TS"},
-                "methodnode": {"NamespaceIndex": 1, "Identifier": "M"},
-                "arguments": large_args,
-            })
+            result = await conn.methodcall(
+                {
+                    "objectnode": {"NamespaceIndex": 1, "Identifier": "TS"},
+                    "methodnode": {"NamespaceIndex": 1, "Identifier": "M"},
+                    "arguments": large_args,
+                }
+            )
 
         assert "exception" in result
 
@@ -139,9 +140,7 @@ class TestOversizedPayloads:
         """browse() with a 5000-char nodeid → exception dict, not crash."""
         conn = _make_connection()
         conn.client = MagicMock()
-        conn.client.get_node = MagicMock(
-            side_effect=Exception("Invalid node id: string too long")
-        )
+        conn.client.get_node = MagicMock(side_effect=Exception("Invalid node id: string too long"))
 
         result = await conn.browse({"nodeid": "ns=1;s=" + "x" * 5000})
         assert "exception" in result
@@ -182,17 +181,17 @@ class TestMethodcallArgumentSanitization:
 
         with patch("python.connection.serialize_full_event", return_value=[]):
             with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
-                result = await conn.methodcall({
-                    "objectnode": {"NamespaceIndex": 1, "Identifier": "TS"},
-                    "methodnode": {"NamespaceIndex": 1, "Identifier": "M"},
-                    "arguments": [{"dataType": 12, "value": None}],
-                })
+                result = await conn.methodcall(
+                    {
+                        "objectnode": {"NamespaceIndex": 1, "Identifier": "TS"},
+                        "methodnode": {"NamespaceIndex": 1, "Identifier": "M"},
+                        "arguments": [{"dataType": 12, "value": None}],
+                    }
+                )
 
         assert "output" in result
         assert len(captured) == 1
-        assert captured[0].Value == "", (
-            f"Expected empty string sanitization of None, got {captured[0].Value!r}"
-        )
+        assert captured[0].Value == "", f"Expected empty string sanitization of None, got {captured[0].Value!r}"
 
     @pytest.mark.asyncio
     async def test_localized_text_none_value_sanitized_to_empty_localized_text(self):
@@ -224,11 +223,13 @@ class TestMethodcallArgumentSanitization:
 
         with patch("python.connection.serialize_full_event", return_value=[]):
             with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
-                result = await conn.methodcall({
-                    "objectnode": {"NamespaceIndex": 1, "Identifier": "TS"},
-                    "methodnode": {"NamespaceIndex": 1, "Identifier": "M"},
-                    "arguments": [{"dataType": 21, "value": None}],
-                })
+                result = await conn.methodcall(
+                    {
+                        "objectnode": {"NamespaceIndex": 1, "Identifier": "TS"},
+                        "methodnode": {"NamespaceIndex": 1, "Identifier": "M"},
+                        "arguments": [{"dataType": 21, "value": None}],
+                    }
+                )
 
         assert "output" in result
         assert len(captured) == 1

@@ -16,6 +16,7 @@ import pytest
 try:
     import pytz  # noqa: E402
     from asyncua import ua  # noqa: E402
+
     HAS_ASYNCUA = True
 except ImportError:  # pragma: no cover - environment-dependent
     pytz = None

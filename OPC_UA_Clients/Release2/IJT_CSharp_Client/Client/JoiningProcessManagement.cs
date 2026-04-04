@@ -3,6 +3,7 @@
 using Opc.Ua;
 using Opc.Ua.Client;
 using IJT_CSharp_Client.Helpers;
+using Microsoft.Extensions.Logging;
 
 namespace IJT_CSharp_Client.Client;
 
@@ -10,8 +11,9 @@ namespace IJT_CSharp_Client.Client;
 /// OPC UA IJT Joining Process Management operations:
 /// GetJoiningProcessList, SelectJoiningProcess, and GetSelectedJoiningProgram.
 /// </summary>
-public sealed class JoiningProcessManagement
+public sealed class JoiningProcessManagement : IDisposable
 {
+    private readonly ILogger<JoiningProcessManagement> _log = IjtLog.For<JoiningProcessManagement>();
     private readonly IjtSession _s;
     private NodeId?             _jpmNodeId;
 
@@ -37,7 +39,7 @@ public sealed class JoiningProcessManagement
         {
             node = _s.IjtBaseObjectId(
                 UAModel.IJTBase.Objects.JoiningSystemType_JoiningProcessManagement);
-            Console.WriteLine("  ⚠ JoiningProcessManagement fallback to type NodeId.");
+            _log.LogWarning("⚠ JoiningProcessManagement fallback to type NodeId.");
         }
 
         _jpmNodeId = node;
@@ -48,11 +50,12 @@ public sealed class JoiningProcessManagement
 
     /// <summary>
     /// Calls <c>JoiningProcessManagement/GetJoiningProcessList</c> (NodeId 7060).
-    /// No input arguments. Output: list of joining process information.
+    /// Input: ProductInstanceUri (string). Output: list of joining process information, Status (int32), StatusMessage (LocalizedText).
     /// </summary>
-    public void GetJoiningProcessList()
+    /// <param name="productInstanceUri">Optional product instance URI filter (empty string = all).</param>
+    public void GetJoiningProcessList(string productInstanceUri = "")
     {
-        Console.WriteLine("\n── GetJoiningProcessList ────────────────────────────");
+        _log.LogInformation("\n── GetJoiningProcessList (uri={Uri}) ────────────────", productInstanceUri);
 
         var objectId = GetJpmNode();
         var methodId = _s.IjtBaseMethodId(
@@ -60,24 +63,27 @@ public sealed class JoiningProcessManagement
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ JoiningProcessManagement node or method not found.");
+            _log.LogError("✗ JoiningProcessManagement node or method not found.");
             return;
         }
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId);
+            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri);
             if (outputs.Count == 0)
             {
-                Console.WriteLine("  [DATA] No output (empty list or not supported).");
+                _log.LogInformation("[DATA] No output (empty list or not supported).");
                 return;
             }
-            Console.WriteLine($"  ✓ GetJoiningProcessList returned {outputs.Count} output(s):");
-            ExtensionObjectHelper.PrintOutputArguments(outputs);
+            IjtJsonSerializer.PrintMethodOutputs("GetJoiningProcessList", outputs);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ✗ GetJoiningProcessList error: {ex.Message}");
+            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(GetJoiningProcessList));
         }
     }
 
@@ -90,12 +96,14 @@ public sealed class JoiningProcessManagement
     /// <param name="joiningProcessId">Unique joining process identifier.</param>
     /// <param name="joiningProcessOriginId">Optional origin system identifier.</param>
     /// <param name="selectionName">Optional friendly selection name.</param>
+    /// <param name="productInstanceUri">Optional product instance URI (empty string = not specified).</param>
     public void SelectJoiningProcess(
         string joiningProcessId,
         string joiningProcessOriginId = "",
-        string selectionName = "")
+        string selectionName = "",
+        string productInstanceUri = "")
     {
-        Console.WriteLine($"\n── SelectJoiningProcess (id={joiningProcessId}) ──────────────");
+        _log.LogInformation("\n── SelectJoiningProcess (id={Id}) ──────────────────", joiningProcessId);
 
         var objectId = GetJpmNode();
         var methodId = _s.IjtBaseMethodId(
@@ -103,7 +111,7 @@ public sealed class JoiningProcessManagement
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ JoiningProcessManagement node or method not found.");
+            _log.LogError("✗ JoiningProcessManagement node or method not found.");
             return;
         }
 
@@ -117,13 +125,17 @@ public sealed class JoiningProcessManagement
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, ext);
-            Console.WriteLine("  ✓ SelectJoiningProcess called.");
-            ExtensionObjectHelper.PrintOutputArguments(outputs);
+            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, ext);
+            _log.LogInformation("✓ SelectJoiningProcess called.");
+            IjtJsonSerializer.PrintMethodOutputs("SelectJoiningProcess", outputs);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ✗ SelectJoiningProcess error: {ex.Message}");
+            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(SelectJoiningProcess));
         }
     }
 
@@ -131,12 +143,13 @@ public sealed class JoiningProcessManagement
 
     /// <summary>
     /// Calls <c>JoiningProcessManagement/GetSelectedJoiningProgram</c>.
-    /// No input arguments. Output: JoiningProgram information.
+    /// Input: ProductInstanceUri (string). Output: JoiningProgram information, Status (int32), StatusMessage (LocalizedText).
     /// Uses <c>JoiningProcessManagementType_GetSelectedJoiningProgram</c> (NodeId 7091) as fallback.
     /// </summary>
-    public void GetSelectedJoiningProgram()
+    /// <param name="productInstanceUri">Optional product instance URI filter (empty string = not specified).</param>
+    public void GetSelectedJoiningProgram(string productInstanceUri = "")
     {
-        Console.WriteLine("\n── GetSelectedJoiningProgram ────────────────────────");
+        _log.LogInformation("\n── GetSelectedJoiningProgram ────────────────────────");
 
         var jpmNode = GetJpmNode();
 
@@ -154,19 +167,29 @@ public sealed class JoiningProcessManagement
 
         if (jpmNode.IsNullNodeId || methodId.IsNullNodeId)
         {
-            Console.WriteLine("  ✗ JoiningProcessManagement node or method not found.");
+            _log.LogError("✗ JoiningProcessManagement node or method not found.");
             return;
         }
 
         try
         {
-            var outputs = _s.CallMethod(jpmNode, methodId);
-            Console.WriteLine("  ✓ GetSelectedJoiningProgram result:");
-            ExtensionObjectHelper.PrintOutputArguments(outputs);
+            var outputs = _s.CallMethod(jpmNode, methodId, productInstanceUri);
+            _log.LogInformation("✓ GetSelectedJoiningProgram result:");
+            IjtJsonSerializer.PrintMethodOutputs("GetSelectedJoiningProgram", outputs);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"  ✗ GetSelectedJoiningProgram error: {ex.Message}");
+            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(GetSelectedJoiningProgram));
         }
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
     }
 }

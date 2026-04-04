@@ -291,9 +291,7 @@ class BN:
     SIMULATE_EVENTS_AND_CONDITIONS = "SimulateEventsAndConditions"
     # Simulation methods (App ns, verified names from server browse)
     SIMULATE_SINGLE_RESULT = "SimulateSingleResult"
-    SIMULATE_BATCH_OR_SYNC_RESULT = (
-        "SimulateBatch_Or_Sync_Result"  # underscores as in server
-    )
+    SIMULATE_BATCH_OR_SYNC_RESULT = "SimulateBatch_Or_Sync_Result"  # underscores as in server
     SIMULATE_JOB_RESULT = "SimulateJobResult"
     SIMULATE_BULK_RESULTS = "SimulateBulkResults"
     SEND_SIMULATED_BULK_RESULTS = "SendSimulatedBulkResults"

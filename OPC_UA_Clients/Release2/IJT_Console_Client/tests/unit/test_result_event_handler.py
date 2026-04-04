@@ -96,9 +96,7 @@ def test_short_result_event_to_dict_is_copy_not_reference():
 async def test_result_event_handler_initializes():
     handler = ResultEventHandler("opc.tcp://localhost:40451")
     assert handler.server_url == "opc.tcp://localhost:40451"
-    assert not hasattr(handler, "client"), (
-        "client must not be stored — it caused race conditions"
-    )
+    assert not hasattr(handler, "client"), "client must not be stored — it caused race conditions"
 
 
 # ---------------------------------------------------------------------------
@@ -111,9 +109,7 @@ async def test_process_event_calls_log_result_to_file():
     handler = ResultEventHandler("opc.tcp://localhost:40451")
 
     evt = _make_short_result_event("e-1", "TighteningDone")
-    with patch(
-        "result_event_handler.log_result_to_file", new_callable=AsyncMock
-    ) as mock_log:
+    with patch("result_event_handler.log_result_to_file", new_callable=AsyncMock) as mock_log:
         await handler.process_event(evt)
     mock_log.assert_awaited_once_with(evt)
 
@@ -273,9 +269,7 @@ async def test_event_notification_calls_log_without_client():
     event.Message = ua.LocalizedText("Pass", "en")
     event.EventId = b"reg-test-bytes"
 
-    with patch(
-        "result_event_handler.log_result_event_details", side_effect=_capture_log
-    ):
+    with patch("result_event_handler.log_result_event_details", side_effect=_capture_log):
         await handler.event_notification(event)
 
     assert len(call_args_list) == 1
@@ -327,9 +321,7 @@ async def test_process_event_handles_short_result_event_correctly():
         Message="Completed",
         EventId="q-evt-001",
     )
-    with patch(
-        "result_event_handler.log_result_to_file", new_callable=AsyncMock
-    ) as mock_log:
+    with patch("result_event_handler.log_result_to_file", new_callable=AsyncMock) as mock_log:
         await handler.process_event(evt)
     mock_log.assert_awaited_once_with(evt)
 
@@ -338,10 +330,7 @@ async def test_process_event_handles_short_result_event_correctly():
 async def test_process_event_queue_overflow_does_not_block():
     """Many concurrent process_event calls complete without blocking."""
     handler = ResultEventHandler("opc.tcp://localhost:40451")
-    events = [
-        ShortResultEvent(EventType="T", Result={}, Message=f"msg{i}", EventId=f"id-{i}")
-        for i in range(50)
-    ]
+    events = [ShortResultEvent(EventType="T", Result={}, Message=f"msg{i}", EventId=f"id-{i}") for i in range(50)]
     with patch("result_event_handler.log_result_to_file", new_callable=AsyncMock):
         tasks = [asyncio.create_task(handler.process_event(e)) for e in events]
         await asyncio.gather(*tasks, return_exceptions=True)

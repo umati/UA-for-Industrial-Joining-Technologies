@@ -5,6 +5,7 @@ Verifies that the web client's serialize_data and utils modules expose the
 expected public API and produce correct output — without importing from any
 other client.
 """
+
 import json
 from datetime import datetime, timezone
 
@@ -27,17 +28,16 @@ def _as_object(value):
 
 def test_serialize_data_has_required_api():
     """Web client serialize_data must expose the expected public functions."""
-    for fn_name in ("serialize_value", "serialize_tuple", "serialize_full_event",
-                    "serialize_class_instance_as_dict"):
-        assert hasattr(web_serialize, fn_name), (
-            f"serialize_data missing required function: {fn_name}"
-        )
+    for fn_name in ("serialize_value", "serialize_tuple", "serialize_full_event", "serialize_class_instance_as_dict"):
+        assert hasattr(web_serialize, fn_name), f"serialize_data missing required function: {fn_name}"
 
 
 def test_serialize_value_primitives():
-    assert web_serialize.serialize_value(None) is None or \
-           web_serialize.serialize_value(None) == "null" or \
-           _as_object(web_serialize.serialize_value(None)) is None  # handles str-JSON variant
+    assert (
+        web_serialize.serialize_value(None) is None
+        or web_serialize.serialize_value(None) == "null"
+        or _as_object(web_serialize.serialize_value(None)) is None
+    )  # handles str-JSON variant
     assert _as_object(web_serialize.serialize_value(True)) is True
     assert _as_object(web_serialize.serialize_value(42)) == 42
     assert _as_object(web_serialize.serialize_value("hello")) == "hello"
@@ -101,4 +101,3 @@ def test_nodeid_to_str_string_node():
     result = web_utils.nodeid_to_str(node)
     assert "TighteningSystem" in result
     assert "1" in result
-

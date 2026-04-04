@@ -8,6 +8,8 @@
 #
 # Base image: ubuntu:24.04 — matches build machine glibc (2.39)
 #
+# Default port: 40451 — always used when launching normally.
+#
 # Build (from this Release2/ directory):
 #   docker build -t opcua-ijt-server .
 #
@@ -17,6 +19,9 @@
 #
 # Override advertised hostname for remote OPC UA clients:
 #   docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=192.168.1.10 opcua-ijt-server
+#
+# Port override (automated testing ONLY — do NOT use for normal operation):
+#   OPCUA_SERVER_PORT=40452 docker compose up
 # ─────────────────────────────────────────────────────────────────────────────
 
 FROM ubuntu:24.04
@@ -63,8 +68,15 @@ RUN printf '%s\n' \
     'fi' \
     'export OPCUA_HOSTNAME' \
     '' \
+    '# Resolve OPCUA_SERVER_PORT: override serverEndpointTCPPort in server_configuration.json' \
+    'OPCUA_SERVER_PORT="${OPCUA_SERVER_PORT:-40451}"' \
+    'export OPCUA_SERVER_PORT' \
+    'if [ -f server_configuration.json ]; then' \
+    '  sed -i "s/\"serverEndpointTCPPort\": [0-9]*/\"serverEndpointTCPPort\": ${OPCUA_SERVER_PORT}/" server_configuration.json' \
+    'fi' \
+    '' \
     'echo "[INFO] OPC UA IJT Server Simulator"' \
-    'echo "[INFO] Endpoint : opc.tcp://${OPCUA_HOSTNAME}:40451"' \
+    'echo "[INFO] Endpoint : opc.tcp://${OPCUA_HOSTNAME}:${OPCUA_SERVER_PORT}"' \
     '' \
     '[ -f opcua_ijt_demo_application ] || { echo "[ERROR] Binary not found in $(pwd)" >&2; exit 1; }' \
     '' \
@@ -75,7 +87,8 @@ RUN printf '%s\n' \
 EXPOSE 40451
 
 ENV RUNNING_IN_DOCKER=1 \
-    OPCUA_HOSTNAME=""
+    OPCUA_HOSTNAME="" \
+    OPCUA_SERVER_PORT="40451"
 
 # Run as non-root for security
 RUN useradd -r -s /bin/false opcua && chown -R opcua:opcua /app
@@ -83,6 +96,6 @@ USER opcua
 
 # TCP readiness probe. start-period covers server init (~3 s; no Wine JIT overhead).
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 \
-    CMD nc -z localhost 40451 || exit 1
+    CMD nc -z localhost ${OPCUA_SERVER_PORT:-40451} || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]

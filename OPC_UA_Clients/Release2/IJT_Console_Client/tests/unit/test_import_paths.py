@@ -31,9 +31,7 @@ def test_all_source_files_are_snake_case():
     """All .py files must have snake_case names (no CamelCase)."""
     for f in _CONSOLE_ROOT.glob("*.py"):
         name = f.stem  # filename without .py
-        assert name == name.lower(), (
-            f"{f.name} is not snake_case — Python modules must be lowercase"
-        )
+        assert name == name.lower(), f"{f.name} is not snake_case — Python modules must be lowercase"
 
 
 # ---------------------------------------------------------------------------
@@ -55,9 +53,7 @@ def test_no_cross_client_imports_in_source(source_file):
     path = _CONSOLE_ROOT / source_file
     content = path.read_text(encoding="utf-8")
     for pattern in _FORBIDDEN_IMPORT_PATTERNS:
-        assert not pattern.search(content), (
-            f"{source_file} imports from forbidden module: {pattern.pattern}"
-        )
+        assert not pattern.search(content), f"{source_file} imports from forbidden module: {pattern.pattern}"
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +135,4 @@ def test_local_imports_exist_as_files(source_file):
         if mod in _STDLIB_AND_THIRD_PARTY:
             continue
         if mod in _LOCAL_MODULES:
-            assert (_CONSOLE_ROOT / f"{mod}.py").exists(), (
-                f"{source_file} imports {mod!r} but {mod}.py does not exist"
-            )
+            assert (_CONSOLE_ROOT / f"{mod}.py").exists(), f"{source_file} imports {mod!r} but {mod}.py does not exist"

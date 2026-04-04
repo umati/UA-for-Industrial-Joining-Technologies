@@ -8,6 +8,7 @@ Handles:
   - Force docker: builds image, starts compose stack, optionally tails logs
   - Force local: runs setup_project.py directly
 """
+
 import argparse
 import shutil
 import subprocess  # nosec B404 — subprocess used to invoke docker/compose; no user-controlled input

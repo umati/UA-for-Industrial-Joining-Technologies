@@ -15,7 +15,7 @@ import pytest
 
 _ = pytest.importorskip("asyncua", reason="asyncua not installed")
 _ = pytest.importorskip("pytz", reason="pytz not installed")
-import pytz  # noqa: E402
+import pytz  # type: ignore[import-untyped]  # noqa: E402
 from asyncua import ua  # noqa: E402
 
 from utils import (  # noqa: E402

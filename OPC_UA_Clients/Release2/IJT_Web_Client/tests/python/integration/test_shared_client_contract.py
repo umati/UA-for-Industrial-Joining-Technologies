@@ -35,6 +35,7 @@ def simulation_methods() -> list:
         return []
     return asyncio.run(discover_simulation_methods(endpoint))
 
+
 def _assert_adapter_response_ok(adapter_name: str, action: str, response) -> None:
     assert isinstance(response, dict), (
         f"{adapter_name} {action} should return a structured dict, got: {type(response).__name__}"
@@ -51,12 +52,8 @@ def _assert_events_payload(adapter_name: str, events: dict) -> None:
     assert isinstance(events["total"], int), f"{adapter_name} events total must be int: {events}"
     assert events["total"] >= 0, f"{adapter_name} events total must be non-negative: {events}"
     if "result_events" in events:
-        assert isinstance(events["result_events"], int), (
-            f"{adapter_name} result_events must be int: {events}"
-        )
-        assert 0 <= events["result_events"] <= events["total"], (
-            f"{adapter_name} invalid result_events count: {events}"
-        )
+        assert isinstance(events["result_events"], int), f"{adapter_name} result_events must be int: {events}"
+        assert 0 <= events["result_events"] <= events["total"], f"{adapter_name} invalid result_events count: {events}"
 
 
 def _is_websocket_startup_error(exc: Exception) -> bool:
@@ -80,7 +77,7 @@ def _is_websocket_startup_error(exc: Exception) -> bool:
                 ws_related.append(typ)
         if ws_related and isinstance(exc, tuple(ws_related)):
             return True
-    except (ImportError, AttributeError):
+    except ImportError, AttributeError:
         # If the optional 'websockets' dependency is missing or does not expose
         # the expected exception types, fall back to the heuristic checks below.
         pass
@@ -111,8 +108,7 @@ def opcua_endpoint() -> str:
 
     if not endpoint_reachable(endpoint):
         pytest.fail(
-            f"OPC UA endpoint {endpoint} is not reachable. "
-            f"The server should have been auto-started by conftest.py."
+            f"OPC UA endpoint {endpoint} is not reachable. The server should have been auto-started by conftest.py."
         )
 
     return endpoint

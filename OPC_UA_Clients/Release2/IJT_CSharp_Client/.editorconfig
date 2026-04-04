@@ -1,0 +1,73 @@
+# EditorConfig: https://editorconfig.org
+# dotnet format uses this for --verify-no-changes in CI
+
+root = true
+
+[*]
+charset                  = utf-8
+end_of_line              = crlf
+indent_style             = space
+trim_trailing_whitespace = true
+insert_final_newline     = true
+
+[*.cs]
+indent_size = 4
+
+# .NET formatting
+dotnet_sort_system_directives_first                                     = true
+dotnet_separate_import_directive_groups                                 = false
+
+# Namespace style
+csharp_style_namespace_declarations                                     = file_scoped:warning
+
+# Braces
+csharp_prefer_braces                                                    = when_multiline:suggestion
+
+# var preferences
+csharp_style_var_for_built_in_types                                     = false:suggestion
+csharp_style_var_when_type_is_apparent                                  = true:suggestion
+csharp_style_var_elsewhere                                              = false:suggestion
+
+# Expression body
+csharp_style_expression_bodied_methods                                  = false:silent
+csharp_style_expression_bodied_properties                               = true:suggestion
+
+# Null checking
+csharp_style_conditional_delegate_call                                  = true:suggestion
+
+# Newlines
+csharp_new_line_before_open_brace                                       = all
+csharp_new_line_before_else                                             = true
+csharp_new_line_before_catch                                            = true
+csharp_new_line_before_finally                                          = true
+
+# Spacing
+csharp_space_after_cast                                                 = false
+csharp_space_before_colon_in_inheritance_clause                         = true
+csharp_space_after_colon_in_inheritance_clause                          = true
+
+# Naming conventions — public members PascalCase
+dotnet_naming_rule.public_members_pascal.symbols                        = public_members
+dotnet_naming_rule.public_members_pascal.style                          = pascal_case
+dotnet_naming_rule.public_members_pascal.severity                       = suggestion
+dotnet_naming_symbols.public_members.applicable_kinds                   = property,method,field,event,delegate
+dotnet_naming_symbols.public_members.applicable_accessibilities         = public,protected,internal
+dotnet_naming_style.pascal_case.capitalization                          = pascal_case
+
+# Private fields _camelCase
+dotnet_naming_rule.private_fields_underscore.symbols                    = private_fields
+dotnet_naming_rule.private_fields_underscore.style                      = underscore_camel
+dotnet_naming_rule.private_fields_underscore.severity                   = suggestion
+dotnet_naming_symbols.private_fields.applicable_kinds                   = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities         = private
+dotnet_naming_style.underscore_camel.capitalization                     = camel_case
+dotnet_naming_style.underscore_camel.required_prefix                    = _
+
+[*.{csproj,sln,props,targets}]
+indent_size = 2
+
+[*.{json,yaml,yml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

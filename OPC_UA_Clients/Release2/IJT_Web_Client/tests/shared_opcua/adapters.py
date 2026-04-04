@@ -40,39 +40,39 @@ def payload_to_nodeid_string(payload: dict[str, Any]) -> str:
 
 def default_arg_value(dtype_identifier: int) -> Any:
     mapping = {
-        1: True,                  # Boolean
-        2: 1,                     # SByte
-        3: 1,                     # Byte
-        4: 1,                     # Int16
-        5: 1,                     # UInt16
-        6: 1,                     # Int32
-        7: 1,                     # UInt32
-        8: 1,                     # Int64
-        9: 1,                     # UInt64
-        10: 1.0,                  # Float
-        11: 1.0,                  # Double
-        12: "1",                  # String
+        1: True,  # Boolean
+        2: 1,  # SByte
+        3: 1,  # Byte
+        4: 1,  # Int16
+        5: 1,  # UInt16
+        6: 1,  # Int32
+        7: 1,  # UInt32
+        8: 1,  # Int64
+        9: 1,  # UInt64
+        10: 1.0,  # Float
+        11: 1.0,  # Double
+        12: "1",  # String
         13: "2026-01-01T00:00:00Z",  # DateTime
-        31918: "1",               # TrimmedString (IJT custom type)
+        31918: "1",  # TrimmedString (IJT custom type)
     }
     return mapping.get(dtype_identifier, "1")
 
 
 def map_nodeid_to_varianttype(nodeid_identifier: int) -> ua.VariantType:
     mapping = {
-        1: ua.VariantType.Boolean,   # Boolean
-        2: ua.VariantType.SByte,     # SByte
-        3: ua.VariantType.Byte,      # Byte
-        4: ua.VariantType.Int16,     # Int16
-        5: ua.VariantType.UInt16,    # UInt16
-        6: ua.VariantType.Int32,     # Int32
-        7: ua.VariantType.UInt32,    # UInt32
-        8: ua.VariantType.Int64,     # Int64
-        9: ua.VariantType.UInt64,    # UInt64
-        10: ua.VariantType.Float,    # Float
-        11: ua.VariantType.Double,   # Double
-        12: ua.VariantType.String,   # String
-        13: ua.VariantType.DateTime, # DateTime
+        1: ua.VariantType.Boolean,  # Boolean
+        2: ua.VariantType.SByte,  # SByte
+        3: ua.VariantType.Byte,  # Byte
+        4: ua.VariantType.Int16,  # Int16
+        5: ua.VariantType.UInt16,  # UInt16
+        6: ua.VariantType.Int32,  # Int32
+        7: ua.VariantType.UInt32,  # UInt32
+        8: ua.VariantType.Int64,  # Int64
+        9: ua.VariantType.UInt64,  # UInt64
+        10: ua.VariantType.Float,  # Float
+        11: ua.VariantType.Double,  # Double
+        12: ua.VariantType.String,  # String
+        13: ua.VariantType.DateTime,  # DateTime
         31918: ua.VariantType.String,  # TrimmedString (IJT custom type)
     }
     return mapping.get(nodeid_identifier, ua.VariantType.String)
@@ -213,6 +213,7 @@ class BaseAdapter:
 
 class WebAdapter(BaseAdapter):
     name = "web"
+
     def __init__(self, endpoint: str, ws_url: str):
         self._websockets = None
         self.endpoint = endpoint
@@ -224,6 +225,7 @@ class WebAdapter(BaseAdapter):
     async def start(self) -> None:
         if self._websockets is None:
             import websockets as _websockets
+
             self._websockets = _websockets
         self.ws = await self._websockets.connect(self.ws_url)
 
@@ -316,9 +318,7 @@ class WebAdapter(BaseAdapter):
 
         total = len(self._events)
         result_events = sum(
-            1
-            for evt in self._events
-            if isinstance(evt.get("data"), dict) and evt["data"].get("Result") is not None
+            1 for evt in self._events if isinstance(evt.get("data"), dict) and evt["data"].get("Result") is not None
         )
         return {"total": total, "result_events": result_events}
 
@@ -464,5 +464,3 @@ def adapters_from_env() -> list[str]:
     raw = os.getenv("OPCUA_CLIENT_ADAPTERS", "web")
     names = [x.strip().lower() for x in raw.split(",") if x.strip()]
     return names or ["web"]
-
-

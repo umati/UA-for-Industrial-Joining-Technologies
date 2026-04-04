@@ -43,15 +43,15 @@ def test_named_constants_have_correct_values():
 @pytest.mark.parametrize(
     "type_id, expected",
     [
-        (1,  ua.VariantType.Boolean),
-        (2,  ua.VariantType.SByte),
-        (3,  ua.VariantType.Byte),
-        (4,  ua.VariantType.Int16),
-        (5,  ua.VariantType.UInt16),
-        (6,  ua.VariantType.Int32),
-        (7,  ua.VariantType.UInt32),
-        (8,  ua.VariantType.Int64),
-        (9,  ua.VariantType.UInt64),
+        (1, ua.VariantType.Boolean),
+        (2, ua.VariantType.SByte),
+        (3, ua.VariantType.Byte),
+        (4, ua.VariantType.Int16),
+        (5, ua.VariantType.UInt16),
+        (6, ua.VariantType.Int32),
+        (7, ua.VariantType.UInt32),
+        (8, ua.VariantType.Int64),
+        (9, ua.VariantType.UInt64),
         (10, ua.VariantType.Float),
         (11, ua.VariantType.Double),
         (12, ua.VariantType.String),
@@ -71,9 +71,7 @@ def test_trimmed_string_maps_to_string():
 def test_builtin_type_map_has_no_extra_numeric_ids():
     """Ensure no accidental duplicate or extra numeric keys beyond the 14 spec entries."""
     numeric_keys = {k for k in _BUILTIN_TYPE_MAP if isinstance(k, int) and k < 1000}
-    assert numeric_keys == set(range(1, 14)), (
-        f"Unexpected or missing numeric keys: {numeric_keys}"
-    )
+    assert numeric_keys == set(range(1, 14)), f"Unexpected or missing numeric keys: {numeric_keys}"
 
 
 # ---------------------------------------------------------------------------

@@ -20,9 +20,7 @@ class OPCUAMethodCaller:
                 try:
                     status = int(ret[0])
                 except (ValueError, TypeError) as e:
-                    ijt_log.warning(
-                        f"Could not parse method return status from {ret[0]!r}: {e}"
-                    )
+                    ijt_log.warning(f"Could not parse method return status from {ret[0]!r}: {e}")
                     status = None
             if len(ret) >= 2:
                 msg = ret[1]
@@ -35,7 +33,7 @@ class OPCUAMethodCaller:
         object_nodeid: str,
         method_nodeid: str,
         joint_id: str,
-        joint_origin_id: str = None,  # <-- Now optional
+        joint_origin_id: str | None = None,  # optional
     ):
         try:
             # 1) Auto-load ProductInstanceUri (required)
@@ -44,11 +42,7 @@ class OPCUAMethodCaller:
                 ijt_log.error("SelectJoint failed: ProductInstanceUri is NULL")
                 return None
 
-            product_instance_uri = str(product_instance_uri)
-
-            # 2) Handle missing/empty JointOriginId
-            if not joint_origin_id:
-                joint_origin_id = ""  # <-- Send as empty OPC UA string
+            product_instance_uri = str(product_instance_uri)  # type: ignore[assignment]
 
             obj = self.client.get_node(object_nodeid)
             mth = self.client.get_node(method_nodeid)
@@ -57,12 +51,11 @@ class OPCUAMethodCaller:
             args = [
                 ua.Variant(product_instance_uri, ua.VariantType.String),
                 ua.Variant(joint_id, ua.VariantType.String),
-                ua.Variant(joint_origin_id, ua.VariantType.String),  # <-- now may be ""
+                ua.Variant(joint_origin_id or "", ua.VariantType.String),
             ]
 
             ijt_log.info(
-                f"Calling SelectJoint: PIUri={product_instance_uri}, "
-                f"JointId={joint_id}, Origin={joint_origin_id!r}"
+                f"Calling SelectJoint: PIUri={product_instance_uri}, JointId={joint_id}, Origin={joint_origin_id!r}"
             )
 
             ret = await obj.call_method(mth, *args)
@@ -87,7 +80,7 @@ class OPCUAMethodCaller:
             if not pi:
                 ijt_log.error("ProductInstanceUri is NULL")
                 return None
-            pi = str(pi)
+            pi = str(pi)  # type: ignore[assignment]
 
             obj = self.client.get_node(object_nodeid)
             mth = self.client.get_node(method_nodeid)
@@ -108,15 +101,13 @@ class OPCUAMethodCaller:
             ijt_log.error(traceback.format_exc())
             return None
 
-    async def start_selected_joining(
-        self, object_nodeid, method_nodeid, deselect_after_joining: bool
-    ):
+    async def start_selected_joining(self, object_nodeid, method_nodeid, deselect_after_joining: bool):
         try:
             pi = await read_tool_identifier(self.client)
             if not pi:
                 ijt_log.error("ProductInstanceUri is NULL")
                 return None
-            pi = str(pi)
+            pi = str(pi)  # type: ignore[assignment]
 
             obj = self.client.get_node(object_nodeid)
             mth = self.client.get_node(method_nodeid)
@@ -126,9 +117,7 @@ class OPCUAMethodCaller:
                 ua.Variant(bool(deselect_after_joining), ua.VariantType.Boolean),
             ]
 
-            ijt_log.info(
-                f"Calling StartSelectedJoining: PIUri={pi}, deselect={deselect_after_joining}"
-            )
+            ijt_log.info(f"Calling StartSelectedJoining: PIUri={pi}, deselect={deselect_after_joining}")
             ret = await obj.call_method(mth, *args)
 
             status, msg = self._parse_outputs(ret)

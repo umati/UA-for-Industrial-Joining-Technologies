@@ -78,13 +78,26 @@ All models extend `IJTBaseModel` which auto-maps constructor parameters to insta
 ## Testing
 
 ```bash
-npx vitest run                  # unit tests
-npx vitest run --coverage       # with coverage
-npx vitest --reporter=verbose   # verbose output
+# Full suite (lint + unit tests + coverage)
+python run_all_tests.py
+
+# Unit tests only
+npx vitest run
+
+# With coverage
+npx vitest run --coverage
+
+# Verbose output
+npx vitest --reporter=verbose
 ```
 
 Unit tests live in `tests/js/unit/` and use Vitest with jsdom.
 E2E tests live in `tests/e2e/` and use Playwright (requires running server).
+
+### Zero-Escape Testing Tools (run_all_tests.py Phase 1, auto-detected)
+
+`eslint` (lint), `prettier` (format), `npm audit` (CVE scan), `depcheck` (unused deps),
+`semgrep` (AI security rules), `detect-secrets` (hardcoded secrets).
 
 ## OPC UA Endpoint
 

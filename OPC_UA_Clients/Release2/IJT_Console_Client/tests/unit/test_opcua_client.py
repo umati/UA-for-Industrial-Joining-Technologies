@@ -86,9 +86,7 @@ def test_init_handler_joining_event_is_none():
 def test_init_creates_asyncua_client_with_timeout():
     with patch("opcua_client.Client") as MockClient:
         OPCUAClient("opc.tcp://localhost:40451")
-    MockClient.assert_called_once_with(
-        "opc.tcp://localhost:40451", timeout=_OPCUA_TIMEOUT_S
-    )
+    MockClient.assert_called_once_with("opc.tcp://localhost:40451", timeout=_OPCUA_TIMEOUT_S)
 
 
 def test_init_creates_method_caller():

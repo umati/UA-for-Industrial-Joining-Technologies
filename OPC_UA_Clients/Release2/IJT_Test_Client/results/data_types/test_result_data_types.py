@@ -100,29 +100,20 @@ async def test_result_meta_data_type_fields(opcua_client, ns_indices):
     creation_time = _require_attr(meta, "CreationTime", "ResultMetaDataType")
     assert creation_time is not None, "ResultMetaDataType.CreationTime must not be None"
     evaluation = _require_attr(meta, "ResultEvaluation", "ResultMetaDataType")
-    assert evaluation is not None, (
-        "ResultMetaDataType.ResultEvaluation must not be None"
-    )
+    assert evaluation is not None, "ResultMetaDataType.ResultEvaluation must not be None"
     # ResultType carries the classification value — field is named "Classification"
     classification = _require_attr(meta, "Classification", "ResultMetaDataType")
-    assert classification is not None, (
-        "ResultMetaDataType.Classification must not be None"
-    )
+    assert classification is not None, "ResultMetaDataType.Classification must not be None"
 
 
 # ---------------------------------------------------------------------------
 # StepResultDataType — requires a multi-step result
 # ---------------------------------------------------------------------------
 async def test_step_result_data_type_structure(opcua_client, ns_indices):
-    result = await _get_result(
-        opcua_client, ns_indices, ResultType.MULTI_STEP_OK_RESULT
-    )
+    result = await _get_result(opcua_client, ns_indices, ResultType.MULTI_STEP_OK_RESULT)
     content = _require_attr(result, "ResultContent", "JoiningResultDataType")
     if not content:
-        pytest.skip(
-            "ResultContent is empty for MULTI_STEP_OK_RESULT — "
-            "cannot validate StepResultDataType"
-        )
+        pytest.skip("ResultContent is empty for MULTI_STEP_OK_RESULT — cannot validate StepResultDataType")
     # ResultContent[0] is a Variant whose Value is a JoiningResultDataType;
     # JoiningResultDataType.StepResults holds the list of StepResultDataType objects.
     first_content_variant = content[0]
@@ -134,24 +125,17 @@ async def test_step_result_data_type_structure(opcua_client, ns_indices):
     step_id = _require_attr(first_step, "StepResultId", "StepResultDataType")
     assert step_id is not None, "StepResultDataType.StepResultId must not be None"
     result_values = _require_attr(first_step, "StepResultValues", "StepResultDataType")
-    assert result_values is not None, (
-        "StepResultDataType.StepResultValues must not be None"
-    )
+    assert result_values is not None, "StepResultDataType.StepResultValues must not be None"
 
 
 # ---------------------------------------------------------------------------
 # ResultValueDataType — digs into step → first value
 # ---------------------------------------------------------------------------
 async def test_result_value_data_type_structure(opcua_client, ns_indices):
-    result = await _get_result(
-        opcua_client, ns_indices, ResultType.MULTI_STEP_OK_RESULT
-    )
+    result = await _get_result(opcua_client, ns_indices, ResultType.MULTI_STEP_OK_RESULT)
     content = _require_attr(result, "ResultContent", "JoiningResultDataType")
     if not content:
-        pytest.skip(
-            "ResultContent is empty for MULTI_STEP_OK_RESULT — "
-            "cannot validate ResultValueDataType"
-        )
+        pytest.skip("ResultContent is empty for MULTI_STEP_OK_RESULT — cannot validate ResultValueDataType")
     first_content_variant = content[0]
     joining_result = getattr(first_content_variant, "Value", first_content_variant)
     step_results = _require_attr(joining_result, "StepResults", "JoiningResultDataType")
@@ -160,18 +144,9 @@ async def test_result_value_data_type_structure(opcua_client, ns_indices):
     first_step = step_results[0]
     result_values = _require_attr(first_step, "StepResultValues", "StepResultDataType")
     if not result_values:
-        pytest.skip(
-            "StepResultValues is empty in first step — "
-            "cannot validate ResultValueDataType structure"
-        )
+        pytest.skip("StepResultValues is empty in first step — cannot validate ResultValueDataType structure")
     first_value = result_values[0]
-    physical_quantity = _require_attr(
-        first_value, "PhysicalQuantity", "ResultValueDataType"
-    )
-    assert physical_quantity is not None, (
-        "ResultValueDataType.PhysicalQuantity must not be None"
-    )
+    physical_quantity = _require_attr(first_value, "PhysicalQuantity", "ResultValueDataType")
+    assert physical_quantity is not None, "ResultValueDataType.PhysicalQuantity must not be None"
     measured_value = _require_attr(first_value, "MeasuredValue", "ResultValueDataType")
-    assert measured_value is not None, (
-        "ResultValueDataType.MeasuredValue must not be None"
-    )
+    assert measured_value is not None, "ResultValueDataType.MeasuredValue must not be None"
