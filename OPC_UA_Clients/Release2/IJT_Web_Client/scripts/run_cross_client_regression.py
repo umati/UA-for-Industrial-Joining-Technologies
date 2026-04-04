@@ -49,6 +49,8 @@ async def run_for_adapter(adapter_name: str, endpoint: str, ws_url: str, console
     methods = await discover_simulation_methods(endpoint)
     wanted = ["SimulateSingleResult", "SimulateJobResult", "SimulateEvents"]
 
+    methods_list: list = report["methods"]  # type: ignore[assignment]
+
     try:
         await adapter.start()
 
@@ -66,15 +68,15 @@ async def run_for_adapter(adapter_name: str, endpoint: str, ws_url: str, console
         for name in wanted:
             spec = next((m for m in methods if m.name == name), None)
             if not spec:
-                report["methods"].append({"name": name, "status": "not_found"})
+                methods_list.append({"name": name, "status": "not_found"})
                 continue
 
             try:
                 result = await adapter.call_method(spec)
                 ok = "exception" not in str(result).lower()
-                report["methods"].append({"name": name, "status": "ok" if ok else "failed", "result": result})
+                methods_list.append({"name": name, "status": "ok" if ok else "failed", "result": result})
             except Exception as exc:
-                report["methods"].append({"name": name, "status": "failed", "error": str(exc)})
+                methods_list.append({"name": name, "status": "failed", "error": str(exc)})
 
         report["events"] = await adapter.collect_events(seconds=6.0)
 
@@ -91,7 +93,7 @@ async def run_for_adapter(adapter_name: str, endpoint: str, ws_url: str, console
             report["stop_error"] = str(exc)
 
     checks_ok = report["connect"] and report["namespaces"] and report["read_objects"]
-    methods_ok = all(m["status"] in {"ok", "not_found"} for m in report["methods"])
+    methods_ok = all(m["status"] in {"ok", "not_found"} for m in methods_list)
     report["ok"] = checks_ok and methods_ok
     return report
 

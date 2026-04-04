@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using IJT_CSharp_Client.Helpers;
 using Microsoft.Extensions.Logging;
@@ -19,7 +19,7 @@ namespace IJT_CSharp_Client.Client;
 public sealed class EventSubscriber : IDisposable
 {
     private readonly ILogger<EventSubscriber> _log = IjtLog.For<EventSubscriber>();
-    private readonly IjtSession _s;
+    private readonly IIjtSession _s;
     private Subscription?       _eventSubscription;
 
     // ── Public .NET events ────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ public sealed class EventSubscriber : IDisposable
     /// Creates an EventSubscriber backed by <paramref name="session"/>.
     /// Call <see cref="Subscribe"/> to start receiving events.
     /// </summary>
-    public EventSubscriber(IjtSession session) => _s = session;
+    public EventSubscriber(IIjtSession session) => _s = session;
 
     // ── Subscription management ───────────────────────────────────────────────
 

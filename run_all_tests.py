@@ -896,8 +896,8 @@ def _suite_testclient_full() -> SuiteResult:
     python = _current_python()
     env = {**os.environ, "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"}
     rc, out = _run_captured(
-        [python, "run_tests.py", "-v"],
-        cwd=TEST_CLIENT_DIR, label="run_tests.py -v", env=env,
+        [python, "run_all_tests.py", "--verbose"],
+        cwd=TEST_CLIENT_DIR, label="run_all_tests.py --verbose", env=env,
     )
     return SuiteResult(name, rc == 0, time.monotonic() - t0, output=out)
 

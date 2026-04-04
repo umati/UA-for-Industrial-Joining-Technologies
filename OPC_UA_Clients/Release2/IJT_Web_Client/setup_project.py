@@ -392,7 +392,7 @@ def _collect_managed_processes() -> list[tuple[str, int]]:
         raw = state.get(key)
         try:
             pid = int(raw or 0)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             continue
         if pid <= 0:
             continue
@@ -798,7 +798,7 @@ def _create_virtualenv(latest_cmd):
     # Remove only the selected venv dir (in Docker this is /opt/ijt_venv, not your bind-mount)
     if VENV_DIR.exists():
 
-        def _on_rm_error(func, path, exc_info):
+        def _on_rm_error(func, path, _exc_info):
             try:
                 os.chmod(path, 0o700)
                 func(path)

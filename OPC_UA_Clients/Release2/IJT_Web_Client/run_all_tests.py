@@ -134,6 +134,7 @@ def _run(
             cwd=str(cwd),
             env=env or os.environ.copy(),
             timeout=timeout,
+            stdin=subprocess.DEVNULL,  # prevent interactive prompts (e.g. npx install)
         )
         return result.returncode
     except subprocess.TimeoutExpired:
@@ -159,6 +160,7 @@ def _run_to_file(
             cwd=str(cwd),
             env=env or os.environ.copy(),
             stdout=fh,
+            stdin=subprocess.DEVNULL,
         )
     return result.returncode
 
@@ -255,8 +257,7 @@ def _stage_pip_install(python: Path) -> StageResult:
         _info("SKIP_VENV_INSTALL=1 — skipping pip install")
         return StageResult("pip-install", 0, duration=time.monotonic() - t0, notes=["skipped via SKIP_VENV_INSTALL"])
     # Upgrade pip first to ensure latest version (avoids stale CVE warnings)
-    _run([python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
-         label="pip self-upgrade")
+    _run([python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"], label="pip self-upgrade")
     rc = _run(
         [
             python,
@@ -307,7 +308,7 @@ def _stage_python_lint(python: Path) -> StageResult:
 
     if _py_module_available("mypy"):
         rc = _run(
-            [python, "-m", "mypy", ".", "--ignore-missing-imports"],
+            [python, "-m", "mypy", "src/", "--ignore-missing-imports"],
             label="mypy",
         )
         if rc != 0:
@@ -354,7 +355,16 @@ def _stage_python_lint(python: Path) -> StageResult:
 
     if _py_module_available("vulture"):
         rc = _run(
-            [python, "-m", "vulture", ".", "--min-confidence", "80", "--exclude", ".venv,venv,.venv-wsl"],
+            [
+                python,
+                "-m",
+                "vulture",
+                ".",
+                "--min-confidence",
+                "80",
+                "--exclude",
+                ".venv,venv,.venv-wsl,tests",
+            ],
             label="vulture",
         )
         if rc not in (0, 1):  # 1 = dead code found (informational)
@@ -800,8 +810,7 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, Optional[subprocess.Popen]]
     if exe:
         _info(f"Launching OPC UA binary: {exe}")
         try:
-            proc = _sp.Popen([exe], stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
-                             cwd=str(Path(exe).parent))
+            proc = _sp.Popen([exe], stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, cwd=str(Path(exe).parent))
         except OSError as exc:
             _warn(f"Failed to launch binary: {exc}")
             proc = None

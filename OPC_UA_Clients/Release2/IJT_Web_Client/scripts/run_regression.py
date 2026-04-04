@@ -274,7 +274,7 @@ class WsHarness:
         self._reader_task = asyncio.create_task(self._reader())
         return self
 
-    async def __aexit__(self, exc_type, exc, tb):
+    async def __aexit__(self, _exc_type, exc, _tb):
         if self.ws:
             await self.ws.close()
         if self._reader_task:

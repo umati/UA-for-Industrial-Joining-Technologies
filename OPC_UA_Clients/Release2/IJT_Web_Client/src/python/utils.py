@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import aiofiles  # type: ignore[import-untyped]
-import pytz
+import pytz  # type: ignore[import-untyped]
 from asyncua import ua
 
 from python.ijt_logger import ijt_log

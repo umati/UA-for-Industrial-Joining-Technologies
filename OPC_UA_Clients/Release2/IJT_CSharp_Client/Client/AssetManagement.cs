@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -15,12 +15,12 @@ namespace IJT_CSharp_Client.Client;
 public sealed class AssetManagement : IDisposable
 {
     private readonly ILogger<AssetManagement> _log = IjtLog.For<AssetManagement>();
-    private readonly IjtSession _s;
+    private readonly IIjtSession _s;
     private Subscription?       _assetVarSubscription;
     private NodeId?             _methodSetNodeId;
 
     /// <summary>Creates an AssetManagement facade backed by <paramref name="ijtSession"/>.</summary>
-    public AssetManagement(IjtSession ijtSession) => _s = ijtSession;
+    public AssetManagement(IIjtSession ijtSession) => _s = ijtSession;
 
     // ── Node lookup ───────────────────────────────────────────────────────────
 

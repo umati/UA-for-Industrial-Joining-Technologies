@@ -268,7 +268,7 @@ def ijt_nodeset_types():
         delattr(ua, "JoiningProcessIdentificationDataType")
 
 
-def test_joining_process_type_happy_path(ijt_nodeset_types):
+def test_joining_process_type_happy_path(ijt_nodeset_types):  # noqa: ARG001 — fixture registers types
     """Verifies the happy path for type 3029 (JoiningProcessIdentificationDataType).
 
     The ``ijt_nodeset_types`` fixture registers the struct via asyncua's

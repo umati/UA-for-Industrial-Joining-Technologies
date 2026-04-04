@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -18,11 +18,11 @@ namespace IJT_CSharp_Client.Client;
 public sealed class ResultManagement : IDisposable
 {
     private readonly ILogger<ResultManagement> _log = IjtLog.For<ResultManagement>();
-    private readonly IjtSession _s;
+    private readonly IIjtSession _s;
     private Subscription?       _resultVarSubscription;
 
     /// <summary>Creates a new ResultManagement facade backed by <paramref name="ijtSession"/>.</summary>
-    public ResultManagement(IjtSession ijtSession) => _s = ijtSession;
+    public ResultManagement(IIjtSession ijtSession) => _s = ijtSession;
 
     // ── Node lookup ───────────────────────────────────────────────────────────
 

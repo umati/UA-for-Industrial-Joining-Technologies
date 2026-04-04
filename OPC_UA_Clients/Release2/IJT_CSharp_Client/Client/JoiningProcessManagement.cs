@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -14,11 +14,11 @@ namespace IJT_CSharp_Client.Client;
 public sealed class JoiningProcessManagement : IDisposable
 {
     private readonly ILogger<JoiningProcessManagement> _log = IjtLog.For<JoiningProcessManagement>();
-    private readonly IjtSession _s;
+    private readonly IIjtSession _s;
     private NodeId?             _jpmNodeId;
 
     /// <summary>Creates a JoiningProcessManagement facade backed by <paramref name="ijtSession"/>.</summary>
-    public JoiningProcessManagement(IjtSession ijtSession) => _s = ijtSession;
+    public JoiningProcessManagement(IIjtSession ijtSession) => _s = ijtSession;
 
     // ── Node lookup ───────────────────────────────────────────────────────────
 

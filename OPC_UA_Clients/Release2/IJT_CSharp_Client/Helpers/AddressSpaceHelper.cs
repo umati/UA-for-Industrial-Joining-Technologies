@@ -176,27 +176,36 @@ public sealed class AddressSpaceHelper
 
     /// <summary>
     /// Returns all forward hierarchical references from <paramref name="startNodeId"/>.
-    /// Never hangs — uses a single Browse service call (no BrowseNext loop needed
-    /// for small address spaces).
+    /// Uses the multi-node <c>ISessionClientMethods.Browse</c> overload (not the
+    /// extension method) so that unit tests can mock it with <c>Mock&lt;ISession&gt;</c>.
     /// </summary>
     public static ReferenceDescriptionCollection BrowseChildren(
         ISession session,
         NodeId startNodeId,
         NodeClass nodeClassMask = NodeClass.Object | NodeClass.Variable | NodeClass.Method)
     {
-        session.Browse(
-            null, null,
-            startNodeId,
-            0,
-            BrowseDirection.Forward,
-            ReferenceTypeIds.HierarchicalReferences,
-            true,
-            (uint)nodeClassMask,
-            out _,
-            out var refs);
+        var nodesToBrowse = new BrowseDescriptionCollection
+        {
+            new BrowseDescription
+            {
+                NodeId          = startNodeId,
+                BrowseDirection = BrowseDirection.Forward,
+                ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
+                IncludeSubtypes = true,
+                NodeClassMask   = (uint)nodeClassMask,
+                ResultMask      = (uint)BrowseResultMask.All,
+            },
+        };
 
-        return refs ?? new ReferenceDescriptionCollection();
+        session.Browse(
+            null, null, 0u,
+            nodesToBrowse,
+            out var results,
+            out _);
+
+        return results?[0]?.References ?? new ReferenceDescriptionCollection();
     }
+
 
     /// <summary>
     /// Finds a direct child of <paramref name="parentId"/> by browse name (case-insensitive).
@@ -252,15 +261,23 @@ public sealed class AddressSpaceHelper
     // ── Variable reading ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Reads the <c>Value</c> attribute of a single variable node.
+    /// Reads the <c>Value</c> attribute of a single variable node via
+    /// <c>ISessionClientMethods.Read</c> (the actual interface method, not the
+    /// extension-method wrapper, so the call can be intercepted in unit tests).
     /// Returns <c>null</c> on any error (bad status, node not found, etc.).
     /// </summary>
     public static object? ReadValue(ISession session, NodeId nodeId)
     {
         try
         {
-            var dv = session.ReadValue(nodeId);
-            return StatusCode.IsGood(dv.StatusCode) ? dv.Value : null;
+            var nodesToRead = new ReadValueIdCollection
+            {
+                new ReadValueId { NodeId = nodeId, AttributeId = Attributes.Value },
+            };
+            session.Read(null, 0.0, TimestampsToReturn.Neither, nodesToRead,
+                out var results, out _);
+            var dv = results?[0];
+            return dv != null && StatusCode.IsGood(dv.StatusCode) ? dv.Value : null;
         }
         catch (Opc.Ua.ServiceResultException srex)
         {

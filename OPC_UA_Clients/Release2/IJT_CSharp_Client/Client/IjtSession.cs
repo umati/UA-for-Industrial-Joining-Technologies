@@ -17,7 +17,7 @@ namespace IJT_CSharp_Client.Client;
 /// Obtain via <see cref="ConnectAsync"/>; dispose with <c>await using</c>.
 /// </para>
 /// </summary>
-public sealed class IjtSession : IAsyncDisposable
+public sealed class IjtSession : IAsyncDisposable, IIjtSession
 {
     // ── Public surface ────────────────────────────────────────────────────────
 

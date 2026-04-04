@@ -1,4 +1,5 @@
 using IJT_CSharp_Client.Helpers;
+using UAModel.MachineryResult;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Helpers;
@@ -60,5 +61,32 @@ public class IjtEventFormatterTests
             "999", "test", "Tightening", ts);
 
         Assert.Contains("2026-03-15", result);
+    }
+
+    [Fact]
+    public void FormatJoiningSystemEvent_WithReportedValues_IncludesValues()
+    {
+        var rv = new[]
+        {
+            new UAModel.IJTBase.ReportedValueDataType { Name = "Torque" },
+        };
+
+        var result = IjtEventFormatter.FormatJoiningSystemEvent(
+            "3001", "Test", "Tightening", DateTime.UtcNow,
+            reportedValues: rv);
+
+        Assert.Contains("ReportedValues", result);
+        Assert.Contains("Torque", result);
+    }
+
+    [Fact]
+    public void FormatResult_WithMetaData_IncludesResultId()
+    {
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "FMT-001" }
+        };
+        var result = IjtResultFormatter.FormatResult(rd, DateTime.UtcNow);
+        Assert.Contains("FMT-001", result);
     }
 }

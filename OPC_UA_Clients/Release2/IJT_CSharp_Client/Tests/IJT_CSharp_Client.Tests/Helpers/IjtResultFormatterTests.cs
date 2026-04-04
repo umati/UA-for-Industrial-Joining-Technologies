@@ -1,4 +1,4 @@
-using IJT_CSharp_Client.Helpers;
+﻿using IJT_CSharp_Client.Helpers;
 using UAModel.MachineryResult;
 using Xunit;
 
@@ -66,6 +66,80 @@ public class IjtResultFormatterTests
         var result = IjtResultFormatter.FormatResult(rd);
 
         Assert.Contains("no content", result);
+    }
+
+    [Fact]
+    public void FormatResult_WithNonEmptyResultContent_ContainsContentItems()
+    {
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "CNT" },
+            ResultContent  = new Opc.Ua.VariantCollection { new Opc.Ua.Variant("step-value") },
+        };
+
+        var result = IjtResultFormatter.FormatResult(rd);
+
+        Assert.Contains("[0]", result);
+    }
+
+    [Fact]
+    public void FormatResult_WithAssociatedEntities_ContainsEntitiesLine()
+    {
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            {
+                ResultId           = "ENT",
+                AssociatedEntities = new UAModel.IJTBase.EntityDataTypeCollection {
+                    new UAModel.IJTBase.EntityDataType { EntityId = "e1" },
+                },
+            }
+        };
+
+        var result = IjtResultFormatter.FormatResult(rd);
+
+        Assert.Contains("AssociatedEntities", result);
+        Assert.Contains("1 entit", result);
+    }
+
+    [Fact]
+    public void FormatResult_WithResultCounters_ContainsCounterDetails()
+    {
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            {
+                ResultId       = "CTR",
+                ResultCounters = new UAModel.IJTBase.ResultCounterDataTypeCollection {
+                    new UAModel.IJTBase.ResultCounterDataType { Name = "TotalCount", CounterValue = 7u },
+                },
+            }
+        };
+
+        var result = IjtResultFormatter.FormatResult(rd);
+
+        Assert.Contains("ResultCounters", result);
+        Assert.Contains("TotalCount", result);
+    }
+
+    [Fact]
+    public void FormatResult_WithExtendedMetaData_ContainsExtendedMetaData()
+    {
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            {
+                ResultId         = "EXT",
+                ExtendedMetaData = new UAModel.IJTBase.KeyValueDataTypeCollection {
+                    new UAModel.IJTBase.KeyValueDataType { Key = "myKey", Value = new Opc.Ua.Variant("myVal") },
+                },
+            }
+        };
+
+        var result = IjtResultFormatter.FormatResult(rd);
+
+        Assert.Contains("ExtendedMetaData", result);
+        Assert.Contains("myKey", result);
     }
 
     [Fact]

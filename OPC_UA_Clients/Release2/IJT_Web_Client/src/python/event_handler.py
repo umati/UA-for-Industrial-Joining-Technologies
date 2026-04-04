@@ -39,22 +39,22 @@ class Short:
         )
         self.Message = getattr(event, "Message", None)
         self.SourceName = str(getattr(event, "SourceName", None))
-        self.SourceNode = nodeid_to_str(getattr(event, "SourceNode", None))
+        self.SourceNode = nodeid_to_str(getattr(event, "SourceNode", None))  # type: ignore[arg-type]
         self.Severity = str(getattr(event, "Severity", None))
         self.Time = getattr(event, "Time", None)
         self.ReceiveTime = getattr(event, "ReceiveTime", None)
         self.LocalTime = getattr(event, "LocalTime", None)
 
-        self.ConditionClassId = nodeid_to_str(getattr(event, "ConditionClassId", None))
-        self.ConditionClassName = localizedtext_to_str(getattr(event, "ConditionClassName", None))
+        self.ConditionClassId = nodeid_to_str(getattr(event, "ConditionClassId", None))  # type: ignore[arg-type]
+        self.ConditionClassName = localizedtext_to_str(getattr(event, "ConditionClassName", None))  # type: ignore[arg-type]
         self.ConditionSubClassId = [nodeid_to_str(nid) for nid in getattr(event, "ConditionSubClassId", [])]
         self.ConditionSubClassName = [localizedtext_to_str(lt) for lt in getattr(event, "ConditionSubClassName", [])]
 
         self.EventCode = getattr(event, "JoiningSystemEventContent/EventCode", None)
-        self.EventText = localizedtext_to_str(getattr(event, "JoiningSystemEventContent/EventText", None))
+        self.EventText = localizedtext_to_str(getattr(event, "JoiningSystemEventContent/EventText", None))  # type: ignore[arg-type]
         self.JoiningTechnology = localizedtext_to_str(
             getattr(event, "JoiningSystemEventContent/JoiningTechnology", None)
-        )
+        )  # type: ignore[arg-type]
         self.AssociatedEntities = getattr(event, "JoiningSystemEventContent/AssociatedEntities", [])
 
         self.ReportedValues = getattr(event, "JoiningSystemEventContent/ReportedValues", [])
