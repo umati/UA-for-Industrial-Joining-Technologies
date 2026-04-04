@@ -1,0 +1,1173 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "IJTBase",
+    "description": "A placeholder API that allows OpenAPI tools to be used to generate code for a companion specification.",
+    "version": "1.01.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4840"
+    }
+  ],
+  "paths": {
+    "/get": {
+      "get": {
+        "operationId": "Get",
+        "responses": {
+          "200": {
+            "description": "ModelDataTypes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response",
+                  "properties": {
+                    "CalibrationDataType": {
+                      "$ref": "#/components/schemas/CalibrationDataType"
+                    },
+                    "ResultCounterDataType": {
+                      "$ref": "#/components/schemas/ResultCounterDataType"
+                    },
+                    "JoiningResultDataType": {
+                      "$ref": "#/components/schemas/JoiningResultDataType"
+                    },
+                    "ErrorInformationDataType": {
+                      "$ref": "#/components/schemas/ErrorInformationDataType"
+                    },
+                    "ResultValueDataType": {
+                      "$ref": "#/components/schemas/ResultValueDataType"
+                    },
+                    "KeyValueDataType": {
+                      "$ref": "#/components/schemas/KeyValueDataType"
+                    },
+                    "StepResultDataType": {
+                      "$ref": "#/components/schemas/StepResultDataType"
+                    },
+                    "EntityDataType": {
+                      "$ref": "#/components/schemas/EntityDataType"
+                    },
+                    "TraceDataType": {
+                      "$ref": "#/components/schemas/TraceDataType"
+                    },
+                    "JoiningTraceDataType": {
+                      "$ref": "#/components/schemas/JoiningTraceDataType"
+                    },
+                    "StepTraceDataType": {
+                      "$ref": "#/components/schemas/StepTraceDataType"
+                    },
+                    "TraceContentDataType": {
+                      "$ref": "#/components/schemas/TraceContentDataType"
+                    },
+                    "DesignValueDataType": {
+                      "$ref": "#/components/schemas/DesignValueDataType"
+                    },
+                    "JoiningProcessDataType": {
+                      "$ref": "#/components/schemas/JoiningProcessDataType"
+                    },
+                    "SignalDataType": {
+                      "$ref": "#/components/schemas/SignalDataType"
+                    },
+                    "JoiningResultMetaDataType": {
+                      "$ref": "#/components/schemas/JoiningResultMetaDataType"
+                    },
+                    "JointComponentDataType": {
+                      "$ref": "#/components/schemas/JointComponentDataType"
+                    },
+                    "ReportedValueDataType": {
+                      "$ref": "#/components/schemas/ReportedValueDataType"
+                    },
+                    "JoiningProcessMetaDataType": {
+                      "$ref": "#/components/schemas/JoiningProcessMetaDataType"
+                    },
+                    "JointDesignDataType": {
+                      "$ref": "#/components/schemas/JointDesignDataType"
+                    },
+                    "JointDataType": {
+                      "$ref": "#/components/schemas/JointDataType"
+                    },
+                    "JoiningProcessIdentificationDataType": {
+                      "$ref": "#/components/schemas/JoiningProcessIdentificationDataType"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LocalizedText": {
+        "type": "object",
+        "properties": {
+          "Locale": {
+            "type": "string",
+            "format": "rfc3066"
+          },
+          "Text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part3/v105/docs/8.5)."
+      },
+      "ExtensionObject": {
+        "type": "object",
+        "properties": {
+          "UaTypeId": {
+            "type": "string",
+            "format": "UaNodeId"
+          },
+          "UaEncoding": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32"
+          },
+          "UaBody": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part6/v105/docs/5.4.2.16)."
+      },
+      "Variant": {
+        "type": "object",
+        "properties": {
+          "UaType": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32"
+          },
+          "Value": { },
+          "Dimensions": {
+            "type": "array",
+            "items": {
+              "minimum": 0,
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part6/v105/docs/5.4.2.17)."
+      },
+      "Duration": {
+        "type": "number",
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part3/v105/docs/8.12).",
+        "format": "double",
+        "default": 0
+      },
+      "UtcTime": {
+        "type": "string",
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part3/v105/docs/8.11).",
+        "format": "date-time",
+        "default": "0001-01-01T00:00:00.0000000+00:00"
+      },
+      "EUInformation": {
+        "type": "object",
+        "properties": {
+          "NamespaceUri": {
+            "type": "string"
+          },
+          "UnitId": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "DisplayName": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "Description": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        }
+      },
+      "UriString": {
+        "type": "string",
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part3/v105/docs/8.31)."
+      },
+      "TrimmedString": {
+        "type": "string",
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part3/v105/docs/8.31)."
+      },
+      "ResultEvaluationEnum": {
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "type": "integer",
+        "description": "[Link to specification](https://reference.opcfoundation.org/Machinery/Result/v101/docs/10.3).",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Undefined",
+          "OK",
+          "NotOK",
+          "NotDecidable"
+        ]
+      },
+      "ProcessingTimesDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "StartTime": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "EndTime": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "AcquisitionDuration": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "ProcessingDuration": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          }
+        },
+        "description": "Contains measured times that were generated during the execution of a recipe."
+      },
+      "ResultMetaDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "ResultId": {
+            "type": "string"
+          },
+          "HasTransferableDataOnFile": {
+            "type": "boolean",
+            "default": false
+          },
+          "IsPartial": {
+            "type": "boolean",
+            "default": false
+          },
+          "IsSimulated": {
+            "type": "boolean",
+            "default": false
+          },
+          "ResultState": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "StepId": {
+            "type": "string"
+          },
+          "PartId": {
+            "type": "string"
+          },
+          "ExternalRecipeId": {
+            "type": "string"
+          },
+          "InternalRecipeId": {
+            "type": "string"
+          },
+          "ProductId": {
+            "type": "string"
+          },
+          "ExternalConfigurationId": {
+            "type": "string"
+          },
+          "InternalConfigurationId": {
+            "type": "string"
+          },
+          "JobId": {
+            "type": "string"
+          },
+          "CreationTime": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "ProcessingTimes": {
+            "$ref": "#/components/schemas/ProcessingTimesDataType"
+          },
+          "ResultUri": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ResultEvaluation": {
+            "type": "integer",
+            "description": "[Link to specification](https://reference.opcfoundation.org/Machinery/Result/v101/docs/10.3).",
+            "format": "ResultEvaluationEnum"
+          },
+          "ResultEvaluationCode": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "ResultEvaluationDetails": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "FileFormat": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Meta data of a result, describing the result."
+      },
+      "CalibrationDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "LastCalibration": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "CalibrationPlace": {
+            "type": "string"
+          },
+          "NextCalibration": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "CalibrationValue": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "SensorScale": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "CertificateUri": {
+            "type": "string"
+          },
+          "EngineeringUnits": {
+            "$ref": "#/components/schemas/EUInformation"
+          }
+        },
+        "description": "This structure contains the Calibration information. It is used as an input argument in SetCalibration method.\nNote: The input data sent in SetCalibration shall be updated in the respective parameters of the asset under Maintenance/Calibration."
+      },
+      "ResultCounterDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "Name": {
+            "type": "string"
+          },
+          "CounterValue": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "CounterType": {
+            "maximum": 32767,
+            "minimum": -32768,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          }
+        },
+        "description": "This structure is used to provide various types of counters associated to a Result. These counters are related to a joining process with sub-processes."
+      },
+      "JoiningResultDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "FailureReason": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "OverallResultValues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultValueDataType"
+            }
+          },
+          "StepResults": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StepResultDataType"
+            }
+          },
+          "Errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ErrorInformationDataType"
+            }
+          },
+          "FailingStepResultId": {
+            "type": "string"
+          },
+          "Trace": {
+            "$ref": "#/components/schemas/JoiningTraceDataType"
+          }
+        },
+        "description": "This structure represents the data associated with Joining Result and the corresponding measurement values."
+      },
+      "ErrorInformationDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "ErrorType": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "ErrorId": {
+            "type": "string"
+          },
+          "LegacyError": {
+            "type": "string"
+          },
+          "ErrorMessage": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "description": "This structure represents the errors occurred in the system which are outside the boundaries of the given program."
+      },
+      "ResultValueDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "MeasuredValue": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "Name": {
+            "type": "string"
+          },
+          "ResultEvaluation": {
+            "type": "integer",
+            "description": "[Link to specification](https://reference.opcfoundation.org/Machinery/Result/v101/docs/10.3).",
+            "format": "ResultEvaluationEnum"
+          },
+          "ValueId": {
+            "type": "string"
+          },
+          "ValueTag": {
+            "maximum": 32767,
+            "minimum": -32768,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "TracePointIndex": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "TracePointTimeOffset": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "ParameterIdList": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ViolationType": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "ViolationConsequence": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "SensorId": {
+            "type": "string"
+          },
+          "LowLimit": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "High": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "TargetValue": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "ResultStep": {
+            "type": "string"
+          },
+          "PhysicalQuantity": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "EngineeringUnits": {
+            "$ref": "#/components/schemas/EUInformation"
+          }
+        },
+        "description": "It is used to report measurement values of the joining operation. Those are meant to characterize the quality of the process. It is used in JoiningResultDataType and StepResultDataType."
+      },
+      "KeyValueDataType": {
+        "type": "object",
+        "properties": {
+          "Key": {
+            "type": "string"
+          },
+          "Value": {
+            "$ref": "#/components/schemas/Variant"
+          }
+        },
+        "description": "This structure is similar to 0:KeyValuePair which uses 0:TrimmedString instead of 0:QualifiedName."
+      },
+      "StepResultDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "StepResultId": {
+            "type": "string"
+          },
+          "ProgramStepId": {
+            "type": "string"
+          },
+          "ProgramStep": {
+            "type": "string"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "ResultEvaluation": {
+            "type": "integer",
+            "description": "[Link to specification](https://reference.opcfoundation.org/Machinery/Result/v101/docs/10.3).",
+            "format": "ResultEvaluationEnum"
+          },
+          "StartTimeOffset": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "StepTraceId": {
+            "type": "string"
+          },
+          "StepResultValues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultValueDataType"
+            }
+          }
+        },
+        "description": "This structure represents the measurement values corresponding to a given step in the program. It is used in JoiningResultDataType."
+      },
+      "EntityDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "Name": {
+            "type": "string"
+          },
+          "Description": {
+            "type": "string"
+          },
+          "EntityId": {
+            "type": "string"
+          },
+          "EntityOriginId": {
+            "type": "string"
+          },
+          "IsExternal": {
+            "type": "boolean",
+            "default": false
+          },
+          "EntityType": {
+            "maximum": 32767,
+            "minimum": -32768,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          }
+        },
+        "description": "This structure provides the identification data for a given entity in the system."
+      },
+      "TraceDataType": {
+        "type": "object",
+        "properties": {
+          "TraceId": {
+            "type": "string"
+          },
+          "ResultId": {
+            "type": "string"
+          }
+        },
+        "description": "It is a base type to encapsulate common data for a Trace."
+      },
+      "JoiningTraceDataType": {
+        "type": "object",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TraceDataType"
+          }
+        ],
+        "properties": {
+          "StepTraces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StepTraceDataType"
+            }
+          }
+        },
+        "description": "This structure is to describe the content of traces for all the steps in the given program. It is used in JoiningResultDataType."
+      },
+      "StepTraceDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "StepTraceId": {
+            "type": "string"
+          },
+          "StepResultId": {
+            "type": "string"
+          },
+          "NumberOfTracePoints": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "SamplingInterval": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "StartTimeOffset": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "StepTraceContent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceContentDataType"
+            }
+          }
+        },
+        "description": "It is to describe of the trace for a given program step. It is used in JoiningTraceDataType."
+      },
+      "TraceContentDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "Values": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double",
+              "default": 0
+            }
+          },
+          "SensorId": {
+            "type": "string"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "Description": {
+            "type": "string"
+          },
+          "PhysicalQuantity": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "EngineeringUnits": {
+            "$ref": "#/components/schemas/EUInformation"
+          }
+        },
+        "description": "It is to describe the trace samples for a given program step. It is used in StepTraceDataType."
+      },
+      "DesignValueDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "PhysicalQuantity": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "Name": {
+            "type": "string"
+          },
+          "DesignValue": {
+            "$ref": "#/components/schemas/Variant"
+          },
+          "EngineeringUnits": {
+            "$ref": "#/components/schemas/EUInformation"
+          }
+        },
+        "description": "This structure provides the design value for a given physical quantity. It is used in JointDesignDataType."
+      },
+      "JoiningProcessDataType": {
+        "type": "object",
+        "properties": {
+          "JoiningProcessMetaData": {
+            "type": "object"
+          },
+          "JoiningProcessContent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Variant"
+            }
+          }
+        },
+        "description": "This structure provides the base container for any joining process in a joining system. \nNote: This specification defines the meta data of a JoiningProcess, and the actual content of the Joining Process is application specific."
+      },
+      "SignalDataType": {
+        "type": "object",
+        "properties": {
+          "SignalId": {
+            "type": "string"
+          },
+          "SignalValue": {
+            "type": "object"
+          },
+          "SignalDescription": {
+            "type": "string"
+          },
+          "SignalType": {
+            "maximum": 32767,
+            "minimum": -32768,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          }
+        },
+        "description": "This structure contains the signal information which is used in SetIOSignals and GetIOSignals methods."
+      },
+      "JoiningResultMetaDataType": {
+        "type": "object",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResultMetaDataType"
+          }
+        ],
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "JoiningTechnology": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "SequenceNumber": {
+            "maximum": 18446744073709551615,
+            "minimum": 0,
+            "type": "number",
+            "default": 0
+          },
+          "Name": {
+            "type": "string"
+          },
+          "Description": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "Classification": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "OperationMode": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "AssemblyType": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "AssociatedEntities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityDataType"
+            }
+          },
+          "ResultCounters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultCounterDataType"
+            }
+          },
+          "InterventionType": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "IsGeneratedOffline": {
+            "type": "boolean",
+            "default": false
+          },
+          "ExtendedMetaData": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KeyValueDataType"
+            }
+          }
+        },
+        "description": "This structure is a subtype of ResultMetaDataType. It is used to define additional meta data of a Result in a joining system."
+      },
+      "JointComponentDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "JointComponentId": {
+            "type": "string"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "Description": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "Manufacturer": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "ManufacturerUri": {
+            "type": "string"
+          },
+          "JointComponentContent": {
+            "$ref": "#/components/schemas/Variant"
+          }
+        },
+        "description": "This structure is the base container for any joint component such as Bolt, Rivet, Gasket, Glue string, etc. \nNote: The concrete definition of joint component is not defined in this version of the specification."
+      },
+      "ReportedValueDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "PhysicalQuantity": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "Name": {
+            "type": "string"
+          },
+          "CurrentValue": {
+            "$ref": "#/components/schemas/Variant"
+          },
+          "PreviousValue": {
+            "$ref": "#/components/schemas/Variant"
+          },
+          "LowLimit": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "HighLimit": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "EngineeringUnits": {
+            "$ref": "#/components/schemas/EUInformation"
+          }
+        },
+        "description": "This structure provides the given value and corresponding limits for a given physical quantity (if applicable)."
+      },
+      "JoiningProcessMetaDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "JoiningProcessId": {
+            "type": "string"
+          },
+          "JoiningProcessOriginId": {
+            "type": "string"
+          },
+          "CreationTime": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "LastUpdatedTime": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "Description": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "JoiningTechnology": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "Classification": {
+            "maximum": 32767,
+            "minimum": -32768,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "AssociatedEntities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityDataType"
+            }
+          }
+        },
+        "description": "This structure provides the meta data which describes the joining process."
+      },
+      "JointDesignDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "JointDesignId": {
+            "type": "string"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "Description": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "JointDesignContent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignValueDataType"
+            }
+          },
+          "JointComponentIdList": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "This structure provides the design information of a given joint."
+      },
+      "JointDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "JointId": {
+            "type": "string"
+          },
+          "JointOriginId": {
+            "type": "string"
+          },
+          "JointDesignId": {
+            "type": "string"
+          },
+          "CreationTime": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "LastUpdatedTime": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "Description": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "Classification": {
+            "maximum": 32767,
+            "minimum": -32768,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "ClassificationDetails": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "JointStatus": {
+            "type": "string"
+          },
+          "AssociatedEntities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityDataType"
+            }
+          },
+          "JoiningTechnology": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "description": "This structure provides the joint information. Joint is the physical outcome of the joining operation which determines the properties of the point where multiple parts are assembled."
+      },
+      "JoiningProcessIdentificationDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "JoiningProcessId": {
+            "type": "string"
+          },
+          "JoiningProcessOriginId": {
+            "type": "string"
+          },
+          "SelectionName": {
+            "type": "string"
+          }
+        },
+        "description": "This structure contains the identification information of a Joining Process. It is used in set of methods defined in JoiningProcessManagementType."
+      }
+    }
+  }
+}

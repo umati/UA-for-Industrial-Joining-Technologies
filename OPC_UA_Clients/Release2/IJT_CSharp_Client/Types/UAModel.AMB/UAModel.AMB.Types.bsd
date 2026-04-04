@@ -1,0 +1,28 @@
+<opc:TypeDictionary
+  xmlns:opc="http://opcfoundation.org/BinarySchema/"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:ua="http://opcfoundation.org/UA/"
+  xmlns:tns="http://opcfoundation.org/UA/AMB/"
+  DefaultByteOrder="LittleEndian"
+  TargetNamespace="http://opcfoundation.org/UA/AMB/"
+>
+  <opc:Import Namespace="http://opcfoundation.org/UA/" Location="Opc.Ua.BinarySchema.bsd"/>
+
+  <opc:EnumeratedType Name="MaintenanceMethodEnum" LengthInBits="32">
+    <opc:EnumeratedValue Name="Local" Value="0" />
+    <opc:EnumeratedValue Name="Remote" Value="1" />
+  </opc:EnumeratedType>
+
+  <opc:StructuredType Name="NameNodeIdDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>A human-readable name of something plus optionally the NodeId in case the something is represented in the AddressSpace</opc:Documentation>
+    <opc:Field Name="Name" TypeName="ua:LocalizedText" />
+    <opc:Field Name="NodeId" TypeName="ua:NodeId" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="RootCauseDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>Root cause of an alarm</opc:Documentation>
+    <opc:Field Name="RootCauseId" TypeName="ua:NodeId" />
+    <opc:Field Name="RootCause" TypeName="ua:LocalizedText" />
+  </opc:StructuredType>
+
+</opc:TypeDictionary>

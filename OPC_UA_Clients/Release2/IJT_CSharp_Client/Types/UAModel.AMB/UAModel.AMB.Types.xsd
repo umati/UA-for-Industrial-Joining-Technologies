@@ -1,0 +1,67 @@
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ua="http://opcfoundation.org/UA/2008/02/Types.xsd"
+  xmlns:tns="http://opcfoundation.org/UA/AMB/"
+  targetNamespace="http://opcfoundation.org/UA/AMB/"
+  elementFormDefault="qualified"
+>
+  <xs:annotation>
+    <xs:appinfo>
+      <ua:Model ModelUri="http://opcfoundation.org/UA/AMB/" Version="1.01.1" PublicationDate="2024-02-27T00:00:00Z" />
+    </xs:appinfo>
+  </xs:annotation>
+  
+  <xs:import namespace="http://opcfoundation.org/UA/" />
+
+  <xs:simpleType  name="MaintenanceMethodEnum">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Local_0" />
+      <xs:enumeration value="Remote_1" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="MaintenanceMethodEnum" type="tns:MaintenanceMethodEnum" />
+
+  <xs:complexType name="ListOfMaintenanceMethodEnum">
+    <xs:sequence>
+      <xs:element name="MaintenanceMethodEnum" type="tns:MaintenanceMethodEnum" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="ListOfMaintenanceMethodEnum" type="tns:ListOfMaintenanceMethodEnum" nillable="true"></xs:element>
+
+  <xs:complexType name="NameNodeIdDataType">
+    <xs:annotation>
+      <xs:documentation>A human-readable name of something plus optionally the NodeId in case the something is represented in the AddressSpace</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="Name" type="ua:LocalizedText" minOccurs="0" nillable="true" />
+      <xs:element name="NodeId" type="ua:NodeId" minOccurs="0" nillable="true" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="NameNodeIdDataType" type="tns:NameNodeIdDataType" />
+
+  <xs:complexType name="ListOfNameNodeIdDataType">
+    <xs:sequence>
+      <xs:element name="NameNodeIdDataType" type="tns:NameNodeIdDataType" minOccurs="0" maxOccurs="unbounded" nillable="true" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="ListOfNameNodeIdDataType" type="tns:ListOfNameNodeIdDataType" nillable="true"></xs:element>
+
+  <xs:complexType name="RootCauseDataType">
+    <xs:annotation>
+      <xs:documentation>Root cause of an alarm</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="RootCauseId" type="ua:NodeId" minOccurs="0" nillable="true" />
+      <xs:element name="RootCause" type="ua:LocalizedText" minOccurs="0" nillable="true" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="RootCauseDataType" type="tns:RootCauseDataType" />
+
+  <xs:complexType name="ListOfRootCauseDataType">
+    <xs:sequence>
+      <xs:element name="RootCauseDataType" type="tns:RootCauseDataType" minOccurs="0" maxOccurs="unbounded" nillable="true" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="ListOfRootCauseDataType" type="tns:ListOfRootCauseDataType" nillable="true"></xs:element>
+
+</xs:schema>

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "RootCauseDataType": {
+      "type": "object",
+      "properties": {
+        "RootCauseId": {
+          "type": "string",
+          "format": "UaNodeId"
+        },
+        "RootCause": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        }
+      }
+    },
+    "NameNodeIdDataType": {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        },
+        "NodeId": {
+          "type": "string",
+          "format": "UaNodeId"
+        }
+      }
+    },
+    "MaintenanceMethodEnum": {
+      "anyOf": [
+        {
+          "const": "Local_0",
+          "title": "Local"
+        },
+        {
+          "const": "Remote_1",
+          "title": "Remote"
+        }
+      ]
+    }
+  }
+}

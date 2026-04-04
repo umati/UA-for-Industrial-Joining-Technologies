@@ -17,6 +17,12 @@ build/
 .eggs/
 *.egg
 
+# Ruff (Python linter) cache
+.ruff_cache/
+
+# Mypy (Python type checker) cache
+.mypy_cache/
+
 # Virtual environments
 venv/
 venv_test/
@@ -72,7 +78,6 @@ OLD/
 # IDEs
 # ---------------------------------------------------------------------------
 .vscode/
-.vs/
 .idea/
 *.swp
 *.swo
@@ -165,6 +170,45 @@ OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_New_RC_1.01.0/Opc.Ua.Machine
 OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_New_RC_1.01.0/Opc.Ua.NodeSet2.xml
 OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_New_RC_1.01.0/server_configuration.json
 OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_New_RC_1.01.0/simulated_data.json
+
+# ---------------------------------------------------------------------------
+# .NET / C# — applies to all C# projects in the repo
+# (IJT_CSharp_Client, Types/ sub-libraries, any future C# work)
+# ---------------------------------------------------------------------------
+
+# Build output directories
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio solution user options & caches
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+
+# Rider / JetBrains
+.idea/
+
+# NuGet artefacts
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Publish output
+**/publish/
+**/PublishOutput/
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# MSBuild crash logs
+MSBuild_*.failure.txt
 
 # ---------------------------------------------------------------------------
 # Session / handoff artefacts

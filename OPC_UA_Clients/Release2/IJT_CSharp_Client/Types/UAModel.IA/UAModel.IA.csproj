@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>UAModel.IA</AssemblyName>
+    <RootNamespace>UAModel.IA</RootNamespace>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>1591;CA1515;CA1707;CA1028</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Core" Version="1.5.378.134" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UAModel.DI\UAModel.DI.csproj" />
+  </ItemGroup>
+
+<ItemGroup>
+    <EmbeddedResource Include="UAModel.IA.NodeSet2.xml" />
+  </ItemGroup>
+
+</Project>
+

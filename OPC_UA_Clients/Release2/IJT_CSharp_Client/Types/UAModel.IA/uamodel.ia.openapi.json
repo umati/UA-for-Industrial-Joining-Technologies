@@ -1,0 +1,167 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "IA",
+    "description": "A placeholder API that allows OpenAPI tools to be used to generate code for a companion specification.",
+    "version": "1.01.4"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4840"
+    }
+  ],
+  "paths": {
+    "/get": {
+      "get": {
+        "operationId": "Get",
+        "responses": {
+          "200": {
+            "description": "ModelDataTypes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response",
+                  "properties": {
+                    "StacklightOperationMode": {
+                      "$ref": "#/components/schemas/StacklightOperationMode"
+                    },
+                    "LevelDisplayMode": {
+                      "$ref": "#/components/schemas/LevelDisplayMode"
+                    },
+                    "SignalColor": {
+                      "$ref": "#/components/schemas/SignalColor"
+                    },
+                    "SignalModeLight": {
+                      "$ref": "#/components/schemas/SignalModeLight"
+                    },
+                    "RGBWDataType": {
+                      "$ref": "#/components/schemas/RGBWDataType"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "StacklightOperationMode": {
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "type": "integer",
+        "description": "[Link to specification]().",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Segmented",
+          "Levelmeter",
+          "Running_Light",
+          "Other"
+        ]
+      },
+      "LevelDisplayMode": {
+        "enum": [
+          0,
+          1,
+          2
+        ],
+        "type": "integer",
+        "description": "[Link to specification]().",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Dimmed",
+          "Blinking",
+          "Other"
+        ]
+      },
+      "SignalColor": {
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "type": "integer",
+        "description": "[Link to specification]().",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Off",
+          "Red",
+          "Green",
+          "Blue",
+          "Yellow",
+          "Purple",
+          "Cyan",
+          "White"
+        ]
+      },
+      "SignalModeLight": {
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "type": "integer",
+        "description": "[Link to specification]().",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Continuous",
+          "Blinking",
+          "Flashing",
+          "Other"
+        ]
+      },
+      "RGBWDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "Red": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "Green": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "Blue": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "White": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          }
+        }
+      }
+    }
+  }
+}

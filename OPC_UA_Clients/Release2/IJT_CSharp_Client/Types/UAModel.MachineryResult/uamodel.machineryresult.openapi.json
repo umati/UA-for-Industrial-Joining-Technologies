@@ -1,0 +1,300 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "MachineryResult",
+    "description": "A placeholder API that allows OpenAPI tools to be used to generate code for a companion specification.",
+    "version": "1.01.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4840"
+    }
+  ],
+  "paths": {
+    "/get": {
+      "get": {
+        "operationId": "Get",
+        "responses": {
+          "200": {
+            "description": "ModelDataTypes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response",
+                  "properties": {
+                    "ResultEvaluationEnum": {
+                      "$ref": "#/components/schemas/ResultEvaluationEnum"
+                    },
+                    "ResultTransferOptionsDataType": {
+                      "$ref": "#/components/schemas/ResultTransferOptionsDataType"
+                    },
+                    "BaseResultTransferOptionsDataType": {
+                      "$ref": "#/components/schemas/BaseResultTransferOptionsDataType"
+                    },
+                    "ProcessingTimesDataType": {
+                      "$ref": "#/components/schemas/ProcessingTimesDataType"
+                    },
+                    "ResultMetaDataType": {
+                      "$ref": "#/components/schemas/ResultMetaDataType"
+                    },
+                    "ResultDataType": {
+                      "$ref": "#/components/schemas/ResultDataType"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LocalizedText": {
+        "type": "object",
+        "properties": {
+          "Locale": {
+            "type": "string",
+            "format": "rfc3066"
+          },
+          "Text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part3/v105/docs/8.5)."
+      },
+      "ExtensionObject": {
+        "type": "object",
+        "properties": {
+          "UaTypeId": {
+            "type": "string",
+            "format": "UaNodeId"
+          },
+          "UaEncoding": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32"
+          },
+          "UaBody": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part6/v105/docs/5.4.2.16)."
+      },
+      "Variant": {
+        "type": "object",
+        "properties": {
+          "UaType": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32"
+          },
+          "Value": { },
+          "Dimensions": {
+            "type": "array",
+            "items": {
+              "minimum": 0,
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part6/v105/docs/5.4.2.17)."
+      },
+      "Duration": {
+        "type": "number",
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part3/v105/docs/8.12).",
+        "format": "double",
+        "default": 0
+      },
+      "UtcTime": {
+        "type": "string",
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part3/v105/docs/8.11).",
+        "format": "date-time",
+        "default": "0001-01-01T00:00:00.0000000+00:00"
+      },
+      "UriString": {
+        "type": "string",
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part3/v105/docs/8.31)."
+      },
+      "TrimmedString": {
+        "type": "string",
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part3/v105/docs/8.31)."
+      },
+      "ResultEvaluationEnum": {
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "type": "integer",
+        "description": "[Link to specification]().",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Undefined",
+          "OK",
+          "NotOK",
+          "NotDecidable"
+        ]
+      },
+      "ResultTransferOptionsDataType": {
+        "type": "object",
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part6/v105/docs/5.4.6)."
+      },
+      "BaseResultTransferOptionsDataType": {
+        "type": "object",
+        "properties": {
+          "ResultId": {
+            "type": "string"
+          }
+        },
+        "description": "Abstract type containing information which file should be provided."
+      },
+      "ProcessingTimesDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "StartTime": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "EndTime": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "AcquisitionDuration": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "ProcessingDuration": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          }
+        },
+        "description": "Contains measured times that were generated during the execution of a recipe."
+      },
+      "ResultMetaDataType": {
+        "type": "object",
+        "properties": {
+          "EncodingMask": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "ResultId": {
+            "type": "string"
+          },
+          "HasTransferableDataOnFile": {
+            "type": "boolean",
+            "default": false
+          },
+          "IsPartial": {
+            "type": "boolean",
+            "default": false
+          },
+          "IsSimulated": {
+            "type": "boolean",
+            "default": false
+          },
+          "ResultState": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "StepId": {
+            "type": "string"
+          },
+          "PartId": {
+            "type": "string"
+          },
+          "ExternalRecipeId": {
+            "type": "string"
+          },
+          "InternalRecipeId": {
+            "type": "string"
+          },
+          "ProductId": {
+            "type": "string"
+          },
+          "ExternalConfigurationId": {
+            "type": "string"
+          },
+          "InternalConfigurationId": {
+            "type": "string"
+          },
+          "JobId": {
+            "type": "string"
+          },
+          "CreationTime": {
+            "type": "string",
+            "format": "date-time",
+            "default": "0001-01-01T00:00:00.0000000+00:00"
+          },
+          "ProcessingTimes": {
+            "$ref": "#/components/schemas/ProcessingTimesDataType"
+          },
+          "ResultUri": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ResultEvaluation": {
+            "type": "integer",
+            "description": "[Link to specification]().",
+            "format": "ResultEvaluationEnum"
+          },
+          "ResultEvaluationCode": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "ResultEvaluationDetails": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "FileFormat": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Meta data of a result, describing the result."
+      },
+      "ResultDataType": {
+        "type": "object",
+        "properties": {
+          "ResultMetaData": {
+            "type": "object"
+          },
+          "ResultContent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Variant"
+            }
+          }
+        },
+        "description": "Contains fields that were created during the execution of a recipe."
+      }
+    }
+  }
+}

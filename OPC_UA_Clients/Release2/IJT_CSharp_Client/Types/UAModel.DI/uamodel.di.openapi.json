@@ -1,0 +1,216 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "DI",
+    "description": "A placeholder API that allows OpenAPI tools to be used to generate code for a companion specification.",
+    "version": "1.04.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4840"
+    }
+  ],
+  "paths": {
+    "/get": {
+      "get": {
+        "operationId": "Get",
+        "responses": {
+          "200": {
+            "description": "ModelDataTypes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response",
+                  "properties": {
+                    "SoftwareVersionFileType": {
+                      "$ref": "#/components/schemas/SoftwareVersionFileType"
+                    },
+                    "UpdateBehavior": {
+                      "$ref": "#/components/schemas/UpdateBehavior"
+                    },
+                    "DeviceHealthEnumeration": {
+                      "$ref": "#/components/schemas/DeviceHealthEnumeration"
+                    },
+                    "FetchResultDataType": {
+                      "$ref": "#/components/schemas/FetchResultDataType"
+                    },
+                    "ParameterResultDataType": {
+                      "$ref": "#/components/schemas/ParameterResultDataType"
+                    },
+                    "TransferResultErrorDataType": {
+                      "$ref": "#/components/schemas/TransferResultErrorDataType"
+                    },
+                    "TransferResultDataDataType": {
+                      "$ref": "#/components/schemas/TransferResultDataDataType"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DiagnosticInfo": {
+        "type": "object",
+        "properties": {
+          "SymbolicId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "NamespaceUri": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "Locale": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "LocalizedText": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "AdditionalInfo": {
+            "type": "string"
+          },
+          "InnerStatusCode": {
+            "$ref": "#/components/schemas/StatusCode"
+          },
+          "InnerDiagnosticInfo": {
+            "$ref": "#/components/schemas/DiagnosticInfo"
+          }
+        },
+        "additionalProperties": false,
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part4/v105/docs/7.12)."
+      },
+      "SoftwareVersionFileType": {
+        "enum": [
+          0,
+          1,
+          2
+        ],
+        "type": "integer",
+        "description": "[Link to specification]().",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Current",
+          "Pending",
+          "Fallback"
+        ]
+      },
+      "UpdateBehaviorBits": {
+        "enum": [
+          1,
+          2,
+          4,
+          8,
+          16
+        ],
+        "type": "integer",
+        "description": "[Link to specification]().",
+        "format": "int32",
+        "x-enum-varnames": [
+          "KeepsParameters",
+          "WillDisconnect",
+          "RequiresPowerCycle",
+          "WillReboot",
+          "NeedsPreparation"
+        ]
+      },
+      "UpdateBehavior": {
+        "maximum": 4294967295,
+        "minimum": 0,
+        "type": "integer",
+        "format": "int64",
+        "default": 0
+      },
+      "DeviceHealthEnumeration": {
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "type": "integer",
+        "description": "[Link to specification]().",
+        "format": "int32",
+        "x-enum-varnames": [
+          "NORMAL",
+          "FAILURE",
+          "CHECK_FUNCTION",
+          "OFF_SPEC",
+          "MAINTENANCE_REQUIRED"
+        ]
+      },
+      "FetchResultDataType": {
+        "type": "object",
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part6/v105/docs/5.4.6)."
+      },
+      "ParameterResultDataType": {
+        "type": "object",
+        "properties": {
+          "NodePath": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "UaQualifiedName"
+            }
+          },
+          "StatusCode": {
+            "$ref": "#/components/schemas/StatusCode"
+          },
+          "Diagnostics": {
+            "$ref": "#/components/schemas/DiagnosticInfo"
+          }
+        }
+      },
+      "TransferResultErrorDataType": {
+        "type": "object",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FetchResultDataType"
+          }
+        ],
+        "properties": {
+          "Status": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "Diagnostics": {
+            "$ref": "#/components/schemas/DiagnosticInfo"
+          }
+        }
+      },
+      "TransferResultDataDataType": {
+        "type": "object",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FetchResultDataType"
+          }
+        ],
+        "properties": {
+          "SequenceNumber": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "EndOfResults": {
+            "type": "boolean",
+            "default": false
+          },
+          "ParameterDefs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParameterResultDataType"
+            }
+          }
+        }
+      }
+    }
+  }
+}

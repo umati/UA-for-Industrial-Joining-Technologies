@@ -1,0 +1,1104 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<UANodeSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" LastModified="2024-02-27T00:00:00Z" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
+  <NamespaceUris>
+    <Uri>http://opcfoundation.org/UA/AMB/</Uri>
+  </NamespaceUris>
+  <Models>
+    <Model ModelUri="http://opcfoundation.org/UA/AMB/" Version="1.01.1" PublicationDate="2024-02-27T00:00:00Z" ModelVersion="1.1.1">
+      <RequiredModel ModelUri="http://opcfoundation.org/UA/" Version="1.05.02" PublicationDate="2022-11-01T00:00:00Z" ModelVersion="1.5.2" />
+    </Model>
+  </Models>
+  <Aliases>
+    <Alias Alias="Boolean">i=1</Alias>
+    <Alias Alias="SByte">i=2</Alias>
+    <Alias Alias="Byte">i=3</Alias>
+    <Alias Alias="Int16">i=4</Alias>
+    <Alias Alias="UInt16">i=5</Alias>
+    <Alias Alias="Int32">i=6</Alias>
+    <Alias Alias="UInt32">i=7</Alias>
+    <Alias Alias="Int64">i=8</Alias>
+    <Alias Alias="UInt64">i=9</Alias>
+    <Alias Alias="Float">i=10</Alias>
+    <Alias Alias="Double">i=11</Alias>
+    <Alias Alias="DateTime">i=13</Alias>
+    <Alias Alias="String">i=12</Alias>
+    <Alias Alias="ByteString">i=15</Alias>
+    <Alias Alias="Guid">i=14</Alias>
+    <Alias Alias="XmlElement">i=16</Alias>
+    <Alias Alias="NodeId">i=17</Alias>
+    <Alias Alias="ExpandedNodeId">i=18</Alias>
+    <Alias Alias="QualifiedName">i=20</Alias>
+    <Alias Alias="LocalizedText">i=21</Alias>
+    <Alias Alias="StatusCode">i=19</Alias>
+    <Alias Alias="Structure">i=22</Alias>
+    <Alias Alias="Number">i=26</Alias>
+    <Alias Alias="Integer">i=27</Alias>
+    <Alias Alias="UInteger">i=28</Alias>
+    <Alias Alias="HasComponent">i=47</Alias>
+    <Alias Alias="HasProperty">i=46</Alias>
+    <Alias Alias="Organizes">i=35</Alias>
+    <Alias Alias="HasEventSource">i=36</Alias>
+    <Alias Alias="HasNotifier">i=48</Alias>
+    <Alias Alias="HasSubtype">i=45</Alias>
+    <Alias Alias="HasTypeDefinition">i=40</Alias>
+    <Alias Alias="HasModellingRule">i=37</Alias>
+    <Alias Alias="HasEncoding">i=38</Alias>
+    <Alias Alias="HasDescription">i=39</Alias>
+    <Alias Alias="HasCause">i=53</Alias>
+    <Alias Alias="ToState">i=52</Alias>
+    <Alias Alias="FromState">i=51</Alias>
+    <Alias Alias="HasEffect">i=54</Alias>
+    <Alias Alias="HasTrueSubState">i=9004</Alias>
+    <Alias Alias="HasFalseSubState">i=9005</Alias>
+    <Alias Alias="HasDictionaryEntry">i=17597</Alias>
+    <Alias Alias="HasCondition">i=9006</Alias>
+    <Alias Alias="HasGuard">i=15112</Alias>
+    <Alias Alias="HasAddIn">i=17604</Alias>
+    <Alias Alias="HasInterface">i=17603</Alias>
+    <Alias Alias="GeneratesEvent">i=41</Alias>
+    <Alias Alias="AlwaysGeneratesEvent">i=3065</Alias>
+    <Alias Alias="HasOrderedComponent">i=49</Alias>
+    <Alias Alias="HasAlarmSuppressionGroup">i=16361</Alias>
+    <Alias Alias="AlarmGroupMember">i=16362</Alias>
+    <Alias Alias="AlarmSuppressionGroupMember">i=32059</Alias>
+  </Aliases>
+  <UADataType NodeId="ns=1;i=3004" BrowseName="1:MaintenanceMethodEnum">
+    <DisplayName>MaintenanceMethodEnum</DisplayName>
+    <Category>AMB Current and Future Maintenance Activities</Category>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6029</Reference>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=29</Reference>
+    </References>
+    <Definition Name="1:MaintenanceMethodEnum">
+      <Field Name="Local" Value="0">
+        <Description>Maintenance close to the asset</Description>
+      </Field>
+      <Field Name="Remote" Value="1">
+        <Description>Maintenance from another location</Description>
+      </Field>
+    </Definition>
+  </UADataType>
+  <UAVariable NodeId="ns=1;i=6029" BrowseName="EnumValues" ParentNodeId="ns=1;i=3004" DataType="i=7594" ValueRank="1" ArrayDimensions="2">
+    <DisplayName>EnumValues</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=3004</Reference>
+    </References>
+    <Value>
+      <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=7616</Identifier>
+          </TypeId>
+          <Body>
+            <EnumValueType>
+              <Value>0</Value>
+              <DisplayName>
+                <Text>Local</Text>
+              </DisplayName>
+              <Description>
+                <Text>Maintenance close to the asset</Text>
+              </Description>
+            </EnumValueType>
+          </Body>
+        </ExtensionObject>
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=7616</Identifier>
+          </TypeId>
+          <Body>
+            <EnumValueType>
+              <Value>1</Value>
+              <DisplayName>
+                <Text>Remote</Text>
+              </DisplayName>
+              <Description>
+                <Text>Maintenance from another location</Text>
+              </Description>
+            </EnumValueType>
+          </Body>
+        </ExtensionObject>
+      </ListOfExtensionObject>
+    </Value>
+  </UAVariable>
+  <UADataType NodeId="ns=1;i=3003" BrowseName="1:NameNodeIdDataType">
+    <DisplayName>NameNodeIdDataType</DisplayName>
+    <Description>A human-readable name of something plus optionally the NodeId in case the something is represented in the AddressSpace</Description>
+    <Category>AMB Current and Future Maintenance Activities</Category>
+    <References>
+      <Reference ReferenceType="HasEncoding">ns=1;i=5012</Reference>
+      <Reference ReferenceType="HasEncoding">ns=1;i=5013</Reference>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=22</Reference>
+    </References>
+    <Definition Name="1:NameNodeIdDataType">
+      <Field Name="Name" DataType="i=21">
+        <Description>The human-readable name. Shall be the DisplayName of the NodeId field, in case the NodeId is provided</Description>
+      </Field>
+      <Field Name="NodeId" DataType="i=17">
+        <Description>Optionally provided NodeId, in case the referenced thing is represented as Node in the AddressSpace.</Description>
+      </Field>
+    </Definition>
+  </UADataType>
+  <UADataType NodeId="ns=1;i=3002" BrowseName="1:RootCauseDataType">
+    <DisplayName>RootCauseDataType</DisplayName>
+    <Description>Root cause of an alarm</Description>
+    <Category>AMB Asset Health Status Root Causes</Category>
+    <References>
+      <Reference ReferenceType="HasEncoding">ns=1;i=5001</Reference>
+      <Reference ReferenceType="HasEncoding">ns=1;i=5005</Reference>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=22</Reference>
+    </References>
+    <Definition Name="1:RootCauseDataType">
+      <Field Name="RootCauseId" DataType="i=17">
+        <Description>The NodeId of the root cause of an alarm. This can point to another Node in the AddressSpace or a ConditionId, that is not necessarily represent as Object in the AddressSpace. Ideally, this points directly to the root cause. Potentially, it points to an alarm that has an additional root cause. Clients shall expect, that they need to follow a path to find the root cause. If the root cause is unknown, the NodeId shall be set to NULL.</Description>
+      </Field>
+      <Field Name="RootCause" DataType="i=21">
+        <Description>Localized description of the root cause of an alarm. This can be the DisplayName of the Node referenced by RootCauseId or a more descriptive text. If the root cause is unknown, this should be described in the text.</Description>
+      </Field>
+    </Definition>
+  </UADataType>
+  <UAReferenceType NodeId="ns=1;i=4002" BrowseName="1:Contains" IsAbstract="true">
+    <DisplayName>Contains</DisplayName>
+    <Description>Links an Object representing some type of location to Objects (like assets) located in that location</Description>
+    <Category>AMB Hierarchical Location Objects</Category>
+    <Category>AMB Operational Location Objects</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=33</Reference>
+    </References>
+    <InverseName>LocatedIn</InverseName>
+  </UAReferenceType>
+  <UAReferenceType NodeId="ns=1;i=4003" BrowseName="1:HierarchicalContains">
+    <DisplayName>HierarchicalContains</DisplayName>
+    <Description>Links an Object representing part in a hierarchical location to Objects (like assets) located in that hierarchical location</Description>
+    <Category>AMB Hierarchical Location Objects</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">ns=1;i=4002</Reference>
+    </References>
+    <InverseName>HierarchicalLocatedIn</InverseName>
+  </UAReferenceType>
+  <UAReferenceType NodeId="ns=1;i=4004" BrowseName="1:OperationalContains">
+    <DisplayName>OperationalContains</DisplayName>
+    <Description>Links an Object representing an operational location to Objects (like assets) located in that operational location</Description>
+    <Category>AMB Operational Location Objects</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">ns=1;i=4002</Reference>
+    </References>
+    <InverseName>OperationalLocatedIn</InverseName>
+  </UAReferenceType>
+  <UAObjectType NodeId="ns=1;i=1005" BrowseName="1:CalibrationDueConditionClassType" IsAbstract="true">
+    <DisplayName>CalibrationDueConditionClassType</DisplayName>
+    <Description>Calibration is due</Description>
+    <Category>AMB Asset Health Status Alarm Categories</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11165</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1015" BrowseName="1:ExternalCheckConditionClassType" IsAbstract="true">
+    <DisplayName>ExternalCheckConditionClassType</DisplayName>
+    <Description>An external check maintenance activity</Description>
+    <Category>AMB Current and Future Maintenance Activities</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11165</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1007" BrowseName="1:FlashUpdateInProgressConditionClassType" IsAbstract="true">
+    <DisplayName>FlashUpdateInProgressConditionClassType</DisplayName>
+    <Description>Flash update in progress</Description>
+    <Category>AMB Asset Health Status Alarm Categories</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11165</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1018" BrowseName="1:ImprovementConditionClassType" IsAbstract="true">
+    <DisplayName>ImprovementConditionClassType</DisplayName>
+    <Description>An improvement maintenance activity</Description>
+    <Category>AMB Current and Future Maintenance Activities</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11165</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1014" BrowseName="1:InspectionConditionClassType" IsAbstract="true">
+    <DisplayName>InspectionConditionClassType</DisplayName>
+    <Description>An inspection maintenance activity</Description>
+    <Category>AMB Current and Future Maintenance Activities</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11165</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1017" BrowseName="1:RepairConditionClassType" IsAbstract="true">
+    <DisplayName>RepairConditionClassType</DisplayName>
+    <Description>A repair maintenance activity</Description>
+    <Category>AMB Current and Future Maintenance Activities</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11165</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1016" BrowseName="1:ServicingConditionClassType" IsAbstract="true">
+    <DisplayName>ServicingConditionClassType</DisplayName>
+    <Description>A servicing maintenance activity</Description>
+    <Category>AMB Current and Future Maintenance Activities</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11165</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1008" BrowseName="1:BadConfigurationConditionClassType" IsAbstract="true">
+    <DisplayName>BadConfigurationConditionClassType</DisplayName>
+    <Description>Configuration is bad</Description>
+    <Category>AMB Asset Health Status Alarm Categories</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11166</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1003" BrowseName="1:ConnectionFailureConditionClassType" IsAbstract="true">
+    <DisplayName>ConnectionFailureConditionClassType</DisplayName>
+    <Description>One or more connections have failed</Description>
+    <Category>AMB Asset Health Status Alarm Categories</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11166</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1019" BrowseName="1:FlashUpdateFailedConditionClassType" IsAbstract="true">
+    <DisplayName>FlashUpdateFailedConditionClassType</DisplayName>
+    <Description>Flash update has failed</Description>
+    <Category>AMB Asset Health Status Alarm Categories</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11166</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1009" BrowseName="1:OutOfResourcesConditionClassType" IsAbstract="true">
+    <DisplayName>OutOfResourcesConditionClassType</DisplayName>
+    <Description>Out of resources issues</Description>
+    <Category>AMB Asset Health Status Alarm Categories</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11166</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1010" BrowseName="1:OutOfMemoryConditionClassType" IsAbstract="true">
+    <DisplayName>OutOfMemoryConditionClassType</DisplayName>
+    <Description>Out of memory issues</Description>
+    <Category>AMB Asset Health Status Alarm Categories</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">ns=1;i=1009</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1004" BrowseName="1:OverTemperatureConditionClassType" IsAbstract="true">
+    <DisplayName>OverTemperatureConditionClassType</DisplayName>
+    <Description>Over temperature</Description>
+    <Category>AMB Asset Health Status Alarm Categories</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11166</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1006" BrowseName="1:SelfTestFailureConditionClassType" IsAbstract="true">
+    <DisplayName>SelfTestFailureConditionClassType</DisplayName>
+    <Description>Self-Test failure</Description>
+    <Category>AMB Asset Health Status Alarm Categories</Category>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=11166</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=1012" BrowseName="1:IMaintenanceEventType" IsAbstract="true">
+    <DisplayName>IMaintenanceEventType</DisplayName>
+    <Description>Information on maintenance activities, should by applied to conditions (ConditionType or subtypes)</Description>
+    <Category>AMB Current and Future Maintenance Activities</Category>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6042</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6036</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6041</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=5014</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6037</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6039</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6040</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6035</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6038</Reference>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=17602</Reference>
+    </References>
+  </UAObjectType>
+  <UAVariable NodeId="ns=1;i=6042" BrowseName="1:ConfigurationChanged" ParentNodeId="ns=1;i=1012" DataType="Boolean" AccessLevel="3">
+    <DisplayName>ConfigurationChanged</DisplayName>
+    <Description>Information if the configuration of the asset is planned to be changed or has changed during the maintenance activity. FALSE indicates no change, and TRUE indicates a change. The content may change during the different MaintenanceStates. By accessing the history of Events a Client can distinguish between the planned and actual configuration changes during the maintenance activity.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=1012</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6036" BrowseName="1:EstimatedDowntime" ParentNodeId="ns=1;i=1012" DataType="i=290" AccessLevel="3">
+    <DisplayName>EstimatedDowntime</DisplayName>
+    <Description>The estimated time the execution of the maintenance activity will take. In case of replanning, it is allowed to change the EstimatedDowntime. If during the execution of the maintenance activity the EstimatedDowntime can be adjusted (e.g., the asset needs to be repaired because an inspection found some issues) this should be done. Clients can access the history of Events to receive the information on the original estimates when the maintenance activity started.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=1012</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6041" BrowseName="1:MaintenanceMethod" ParentNodeId="ns=1;i=1012" DataType="ns=1;i=3004" AccessLevel="3">
+    <DisplayName>MaintenanceMethod</DisplayName>
+    <Description>Information about the planned or used maintenance method. The content may change during the different MaintenanceStates. By accessing the history of Events a Client can distinguish between the planned and actual used maintenance method during the maintenance activity.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=1012</Reference>
+    </References>
+  </UAVariable>
+  <UAObject NodeId="ns=1;i=5014" BrowseName="1:MaintenanceState" ParentNodeId="ns=1;i=1012">
+    <DisplayName>MaintenanceState</DisplayName>
+    <Description>Information if the maintenance activity is still planned, currently in execution, or has already been executed.</Description>
+    <References>
+      <Reference ReferenceType="HasComponent">ns=1;i=6033</Reference>
+      <Reference ReferenceType="HasTypeDefinition">ns=1;i=1013</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1012</Reference>
+    </References>
+  </UAObject>
+  <UAVariable NodeId="ns=1;i=6033" BrowseName="CurrentState" ParentNodeId="ns=1;i=5014" DataType="LocalizedText">
+    <DisplayName>CurrentState</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6034</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2760</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=5014</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6034" BrowseName="Id" ParentNodeId="ns=1;i=6033" DataType="NodeId">
+    <DisplayName>Id</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=6033</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6037" BrowseName="1:MaintenanceSupplier" ParentNodeId="ns=1;i=1012" DataType="ns=1;i=3003" AccessLevel="3">
+    <DisplayName>MaintenanceSupplier</DisplayName>
+    <Description>Information on the supplier that is planned to execute, currently executing or has executed the maintenance activity. The content may change during the different MaintenanceStates. By accessing the history of Events a Client can distinguish between the planned and actual supplier that executed the maintenance activity. The value contains always a human-readable name of the supplier and optionally references a Node representing the supplier in the AddressSpace.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=1012</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6039" BrowseName="1:PartsOfAssetReplaced" ParentNodeId="ns=1;i=1012" DataType="ns=1;i=3003" ValueRank="1" ArrayDimensions="0" AccessLevel="3">
+    <DisplayName>PartsOfAssetReplaced</DisplayName>
+    <Description>Information on the parts of the assets that are planned to be serviced during the maintenance activity, currently serviced or have been serviced, depending on the different MaintenanceStates. The content may change during the different MaintenanceStates. By accessing the history of Events a Client can distinguish between the planned and actual parts of the assets serviced during the maintenance activity. The value contains always an array of a human-readable name of the qualification of the parts of the asset to be serviced and optionally references a Node representing the part of the asset in the AddressSpace.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=1012</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6040" BrowseName="1:PartsOfAssetServiced" ParentNodeId="ns=1;i=1012" DataType="ns=1;i=3003" ValueRank="1" ArrayDimensions="0" AccessLevel="3">
+    <DisplayName>PartsOfAssetServiced</DisplayName>
+    <Description>Information on the parts of the assets that are planned to be serviced during the maintenance activity, currently serviced or have been serviced, depending on the different MaintenanceStates. The content may change during the different MaintenanceStates. By accessing the history of Events a Client can distinguish between the planned and actual parts of the assets serviced during the maintenance activity. The value contains always an array of a human-readable name of the qualification of the parts of the asset to be serviced and optionally references a Node representing the part of the asset in the AddressSpace.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=1012</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6035" BrowseName="1:PlannedDate" ParentNodeId="ns=1;i=1012" DataType="i=294" AccessLevel="3">
+    <DisplayName>PlannedDate</DisplayName>
+    <Description>Date for which the maintenance activity has been scheduled. In case of replanning, it is allowed to change the PlannedDate. However, it is not the intention that the PlannedDate is modified because the maintenance activity starts to get executed. If the PlannedDate depends for example on the operation hours of the asset, it might get adapted depending on the passed operation hours.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=1012</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6038" BrowseName="1:QualificationOfPersonnel" ParentNodeId="ns=1;i=1012" DataType="ns=1;i=3003" AccessLevel="3">
+    <DisplayName>QualificationOfPersonnel</DisplayName>
+    <Description>Information on the qualification of the personnel that is planned to execute, currently executing or has executed the maintenance activity. The content may change during the different MaintenanceStates. By accessing the history of Events a Client can distinguish between the planned and actual qualification of the personnel that executed the maintenance activity. The value contains always a human-readable name of the qualification of the personnel and optionally references a Node representing the qualification of the personnel in the AddressSpace.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=1012</Reference>
+    </References>
+  </UAVariable>
+  <UAObjectType NodeId="ns=1;i=1002" BrowseName="1:IRootCauseIndicationType" IsAbstract="true">
+    <DisplayName>IRootCauseIndicationType</DisplayName>
+    <Description>Information on the root cause of conditions, should be applied to alarms (AlarmType or subtypes)</Description>
+    <Category>AMB Asset Health Status Root Causes</Category>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6015</Reference>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=17602</Reference>
+    </References>
+  </UAObjectType>
+  <UAVariable NodeId="ns=1;i=6015" BrowseName="1:PotentialRootCauses" ParentNodeId="ns=1;i=1002" DataType="ns=1;i=3002" ValueRank="1" ArrayDimensions="0" AccessLevel="3">
+    <DisplayName>PotentialRootCauses</DisplayName>
+    <Description>An array of potential root causes of the alarm. This is intended to be a hint to the client and might be a local view on the potential root causes of the alarm. The list might not contain all potential root causes, that is, other potential root causes might exist as well. If the alarm itself is considered to be the root cause, the array shall be empty. If no potential root causes have been identified, there shall be at least one entry in the array indicating that the root cause is unknown.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=1002</Reference>
+    </References>
+  </UAVariable>
+  <UAObjectType NodeId="ns=1;i=1011" BrowseName="1:DocumentationLinksType">
+    <DisplayName>DocumentationLinksType</DisplayName>
+    <Description>AddIn to link documentation provided by the manufacturer and / or end-user.</Description>
+    <Category>AMB DocumentationLinks Base</Category>
+    <References>
+      <Reference ReferenceType="HasComponent">ns=1;i=6017</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=7004</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6016</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=7005</Reference>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=58</Reference>
+    </References>
+  </UAObjectType>
+  <UAVariable NodeId="ns=1;i=6017" BrowseName="1:&lt;Link&gt;" SymbolicName="Link_Placeholder" ParentNodeId="ns=1;i=1011" DataType="i=23751" AccessLevel="3">
+    <DisplayName>&lt;Link&gt;</DisplayName>
+    <Description>Represents links to externally managed documentation, typically URLs.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=63</Reference>
+      <Reference ReferenceType="HasModellingRule">i=11508</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1011</Reference>
+    </References>
+  </UAVariable>
+  <UAMethod NodeId="ns=1;i=7004" BrowseName="1:AddLink" ParentNodeId="ns=1;i=1011">
+    <DisplayName>AddLink</DisplayName>
+    <Description>Method to add an end-user specific link that is stored persistently in the server.</Description>
+    <Category>AMB DocumentationLinks Base</Category>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6018</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6019</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1011</Reference>
+    </References>
+  </UAMethod>
+  <UAVariable NodeId="ns=1;i=6018" BrowseName="InputArguments" ParentNodeId="ns=1;i=7004" DataType="i=296" ValueRank="1" ArrayDimensions="4">
+    <DisplayName>InputArguments</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=7004</Reference>
+    </References>
+    <Value>
+      <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>LinkToExternalSource</Name>
+              <DataType>
+                <Identifier>i=23751</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description>
+                <Text>Link to an external source. The server might or might not check if a correct URI is provided, or if the URI is available/reachable.</Text>
+              </Description>
+            </Argument>
+          </Body>
+        </ExtensionObject>
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>BrowseName</Name>
+              <DataType>
+                <Identifier>i=20</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description>
+                <Text>The BrowseName of the new created Node. Method fails if a Variable with the same BrowseName already exists.</Text>
+              </Description>
+            </Argument>
+          </Body>
+        </ExtensionObject>
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>DisplayName</Name>
+              <DataType>
+                <Identifier>i=21</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description>
+                <Text>The DisplayName of the new created Node. If the server supports multiple locales, and the Client wants to provide more than one locale, the Write operation on the Variable shall be used.</Text>
+              </Description>
+            </Argument>
+          </Body>
+        </ExtensionObject>
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>Description</Name>
+              <DataType>
+                <Identifier>i=21</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description>
+                <Text>The Description of the new created Node. If the server supports multiple locales, and the Client wants to provide more than one locale, the Write operation on the Variable shall be used.</Text>
+              </Description>
+            </Argument>
+          </Body>
+        </ExtensionObject>
+      </ListOfExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6019" BrowseName="OutputArguments" ParentNodeId="ns=1;i=7004" DataType="i=296" ValueRank="1" ArrayDimensions="1">
+    <DisplayName>OutputArguments</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=7004</Reference>
+    </References>
+    <Value>
+      <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>LinkVariable</Name>
+              <DataType>
+                <Identifier>i=17</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description>
+                <Text>The NodeId of the newly created Variable.</Text>
+              </Description>
+            </Argument>
+          </Body>
+        </ExtensionObject>
+      </ListOfExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6016" BrowseName="DefaultInstanceBrowseName" ParentNodeId="ns=1;i=1011" DataType="QualifiedName" AccessLevel="3">
+    <DisplayName>DefaultInstanceBrowseName</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=1011</Reference>
+    </References>
+    <Value>
+      <QualifiedName xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <NamespaceIndex>1</NamespaceIndex>
+        <Name>DocumentationLinks</Name>
+      </QualifiedName>
+    </Value>
+  </UAVariable>
+  <UAMethod NodeId="ns=1;i=7005" BrowseName="1:RemoveLink" ParentNodeId="ns=1;i=1011">
+    <DisplayName>RemoveLink</DisplayName>
+    <Description>Method to remove an end-user specific link that is managed in the server.</Description>
+    <Category>AMB DocumentationLinks Base</Category>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6020</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1011</Reference>
+    </References>
+  </UAMethod>
+  <UAVariable NodeId="ns=1;i=6020" BrowseName="InputArguments" ParentNodeId="ns=1;i=7005" DataType="i=296" ValueRank="1" ArrayDimensions="1">
+    <DisplayName>InputArguments</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=7005</Reference>
+    </References>
+    <Value>
+      <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>VariableToBeDeleted</Name>
+              <DataType>
+                <Identifier>i=17</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description>
+                <Text>NodeId of the Variable containing a link, that should be deleted. Variable shall be referenced from the Object with a HasComponent Reference where the Method is called on.</Text>
+              </Description>
+            </Argument>
+          </Body>
+        </ExtensionObject>
+      </ListOfExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAObjectType NodeId="ns=1;i=1013" BrowseName="1:MaintenanceEventStateMachineType">
+    <DisplayName>MaintenanceEventStateMachineType</DisplayName>
+    <Description>Information, whether a maintenance activity is planned, currently in execution, or has been executed</Description>
+    <Category>AMB Current and Future Maintenance Activities</Category>
+    <References>
+      <Reference ReferenceType="HasComponent">ns=1;i=5007</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=5008</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=5010</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=5011</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=5009</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=5006</Reference>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=2771</Reference>
+    </References>
+  </UAObjectType>
+  <UAObject NodeId="ns=1;i=5007" BrowseName="1:Executing" ParentNodeId="ns=1;i=1013">
+    <DisplayName>Executing</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6022</Reference>
+      <Reference ReferenceType="FromState" IsForward="false">ns=1;i=5010</Reference>
+      <Reference ReferenceType="ToState" IsForward="false">ns=1;i=5009</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2307</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1013</Reference>
+    </References>
+  </UAObject>
+  <UAVariable NodeId="ns=1;i=6022" BrowseName="StateNumber" ParentNodeId="ns=1;i=5007" DataType="UInt32">
+    <DisplayName>StateNumber</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=5007</Reference>
+    </References>
+    <Value>
+      <UInt32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">2</UInt32>
+    </Value>
+  </UAVariable>
+  <UAObject NodeId="ns=1;i=5008" BrowseName="1:Finished" ParentNodeId="ns=1;i=1013">
+    <DisplayName>Finished</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6023</Reference>
+      <Reference ReferenceType="ToState" IsForward="false">ns=1;i=5010</Reference>
+      <Reference ReferenceType="FromState" IsForward="false">ns=1;i=5011</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2307</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1013</Reference>
+    </References>
+  </UAObject>
+  <UAVariable NodeId="ns=1;i=6023" BrowseName="StateNumber" ParentNodeId="ns=1;i=5008" DataType="UInt32">
+    <DisplayName>StateNumber</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=5008</Reference>
+    </References>
+    <Value>
+      <UInt32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">3</UInt32>
+    </Value>
+  </UAVariable>
+  <UAObject NodeId="ns=1;i=5010" BrowseName="1:FromExecutingToFinished" ParentNodeId="ns=1;i=1013">
+    <DisplayName>FromExecutingToFinished</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6025</Reference>
+      <Reference ReferenceType="FromState">ns=1;i=5007</Reference>
+      <Reference ReferenceType="ToState">ns=1;i=5008</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2310</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1013</Reference>
+    </References>
+  </UAObject>
+  <UAVariable NodeId="ns=1;i=6025" BrowseName="TransitionNumber" ParentNodeId="ns=1;i=5010" DataType="UInt32">
+    <DisplayName>TransitionNumber</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=5010</Reference>
+    </References>
+    <Value>
+      <UInt32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">2</UInt32>
+    </Value>
+  </UAVariable>
+  <UAObject NodeId="ns=1;i=5011" BrowseName="1:FromFinishedToPlanned" ParentNodeId="ns=1;i=1013">
+    <DisplayName>FromFinishedToPlanned</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6026</Reference>
+      <Reference ReferenceType="FromState">ns=1;i=5008</Reference>
+      <Reference ReferenceType="ToState">ns=1;i=5006</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2310</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1013</Reference>
+    </References>
+  </UAObject>
+  <UAVariable NodeId="ns=1;i=6026" BrowseName="TransitionNumber" ParentNodeId="ns=1;i=5011" DataType="UInt32">
+    <DisplayName>TransitionNumber</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=5011</Reference>
+    </References>
+    <Value>
+      <UInt32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">3</UInt32>
+    </Value>
+  </UAVariable>
+  <UAObject NodeId="ns=1;i=5009" BrowseName="1:FromPlannedToExecuting" ParentNodeId="ns=1;i=1013">
+    <DisplayName>FromPlannedToExecuting</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6024</Reference>
+      <Reference ReferenceType="ToState">ns=1;i=5007</Reference>
+      <Reference ReferenceType="FromState">ns=1;i=5006</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2310</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1013</Reference>
+    </References>
+  </UAObject>
+  <UAVariable NodeId="ns=1;i=6024" BrowseName="TransitionNumber" ParentNodeId="ns=1;i=5009" DataType="UInt32">
+    <DisplayName>TransitionNumber</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=5009</Reference>
+    </References>
+    <Value>
+      <UInt32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">1</UInt32>
+    </Value>
+  </UAVariable>
+  <UAObject NodeId="ns=1;i=5006" BrowseName="1:Planned" ParentNodeId="ns=1;i=1013">
+    <DisplayName>Planned</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6021</Reference>
+      <Reference ReferenceType="ToState" IsForward="false">ns=1;i=5011</Reference>
+      <Reference ReferenceType="FromState" IsForward="false">ns=1;i=5009</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2309</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1013</Reference>
+    </References>
+  </UAObject>
+  <UAVariable NodeId="ns=1;i=6021" BrowseName="StateNumber" ParentNodeId="ns=1;i=5006" DataType="UInt32">
+    <DisplayName>StateNumber</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=5006</Reference>
+    </References>
+    <Value>
+      <UInt32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">1</UInt32>
+    </Value>
+  </UAVariable>
+  <UAObject NodeId="ns=1;i=5002" BrowseName="1:Assets">
+    <DisplayName>Assets</DisplayName>
+    <Description>Entry point to discover assets</Description>
+    <References>
+      <Reference ReferenceType="HasComponent">ns=1;i=7001</Reference>
+      <Reference ReferenceType="Organizes" IsForward="false">i=23470</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=23456</Reference>
+    </References>
+  </UAObject>
+  <UAMethod NodeId="ns=1;i=7001" BrowseName="FindAlias" ParentNodeId="ns=1;i=5002" MethodDeclarationId="i=23462">
+    <DisplayName>FindAlias</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6001</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6002</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=5002</Reference>
+    </References>
+  </UAMethod>
+  <UAVariable NodeId="ns=1;i=6001" BrowseName="InputArguments" ParentNodeId="ns=1;i=7001" DataType="i=296" ValueRank="1" ArrayDimensions="2">
+    <DisplayName>InputArguments</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=7001</Reference>
+    </References>
+    <Value>
+      <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>AliasNameSearchPattern</Name>
+              <DataType>
+                <Identifier>i=12</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description />
+            </Argument>
+          </Body>
+        </ExtensionObject>
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>ReferenceTypeFilter</Name>
+              <DataType>
+                <Identifier>i=17</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description />
+            </Argument>
+          </Body>
+        </ExtensionObject>
+      </ListOfExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6002" BrowseName="OutputArguments" ParentNodeId="ns=1;i=7001" DataType="i=296" ValueRank="1" ArrayDimensions="1">
+    <DisplayName>OutputArguments</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=7001</Reference>
+    </References>
+    <Value>
+      <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>AliasNodeList</Name>
+              <DataType>
+                <Identifier>i=23468</Identifier>
+              </DataType>
+              <ValueRank>1</ValueRank>
+              <ArrayDimensions>
+                <UInt32>0</UInt32>
+              </ArrayDimensions>
+              <Description />
+            </Argument>
+          </Body>
+        </ExtensionObject>
+      </ListOfExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAObject NodeId="ns=1;i=5004" BrowseName="1:AssetsByAssetId">
+    <DisplayName>AssetsByAssetId</DisplayName>
+    <Description>Entry point to discover assets by AssetId</Description>
+    <References>
+      <Reference ReferenceType="HasComponent">ns=1;i=7003</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6008</Reference>
+      <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=5002</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=23456</Reference>
+    </References>
+  </UAObject>
+  <UAMethod NodeId="ns=1;i=7003" BrowseName="FindAlias" ParentNodeId="ns=1;i=5004" MethodDeclarationId="i=23462">
+    <DisplayName>FindAlias</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6006</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6007</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=5004</Reference>
+    </References>
+  </UAMethod>
+  <UAVariable NodeId="ns=1;i=6006" BrowseName="InputArguments" ParentNodeId="ns=1;i=7003" DataType="i=296" ValueRank="1" ArrayDimensions="2">
+    <DisplayName>InputArguments</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=7003</Reference>
+    </References>
+    <Value>
+      <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>AliasNameSearchPattern</Name>
+              <DataType>
+                <Identifier>i=12</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description />
+            </Argument>
+          </Body>
+        </ExtensionObject>
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>ReferenceTypeFilter</Name>
+              <DataType>
+                <Identifier>i=17</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description />
+            </Argument>
+          </Body>
+        </ExtensionObject>
+      </ListOfExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6007" BrowseName="OutputArguments" ParentNodeId="ns=1;i=7003" DataType="i=296" ValueRank="1" ArrayDimensions="1">
+    <DisplayName>OutputArguments</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=7003</Reference>
+    </References>
+    <Value>
+      <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>AliasNodeList</Name>
+              <DataType>
+                <Identifier>i=23468</Identifier>
+              </DataType>
+              <ValueRank>1</ValueRank>
+              <ArrayDimensions>
+                <UInt32>0</UInt32>
+              </ArrayDimensions>
+              <Description />
+            </Argument>
+          </Body>
+        </ExtensionObject>
+      </ListOfExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6008" BrowseName="NodeVersion" ParentNodeId="ns=1;i=5004" DataType="String">
+    <DisplayName>NodeVersion</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=5004</Reference>
+    </References>
+  </UAVariable>
+  <UAObject NodeId="ns=1;i=5003" BrowseName="1:AssetsByProductInstanceUri">
+    <DisplayName>AssetsByProductInstanceUri</DisplayName>
+    <Description>Entry point to discover assets by ProductInstanceUri</Description>
+    <References>
+      <Reference ReferenceType="HasComponent">ns=1;i=7002</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6005</Reference>
+      <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=5002</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=23456</Reference>
+    </References>
+  </UAObject>
+  <UAMethod NodeId="ns=1;i=7002" BrowseName="FindAlias" ParentNodeId="ns=1;i=5003" MethodDeclarationId="i=23462">
+    <DisplayName>FindAlias</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6003</Reference>
+      <Reference ReferenceType="HasProperty">ns=1;i=6004</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=5003</Reference>
+    </References>
+  </UAMethod>
+  <UAVariable NodeId="ns=1;i=6003" BrowseName="InputArguments" ParentNodeId="ns=1;i=7002" DataType="i=296" ValueRank="1" ArrayDimensions="2">
+    <DisplayName>InputArguments</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=7002</Reference>
+    </References>
+    <Value>
+      <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>AliasNameSearchPattern</Name>
+              <DataType>
+                <Identifier>i=12</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description />
+            </Argument>
+          </Body>
+        </ExtensionObject>
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>ReferenceTypeFilter</Name>
+              <DataType>
+                <Identifier>i=17</Identifier>
+              </DataType>
+              <ValueRank>-1</ValueRank>
+              <ArrayDimensions />
+              <Description />
+            </Argument>
+          </Body>
+        </ExtensionObject>
+      </ListOfExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6004" BrowseName="OutputArguments" ParentNodeId="ns=1;i=7002" DataType="i=296" ValueRank="1" ArrayDimensions="1">
+    <DisplayName>OutputArguments</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=7002</Reference>
+    </References>
+    <Value>
+      <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=297</Identifier>
+          </TypeId>
+          <Body>
+            <Argument>
+              <Name>AliasNodeList</Name>
+              <DataType>
+                <Identifier>i=23468</Identifier>
+              </DataType>
+              <ValueRank>1</ValueRank>
+              <ArrayDimensions>
+                <UInt32>0</UInt32>
+              </ArrayDimensions>
+              <Description />
+            </Argument>
+          </Body>
+        </ExtensionObject>
+      </ListOfExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6005" BrowseName="NodeVersion" ParentNodeId="ns=1;i=5003" DataType="String">
+    <DisplayName>NodeVersion</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=5003</Reference>
+    </References>
+  </UAVariable>
+  <UAObject NodeId="ns=1;i=5021" BrowseName="1:HierarchicalLocations">
+    <DisplayName>HierarchicalLocations</DisplayName>
+    <Description>Entry point for objects representing the root of a location hierarchy</Description>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">i=31915</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=61</Reference>
+    </References>
+  </UAObject>
+  <UAObject NodeId="ns=1;i=5022" BrowseName="1:OperationalLocations">
+    <DisplayName>OperationalLocations</DisplayName>
+    <Description>Entry point for objects representing the root of a hierarchy of operational locations</Description>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">i=31915</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=61</Reference>
+    </References>
+  </UAObject>
+  <UAObject NodeId="ns=1;i=5001" BrowseName="Default Binary" SymbolicName="DefaultBinary">
+    <DisplayName>Default Binary</DisplayName>
+    <References>
+      <Reference ReferenceType="HasEncoding" IsForward="false">ns=1;i=3002</Reference>
+      <Reference ReferenceType="HasDescription">ns=1;i=6013</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=76</Reference>
+    </References>
+  </UAObject>
+  <UAObject NodeId="ns=1;i=5005" BrowseName="Default XML" SymbolicName="DefaultXml">
+    <DisplayName>Default XML</DisplayName>
+    <References>
+      <Reference ReferenceType="HasEncoding" IsForward="false">ns=1;i=3002</Reference>
+      <Reference ReferenceType="HasDescription">ns=1;i=6014</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=76</Reference>
+    </References>
+  </UAObject>
+  <UAObject NodeId="ns=1;i=5012" BrowseName="Default Binary" SymbolicName="DefaultBinary">
+    <DisplayName>Default Binary</DisplayName>
+    <References>
+      <Reference ReferenceType="HasEncoding" IsForward="false">ns=1;i=3003</Reference>
+      <Reference ReferenceType="HasDescription">ns=1;i=6027</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=76</Reference>
+    </References>
+  </UAObject>
+  <UAObject NodeId="ns=1;i=5013" BrowseName="Default XML" SymbolicName="DefaultXml">
+    <DisplayName>Default XML</DisplayName>
+    <References>
+      <Reference ReferenceType="HasEncoding" IsForward="false">ns=1;i=3003</Reference>
+      <Reference ReferenceType="HasDescription">ns=1;i=6028</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=76</Reference>
+    </References>
+  </UAObject>
+</UANodeSet>

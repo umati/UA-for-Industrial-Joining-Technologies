@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>UAModel.IJTBase</AssemblyName>
+    <RootNamespace>UAModel.IJTBase</RootNamespace>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>1591;CA1515;CA1707;CA1028</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Core" Version="1.5.378.134" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UAModel.DI\UAModel.DI.csproj" />
+    <ProjectReference Include="..\UAModel.AMB\UAModel.AMB.csproj" />
+    <ProjectReference Include="..\UAModel.IA\UAModel.IA.csproj" />
+    <ProjectReference Include="..\UAModel.Machinery\UAModel.Machinery.csproj" />
+    <ProjectReference Include="..\UAModel.MachineryResult\UAModel.MachineryResult.csproj" />
+  </ItemGroup>
+
+<ItemGroup>
+    <EmbeddedResource Include="UAModel.IJTBase.NodeSet2.xml" />
+  </ItemGroup>
+
+</Project>
+

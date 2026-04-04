@@ -1,0 +1,760 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "CalibrationDataType": {
+      "type": "object",
+      "properties": {
+        "LastCalibration": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "CalibrationPlace": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "NextCalibration": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "CalibrationValue": {
+          "type": "number",
+          "format": "double"
+        },
+        "SensorScale": {
+          "type": "number",
+          "format": "double"
+        },
+        "CertificateUri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "EngineeringUnits": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/EUInformation"
+        }
+      }
+    },
+    "ResultCounterDataType": {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "CounterValue": {
+          "type": "integer",
+          "format": "uint32"
+        },
+        "CounterType": {
+          "type": "integer",
+          "format": "int16"
+        }
+      }
+    },
+    "JoiningResultDataType": {
+      "type": "object",
+      "properties": {
+        "FailureReason": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "OverallResultValues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResultValueDataType"
+          }
+        },
+        "StepResults": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StepResultDataType"
+          }
+        },
+        "Errors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ErrorInformationDataType"
+          }
+        },
+        "FailingStepResultId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Trace": {
+          "$ref": "#/$defs/JoiningTraceDataType"
+        }
+      }
+    },
+    "ErrorInformationDataType": {
+      "type": "object",
+      "properties": {
+        "ErrorType": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "ErrorId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "LegacyError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ErrorMessage": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        }
+      }
+    },
+    "ResultValueDataType": {
+      "type": "object",
+      "properties": {
+        "MeasuredValue": {
+          "type": "number",
+          "format": "double"
+        },
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ResultEvaluation": {
+          "$ref": "https://opcfoundation.org/schemas/Machinery/Result/#/$defs/ResultEvaluationEnum"
+        },
+        "ValueId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ValueTag": {
+          "type": "integer",
+          "format": "int16"
+        },
+        "TracePointIndex": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "TracePointTimeOffset": {
+          "type": "number",
+          "format": "double"
+        },
+        "ParameterIdList": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "ViolationType": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "ViolationConsequence": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "SensorId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "LowLimit": {
+          "type": "number",
+          "format": "double"
+        },
+        "HighLimit": {
+          "type": "number",
+          "format": "double"
+        },
+        "TargetValue": {
+          "type": "number",
+          "format": "double"
+        },
+        "ResultStep": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "PhysicalQuantity": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "EngineeringUnits": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/EUInformation"
+        }
+      }
+    },
+    "KeyValueDataType": {
+      "type": "object",
+      "properties": {
+        "Key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Value": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/BaseDataType"
+        }
+      }
+    },
+    "StepResultDataType": {
+      "type": "object",
+      "properties": {
+        "StepResultId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ProgramStepId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ProgramStep": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ResultEvaluation": {
+          "$ref": "https://opcfoundation.org/schemas/Machinery/Result/#/$defs/ResultEvaluationEnum"
+        },
+        "StartTimeOffset": {
+          "type": "number",
+          "format": "double"
+        },
+        "StepTraceId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "StepResultValues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResultValueDataType"
+          }
+        }
+      }
+    },
+    "EntityDataType": {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "EntityId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "EntityOriginId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "IsExternal": {
+          "type": "boolean"
+        },
+        "EntityType": {
+          "type": "integer",
+          "format": "int16"
+        }
+      }
+    },
+    "TraceDataType": {
+      "type": "object",
+      "properties": {
+        "TraceId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ResultId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "JoiningTraceDataType": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/TraceDataType"
+        }
+      ],
+      "properties": {
+        "StepTraces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StepTraceDataType"
+          }
+        }
+      }
+    },
+    "StepTraceDataType": {
+      "type": "object",
+      "properties": {
+        "StepTraceId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "StepResultId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "NumberOfTracePoints": {
+          "type": "integer",
+          "format": "uint32"
+        },
+        "SamplingInterval": {
+          "type": "number",
+          "format": "double"
+        },
+        "StartTimeOffset": {
+          "type": "number",
+          "format": "double"
+        },
+        "StepTraceContent": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TraceContentDataType"
+          }
+        }
+      }
+    },
+    "TraceContentDataType": {
+      "type": "object",
+      "properties": {
+        "Values": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "SensorId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "PhysicalQuantity": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "EngineeringUnits": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/EUInformation"
+        }
+      }
+    },
+    "DesignValueDataType": {
+      "type": "object",
+      "properties": {
+        "PhysicalQuantity": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "DesignValue": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/BaseDataType"
+        },
+        "EngineeringUnits": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/EUInformation"
+        }
+      }
+    },
+    "JoiningProcessDataType": {
+      "type": "object",
+      "properties": {
+        "JoiningProcessMetaData": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/ExtensionObject"
+        },
+        "JoiningProcessContent": {
+          "type": "array",
+          "items": {
+            "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/BaseDataType"
+          }
+        }
+      }
+    },
+    "SignalDataType": {
+      "type": "object",
+      "properties": {
+        "SignalId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "SignalValue": {
+          "type": "number"
+        },
+        "SignalDescription": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "SignalType": {
+          "type": "integer",
+          "format": "int16"
+        }
+      }
+    },
+    "JoiningResultMetaDataType": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://opcfoundation.org/schemas/Machinery/Result/#/$defs/ResultMetaDataType"
+        }
+      ],
+      "properties": {
+        "JoiningTechnology": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        },
+        "SequenceNumber": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Description": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        },
+        "Classification": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "OperationMode": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "AssemblyType": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "AssociatedEntities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EntityDataType"
+          }
+        },
+        "ResultCounters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResultCounterDataType"
+          }
+        },
+        "InterventionType": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "IsGeneratedOffline": {
+          "type": "boolean"
+        },
+        "ExtendedMetaData": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeyValueDataType"
+          }
+        }
+      }
+    },
+    "JointComponentDataType": {
+      "type": "object",
+      "properties": {
+        "JointComponentId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Description": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        },
+        "Manufacturer": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        },
+        "ManufacturerUri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "JointComponentContent": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/BaseDataType"
+        }
+      }
+    },
+    "ReportedValueDataType": {
+      "type": "object",
+      "properties": {
+        "PhysicalQuantity": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "CurrentValue": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/BaseDataType"
+        },
+        "PreviousValue": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/BaseDataType"
+        },
+        "LowLimit": {
+          "type": "number",
+          "format": "double"
+        },
+        "HighLimit": {
+          "type": "number",
+          "format": "double"
+        },
+        "EngineeringUnits": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/EUInformation"
+        }
+      }
+    },
+    "JoiningProcessMetaDataType": {
+      "type": "object",
+      "properties": {
+        "JoiningProcessId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "JoiningProcessOriginId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "CreationTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "LastUpdatedTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Description": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        },
+        "JoiningTechnology": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        },
+        "Classification": {
+          "type": "integer",
+          "format": "int16"
+        },
+        "AssociatedEntities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EntityDataType"
+          }
+        }
+      }
+    },
+    "JointDesignDataType": {
+      "type": "object",
+      "properties": {
+        "JointDesignId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Description": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        },
+        "JointDesignContent": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DesignValueDataType"
+          }
+        },
+        "JointComponentIdList": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "JointDataType": {
+      "type": "object",
+      "properties": {
+        "JointId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "JointOriginId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "JointDesignId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "CreationTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "LastUpdatedTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "Name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "Description": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        },
+        "Classification": {
+          "type": "integer",
+          "format": "int16"
+        },
+        "ClassificationDetails": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        },
+        "JointStatus": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "AssociatedEntities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EntityDataType"
+          }
+        },
+        "JoiningTechnology": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        }
+      }
+    },
+    "JoiningProcessIdentificationDataType": {
+      "type": "object",
+      "properties": {
+        "JoiningProcessId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "JoiningProcessOriginId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "SelectionName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

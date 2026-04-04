@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "SoftwareVersionFileType": {
+      "anyOf": [
+        {
+          "const": "Current_0",
+          "title": "Current"
+        },
+        {
+          "const": "Pending_1",
+          "title": "Pending"
+        },
+        {
+          "const": "Fallback_2",
+          "title": "Fallback"
+        }
+      ]
+    },
+    "UpdateBehavior": {
+      "type": "integer",
+      "format": "uint32"
+    },
+    "UpdateBehaviorMasks": {
+      "anyOf": [
+        {
+          "const": 1,
+          "title": "KeepsParameters"
+        },
+        {
+          "const": 2,
+          "title": "WillDisconnect"
+        },
+        {
+          "const": 4,
+          "title": "RequiresPowerCycle"
+        },
+        {
+          "const": 8,
+          "title": "WillReboot"
+        },
+        {
+          "const": 16,
+          "title": "NeedsPreparation"
+        }
+      ]
+    },
+    "DeviceHealthEnumeration": {
+      "anyOf": [
+        {
+          "const": "NORMAL_0",
+          "title": "NORMAL"
+        },
+        {
+          "const": "FAILURE_1",
+          "title": "FAILURE"
+        },
+        {
+          "const": "CHECK_FUNCTION_2",
+          "title": "CHECK_FUNCTION"
+        },
+        {
+          "const": "OFF_SPEC_3",
+          "title": "OFF_SPEC"
+        },
+        {
+          "const": "MAINTENANCE_REQUIRED_4",
+          "title": "MAINTENANCE_REQUIRED"
+        }
+      ]
+    },
+    "FetchResultDataType": {
+      "type": "object",
+      "properties": {}
+    },
+    "ParameterResultDataType": {
+      "type": "object",
+      "properties": {
+        "NodePath": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "UaQualifiedName"
+          }
+        },
+        "StatusCode": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/StatusCode"
+        },
+        "Diagnostics": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/DiagnosticInfo"
+        }
+      }
+    },
+    "TransferResultErrorDataType": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/FetchResultDataType"
+        }
+      ],
+      "properties": {
+        "Status": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "Diagnostics": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/DiagnosticInfo"
+        }
+      }
+    },
+    "TransferResultDataDataType": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/FetchResultDataType"
+        }
+      ],
+      "properties": {
+        "SequenceNumber": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "EndOfResults": {
+          "type": "boolean"
+        },
+        "ParameterDefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ParameterResultDataType"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "StacklightOperationMode": {
+      "anyOf": [
+        {
+          "const": 0,
+          "title": "Segmented"
+        },
+        {
+          "const": 1,
+          "title": "Levelmeter"
+        },
+        {
+          "const": 2,
+          "title": "Running_Light"
+        },
+        {
+          "const": 3,
+          "title": "Other"
+        }
+      ]
+    },
+    "LevelDisplayMode": {
+      "anyOf": [
+        {
+          "const": 0,
+          "title": "Dimmed"
+        },
+        {
+          "const": 1,
+          "title": "Blinking"
+        },
+        {
+          "const": 2,
+          "title": "Other"
+        }
+      ]
+    },
+    "SignalColor": {
+      "anyOf": [
+        {
+          "const": 0,
+          "title": "Off"
+        },
+        {
+          "const": 1,
+          "title": "Red"
+        },
+        {
+          "const": 2,
+          "title": "Green"
+        },
+        {
+          "const": 3,
+          "title": "Blue"
+        },
+        {
+          "const": 4,
+          "title": "Yellow"
+        },
+        {
+          "const": 5,
+          "title": "Purple"
+        },
+        {
+          "const": 6,
+          "title": "Cyan"
+        },
+        {
+          "const": 7,
+          "title": "White"
+        }
+      ]
+    },
+    "SignalModeLight": {
+      "anyOf": [
+        {
+          "const": 0,
+          "title": "Continuous"
+        },
+        {
+          "const": 1,
+          "title": "Blinking"
+        },
+        {
+          "const": 2,
+          "title": "Flashing"
+        },
+        {
+          "const": 3,
+          "title": "Other"
+        }
+      ]
+    },
+    "RGBWDataType": {
+      "type": "object",
+      "properties": {
+        "Red": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "Green": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "Blue": {
+          "type": "integer",
+          "format": "uint8"
+        },
+        "White": {
+          "type": "integer",
+          "format": "uint8"
+        }
+      }
+    }
+  }
+}

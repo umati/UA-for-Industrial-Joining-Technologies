@@ -1,0 +1,70 @@
+<opc:TypeDictionary
+  xmlns:opc="http://opcfoundation.org/BinarySchema/"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:ua="http://opcfoundation.org/UA/"
+  xmlns:tns="http://opcfoundation.org/UA/Machinery/Result/"
+  DefaultByteOrder="LittleEndian"
+  TargetNamespace="http://opcfoundation.org/UA/Machinery/Result/"
+>
+  <opc:Import Namespace="http://opcfoundation.org/UA/" Location="Opc.Ua.BinarySchema.bsd"/>
+
+  <opc:EnumeratedType Name="ResultEvaluationEnum" LengthInBits="32">
+    <opc:Documentation>Indicates whether a result was in tolerance</opc:Documentation>
+    <opc:EnumeratedValue Name="Undefined" Value="0" />
+    <opc:EnumeratedValue Name="OK" Value="1" />
+    <opc:EnumeratedValue Name="NotOK" Value="2" />
+    <opc:EnumeratedValue Name="NotDecidable" Value="3" />
+  </opc:EnumeratedType>
+
+  <opc:StructuredType Name="BaseResultTransferOptionsDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>Abstract type containing information which file should be provided.</opc:Documentation>
+    <opc:Field Name="ResultId" TypeName="opc:String" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="ResultTransferOptionsDataType" BaseType="tns:BaseResultTransferOptionsDataType">
+    <opc:Documentation>Contains information which file should be provided.</opc:Documentation>
+    <opc:Field Name="ResultId" TypeName="opc:String" SourceType="tns:BaseResultTransferOptionsDataType" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="ProcessingTimesDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>Contains measured times that were generated during the execution of a recipe.</opc:Documentation>
+    <opc:Field Name="StartTime" TypeName="opc:DateTime" />
+    <opc:Field Name="EndTime" TypeName="opc:DateTime" />
+    <opc:Field Name="AcquisitionDuration" TypeName="opc:Double" />
+    <opc:Field Name="ProcessingDuration" TypeName="opc:Double" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="ResultDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>Contains fields that were created during the execution of a recipe.</opc:Documentation>
+    <opc:Field Name="ResultMetaData" TypeName="ua:ExtensionObject" />
+    <opc:Field Name="NoOfResultContent" TypeName="opc:Int32" />
+    <opc:Field Name="ResultContent" TypeName="ua:Variant" LengthField="NoOfResultContent" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="ResultMetaDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>Meta data of a result, describing the result.</opc:Documentation>
+    <opc:Field Name="ResultId" TypeName="opc:String" />
+    <opc:Field Name="HasTransferableDataOnFile" TypeName="opc:Boolean" />
+    <opc:Field Name="IsPartial" TypeName="opc:Boolean" />
+    <opc:Field Name="IsSimulated" TypeName="opc:Boolean" />
+    <opc:Field Name="ResultState" TypeName="opc:Int32" />
+    <opc:Field Name="StepId" TypeName="opc:String" />
+    <opc:Field Name="PartId" TypeName="opc:String" />
+    <opc:Field Name="ExternalRecipeId" TypeName="opc:String" />
+    <opc:Field Name="InternalRecipeId" TypeName="opc:String" />
+    <opc:Field Name="ProductId" TypeName="opc:String" />
+    <opc:Field Name="ExternalConfigurationId" TypeName="opc:String" />
+    <opc:Field Name="InternalConfigurationId" TypeName="opc:String" />
+    <opc:Field Name="JobId" TypeName="opc:String" />
+    <opc:Field Name="CreationTime" TypeName="opc:DateTime" />
+    <opc:Field Name="ProcessingTimes" TypeName="tns:ProcessingTimesDataType" />
+    <opc:Field Name="NoOfResultUri" TypeName="opc:Int32" />
+    <opc:Field Name="ResultUri" TypeName="opc:String" LengthField="NoOfResultUri" />
+    <opc:Field Name="ResultEvaluation" TypeName="tns:ResultEvaluationEnum" />
+    <opc:Field Name="ResultEvaluationCode" TypeName="opc:Int64" />
+    <opc:Field Name="ResultEvaluationDetails" TypeName="ua:LocalizedText" />
+    <opc:Field Name="NoOfFileFormat" TypeName="opc:Int32" />
+    <opc:Field Name="FileFormat" TypeName="opc:String" LengthField="NoOfFileFormat" />
+  </opc:StructuredType>
+
+</opc:TypeDictionary>

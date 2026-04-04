@@ -1,0 +1,100 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "AMB",
+    "description": "A placeholder API that allows OpenAPI tools to be used to generate code for a companion specification.",
+    "version": "1.01.1"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4840"
+    }
+  ],
+  "paths": {
+    "/get": {
+      "get": {
+        "operationId": "Get",
+        "responses": {
+          "200": {
+            "description": "ModelDataTypes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response",
+                  "properties": {
+                    "RootCauseDataType": {
+                      "$ref": "#/components/schemas/RootCauseDataType"
+                    },
+                    "NameNodeIdDataType": {
+                      "$ref": "#/components/schemas/NameNodeIdDataType"
+                    },
+                    "MaintenanceMethodEnum": {
+                      "$ref": "#/components/schemas/MaintenanceMethodEnum"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LocalizedText": {
+        "type": "object",
+        "properties": {
+          "Locale": {
+            "type": "string",
+            "format": "rfc3066"
+          },
+          "Text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "description": "[Link to specification](https://reference.opcfoundation.org/Core/Part3/v105/docs/8.5)."
+      },
+      "RootCauseDataType": {
+        "type": "object",
+        "properties": {
+          "RootCauseId": {
+            "type": "string",
+            "format": "UaNodeId"
+          },
+          "RootCause": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "description": "Root cause of an alarm"
+      },
+      "NameNodeIdDataType": {
+        "type": "object",
+        "properties": {
+          "Name": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "NodeId": {
+            "type": "string",
+            "format": "UaNodeId"
+          }
+        },
+        "description": "A human-readable name of something plus optionally the NodeId in case the something is represented in the AddressSpace"
+      },
+      "MaintenanceMethodEnum": {
+        "enum": [
+          0,
+          1
+        ],
+        "type": "integer",
+        "description": "[Link to specification]().",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Local",
+          "Remote"
+        ]
+      }
+    }
+  }
+}

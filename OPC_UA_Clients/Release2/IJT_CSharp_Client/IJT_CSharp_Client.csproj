@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>IJT_CSharp_Client</AssemblyName>
+    <RootNamespace>IJT_CSharp_Client</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <NoWarn>1591;CA1515;CA1707;CA1028;0618</NoWarn>
+    <Description>OPC UA IJT C# Client — reference implementation for the IJT Companion Specification using the OPC Foundation .NET SDK</Description>
+  </PropertyGroup>
+
+  <!-- Exclude the Types/ sub-projects from this project's compile glob.
+       They are built independently via ProjectReference. -->
+  <ItemGroup>
+    <Compile Remove="Types\**" />
+    <EmbeddedResource Remove="Types\**" />
+    <None Remove="Types\**" />
+  </ItemGroup>
+
+  <!-- OPC Foundation .NET SDK (MIT licensed) -->
+  <ItemGroup>
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua" Version="1.5.378.134" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.*" />
+  </ItemGroup>
+
+  <!-- IJT and dependent companion-spec type libraries (generated from NodeSet files) -->
+  <ItemGroup>
+    <ProjectReference Include="Types\UAModel.IJTTightening\UAModel.IJTTightening.csproj" />
+  </ItemGroup>
+
+</Project>

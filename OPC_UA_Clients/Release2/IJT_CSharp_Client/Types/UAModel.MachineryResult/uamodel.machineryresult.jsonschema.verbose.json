@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ResultEvaluationEnum": {
+      "anyOf": [
+        {
+          "const": "Undefined_0",
+          "title": "Undefined"
+        },
+        {
+          "const": "OK_1",
+          "title": "OK"
+        },
+        {
+          "const": "NotOK_2",
+          "title": "NotOK"
+        },
+        {
+          "const": "NotDecidable_3",
+          "title": "NotDecidable"
+        }
+      ]
+    },
+    "ResultTransferOptionsDataType": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/BaseResultTransferOptionsDataType"
+        }
+      ],
+      "properties": {}
+    },
+    "BaseResultTransferOptionsDataType": {
+      "type": "object",
+      "properties": {
+        "ResultId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ProcessingTimesDataType": {
+      "type": "object",
+      "properties": {
+        "StartTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "EndTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "AcquisitionDuration": {
+          "type": "number",
+          "format": "double"
+        },
+        "ProcessingDuration": {
+          "type": "number",
+          "format": "double"
+        }
+      }
+    },
+    "ResultMetaDataType": {
+      "type": "object",
+      "properties": {
+        "ResultId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "HasTransferableDataOnFile": {
+          "type": "boolean"
+        },
+        "IsPartial": {
+          "type": "boolean"
+        },
+        "IsSimulated": {
+          "type": "boolean"
+        },
+        "ResultState": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "StepId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "PartId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ExternalRecipeId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "InternalRecipeId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ProductId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ExternalConfigurationId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "InternalConfigurationId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "JobId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "CreationTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ProcessingTimes": {
+          "$ref": "#/$defs/ProcessingTimesDataType"
+        },
+        "ResultUri": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "ResultEvaluation": {
+          "$ref": "#/$defs/ResultEvaluationEnum"
+        },
+        "ResultEvaluationCode": {
+          "type": "string",
+          "format": "int32"
+        },
+        "ResultEvaluationDetails": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/LocalizedText"
+        },
+        "FileFormat": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "ResultDataType": {
+      "type": "object",
+      "properties": {
+        "ResultMetaData": {
+          "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/ExtensionObject"
+        },
+        "ResultContent": {
+          "type": "array",
+          "items": {
+            "$ref": "https://opcfoundation.org/schemas/OpenApi/opc.ua.services.jsonschema.json#/$defs/BaseDataType"
+          }
+        }
+      }
+    }
+  }
+}

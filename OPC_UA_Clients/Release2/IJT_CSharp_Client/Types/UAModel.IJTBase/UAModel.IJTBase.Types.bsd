@@ -1,0 +1,284 @@
+<opc:TypeDictionary
+  xmlns:UAModel.DI="http://opcfoundation.org/UA/DI/"
+  xmlns:UAModel.AMB="http://opcfoundation.org/UA/AMB/"
+  xmlns:UAModel.IA="http://opcfoundation.org/UA/IA/"
+  xmlns:UAModel.Machinery="http://opcfoundation.org/UA/Machinery/"
+  xmlns:UAModel.MachineryResult="http://opcfoundation.org/UA/Machinery/Result/"
+  xmlns:opc="http://opcfoundation.org/BinarySchema/"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:ua="http://opcfoundation.org/UA/"
+  xmlns:tns="http://opcfoundation.org/UA/IJT/Base/"
+  DefaultByteOrder="LittleEndian"
+  TargetNamespace="http://opcfoundation.org/UA/IJT/Base/"
+>
+  <opc:Import Namespace="http://opcfoundation.org/UA/" Location="Opc.Ua.BinarySchema.bsd"/>
+  <opc:Import Namespace="http://opcfoundation.org/UA/DI/" Location="UAModel.DI.BinarySchema.bsd"/>
+  <opc:Import Namespace="http://opcfoundation.org/UA/AMB/" Location="UAModel.AMB.BinarySchema.bsd"/>
+  <opc:Import Namespace="http://opcfoundation.org/UA/IA/" Location="UAModel.IA.BinarySchema.bsd"/>
+  <opc:Import Namespace="http://opcfoundation.org/UA/Machinery/" Location="UAModel.Machinery.BinarySchema.bsd"/>
+  <opc:Import Namespace="http://opcfoundation.org/UA/Machinery/Result/" Location="UAModel.MachineryResult.BinarySchema.bsd"/>
+
+  <opc:StructuredType Name="CalibrationDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure contains the Calibration information. It is used as an input argument in SetCalibration method.
+Note: The input data sent in SetCalibration shall be updated in the respective parameters of the asset under Maintenance/Calibration.</opc:Documentation>
+    <opc:Field Name="LastCalibration" TypeName="opc:DateTime" />
+    <opc:Field Name="CalibrationPlace" TypeName="opc:String" />
+    <opc:Field Name="NextCalibration" TypeName="opc:DateTime" />
+    <opc:Field Name="CalibrationValue" TypeName="opc:Double" />
+    <opc:Field Name="SensorScale" TypeName="opc:Double" />
+    <opc:Field Name="CertificateUri" TypeName="opc:String" />
+    <opc:Field Name="EngineeringUnits" TypeName="ua:EUInformation" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="DesignValueDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure provides the design value for a given physical quantity. It is used in JointDesignDataType.</opc:Documentation>
+    <opc:Field Name="PhysicalQuantity" TypeName="opc:Byte" />
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="DesignValue" TypeName="ua:Variant" />
+    <opc:Field Name="EngineeringUnits" TypeName="ua:EUInformation" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="EntityDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure provides the identification data for a given entity in the system.</opc:Documentation>
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="Description" TypeName="opc:String" />
+    <opc:Field Name="EntityId" TypeName="opc:String" />
+    <opc:Field Name="EntityOriginId" TypeName="opc:String" />
+    <opc:Field Name="IsExternal" TypeName="opc:Boolean" />
+    <opc:Field Name="EntityType" TypeName="opc:Int16" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="ErrorInformationDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure represents the errors occurred in the system which are outside the boundaries of the given program.</opc:Documentation>
+    <opc:Field Name="ErrorType" TypeName="opc:Byte" />
+    <opc:Field Name="ErrorId" TypeName="opc:String" />
+    <opc:Field Name="LegacyError" TypeName="opc:String" />
+    <opc:Field Name="ErrorMessage" TypeName="ua:LocalizedText" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="JoiningProcessDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure provides the base container for any joining process in a joining system. 
+Note: This specification defines the meta data of a JoiningProcess, and the actual content of the Joining Process is application specific.</opc:Documentation>
+    <opc:Field Name="JoiningProcessMetaData" TypeName="ua:ExtensionObject" />
+    <opc:Field Name="NoOfJoiningProcessContent" TypeName="opc:Int32" />
+    <opc:Field Name="JoiningProcessContent" TypeName="ua:Variant" LengthField="NoOfJoiningProcessContent" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="JoiningProcessIdentificationDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure contains the identification information of a Joining Process. It is used in set of methods defined in JoiningProcessManagementType.</opc:Documentation>
+    <opc:Field Name="JoiningProcessId" TypeName="opc:String" />
+    <opc:Field Name="JoiningProcessOriginId" TypeName="opc:String" />
+    <opc:Field Name="SelectionName" TypeName="opc:String" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="JoiningProcessMetaDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure provides the meta data which describes the joining process.</opc:Documentation>
+    <opc:Field Name="JoiningProcessId" TypeName="opc:String" />
+    <opc:Field Name="JoiningProcessOriginId" TypeName="opc:String" />
+    <opc:Field Name="CreationTime" TypeName="opc:DateTime" />
+    <opc:Field Name="LastUpdatedTime" TypeName="opc:DateTime" />
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="Description" TypeName="ua:LocalizedText" />
+    <opc:Field Name="JoiningTechnology" TypeName="ua:LocalizedText" />
+    <opc:Field Name="Classification" TypeName="opc:Int16" />
+    <opc:Field Name="NoOfAssociatedEntities" TypeName="opc:Int32" />
+    <opc:Field Name="AssociatedEntities" TypeName="tns:EntityDataType" LengthField="NoOfAssociatedEntities" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="JoiningResultDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure represents the data associated with Joining Result and the corresponding measurement values.</opc:Documentation>
+    <opc:Field Name="FailureReason" TypeName="opc:Byte" />
+    <opc:Field Name="NoOfOverallResultValues" TypeName="opc:Int32" />
+    <opc:Field Name="OverallResultValues" TypeName="tns:ResultValueDataType" LengthField="NoOfOverallResultValues" />
+    <opc:Field Name="NoOfStepResults" TypeName="opc:Int32" />
+    <opc:Field Name="StepResults" TypeName="tns:StepResultDataType" LengthField="NoOfStepResults" />
+    <opc:Field Name="NoOfErrors" TypeName="opc:Int32" />
+    <opc:Field Name="Errors" TypeName="tns:ErrorInformationDataType" LengthField="NoOfErrors" />
+    <opc:Field Name="FailingStepResultId" TypeName="opc:String" />
+    <opc:Field Name="Trace" TypeName="tns:JoiningTraceDataType" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="JointComponentDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure is the base container for any joint component such as Bolt, Rivet, Gasket, Glue string, etc. 
+Note: The concrete definition of joint component is not defined in this version of the specification.</opc:Documentation>
+    <opc:Field Name="JointComponentId" TypeName="opc:String" />
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="Description" TypeName="ua:LocalizedText" />
+    <opc:Field Name="Manufacturer" TypeName="ua:LocalizedText" />
+    <opc:Field Name="ManufacturerUri" TypeName="opc:String" />
+    <opc:Field Name="JointComponentContent" TypeName="ua:Variant" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="JointDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure provides the joint information. Joint is the physical outcome of the joining operation which determines the properties of the point where multiple parts are assembled.</opc:Documentation>
+    <opc:Field Name="JointId" TypeName="opc:String" />
+    <opc:Field Name="JointOriginId" TypeName="opc:String" />
+    <opc:Field Name="JointDesignId" TypeName="opc:String" />
+    <opc:Field Name="CreationTime" TypeName="opc:DateTime" />
+    <opc:Field Name="LastUpdatedTime" TypeName="opc:DateTime" />
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="Description" TypeName="ua:LocalizedText" />
+    <opc:Field Name="Classification" TypeName="opc:Int16" />
+    <opc:Field Name="ClassificationDetails" TypeName="ua:LocalizedText" />
+    <opc:Field Name="JointStatus" TypeName="opc:String" />
+    <opc:Field Name="NoOfAssociatedEntities" TypeName="opc:Int32" />
+    <opc:Field Name="AssociatedEntities" TypeName="tns:EntityDataType" LengthField="NoOfAssociatedEntities" />
+    <opc:Field Name="JoiningTechnology" TypeName="ua:LocalizedText" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="JointDesignDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure provides the design information of a given joint.</opc:Documentation>
+    <opc:Field Name="JointDesignId" TypeName="opc:String" />
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="Description" TypeName="ua:LocalizedText" />
+    <opc:Field Name="NoOfJointDesignContent" TypeName="opc:Int32" />
+    <opc:Field Name="JointDesignContent" TypeName="tns:DesignValueDataType" LengthField="NoOfJointDesignContent" />
+    <opc:Field Name="NoOfJointComponentIdList" TypeName="opc:Int32" />
+    <opc:Field Name="JointComponentIdList" TypeName="opc:String" LengthField="NoOfJointComponentIdList" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="KeyValueDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure is similar to 0:KeyValuePair which uses 0:TrimmedString instead of 0:QualifiedName.</opc:Documentation>
+    <opc:Field Name="Key" TypeName="opc:String" />
+    <opc:Field Name="Value" TypeName="ua:Variant" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="ReportedValueDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure provides the given value and corresponding limits for a given physical quantity (if applicable).</opc:Documentation>
+    <opc:Field Name="PhysicalQuantity" TypeName="opc:Byte" />
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="CurrentValue" TypeName="ua:Variant" />
+    <opc:Field Name="PreviousValue" TypeName="ua:Variant" />
+    <opc:Field Name="LowLimit" TypeName="opc:Double" />
+    <opc:Field Name="HighLimit" TypeName="opc:Double" />
+    <opc:Field Name="EngineeringUnits" TypeName="ua:EUInformation" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="ResultCounterDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure is used to provide various types of counters associated to a Result. These counters are related to a joining process with sub-processes.</opc:Documentation>
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="CounterValue" TypeName="opc:UInt32" />
+    <opc:Field Name="CounterType" TypeName="opc:Int16" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="JoiningResultMetaDataType" BaseType="UAModel.MachineryResult:ResultMetaDataType">
+    <opc:Documentation>This structure is a subtype of ResultMetaDataType. It is used to define additional meta data of a Result in a joining system.</opc:Documentation>
+    <opc:Field Name="ResultId" TypeName="opc:String" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="HasTransferableDataOnFile" TypeName="opc:Boolean" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="IsPartial" TypeName="opc:Boolean" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="IsSimulated" TypeName="opc:Boolean" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="ResultState" TypeName="opc:Int32" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="StepId" TypeName="opc:String" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="PartId" TypeName="opc:String" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="ExternalRecipeId" TypeName="opc:String" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="InternalRecipeId" TypeName="opc:String" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="ProductId" TypeName="opc:String" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="ExternalConfigurationId" TypeName="opc:String" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="InternalConfigurationId" TypeName="opc:String" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="JobId" TypeName="opc:String" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="CreationTime" TypeName="opc:DateTime" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="ProcessingTimes" TypeName="UAModel.MachineryResult:ProcessingTimesDataType" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="NoOfResultUri" TypeName="opc:Int32" />
+    <opc:Field Name="ResultUri" TypeName="opc:String" LengthField="NoOfResultUri" />
+    <opc:Field Name="ResultEvaluation" TypeName="UAModel.MachineryResult:ResultEvaluationEnum" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="ResultEvaluationCode" TypeName="opc:Int64" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="ResultEvaluationDetails" TypeName="ua:LocalizedText" SourceType="UAModel.MachineryResult:ResultMetaDataType" />
+    <opc:Field Name="NoOfFileFormat" TypeName="opc:Int32" />
+    <opc:Field Name="FileFormat" TypeName="opc:String" LengthField="NoOfFileFormat" />
+    <opc:Field Name="JoiningTechnology" TypeName="ua:LocalizedText" />
+    <opc:Field Name="SequenceNumber" TypeName="opc:UInt64" />
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="Description" TypeName="ua:LocalizedText" />
+    <opc:Field Name="Classification" TypeName="opc:Byte" />
+    <opc:Field Name="OperationMode" TypeName="opc:Byte" />
+    <opc:Field Name="AssemblyType" TypeName="opc:Byte" />
+    <opc:Field Name="NoOfAssociatedEntities" TypeName="opc:Int32" />
+    <opc:Field Name="AssociatedEntities" TypeName="tns:EntityDataType" LengthField="NoOfAssociatedEntities" />
+    <opc:Field Name="NoOfResultCounters" TypeName="opc:Int32" />
+    <opc:Field Name="ResultCounters" TypeName="tns:ResultCounterDataType" LengthField="NoOfResultCounters" />
+    <opc:Field Name="InterventionType" TypeName="opc:Byte" />
+    <opc:Field Name="IsGeneratedOffline" TypeName="opc:Boolean" />
+    <opc:Field Name="NoOfExtendedMetaData" TypeName="opc:Int32" />
+    <opc:Field Name="ExtendedMetaData" TypeName="tns:KeyValueDataType" LengthField="NoOfExtendedMetaData" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="ResultValueDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>It is used to report measurement values of the joining operation. Those are meant to characterize the quality of the process. It is used in JoiningResultDataType and StepResultDataType.</opc:Documentation>
+    <opc:Field Name="MeasuredValue" TypeName="opc:Double" />
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="ResultEvaluation" TypeName="UAModel.MachineryResult:ResultEvaluationEnum" />
+    <opc:Field Name="ValueId" TypeName="opc:String" />
+    <opc:Field Name="ValueTag" TypeName="opc:Int16" />
+    <opc:Field Name="TracePointIndex" TypeName="opc:Int32" />
+    <opc:Field Name="TracePointTimeOffset" TypeName="opc:Double" />
+    <opc:Field Name="NoOfParameterIdList" TypeName="opc:Int32" />
+    <opc:Field Name="ParameterIdList" TypeName="opc:String" LengthField="NoOfParameterIdList" />
+    <opc:Field Name="ViolationType" TypeName="opc:Byte" />
+    <opc:Field Name="ViolationConsequence" TypeName="opc:Byte" />
+    <opc:Field Name="SensorId" TypeName="opc:String" />
+    <opc:Field Name="LowLimit" TypeName="opc:Double" />
+    <opc:Field Name="High" TypeName="opc:Double" />
+    <opc:Field Name="TargetValue" TypeName="opc:Double" />
+    <opc:Field Name="ResultStep" TypeName="opc:String" />
+    <opc:Field Name="PhysicalQuantity" TypeName="opc:Byte" />
+    <opc:Field Name="EngineeringUnits" TypeName="ua:EUInformation" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="SignalDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure contains the signal information which is used in SetIOSignals and GetIOSignals methods.</opc:Documentation>
+    <opc:Field Name="SignalId" TypeName="opc:String" />
+    <opc:Field Name="SignalValue" TypeName="ua:ExtensionObject" />
+    <opc:Field Name="SignalDescription" TypeName="opc:String" />
+    <opc:Field Name="SignalType" TypeName="opc:Int16" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="StepResultDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>This structure represents the measurement values corresponding to a given step in the program. It is used in JoiningResultDataType.</opc:Documentation>
+    <opc:Field Name="StepResultId" TypeName="opc:String" />
+    <opc:Field Name="ProgramStepId" TypeName="opc:String" />
+    <opc:Field Name="ProgramStep" TypeName="opc:String" />
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="ResultEvaluation" TypeName="UAModel.MachineryResult:ResultEvaluationEnum" />
+    <opc:Field Name="StartTimeOffset" TypeName="opc:Double" />
+    <opc:Field Name="StepTraceId" TypeName="opc:String" />
+    <opc:Field Name="NoOfStepResultValues" TypeName="opc:Int32" />
+    <opc:Field Name="StepResultValues" TypeName="tns:ResultValueDataType" LengthField="NoOfStepResultValues" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="StepTraceDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>It is to describe of the trace for a given program step. It is used in JoiningTraceDataType.</opc:Documentation>
+    <opc:Field Name="StepTraceId" TypeName="opc:String" />
+    <opc:Field Name="StepResultId" TypeName="opc:String" />
+    <opc:Field Name="NumberOfTracePoints" TypeName="opc:UInt32" />
+    <opc:Field Name="SamplingInterval" TypeName="opc:Double" />
+    <opc:Field Name="StartTimeOffset" TypeName="opc:Double" />
+    <opc:Field Name="NoOfStepTraceContent" TypeName="opc:Int32" />
+    <opc:Field Name="StepTraceContent" TypeName="tns:TraceContentDataType" LengthField="NoOfStepTraceContent" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="TraceContentDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>It is to describe the trace samples for a given program step. It is used in StepTraceDataType.</opc:Documentation>
+    <opc:Field Name="NoOfValues" TypeName="opc:Int32" />
+    <opc:Field Name="Values" TypeName="opc:Double" LengthField="NoOfValues" />
+    <opc:Field Name="SensorId" TypeName="opc:String" />
+    <opc:Field Name="Name" TypeName="opc:String" />
+    <opc:Field Name="Description" TypeName="opc:String" />
+    <opc:Field Name="PhysicalQuantity" TypeName="opc:Byte" />
+    <opc:Field Name="EngineeringUnits" TypeName="ua:EUInformation" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="TraceDataType" BaseType="ua:ExtensionObject">
+    <opc:Documentation>It is a base type to encapsulate common data for a Trace.</opc:Documentation>
+    <opc:Field Name="TraceId" TypeName="opc:String" />
+    <opc:Field Name="ResultId" TypeName="opc:String" />
+  </opc:StructuredType>
+
+  <opc:StructuredType Name="JoiningTraceDataType" BaseType="tns:TraceDataType">
+    <opc:Documentation>This structure is to describe the content of traces for all the steps in the given program. It is used in JoiningResultDataType.</opc:Documentation>
+    <opc:Field Name="TraceId" TypeName="opc:String" SourceType="tns:TraceDataType" />
+    <opc:Field Name="ResultId" TypeName="opc:String" SourceType="tns:TraceDataType" />
+    <opc:Field Name="NoOfStepTraces" TypeName="opc:Int32" />
+    <opc:Field Name="StepTraces" TypeName="tns:StepTraceDataType" LengthField="NoOfStepTraces" />
+  </opc:StructuredType>
+
+</opc:TypeDictionary>

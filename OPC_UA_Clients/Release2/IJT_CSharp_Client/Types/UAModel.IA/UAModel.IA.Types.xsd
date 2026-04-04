@@ -1,0 +1,118 @@
+<xs:schema
+  xmlns:UAModel.DI="http://opcfoundation.org/UA/DI/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ua="http://opcfoundation.org/UA/2008/02/Types.xsd"
+  xmlns:tns="http://opcfoundation.org/UA/IA/"
+  targetNamespace="http://opcfoundation.org/UA/IA/"
+  elementFormDefault="qualified"
+>
+  <xs:annotation>
+    <xs:appinfo>
+      <ua:Model ModelUri="http://opcfoundation.org/UA/IA/" Version="1.01.4" PublicationDate="2025-05-23T00:00:00Z" />
+    </xs:appinfo>
+  </xs:annotation>
+  
+  <xs:import namespace="http://opcfoundation.org/UA/" />
+  <xs:import namespace="http://opcfoundation.org/UA/DI/" />
+
+  <xs:simpleType  name="LevelDisplayMode">
+    <xs:annotation>
+      <xs:documentation>Contains the values used to indicate how a percentual value is displayed if the stacklight unit works in Levelmeter mode.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Dimmed_0" />
+      <xs:enumeration value="Blinking_1" />
+      <xs:enumeration value="Other_2" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="LevelDisplayMode" type="tns:LevelDisplayMode" />
+
+  <xs:complexType name="ListOfLevelDisplayMode">
+    <xs:sequence>
+      <xs:element name="LevelDisplayMode" type="tns:LevelDisplayMode" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="ListOfLevelDisplayMode" type="tns:ListOfLevelDisplayMode" nillable="true"></xs:element>
+
+  <xs:simpleType  name="SignalColor">
+    <xs:annotation>
+      <xs:documentation>Holds the possible colour values for stacklight lamps.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Off_0" />
+      <xs:enumeration value="Red_1" />
+      <xs:enumeration value="Green_2" />
+      <xs:enumeration value="Blue_3" />
+      <xs:enumeration value="Yellow_4" />
+      <xs:enumeration value="Purple_5" />
+      <xs:enumeration value="Cyan_6" />
+      <xs:enumeration value="White_7" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="SignalColor" type="tns:SignalColor" />
+
+  <xs:complexType name="ListOfSignalColor">
+    <xs:sequence>
+      <xs:element name="SignalColor" type="tns:SignalColor" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="ListOfSignalColor" type="tns:ListOfSignalColor" nillable="true"></xs:element>
+
+  <xs:simpleType  name="SignalModeLight">
+    <xs:annotation>
+      <xs:documentation>Contains the values used to indicate in what way a lamp behaves when switched on.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Continuous_0" />
+      <xs:enumeration value="Blinking_1" />
+      <xs:enumeration value="Flashing_2" />
+      <xs:enumeration value="Other_3" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="SignalModeLight" type="tns:SignalModeLight" />
+
+  <xs:complexType name="ListOfSignalModeLight">
+    <xs:sequence>
+      <xs:element name="SignalModeLight" type="tns:SignalModeLight" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="ListOfSignalModeLight" type="tns:ListOfSignalModeLight" nillable="true"></xs:element>
+
+  <xs:simpleType  name="StacklightOperationMode">
+    <xs:annotation>
+      <xs:documentation>Contains the values used to indicate how a stacklight (as a whole unit) is used.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Segmented_0" />
+      <xs:enumeration value="Levelmeter_1" />
+      <xs:enumeration value="Running_Light_2" />
+      <xs:enumeration value="Other_3" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="StacklightOperationMode" type="tns:StacklightOperationMode" />
+
+  <xs:complexType name="ListOfStacklightOperationMode">
+    <xs:sequence>
+      <xs:element name="StacklightOperationMode" type="tns:StacklightOperationMode" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="ListOfStacklightOperationMode" type="tns:ListOfStacklightOperationMode" nillable="true"></xs:element>
+
+  <xs:complexType name="RGBWDataType">
+    <xs:sequence>
+      <xs:element name="Red" type="xs:unsignedByte" minOccurs="0" />
+      <xs:element name="Green" type="xs:unsignedByte" minOccurs="0" />
+      <xs:element name="Blue" type="xs:unsignedByte" minOccurs="0" />
+      <xs:element name="White" type="xs:unsignedByte" minOccurs="0" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="RGBWDataType" type="tns:RGBWDataType" />
+
+  <xs:complexType name="ListOfRGBWDataType">
+    <xs:sequence>
+      <xs:element name="RGBWDataType" type="tns:RGBWDataType" minOccurs="0" maxOccurs="unbounded" nillable="true" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="ListOfRGBWDataType" type="tns:ListOfRGBWDataType" nillable="true"></xs:element>
+
+</xs:schema>

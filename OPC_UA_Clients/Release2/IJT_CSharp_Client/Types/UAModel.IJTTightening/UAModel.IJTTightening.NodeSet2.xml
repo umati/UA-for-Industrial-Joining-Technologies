@@ -1,0 +1,724 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<UANodeSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" LastModified="2025-10-06T00:00:00Z" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
+  <NamespaceUris>
+    <Uri>http://opcfoundation.org/UA/IJT/Tightening/</Uri>
+    <Uri>http://opcfoundation.org/UA/IJT/Base/</Uri>
+    <Uri>http://opcfoundation.org/UA/Machinery/</Uri>
+    <Uri>http://opcfoundation.org/UA/IA/</Uri>
+    <Uri>http://opcfoundation.org/UA/DI/</Uri>
+    <Uri>http://opcfoundation.org/UA/AMB/</Uri>
+    <Uri>http://opcfoundation.org/UA/Machinery/Result/</Uri>
+  </NamespaceUris>
+  <Models>
+    <Model ModelUri="http://opcfoundation.org/UA/IJT/Tightening/" Version="2.00.1" PublicationDate="2025-10-06T00:00:00Z" ModelVersion="2.0.1">
+      <RequiredModel ModelUri="http://opcfoundation.org/UA/" Version="1.05.05" PublicationDate="2025-06-30T00:00:00Z" ModelVersion="1.5.5" />
+      <RequiredModel ModelUri="http://opcfoundation.org/UA/DI/" Version="1.04.0" PublicationDate="2022-11-03T00:00:00Z" ModelVersion="1.4.0" />
+      <RequiredModel ModelUri="http://opcfoundation.org/UA/AMB/" Version="1.01.1" PublicationDate="2024-02-27T00:00:00Z" ModelVersion="1.1.1" />
+      <RequiredModel ModelUri="http://opcfoundation.org/UA/IA/" Version="1.01.4" PublicationDate="2025-05-23T00:00:00Z" ModelVersion="1.1.4" />
+      <RequiredModel ModelUri="http://opcfoundation.org/UA/Machinery/" Version="1.04.0" PublicationDate="2025-07-01T00:00:00Z" ModelVersion="1.4.0" />
+      <RequiredModel ModelUri="http://opcfoundation.org/UA/Machinery/Result/" Version="1.01.0" PublicationDate="2025-07-01T00:00:00Z" ModelVersion="1.1.0" />
+      <RequiredModel ModelUri="http://opcfoundation.org/UA/IJT/Base/" Version="1.01.0" PublicationDate="2025-10-06T00:00:00Z" ModelVersion="1.1.0" />
+    </Model>
+  </Models>
+  <Aliases>
+    <Alias Alias="Boolean">i=1</Alias>
+    <Alias Alias="SByte">i=2</Alias>
+    <Alias Alias="Byte">i=3</Alias>
+    <Alias Alias="Int16">i=4</Alias>
+    <Alias Alias="UInt16">i=5</Alias>
+    <Alias Alias="Int32">i=6</Alias>
+    <Alias Alias="UInt32">i=7</Alias>
+    <Alias Alias="Int64">i=8</Alias>
+    <Alias Alias="UInt64">i=9</Alias>
+    <Alias Alias="Float">i=10</Alias>
+    <Alias Alias="Double">i=11</Alias>
+    <Alias Alias="DateTime">i=13</Alias>
+    <Alias Alias="String">i=12</Alias>
+    <Alias Alias="ByteString">i=15</Alias>
+    <Alias Alias="Guid">i=14</Alias>
+    <Alias Alias="XmlElement">i=16</Alias>
+    <Alias Alias="NodeId">i=17</Alias>
+    <Alias Alias="ExpandedNodeId">i=18</Alias>
+    <Alias Alias="QualifiedName">i=20</Alias>
+    <Alias Alias="LocalizedText">i=21</Alias>
+    <Alias Alias="StatusCode">i=19</Alias>
+    <Alias Alias="Structure">i=22</Alias>
+    <Alias Alias="Number">i=26</Alias>
+    <Alias Alias="Integer">i=27</Alias>
+    <Alias Alias="UInteger">i=28</Alias>
+    <Alias Alias="HasComponent">i=47</Alias>
+    <Alias Alias="HasProperty">i=46</Alias>
+    <Alias Alias="Organizes">i=35</Alias>
+    <Alias Alias="HasEventSource">i=36</Alias>
+    <Alias Alias="HasNotifier">i=48</Alias>
+    <Alias Alias="HasSubtype">i=45</Alias>
+    <Alias Alias="HasTypeDefinition">i=40</Alias>
+    <Alias Alias="HasModellingRule">i=37</Alias>
+    <Alias Alias="HasEncoding">i=38</Alias>
+    <Alias Alias="HasDescription">i=39</Alias>
+    <Alias Alias="HasCause">i=53</Alias>
+    <Alias Alias="ToState">i=52</Alias>
+    <Alias Alias="FromState">i=51</Alias>
+    <Alias Alias="HasEffect">i=54</Alias>
+    <Alias Alias="HasTrueSubState">i=9004</Alias>
+    <Alias Alias="HasFalseSubState">i=9005</Alias>
+    <Alias Alias="HasDictionaryEntry">i=17597</Alias>
+    <Alias Alias="HasCondition">i=9006</Alias>
+    <Alias Alias="HasGuard">i=15112</Alias>
+    <Alias Alias="HasAddIn">i=17604</Alias>
+    <Alias Alias="HasInterface">i=17603</Alias>
+    <Alias Alias="GeneratesEvent">i=41</Alias>
+    <Alias Alias="AlwaysGeneratesEvent">i=3065</Alias>
+    <Alias Alias="HasOrderedComponent">i=49</Alias>
+    <Alias Alias="HasAlarmSuppressionGroup">i=16361</Alias>
+    <Alias Alias="AlarmGroupMember">i=16362</Alias>
+    <Alias Alias="AlarmSuppressionGroupMember">i=32059</Alias>
+  </Aliases>
+  <UAObjectType NodeId="ns=1;i=1003" BrowseName="1:ITighteningToolParametersType" IsAbstract="true">
+    <DisplayName>ITighteningToolParametersType</DisplayName>
+    <Description>This interface is inherited from 0:BaseInterfaceType to add additional parameters of a tool in a tightening system. It shall be added to 2:Parameters object of the tool instance.</Description>
+    <Category>IJT_TIGHTENING Asset Management Tightening Tool Parameters</Category>
+    <References>
+      <Reference ReferenceType="HasComponent">ns=1;i=6005</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=6014</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=6016</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=6022</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=6020</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=6021</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=6023</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=6018</Reference>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=17602</Reference>
+    </References>
+  </UAObjectType>
+  <UAVariable NodeId="ns=1;i=6005" BrowseName="1:DesignType" ParentNodeId="ns=1;i=1003" DataType="Byte">
+    <DisplayName>DesignType</DisplayName>
+    <Description>DesignType provides information on the design of the Tool.</Description>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6006</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2376</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1003</Reference>
+    </References>
+    <Value>
+      <Byte xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">0</Byte>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6006" BrowseName="EnumStrings" ParentNodeId="ns=1;i=6005" DataType="LocalizedText" ValueRank="1" ArrayDimensions="0">
+    <DisplayName>EnumStrings</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=6005</Reference>
+    </References>
+    <Value>
+      <ListOfLocalizedText xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <LocalizedText>
+          <Text>OTHER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>PISTOL</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ANGLE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>STRAIGHT</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>OFFSET</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>REVERSE_OFFSET</Text>
+        </LocalizedText>
+      </ListOfLocalizedText>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6014" BrowseName="1:DriveMethod" ParentNodeId="ns=1;i=1003" DataType="Byte">
+    <DisplayName>DriveMethod</DisplayName>
+    <Description>DriveMethod provides information on the drive method of the motor of the Tool.</Description>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6015</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2376</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1003</Reference>
+    </References>
+    <Value>
+      <Byte xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">0</Byte>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6015" BrowseName="EnumStrings" ParentNodeId="ns=1;i=6014" DataType="LocalizedText" ValueRank="1" ArrayDimensions="0">
+    <DisplayName>EnumStrings</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=6014</Reference>
+    </References>
+    <Value>
+      <ListOfLocalizedText xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <LocalizedText>
+          <Text>OTHER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>CONTINUOUS</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>PULSE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>RATCHETING</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TENSIONING</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>MANUAL</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>INERTIA</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>HYBRID</Text>
+        </LocalizedText>
+      </ListOfLocalizedText>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6016" BrowseName="1:DriveType" ParentNodeId="ns=1;i=1003" DataType="Byte">
+    <DisplayName>DriveType</DisplayName>
+    <Description>DriveType provides information on the drive type of the Tool.</Description>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6017</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2376</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1003</Reference>
+    </References>
+    <Value>
+      <Byte xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">0</Byte>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6017" BrowseName="EnumStrings" ParentNodeId="ns=1;i=6016" DataType="LocalizedText" ValueRank="1" ArrayDimensions="0">
+    <DisplayName>EnumStrings</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=6016</Reference>
+    </References>
+    <Value>
+      <ListOfLocalizedText xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <LocalizedText>
+          <Text>OTHER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ELECTRIC</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>HYDRAULIC</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>PNEUMATIC</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>MANUAL</Text>
+        </LocalizedText>
+      </ListOfLocalizedText>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6022" BrowseName="1:MaxSpeed" ParentNodeId="ns=1;i=1003" DataType="Double">
+    <DisplayName>MaxSpeed</DisplayName>
+    <Description>MaxSpeed is the maximum rotation speed of the driving shaft.</Description>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6036</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=6026</Reference>
+      <Reference ReferenceType="HasTypeDefinition">ns=2;i=2011</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1003</Reference>
+    </References>
+    <Value>
+      <Double xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">0</Double>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6036" BrowseName="2:EngineeringUnits" ParentNodeId="ns=1;i=6022" DataType="i=887">
+    <DisplayName>EngineeringUnits</DisplayName>
+    <Description>0:EngineeringUnits defines the engineering unit of the values.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=6022</Reference>
+    </References>
+    <Value>
+      <ExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <TypeId>
+          <Identifier>i=888</Identifier>
+        </TypeId>
+        <Body>
+          <EUInformation>
+            <NamespaceUri />
+            <UnitId>-1</UnitId>
+            <DisplayName />
+            <Description />
+          </EUInformation>
+        </Body>
+      </ExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6026" BrowseName="2:PhysicalQuantity" ParentNodeId="ns=1;i=6022" DataType="Byte">
+    <DisplayName>PhysicalQuantity</DisplayName>
+    <Description>PhysicalQuantity is to determine the type of the physical quantity associated to a given value(s).</Description>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6027</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2376</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=6022</Reference>
+    </References>
+    <Value>
+      <Byte xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">0</Byte>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6027" BrowseName="EnumStrings" ParentNodeId="ns=1;i=6026" DataType="LocalizedText" ValueRank="1" ArrayDimensions="0">
+    <DisplayName>EnumStrings</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=6026</Reference>
+    </References>
+    <Value>
+      <ListOfLocalizedText xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <LocalizedText>
+          <Text>OTHER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TIME</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ANGLE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>IMPULSE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>DISTANCE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>AREA</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>VOLUME</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>FORCE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>PRESSURE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>VOLTAGE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>CURRENT</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>RESISTANCE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>POWER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ENERGY</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>MASS</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TEMPERATURE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>FREQUENCY</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>JOLT</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>VIBRATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>NUMBER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>LINEAR_SPEED</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ANGULAR_SPEED</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>LINEAR_ACCELERATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ANGULAR_ACCELERATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_SPEED</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_ACCELERATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_PER_ANGLE_GRADIENT</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_PER_ANGLE_GRADIENT2</Text>
+        </LocalizedText>
+      </ListOfLocalizedText>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6020" BrowseName="1:MaxTorque" ParentNodeId="ns=1;i=1003" DataType="Double">
+    <DisplayName>MaxTorque</DisplayName>
+    <Description>MaxTorque is the maximum allowed torque for which the tool may be used for tightening processes. For Click Wrenches, it may not be available.</Description>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6028</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=6029</Reference>
+      <Reference ReferenceType="HasTypeDefinition">ns=2;i=2011</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1003</Reference>
+    </References>
+    <Value>
+      <Double xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">0</Double>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6028" BrowseName="2:EngineeringUnits" ParentNodeId="ns=1;i=6020" DataType="i=887">
+    <DisplayName>EngineeringUnits</DisplayName>
+    <Description>0:EngineeringUnits defines the engineering unit of the values.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=6020</Reference>
+    </References>
+    <Value>
+      <ExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <TypeId>
+          <Identifier>i=888</Identifier>
+        </TypeId>
+        <Body>
+          <EUInformation>
+            <NamespaceUri />
+            <UnitId>-1</UnitId>
+            <DisplayName />
+            <Description />
+          </EUInformation>
+        </Body>
+      </ExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6029" BrowseName="2:PhysicalQuantity" ParentNodeId="ns=1;i=6020" DataType="Byte">
+    <DisplayName>PhysicalQuantity</DisplayName>
+    <Description>PhysicalQuantity is to determine the type of the physical quantity associated to a given value(s).</Description>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6032</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2376</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=6020</Reference>
+    </References>
+    <Value>
+      <Byte xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">0</Byte>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6032" BrowseName="EnumStrings" ParentNodeId="ns=1;i=6029" DataType="LocalizedText" ValueRank="1" ArrayDimensions="0">
+    <DisplayName>EnumStrings</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=6029</Reference>
+    </References>
+    <Value>
+      <ListOfLocalizedText xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <LocalizedText>
+          <Text>OTHER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TIME</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ANGLE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>IMPULSE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>DISTANCE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>AREA</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>VOLUME</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>FORCE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>PRESSURE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>VOLTAGE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>CURRENT</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>RESISTANCE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>POWER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ENERGY</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>MASS</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TEMPERATURE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>FREQUENCY</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>JOLT</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>VIBRATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>NUMBER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>LINEAR_SPEED</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ANGULAR_SPEED</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>LINEAR_ACCELERATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ANGULAR_ACCELERATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_SPEED</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_ACCELERATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_PER_ANGLE_GRADIENT</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_PER_ANGLE_GRADIENT2</Text>
+        </LocalizedText>
+      </ListOfLocalizedText>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6021" BrowseName="1:MinTorque" ParentNodeId="ns=1;i=1003" DataType="Double">
+    <DisplayName>MinTorque</DisplayName>
+    <Description>MinTorque is the minimum allowed torque for which the tool may be used for tightening processes.</Description>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6024</Reference>
+      <Reference ReferenceType="HasComponent">ns=1;i=6025</Reference>
+      <Reference ReferenceType="HasTypeDefinition">ns=2;i=2011</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1003</Reference>
+    </References>
+    <Value>
+      <Double xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">0</Double>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6024" BrowseName="2:EngineeringUnits" ParentNodeId="ns=1;i=6021" DataType="i=887">
+    <DisplayName>EngineeringUnits</DisplayName>
+    <Description>0:EngineeringUnits defines the engineering unit of the values.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=6021</Reference>
+    </References>
+    <Value>
+      <ExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <TypeId>
+          <Identifier>i=888</Identifier>
+        </TypeId>
+        <Body>
+          <EUInformation>
+            <NamespaceUri />
+            <UnitId>-1</UnitId>
+            <DisplayName />
+            <Description />
+          </EUInformation>
+        </Body>
+      </ExtensionObject>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6025" BrowseName="2:PhysicalQuantity" ParentNodeId="ns=1;i=6021" DataType="Byte">
+    <DisplayName>PhysicalQuantity</DisplayName>
+    <Description>PhysicalQuantity is to determine the type of the physical quantity associated to a given value(s).</Description>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6033</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2376</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=6021</Reference>
+    </References>
+    <Value>
+      <Byte xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">0</Byte>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6033" BrowseName="EnumStrings" ParentNodeId="ns=1;i=6025" DataType="LocalizedText" ValueRank="1" ArrayDimensions="0">
+    <DisplayName>EnumStrings</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=6025</Reference>
+    </References>
+    <Value>
+      <ListOfLocalizedText xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <LocalizedText>
+          <Text>OTHER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TIME</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ANGLE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>IMPULSE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>DISTANCE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>AREA</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>VOLUME</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>FORCE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>PRESSURE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>VOLTAGE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>CURRENT</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>RESISTANCE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>POWER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ENERGY</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>MASS</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TEMPERATURE</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>FREQUENCY</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>JOLT</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>VIBRATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>NUMBER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>LINEAR_SPEED</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ANGULAR_SPEED</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>LINEAR_ACCELERATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>ANGULAR_ACCELERATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_SPEED</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_ACCELERATION</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_PER_ANGLE_GRADIENT</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TORQUE_PER_ANGLE_GRADIENT2</Text>
+        </LocalizedText>
+      </ListOfLocalizedText>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6023" BrowseName="1:MotorType" ParentNodeId="ns=1;i=1003" DataType="String">
+    <DisplayName>MotorType</DisplayName>
+    <Description>MotorType is the type of motor in the tool.</Description>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=63</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1003</Reference>
+    </References>
+    <Value>
+      <String xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd" />
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6018" BrowseName="1:ShutOffMethod" ParentNodeId="ns=1;i=1003" DataType="Byte">
+    <DisplayName>ShutOffMethod</DisplayName>
+    <Description>ShutOffMethod provides information on the shutoff method of the tool.</Description>
+    <References>
+      <Reference ReferenceType="HasProperty">ns=1;i=6019</Reference>
+      <Reference ReferenceType="HasTypeDefinition">i=2376</Reference>
+      <Reference ReferenceType="HasModellingRule">i=80</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1003</Reference>
+    </References>
+    <Value>
+      <Byte xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">0</Byte>
+    </Value>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=6019" BrowseName="EnumStrings" ParentNodeId="ns=1;i=6018" DataType="LocalizedText" ValueRank="1" ArrayDimensions="0">
+    <DisplayName>EnumStrings</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
+      <Reference ReferenceType="HasModellingRule">i=78</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=6018</Reference>
+    </References>
+    <Value>
+      <ListOfLocalizedText xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <LocalizedText>
+          <Text>OTHER</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>MECHANICAL</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>CURRENT</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>TRANSDUCER</Text>
+        </LocalizedText>
+      </ListOfLocalizedText>
+    </Value>
+  </UAVariable>
+</UANodeSet>
