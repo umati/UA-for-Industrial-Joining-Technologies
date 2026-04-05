@@ -76,7 +76,7 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Console Client (`OPC_UA_Clients/Release2/IJT_Console_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2
-- **Test baseline**: 285 Python pass, 0 skip (unit); live tests auto-skip when no server
+- **Test baseline**: 288 Python pass, 0 skip (unit); live tests auto-skip when no server
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Entry point**: `python setup_client.py --url="opc.tcp://..."`
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md`
@@ -126,7 +126,7 @@ UA-for-Industrial-Joining-Technologies/
 |-----|--------------|
 | `build-server-image` | Builds OPC UA server Docker image → ghcr.io (used by other jobs) |
 | `web-client` | Python unit (310), JS unit (162), ESLint, Bandit, npm audit |
-| `console-client` | Python unit (285), Bandit; Phase 2 with Docker server (port 40453) |
+| `console-client` | Python unit (288), Bandit; Phase 2 with Docker server (port 40453) |
 | `node-client` | JS unit (~152), ESLint, npm audit |
 | `test-client` | pytest collect + import check; Phase 2 with Docker server (port 40454) |
 | `csharp-client` | dotnet build + test + NuGet CVE scan; Phase 2 with server (port 40452) |

@@ -857,6 +857,7 @@ def main() -> int:
         _relaunch_under_venv()
         return 0  # unreachable after execv, satisfies type checker
 
+    shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     run_phase1 = not args.phase2

@@ -428,9 +428,6 @@ class IJTTypes:
     ICABLE_TYPE = 1014
     IACCESSORY_TYPE = 1015
     ISUB_COMPONENT_TYPE = 1016
-    # IJoiningAdditionalInformationType: interface for Parameters folder.
-    # Per spec all asset Parameters should implement this.
-    # NOTE: namespace_helper_t.h does not yet define this ID — server gap.
     IJOINING_ADDITIONAL_INFORMATION_TYPE = 1017
     ISOFTWARE_TYPE = 1019
     IVIRTUAL_STATION_TYPE = 1031

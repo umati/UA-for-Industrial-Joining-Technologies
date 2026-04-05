@@ -681,6 +681,9 @@ def main() -> int:
     t0 = time.monotonic()
     _header()
 
+    shutil.rmtree(RESULTS_DIR, ignore_errors=True)
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
     results: list = []
 
     if not args.phase2:

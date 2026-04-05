@@ -210,3 +210,14 @@ Representative values for testing:
 | 47 | CONFIGURATION_CHANGED | System |
 
 Full list (1–60): see `helpers/namespaces.py` `SimulateEventType` class.
+
+---
+
+## Known Server Limitations
+
+| ID | Method | Behaviour |
+|----|--------|-----------|
+| STUB-001 | GetResultIdListFiltered | Returns BadNotImplemented — not implemented by server |
+| STUB-002 | ReleaseResultHandle | Returns BadNotImplemented — not implemented by server |
+
+Tests that call these methods are marked xfail accordingly.

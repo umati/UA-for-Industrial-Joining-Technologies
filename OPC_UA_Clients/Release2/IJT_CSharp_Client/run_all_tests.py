@@ -596,6 +596,7 @@ def main() -> int:
     if not _check_prerequisites():
         return 1
 
+    shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     results: List[StepResult] = []

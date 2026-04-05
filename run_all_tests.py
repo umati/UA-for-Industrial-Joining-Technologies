@@ -584,6 +584,7 @@ def _print_step_result(r: StepResult) -> None:
 def _run_gha_checks() -> list[SuiteResult]:
     """Run all GHA validation checks and return SuiteResult list for the summary."""
     results_dir = ROOT / "test-results"
+    shutil.rmtree(results_dir, ignore_errors=True)
     results_dir.mkdir(exist_ok=True)
 
     step_results = [

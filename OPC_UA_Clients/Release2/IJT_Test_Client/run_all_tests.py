@@ -902,6 +902,7 @@ def main() -> int:
     # Step 2: Re-exec under the venv Python so all tools use the same interpreter
     _relaunch_if_needed()
 
+    shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Build pytest arg list from CLI flags + any raw remainder args

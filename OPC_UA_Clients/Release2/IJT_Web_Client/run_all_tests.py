@@ -1075,7 +1075,8 @@ def main() -> int:
 
     results: list[StageResult] = []
 
-    # Ensure test-results/ directory exists before any stage writes to it
+    # Wipe previous run's results so the local copy always reflects the latest run only
+    shutil.rmtree(ROOT / "test-results", ignore_errors=True)
     (ROOT / "test-results").mkdir(parents=True, exist_ok=True)
 
     # ── Static / unit stages (skipped when --phase2) ──────────────────────────

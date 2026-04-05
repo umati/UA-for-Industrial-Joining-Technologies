@@ -616,6 +616,7 @@ def main() -> int:
         return 1
 
     results_dir = _PROJECT_DIR / "test-results"
+    shutil.rmtree(results_dir, ignore_errors=True)
     results_dir.mkdir(parents=True, exist_ok=True)
 
     results: List[StepResult] = []
