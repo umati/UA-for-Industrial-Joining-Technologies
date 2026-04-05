@@ -47,5 +47,5 @@ public static class IjtFileLogger
     }
 
     public static string ResultLogPath => _resultLogPath;
-    public static string EventLogPath  => _eventLogPath;
+    public static string EventLogPath => _eventLogPath;
 }

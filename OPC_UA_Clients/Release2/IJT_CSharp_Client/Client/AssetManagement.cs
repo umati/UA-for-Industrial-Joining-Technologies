@@ -1,9 +1,9 @@
-﻿#nullable enable
+#nullable enable
 
-using Opc.Ua;
-using Opc.Ua.Client;
 using IJT_CSharp_Client.Helpers;
 using Microsoft.Extensions.Logging;
+using Opc.Ua;
+using Opc.Ua.Client;
 
 namespace IJT_CSharp_Client.Client;
 
@@ -16,8 +16,8 @@ public sealed class AssetManagement : IDisposable
 {
     private readonly ILogger<AssetManagement> _log = IjtLog.For<AssetManagement>();
     private readonly IIjtSession _s;
-    private Subscription?       _assetVarSubscription;
-    private NodeId?             _methodSetNodeId;
+    private Subscription? _assetVarSubscription;
+    private NodeId? _methodSetNodeId;
 
     /// <summary>Creates an AssetManagement facade backed by <paramref name="ijtSession"/>.</summary>
     public AssetManagement(IIjtSession ijtSession) => _s = ijtSession;
@@ -111,7 +111,7 @@ public sealed class AssetManagement : IDisposable
         try
         {
             var extObjects = entities.Select(e => new ExtensionObject(e)).ToArray();
-            var outputs    = _s.CallMethod(objectId, methodId, (object)extObjects);
+            var outputs = _s.CallMethod(objectId, methodId, (object)extObjects);
             _log.LogInformation("✓ SendIdentifiers called ({Count} entities).", extObjects.Length);
             IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
         }
@@ -269,7 +269,7 @@ public sealed class AssetManagement : IDisposable
 
         _assetVarSubscription = new Subscription(_s.Session.DefaultSubscription)
         {
-            DisplayName        = "IJT Asset Variables",
+            DisplayName = "IJT Asset Variables",
             PublishingInterval = _s.Config.PublishingIntervalMs,
         };
 
@@ -291,7 +291,7 @@ public sealed class AssetManagement : IDisposable
             {
                 if (inst.BrowseName.Name.StartsWith('<')) continue; // skip placeholders
                 var instNodeId = (NodeId)inst.NodeId;
-                var idNode     = _s.BrowseChild(instNodeId, UAModel.IJTBase.BrowseNames.Identification);
+                var idNode = _s.BrowseChild(instNodeId, UAModel.IJTBase.BrowseNames.Identification);
                 if (idNode.IsNullNodeId) continue;
 
                 count += AddIdentificationItems(_assetVarSubscription, idNode,
@@ -325,9 +325,9 @@ public sealed class AssetManagement : IDisposable
 
             var item = new MonitoredItem(sub.DefaultItem)
             {
-                DisplayName      = $"{assetPath}/{varName}",
-                StartNodeId      = varNode,
-                AttributeId      = Attributes.Value,
+                DisplayName = $"{assetPath}/{varName}",
+                StartNodeId = varNode,
+                AttributeId = Attributes.Value,
                 SamplingInterval = 1000,
             };
 

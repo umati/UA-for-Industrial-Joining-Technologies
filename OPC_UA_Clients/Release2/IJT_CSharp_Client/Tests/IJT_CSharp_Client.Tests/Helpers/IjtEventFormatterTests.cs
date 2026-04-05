@@ -10,10 +10,10 @@ public class IjtEventFormatterTests
     public void FormatJoiningSystemEvent_BasicFields_ContainsEventCode()
     {
         var result = IjtEventFormatter.FormatJoiningSystemEvent(
-            eventCode:         "1001",
-            eventText:         "Tool connected",
+            eventCode: "1001",
+            eventText: "Tool connected",
             joiningTechnology: "Tightening",
-            eventTime:         DateTime.UtcNow);
+            eventTime: DateTime.UtcNow);
 
         Assert.Contains("1001", result);
         Assert.Contains("Tool connected", result);

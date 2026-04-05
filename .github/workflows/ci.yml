@@ -943,40 +943,9 @@ jobs:
           PYEOF
 
   # ───────────────────────────────────────────────────────────────────────────
-  # CodeQL Analysis — security semantic analysis (runs independently of tests)
+  # CodeQL Analysis — disabled: GitHub Default Setup is enabled on this repo,
+  # which conflicts with advanced workflow uploads. Security scanning is handled
+  # automatically by GitHub's Default Setup in repository settings.
   # ───────────────────────────────────────────────────────────────────────────
-  codeql:
-    name: CodeQL Analysis (${{ matrix.language }})
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      actions: read
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [python, javascript-typescript, csharp]
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up .NET (C# only)
-        if: matrix.language == 'csharp'
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "9.x"
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
-        with:
-          languages: ${{ matrix.language }}
-          queries: security-extended,security-and-quality
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v4
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
-        with:
-          category: "/language:${{ matrix.language }}"
-          output: codeql-results
-          upload: true
+  # codeql: (removed — re-enable only after disabling Default Setup in repo
+  #          Settings → Security → Code scanning)

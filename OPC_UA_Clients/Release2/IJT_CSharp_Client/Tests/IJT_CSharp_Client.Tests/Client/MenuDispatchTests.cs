@@ -1,10 +1,10 @@
 #nullable enable
 
+using System.Collections.Generic;
 using IJT_CSharp_Client.Client;
 using Moq;
 using Opc.Ua;
 using Opc.Ua.Client;
-using System.Collections.Generic;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Client;
@@ -88,11 +88,11 @@ public sealed class MenuDispatchTests
     public void MenuItem0_Quit_NoManagerMethodCalled()
     {
         // Arrange – create all four managers as Program.cs does
-        var mock        = HappyPathMock();
-        var resultMgmt  = new ResultManagement(mock.Object);
-        var assetMgmt   = new AssetManagement(mock.Object);
-        var jpm         = new JoiningProcessManagement(mock.Object);
-        var eventSub    = new EventSubscriber(EventMock().Object);
+        var mock = HappyPathMock();
+        var resultMgmt = new ResultManagement(mock.Object);
+        var assetMgmt = new AssetManagement(mock.Object);
+        var jpm = new JoiningProcessManagement(mock.Object);
+        var eventSub = new EventSubscriber(EventMock().Object);
 
         // Act – "cmd = 0" just cancels the token; we simulate by doing nothing
         // Assert – no CallMethod on any manager
@@ -112,7 +112,7 @@ public sealed class MenuDispatchTests
     public void MenuItem1_Subscribe_WhenAlreadySubscribed_IsNoOp_DoesNotThrow()
     {
         // Inject a non-null subscription to simulate the "already subscribed" guard
-        var sut   = new EventSubscriber(EventMock().Object);
+        var sut = new EventSubscriber(EventMock().Object);
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
@@ -153,7 +153,7 @@ public sealed class MenuDispatchTests
     public void MenuItem2_Unsubscribe_WhenNotSubscribed_IsNoOp_DoesNotThrow()
     {
         var sut = new EventSubscriber(EventMock().Object);
-        var ex  = Record.Exception(() => sut.Unsubscribe());
+        var ex = Record.Exception(() => sut.Unsubscribe());
         Assert.Null(ex);
     }
 
@@ -183,7 +183,7 @@ public sealed class MenuDispatchTests
     public void MenuItem3_GetLatestResult_WhenNodesNull_DoesNotThrow_AndSkipsCallMethod()
     {
         var mock = NullNodeMock();
-        var ex   = Record.Exception(() => new ResultManagement(mock.Object).GetLatestResult());
+        var ex = Record.Exception(() => new ResultManagement(mock.Object).GetLatestResult());
 
         Assert.Null(ex);
         mock.Verify(s => s.CallMethod(
@@ -221,7 +221,7 @@ public sealed class MenuDispatchTests
     public void MenuItem4_GetResultById_WithNullId_SkipsDispatch()
     {
         // Prompt returning null causes Program.cs to break without calling the manager
-        var mock    = HappyPathMock();
+        var mock = HappyPathMock();
         string? rid = null;
         if (rid != null) new ResultManagement(mock.Object).GetResultById(rid);
 
@@ -528,7 +528,7 @@ public sealed class MenuDispatchTests
     public void MenuItem11_GetJoiningProcessList_WhenNodesNull_DoesNotThrow_AndSkipsCallMethod()
     {
         var mock = NullNodeMock();
-        var ex   = Record.Exception(() =>
+        var ex = Record.Exception(() =>
             new JoiningProcessManagement(mock.Object).GetJoiningProcessList());
 
         Assert.Null(ex);
@@ -578,7 +578,7 @@ public sealed class MenuDispatchTests
     public void MenuItem12_SelectJoiningProcess_WhenIdNullFromPrompt_SkipsDispatch()
     {
         // Program.cs: if (id is null) break;
-        var mock  = HappyPathMock();
+        var mock = HappyPathMock();
         string? id = null;
         if (id is not null)
             new JoiningProcessManagement(mock.Object)
@@ -710,16 +710,16 @@ public sealed class MenuDispatchTests
         // Asserts that the EntityDataType initialiser in Program.cs produces the correct values
         var entity = new UAModel.IJTBase.EntityDataType
         {
-            Name       = "Batch-A",
-            EntityId   = "ENT-001",
+            Name = "Batch-A",
+            EntityId = "ENT-001",
             IsExternal = false,
             EntityType = 0,  // EntityType is `short`
         };
 
-        Assert.Equal("Batch-A",  entity.Name);
-        Assert.Equal("ENT-001",  entity.EntityId);
+        Assert.Equal("Batch-A", entity.Name);
+        Assert.Equal("ENT-001", entity.EntityId);
         Assert.False(entity.IsExternal);
-        Assert.Equal((short)0,   entity.EntityType);
+        Assert.Equal((short)0, entity.EntityType);
     }
 
     [Fact]
@@ -749,9 +749,9 @@ public sealed class MenuDispatchTests
         var ex = Record.Exception(() =>
         {
             using var resultMgmt = new ResultManagement(session);
-            using var assetMgmt  = new AssetManagement(session);
-            using var jpm        = new JoiningProcessManagement(session);
-            using var eventSub   = new EventSubscriber(EventMock().Object);
+            using var assetMgmt = new AssetManagement(session);
+            using var jpm = new JoiningProcessManagement(session);
+            using var eventSub = new EventSubscriber(EventMock().Object);
         });
         Assert.Null(ex);
     }
@@ -759,8 +759,8 @@ public sealed class MenuDispatchTests
     [Fact]
     public void AllManagers_DisposeAfterNoCalls_DoNotThrow()
     {
-        var session  = HappyPathMock().Object;
-        var evtMock  = EventMock().Object;
+        var session = HappyPathMock().Object;
+        var evtMock = EventMock().Object;
 
         var ex = Record.Exception(() =>
         {

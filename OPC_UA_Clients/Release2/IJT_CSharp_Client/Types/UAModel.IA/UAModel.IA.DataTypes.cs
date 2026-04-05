@@ -29,12 +29,12 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Xml;
 using System.Linq;
 using System.Runtime.Serialization;
-using System.Threading.Tasks;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Xml;
 using Opc.Ua;
 using UAModel.DI;
 
@@ -43,573 +43,572 @@ using UAModel.DI;
 #pragma warning disable CA1707 // Identifiers should not contain underscores
 #pragma warning disable CA1028 // Enum Storage should be Int32
 
-namespace UAModel.IA
+namespace UAModel.IA;
+
+#region LevelDisplayMode Enumeration
+#if (!OPCUA_EXCLUDE_LevelDisplayMode)
+/// <exclude />
+[System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
+[DataContract(Namespace = UAModel.IA.Namespaces.IA)]
+
+public enum LevelDisplayMode
 {
-    #region LevelDisplayMode Enumeration
-    #if (!OPCUA_EXCLUDE_LevelDisplayMode)
-    /// <exclude />
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
-    [DataContract(Namespace = UAModel.IA.Namespaces.IA)]
-    
-    public enum LevelDisplayMode
-    {
-        [EnumMember(Value = "Dimmed_0")]
-        Dimmed = 0,
+    [EnumMember(Value = "Dimmed_0")]
+    Dimmed = 0,
 
-        [EnumMember(Value = "Blinking_1")]
-        Blinking = 1,
+    [EnumMember(Value = "Blinking_1")]
+    Blinking = 1,
 
-        [EnumMember(Value = "Other_2")]
-        Other = 2,
-    }
+    [EnumMember(Value = "Other_2")]
+    Other = 2,
+}
 
-    #region LevelDisplayModeCollection Class
-    /// <exclude />
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
-    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
-    [CollectionDataContract(Name = "ListOfLevelDisplayMode", Namespace = UAModel.IA.Namespaces.IA, ItemName = "LevelDisplayMode")]
-    public partial class LevelDisplayModeCollection : List<LevelDisplayMode>, ICloneable
-    {
-        #region Constructors
-        public LevelDisplayModeCollection() {}
+#region LevelDisplayModeCollection Class
+/// <exclude />
+[System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
+[CollectionDataContract(Name = "ListOfLevelDisplayMode", Namespace = UAModel.IA.Namespaces.IA, ItemName = "LevelDisplayMode")]
+public partial class LevelDisplayModeCollection : List<LevelDisplayMode>, ICloneable
+{
+    #region Constructors
+    public LevelDisplayModeCollection() { }
 
-        public LevelDisplayModeCollection(int capacity) : base(capacity) {}
+    public LevelDisplayModeCollection(int capacity) : base(capacity) { }
 
-        public LevelDisplayModeCollection(IEnumerable<LevelDisplayMode> collection) : base(collection) {}
-        #endregion
-
-        #region Static Operators
-        public static implicit operator LevelDisplayModeCollection(LevelDisplayMode[] values)
-        {
-            if (values != null)
-            {
-                return new LevelDisplayModeCollection(values);
-            }
-
-            return new LevelDisplayModeCollection();
-        }
-
-        public static explicit operator LevelDisplayMode[](LevelDisplayModeCollection values)
-        {
-            if (values != null)
-            {
-                return values.ToArray();
-            }
-
-            return null;
-        }
-        #endregion
-
-        #region ICloneable Methods
-        public object Clone()
-        {
-            return (LevelDisplayModeCollection)this.MemberwiseClone();
-        }
-        #endregion
-
-        /// <summary cref="Object.MemberwiseClone" />
-        public new object MemberwiseClone()
-        {
-            LevelDisplayModeCollection clone = new LevelDisplayModeCollection(this.Count);
-
-            for (int ii = 0; ii < this.Count; ii++)
-            {
-                clone.Add((LevelDisplayMode)Utils.Clone(this[ii]));
-            }
-
-            return clone;
-        }
-    }
-    #endregion
-    #endif
+    public LevelDisplayModeCollection(IEnumerable<LevelDisplayMode> collection) : base(collection) { }
     #endregion
 
-    #region SignalColor Enumeration
-    #if (!OPCUA_EXCLUDE_SignalColor)
-    /// <exclude />
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
-    [DataContract(Namespace = UAModel.IA.Namespaces.IA)]
-    
-    public enum SignalColor
+    #region Static Operators
+    public static implicit operator LevelDisplayModeCollection(LevelDisplayMode[] values)
     {
-        [EnumMember(Value = "Off_0")]
-        Off = 0,
+        if (values != null)
+        {
+            return new LevelDisplayModeCollection(values);
+        }
 
-        [EnumMember(Value = "Red_1")]
-        Red = 1,
-
-        [EnumMember(Value = "Green_2")]
-        Green = 2,
-
-        [EnumMember(Value = "Blue_3")]
-        Blue = 3,
-
-        [EnumMember(Value = "Yellow_4")]
-        Yellow = 4,
-
-        [EnumMember(Value = "Purple_5")]
-        Purple = 5,
-
-        [EnumMember(Value = "Cyan_6")]
-        Cyan = 6,
-
-        [EnumMember(Value = "White_7")]
-        White = 7,
+        return new LevelDisplayModeCollection();
     }
 
-    #region SignalColorCollection Class
-    /// <exclude />
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
-    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
-    [CollectionDataContract(Name = "ListOfSignalColor", Namespace = UAModel.IA.Namespaces.IA, ItemName = "SignalColor")]
-    public partial class SignalColorCollection : List<SignalColor>, ICloneable
+    public static explicit operator LevelDisplayMode[](LevelDisplayModeCollection values)
     {
-        #region Constructors
-        public SignalColorCollection() {}
-
-        public SignalColorCollection(int capacity) : base(capacity) {}
-
-        public SignalColorCollection(IEnumerable<SignalColor> collection) : base(collection) {}
-        #endregion
-
-        #region Static Operators
-        public static implicit operator SignalColorCollection(SignalColor[] values)
+        if (values != null)
         {
-            if (values != null)
-            {
-                return new SignalColorCollection(values);
-            }
-
-            return new SignalColorCollection();
+            return values.ToArray();
         }
 
-        public static explicit operator SignalColor[](SignalColorCollection values)
-        {
-            if (values != null)
-            {
-                return values.ToArray();
-            }
-
-            return null;
-        }
-        #endregion
-
-        #region ICloneable Methods
-        public object Clone()
-        {
-            return (SignalColorCollection)this.MemberwiseClone();
-        }
-        #endregion
-
-        /// <summary cref="Object.MemberwiseClone" />
-        public new object MemberwiseClone()
-        {
-            SignalColorCollection clone = new SignalColorCollection(this.Count);
-
-            for (int ii = 0; ii < this.Count; ii++)
-            {
-                clone.Add((SignalColor)Utils.Clone(this[ii]));
-            }
-
-            return clone;
-        }
+        return null;
     }
     #endregion
-    #endif
-    #endregion
 
-    #region SignalModeLight Enumeration
-    #if (!OPCUA_EXCLUDE_SignalModeLight)
-    /// <exclude />
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
-    [DataContract(Namespace = UAModel.IA.Namespaces.IA)]
-    
-    public enum SignalModeLight
+    #region ICloneable Methods
+    public object Clone()
     {
-        [EnumMember(Value = "Continuous_0")]
-        Continuous = 0,
-
-        [EnumMember(Value = "Blinking_1")]
-        Blinking = 1,
-
-        [EnumMember(Value = "Flashing_2")]
-        Flashing = 2,
-
-        [EnumMember(Value = "Other_3")]
-        Other = 3,
-    }
-
-    #region SignalModeLightCollection Class
-    /// <exclude />
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
-    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
-    [CollectionDataContract(Name = "ListOfSignalModeLight", Namespace = UAModel.IA.Namespaces.IA, ItemName = "SignalModeLight")]
-    public partial class SignalModeLightCollection : List<SignalModeLight>, ICloneable
-    {
-        #region Constructors
-        public SignalModeLightCollection() {}
-
-        public SignalModeLightCollection(int capacity) : base(capacity) {}
-
-        public SignalModeLightCollection(IEnumerable<SignalModeLight> collection) : base(collection) {}
-        #endregion
-
-        #region Static Operators
-        public static implicit operator SignalModeLightCollection(SignalModeLight[] values)
-        {
-            if (values != null)
-            {
-                return new SignalModeLightCollection(values);
-            }
-
-            return new SignalModeLightCollection();
-        }
-
-        public static explicit operator SignalModeLight[](SignalModeLightCollection values)
-        {
-            if (values != null)
-            {
-                return values.ToArray();
-            }
-
-            return null;
-        }
-        #endregion
-
-        #region ICloneable Methods
-        public object Clone()
-        {
-            return (SignalModeLightCollection)this.MemberwiseClone();
-        }
-        #endregion
-
-        /// <summary cref="Object.MemberwiseClone" />
-        public new object MemberwiseClone()
-        {
-            SignalModeLightCollection clone = new SignalModeLightCollection(this.Count);
-
-            for (int ii = 0; ii < this.Count; ii++)
-            {
-                clone.Add((SignalModeLight)Utils.Clone(this[ii]));
-            }
-
-            return clone;
-        }
+        return (LevelDisplayModeCollection)this.MemberwiseClone();
     }
     #endregion
-    #endif
+
+    /// <summary cref="Object.MemberwiseClone" />
+    public new object MemberwiseClone()
+    {
+        LevelDisplayModeCollection clone = new LevelDisplayModeCollection(this.Count);
+
+        for (int ii = 0; ii < this.Count; ii++)
+        {
+            clone.Add((LevelDisplayMode)Utils.Clone(this[ii]));
+        }
+
+        return clone;
+    }
+}
+#endregion
+#endif
+#endregion
+
+#region SignalColor Enumeration
+#if (!OPCUA_EXCLUDE_SignalColor)
+/// <exclude />
+[System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
+[DataContract(Namespace = UAModel.IA.Namespaces.IA)]
+
+public enum SignalColor
+{
+    [EnumMember(Value = "Off_0")]
+    Off = 0,
+
+    [EnumMember(Value = "Red_1")]
+    Red = 1,
+
+    [EnumMember(Value = "Green_2")]
+    Green = 2,
+
+    [EnumMember(Value = "Blue_3")]
+    Blue = 3,
+
+    [EnumMember(Value = "Yellow_4")]
+    Yellow = 4,
+
+    [EnumMember(Value = "Purple_5")]
+    Purple = 5,
+
+    [EnumMember(Value = "Cyan_6")]
+    Cyan = 6,
+
+    [EnumMember(Value = "White_7")]
+    White = 7,
+}
+
+#region SignalColorCollection Class
+/// <exclude />
+[System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
+[CollectionDataContract(Name = "ListOfSignalColor", Namespace = UAModel.IA.Namespaces.IA, ItemName = "SignalColor")]
+public partial class SignalColorCollection : List<SignalColor>, ICloneable
+{
+    #region Constructors
+    public SignalColorCollection() { }
+
+    public SignalColorCollection(int capacity) : base(capacity) { }
+
+    public SignalColorCollection(IEnumerable<SignalColor> collection) : base(collection) { }
     #endregion
 
-    #region StacklightOperationMode Enumeration
-    #if (!OPCUA_EXCLUDE_StacklightOperationMode)
-    /// <exclude />
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
-    [DataContract(Namespace = UAModel.IA.Namespaces.IA)]
-    
-    public enum StacklightOperationMode
+    #region Static Operators
+    public static implicit operator SignalColorCollection(SignalColor[] values)
     {
-        [EnumMember(Value = "Segmented_0")]
-        Segmented = 0,
+        if (values != null)
+        {
+            return new SignalColorCollection(values);
+        }
 
-        [EnumMember(Value = "Levelmeter_1")]
-        Levelmeter = 1,
-
-        [EnumMember(Value = "Running_Light_2")]
-        Running_Light = 2,
-
-        [EnumMember(Value = "Other_3")]
-        Other = 3,
+        return new SignalColorCollection();
     }
 
-    #region StacklightOperationModeCollection Class
-    /// <exclude />
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
-    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
-    [CollectionDataContract(Name = "ListOfStacklightOperationMode", Namespace = UAModel.IA.Namespaces.IA, ItemName = "StacklightOperationMode")]
-    public partial class StacklightOperationModeCollection : List<StacklightOperationMode>, ICloneable
+    public static explicit operator SignalColor[](SignalColorCollection values)
     {
-        #region Constructors
-        public StacklightOperationModeCollection() {}
-
-        public StacklightOperationModeCollection(int capacity) : base(capacity) {}
-
-        public StacklightOperationModeCollection(IEnumerable<StacklightOperationMode> collection) : base(collection) {}
-        #endregion
-
-        #region Static Operators
-        public static implicit operator StacklightOperationModeCollection(StacklightOperationMode[] values)
+        if (values != null)
         {
-            if (values != null)
-            {
-                return new StacklightOperationModeCollection(values);
-            }
-
-            return new StacklightOperationModeCollection();
+            return values.ToArray();
         }
 
-        public static explicit operator StacklightOperationMode[](StacklightOperationModeCollection values)
-        {
-            if (values != null)
-            {
-                return values.ToArray();
-            }
-
-            return null;
-        }
-        #endregion
-
-        #region ICloneable Methods
-        public object Clone()
-        {
-            return (StacklightOperationModeCollection)this.MemberwiseClone();
-        }
-        #endregion
-
-        /// <summary cref="Object.MemberwiseClone" />
-        public new object MemberwiseClone()
-        {
-            StacklightOperationModeCollection clone = new StacklightOperationModeCollection(this.Count);
-
-            for (int ii = 0; ii < this.Count; ii++)
-            {
-                clone.Add((StacklightOperationMode)Utils.Clone(this[ii]));
-            }
-
-            return clone;
-        }
+        return null;
     }
     #endregion
-    #endif
+
+    #region ICloneable Methods
+    public object Clone()
+    {
+        return (SignalColorCollection)this.MemberwiseClone();
+    }
     #endregion
 
-    #region RGBWDataType Class
-    #if (!OPCUA_EXCLUDE_RGBWDataType)
-    /// <exclude />
-    [Flags]
-    public enum RGBWDataTypeFields : uint
+    /// <summary cref="Object.MemberwiseClone" />
+    public new object MemberwiseClone()
     {
-        None = 0,
-        White = 0x1,
+        SignalColorCollection clone = new SignalColorCollection(this.Count);
+
+        for (int ii = 0; ii < this.Count; ii++)
+        {
+            clone.Add((SignalColor)Utils.Clone(this[ii]));
+        }
+
+        return clone;
+    }
+}
+#endregion
+#endif
+#endregion
+
+#region SignalModeLight Enumeration
+#if (!OPCUA_EXCLUDE_SignalModeLight)
+/// <exclude />
+[System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
+[DataContract(Namespace = UAModel.IA.Namespaces.IA)]
+
+public enum SignalModeLight
+{
+    [EnumMember(Value = "Continuous_0")]
+    Continuous = 0,
+
+    [EnumMember(Value = "Blinking_1")]
+    Blinking = 1,
+
+    [EnumMember(Value = "Flashing_2")]
+    Flashing = 2,
+
+    [EnumMember(Value = "Other_3")]
+    Other = 3,
+}
+
+#region SignalModeLightCollection Class
+/// <exclude />
+[System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
+[CollectionDataContract(Name = "ListOfSignalModeLight", Namespace = UAModel.IA.Namespaces.IA, ItemName = "SignalModeLight")]
+public partial class SignalModeLightCollection : List<SignalModeLight>, ICloneable
+{
+    #region Constructors
+    public SignalModeLightCollection() { }
+
+    public SignalModeLightCollection(int capacity) : base(capacity) { }
+
+    public SignalModeLightCollection(IEnumerable<SignalModeLight> collection) : base(collection) { }
+    #endregion
+
+    #region Static Operators
+    public static implicit operator SignalModeLightCollection(SignalModeLight[] values)
+    {
+        if (values != null)
+        {
+            return new SignalModeLightCollection(values);
+        }
+
+        return new SignalModeLightCollection();
     }
 
-    /// <exclude />
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
-    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
-    [DataContract(Namespace = UAModel.IA.Namespaces.IA)]
-    public partial class RGBWDataType : IEncodeable, IJsonEncodeable
+    public static explicit operator SignalModeLight[](SignalModeLightCollection values)
     {
-        #region Constructors
-        public RGBWDataType()
+        if (values != null)
         {
-            Initialize();
+            return values.ToArray();
         }
 
-        [OnDeserializing]
-        private void Initialize(StreamingContext context)
+        return null;
+    }
+    #endregion
+
+    #region ICloneable Methods
+    public object Clone()
+    {
+        return (SignalModeLightCollection)this.MemberwiseClone();
+    }
+    #endregion
+
+    /// <summary cref="Object.MemberwiseClone" />
+    public new object MemberwiseClone()
+    {
+        SignalModeLightCollection clone = new SignalModeLightCollection(this.Count);
+
+        for (int ii = 0; ii < this.Count; ii++)
         {
-            Initialize();
+            clone.Add((SignalModeLight)Utils.Clone(this[ii]));
         }
 
-        private void Initialize()
+        return clone;
+    }
+}
+#endregion
+#endif
+#endregion
+
+#region StacklightOperationMode Enumeration
+#if (!OPCUA_EXCLUDE_StacklightOperationMode)
+/// <exclude />
+[System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
+[DataContract(Namespace = UAModel.IA.Namespaces.IA)]
+
+public enum StacklightOperationMode
+{
+    [EnumMember(Value = "Segmented_0")]
+    Segmented = 0,
+
+    [EnumMember(Value = "Levelmeter_1")]
+    Levelmeter = 1,
+
+    [EnumMember(Value = "Running_Light_2")]
+    Running_Light = 2,
+
+    [EnumMember(Value = "Other_3")]
+    Other = 3,
+}
+
+#region StacklightOperationModeCollection Class
+/// <exclude />
+[System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
+[CollectionDataContract(Name = "ListOfStacklightOperationMode", Namespace = UAModel.IA.Namespaces.IA, ItemName = "StacklightOperationMode")]
+public partial class StacklightOperationModeCollection : List<StacklightOperationMode>, ICloneable
+{
+    #region Constructors
+    public StacklightOperationModeCollection() { }
+
+    public StacklightOperationModeCollection(int capacity) : base(capacity) { }
+
+    public StacklightOperationModeCollection(IEnumerable<StacklightOperationMode> collection) : base(collection) { }
+    #endregion
+
+    #region Static Operators
+    public static implicit operator StacklightOperationModeCollection(StacklightOperationMode[] values)
+    {
+        if (values != null)
         {
-            EncodingMask = (uint)RGBWDataTypeFields.None;
-            m_red = (byte)0;
-            m_green = (byte)0;
-            m_blue = (byte)0;
-            m_white = (byte)0;
-        }
-        #endregion
-
-        #region Public Properties
-        [DataMember(Name = "EncodingMask", IsRequired = true, Order = 0)]
-        public virtual uint EncodingMask { get; set; }
-
-        [DataMember(Name = "Red", IsRequired = false, Order = 1)]
-        public byte Red
-        {
-            get { return m_red;  }
-            set { m_red = value; }
-        }
-
-        [DataMember(Name = "Green", IsRequired = false, Order = 2)]
-        public byte Green
-        {
-            get { return m_green;  }
-            set { m_green = value; }
-        }
-
-        [DataMember(Name = "Blue", IsRequired = false, Order = 3)]
-        public byte Blue
-        {
-            get { return m_blue;  }
-            set { m_blue = value; }
-        }
-
-        [DataMember(Name = "White", IsRequired = false, Order = 4)]
-        public byte White
-        {
-            get { return m_white;  }
-            set { m_white = value; }
-        }
-        #endregion
-
-        #region IEncodeable Members
-        /// <summary cref="IEncodeable.TypeId" />
-        public virtual ExpandedNodeId TypeId => DataTypeIds.RGBWDataType;
-
-        /// <summary cref="IEncodeable.BinaryEncodingId" />
-        public virtual ExpandedNodeId BinaryEncodingId => ObjectIds.RGBWDataType_Encoding_DefaultBinary;
-
-        /// <summary cref="IEncodeable.XmlEncodingId" />
-        public virtual ExpandedNodeId XmlEncodingId => ObjectIds.RGBWDataType_Encoding_DefaultXml;
-
-        /// <summary cref="IJsonEncodeable.JsonEncodingId" />
-        public virtual ExpandedNodeId JsonEncodingId => NodeId.Null;
-
-        /// <summary cref="IEncodeable.Encode(IEncoder)" />
-        public virtual void Encode(IEncoder encoder)
-        {
-            encoder.PushNamespace(UAModel.IA.Namespaces.IA);
-            encoder.WriteEncodingMask((uint)EncodingMask);
-
-            encoder.WriteByte("Red", Red);
-            encoder.WriteByte("Green", Green);
-            encoder.WriteByte("Blue", Blue);
-            if ((EncodingMask & (uint)RGBWDataTypeFields.White) != 0) encoder.WriteByte("White", White);
-
-            encoder.PopNamespace();
+            return new StacklightOperationModeCollection(values);
         }
 
-        /// <summary cref="IEncodeable.Decode(IDecoder)" />
-        public virtual void Decode(IDecoder decoder)
+        return new StacklightOperationModeCollection();
+    }
+
+    public static explicit operator StacklightOperationMode[](StacklightOperationModeCollection values)
+    {
+        if (values != null)
         {
-            decoder.PushNamespace(UAModel.IA.Namespaces.IA);
-
-            EncodingMask = decoder.ReadEncodingMask(m_FieldNames);
-
-            Red = decoder.ReadByte("Red");
-            Green = decoder.ReadByte("Green");
-            Blue = decoder.ReadByte("Blue");
-            if ((EncodingMask & (uint)RGBWDataTypeFields.White) != 0) White = decoder.ReadByte("White");
-
-            decoder.PopNamespace();
+            return values.ToArray();
         }
 
-        /// <summary cref="IEncodeable.IsEqual(IEncodeable)" />
-        public virtual bool IsEqual(IEncodeable encodeable)
+        return null;
+    }
+    #endregion
+
+    #region ICloneable Methods
+    public object Clone()
+    {
+        return (StacklightOperationModeCollection)this.MemberwiseClone();
+    }
+    #endregion
+
+    /// <summary cref="Object.MemberwiseClone" />
+    public new object MemberwiseClone()
+    {
+        StacklightOperationModeCollection clone = new StacklightOperationModeCollection(this.Count);
+
+        for (int ii = 0; ii < this.Count; ii++)
         {
-            if (Object.ReferenceEquals(this, encodeable))
-            {
-                return true;
-            }
+            clone.Add((StacklightOperationMode)Utils.Clone(this[ii]));
+        }
 
-            RGBWDataType value = encodeable as RGBWDataType;
+        return clone;
+    }
+}
+#endregion
+#endif
+#endregion
 
-            if (value == null)
-            {
-                return false;
-            }
+#region RGBWDataType Class
+#if (!OPCUA_EXCLUDE_RGBWDataType)
+/// <exclude />
+[Flags]
+public enum RGBWDataTypeFields : uint
+{
+    None = 0,
+    White = 0x1,
+}
 
-            if (value.EncodingMask != this.EncodingMask) return false;
+/// <exclude />
+[System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
+[DataContract(Namespace = UAModel.IA.Namespaces.IA)]
+public partial class RGBWDataType : IEncodeable, IJsonEncodeable
+{
+    #region Constructors
+    public RGBWDataType()
+    {
+        Initialize();
+    }
 
-            if (!Utils.IsEqual(m_red, value.m_red)) return false;
-            if (!Utils.IsEqual(m_green, value.m_green)) return false;
-            if (!Utils.IsEqual(m_blue, value.m_blue)) return false;
-            if ((EncodingMask & (uint)RGBWDataTypeFields.White) != 0) if (!Utils.IsEqual(m_white, value.m_white)) return false;
+    [OnDeserializing]
+    private void Initialize(StreamingContext context)
+    {
+        Initialize();
+    }
 
+    private void Initialize()
+    {
+        EncodingMask = (uint)RGBWDataTypeFields.None;
+        m_red = (byte)0;
+        m_green = (byte)0;
+        m_blue = (byte)0;
+        m_white = (byte)0;
+    }
+    #endregion
+
+    #region Public Properties
+    [DataMember(Name = "EncodingMask", IsRequired = true, Order = 0)]
+    public virtual uint EncodingMask { get; set; }
+
+    [DataMember(Name = "Red", IsRequired = false, Order = 1)]
+    public byte Red
+    {
+        get { return m_red; }
+        set { m_red = value; }
+    }
+
+    [DataMember(Name = "Green", IsRequired = false, Order = 2)]
+    public byte Green
+    {
+        get { return m_green; }
+        set { m_green = value; }
+    }
+
+    [DataMember(Name = "Blue", IsRequired = false, Order = 3)]
+    public byte Blue
+    {
+        get { return m_blue; }
+        set { m_blue = value; }
+    }
+
+    [DataMember(Name = "White", IsRequired = false, Order = 4)]
+    public byte White
+    {
+        get { return m_white; }
+        set { m_white = value; }
+    }
+    #endregion
+
+    #region IEncodeable Members
+    /// <summary cref="IEncodeable.TypeId" />
+    public virtual ExpandedNodeId TypeId => DataTypeIds.RGBWDataType;
+
+    /// <summary cref="IEncodeable.BinaryEncodingId" />
+    public virtual ExpandedNodeId BinaryEncodingId => ObjectIds.RGBWDataType_Encoding_DefaultBinary;
+
+    /// <summary cref="IEncodeable.XmlEncodingId" />
+    public virtual ExpandedNodeId XmlEncodingId => ObjectIds.RGBWDataType_Encoding_DefaultXml;
+
+    /// <summary cref="IJsonEncodeable.JsonEncodingId" />
+    public virtual ExpandedNodeId JsonEncodingId => NodeId.Null;
+
+    /// <summary cref="IEncodeable.Encode(IEncoder)" />
+    public virtual void Encode(IEncoder encoder)
+    {
+        encoder.PushNamespace(UAModel.IA.Namespaces.IA);
+        encoder.WriteEncodingMask((uint)EncodingMask);
+
+        encoder.WriteByte("Red", Red);
+        encoder.WriteByte("Green", Green);
+        encoder.WriteByte("Blue", Blue);
+        if ((EncodingMask & (uint)RGBWDataTypeFields.White) != 0) encoder.WriteByte("White", White);
+
+        encoder.PopNamespace();
+    }
+
+    /// <summary cref="IEncodeable.Decode(IDecoder)" />
+    public virtual void Decode(IDecoder decoder)
+    {
+        decoder.PushNamespace(UAModel.IA.Namespaces.IA);
+
+        EncodingMask = decoder.ReadEncodingMask(m_FieldNames);
+
+        Red = decoder.ReadByte("Red");
+        Green = decoder.ReadByte("Green");
+        Blue = decoder.ReadByte("Blue");
+        if ((EncodingMask & (uint)RGBWDataTypeFields.White) != 0) White = decoder.ReadByte("White");
+
+        decoder.PopNamespace();
+    }
+
+    /// <summary cref="IEncodeable.IsEqual(IEncodeable)" />
+    public virtual bool IsEqual(IEncodeable encodeable)
+    {
+        if (Object.ReferenceEquals(this, encodeable))
+        {
             return true;
         }
 
-        /// <summary cref="ICloneable.Clone" />
-        public virtual object Clone()
+        RGBWDataType value = encodeable as RGBWDataType;
+
+        if (value == null)
         {
-            return (RGBWDataType)this.MemberwiseClone();
+            return false;
         }
 
-        /// <summary cref="Object.MemberwiseClone" />
-        public new object MemberwiseClone()
-        {
-            RGBWDataType clone = (RGBWDataType)base.MemberwiseClone();
+        if (value.EncodingMask != this.EncodingMask) return false;
 
-            clone.EncodingMask = this.EncodingMask;
+        if (!Utils.IsEqual(m_red, value.m_red)) return false;
+        if (!Utils.IsEqual(m_green, value.m_green)) return false;
+        if (!Utils.IsEqual(m_blue, value.m_blue)) return false;
+        if ((EncodingMask & (uint)RGBWDataTypeFields.White) != 0) if (!Utils.IsEqual(m_white, value.m_white)) return false;
 
-            clone.m_red = (byte)Utils.Clone(this.m_red);
-            clone.m_green = (byte)Utils.Clone(this.m_green);
-            clone.m_blue = (byte)Utils.Clone(this.m_blue);
-            if ((EncodingMask & (uint)RGBWDataTypeFields.White) != 0) clone.m_white = (byte)Utils.Clone(this.m_white);
-
-            return clone;
-        }
-        #endregion
-
-        #region Private Fields
-        private byte m_red;
-        private byte m_green;
-        private byte m_blue;
-        private byte m_white;
-
-        private static readonly string[] m_FieldNames = Enum.GetNames(typeof(RGBWDataTypeFields)).Where(x => x != nameof(RGBWDataTypeFields.None)).ToArray();
-        #endregion
+        return true;
     }
 
-    #region RGBWDataTypeCollection Class
-    /// <exclude />
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
-    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
-    [CollectionDataContract(Name = "ListOfRGBWDataType", Namespace = UAModel.IA.Namespaces.IA, ItemName = "RGBWDataType")]
-    public partial class RGBWDataTypeCollection : List<RGBWDataType>, ICloneable
+    /// <summary cref="ICloneable.Clone" />
+    public virtual object Clone()
     {
-        #region Constructors
-        public RGBWDataTypeCollection() {}
+        return (RGBWDataType)this.MemberwiseClone();
+    }
 
-        public RGBWDataTypeCollection(int capacity) : base(capacity) {}
+    /// <summary cref="Object.MemberwiseClone" />
+    public new object MemberwiseClone()
+    {
+        RGBWDataType clone = (RGBWDataType)base.MemberwiseClone();
 
-        public RGBWDataTypeCollection(IEnumerable<RGBWDataType> collection) : base(collection) {}
-        #endregion
+        clone.EncodingMask = this.EncodingMask;
 
-        #region Static Operators
-        public static implicit operator RGBWDataTypeCollection(RGBWDataType[] values)
-        {
-            if (values != null)
-            {
-                return new RGBWDataTypeCollection(values);
-            }
+        clone.m_red = (byte)Utils.Clone(this.m_red);
+        clone.m_green = (byte)Utils.Clone(this.m_green);
+        clone.m_blue = (byte)Utils.Clone(this.m_blue);
+        if ((EncodingMask & (uint)RGBWDataTypeFields.White) != 0) clone.m_white = (byte)Utils.Clone(this.m_white);
 
-            return new RGBWDataTypeCollection();
-        }
-
-        public static explicit operator RGBWDataType[](RGBWDataTypeCollection values)
-        {
-            if (values != null)
-            {
-                return values.ToArray();
-            }
-
-            return null;
-        }
-        #endregion
-
-        #region ICloneable Methods
-        public object Clone()
-        {
-            return (RGBWDataTypeCollection)this.MemberwiseClone();
-        }
-        #endregion
-
-        /// <summary cref="Object.MemberwiseClone" />
-        public new object MemberwiseClone()
-        {
-            RGBWDataTypeCollection clone = new RGBWDataTypeCollection(this.Count);
-
-            for (int ii = 0; ii < this.Count; ii++)
-            {
-                clone.Add((RGBWDataType)Utils.Clone(this[ii]));
-            }
-
-            return clone;
-        }
+        return clone;
     }
     #endregion
-    #endif
+
+    #region Private Fields
+    private byte m_red;
+    private byte m_green;
+    private byte m_blue;
+    private byte m_white;
+
+    private static readonly string[] m_FieldNames = Enum.GetNames(typeof(RGBWDataTypeFields)).Where(x => x != nameof(RGBWDataTypeFields.None)).ToArray();
     #endregion
 }
+
+#region RGBWDataTypeCollection Class
+/// <exclude />
+[System.CodeDom.Compiler.GeneratedCodeAttribute("Opc.Ua.ModelCompiler", "1.0.0.0")]
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute()]
+[CollectionDataContract(Name = "ListOfRGBWDataType", Namespace = UAModel.IA.Namespaces.IA, ItemName = "RGBWDataType")]
+public partial class RGBWDataTypeCollection : List<RGBWDataType>, ICloneable
+{
+    #region Constructors
+    public RGBWDataTypeCollection() { }
+
+    public RGBWDataTypeCollection(int capacity) : base(capacity) { }
+
+    public RGBWDataTypeCollection(IEnumerable<RGBWDataType> collection) : base(collection) { }
+    #endregion
+
+    #region Static Operators
+    public static implicit operator RGBWDataTypeCollection(RGBWDataType[] values)
+    {
+        if (values != null)
+        {
+            return new RGBWDataTypeCollection(values);
+        }
+
+        return new RGBWDataTypeCollection();
+    }
+
+    public static explicit operator RGBWDataType[](RGBWDataTypeCollection values)
+    {
+        if (values != null)
+        {
+            return values.ToArray();
+        }
+
+        return null;
+    }
+    #endregion
+
+    #region ICloneable Methods
+    public object Clone()
+    {
+        return (RGBWDataTypeCollection)this.MemberwiseClone();
+    }
+    #endregion
+
+    /// <summary cref="Object.MemberwiseClone" />
+    public new object MemberwiseClone()
+    {
+        RGBWDataTypeCollection clone = new RGBWDataTypeCollection(this.Count);
+
+        for (int ii = 0; ii < this.Count; ii++)
+        {
+            clone.Add((RGBWDataType)Utils.Clone(this[ii]));
+        }
+
+        return clone;
+    }
+}
+#endregion
+#endif
+#endregion

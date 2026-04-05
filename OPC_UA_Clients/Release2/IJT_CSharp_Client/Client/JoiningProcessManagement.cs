@@ -1,9 +1,9 @@
-﻿#nullable enable
+#nullable enable
 
-using Opc.Ua;
-using Opc.Ua.Client;
 using IJT_CSharp_Client.Helpers;
 using Microsoft.Extensions.Logging;
+using Opc.Ua;
+using Opc.Ua.Client;
 
 namespace IJT_CSharp_Client.Client;
 
@@ -15,7 +15,7 @@ public sealed class JoiningProcessManagement : IDisposable
 {
     private readonly ILogger<JoiningProcessManagement> _log = IjtLog.For<JoiningProcessManagement>();
     private readonly IIjtSession _s;
-    private NodeId?             _jpmNodeId;
+    private NodeId? _jpmNodeId;
 
     /// <summary>Creates a JoiningProcessManagement facade backed by <paramref name="ijtSession"/>.</summary>
     public JoiningProcessManagement(IIjtSession ijtSession) => _s = ijtSession;
@@ -117,9 +117,9 @@ public sealed class JoiningProcessManagement : IDisposable
 
         var jpId = new UAModel.IJTBase.JoiningProcessIdentificationDataType
         {
-            JoiningProcessId       = joiningProcessId,
+            JoiningProcessId = joiningProcessId,
             JoiningProcessOriginId = joiningProcessOriginId,
-            SelectionName          = selectionName,
+            SelectionName = selectionName,
         };
         var ext = new ExtensionObject(jpId);
 

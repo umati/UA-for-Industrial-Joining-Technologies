@@ -15,8 +15,8 @@ namespace IJT_CSharp_Client.Tests.Client;
 public sealed class ResultManagementTests
 {
     private static readonly NodeId JoiningSystemId = new(8001u, (ushort)2);
-    private static readonly NodeId RmNodeId        = new(8002u, (ushort)2);
-    private static readonly NodeId MethodId        = new(8003u, (ushort)2);
+    private static readonly NodeId RmNodeId = new(8002u, (ushort)2);
+    private static readonly NodeId MethodId = new(8003u, (ushort)2);
 
     private static Mock<IIjtSession> HappyPathMock()
     {

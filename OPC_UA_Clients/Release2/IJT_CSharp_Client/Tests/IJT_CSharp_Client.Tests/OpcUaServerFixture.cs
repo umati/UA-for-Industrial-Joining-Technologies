@@ -3,8 +3,8 @@
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
-using Microsoft.Extensions.Logging;
 using IJT_CSharp_Client.Helpers;
+using Microsoft.Extensions.Logging;
 
 namespace IJT_CSharp_Client.Tests;
 
@@ -53,12 +53,12 @@ public sealed class OpcUaServerFixture : IDisposable
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName               = exePath,
-                    WorkingDirectory       = Path.GetDirectoryName(exePath)!,
-                    UseShellExecute        = false,
-                    CreateNoWindow         = true,
+                    FileName = exePath,
+                    WorkingDirectory = Path.GetDirectoryName(exePath)!,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
                     RedirectStandardOutput = true,
-                    RedirectStandardError  = true,
+                    RedirectStandardError = true,
                 },
                 EnableRaisingEvents = true,
             };

@@ -33,14 +33,14 @@ public static class ExtensionObjectHelper
     /// </param>
     public static ExtensionObject MakeJoiningProcessId(
         string? joiningProcessId,
-        string? selectionName   = null,
-        string? originId        = null)
+        string? selectionName = null,
+        string? originId = null)
     {
         var jpid = new JoiningProcessIdentificationDataType();
 
         if (joiningProcessId != null)
         {
-            jpid.JoiningProcessId  = joiningProcessId;
+            jpid.JoiningProcessId = joiningProcessId;
             jpid.EncodingMask |= (uint)JoiningProcessIdentificationDataTypeFields.JoiningProcessId;
         }
         if (selectionName != null)
@@ -75,19 +75,19 @@ public static class ExtensionObjectHelper
     ///   (0 = Unspecified, 1 = ProductSerialNumber, 2 = ProductBatchId, …).
     /// </param>
     public static ExtensionObject MakeEntity(
-        string  entityId,
-        string? name        = null,
+        string entityId,
+        string? name = null,
         string? description = null,
-        string? originId    = null,
-        bool    isExternal  = true,
-        short   entityType  = 0)
+        string? originId = null,
+        bool isExternal = true,
+        short entityType = 0)
     {
         var entity = new EntityDataType
         {
-            EntityId      = entityId,
-            IsExternal    = isExternal,
-            EntityType    = entityType,
-            EncodingMask  = 0,
+            EntityId = entityId,
+            IsExternal = isExternal,
+            EntityType = entityType,
+            EncodingMask = 0,
         };
 
         if (name != null)
@@ -134,10 +134,10 @@ public static class ExtensionObjectHelper
     {
         return value switch
         {
-            T typed                            => typed,
-            ExtensionObject { Body: T body }   => body,
-            ExtensionObject eo                 => eo.Body as T,
-            _                                  => null,
+            T typed => typed,
+            ExtensionObject { Body: T body } => body,
+            ExtensionObject eo => eo.Body as T,
+            _ => null,
         };
     }
 
@@ -146,11 +146,11 @@ public static class ExtensionObjectHelper
     /// </summary>
     public static string Describe(object? value) => value switch
     {
-        null                    => "(null)",
+        null => "(null)",
         ExtensionObject { Body: IEncodeable enc } => $"{enc.GetType().Name}",
-        ExtensionObject eo      => $"ExtensionObject TypeId={eo.TypeId}",
-        byte[] b                => $"byte[{b.Length}]",
-        _                       => value.ToString() ?? "(null)",
+        ExtensionObject eo => $"ExtensionObject TypeId={eo.TypeId}",
+        byte[] b => $"byte[{b.Length}]",
+        _ => value.ToString() ?? "(null)",
     };
 
     /// <summary>

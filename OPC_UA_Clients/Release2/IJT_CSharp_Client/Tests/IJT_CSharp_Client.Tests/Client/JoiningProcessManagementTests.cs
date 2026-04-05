@@ -1,9 +1,9 @@
 #nullable enable
 
+using System.Collections.Generic;
 using IJT_CSharp_Client.Client;
 using Moq;
 using Opc.Ua;
-using System.Collections.Generic;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Client;
@@ -16,8 +16,8 @@ namespace IJT_CSharp_Client.Tests.Client;
 public sealed class JoiningProcessManagementTests
 {
     private static readonly NodeId JoiningSystemId = new(7001u, (ushort)2);
-    private static readonly NodeId JpmNodeId       = new(7002u, (ushort)2);
-    private static readonly NodeId MethodId        = new(7003u, (ushort)2);
+    private static readonly NodeId JpmNodeId = new(7002u, (ushort)2);
+    private static readonly NodeId MethodId = new(7003u, (ushort)2);
 
     private static Mock<IIjtSession> HappyPathMock()
     {

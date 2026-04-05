@@ -1,11 +1,11 @@
 #nullable enable
 
+using IJT_CSharp_Client.Configuration;
+using IJT_CSharp_Client.Helpers;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
-using IJT_CSharp_Client.Configuration;
-using IJT_CSharp_Client.Helpers;
 
 namespace IJT_CSharp_Client.Client;
 
@@ -49,14 +49,14 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
     public bool IsConnected => Session?.Connected ?? false;
 
     // ── Management surface (created lazily after Connect) ─────────────────────
-    public ResultManagement         ResultManagement         { get; private set; } = null!;
-    public AssetManagement          AssetManagement          { get; private set; } = null!;
+    public ResultManagement ResultManagement { get; private set; } = null!;
+    public AssetManagement AssetManagement { get; private set; } = null!;
     public JoiningProcessManagement JoiningProcessManagement { get; private set; } = null!;
-    public EventSubscriber          EventSubscriber          { get; private set; } = null!;
+    public EventSubscriber EventSubscriber { get; private set; } = null!;
 
     // ── Construction / connection ─────────────────────────────────────────────
 
-    private const int KeepAliveIntervalMs        = 5_000;
+    private const int KeepAliveIntervalMs = 5_000;
     private const int EndpointDiscoveryTimeoutMs = 15_000;
 
     private readonly ILogger<IjtSession> _log = IjtLog.For<IjtSession>();
@@ -64,7 +64,7 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
     private IjtSession(ISession session, ClientConfig config)
     {
         Session = session;
-        Config  = config;
+        Config = config;
     }
 
     /// <summary>
@@ -97,7 +97,7 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
 
         var wrapper = new IjtSession(session, config);
         session.KeepAliveInterval = KeepAliveIntervalMs;
-        session.KeepAlive        += wrapper.OnKeepAlive;
+        session.KeepAlive += wrapper.OnKeepAlive;
 
         wrapper.ResolveNamespaceIndices();
         wrapper.DiscoverJoiningSystem();
@@ -123,13 +123,13 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
         {
             ApplicationName = config.ApplicationName,
             ApplicationType = ApplicationType.Client,
-            ApplicationUri  = $"urn:{System.Net.Dns.GetHostName()}:{config.ApplicationName.Replace(' ', '-')}",
+            ApplicationUri = $"urn:{System.Net.Dns.GetHostName()}:{config.ApplicationName.Replace(' ', '-')}",
             SecurityConfiguration = new SecurityConfiguration
             {
                 ApplicationCertificate = new CertificateIdentifier
                 {
-                    StoreType   = CertificateStoreType.Directory,
-                    StorePath   = Path.Combine(pkiRoot, "own"),
+                    StoreType = CertificateStoreType.Directory,
+                    StorePath = Path.Combine(pkiRoot, "own"),
                     SubjectName = config.ApplicationName,
                 },
                 TrustedIssuerCertificates = new CertificateTrustList
@@ -148,9 +148,9 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
                     StorePath = Path.Combine(pkiRoot, "rejected"),
                 },
                 AutoAcceptUntrustedCertificates = config.AutoAcceptServerCertificate,
-                AddAppCertToTrustedStore        = true,
+                AddAppCertToTrustedStore = true,
             },
-            TransportQuotas     = new TransportQuotas { OperationTimeout = 30_000 },
+            TransportQuotas = new TransportQuotas { OperationTimeout = 30_000 },
             ClientConfiguration = new ClientConfiguration
             {
                 DefaultSessionTimeout = config.SessionTimeoutMs,
@@ -176,10 +176,10 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
         return await Opc.Ua.Client.Session.Create(
             appConfig, endpoint,
             updateBeforeConnect: false,
-            sessionName:         config.ApplicationName,
-            sessionTimeout:      (uint)config.SessionTimeoutMs,
-            identity:            new UserIdentity(new AnonymousIdentityToken()),
-            preferredLocales:    null).ConfigureAwait(false);
+            sessionName: config.ApplicationName,
+            sessionTimeout: (uint)config.SessionTimeoutMs,
+            identity: new UserIdentity(new AnonymousIdentityToken()),
+            preferredLocales: null).ConfigureAwait(false);
     }
 
     // ── Namespace resolution ──────────────────────────────────────────────────
@@ -262,10 +262,10 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
 
     private void InitManagement()
     {
-        ResultManagement         = new ResultManagement(this);
-        AssetManagement          = new AssetManagement(this);
+        ResultManagement = new ResultManagement(this);
+        AssetManagement = new AssetManagement(this);
         JoiningProcessManagement = new JoiningProcessManagement(this);
-        EventSubscriber          = new EventSubscriber(this);
+        EventSubscriber = new EventSubscriber(this);
     }
 
     // ── Keep-alive / reconnect ────────────────────────────────────────────────
@@ -322,7 +322,7 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
                         : new VariantCollection(),
                 }
             },
-            results:         out var results,
+            results: out var results,
             diagnosticInfos: out _);
 
         ClientBase.ValidateResponse(results, new CallMethodRequestCollection());

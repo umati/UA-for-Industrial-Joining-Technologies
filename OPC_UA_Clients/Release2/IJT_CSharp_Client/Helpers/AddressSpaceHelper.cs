@@ -340,9 +340,9 @@ public sealed class AddressSpaceHelper
         var idNode = FindChild(session, assetNodeId, "Identification");
         if (idNode.IsNullNodeId) return "(no Identification node)";
 
-        var manufacturer  = ReadValue<string>(session, FindChild(session, idNode, "Manufacturer"));
-        var serial        = ReadValue<string>(session, FindChild(session, idNode, "SerialNumber"));
-        var description   = ReadValue<string>(session, FindChild(session, idNode, "Description"));
+        var manufacturer = ReadValue<string>(session, FindChild(session, idNode, "Manufacturer"));
+        var serial = ReadValue<string>(session, FindChild(session, idNode, "SerialNumber"));
+        var description = ReadValue<string>(session, FindChild(session, idNode, "Description"));
 
         return $"Manufacturer={manufacturer ?? "?"}, SN={serial ?? "?"}, Desc={description ?? "?"}";
     }

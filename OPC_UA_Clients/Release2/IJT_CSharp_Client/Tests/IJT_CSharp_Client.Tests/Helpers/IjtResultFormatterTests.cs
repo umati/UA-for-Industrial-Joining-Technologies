@@ -1,4 +1,4 @@
-﻿using IJT_CSharp_Client.Helpers;
+using IJT_CSharp_Client.Helpers;
 using UAModel.MachineryResult;
 using Xunit;
 
@@ -20,8 +20,8 @@ public class IjtResultFormatterTests
         {
             ResultMetaData = new ResultMetaDataType
             {
-                ResultId         = "TEST-001",
-                IsSimulated      = true,
+                ResultId = "TEST-001",
+                IsSimulated = true,
                 ResultEvaluation = ResultEvaluationEnum.OK,
             }
         };
@@ -40,11 +40,11 @@ public class IjtResultFormatterTests
         {
             ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
             {
-                ResultId       = "IJT-002",
-                Name           = "SingleTightening",
+                ResultId = "IJT-002",
+                Name = "SingleTightening",
                 SequenceNumber = 42,
                 Classification = 1,
-                IsSimulated    = false,
+                IsSimulated = false,
             }
         };
 
@@ -74,7 +74,7 @@ public class IjtResultFormatterTests
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "CNT" },
-            ResultContent  = new Opc.Ua.VariantCollection { new Opc.Ua.Variant("step-value") },
+            ResultContent = new Opc.Ua.VariantCollection { new Opc.Ua.Variant("step-value") },
         };
 
         var result = IjtResultFormatter.FormatResult(rd);
@@ -89,7 +89,7 @@ public class IjtResultFormatterTests
         {
             ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
             {
-                ResultId           = "ENT",
+                ResultId = "ENT",
                 AssociatedEntities = new UAModel.IJTBase.EntityDataTypeCollection {
                     new UAModel.IJTBase.EntityDataType { EntityId = "e1" },
                 },
@@ -109,7 +109,7 @@ public class IjtResultFormatterTests
         {
             ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
             {
-                ResultId       = "CTR",
+                ResultId = "CTR",
                 ResultCounters = new UAModel.IJTBase.ResultCounterDataTypeCollection {
                     new UAModel.IJTBase.ResultCounterDataType { Name = "TotalCount", CounterValue = 7u },
                 },
@@ -129,7 +129,7 @@ public class IjtResultFormatterTests
         {
             ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
             {
-                ResultId         = "EXT",
+                ResultId = "EXT",
                 ExtendedMetaData = new UAModel.IJTBase.KeyValueDataTypeCollection {
                     new UAModel.IJTBase.KeyValueDataType { Key = "myKey", Value = new Opc.Ua.Variant("myVal") },
                 },

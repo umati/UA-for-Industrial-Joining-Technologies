@@ -1,10 +1,10 @@
 #nullable enable
 
+using System.Collections.Generic;
 using IJT_CSharp_Client.Client;
 using Moq;
 using Opc.Ua;
 using Opc.Ua.Client;
-using System.Collections.Generic;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Client;
@@ -19,9 +19,9 @@ public sealed class AssetManagementTests
     // ── Shared node IDs ───────────────────────────────────────────────────────
 
     private static readonly NodeId JoiningSystemId = new(9001u, (ushort)2);
-    private static readonly NodeId MethodSetId      = new(9002u, (ushort)2);
-    private static readonly NodeId MethodId         = new(9003u, (ushort)2);
-    private static readonly NodeId ObjectId         = new(9004u, (ushort)2);
+    private static readonly NodeId MethodSetId = new(9002u, (ushort)2);
+    private static readonly NodeId MethodId = new(9003u, (ushort)2);
+    private static readonly NodeId ObjectId = new(9004u, (ushort)2);
 
     // ── Mock factory ─────────────────────────────────────────────────────────
 
@@ -314,7 +314,7 @@ public sealed class AssetManagementTests
         // First call requires Assets node not found → no subscription created
         // But if subscription is null the second call is harmless too
         var mock = NullNodeMock();
-        var sut  = new AssetManagement(mock.Object);
+        var sut = new AssetManagement(mock.Object);
         sut.SubscribeAssetVariables();
         var ex = Record.Exception(() => sut.SubscribeAssetVariables());
         Assert.Null(ex);
@@ -326,7 +326,7 @@ public sealed class AssetManagementTests
     public void EnableAsset_CalledTwice_SecondCallHitsMethodSetCache()
     {
         var mock = HappyPathMock();
-        var sut  = new AssetManagement(mock.Object);
+        var sut = new AssetManagement(mock.Object);
 
         sut.EnableAsset("urn:asset-1", true);
         sut.EnableAsset("urn:asset-2", false); // second call hits cache at line 34
@@ -342,7 +342,7 @@ public sealed class AssetManagementTests
         mock.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>())).Returns(NodeId.Null);
 
         var sut = new AssetManagement(mock.Object);
-        var ex  = Record.Exception(() => sut.SendIdentifiers(
+        var ex = Record.Exception(() => sut.SendIdentifiers(
             new List<UAModel.IJTBase.EntityDataType>()));
         Assert.Null(ex);
 
@@ -403,7 +403,7 @@ public sealed class AssetManagementTests
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Obsolete", "CS0618")]
     public void SubscribeAssetVariables_WhenNoCategoriesFound_DisposesWithoutCreate()
     {
-        var amNodeId     = new NodeId(5002u, (ushort)2);
+        var amNodeId = new NodeId(5002u, (ushort)2);
         var assetsNodeId = new NodeId(5003u, (ushort)2);
 
         var mock = new Mock<IIjtSession>();
@@ -414,7 +414,7 @@ public sealed class AssetManagementTests
             .Returns<NodeId, string, ushort, NodeClass>((parent, name, ns, nc) =>
             {
                 if (parent == JoiningSystemId) return amNodeId;
-                if (parent == amNodeId)        return assetsNodeId;
+                if (parent == amNodeId) return assetsNodeId;
                 return NodeId.Null;            // Controllers/Tools → Null → count stays 0
             });
 

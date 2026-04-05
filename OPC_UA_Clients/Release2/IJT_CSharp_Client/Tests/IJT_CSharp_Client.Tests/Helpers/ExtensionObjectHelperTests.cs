@@ -18,7 +18,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void MakeJoiningProcessId_WithId_BodyHasId()
     {
-        var eo   = ExtensionObjectHelper.MakeJoiningProcessId("JP-001");
+        var eo = ExtensionObjectHelper.MakeJoiningProcessId("JP-001");
         var body = Assert.IsType<JoiningProcessIdentificationDataType>(eo.Body);
         Assert.Equal("JP-001", body.JoiningProcessId);
     }
@@ -26,7 +26,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void MakeJoiningProcessId_WithSelectionName_BodyHasSelectionName()
     {
-        var eo   = ExtensionObjectHelper.MakeJoiningProcessId("JP-002", selectionName: "M8x1.25");
+        var eo = ExtensionObjectHelper.MakeJoiningProcessId("JP-002", selectionName: "M8x1.25");
         var body = Assert.IsType<JoiningProcessIdentificationDataType>(eo.Body);
         Assert.Equal("M8x1.25", body.SelectionName);
     }
@@ -34,7 +34,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void MakeJoiningProcessId_WithOriginId_BodyHasOriginId()
     {
-        var eo   = ExtensionObjectHelper.MakeJoiningProcessId(null, originId: "SYS-A");
+        var eo = ExtensionObjectHelper.MakeJoiningProcessId(null, originId: "SYS-A");
         var body = Assert.IsType<JoiningProcessIdentificationDataType>(eo.Body);
         Assert.Equal("SYS-A", body.JoiningProcessOriginId);
     }
@@ -49,7 +49,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void MakeJoiningProcessId_WithAllArgs_SetsEncodingMask()
     {
-        var eo   = ExtensionObjectHelper.MakeJoiningProcessId("JP-003", "Name", "Origin");
+        var eo = ExtensionObjectHelper.MakeJoiningProcessId("JP-003", "Name", "Origin");
         var body = Assert.IsType<JoiningProcessIdentificationDataType>(eo.Body);
         Assert.NotEqual(0u, body.EncodingMask);
     }
@@ -59,7 +59,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void MakeEntity_MinimalArgs_BodyHasEntityId()
     {
-        var eo   = ExtensionObjectHelper.MakeEntity("entity-1");
+        var eo = ExtensionObjectHelper.MakeEntity("entity-1");
         var body = Assert.IsType<EntityDataType>(eo.Body);
         Assert.Equal("entity-1", body.EntityId);
     }
@@ -67,7 +67,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void MakeEntity_WithName_BodyHasName()
     {
-        var eo   = ExtensionObjectHelper.MakeEntity("e-2", name: "Part A");
+        var eo = ExtensionObjectHelper.MakeEntity("e-2", name: "Part A");
         var body = Assert.IsType<EntityDataType>(eo.Body);
         Assert.Equal("Part A", body.Name);
     }
@@ -75,7 +75,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void MakeEntity_WithDescription_BodyHasDescription()
     {
-        var eo   = ExtensionObjectHelper.MakeEntity("e-3", description: "desc");
+        var eo = ExtensionObjectHelper.MakeEntity("e-3", description: "desc");
         var body = Assert.IsType<EntityDataType>(eo.Body);
         Assert.Equal("desc", body.Description);
     }
@@ -83,7 +83,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void MakeEntity_WithOriginId_BodyHasOriginId()
     {
-        var eo   = ExtensionObjectHelper.MakeEntity("e-4", originId: "ORG-1");
+        var eo = ExtensionObjectHelper.MakeEntity("e-4", originId: "ORG-1");
         var body = Assert.IsType<EntityDataType>(eo.Body);
         Assert.Equal("ORG-1", body.EntityOriginId);
     }
@@ -91,7 +91,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void MakeEntity_IsExternalFalse_SetsEncodingMask()
     {
-        var eo   = ExtensionObjectHelper.MakeEntity("e-5", isExternal: false);
+        var eo = ExtensionObjectHelper.MakeEntity("e-5", isExternal: false);
         var body = Assert.IsType<EntityDataType>(eo.Body);
         Assert.False(body.IsExternal);
         Assert.NotEqual(0u, body.EncodingMask);
@@ -100,7 +100,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void MakeEntity_WithEntityType_SetsType()
     {
-        var eo   = ExtensionObjectHelper.MakeEntity("e-6", entityType: 1);
+        var eo = ExtensionObjectHelper.MakeEntity("e-6", entityType: 1);
         var body = Assert.IsType<EntityDataType>(eo.Body);
         Assert.Equal((short)1, body.EntityType);
     }
@@ -147,7 +147,7 @@ public sealed class ExtensionObjectHelperTests
     public void TryDecode_WhenValueIsExtensionObjectWithMatchingBody_ReturnsBody()
     {
         var entity = new EntityDataType { EntityId = "wrapped" };
-        var eo     = new ExtensionObject(entity);
+        var eo = new ExtensionObject(entity);
         var result = ExtensionObjectHelper.TryDecode<EntityDataType>(eo);
         Assert.Same(entity, result);
     }
@@ -195,7 +195,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void Describe_ExtensionObjectWithBody_ReturnsTypeName()
     {
-        var eo     = new ExtensionObject(new EntityDataType());
+        var eo = new ExtensionObject(new EntityDataType());
         var result = ExtensionObjectHelper.Describe(eo);
         Assert.Contains("EntityDataType", result);
     }
@@ -240,7 +240,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void FormatVariantValue_ExtensionObject_ReturnsExtensionObjectFormat()
     {
-        var eo     = new ExtensionObject(new EntityDataType());
+        var eo = new ExtensionObject(new EntityDataType());
         var result = ExtensionObjectHelper.FormatVariantValue(eo);
         Assert.Contains("ExtensionObject", result);
     }
@@ -250,7 +250,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void FormatExtensionObject_WithBody_ReturnsTypeName()
     {
-        var eo     = new ExtensionObject(new EntityDataType());
+        var eo = new ExtensionObject(new EntityDataType());
         var result = ExtensionObjectHelper.FormatExtensionObject(eo);
         Assert.Contains("EntityDataType", result);
     }
@@ -258,7 +258,7 @@ public sealed class ExtensionObjectHelperTests
     [Fact]
     public void FormatExtensionObject_NoBody_ReturnsNullBody()
     {
-        var eo     = new ExtensionObject(new ExpandedNodeId(0u, 0));
+        var eo = new ExtensionObject(new ExpandedNodeId(0u, 0));
         var result = ExtensionObjectHelper.FormatExtensionObject(eo);
         Assert.Contains("Body=(null)", result);
     }

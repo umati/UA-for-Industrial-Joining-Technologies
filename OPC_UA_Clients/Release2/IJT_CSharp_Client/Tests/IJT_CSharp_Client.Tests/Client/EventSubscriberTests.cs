@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Helpers;
@@ -40,7 +40,7 @@ public sealed class EventSubscriberTests
     public void Unsubscribe_WhenNotSubscribed_DoesNotThrow()
     {
         var sut = new EventSubscriber(CreateMock().Object);
-        var ex  = Record.Exception(() => sut.Unsubscribe());
+        var ex = Record.Exception(() => sut.Unsubscribe());
         Assert.Null(ex);
     }
 
@@ -67,25 +67,25 @@ public sealed class EventSubscriberTests
     [Fact]
     public void ResultReadyEventArgs_PropertiesAreSettable()
     {
-        var now  = DateTime.UtcNow;
+        var now = DateTime.UtcNow;
         var args = new EventSubscriber.ResultReadyEventArgs
         {
-            EventTypeName  = "TestType",
-            EventTime      = now,
-            ResultId       = "RES-1",
+            EventTypeName = "TestType",
+            EventTime = now,
+            ResultId = "RES-1",
             Classification = "OK",
-            Name           = "TestProgram",
+            Name = "TestProgram",
             SequenceNumber = 42,
-            AssemblyType   = "type-A",
-            OverallStatus  = "OK",
+            AssemblyType = "type-A",
+            OverallStatus = "OK",
         };
 
         Assert.Equal("TestType", args.EventTypeName);
-        Assert.Equal(now,        args.EventTime);
-        Assert.Equal("RES-1",    args.ResultId);
-        Assert.Equal("OK",       args.Classification);
+        Assert.Equal(now, args.EventTime);
+        Assert.Equal("RES-1", args.ResultId);
+        Assert.Equal("OK", args.Classification);
         Assert.Equal("TestProgram", args.Name);
-        Assert.Equal(42,         args.SequenceNumber);
+        Assert.Equal(42, args.SequenceNumber);
     }
 
     [Fact]
@@ -99,19 +99,19 @@ public sealed class EventSubscriberTests
     [Fact]
     public void JoiningSystemEventArgs_PropertiesAreSettable()
     {
-        var now  = DateTime.UtcNow;
+        var now = DateTime.UtcNow;
         var args = new EventSubscriber.JoiningSystemEventArgs
         {
-            EventCode         = "CODE-1",
-            EventText         = "Message text",
+            EventCode = "CODE-1",
+            EventText = "Message text",
             JoiningTechnology = "Tightening",
-            EventTime         = now,
+            EventTime = now,
         };
 
-        Assert.Equal("CODE-1",       args.EventCode);
+        Assert.Equal("CODE-1", args.EventCode);
         Assert.Equal("Message text", args.EventText);
-        Assert.Equal("Tightening",   args.JoiningTechnology);
-        Assert.Equal(now,            args.EventTime);
+        Assert.Equal("Tightening", args.JoiningTechnology);
+        Assert.Equal(now, args.EventTime);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class EventSubscriberTests
     [Fact]
     public void OnResultReady_EventCanBeSubscribed_AndUnsubscribed()
     {
-        var sut     = new EventSubscriber(CreateMock().Object);
+        var sut = new EventSubscriber(CreateMock().Object);
         var handler = new EventHandler<EventSubscriber.ResultReadyEventArgs>((_, _) => { });
 
         sut.OnResultReady += handler;
@@ -139,7 +139,7 @@ public sealed class EventSubscriberTests
     [Fact]
     public void OnJoiningSystemEvent_EventCanBeSubscribed_AndUnsubscribed()
     {
-        var sut     = new EventSubscriber(CreateMock().Object);
+        var sut = new EventSubscriber(CreateMock().Object);
         var handler = new EventHandler<EventSubscriber.JoiningSystemEventArgs>((_, _) => { });
 
         sut.OnJoiningSystemEvent += handler;

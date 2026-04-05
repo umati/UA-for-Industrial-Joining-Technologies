@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 #pragma warning disable CS0618 // OPC UA sync methods are obsolete but still functional
 
 using IJT_CSharp_Client.Helpers;
@@ -25,9 +25,9 @@ public sealed class AddressSpaceHelperTests
 
     private static Mock<ISession> SessionWithBrowseResult(ReferenceDescriptionCollection refs)
     {
-        var mock    = new Mock<ISession>();
+        var mock = new Mock<ISession>();
         var results = new BrowseResultCollection { new BrowseResult { References = refs } };
-        var diags   = new DiagnosticInfoCollection();
+        var diags = new DiagnosticInfoCollection();
 
         mock.Setup(s => s.Browse(
                 It.IsAny<RequestHeader>(),
@@ -43,8 +43,8 @@ public sealed class AddressSpaceHelperTests
 
     private static Mock<ISession> SessionWithReadResult(DataValue value)
     {
-        var mock     = new Mock<ISession>();
-        var dvColl   = new DataValueCollection { value };
+        var mock = new Mock<ISession>();
+        var dvColl = new DataValueCollection { value };
         var readDiag = new DiagnosticInfoCollection();
 
         mock.Setup(s => s.Read(
@@ -65,8 +65,8 @@ public sealed class AddressSpaceHelperTests
     public void BrowseChildren_WhenBrowseReturnsNullRefs_ReturnsEmptyCollection()
     {
         var results = new BrowseResultCollection { new BrowseResult { References = null! } };
-        var diags   = new DiagnosticInfoCollection();
-        var mock    = new Mock<ISession>();
+        var diags = new DiagnosticInfoCollection();
+        var mock = new Mock<ISession>();
         mock.Setup(s => s.Browse(
                 It.IsAny<RequestHeader>(), It.IsAny<ViewDescription>(), It.IsAny<uint>(),
                 It.IsAny<BrowseDescriptionCollection>(), out results, out diags))
@@ -84,7 +84,7 @@ public sealed class AddressSpaceHelperTests
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("TestNode", 1),
-            NodeId     = new ExpandedNodeId(new NodeId(42u, 1)),
+            NodeId = new ExpandedNodeId(new NodeId(42u, 1)),
         };
         var result = AddressSpaceHelper.BrowseChildren(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
@@ -103,7 +103,7 @@ public sealed class AddressSpaceHelperTests
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("AssetManagement", 2),
-            NodeId     = new ExpandedNodeId(childId),
+            NodeId = new ExpandedNodeId(childId),
         };
         var result = AddressSpaceHelper.FindChild(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
@@ -131,7 +131,7 @@ public sealed class AddressSpaceHelperTests
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("assetmanagement", 2),
-            NodeId     = new ExpandedNodeId(childId),
+            NodeId = new ExpandedNodeId(childId),
         };
         var result = AddressSpaceHelper.FindChild(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
@@ -161,7 +161,7 @@ public sealed class AddressSpaceHelperTests
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("AssetManagement", 2),
-            NodeId     = new ExpandedNodeId(childId),
+            NodeId = new ExpandedNodeId(childId),
         };
         var result = AddressSpaceHelper.ResolvePath(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
@@ -196,8 +196,8 @@ public sealed class AddressSpaceHelperTests
     [Fact]
     public void ReadValue_WhenServiceThrows_ReturnsNull()
     {
-        var mock     = new Mock<ISession>();
-        var dvColl   = new DataValueCollection();
+        var mock = new Mock<ISession>();
+        var dvColl = new DataValueCollection();
         var readDiag = new DiagnosticInfoCollection();
         mock.Setup(s => s.Read(
                 It.IsAny<RequestHeader>(), It.IsAny<double>(), It.IsAny<TimestampsToReturn>(),
@@ -247,10 +247,10 @@ public sealed class AddressSpaceHelperTests
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("ResultManagement", 2),
-            NodeId     = new ExpandedNodeId(childId),
+            NodeId = new ExpandedNodeId(childId),
         };
         var helper = new AddressSpaceHelper();
-        var mock   = SessionWithBrowseResult(new ReferenceDescriptionCollection { rd });
+        var mock = SessionWithBrowseResult(new ReferenceDescriptionCollection { rd });
 
         var found = helper.FindChildAsync(mock.Object, new NodeId(1u, 1), "ResultManagement");
         Assert.Equal(childId, found);
@@ -265,7 +265,7 @@ public sealed class AddressSpaceHelperTests
     [Fact]
     public void GetOrFindManagementNodeAsync_WhenBrowseReturnsEmpty_ReturnsNullNodeId()
     {
-        var helper  = new AddressSpaceHelper();
+        var helper = new AddressSpaceHelper();
         var session = SessionWithBrowseResult(new ReferenceDescriptionCollection()).Object;
 
         var result = helper.GetOrFindManagementNodeAsync(
@@ -281,20 +281,20 @@ public sealed class AddressSpaceHelperTests
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("ResultManagement", 2),
-            NodeId     = new ExpandedNodeId(childId),
+            NodeId = new ExpandedNodeId(childId),
         };
-        var mock   = SessionWithBrowseResult(new ReferenceDescriptionCollection { rd });
+        var mock = SessionWithBrowseResult(new ReferenceDescriptionCollection { rd });
         var helper = new AddressSpaceHelper();
-        var jsId   = new NodeId(1u, 1);
+        var jsId = new NodeId(1u, 1);
 
-        var first  = helper.GetOrFindManagementNodeAsync(mock.Object, jsId, "ResultManagement");
+        var first = helper.GetOrFindManagementNodeAsync(mock.Object, jsId, "ResultManagement");
         var second = helper.GetOrFindManagementNodeAsync(mock.Object, jsId, "ResultManagement");
 
         Assert.Equal(first, second);
         Assert.Equal(childId, first);
 
         var verifyResults = new BrowseResultCollection();
-        var verifyDiags   = new DiagnosticInfoCollection();
+        var verifyDiags = new DiagnosticInfoCollection();
         mock.Verify(s => s.Browse(
             It.IsAny<RequestHeader>(), It.IsAny<ViewDescription>(),
             It.IsAny<uint>(), It.IsAny<BrowseDescriptionCollection>(),
@@ -309,16 +309,16 @@ public sealed class AddressSpaceHelperTests
     {
         var realNode = new ReferenceDescription
         {
-            BrowseName  = new QualifiedName("Controller1", 2),
+            BrowseName = new QualifiedName("Controller1", 2),
             DisplayName = new LocalizedText("en", "Controller 1"),
-            NodeId      = new ExpandedNodeId(new NodeId(200u, 2)),
+            NodeId = new ExpandedNodeId(new NodeId(200u, 2)),
         };
         var placeholder = new ReferenceDescription
         {
             BrowseName = new QualifiedName("<ControllerTemplate>", 2),
-            NodeId     = new ExpandedNodeId(new NodeId(201u, 2)),
+            NodeId = new ExpandedNodeId(new NodeId(201u, 2)),
         };
-        var refs   = new ReferenceDescriptionCollection { realNode, placeholder };
+        var refs = new ReferenceDescriptionCollection { realNode, placeholder };
         var helper = new AddressSpaceHelper();
 
         var result = helper.DiscoverAssetInstancesAsync(
@@ -346,8 +346,8 @@ public sealed class AddressSpaceHelperTests
         var childId = new NodeId(300u, 2);
         var rd = new ReferenceDescription
         {
-            BrowseName     = new QualifiedName("JoiningSystem1", 2),
-            NodeId         = new ExpandedNodeId(childId),
+            BrowseName = new QualifiedName("JoiningSystem1", 2),
+            NodeId = new ExpandedNodeId(childId),
             TypeDefinition = new ExpandedNodeId(1005u, 2),
         };
         var result = AddressSpaceHelper.FindByTypeDefinition(
@@ -363,8 +363,8 @@ public sealed class AddressSpaceHelperTests
     {
         var rd = new ReferenceDescription
         {
-            BrowseName     = new QualifiedName("SomeOtherObject", 2),
-            NodeId         = new ExpandedNodeId(new NodeId(400u, 2)),
+            BrowseName = new QualifiedName("SomeOtherObject", 2),
+            NodeId = new ExpandedNodeId(new NodeId(400u, 2)),
             TypeDefinition = new ExpandedNodeId(9999u, 2),
         };
         var result = AddressSpaceHelper.FindByTypeDefinition(
@@ -384,7 +384,7 @@ public sealed class AddressSpaceHelperTests
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("MethodSet", 2),
-            NodeId     = new ExpandedNodeId(childId),
+            NodeId = new ExpandedNodeId(childId),
         };
         var result = new AddressSpaceHelper().FindChildAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
@@ -401,12 +401,12 @@ public sealed class AddressSpaceHelperTests
         var wrongNs = new ReferenceDescription
         {
             BrowseName = new QualifiedName("MethodSet", 1),
-            NodeId     = new ExpandedNodeId(new NodeId(500u, 1)),
+            NodeId = new ExpandedNodeId(new NodeId(500u, 1)),
         };
         var correct = new ReferenceDescription
         {
             BrowseName = new QualifiedName("MethodSet", 2),
-            NodeId     = new ExpandedNodeId(correctId),
+            NodeId = new ExpandedNodeId(correctId),
         };
         var result = new AddressSpaceHelper().FindChildAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { wrongNs, correct }).Object,
@@ -424,8 +424,8 @@ public sealed class AddressSpaceHelperTests
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("GetLatestResult", 2),
-            NodeId     = new ExpandedNodeId(methodId),
-            NodeClass  = NodeClass.Method,
+            NodeId = new ExpandedNodeId(methodId),
+            NodeClass = NodeClass.Method,
         };
         var result = new AddressSpaceHelper().FindMethodNodeAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
@@ -454,8 +454,8 @@ public sealed class AddressSpaceHelperTests
         var nodeId = new NodeId(1001u, 2);
         var rd = new ReferenceDescription
         {
-            BrowseName     = new QualifiedName("JoiningSystem1", 2),
-            NodeId         = new ExpandedNodeId(nodeId),
+            BrowseName = new QualifiedName("JoiningSystem1", 2),
+            NodeId = new ExpandedNodeId(nodeId),
             TypeDefinition = new ExpandedNodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 2),
         };
         var helper = new AddressSpaceHelper();
@@ -471,20 +471,20 @@ public sealed class AddressSpaceHelperTests
         var nodeId = new NodeId(1001u, 2);
         var rd = new ReferenceDescription
         {
-            BrowseName     = new QualifiedName("JoiningSystem1", 2),
-            NodeId         = new ExpandedNodeId(nodeId),
+            BrowseName = new QualifiedName("JoiningSystem1", 2),
+            NodeId = new ExpandedNodeId(nodeId),
             TypeDefinition = new ExpandedNodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 2),
         };
-        var mock   = SessionWithBrowseResult(new ReferenceDescriptionCollection { rd });
+        var mock = SessionWithBrowseResult(new ReferenceDescriptionCollection { rd });
         var helper = new AddressSpaceHelper();
 
-        var first  = helper.FindJoiningSystemAsync(mock.Object, 2);
+        var first = helper.FindJoiningSystemAsync(mock.Object, 2);
         var second = helper.FindJoiningSystemAsync(mock.Object, 2); // cache hit
 
         Assert.Equal(first, second);
         // Browse called exactly once (second call uses cache)
         var verifyResults = new BrowseResultCollection();
-        var verifyDiags   = new DiagnosticInfoCollection();
+        var verifyDiags = new DiagnosticInfoCollection();
         mock.Verify(s => s.Browse(
             It.IsAny<RequestHeader>(), It.IsAny<ViewDescription>(),
             It.IsAny<uint>(), It.IsAny<BrowseDescriptionCollection>(),
@@ -497,8 +497,8 @@ public sealed class AddressSpaceHelperTests
         var nodeId = new NodeId(999u, 2);
         var rd = new ReferenceDescription
         {
-            BrowseName     = new QualifiedName("NotAJoiningSystem", 2),
-            NodeId         = new ExpandedNodeId(nodeId),
+            BrowseName = new QualifiedName("NotAJoiningSystem", 2),
+            NodeId = new ExpandedNodeId(nodeId),
             TypeDefinition = new ExpandedNodeId(9999u, 2),   // wrong type
         };
         var helper = new AddressSpaceHelper();
@@ -514,8 +514,8 @@ public sealed class AddressSpaceHelperTests
     {
         var rd = new ReferenceDescription
         {
-            BrowseName     = new QualifiedName("Server", 0),
-            NodeId         = new ExpandedNodeId(new NodeId(2253u, 0)),
+            BrowseName = new QualifiedName("Server", 0),
+            NodeId = new ExpandedNodeId(new NodeId(2253u, 0)),
             TypeDefinition = new ExpandedNodeId(9999u, 2),
         };
         var helper = new AddressSpaceHelper();
@@ -531,8 +531,8 @@ public sealed class AddressSpaceHelperTests
         var nodeId = new NodeId(1002u, 2);
         var rd = new ReferenceDescription
         {
-            BrowseName     = new QualifiedName("JS2", 2),
-            NodeId         = new ExpandedNodeId(nodeId),
+            BrowseName = new QualifiedName("JS2", 2),
+            NodeId = new ExpandedNodeId(nodeId),
             TypeDefinition = new ExpandedNodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 5),
         };
         var helper = new AddressSpaceHelper();
@@ -561,7 +561,7 @@ public sealed class AddressSpaceHelperTests
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("Identification", 4),
-            NodeId     = new ExpandedNodeId(identId),
+            NodeId = new ExpandedNodeId(identId),
         };
         var helper = new AddressSpaceHelper();
         var result = helper.GetIdentificationNodeAsync(
@@ -580,7 +580,7 @@ public sealed class AddressSpaceHelperTests
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("Identification", 3),
-            NodeId     = new ExpandedNodeId(identId),
+            NodeId = new ExpandedNodeId(identId),
         };
         var helper = new AddressSpaceHelper();
         var result = helper.GetIdentificationNodeAsync(
@@ -598,7 +598,7 @@ public sealed class AddressSpaceHelperTests
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("NotIdentification", 2),
-            NodeId     = new ExpandedNodeId(new NodeId(702u, 2)),
+            NodeId = new ExpandedNodeId(new NodeId(702u, 2)),
         };
         var helper = new AddressSpaceHelper();
         var result = helper.GetIdentificationNodeAsync(
@@ -696,7 +696,7 @@ public sealed class AddressSpaceHelperTests
         var idRef = new ReferenceDescription
         {
             BrowseName = new QualifiedName("Identification", 2),
-            NodeId     = new ExpandedNodeId(idNodeId),
+            NodeId = new ExpandedNodeId(idNodeId),
         };
         // With Browse returning idRef for all calls, FindChild("Identification") returns idNodeId
         // Then FindChild("Manufacturer"), FindChild("SerialNumber"), FindChild("Description")
@@ -714,8 +714,8 @@ public sealed class AddressSpaceHelperTests
     [Fact]
     public void ReadValue_WhenInvalidCastException_ReturnsNull()
     {
-        var mock     = new Mock<ISession>();
-        var dvColl   = new DataValueCollection();
+        var mock = new Mock<ISession>();
+        var dvColl = new DataValueCollection();
         var readDiag = new DiagnosticInfoCollection();
         mock.Setup(s => s.Read(
                 It.IsAny<RequestHeader>(), It.IsAny<double>(), It.IsAny<TimestampsToReturn>(),
@@ -729,8 +729,8 @@ public sealed class AddressSpaceHelperTests
     [Fact]
     public void ReadValueT_WhenConvertThrowsInvalidCast_ReturnsDefault()
     {
-        var mock     = new Mock<ISession>();
-        var dvColl   = new DataValueCollection { new DataValue { Value = new NodeId(1u, 0), StatusCode = StatusCodes.Good } };
+        var mock = new Mock<ISession>();
+        var dvColl = new DataValueCollection { new DataValue { Value = new NodeId(1u, 0), StatusCode = StatusCodes.Good } };
         var readDiag = new DiagnosticInfoCollection();
         mock.Setup(s => s.Read(
                 It.IsAny<RequestHeader>(), It.IsAny<double>(), It.IsAny<TimestampsToReturn>(),
@@ -744,8 +744,8 @@ public sealed class AddressSpaceHelperTests
     [Fact]
     public void ReadValueT_WhenConvertThrowsOverflow_ReturnsDefault()
     {
-        var mock     = new Mock<ISession>();
-        var dvColl   = new DataValueCollection { new DataValue { Value = long.MaxValue, StatusCode = StatusCodes.Good } };
+        var mock = new Mock<ISession>();
+        var dvColl = new DataValueCollection { new DataValue { Value = long.MaxValue, StatusCode = StatusCodes.Good } };
         var readDiag = new DiagnosticInfoCollection();
         mock.Setup(s => s.Read(
                 It.IsAny<RequestHeader>(), It.IsAny<double>(), It.IsAny<TimestampsToReturn>(),

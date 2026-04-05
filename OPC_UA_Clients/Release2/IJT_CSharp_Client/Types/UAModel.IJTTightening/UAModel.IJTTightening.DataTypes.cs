@@ -29,25 +29,23 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Xml;
 using System.Linq;
 using System.Runtime.Serialization;
-using System.Threading.Tasks;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Xml;
 using Opc.Ua;
-using UAModel.DI;
 using UAModel.AMB;
+using UAModel.DI;
 using UAModel.IA;
+using UAModel.IJTBase;
 using UAModel.Machinery;
 using UAModel.MachineryResult;
-using UAModel.IJTBase;
 
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 #pragma warning disable CA1515 // Consider making public types internal
 #pragma warning disable CA1707 // Identifiers should not contain underscores
 #pragma warning disable CA1028 // Enum Storage should be Int32
 
-namespace UAModel.IJTTightening
-{
-}
+namespace UAModel.IJTTightening;

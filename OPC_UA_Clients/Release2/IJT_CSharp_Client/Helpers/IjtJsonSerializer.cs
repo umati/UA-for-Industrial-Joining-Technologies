@@ -20,9 +20,9 @@ public static class IjtJsonSerializer
 {
     private static readonly JsonSerializerOptions _opts = new()
     {
-        WriteIndented                = true,
-        DefaultIgnoreCondition       = JsonIgnoreCondition.WhenWritingNull,
-        ReferenceHandler             = ReferenceHandler.IgnoreCycles,
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        ReferenceHandler = ReferenceHandler.IgnoreCycles,
         Converters =
         {
             new JsonStringEnumConverter(),          // enums as strings (e.g. "OK" not 0)
@@ -162,19 +162,19 @@ public static class IjtJsonSerializer
         if (meta is null) { sb.AppendLine("        (no metadata)"); return; }
 
         // ── Base ResultMetaDataType fields ────────────────────────────────────
-        AppendMetaField(sb, "ResultId",                  meta.ResultId);
+        AppendMetaField(sb, "ResultId", meta.ResultId);
         AppendMetaField(sb, "HasTransferableDataOnFile", meta.HasTransferableDataOnFile.ToString());
-        AppendMetaField(sb, "IsPartial",                 meta.IsPartial.ToString());
-        AppendMetaField(sb, "IsSimulated",               meta.IsSimulated.ToString());
-        AppendMetaField(sb, "ResultState",               meta.ResultState.ToString());
-        AppendMetaField(sb, "StepId",                    meta.StepId);
-        AppendMetaField(sb, "PartId",                    meta.PartId);
-        AppendMetaField(sb, "ExternalRecipeId",          meta.ExternalRecipeId);
-        AppendMetaField(sb, "InternalRecipeId",          meta.InternalRecipeId);
-        AppendMetaField(sb, "ProductId",                 meta.ProductId);
-        AppendMetaField(sb, "ExternalConfigurationId",   meta.ExternalConfigurationId);
-        AppendMetaField(sb, "InternalConfigurationId",   meta.InternalConfigurationId);
-        AppendMetaField(sb, "JobId",                     meta.JobId);
+        AppendMetaField(sb, "IsPartial", meta.IsPartial.ToString());
+        AppendMetaField(sb, "IsSimulated", meta.IsSimulated.ToString());
+        AppendMetaField(sb, "ResultState", meta.ResultState.ToString());
+        AppendMetaField(sb, "StepId", meta.StepId);
+        AppendMetaField(sb, "PartId", meta.PartId);
+        AppendMetaField(sb, "ExternalRecipeId", meta.ExternalRecipeId);
+        AppendMetaField(sb, "InternalRecipeId", meta.InternalRecipeId);
+        AppendMetaField(sb, "ProductId", meta.ProductId);
+        AppendMetaField(sb, "ExternalConfigurationId", meta.ExternalConfigurationId);
+        AppendMetaField(sb, "InternalConfigurationId", meta.InternalConfigurationId);
+        AppendMetaField(sb, "JobId", meta.JobId);
         AppendMetaField(sb, "CreationTime",
             meta.CreationTime > DateTime.MinValue
                 ? meta.CreationTime.ToString("yyyy-MM-dd HH:mm:ss.fff UTC")
@@ -183,29 +183,29 @@ public static class IjtJsonSerializer
             AppendJsonBlock(sb, "        ProcessingTimes", meta.ProcessingTimes);
         AppendMetaField(sb, "ResultUri",
             meta.ResultUri?.Count > 0 ? string.Join(", ", meta.ResultUri) : null);
-        AppendMetaField(sb, "ResultEvaluation",          meta.ResultEvaluation.ToString());
+        AppendMetaField(sb, "ResultEvaluation", meta.ResultEvaluation.ToString());
         AppendMetaField(sb, "ResultEvaluationCode",
             meta.ResultEvaluationCode != 0 ? meta.ResultEvaluationCode.ToString() : null);
-        AppendMetaField(sb, "ResultEvaluationDetails",   meta.ResultEvaluationDetails?.Text);
+        AppendMetaField(sb, "ResultEvaluationDetails", meta.ResultEvaluationDetails?.Text);
         AppendMetaField(sb, "FileFormat",
             meta.FileFormat?.Count > 0 ? string.Join(", ", meta.FileFormat) : null);
 
         // ── JoiningResultMetaDataType extra fields ────────────────────────────
         if (meta is JoiningResultMetaDataType jm)
         {
-            AppendMetaField(sb, "JoiningTechnology",   jm.JoiningTechnology?.Text);
-            AppendMetaField(sb, "SequenceNumber",      jm.SequenceNumber.ToString());
-            AppendMetaField(sb, "Name",                jm.Name);
-            AppendMetaField(sb, "Description",         jm.Description?.Text);
-            AppendMetaField(sb, "Classification",      jm.Classification.ToString());
-            AppendMetaField(sb, "OperationMode",       jm.OperationMode.ToString());
-            AppendMetaField(sb, "AssemblyType",        jm.AssemblyType.ToString());
+            AppendMetaField(sb, "JoiningTechnology", jm.JoiningTechnology?.Text);
+            AppendMetaField(sb, "SequenceNumber", jm.SequenceNumber.ToString());
+            AppendMetaField(sb, "Name", jm.Name);
+            AppendMetaField(sb, "Description", jm.Description?.Text);
+            AppendMetaField(sb, "Classification", jm.Classification.ToString());
+            AppendMetaField(sb, "OperationMode", jm.OperationMode.ToString());
+            AppendMetaField(sb, "AssemblyType", jm.AssemblyType.ToString());
             if (jm.AssociatedEntities?.Count > 0)
                 AppendJsonBlock(sb, "        AssociatedEntities", jm.AssociatedEntities);
             if (jm.ResultCounters?.Count > 0)
                 AppendJsonBlock(sb, "        ResultCounters", jm.ResultCounters);
-            AppendMetaField(sb, "InterventionType",    jm.InterventionType.ToString());
-            AppendMetaField(sb, "IsGeneratedOffline",  jm.IsGeneratedOffline.ToString());
+            AppendMetaField(sb, "InterventionType", jm.InterventionType.ToString());
+            AppendMetaField(sb, "IsGeneratedOffline", jm.IsGeneratedOffline.ToString());
             if (jm.ExtendedMetaData?.Count > 0)
                 AppendJsonBlock(sb, "        ExtendedMetaData", jm.ExtendedMetaData);
         }
@@ -309,10 +309,10 @@ internal sealed class EUInformationConverter : JsonConverter<EUInformation>
     public override void Write(Utf8JsonWriter w, EUInformation v, JsonSerializerOptions o)
     {
         w.WriteStartObject();
-        w.WriteString("DisplayName",   v?.DisplayName?.Text ?? "");
-        w.WriteString("Description",   v?.Description?.Text ?? "");
-        w.WriteNumber("UnitId",        v?.UnitId ?? 0);
-        w.WriteString("NamespaceUri",  v?.NamespaceUri ?? "");
+        w.WriteString("DisplayName", v?.DisplayName?.Text ?? "");
+        w.WriteString("Description", v?.Description?.Text ?? "");
+        w.WriteNumber("UnitId", v?.UnitId ?? 0);
+        w.WriteString("NamespaceUri", v?.NamespaceUri ?? "");
         w.WriteEndObject();
     }
 }

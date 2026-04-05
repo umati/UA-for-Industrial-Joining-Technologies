@@ -36,9 +36,9 @@ catch (Exception ex)
 await using (session)
 {
     using var resultMgmt = new ResultManagement(session);
-    using var assetMgmt  = new AssetManagement(session);
-    using var jpm        = new JoiningProcessManagement(session);
-    using var eventSub   = new EventSubscriber(session);
+    using var assetMgmt = new AssetManagement(session);
+    using var jpm = new JoiningProcessManagement(session);
+    using var eventSub = new EventSubscriber(session);
 
     // ── Wire up event handlers ─────────────────────────────────────────────────
     eventSub.OnResultReady += (_, e) =>
@@ -101,45 +101,45 @@ await using (session)
                 resultMgmt.GetLatestResult();
                 break;
             case "4":
-            {
-                var rid = Prompt("Result ID");
-                if (rid != null) resultMgmt.GetResultById(rid);
-                break;
-            }
+                {
+                    var rid = Prompt("Result ID");
+                    if (rid != null) resultMgmt.GetResultById(rid);
+                    break;
+                }
             case "5":
                 resultMgmt.SubscribeResultVariable();
                 break;
 
             // Asset Management
             case "6":
-            {
-                var uri = Prompt("ProductInstance URI");
-                if (uri is null) break;
-                Console.Write("  Enable? [Y/n]: ");
-                var ynRaw = (Console.ReadLine() ?? "y").Trim();
-                // Reject pathologically long input; default to enable
-                var yn = ynRaw.Length > 10 ? "y" : ynRaw;
-                assetMgmt.EnableAsset(uri, !yn.Equals("n", StringComparison.OrdinalIgnoreCase));
-                break;
-            }
+                {
+                    var uri = Prompt("ProductInstance URI");
+                    if (uri is null) break;
+                    Console.Write("  Enable? [Y/n]: ");
+                    var ynRaw = (Console.ReadLine() ?? "y").Trim();
+                    // Reject pathologically long input; default to enable
+                    var yn = ynRaw.Length > 10 ? "y" : ynRaw;
+                    assetMgmt.EnableAsset(uri, !yn.Equals("n", StringComparison.OrdinalIgnoreCase));
+                    break;
+                }
             case "7":
-            {
-                var uri = Prompt("ProductInstance URI");
-                if (uri != null) assetMgmt.SendTextIdentifiers(uri, ["ID-001", "Batch-2024"]);
-                break;
-            }
+                {
+                    var uri = Prompt("ProductInstance URI");
+                    if (uri != null) assetMgmt.SendTextIdentifiers(uri, ["ID-001", "Batch-2024"]);
+                    break;
+                }
             case "8":
-            {
-                var uri = Prompt("ProductInstance URI");
-                if (uri != null) assetMgmt.GetIdentifiers(uri);
-                break;
-            }
+                {
+                    var uri = Prompt("ProductInstance URI");
+                    if (uri != null) assetMgmt.GetIdentifiers(uri);
+                    break;
+                }
             case "9":
-            {
-                var uri = Prompt("ProductInstance URI");
-                if (uri != null) assetMgmt.ResetIdentifiers(uri);
-                break;
-            }
+                {
+                    var uri = Prompt("ProductInstance URI");
+                    if (uri != null) assetMgmt.ResetIdentifiers(uri);
+                    break;
+                }
             case "10":
                 assetMgmt.SubscribeAssetVariables();
                 break;
@@ -149,27 +149,27 @@ await using (session)
                 jpm.GetJoiningProcessList();
                 break;
             case "12":
-            {
-                var id   = Prompt("Joining Process ID");
-                if (id is null) break;
-                var name = Prompt("Selection name (optional, press Enter to skip)") ?? "";
-                jpm.SelectJoiningProcess(id, selectionName: name);
-                break;
-            }
+                {
+                    var id = Prompt("Joining Process ID");
+                    if (id is null) break;
+                    var name = Prompt("Selection name (optional, press Enter to skip)") ?? "";
+                    jpm.SelectJoiningProcess(id, selectionName: name);
+                    break;
+                }
             case "13":
                 jpm.GetSelectedJoiningProgram();
                 break;
 
             // Identifiers demo
             case "14":
-            {
-                var entities = new List<UAModel.IJTBase.EntityDataType>
+                {
+                    var entities = new List<UAModel.IJTBase.EntityDataType>
                 {
                     new() { Name = "Batch-A", EntityId = "ENT-001", IsExternal = false, EntityType = 0 }
                 };
-                assetMgmt.SendIdentifiers(entities);
-                break;
-            }
+                    assetMgmt.SendIdentifiers(entities);
+                    break;
+                }
 
             case "0":
                 cts.Cancel();

@@ -36,8 +36,8 @@ public sealed class ClientConfig
     /// </summary>
     public static ClientConfig FromEnvironment() => new()
     {
-        ServerUrl                   = Environment.GetEnvironmentVariable("IJT_SERVER_URL") ?? "opc.tcp://localhost:40451",
-        ApplicationName             = Environment.GetEnvironmentVariable("IJT_APP_NAME")   ?? "IJT CSharp Client",
+        ServerUrl = Environment.GetEnvironmentVariable("IJT_SERVER_URL") ?? "opc.tcp://localhost:40451",
+        ApplicationName = Environment.GetEnvironmentVariable("IJT_APP_NAME") ?? "IJT CSharp Client",
         AutoAcceptServerCertificate = string.Equals(
             Environment.GetEnvironmentVariable("IJT_AUTO_ACCEPT"), "true",
             StringComparison.OrdinalIgnoreCase),

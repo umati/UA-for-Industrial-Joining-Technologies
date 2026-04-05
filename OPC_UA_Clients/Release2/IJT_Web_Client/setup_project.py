@@ -489,7 +489,7 @@ def _should_block_foreground(frontend_proc, backend_proc) -> bool:
 class _SetupLock:
     def __init__(self, path: Path):
         self.path = path
-        self._fh: "IO[str] | None" = None
+        self._fh: IO[str] | None = None
 
     def acquire(self) -> bool:
         self.path.parent.mkdir(parents=True, exist_ok=True)

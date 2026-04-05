@@ -1,9 +1,9 @@
+using System.Collections.Generic;
+using System.Linq;
 using IJT_CSharp_Client.Helpers;
 using Opc.Ua;
 using UAModel.MachineryResult;
 using Xunit;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace IJT_CSharp_Client.Tests.Helpers;
 
@@ -35,7 +35,7 @@ public class IjtJsonSerializerTests
     public void Serialize_ExtensionObjectWithBody_UnwrapsBody()
     {
         var meta = new ResultMetaDataType { ResultId = "EO-TEST" };
-        var eo   = new ExtensionObject(meta);
+        var eo = new ExtensionObject(meta);
 
         var result = IjtJsonSerializer.Serialize(eo);
         Assert.Contains("EO-TEST", result);
@@ -110,7 +110,7 @@ public class IjtJsonSerializerTests
     [Fact]
     public void Serialize_Uuid_UsesUuidConverter()
     {
-        var uuid   = new Uuid(Guid.NewGuid());
+        var uuid = new Uuid(Guid.NewGuid());
         var result = IjtJsonSerializer.Serialize(uuid);
         Assert.NotNull(result);
         Assert.NotEmpty(result);
@@ -134,7 +134,7 @@ public class IjtJsonSerializerTests
     [Fact]
     public void Serialize_EmptyExtensionObject_ReturnsTypeIdInfo()
     {
-        var eo     = new ExtensionObject(new ExpandedNodeId(123u, 2));
+        var eo = new ExtensionObject(new ExpandedNodeId(123u, 2));
         var result = IjtJsonSerializer.Serialize(eo);
         // empty body → returns the "empty ExtensionObject" string
         Assert.Contains("ExtensionObject", result);
@@ -175,8 +175,8 @@ public class IjtJsonSerializerTests
         {
             ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
             {
-                ResultId       = "PR-TEST",
-                Name           = "Test Program",
+                ResultId = "PR-TEST",
+                Name = "Test Program",
                 SequenceNumber = 1,
                 Classification = 1,
             }
@@ -242,10 +242,10 @@ public class IjtJsonSerializerTests
     {
         var args = new IJT_CSharp_Client.Client.EventSubscriber.JoiningSystemEventArgs
         {
-            EventCode         = "E001",
-            EventText         = "Test event",
+            EventCode = "E001",
+            EventText = "Test event",
             JoiningTechnology = "Tightening",
-            EventTime         = DateTime.UtcNow,
+            EventTime = DateTime.UtcNow,
         };
         var ex = Record.Exception(() => IjtJsonSerializer.PrintJoiningSystemEvent(args));
         Assert.Null(ex);
@@ -259,8 +259,8 @@ public class IjtJsonSerializerTests
             .ToList();
         var args = new IJT_CSharp_Client.Client.EventSubscriber.JoiningSystemEventArgs
         {
-            EventCode  = "E002",
-            AllFields  = allFields,
+            EventCode = "E002",
+            AllFields = allFields,
         };
         var ex = Record.Exception(() => IjtJsonSerializer.PrintJoiningSystemEvent(args));
         Assert.Null(ex);
@@ -323,7 +323,7 @@ public class IjtJsonSerializerTests
     public void Serialize_ExtensionObjectArray_UnwrapsItems()
     {
         var meta = new ResultMetaDataType { ResultId = "ARR-TEST" };
-        var arr  = new ExtensionObject[] { new ExtensionObject(meta) };
+        var arr = new ExtensionObject[] { new ExtensionObject(meta) };
         var result = IjtJsonSerializer.Serialize(arr);
         Assert.Contains("ARR-TEST", result);
     }
@@ -427,8 +427,8 @@ public class IjtJsonSerializerTests
     [Fact]
     public void JsonConverter_UuidRead_ReturnsUuid()
     {
-        var opts   = GetSerializerOpts();
-        var guid   = Guid.NewGuid().ToString();
+        var opts = GetSerializerOpts();
+        var guid = Guid.NewGuid().ToString();
         var result = System.Text.Json.JsonSerializer.Deserialize<Uuid>($"\"{guid}\"", opts);
         Assert.Equal(guid, result.GuidString);
     }
@@ -437,7 +437,7 @@ public class IjtJsonSerializerTests
     public void JsonConverter_ExtensionObjectRead_ThrowsNotSupported()
     {
         var opts = GetSerializerOpts();
-        var ex   = Record.Exception(() =>
+        var ex = Record.Exception(() =>
             System.Text.Json.JsonSerializer.Deserialize<ExtensionObject>("{}", opts));
         Assert.NotNull(ex);
     }
@@ -446,7 +446,7 @@ public class IjtJsonSerializerTests
     public void JsonConverter_VariantRead_ThrowsNotSupported()
     {
         var opts = GetSerializerOpts();
-        var ex   = Record.Exception(() =>
+        var ex = Record.Exception(() =>
             System.Text.Json.JsonSerializer.Deserialize<Variant>("null", opts));
         Assert.NotNull(ex);
     }
@@ -455,7 +455,7 @@ public class IjtJsonSerializerTests
     public void JsonConverter_EUInformationRead_ThrowsNotSupported()
     {
         var opts = GetSerializerOpts();
-        var ex   = Record.Exception(() =>
+        var ex = Record.Exception(() =>
             System.Text.Json.JsonSerializer.Deserialize<EUInformation>("{}", opts));
         Assert.NotNull(ex);
     }

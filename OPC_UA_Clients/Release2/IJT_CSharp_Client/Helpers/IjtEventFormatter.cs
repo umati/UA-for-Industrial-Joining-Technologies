@@ -21,19 +21,19 @@ public static class IjtEventFormatter
     /// EventCode, EventText, JoiningTechnology, AssociatedEntities, ReportedValues.
     /// </summary>
     public static string FormatJoiningSystemEvent(
-        string?   eventCode,
-        string?   eventText,
-        string?   joiningTechnology,
-        DateTime  eventTime,
-        UAModel.IJTBase.EntityDataType[]?        associatedEntities = null,
-        UAModel.IJTBase.ReportedValueDataType[]? reportedValues     = null)
+        string? eventCode,
+        string? eventText,
+        string? joiningTechnology,
+        DateTime eventTime,
+        UAModel.IJTBase.EntityDataType[]? associatedEntities = null,
+        UAModel.IJTBase.ReportedValueDataType[]? reportedValues = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Received: {eventTime:yyyy-MM-dd HH:mm:ss.fff} UTC");
         sb.AppendLine();
         sb.AppendLine("JOINING SYSTEM EVENT");
-        AppendField(sb, "EventCode",         eventCode);
-        AppendField(sb, "EventText",         eventText);
+        AppendField(sb, "EventCode", eventCode);
+        AppendField(sb, "EventText", eventText);
         AppendField(sb, "JoiningTechnology", joiningTechnology);
 
         if (associatedEntities?.Length > 0)

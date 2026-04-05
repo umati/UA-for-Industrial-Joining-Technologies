@@ -16,7 +16,7 @@ public static class IjtLog
     private static readonly ILoggerFactory _factory = LoggerFactory.Create(builder =>
     {
         var levelStr = Environment.GetEnvironmentVariable("IJT_LOG_LEVEL") ?? "Information";
-        var level    = Enum.TryParse<LogLevel>(levelStr, ignoreCase: true, out var l)
+        var level = Enum.TryParse<LogLevel>(levelStr, ignoreCase: true, out var l)
                        ? l : LogLevel.Information;
 
         builder
@@ -24,8 +24,8 @@ public static class IjtLog
             .AddSimpleConsole(o =>
             {
                 o.TimestampFormat = "HH:mm:ss.fff ";
-                o.SingleLine      = false;
-                o.ColorBehavior   = LoggerColorBehavior.Enabled;
+                o.SingleLine = false;
+                o.ColorBehavior = LoggerColorBehavior.Enabled;
                 o.UseUtcTimestamp = false;
             });
     });

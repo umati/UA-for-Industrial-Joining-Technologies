@@ -1,9 +1,9 @@
-﻿#nullable enable
+#nullable enable
 
-using Opc.Ua;
-using Opc.Ua.Client;
 using IJT_CSharp_Client.Helpers;
 using Microsoft.Extensions.Logging;
+using Opc.Ua;
+using Opc.Ua.Client;
 
 namespace IJT_CSharp_Client.Client;
 
@@ -19,7 +19,7 @@ public sealed class ResultManagement : IDisposable
 {
     private readonly ILogger<ResultManagement> _log = IjtLog.For<ResultManagement>();
     private readonly IIjtSession _s;
-    private Subscription?       _resultVarSubscription;
+    private Subscription? _resultVarSubscription;
 
     /// <summary>Creates a new ResultManagement facade backed by <paramref name="ijtSession"/>.</summary>
     public ResultManagement(IIjtSession ijtSession) => _s = ijtSession;
@@ -153,15 +153,15 @@ public sealed class ResultManagement : IDisposable
 
         _resultVarSubscription = new Subscription(_s.Session.DefaultSubscription)
         {
-            DisplayName        = "IJT ResultVariable",
+            DisplayName = "IJT ResultVariable",
             PublishingInterval = _s.Config.PublishingIntervalMs,
         };
 
         var item = new MonitoredItem(_resultVarSubscription.DefaultItem)
         {
-            DisplayName      = "ResultVariable",
-            StartNodeId      = resultVarNode,
-            AttributeId      = Attributes.Value,
+            DisplayName = "ResultVariable",
+            StartNodeId = resultVarNode,
+            AttributeId = Attributes.Value,
             SamplingInterval = 500,
         };
         item.Notification += OnResultVariableChanged;
@@ -184,7 +184,7 @@ public sealed class ResultManagement : IDisposable
 
             // Unwrap Variant → ExtensionObject → ResultDataType
             var raw = value.Value is Variant v ? v.Value : value.Value;
-            var rd  = raw is ExtensionObject eo
+            var rd = raw is ExtensionObject eo
                 ? eo.Body as UAModel.MachineryResult.ResultDataType
                 : raw as UAModel.MachineryResult.ResultDataType;
 
