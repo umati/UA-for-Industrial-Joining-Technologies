@@ -18,7 +18,7 @@ import time
 import webbrowser
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 # Add src/ to path so "from python.xxx import" works regardless of cwd
 sys.path.insert(0, str(Path(__file__).parent / "src"))

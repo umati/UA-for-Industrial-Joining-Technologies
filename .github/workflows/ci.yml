@@ -1,4 +1,4 @@
-# ─────────────────────────────────────────────────────────────────────────────
+﻿# ─────────────────────────────────────────────────────────────────────────────
 # CI — IJT OPC UA Full Test Suite
 #
 # Runs on every push / PR to main. Produces a combined summary table on the
@@ -63,7 +63,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -215,7 +215,7 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -450,14 +450,6 @@ jobs:
             -DestinationPath "OPC_UA_Servers\Release2\" `
             -Force
 
-      - name: Patch server port to 40452
-        working-directory: ${{ github.workspace }}/OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator
-        run: |
-          $cfg = Get-Content server_configuration.json -Raw | ConvertFrom-Json
-          $cfg.serverConfigurationData.serverEndpointTCPPort = 40452
-          $cfg | ConvertTo-Json -Depth 10 | Set-Content server_configuration.json -Encoding UTF8
-          Write-Host "Patched serverEndpointTCPPort to 40452"
-
       - name: Start OPC UA Server (background)
         working-directory: ${{ github.workspace }}
         run: |
@@ -468,27 +460,27 @@ jobs:
           Write-Host "Server PID: $($proc.Id)"
           echo "SERVER_PID=$($proc.Id)" >> $env:GITHUB_ENV
           echo "OPCUA_SIMULATOR_EXE=${{ github.workspace }}\OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\opcua_ijt_demo_application.exe" >> $env:GITHUB_ENV
-          echo "OPCUA_SERVER_PORT=40452" >> $env:GITHUB_ENV
-          echo "OPCUA_SERVER_URL=opc.tcp://localhost:40452" >> $env:GITHUB_ENV
+          echo "OPCUA_SERVER_PORT=40451" >> $env:GITHUB_ENV
+          echo "OPCUA_SERVER_URL=opc.tcp://localhost:40451" >> $env:GITHUB_ENV
 
-      - name: Wait for OPC UA port 40452
+      - name: Wait for OPC UA port 40451
         working-directory: ${{ github.workspace }}
         run: |
           $timeout = 60
           $start   = Get-Date
           while (((Get-Date) - $start).TotalSeconds -lt $timeout) {
-            if (Test-NetConnection -ComputerName localhost -Port 40452 `
+            if (Test-NetConnection -ComputerName localhost -Port 40451 `
                   -InformationLevel Quiet -WarningAction SilentlyContinue) {
-              Write-Host "Port 40452 is open"
+              Write-Host "Port 40451 is open"
               exit 0
             }
             Write-Host "Waiting for server..."
             Start-Sleep -Seconds 3
           }
-          Write-Host "ERROR: Timeout waiting for port 40452"
+          Write-Host "ERROR: Timeout waiting for port 40451"
           exit 1
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
 
@@ -513,7 +505,7 @@ jobs:
         continue-on-error: true
         env:
           IJT_AUTO_ACCEPT: 'true'
-          OPCUA_SERVER_PORT: '40452'
+          OPCUA_SERVER_PORT: '40451'
           OPCUA_SERVER_URL: ${{ env.OPCUA_SERVER_URL }}
         run: |
           New-Item -ItemType Directory -Force -Path test-results | Out-Null
@@ -630,7 +622,7 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -969,21 +961,21 @@ jobs:
 
       - name: Set up .NET (C# only)
         if: matrix.language == 'csharp'
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "9.x"
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
           output: codeql-results

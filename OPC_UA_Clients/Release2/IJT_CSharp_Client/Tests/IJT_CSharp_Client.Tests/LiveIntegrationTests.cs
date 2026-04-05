@@ -88,6 +88,152 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
             Task.Run(() => session.AssetManagement.EnableAsset(string.Empty, true), cts.Token)).ConfigureAwait(false);
         Assert.Null(ex);
     }
+
+    // ── Result Management (menu items 3-5) ───────────────────────────────────
+
+    [SkippableFact]
+    public async Task GetResultById_WithEmptyId_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(() =>
+            Task.Run(() => session.ResultManagement.GetResultById(string.Empty), cts.Token)).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    [SkippableFact]
+    public async Task SubscribeResultVariable_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(() =>
+            Task.Run(() => session.ResultManagement.SubscribeResultVariable(), cts.Token)).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    // ── Asset Management (menu items 6-10) ───────────────────────────────────
+
+    [SkippableFact]
+    public async Task SendTextIdentifiers_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(() =>
+            Task.Run(() => session.AssetManagement.SendTextIdentifiers(string.Empty, ["ID-001", "Batch-A"]), cts.Token)).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    [SkippableFact]
+    public async Task GetIdentifiers_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(() =>
+            Task.Run(() => session.AssetManagement.GetIdentifiers(string.Empty), cts.Token)).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    [SkippableFact]
+    public async Task ResetIdentifiers_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(() =>
+            Task.Run(() => session.AssetManagement.ResetIdentifiers(string.Empty), cts.Token)).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    [SkippableFact]
+    public async Task SubscribeAssetVariables_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(() =>
+            Task.Run(() => session.AssetManagement.SubscribeAssetVariables(), cts.Token)).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    [SkippableFact]
+    public async Task SendIdentifiers_WithDemoEntities_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var entities = new List<UAModel.IJTBase.EntityDataType>
+        {
+            new() { EntityId = "urn:demo:nut-1", EntityType = 1 },
+        };
+        var ex = await Record.ExceptionAsync(() =>
+            Task.Run(() => session.AssetManagement.SendIdentifiers(entities), cts.Token)).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    // ── Joining Process (menu items 11-13) ───────────────────────────────────
+
+    [SkippableFact]
+    public async Task SelectJoiningProcess_WithEmptyId_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(() =>
+            Task.Run(() => session.JoiningProcessManagement.SelectJoiningProcess(string.Empty), cts.Token)).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    [SkippableFact]
+    public async Task GetSelectedJoiningProgram_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(() =>
+            Task.Run(() => session.JoiningProcessManagement.GetSelectedJoiningProgram(), cts.Token)).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    // ── Event subscription (menu items 1-2) ──────────────────────────────────
+
+    [SkippableFact]
+    public async Task Subscribe_ThenUnsubscribe_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(async () =>
+        {
+            await Task.Run(() => session.EventSubscriber.Subscribe(), cts.Token).ConfigureAwait(false);
+            await Task.Delay(500, cts.Token).ConfigureAwait(false);
+            session.EventSubscriber.Unsubscribe();
+        }).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
 }
 
 [CollectionDefinition("LiveServer")]
