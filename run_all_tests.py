@@ -556,6 +556,14 @@ def _ensure_client_venv(client_dir: Path, outputs: list[str]) -> Path:
                 timeout=300,
             )
             outputs.append(out)
+            if rc != 0:
+                log.error(
+                    "[venv] pip install %s failed (exit %d) for %s",
+                    req_name, rc, client_dir.name,
+                )
+                raise RuntimeError(
+                    f"pip install {req_name} failed with exit {rc} for {client_dir.name}"
+                )
 
     return venv_py
 
@@ -799,7 +807,10 @@ def _suite_console_unit() -> SuiteResult:
         return SuiteResult(name, True, skipped=True, notes=["tests/unit/ not found"])
 
     outputs: list[str] = []
-    venv_py = _ensure_client_venv(CONSOLE_DIR, outputs)
+    try:
+        venv_py = _ensure_client_venv(CONSOLE_DIR, outputs)
+    except RuntimeError as exc:
+        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
 
     rc_pytest, out = _run_captured(
         [str(venv_py), "-m", "pytest", "tests/unit/", "-v", "--tb=short", "--no-header"],
@@ -820,7 +831,10 @@ def _suite_webclient_unit() -> SuiteResult:
         return SuiteResult(name, True, skipped=True, notes=["WEB_CLIENT_DIR not found"])
 
     outputs: list[str] = []
-    venv_py = _ensure_client_venv(WEB_CLIENT_DIR, outputs)
+    try:
+        venv_py = _ensure_client_venv(WEB_CLIENT_DIR, outputs)
+    except RuntimeError as exc:
+        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
 
     # Python unit tests — exclude live/integration markers so no server is needed
     rc_py, out = _run_captured(
@@ -867,7 +881,10 @@ def _suite_testclient_collect() -> SuiteResult:
         return SuiteResult(name, True, skipped=True, notes=["TEST_CLIENT_DIR not found"])
 
     outputs: list[str] = []
-    venv_py = _ensure_client_venv(TEST_CLIENT_DIR, outputs)
+    try:
+        venv_py = _ensure_client_venv(TEST_CLIENT_DIR, outputs)
+    except RuntimeError as exc:
+        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
 
     rc, out = _run_captured(
         [str(venv_py), "-m", "pytest", "--collect-only", "-q", "--tb=short"],
@@ -1033,7 +1050,10 @@ def _suite_console_live() -> SuiteResult:
         return SuiteResult(name, True, skipped=True, notes=["tests/live/ not found"])
 
     outputs: list[str] = []
-    venv_py = _ensure_client_venv(CONSOLE_DIR, outputs)
+    try:
+        venv_py = _ensure_client_venv(CONSOLE_DIR, outputs)
+    except RuntimeError as exc:
+        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
     env = {**os.environ, "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"}
     rc, out = _run_captured(
         [str(venv_py), "-m", "pytest", "tests/live/", "-v", "--tb=short", "--no-header"],
@@ -1061,7 +1081,10 @@ def _suite_testclient_full() -> SuiteResult:
         return SuiteResult(name, True, skipped=True, notes=["TEST_CLIENT_DIR not found"])
 
     outputs: list[str] = []
-    venv_py = _ensure_client_venv(TEST_CLIENT_DIR, outputs)
+    try:
+        venv_py = _ensure_client_venv(TEST_CLIENT_DIR, outputs)
+    except RuntimeError as exc:
+        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
     env = {**os.environ, "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"}
     # pytest.ini testpaths = conformance events assets results joint joining_process common
     rc, out = _run_captured(
@@ -1098,7 +1121,10 @@ def _suite_webclient_live() -> SuiteResult:
                            notes=["no tests/python/live/ or integration/ dirs found"])
 
     outputs: list[str] = []
-    venv_py = _ensure_client_venv(WEB_CLIENT_DIR, outputs)
+    try:
+        venv_py = _ensure_client_venv(WEB_CLIENT_DIR, outputs)
+    except RuntimeError as exc:
+        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
     env = {
         **os.environ,
         "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}",

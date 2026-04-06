@@ -1,5 +1,6 @@
 import importlib
 import json
+from typing import Any
 
 import pytest
 
@@ -25,7 +26,7 @@ class FakeWebSocket:
 
 
 class FakeIJTInterface:
-    created = []
+    created: list[Any] = []
 
     def __init__(self):
         self.handled = []

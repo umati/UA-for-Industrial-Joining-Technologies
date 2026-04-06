@@ -499,11 +499,11 @@ class _SetupLock:
                 import msvcrt  # type: ignore[import]
 
                 self._fh.seek(0)
-                msvcrt.locking(self._fh.fileno(), msvcrt.LK_NBLCK, 1)
+                msvcrt.locking(self._fh.fileno(), msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
             else:
                 import fcntl  # type: ignore[import]
 
-                fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # type: ignore[attr-defined]
             self._fh.seek(0)
             self._fh.truncate()
             self._fh.write(str(os.getpid()))
@@ -522,11 +522,11 @@ class _SetupLock:
                 import msvcrt
 
                 self._fh.seek(0)
-                msvcrt.locking(self._fh.fileno(), msvcrt.LK_UNLCK, 1)
+                msvcrt.locking(self._fh.fileno(), msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
             else:
                 import fcntl
 
-                fcntl.flock(self._fh.fileno(), fcntl.LOCK_UN)
+                fcntl.flock(self._fh.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]
         except Exception as exc:
             log.debug("Failed to release setup lock cleanly: %s", exc)
         try:
@@ -658,7 +658,7 @@ def _ensure_opc_server_running(endpoint: str, *, allow_launch: bool, context: st
                 )
                 popen_kwargs: "dict[str, Any]" = {"cwd": str(exe.parent)}
                 if IS_WINDOWS:
-                    popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+                    popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE  # type: ignore[attr-defined]
                 subprocess.Popen([str(exe)], **popen_kwargs)  # nosec B603 B607
                 startup_timeout = _env_float("OPCUA_STARTUP_TIMEOUT_SEC", 45.0, 1.0)
                 startup_poll = _env_float("OPCUA_STARTUP_POLL_SEC", 0.5, 0.1)

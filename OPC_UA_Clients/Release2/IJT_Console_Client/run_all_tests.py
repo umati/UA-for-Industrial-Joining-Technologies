@@ -30,7 +30,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+
 
 # Ensure stdout/stderr use UTF-8 on Windows (cp1252 can't encode box-drawing chars)
 if hasattr(sys.stdout, "reconfigure"):
@@ -244,7 +244,7 @@ def _binary_available(name: str) -> bool:
 _SERVER_NATIVE_PORT = 40451  # port the binary always uses (from server_configuration.json)
 
 
-def _ensure_server(port: int = 40461) -> Optional[subprocess.Popen]:
+def _ensure_server(port: int = 40461) -> subprocess.Popen | None:
     """Start OPC UA server if not already running. Returns Popen handle or None.
 
     If OPCUA_SERVER_URL is already set the caller manages the server — skip auto-launch.
@@ -321,8 +321,8 @@ def _run(
     cmd: list[str],
     *,
     cwd: Path = _HERE,
-    extra_env: Optional[dict[str, str]] = None,
-    timeout: Optional[int] = None,
+    extra_env: dict[str, str] | None = None,
+    timeout: int | None = None,
 ) -> tuple[int, str]:
     """
     Run *cmd* and return (returncode, combined_stdout_stderr).
@@ -632,7 +632,7 @@ def _step_detect_secrets() -> _StepResult:
     return result
 
 
-def _step_unit_tests(junit_xml: Optional[str]) -> _StepResult:
+def _step_unit_tests(junit_xml: str | None) -> _StepResult:
     """Run pytest over tests/unit/ with coverage; uses tests/ if unit/ absent."""
     result = _StepResult("[PHASE 1] pytest unit")
     t0 = time.monotonic()
@@ -765,7 +765,7 @@ def _step_pyright() -> _StepResult:
 # ---------------------------------------------------------------------------
 
 
-def _step_live_tests(_junit_xml: Optional[str]) -> _StepResult:
+def _step_live_tests(_junit_xml: str | None) -> _StepResult:
     """Run pytest over tests/live/ (or -m live); requires a reachable OPC UA server."""
     result = _StepResult("[PHASE 2] pytest live")
     t0 = time.monotonic()
@@ -856,7 +856,7 @@ def main() -> int:
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
 
     args = _build_parser().parse_args()
-    junit_xml: Optional[str] = args.junit_xml
+    junit_xml: str | None = args.junit_xml
 
     if junit_xml:
         Path(junit_xml).parent.mkdir(parents=True, exist_ok=True)
@@ -876,7 +876,7 @@ def main() -> int:
 
     t_start = time.monotonic()
     results: list[_StepResult] = []
-    server_proc: Optional[subprocess.Popen] = None
+    server_proc: subprocess.Popen | None = None
 
     try:
         _section("Sanity Checks")

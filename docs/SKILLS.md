@@ -33,7 +33,6 @@
 UA-for-Industrial-Joining-Technologies/
 ├── README.md                        # Project overview and links
 ├── SECURITY.md                      # GitHub security policy (must stay at root)
-├── SKILLS.md                        # Redirect stub → see docs/SKILLS.md
 ├── docs/
 │   └── SKILLS.md                    # ← THIS FILE: root-level agent context
 ├── run_all_tests.py                 # Root orchestrator — runs all project suites
@@ -130,8 +129,6 @@ UA-for-Industrial-Joining-Technologies/
 | `OPCUA_SERVER_PORT` | `40451` | Override port — used by CI to run parallel isolated instances |
 | `OPCUA_HOSTNAME` | `localhost` | Override advertised hostname — used for Docker with remote clients |
 
-CI port assignments: default=40451, csharp-CI=40452, console-CI=40453, test-CI=40454, web-CI=40455
-
 ---
 
 ## CI/CD
@@ -141,19 +138,28 @@ CI port assignments: default=40451, csharp-CI=40452, console-CI=40453, test-CI=4
 ### Fast CI (`ci.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
 |-----|--------------|
-| `build-server-image` | Builds OPC UA server Docker image → ghcr.io (used by other jobs) |
 | `web-client` | Python unit (310), JS unit (162), ESLint, Bandit, npm audit |
-| `console-client` | Python unit (288), Bandit; Phase 2 with Docker server (port 40453) |
+| `console-client` | Python unit tests (tests/unit/), Bandit, Ruff, mypy |
 | `node-client` | JS unit (~152), ESLint, npm audit |
-| `test-client` | pytest collect + import check; Phase 2 with Docker server (port 40454) |
-| `csharp-client` | dotnet build + test + NuGet CVE scan; Phase 2 with server (port 40452) |
-| `docker-smoke` | docker buildx + compose up + HTTP:3000 readiness |
-| `report` | Combined markdown summary → Actions Summary tab |
+| `test-client` | pytest collect-only (import check), Bandit, Ruff, mypy |
+| `csharp-client` | dotnet build + test + NuGet CVE scan; Phase 2 with server (port 40451) |
+| `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
+| `report` |Combined markdown summary → Actions Summary tab |
 | `codeql` | GitHub CodeQL semantic analysis (Python + JS matrix), runs independently |
 
 Runtime: ~5–7 minutes. Python 3.14, Node.js 24, .NET 10 everywhere.
 Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `setup-dotnet@v4`, `upload-artifact@v7`, `download-artifact@v8`
-Port assignments: default=40451, csharp-CI=40452, console-CI=40453, test-CI=40454, web-CI=40455
+
+### Port Ownership
+
+| Job | Workflow | Port | Protocol |
+|-----|----------|------|----------|
+| `csharp-client` | `ci.yml` | 40451 | Windows native EXE |
+| `server-smoke-windows` | `ci.yml` | 40451 | Windows native EXE |
+| `server-smoke-docker` | `heavy-tests.yml` | 40451 | Docker (Linux) |
+| `integration-tests` | `heavy-tests.yml` | 40451 | Windows native EXE |
+
+> Release1 Node Client always uses 40451 (fixed — no dynamic port support). Release2 clients all use 40451 in heavy-tests. The old per-job isolated Docker ports (40452–40455) are no longer used in CI.
 
 ### Heavy Tests (`heavy-tests.yml`) — nightly + path-triggered
 Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJT_Test_Client/**`, or workflow file change.

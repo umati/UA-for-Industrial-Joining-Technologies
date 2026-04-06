@@ -180,7 +180,7 @@ async def test_simulate_batch_or_sync_result(classification, label, opcua_client
     reason="SimulateJobResult holds the connection for an extended period while firing "
     "all child results; asyncua drops the request before the server responds. "
     "Use IJT_Console_Client to validate SimulateJobResult interactively.",
-    strict=False,
+    strict=True,
 )
 async def test_simulate_job_result(opcua_client, simulate_results_folder, ns_indices):
     """SimulateJobResult must complete with send_as_refs=TRUE (recommended)."""

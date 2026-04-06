@@ -27,6 +27,11 @@ public sealed class AssetManagementUnitTests
     public void EnableAsset_WithValidUri_Enable_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
+        object[]? capturedArgs = null;
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
+            .Returns(new List<object>());
         using var am = new AssetManagement(session.Object);
 
         var ex = Record.Exception(() => am.EnableAsset("urn:tool:001", enable: true));
@@ -34,12 +39,21 @@ public sealed class AssetManagementUnitTests
         Assert.Null(ex);
         session.Verify(s => s.CallMethod(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+        Assert.NotNull(capturedArgs);
+        Assert.Equal(2, capturedArgs.Length);
+        Assert.Equal("urn:tool:001", capturedArgs[0]);
+        Assert.Equal(true, capturedArgs[1]);
     }
 
     [Fact]
     public void EnableAsset_WithValidUri_Disable_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
+        object[]? capturedArgs = null;
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
+            .Returns(new List<object>());
         using var am = new AssetManagement(session.Object);
 
         var ex = Record.Exception(() => am.EnableAsset("urn:tool:001", enable: false));
@@ -47,6 +61,10 @@ public sealed class AssetManagementUnitTests
         Assert.Null(ex);
         session.Verify(s => s.CallMethod(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+        Assert.NotNull(capturedArgs);
+        Assert.Equal(2, capturedArgs.Length);
+        Assert.Equal("urn:tool:001", capturedArgs[0]);
+        Assert.Equal(false, capturedArgs[1]);
     }
 
     [Fact]

@@ -105,7 +105,7 @@ async def test_cu_asset_management_asset_has_operation_counters(controllers_inst
         "Server binary does not yet expose AssociatedWith references on asset nodes. "
         "§11.1 CU-AM-009 will pass once the server implements them."
     ),
-    strict=False,
+    strict=True,
 )
 async def test_cu_asset_management_associated_with_references(controllers_instances):
     # §11.1 CU-AM-009: At least one controller must have AssociatedWith references

@@ -24,6 +24,11 @@ public sealed class ResultManagementUnitTests
     public void GetLatestResult_NodeFound_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
+        object[]? capturedArgs = null;
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
+            .Returns(new List<object>());
         using var rm = new ResultManagement(session.Object);
 
         var ex = Record.Exception(() => rm.GetLatestResult());
@@ -31,6 +36,9 @@ public sealed class ResultManagementUnitTests
         Assert.Null(ex);
         session.Verify(s => s.CallMethod(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+        Assert.NotNull(capturedArgs);
+        Assert.Single(capturedArgs);
+        Assert.Equal(5000, capturedArgs[0]);  // default timeoutMs
     }
 
     [Fact]
@@ -102,6 +110,11 @@ public sealed class ResultManagementUnitTests
     public void GetResultById_WithValidId_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
+        object[]? capturedArgs = null;
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
+            .Returns(new List<object>());
         using var rm = new ResultManagement(session.Object);
 
         var ex = Record.Exception(() => rm.GetResultById("RESULT-2024-001"));
@@ -109,6 +122,10 @@ public sealed class ResultManagementUnitTests
         Assert.Null(ex);
         session.Verify(s => s.CallMethod(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+        Assert.NotNull(capturedArgs);
+        Assert.Equal(2, capturedArgs.Length);
+        Assert.Equal("RESULT-2024-001", capturedArgs[0]);
+        Assert.Equal(5000, capturedArgs[1]);  // default timeoutMs
     }
 
     [Fact]

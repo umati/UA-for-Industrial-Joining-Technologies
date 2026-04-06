@@ -25,33 +25,33 @@ Download the appropriate ZIP by clicking the **Download raw file** button on Git
 
 ### Windows
 
-1. Install the [Visual C++ Runtime (VC-Redist)](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-180) if not already installed.
-2. Launch `opcua_ijt_demo_application.exe`. Ensure it has **Read/Write** access to its directory (run as **Administrator** if needed).
+- Install the [Visual C++ Runtime (VC-Redist)](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-180) if not already installed.
+- Launch `opcua_ijt_demo_application.exe`. Ensure it has **Read/Write** access to its directory (run as **Administrator** if needed).
 
 ### Linux
 
-1. Open a terminal in the extracted folder and make the file runnable (first time only):
+- Open a terminal in the extracted folder and make the file runnable (first time only):
    ```bash
    chmod +x opcua_ijt_demo_application
    ```
-2. Start the server:
+- Start the server:
    ```bash
    ./opcua_ijt_demo_application
    ```
 
 ### Docker
 
-Open a terminal in the `Release2/` directory and run:
+- Open a terminal in the `Release2/` directory and run:
 
-```bash
-docker compose up
-```
+   ```bash
+   docker compose up
+   ```
 
-To allow OPC UA clients on **other machines** to connect, pass the host IP:
+- To allow OPC UA clients on **other machines** to connect, pass the host IP:
 
-```bash
-docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=192.168.1.10 opcua-ijt-server
-```
+   ```bash
+   docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=192.168.1.10 opcua-ijt-server
+   ```
 
 ---
 

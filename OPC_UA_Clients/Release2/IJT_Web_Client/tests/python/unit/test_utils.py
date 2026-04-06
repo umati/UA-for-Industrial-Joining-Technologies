@@ -19,8 +19,8 @@ try:
 
     HAS_ASYNCUA = True
 except ImportError:  # pragma: no cover - environment-dependent
-    pytz = None
-    ua = None
+    pytz = None  # type: ignore[assignment]
+    ua = None  # type: ignore[assignment]
     HAS_ASYNCUA = False
 
 from python.utils import (  # noqa: E402

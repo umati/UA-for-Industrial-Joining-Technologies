@@ -136,8 +136,10 @@ async def test_cu_result_management_get_result_by_id(opcua_client, simulate_resu
     if not result_id:
         pytest.skip("ResultId is empty — cannot call GetResultById")
     grbi_node = await find_child_by_browse_name(rm, BN.GET_RESULT_BY_ID, ns_mr)
-    if grbi_node is None:
-        pytest.skip(f"Method '{BN.GET_RESULT_BY_ID}' not found in ResultManagement")
+    assert grbi_node is not None, (
+        f"§11.1 CU-RM: GetResultById ('{BN.GET_RESULT_BY_ID}') is a required method "
+        "in ResultManagement but not found on this server"
+    )
     try:
         result = await asyncio.wait_for(
             rm.call_method(

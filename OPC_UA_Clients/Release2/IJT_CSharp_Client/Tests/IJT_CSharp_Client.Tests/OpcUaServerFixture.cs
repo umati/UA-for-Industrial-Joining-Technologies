@@ -224,6 +224,10 @@ public sealed class OpcUaServerFixture : IDisposable
                     CreateNoWindow = true,
                 },
             };
+            // Enforce the resolved port so docker-compose uses the same port the test
+            // fixture is about to connect to (avoids mismatch when _port was parsed from
+            // OPCUA_SERVER_URL rather than being set via OPCUA_SERVER_PORT directly).
+            r.StartInfo.Environment["OPCUA_SERVER_PORT"] = _port.ToString();
             r.Start();
             r.WaitForExit(30_000);
             if (r.ExitCode == 0)
@@ -311,6 +315,7 @@ public sealed class OpcUaServerFixture : IDisposable
                             CreateNoWindow = true,
                         },
                     };
+                    r.StartInfo.Environment["OPCUA_SERVER_PORT"] = _port.ToString();
                     r.Start();
                     r.WaitForExit(30_000);
                 }

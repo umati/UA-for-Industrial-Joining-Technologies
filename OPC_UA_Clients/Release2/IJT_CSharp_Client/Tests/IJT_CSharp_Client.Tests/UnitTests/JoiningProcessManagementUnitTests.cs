@@ -37,6 +37,11 @@ public sealed class JoiningProcessManagementUnitTests
     public void GetJoiningProcessList_WithSpecificUri_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
+        object[]? capturedArgs = null;
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
+            .Returns(new List<object>());
         using var jpm = new JoiningProcessManagement(session.Object);
 
         var ex = Record.Exception(() => jpm.GetJoiningProcessList("urn:tool:controller-1"));
@@ -44,6 +49,9 @@ public sealed class JoiningProcessManagementUnitTests
         Assert.Null(ex);
         session.Verify(s => s.CallMethod(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+        Assert.NotNull(capturedArgs);
+        Assert.Single(capturedArgs);
+        Assert.Equal("urn:tool:controller-1", capturedArgs[0]);
     }
 
     [Fact]
@@ -135,6 +143,27 @@ public sealed class JoiningProcessManagementUnitTests
         var ex = Record.Exception(() => jpm.SelectJoiningProcess(string.Empty));
 
         Assert.Null(ex);
+    }
+
+    [Fact]
+    public void SelectJoiningProcess_WithId_PassesExtensionObjectWithCorrectJoiningProcessId()
+    {
+        var session = MockSessionBuilder.Create();
+        object[]? capturedArgs = null;
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
+            .Returns(new List<object>());
+        using var jpm = new JoiningProcessManagement(session.Object);
+
+        jpm.SelectJoiningProcess("JP-007");
+
+        Assert.NotNull(capturedArgs);
+        Assert.Equal(2, capturedArgs.Length);
+        Assert.Equal(string.Empty, capturedArgs[0]);  // productInstanceUri default
+        var ext = Assert.IsType<ExtensionObject>(capturedArgs[1]);
+        var jpId = Assert.IsType<UAModel.IJTBase.JoiningProcessIdentificationDataType>(ext.Body);
+        Assert.Equal("JP-007", jpId.JoiningProcessId);
     }
 
     [Fact]

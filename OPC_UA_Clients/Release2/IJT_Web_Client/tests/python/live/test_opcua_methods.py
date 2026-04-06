@@ -37,7 +37,7 @@ import asyncio
 import os
 import socket
 import time
-from typing import List
+
 
 import asyncua.client.ua_client as _uc
 import pytest
@@ -85,7 +85,7 @@ def _port_open(host: str, port: int, timeout: float = 2.0) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
-    except OSError, ConnectionRefusedError:
+    except OSError:
         return False
 
 
@@ -111,7 +111,7 @@ class ResultHandler:
     """Collects JoiningSystemResultReadyEvent notifications."""
 
     def __init__(self):
-        self.events: List = []
+        self.events: list = []
 
     async def event_notification(self, event):
         self.events.append(event)
@@ -121,7 +121,7 @@ class SystemHandler:
     """Collects JoiningSystemEvent notifications."""
 
     def __init__(self):
-        self.events: List = []
+        self.events: list = []
 
     async def event_notification(self, event):
         self.events.append(event)
@@ -232,7 +232,7 @@ async def ijt_session():
 
 
 def _node(c, identifier: str):
-    return c.get_node(ua.NodeId(identifier, NS, ua.NodeIdType.String))
+    return c.get_node(ua.NodeId(identifier, NS, ua.NodeIdType.String))  # type: ignore[arg-type]
 
 
 def _v(value, vtype):
@@ -261,14 +261,14 @@ async def _wait_events(handler, min_count: int = 1, timeout: float = 8.0) -> lis
     return list(handler.events)
 
 
-async def _invoke_result(c, result_h, method_id: str, *args, timeout=8.0) -> List:
+async def _invoke_result(c, result_h, method_id: str, *args, timeout=8.0) -> list:
     """Clear result handler, call method, wait, return snapshot."""
     result_h.events.clear()
     await _call(c, _SIM_R, method_id, *args)
     return await _wait_events(result_h, 1, timeout)
 
 
-async def _invoke_system(c, system_h, parent_id: str, method_id: str, *args, timeout=6.0) -> List:
+async def _invoke_system(c, system_h, parent_id: str, method_id: str, *args, timeout=6.0) -> list:
     """Clear system handler, call method, wait, return snapshot."""
     system_h.events.clear()
     await _call(c, parent_id, method_id, *args)

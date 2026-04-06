@@ -67,7 +67,7 @@ def _patch_asyncua_send_timeout() -> None:
             timeout = self._timeout
         return await _orig(self, request, timeout, message_type)
 
-    _uc.UaClient._send_request = _fixed
+    _uc.UaClient._send_request = _fixed  # type: ignore[method-assign]
 
 
 _patch_asyncua_send_timeout()

@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import os
+from typing import Any
 
 import pytest
 
@@ -171,7 +172,7 @@ async def test_shared_client_contract(
 
         await adapter.subscribe()
 
-        call_results = []
+        call_results: list[dict[str, Any]] = []
         for name in wanted:
             spec = next((m for m in methods if m.name == name), None)
             if not spec:
@@ -182,7 +183,7 @@ async def test_shared_client_contract(
                 result = await adapter.call_method(spec)
                 ok = True
             except Exception as exc:
-                result = exc
+                result = exc  # type: ignore[assignment]
                 ok = False
             call_results.append({"name": name, "status": "ok" if ok else "failed", "result": result})
 

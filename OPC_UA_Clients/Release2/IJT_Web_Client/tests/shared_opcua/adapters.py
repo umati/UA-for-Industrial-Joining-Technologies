@@ -215,7 +215,7 @@ class WebAdapter(BaseAdapter):
     name = "web"
 
     def __init__(self, endpoint: str, ws_url: str):
-        self._websockets = None
+        self._websockets: Any = None
         self.endpoint = endpoint
         self.ws_url = ws_url
         self.ws = None
@@ -340,11 +340,11 @@ class ConsoleAdapter(BaseAdapter):
     def __init__(self, endpoint: str, console_dir: str):
         self.endpoint = endpoint
         self.console_dir = Path(console_dir)
-        self.client_wrapper = None
+        self.client_wrapper: Any = None
         self._event_sub = None
         self._event_handler = None
         self._counter: _CountingHandler | None = None
-        self._counter_sub = None
+        self._counter_sub: Any = None
 
     async def start(self) -> None:
         if not self.console_dir.exists():

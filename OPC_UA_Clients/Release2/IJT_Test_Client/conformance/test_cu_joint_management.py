@@ -93,8 +93,9 @@ async def test_cu_joint_management_get_joint_list_callable(opcua_client, ns_indi
         pytest.skip("DI namespace not registered on server")
     jm = await _get_jm(opcua_client, ns_ijt)
     method_node = await find_child_by_browse_name(jm, BN.GET_JOINT_LIST, ns_ijt)
-    if method_node is None:
-        pytest.skip(f"'{BN.GET_JOINT_LIST}' method not found on JointManagement")
+    assert method_node is not None, (
+        f"§11.1 CU-JM: '{BN.GET_JOINT_LIST}' is a required method on JointManagement but not found"
+    )
     pi_uri = await _get_tool_product_instance_uri(opcua_client, ns_ijt, ns_di)
     if pi_uri is None:
         pytest.skip("Could not read ProductInstanceUri from first tool — required for GetJointList")

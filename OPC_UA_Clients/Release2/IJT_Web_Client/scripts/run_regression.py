@@ -304,7 +304,7 @@ class WsHarness:
             fut = asyncio.get_running_loop().create_future()
             self.pending[uid] = fut
 
-        await self.ws.send(json.dumps(event))
+        await self.ws.send(json.dumps(event))  # type: ignore[attr-defined]
         if fut:
             return await asyncio.wait_for(fut, timeout=15)
         return None

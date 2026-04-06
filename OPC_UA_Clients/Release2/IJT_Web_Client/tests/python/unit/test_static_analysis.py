@@ -226,7 +226,7 @@ _TOKEN_SKIP = {
 
 def _find_implicit_concat_in_lists(source: str) -> list[int]:
     """Return line numbers with adjacent string literals inside list brackets."""
-    found = []
+    found: list[int] = []
     try:
         tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
     except tokenize.TokenError:

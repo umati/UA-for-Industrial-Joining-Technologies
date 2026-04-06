@@ -3,11 +3,12 @@
 #
 # Runs nightly, on manual trigger, or when OPC UA Server / Web Client code
 # changes are pushed to main. These jobs are excluded from the fast CI path
-# because they take 20-30 minutes (Docker build + 13 integration tests).
+# because they take 20-30 minutes (Docker build + live conformance tests).
 #
 # Jobs:
 #   server-smoke-docker  Release2 / OPC UA Server        Linux native Docker build + smoke
-#   integration-tests    Release2 / Integration Tests     Windows: OPC UA + Test Client + WebSocket
+#   webclient-docker     Release2 / IJT Web Client        Docker unit/prod tests
+#   integration-tests    Release2 / Integration Tests     Windows: OPC UA + Test Client + Web Client + Console Client
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: Heavy Tests
@@ -19,8 +20,10 @@ on:
   push:
     branches: [main]
     paths:
-      # OPC UA Server — any change needs Docker rebuild + smoke
-      - 'OPC_UA_Servers/**'
+      # OPC UA Server — code/binary/Dockerfile/test changes (docs-only changes excluded)
+      - 'OPC_UA_Servers/Release2/*.zip'
+      - 'OPC_UA_Servers/Release2/Dockerfile'
+      - 'OPC_UA_Servers/Release2/tests/**'
       # Web Client — only OPC UA backend, Docker config, integration tests, and dependencies
       # GUI/JS/unit-test changes are covered by fast CI and do NOT need live OPC UA testing
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/src/python/**'
@@ -31,7 +34,30 @@ on:
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements*.txt'
       # Test Client — every change is an OPC UA conformance test change
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
+      # Console Client — live tests run here (not in fast CI)
+      - 'OPC_UA_Clients/Release2/IJT_Console_Client/*.py'
+      - 'OPC_UA_Clients/Release2/IJT_Console_Client/tests/live/**'
+      - 'OPC_UA_Clients/Release2/IJT_Console_Client/requirements*.txt'
       # Workflow file itself
+      - '.github/workflows/heavy-tests.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      # Same paths as push — run live tests on PRs that touch server/client code
+      # so regressions are caught before merge, not after.
+      - 'OPC_UA_Servers/Release2/*.zip'
+      - 'OPC_UA_Servers/Release2/Dockerfile'
+      - 'OPC_UA_Servers/Release2/tests/**'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/src/python/**'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/**'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/index.py'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/docker-compose.yml'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements*.txt'
+      - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
+      - 'OPC_UA_Clients/Release2/IJT_Console_Client/*.py'
+      - 'OPC_UA_Clients/Release2/IJT_Console_Client/tests/live/**'
+      - 'OPC_UA_Clients/Release2/IJT_Console_Client/requirements*.txt'
       - '.github/workflows/heavy-tests.yml'
 
 permissions:
@@ -283,6 +309,22 @@ jobs:
             -v --tb=short --timeout=60 `
             --junitxml=OPC_UA_Clients/Release2/IJT_Web_Client/test-results/pytest-integration.xml
 
+      - name: Install Console Client dependencies
+        working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run Console Client live tests
+        working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
+        env:
+          OPCUA_SERVER_URL: opc.tcp://localhost:40451
+        run: |
+          New-Item -ItemType Directory -Force -Path test-results | Out-Null
+          python -m pytest tests/live/ `
+            -v --tb=short --timeout=120 `
+            --junitxml=test-results/pytest-live.xml
+
       - name: Upload Integration Test Results
         uses: actions/upload-artifact@v7
         if: always()
@@ -291,6 +333,7 @@ jobs:
           path: |
             OPC_UA_Clients/Release2/IJT_Test_Client/test-results/
             OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
+            OPC_UA_Clients/Release2/IJT_Console_Client/test-results/
 
       - name: Stop servers
         if: always()

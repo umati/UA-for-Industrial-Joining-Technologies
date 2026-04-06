@@ -10,3 +10,6 @@ paths-ignore:
   # The server Dockerfile runs as root (required by the OPC UA server process
   # to bind to port 40451 and write PKI certificates to its working directory).
   - 'OPC_UA_Servers/Release2/Dockerfile'
+  # Auto-generated OPC UA type libraries — not handwritten code, thousands of
+  # boilerplate instances of nested-if, ICloneable, ternary etc. from the code generator.
+  - 'OPC_UA_Clients/Release2/IJT_CSharp_Client/Types/**'

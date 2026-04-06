@@ -39,7 +39,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+
 
 # Ensure stdout/stderr use UTF-8 on Windows (cp1252 can't encode box-drawing chars)
 if hasattr(sys.stdout, "reconfigure"):
@@ -158,8 +158,8 @@ def _run(
     *,
     cwd: Path = ROOT,
     label: str = "",
-    env: Optional[dict] = None,
-    timeout: Optional[int] = None,
+    env: dict | None = None,
+    timeout: int | None = None,
 ) -> int:
     display = label or " ".join(str(c) for c in cmd[:5])
     print(f"\n{_C.DIM}CMD: {display}{_C.RESET}")
@@ -184,7 +184,7 @@ def _run_to_file(
     *,
     cwd: Path = ROOT,
     label: str = "",
-    env: Optional[dict] = None,
+    env: dict | None = None,
 ) -> int:
     """Run *cmd*, capture stdout to *output_file*, return exit code."""
     display = label or " ".join(str(c) for c in cmd[:5])
@@ -689,19 +689,15 @@ def _stage_playwright_install() -> StageResult:
             env=env,
         )
     if rc != 0:
-        # Corporate SSL proxy may block download — retry with TLS verification disabled
-        _warn("Download failed, retrying with NODE_TLS_REJECT_UNAUTHORIZED=0 (corporate proxy)")
-        env2 = {**env, "NODE_TLS_REJECT_UNAUTHORIZED": "0"}
-        rc = _run(
-            [npx, "playwright", "install", "chromium"],
-            label="playwright install chromium (TLS bypass)",
-            env=env2,
-        )
-    if rc != 0:
-        # If still failing it's a network/environment issue — warn but don't block other tests
-        _warn("Playwright browser install failed (network/SSL issue) — smoke tests will be skipped")
+        # Network or environment issue — skip Playwright smoke tests without blocking others.
+        # To resolve: configure system/npm proxy settings or a trusted CA bundle, then run:
+        #   npx playwright install chromium
+        _warn("Playwright browser install failed (network issue) — smoke tests will be skipped")
         result = StageResult("playwright-install", 0, skipped=True)
-        result.notes.append("Browser download blocked (SSL/network) — run 'npx playwright install chromium' manually")
+        result.notes.append(
+            "Browser download failed — configure proxy/CA certs and run "
+            "'npx playwright install chromium' manually"
+        )
         return result
     return StageResult("playwright-install", rc, duration=time.monotonic() - t0)
 
@@ -809,7 +805,7 @@ def _opcua_server_port() -> int:
     return int(os.getenv("OPCUA_SERVER_PORT", str(_CLIENT_DEFAULT_PORT)))
 
 
-def _maybe_start_opcua_server() -> tuple[bool, bool, Optional[subprocess.Popen]]:
+def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
     """Start the OPC UA server if the target port is not yet open.
 
     Returns *(started_by_us, port_open, proc)*.
@@ -838,7 +834,7 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, Optional[subprocess.Popen]]
         return False, True, None
 
     # Try binary launch first
-    exe: Optional[str] = os.getenv("OPCUA_SIMULATOR_EXE")
+    exe: str | None = os.getenv("OPCUA_SIMULATOR_EXE")
     if not exe:
         for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
             if candidate.exists():
@@ -892,7 +888,7 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, Optional[subprocess.Popen]]
     return True, False, None
 
 
-def _stop_opcua_server(proc: Optional[subprocess.Popen] = None) -> None:
+def _stop_opcua_server(proc: subprocess.Popen | None = None) -> None:
     if proc is not None:
         proc.terminate()
         try:
@@ -909,7 +905,7 @@ def _stop_opcua_server(proc: Optional[subprocess.Popen] = None) -> None:
 def _stage_python_integration(
     python: Path,
     *,
-    prestarted: tuple[bool, bool, Optional[subprocess.Popen]] | None = None,
+    prestarted: tuple[bool, bool, subprocess.Popen | None] | None = None,
 ) -> StageResult:
     """Phase 2 — run integration tests against a live OPC UA server.
 

@@ -65,7 +65,7 @@ async def find_joining_system(client) -> UANode | None:
     objects = client.get_objects_node()
     try:
         refs = await _browse_refs(objects)
-    except Exception:
+    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
         return None  # Objects node unreachable — server has non-standard address space
     children = [_node_from_ref(objects, r.NodeId) for r in refs]
     for child in children:
@@ -96,7 +96,7 @@ async def find_child_by_browse_name(
     """
     try:
         refs = await _browse_refs(parent_node, timeout=timeout)
-    except Exception:
+    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
         return None  # Parent node unreachable — caller receives None and skips
     for ref in refs:
         if ref.BrowseName.Name == name and ref.BrowseName.NamespaceIndex == ns_index:
@@ -113,7 +113,7 @@ async def browse_folder_instances(folder_node: UANode, timeout: float = _BROWSE_
     results: list[tuple[str, UANode]] = []
     try:
         refs = await _browse_refs(folder_node, timeout=timeout)
-    except Exception:
+    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
         return results  # Folder unreachable — return whatever was collected so far
     for ref in refs:
         results.append(
@@ -158,7 +158,7 @@ async def get_interface_types(node: UANode, ns_opc_ua: int = 0) -> list:
             nodeclassmask=ua.NodeClass.Unspecified,
         )
         return [ref.NodeId for ref in refs]
-    except Exception:
+    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
         return []  # Node has no HasInterface references or is unreachable
 
 
@@ -188,7 +188,7 @@ async def get_associated_assets(node: UANode, ns_opc_ua: int = 0) -> list:
             nodeclassmask=ua.NodeClass.Unspecified,
         )
         return [_node_from_ref(node, ref.NodeId) for ref in refs]
-    except Exception:
+    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
         return []  # Node has no AssociatedWith references or is unreachable
 
 
@@ -205,7 +205,7 @@ async def get_children_by_reference(node: UANode, ref_type_id: int, ns_opc_ua: i
             nodeclassmask=ua.NodeClass.Unspecified,
         )
         return [_node_from_ref(node, ref.NodeId) for ref in refs]
-    except Exception:
+    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
         return []  # Reference type not present on node or node is unreachable
 
 
