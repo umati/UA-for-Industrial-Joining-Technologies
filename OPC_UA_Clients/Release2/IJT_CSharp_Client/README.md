@@ -26,7 +26,7 @@ python run_all_tests.py
 
 Requires .NET 10 SDK. The runner wraps `dotnet test` and `dotnet format`.
 
-You can also run the .NET test suite directly:
+The .NET test suite can also be run directly:
 
 ```bash
 dotnet test IJT_CSharp_Client.sln
@@ -47,4 +47,17 @@ Client/          Session, Events, Results, Assets, Joining Process
 Configuration/   Server URL and app name (env var overrides)
 Helpers/         Browse utilities, ExtensionObject helpers
 Types/           C# type libraries from IJT NodeSet files
+```
+
+## Types — Reuse in Other Projects
+
+The `Types/` directory contains auto-generated C# libraries for all IJT OPC UA
+data types. They can be used independently of this client in any .NET project.
+
+They depend on `OPCFoundation.NetStandard.Opc.Ua.Core >= 1.5.0`. When using a
+third-party OPC UA SDK (e.g. Softing), add an explicit NuGet reference to the
+OPC Foundation Core package to resolve compiler error CS0012:
+
+```xml
+<PackageReference Include="OPCFoundation.NetStandard.Opc.Ua" Version="[1.5.0,)" />
 ```

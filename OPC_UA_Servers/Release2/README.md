@@ -1,81 +1,81 @@
 # OPC UA IJT Server Simulator
 
+OPC UA Server Simulator for the [OPC UA Industrial Joining Technologies](https://github.com/umati/UA-for-Industrial-Joining-Technologies) specification (OPC 40450-1 Joining Base and OPC 40451-1 Tightening).
+
 ## Contact
-**Author:** Mohit Agarwal: mohit.agarwal@atlascopco.com
 
-## Usage
+**Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+
+---
+
+## Getting Started
+
 ### Common Steps
-- Download the appropriate ZIP by clicking the **'Download raw file'** button and **Extract** it:
-  - **Windows:** `OPC_UA_IJT_Server_Simulator.zip` → extract to `OPC_UA_IJT_Server_Simulator/`
-  - **Linux:** `OPC_UA_IJT_Server_Simulator_Linux.zip` → extract to `OPC_UA_IJT_Server_Simulator_Linux/`
-  - **Docker:** uses the Linux binary automatically — no manual download needed
-- **Go** to the extracted directory.
-- The **EndpointUrl** of the OPC UA Server would be: **opc.tcp://localhost:40451** or **opc.tcp://YourComputerName:40451**.
 
-### Windows 10 or Later
-#### Prerequisites
-- **Install** Visual C++ Runtime [**VC-Redist**](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-180)
-#### Running the application
-- **Launch** the **binary** file (**`opcua_ijt_demo_application.exe`**). Ensure that it is Run as **Adminstrator** or at least **Read/Write** access to the directory.
+Download the appropriate ZIP by clicking the **Download raw file** button on GitHub and extract it:
 
-### Linux (Ubuntu 20.04 or Later / Any glibc 2.17+ Distro)
-- Download **OPC_UA_IJT_Server_Simulator_Linux.zip** and extract it.
-- **Go** to the **OPC_UA_IJT_Server_Simulator_Linux** directory.
-- Make the binary executable (first time only):
-  ```
-  chmod +x opcua_ijt_demo_application
-  ```
-- **Run:**
-  ```
-  ./opcua_ijt_demo_application
-  ```
-- The binary is statically linked (no runtime library installation required). It runs on Ubuntu 20.04+, Debian 10+, RHEL/CentOS 7+, and any Linux with glibc 2.17+.
+| Platform | Download | Extract to |
+|----------|----------|------------|
+| Windows  | `OPC_UA_IJT_Server_Simulator.zip` | `OPC_UA_IJT_Server_Simulator/` |
+| Linux    | `OPC_UA_IJT_Server_Simulator_Linux.zip` | `OPC_UA_IJT_Server_Simulator_Linux/` |
+| Docker   | Uses the Linux binary automatically — no download needed | — |
+
+- **Server Endpoint:** `opc.tcp://localhost:40451`
+- For remote connections, replace `localhost` with the hostname or IP address.
+
+### Windows
+
+1. Install the [Visual C++ Runtime (VC-Redist)](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-180) if not already installed.
+2. Launch `opcua_ijt_demo_application.exe`. Ensure it has **Read/Write** access to its directory (run as **Administrator** if needed).
+
+### Linux
+
+1. Open a terminal in the extracted folder and make the file runnable (first time only):
+   ```bash
+   chmod +x opcua_ijt_demo_application
+   ```
+2. Start the server:
+   ```bash
+   ./opcua_ijt_demo_application
+   ```
 
 ### Docker
-- The `Dockerfile` is in the **`Release2/`** directory — run all Docker commands from there.
-- The Docker image uses the **native Linux binary** (no Wine needed).
-- **Recommended:**
-  ```
-  docker compose up
-  ```
-- **Or manually:**
-  ```
-  docker build -t opcua-ijt-server .
-  docker run --rm -p 40451:40451 opcua-ijt-server
-  ```
-- **For remote clients** — pass your host IP so OPC UA clients outside the container can connect:
-  ```
-  docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=192.168.1.10 opcua-ijt-server
-  ```
-- **Note:** The server always uses port **40451** by default. The `OPCUA_SERVER_PORT` environment variable is available for automated testing scenarios only (running multiple isolated instances in parallel). For normal use, always use the default port.
-- **Verify the server is responding** (requires `asyncua`):
-  ```
-  pip install asyncua
-  python tests/smoke_test.py
-  ```
+
+Open a terminal in the `Release2/` directory and run:
+
+```bash
+docker compose up
+```
+
+To allow OPC UA clients on **other machines** to connect, pass the host IP:
+
+```bash
+docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=192.168.1.10 opcua-ijt-server
+```
+
+---
+
+## General Usage
+
+Full usage guide including all simulation methods and configuration options:
+[**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf)
+
+---
 
 ## Testing
-
-Run the server smoke tests (requires Docker and a running server on port 40451):
 
 ```bash
 python run_all_tests.py
 ```
 
-Individual smoke test (no Docker required — server must already be running):
-
-```bash
-python tests/smoke_test.py
-```
-
-### General Usage
-- Refer to the following document: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf).
+---
 
 # Change Log
-**2026-04-02:** Following Changes.
+
+**2026-04-02:** Following changes.
 1. **Moved** `Dockerfile` and added `docker-compose.yml` to the `Release2/` directory (previously was inside the binary subfolder).
 2. **Embedded** the Docker entrypoint script inline in the Dockerfile — single-file Docker configuration, no extra scripts to manage.
-3. **Added** `tests/smoke_test.py` — 8-check OPC UA sanity test (TCP, session, namespaces, TighteningSystem, Simulations, ResultManagement, AssetManagement).
+3. **Added** `tests/smoke_test.py` — 10-check OPC UA sanity test (TCP, session, namespaces, TighteningSystem, Simulations, ResultManagement, AssetManagement, JoiningProcessManagement, JointManagement).
 4. **Added** `.dockerignore` to keep Docker image lean (excludes zip archives, PDFs, docs).
 5. **Added** missing interface for Asset.Identification IJoiningAdditionalInformationType.
 6. **Added** native Linux binary package (`OPC_UA_IJT_Server_Simulator_Linux.zip`) — runs on any glibc 2.17+ Linux distro without Wine or additional runtime dependencies.
@@ -161,7 +161,7 @@ python tests/smoke_test.py
 3. Minor bugs and optimizations.
 
 **2025-02-24:** Following changes.
-1. Fixed a crash issue which occurs in rare sceanrios due to Result variable updates.
+1. Fixed a crash issue which occurs in rare scenarios due to Result variable updates.
 2. Removed GetLatestResult method implementation as it was a temporary implementation. It is NOT implemented in the Simulator. A new mechanism defined in the upcoming IJT Joining Specification will be implemented after the specification version is published.
 2. Added some minor log lines and Minor bugs and optimizations.
 
@@ -177,7 +177,7 @@ python tests/smoke_test.py
 **2024-11-14:** Following changes.
 1. Correction of CounterType in JobResult from TOTOAL_JOINING_PROCESS_SIZE to OTHER.
 2. Test Logic for GetLatestResult
-3. Logging the input arguments receieved from SendIdentifiers Method
+3. Logging the input arguments received from SendIdentifiers Method
 
 **2024-10-31:** Following changes.
 1. Added simulated data for GetJoiningProcessList method.
@@ -220,27 +220,27 @@ python tests/smoke_test.py
 	StepId, PartId, ExternalRecipeId, InternalRecipeId, ProductId, ExternalConfigurationId, InternalConfigurationId, JobId.
 2. HasTransferableDataOnFile, ResultUri, FileFormat are NOT applicable for a Result generated from a joining system since Results are NOT reported as Files.
 
-**2024-04-19:** Few enhacements and issue fixes as follows.
+**2024-04-19:** Few enhancements and issue fixes as follows.
 1. Formally released version of OPC UA SDK with new fixes.
 2. Added logic for 12 commands which will Log the input arguments on invocation as a test simulation.
 3. Minor bugs and optimizations.
 
-**2024-03-10:** Few enhacements and issue fixes as follows.
+**2024-03-10:** Few enhancements and issue fixes as follows.
 1. Updated the formally released NodeSets.
 2. Correction in the NamespaceIndex of JoiningSystem->Identification
 3. Minor bugs and optimizations.
 
-**2024-02-27:** Few enhacements and issue fixes as follows.
+**2024-02-27:** Few enhancements and issue fixes as follows.
 1. Updated the latest NodeSet based on the all the fixes for Release Candidate Comments.
 2. Added newer version of the OPC UA SDK received.
 3. Fixed issue related to method call where TrimmedString was not getting converted internally when passed as an input argument.
 
-**2024-02-16:** Few enhacements and issue fixes as follows.
+**2024-02-16:** Few enhancements and issue fixes as follows.
 1. Updated the latest NodeSet based on the all the fixes for Release Candidate Comments.
 2. Added latest version of the OPC UA SDK UA 1.05 Concrete SubTypes.
 3. Few minor bugs and optimizations.
 
-**2024-02-07:** Few enhacements and issue fixes as follows.
+**2024-02-07:** Few enhancements and issue fixes as follows.
 1.	Integrated MachineryLifetimeCounterType as part of the IJoiningSystemAssetType.
 2.	Added ExtendedMetaData in JoiningResultMetaDataType
 3.	Added AssociatedEntities in JoiningProcessMetaDataType

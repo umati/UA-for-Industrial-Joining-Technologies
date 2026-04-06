@@ -52,7 +52,7 @@ jobs:
   # Release2 / OPC UA Server — Docker Smoke
   #   Extract the Linux ZIP to satisfy the COPY instructions in the Dockerfile,
   #   build the native Linux Docker image (layer-cached via GitHub Actions cache),
-  #   start the container, wait for TCP 40451, run all 8 smoke checks, tear down.
+  #   start the container, wait for TCP 40451, run all 10 smoke checks, tear down.
   # ───────────────────────────────────────────────────────────────────────────
   server-smoke-docker:
     name: "Release2 / OPC UA Server — Docker Smoke"
@@ -116,7 +116,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
 
-      - name: Run smoke test (8 checks)
+      - name: Run smoke test (10 checks)
         run: python OPC_UA_Servers/Release2/tests/smoke_test.py --tcp-timeout 30
 
       - name: Dump container logs
@@ -253,7 +253,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
 
-      - name: Run smoke test (8 checks)
+      - name: Run smoke test (10 checks)
         run: python OPC_UA_Servers/Release2/tests/smoke_test.py --tcp-timeout 30
 
       - name: Install IJT Test Client dependencies

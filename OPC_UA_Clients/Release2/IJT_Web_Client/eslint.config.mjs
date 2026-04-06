@@ -4,6 +4,8 @@ export default neostandard({
   ignores: [
     'node_modules/**',
     'venv/**',
+    '.venv/**',
+    '.state/**',
     '.tmp-pip/**'
   ],
   languageOptions: {

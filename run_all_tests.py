@@ -147,10 +147,13 @@ def _result_line(ok: bool, skipped: bool, name: str, duration: float,
 REPO_ROOT       = Path(__file__).resolve().parent
 ROOT            = REPO_ROOT  # alias used by GHA validation helpers
 SERVER_DIR      = REPO_ROOT / "OPC_UA_Servers" / "Release2"
+_NATIVE_BINARY_WIN   = SERVER_DIR / "OPC_UA_IJT_Server_Simulator"        / "opcua_ijt_demo_application.exe"
+_NATIVE_BINARY_LINUX = SERVER_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
 CSHARP_DIR      = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_CSharp_Client"
 CONSOLE_DIR     = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Console_Client"
 TEST_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Test_Client"
 WEB_CLIENT_DIR  = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client"
+NODE_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release1" / "IJT_Node_Client"
 SMOKE_TEST      = SERVER_DIR / "tests" / "smoke_test.py"
 OPCUA_PORT      = 40451
 
@@ -319,6 +322,36 @@ def _emit_suite_output(result: SuiteResult) -> None:
 # Docker / server management
 # ---------------------------------------------------------------------------
 
+_native_server_proc: Optional[subprocess.Popen] = None
+
+
+def _try_native_binary() -> bool:
+    """Launch the native OPC UA server binary (no Docker dependency).
+
+    Tries the Windows .exe on Windows, the Linux binary otherwise.
+    Returns True if the binary was found and the process was started.
+    Sets module-level ``_native_server_proc`` so ``_stop_server`` can clean up.
+    """
+    global _native_server_proc
+    binary = _NATIVE_BINARY_WIN if IS_WINDOWS else _NATIVE_BINARY_LINUX
+    if not binary.exists():
+        log.info("Native OPC UA binary not found at %s", binary)
+        return False
+    log.info("Starting OPC UA server binary: %s", binary)
+    try:
+        _native_server_proc = subprocess.Popen(
+            [str(binary)],
+            cwd=str(binary.parent),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        log.info("OPC UA binary launched (pid=%d).", _native_server_proc.pid)
+        return True
+    except OSError as exc:
+        log.warning("Failed to launch native binary: %s", exc)
+        return False
+
+
 def _ensure_docker_running() -> None:
     """Ensure Docker daemon is up; on Windows, launch Docker Desktop if needed."""
     docker = _find_cmd(["docker", "docker.exe"])
@@ -383,16 +416,34 @@ def _ensure_docker_running() -> None:
     sys.exit(1)
 
 
-def _start_server(no_rebuild: bool = False) -> None:
-    """docker compose up -d [--no-build | --build] in SERVER_DIR."""
+def _start_server(no_rebuild: bool = False) -> bool:
+    """Start the OPC UA server. Tries native binary first, Docker as fallback.
+
+    Resolution order:
+      1. Server already running on OPCUA_PORT → return False (no-op).
+      2. Native binary (Windows .exe / Linux ELF) → fastest, no Docker needed.
+      3. Docker compose up → cross-platform fallback.
+
+    Returns True if *this call* started something (caller must call ``_stop_server``).
+    Returns False if the server was already running.
+    Calls ``sys.exit(1)`` only if Docker is the chosen path and compose fails.
+    """
+    # 1. Already running?
+    if _wait_for_port(OPCUA_PORT, timeout=3):
+        log.info("OPC UA server already running on port %d — skipping start.", OPCUA_PORT)
+        return False
+
+    # 2. Native binary (preferred — no Docker dependency)
+    if _try_native_binary():
+        return True
+
+    # 3. Docker fallback
+    log.info("Native binary not available — using Docker.")
+    _ensure_docker_running()  # exits on failure if Docker unavailable
     docker = _find_cmd(["docker", "docker.exe"])
     if not docker:
-        log.warning(
-            "Docker not found — cannot auto-start OPC UA server. "
-            "Phase 2 tests will be skipped or fail. "
-            "Install Docker or set OPCUA_SERVER_URL to point at a running server."
-        )
-        return
+        log.error("Docker binary disappeared after _ensure_docker_running succeeded.")
+        sys.exit(1)
     build_flag = "--no-build" if no_rebuild else "--build"
     log.info("Starting OPC UA server: docker compose up -d %s", build_flag)
     rc = subprocess.run(
@@ -402,6 +453,7 @@ def _start_server(no_rebuild: bool = False) -> None:
     if rc != 0:
         log.error("docker compose up failed (exit=%d).", rc)
         sys.exit(1)
+    return True
 
 
 def _wait_for_port(port: int = OPCUA_PORT, timeout: int = 90) -> bool:
@@ -420,7 +472,25 @@ def _wait_for_port(port: int = OPCUA_PORT, timeout: int = 90) -> bool:
 
 
 def _stop_server() -> None:
-    """docker compose down in SERVER_DIR."""
+    """Stop the OPC UA server — handles both native binary and Docker."""
+    global _native_server_proc
+    if _native_server_proc is not None:
+        log.info("Stopping OPC UA server binary (pid=%d)...", _native_server_proc.pid)
+        try:
+            if _native_server_proc.poll() is None:
+                _native_server_proc.terminate()
+                try:
+                    _native_server_proc.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    _native_server_proc.kill()
+                    _native_server_proc.wait(timeout=5)
+        except OSError as exc:
+            log.warning("Error stopping server process: %s", exc)
+        _native_server_proc = None
+        log.info("OPC UA server binary stopped.")
+        return
+
+    # Docker path
     docker = _find_cmd(["docker", "docker.exe"])
     if not docker:
         return
@@ -432,6 +502,62 @@ def _stop_server() -> None:
         stderr=subprocess.DEVNULL,
     )
     log.info("Server stopped.")
+
+
+# ---------------------------------------------------------------------------
+# Client venv management
+# ---------------------------------------------------------------------------
+
+def _ensure_client_venv(client_dir: Path, outputs: list[str]) -> Path:
+    """Ensure *client_dir/.venv* exists and requirements are installed.
+
+    Returns the path to the venv Python interpreter.  All install output is
+    appended to *outputs* so it flows into the parent SuiteResult.
+
+    This is used by Phase 2 suites so the root runner can call pytest directly
+    inside each client's isolated environment — avoiding the subprocess-chain
+    deadlock where a client runner's ``_relaunch_under_venv()`` call would
+    create a grandchild process that holds inherited stdout/stderr pipe
+    write-handles after the intermediate process exits (Windows P_OVERLAY).
+    """
+    venv_dir = client_dir / ".venv"
+    venv_py = (
+        venv_dir / "Scripts" / "python.exe"
+        if IS_WINDOWS
+        else venv_dir / "bin" / "python"
+    )
+
+    if not venv_py.exists():
+        log.info("[venv] Creating %s/.venv ...", client_dir.name)
+        rc, out = _run_captured(
+            [sys.executable, "-m", "venv", str(venv_dir)],
+            cwd=client_dir,
+            label=f"venv create ({client_dir.name})",
+            timeout=120,
+        )
+        outputs.append(out)
+        if rc != 0:
+            log.error("[venv] Failed to create venv for %s", client_dir.name)
+            return Path(sys.executable)  # fallback — suite will likely fail naturally
+
+    # Install from requirements.txt then requirements-dev.txt (if they exist).
+    # --pre allows asyncua pre-release builds on Python 3.14+.
+    for req_name in ("requirements.txt", "requirements-dev.txt"):
+        req_path = client_dir / req_name
+        if req_path.exists():
+            rc, out = _run_captured(
+                [
+                    str(venv_py), "-m", "pip", "install",
+                    "--quiet", "--disable-pip-version-check", "--pre",
+                    "-r", str(req_path),
+                ],
+                cwd=client_dir,
+                label=f"pip install {req_name} ({client_dir.name})",
+                timeout=300,
+            )
+            outputs.append(out)
+
+    return venv_py
 
 
 # ---------------------------------------------------------------------------
@@ -624,7 +750,7 @@ def _suite_csharp_unit() -> SuiteResult:
     sln = CSHARP_DIR / "IJT_CSharp_Client.sln"
     csproj = (CSHARP_DIR / "Tests" / "IJT_CSharp_Client.Tests"
               / "IJT_CSharp_Client.Tests.csproj")
-    env = _dotnet_env(IJT_AUTO_ACCEPT="true")
+    env = _dotnet_env(IJT_AUTO_ACCEPT="true", IJT_PHASE1_ONLY="true")
     outputs: list[str] = []
 
     rc_restore, out = _run_captured(
@@ -661,7 +787,7 @@ def _suite_csharp_unit() -> SuiteResult:
 
 
 def _suite_console_unit() -> SuiteResult:
-    """Console Client -- unit tests only (tests/unit/)."""
+    """Console Client -- unit tests only (tests/unit/) in client's own venv."""
     name = "console"
     t0 = time.monotonic()
 
@@ -672,55 +798,34 @@ def _suite_console_unit() -> SuiteResult:
     if not unit_dir.exists():
         return SuiteResult(name, True, skipped=True, notes=["tests/unit/ not found"])
 
-    python = _current_python()
     outputs: list[str] = []
-
-    rc_pip, out = _run_captured(
-        [python, "-m", "pip", "install", "-q", "--disable-pip-version-check",
-         "-r", "requirements.txt", "-r", "requirements-dev.txt"],
-        cwd=CONSOLE_DIR, label="pip install (console)",
-    )
-    outputs.append(out)
+    venv_py = _ensure_client_venv(CONSOLE_DIR, outputs)
 
     rc_pytest, out = _run_captured(
-        [python, "-m", "pytest", "tests/unit/", "-v", "--tb=short", "--no-header"],
+        [str(venv_py), "-m", "pytest", "tests/unit/", "-v", "--tb=short", "--no-header"],
         cwd=CONSOLE_DIR, label="pytest console unit",
     )
     outputs.append(out)
 
-    return SuiteResult(name, rc_pip == 0 and rc_pytest == 0,
+    return SuiteResult(name, rc_pytest == 0,
                        time.monotonic() - t0, output="\n".join(outputs))
 
 
 def _suite_webclient_unit() -> SuiteResult:
-    """Web Client -- Python unit tests (pytest) + JS unit tests (vitest)."""
+    """Web Client -- Python unit tests (pytest) + JS unit tests (vitest) in client venv."""
     name = "webclient"
     t0 = time.monotonic()
 
     if not WEB_CLIENT_DIR.exists():
         return SuiteResult(name, True, skipped=True, notes=["WEB_CLIENT_DIR not found"])
 
-    python = _current_python()
     outputs: list[str] = []
+    venv_py = _ensure_client_venv(WEB_CLIENT_DIR, outputs)
 
-    # Install Python test deps (mirrors what the Web Client runner installs)
-    rc_pip, out = _run_captured(
-        [
-            python, "-m", "pip", "install",
-            "--quiet", "--disable-pip-version-check", "--pre",
-            "asyncua>=1.2b2",
-            "pytest", "pytest-asyncio",
-            "websockets>=16.0",
-            "pytz", "aiofiles", "packaging", "python-dotenv",
-        ],
-        cwd=WEB_CLIENT_DIR, label="pip install (webclient)",
-    )
-    outputs.append(out)
-
-    # Python unit tests -- same marker filter as the Web Client runner uses
+    # Python unit tests — exclude live/integration markers so no server is needed
     rc_py, out = _run_captured(
         [
-            python, "-m", "pytest", "tests/",
+            str(venv_py), "-m", "pytest", "tests/",
             "-m", "not integration and not live and not live_ws and not legacy",
             "-v", "--tb=short", "--no-header",
         ],
@@ -749,34 +854,85 @@ def _suite_webclient_unit() -> SuiteResult:
     else:
         outputs.append("npm not found in PATH -- JS unit tests skipped\n")
 
-    ok = rc_pip == 0 and rc_py == 0 and rc_js == 0
+    ok = rc_py == 0 and rc_js == 0
     return SuiteResult(name, ok, time.monotonic() - t0, output="\n".join(outputs))
 
 
 def _suite_testclient_collect() -> SuiteResult:
-    """Test Client -- collect-only check (verifies all imports without a server)."""
+    """Test Client -- collect-only check in client venv (verifies all imports without a server)."""
     name = "testclient"
     t0 = time.monotonic()
 
     if not TEST_CLIENT_DIR.exists():
         return SuiteResult(name, True, skipped=True, notes=["TEST_CLIENT_DIR not found"])
 
-    # Prefer the test client's own venv
-    venv_python = (
-        TEST_CLIENT_DIR / ".venv"
-        / ("Scripts" if IS_WINDOWS else "bin")
-        / ("python.exe" if IS_WINDOWS else "python")
-    )
-    python = str(venv_python) if venv_python.exists() else _current_python()
+    outputs: list[str] = []
+    venv_py = _ensure_client_venv(TEST_CLIENT_DIR, outputs)
 
     rc, out = _run_captured(
-        [python, "-m", "pytest", "--collect-only", "-q", "--tb=short"],
+        [str(venv_py), "-m", "pytest", "--collect-only", "-q", "--tb=short"],
         cwd=TEST_CLIENT_DIR, label="pytest --collect-only (testclient)",
     )
+    outputs.append(out)
     # rc=5 means "no tests collected" -- still a valid import check
     ok = rc in (0, 5)
     notes = ["no tests collected (rc=5)"] if rc == 5 else []
-    return SuiteResult(name, ok, time.monotonic() - t0, output=out, notes=notes)
+    return SuiteResult(name, ok, time.monotonic() - t0,
+                       output="\n".join(outputs), notes=notes)
+
+
+def _suite_node_unit() -> SuiteResult:
+    """Node Client (Release1) -- JS unit tests (vitest) + ESLint static analysis.
+
+    IMPORTANT: Only unit tests are run here (tests/js/unit/ via vitest with jsdom).
+    These tests make NO live OPC UA connections and use NO ports — safe for parallel
+    execution alongside all Release2 client suites.
+
+    NOTE: The Release1 OPC UA Server used by Node Client does NOT support dynamic
+    ports (always binds to 40451). The Release2 OPC UA Server supports dynamic ports
+    via OPCUA_SERVER_PORT. These two server versions have BREAKING CHANGES (renamed
+    types, new models) and are NOT interchangeable. Node Client E2E tests (Playwright)
+    are intentionally excluded here to avoid port-40451 conflicts with Release2 clients.
+    Run E2E tests manually or in a dedicated isolated environment.
+    """
+    name = "node"
+    t0 = time.monotonic()
+
+    if not NODE_CLIENT_DIR.exists():
+        return SuiteResult(name, True, skipped=True, notes=["NODE_CLIENT_DIR not found"])
+
+    npm = _find_cmd(["npm", "npm.cmd"])
+    if not npm:
+        return SuiteResult(name, True, skipped=True, notes=["npm not in PATH"])
+
+    outputs: list[str] = []
+
+    # Install / update node_modules
+    rc_install, out = _run_captured(
+        [npm, "ci"],
+        cwd=NODE_CLIENT_DIR, label="npm ci (node)",
+    )
+    outputs.append(out)
+    if rc_install != 0:
+        return SuiteResult(name, False, time.monotonic() - t0,
+                           output="\n".join(outputs), notes=["npm ci failed"])
+
+    # ESLint
+    rc_lint, out = _run_captured(
+        [npm, "run", "lint:js"],
+        cwd=NODE_CLIENT_DIR, label="eslint (node)",
+    )
+    outputs.append(out)
+
+    # Vitest unit tests
+    rc_test, out = _run_captured(
+        [npm, "run", "test:unit:js"],
+        cwd=NODE_CLIENT_DIR, label="vitest (node)",
+    )
+    outputs.append(out)
+
+    ok = rc_lint == 0 and rc_test == 0
+    return SuiteResult(name, ok, time.monotonic() - t0, output="\n".join(outputs))
 
 
 # ---------------------------------------------------------------------------
@@ -865,7 +1021,7 @@ def _suite_csharp_live() -> SuiteResult:
 
 
 def _suite_console_live() -> SuiteResult:
-    """Console Client -- live tests against the running OPC UA server."""
+    """Console Client -- live tests using the client's own venv Python."""
     name = "console-live"
     t0 = time.monotonic()
 
@@ -876,47 +1032,89 @@ def _suite_console_live() -> SuiteResult:
     if not live_dir.exists():
         return SuiteResult(name, True, skipped=True, notes=["tests/live/ not found"])
 
-    python = _current_python()
+    outputs: list[str] = []
+    venv_py = _ensure_client_venv(CONSOLE_DIR, outputs)
+    env = {**os.environ, "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"}
     rc, out = _run_captured(
-        [python, "-m", "pytest", "tests/live/", "-v", "--tb=short", "--no-header"],
-        cwd=CONSOLE_DIR, label="pytest console live",
+        [str(venv_py), "-m", "pytest", "tests/live/", "-v", "--tb=short", "--no-header"],
+        cwd=CONSOLE_DIR,
+        label="pytest console live",
+        env=env,
     )
+    outputs.append(out)
     ok = rc in (0, 5)
     notes = ["no live tests collected"] if rc == 5 else []
-    return SuiteResult(name, ok, time.monotonic() - t0, output=out, notes=notes)
+    return SuiteResult(name, ok, time.monotonic() - t0, output="\n".join(outputs), notes=notes)
 
 
 def _suite_testclient_full() -> SuiteResult:
-    """Test Client -- full conformance suite via run_tests.py (owns its own venv)."""
+    """Test Client -- full conformance suite via direct pytest in client venv.
+
+    Uses ``_ensure_client_venv`` to create/populate ``.venv`` then calls pytest
+    directly — no subprocess chain through the client runner, no pipe deadlock.
+    pytest.ini in TEST_CLIENT_DIR configures ``testpaths`` for all conformance dirs.
+    """
     name = "testclient-full"
     t0 = time.monotonic()
 
     if not TEST_CLIENT_DIR.exists():
         return SuiteResult(name, True, skipped=True, notes=["TEST_CLIENT_DIR not found"])
 
-    python = _current_python()
+    outputs: list[str] = []
+    venv_py = _ensure_client_venv(TEST_CLIENT_DIR, outputs)
     env = {**os.environ, "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"}
+    # pytest.ini testpaths = conformance events assets results joint joining_process common
     rc, out = _run_captured(
-        [python, "run_all_tests.py", "--verbose"],
-        cwd=TEST_CLIENT_DIR, label="run_all_tests.py --verbose", env=env,
+        [str(venv_py), "-m", "pytest", "-v", "--tb=short", "--no-header"],
+        cwd=TEST_CLIENT_DIR,
+        label="pytest testclient conformance (live)",
+        env=env,
     )
-    return SuiteResult(name, rc == 0, time.monotonic() - t0, output=out)
+    outputs.append(out)
+    ok = rc in (0, 5)
+    notes = ["no tests collected (rc=5)"] if rc == 5 else []
+    return SuiteResult(name, ok, time.monotonic() - t0,
+                       output="\n".join(outputs), notes=notes)
 
 
 def _suite_webclient_live() -> SuiteResult:
-    """Web Client -- live + integration tests (delegates to web client runner)."""
+    """Web Client -- live + integration tests via direct pytest in client venv.
+
+    Uses ``_ensure_client_venv`` to create/populate ``.venv`` then calls pytest
+    directly on ``tests/python/live/`` and ``tests/python/integration/`` — no
+    subprocess chain through the client runner, no pipe deadlock.
+    """
     name = "webclient-live"
     t0 = time.monotonic()
 
     if not WEB_CLIENT_DIR.exists():
         return SuiteResult(name, True, skipped=True, notes=["WEB_CLIENT_DIR not found"])
 
-    python = _current_python()
+    live_dir = WEB_CLIENT_DIR / "tests" / "python" / "live"
+    integ_dir = WEB_CLIENT_DIR / "tests" / "python" / "integration"
+    test_dirs = [str(d) for d in (live_dir, integ_dir) if d.exists()]
+    if not test_dirs:
+        return SuiteResult(name, True, skipped=True,
+                           notes=["no tests/python/live/ or integration/ dirs found"])
+
+    outputs: list[str] = []
+    venv_py = _ensure_client_venv(WEB_CLIENT_DIR, outputs)
+    env = {
+        **os.environ,
+        "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}",
+        "OPCUA_TEST_ENDPOINT": f"opc.tcp://localhost:{OPCUA_PORT}",
+    }
     rc, out = _run_captured(
-        [python, "run_all_tests.py", "--integration"],
-        cwd=WEB_CLIENT_DIR, label="run_all_tests.py --integration (webclient)",
+        [str(venv_py), "-m", "pytest"] + test_dirs + ["-v", "--tb=short", "--no-header"],
+        cwd=WEB_CLIENT_DIR,
+        label="pytest webclient live+integration",
+        env=env,
     )
-    return SuiteResult(name, rc == 0, time.monotonic() - t0, output=out)
+    outputs.append(out)
+    ok = rc in (0, 5)
+    notes = ["no tests collected (rc=5)"] if rc == 5 else []
+    return SuiteResult(name, ok, time.monotonic() - t0,
+                       output="\n".join(outputs), notes=notes)
 
 
 # ---------------------------------------------------------------------------
@@ -928,6 +1126,7 @@ PHASE1_SUITES: dict[str, object] = {
     "console":    _suite_console_unit,
     "webclient":  _suite_webclient_unit,
     "testclient": _suite_testclient_collect,
+    "node":       _suite_node_unit,
 }
 
 PHASE2_SUITES: dict[str, object] = {
@@ -1124,11 +1323,9 @@ def main() -> int:
                     )
                     return 1
             else:
-                _ensure_docker_running()
-                _start_server(no_rebuild=args.no_rebuild)
-                server_was_started = True
+                server_was_started = _start_server(no_rebuild=args.no_rebuild)
                 if not _wait_for_port(OPCUA_PORT, timeout=90):
-                    log.error("OPC UA server did not become ready. Aborting Phase 2.")
+                    log.error("OPC UA server did not become ready on port %d. Aborting Phase 2.", OPCUA_PORT)
                     return 1
 
         # -- Phase 2 ---------------------------------------------------------

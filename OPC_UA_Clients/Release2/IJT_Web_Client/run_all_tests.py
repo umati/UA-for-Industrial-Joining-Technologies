@@ -54,6 +54,41 @@ ROOT = Path(__file__).resolve().parent
 IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 IS_CI = bool(os.getenv("CI"))
+_VENV = ROOT / ".venv"
+
+
+# ---------------------------------------------------------------------------
+# Venv bootstrap — ensure isolated Python environment (skipped in CI/Docker)
+# ---------------------------------------------------------------------------
+
+def _inside_venv() -> bool:
+    """Return True if the current interpreter lives inside _VENV."""
+    try:
+        return Path(sys.executable).resolve().is_relative_to(_VENV.resolve())
+    except AttributeError:
+        return str(sys.executable).startswith(str(_VENV))
+
+
+def _relaunch_under_venv() -> None:
+    """Create .venv if needed, then re-exec this script inside it."""
+    if not _VENV.exists():
+        print(f"[bootstrap] Creating venv: {_VENV}")
+        subprocess.check_call([sys.executable, "-m", "venv", str(_VENV)])
+    venv_py_rel = Path("Scripts" if IS_WINDOWS else "bin") / (
+        "python.exe" if IS_WINDOWS else "python"
+    )
+    venv_py = str(_VENV / venv_py_rel)
+    print(f"[bootstrap] Re-launching under venv Python: {venv_py}")
+    # subprocess.run() + sys.exit() instead of os.execv():
+    # On Windows, os.execv is implemented as P_OVERLAY (CreateProcess + ExitProcess),
+    # which creates a new grandchild process and immediately exits the current one.
+    # The grandchild INHERITS stdout/stderr pipe write-handles, so any parent using
+    # Popen(stdout=PIPE) and communicate() blocks forever on stdout_thread.join()
+    # because the grandchild keeps the handles open.
+    # subprocess.run() keeps the current process alive until the child finishes,
+    # ensuring pipe handles close in the correct order on all platforms.
+    result = subprocess.run([venv_py] + sys.argv, check=False)
+    sys.exit(result.returncode)
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +169,7 @@ def _run(
             cwd=str(cwd),
             env=env or os.environ.copy(),
             timeout=timeout,
+            check=False,
             stdin=subprocess.DEVNULL,  # prevent interactive prompts (e.g. npx install)
         )
         return result.returncode
@@ -160,6 +196,7 @@ def _run_to_file(
             cwd=str(cwd),
             env=env or os.environ.copy(),
             stdout=fh,
+            check=False,
             stdin=subprocess.DEVNULL,
         )
     return result.returncode
@@ -472,6 +509,7 @@ def _stage_python_unit(python: Path) -> StageResult:
             "--cov=.",
             f"--cov-report=xml:{results_dir / 'coverage-py.xml'}",
             f"--cov-report=html:{results_dir / 'htmlcov-py'}",
+            "--cov-fail-under=70",
         ]
     else:
         _skip("pytest-cov not installed — coverage skipped (pip install pytest-cov)")
@@ -868,18 +906,30 @@ def _stop_opcua_server(proc: Optional[subprocess.Popen] = None) -> None:
         _run([docker, "compose", "down"], cwd=_SERVER_COMPOSE_DIR, label="docker compose down  (OPC UA server)")
 
 
-def _stage_python_integration(python: Path) -> StageResult:
+def _stage_python_integration(
+    python: Path,
+    *,
+    prestarted: tuple[bool, bool, Optional[subprocess.Popen]] | None = None,
+) -> StageResult:
     """Phase 2 — run integration tests against a live OPC UA server.
 
     Auto-launches the Docker server if the port is not yet open and Docker
     is available.  Always tears down any container it started.
+
+    If *prestarted* is provided (a tuple from ``_maybe_start_opcua_server``),
+    this function uses it instead of calling ``_maybe_start_opcua_server`` again —
+    the caller owns the server lifecycle and is responsible for teardown.
     """
     _banner("STAGE 4b  Python integration tests (Phase 2 — live OPC UA)")
     t0 = time.monotonic()
     results_dir = ROOT / "test-results"
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    started, port_open, server_proc = _maybe_start_opcua_server()
+    if prestarted is not None:
+        # Server lifecycle is owned by caller — do NOT stop on exit
+        started, port_open, server_proc = False, prestarted[1], prestarted[2]
+    else:
+        started, port_open, server_proc = _maybe_start_opcua_server()
     try:
         if not port_open:
             _skip("OPC UA server unreachable — skipping integration tests")
@@ -916,6 +966,7 @@ def _docker_available() -> bool:
             [docker, "info"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            check=False,
             timeout=20,
         )
         return r.returncode == 0
@@ -1029,6 +1080,11 @@ def main() -> int:
     parser.add_argument("--ui-url", default=os.getenv("UI_TEST_BASE_URL", "http://127.0.0.1:3000"))
     args = parser.parse_args()
 
+    # Bootstrap: run inside isolated .venv (skipped when already in venv, CI, or Docker)
+    if not IS_CI and not IS_DOCKER and not _inside_venv():
+        _relaunch_under_venv()
+        return 0  # unreachable after sys.exit(); satisfies type checker
+
     if args.list:
         print("Available stages:")
         for s in STAGES:
@@ -1089,22 +1145,35 @@ def main() -> int:
         results.append(_stage_js_unit())
         results.append(_stage_infra_lint())
 
-    # ── Live tests (optional, skipped when --phase1) ──────────────────────────
-    if run_live:
-        if opcua_up:
-            results.append(_stage_python_live(python))
-        else:
-            _skip("python-live: OPC UA server not reachable")
-            results.append(StageResult("python-live", 0, skipped=True))
+    # ── Live + Integration tests (Phase 2 — skipped when --phase1) ────────────
+    # Auto-launch server ONCE and share it between live and integration stages.
+    # This ensures live tests are not skipped just because the server was not
+    # running at startup — the same auto-launch logic that integration uses.
+    if not args.phase1:
+        _srv_started, _srv_port_open, _srv_proc = _maybe_start_opcua_server()
+        try:
+            if run_live:
+                if _srv_port_open:
+                    results.append(_stage_python_live(python))
+                else:
+                    _skip("python-live: OPC UA server not available")
+                    results.append(StageResult("python-live", 0, skipped=True,
+                                               notes=["OPC UA server not available"]))
 
-    # ── Phase 2 — integration tests (auto-launch Docker OPC UA server) ────────
-    if not args.phase1 and (run_live or docker_up):
-        results.append(_stage_python_integration(python))
-    elif not args.phase1:
-        _skip("python-integration: OPC UA server not available and Docker not running")
-        results.append(
-            StageResult("python-integration", 0, skipped=True, notes=["start OPC UA server or Docker to enable"])
-        )
+            if run_live or docker_up or _srv_port_open:
+                # Pass prestarted so integration stage re-uses the running server
+                results.append(_stage_python_integration(
+                    python, prestarted=(_srv_started, _srv_port_open, _srv_proc)
+                ))
+            else:
+                _skip("python-integration: OPC UA server not available and Docker not running")
+                results.append(StageResult(
+                    "python-integration", 0, skipped=True,
+                    notes=["start OPC UA server or Docker to enable"],
+                ))
+        finally:
+            if _srv_started:
+                _stop_opcua_server(_srv_proc)
 
     # Hint: multi-version testing via pyenv
     if _cmd_available("pyenv"):

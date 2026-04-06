@@ -10,7 +10,7 @@
 #   node-client          Release1 / IJT Node Client   Vitest · ESLint · npm audit
 #   docker-smoke         Release2 / IJT Web Client    Docker build + HTTP/WS readiness
 #   test-client          Release2 / IJT Test Client   pytest collect-only · Bandit
-#   server-smoke-windows Release2 / OPC UA Server     Windows native smoke (8 checks)
+#   server-smoke-windows Release2 / OPC UA Server     Windows native smoke (10 checks)
 #   report               Combined summary (always runs after all jobs)
 #
 # Heavy tests (nightly + manual): see .github/workflows/heavy-tests.yml
@@ -88,6 +88,8 @@ jobs:
   web-client:
     name: "Release2 / IJT Web Client"
     runs-on: ubuntu-latest
+    outputs:
+      mypy_result: ${{ steps.mypy.outcome }}
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
@@ -122,7 +124,12 @@ jobs:
       - name: Python Unit Tests
         id: pytest
         continue-on-error: true
-        run: python -m pytest tests/python/unit -q --junitxml=test-results/pytest.xml
+        run: |
+          python -m pytest tests/python/unit -q \
+            --junitxml=test-results/pytest.xml \
+            --cov=. \
+            --cov-report=xml:test-results/coverage.xml \
+            --cov-report=term-missing
 
       - name: JS Unit Tests
         id: vitest
@@ -143,6 +150,11 @@ jobs:
         id: pylint
         continue-on-error: true
         run: python -m ruff check . --output-format=github
+
+      - name: mypy (Type Checking)
+        id: mypy
+        continue-on-error: true
+        run: python -m mypy . --ignore-missing-imports --no-error-summary
 
       - name: npm Audit (JS Security)
         id: npm_audit
@@ -175,6 +187,7 @@ jobs:
           steps.eslint.outcome    == 'failure' ||
           steps.bandit.outcome    == 'failure' ||
           steps.pylint.outcome    == 'failure' ||
+          steps.mypy.outcome      == 'failure' ||
           steps.npm_audit.outcome == 'failure')
         run: |
           echo "One or more checks failed:"
@@ -183,7 +196,132 @@ jobs:
           echo "  eslint     -> ${{ steps.eslint.outcome }}"
           echo "  bandit     -> ${{ steps.bandit.outcome }}"
           echo "  ruff       -> ${{ steps.pylint.outcome }}"
+          echo "  mypy       -> ${{ steps.mypy.outcome }}"
           echo "  npm audit  -> ${{ steps.npm_audit.outcome }}"
+          exit 1
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Release2 / IJT Web Client — Live & Integration Tests
+  #   Starts the pre-built OPC UA Docker image on port 40455, then runs:
+  #     - tests/python/live/        (52 tests — direct OPC UA connection)
+  #     - tests/python/integration/ (13 tests — OPC UA + WebSocket backend)
+  # ───────────────────────────────────────────────────────────────────────────
+  web-client-live:
+    name: "Release2 / IJT Web Client — Live Tests"
+    runs-on: ubuntu-latest
+    needs: [build-server-image]
+    defaults:
+      run:
+        working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
+            OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Start OPC UA Server (Docker, port 40455)
+        run: |
+          docker run -d \
+            --name opcua-server-webclient-live \
+            -p 40455:40455 \
+            -e OPCUA_SERVER_PORT=40455 \
+            ghcr.io/umati/ua-for-industrial-joining-technologies/opcua-ijt-server:ci-${{ github.sha }}
+          echo "OPCUA_SERVER_URL=opc.tcp://localhost:40455" >> $GITHUB_ENV
+          echo "OPCUA_TEST_ENDPOINT=opc.tcp://localhost:40455" >> $GITHUB_ENV
+
+      - name: Wait for OPC UA port 40455
+        run: |
+          for i in $(seq 1 20); do
+            if nc -z localhost 40455 2>/dev/null; then
+              echo "Port 40455 is open"
+              exit 0
+            fi
+            echo "Waiting for server... ($i/20)"
+            sleep 3
+          done
+          echo "ERROR: Timeout waiting for port 40455"
+          cat $(docker inspect --format='{{.LogPath}}' opcua-server-webclient-live 2>/dev/null) 2>/dev/null | tail -30 || true
+          exit 1
+
+      - run: mkdir -p test-results
+
+      - name: Python Live Tests
+        id: pytest_live
+        continue-on-error: true
+        env:
+          OPCUA_SERVER_URL: ${{ env.OPCUA_SERVER_URL }}
+          OPCUA_TEST_ENDPOINT: ${{ env.OPCUA_TEST_ENDPOINT }}
+        run: |
+          python -m pytest tests/python/live/ -q \
+            --junitxml=test-results/pytest-live.xml \
+            --cov=. \
+            --cov-report=xml:test-results/coverage-live.xml \
+            --tb=short \
+            --timeout=120
+
+      - name: Python Integration Tests
+        id: pytest_integration
+        continue-on-error: true
+        env:
+          OPCUA_SERVER_URL: ${{ env.OPCUA_SERVER_URL }}
+          OPCUA_TEST_ENDPOINT: ${{ env.OPCUA_TEST_ENDPOINT }}
+        run: |
+          python -m pytest tests/python/integration/ -q \
+            --junitxml=test-results/pytest-integration.xml \
+            --cov=. \
+            --cov-report=xml:test-results/coverage-integration.xml \
+            --tb=short \
+            --timeout=120
+
+      - name: Stop OPC UA Server
+        if: always()
+        run: docker rm -f opcua-server-webclient-live 2>/dev/null || true
+
+      - name: Publish Test Reports
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: "Web Client — Live & Integration Tests"
+          path: |
+            OPC_UA_Clients/Release2/IJT_Web_Client/test-results/pytest-live.xml
+            OPC_UA_Clients/Release2/IJT_Web_Client/test-results/pytest-integration.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: results-web-client-live
+          path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
+
+      - name: Fail if Any Check Failed
+        if: always() && (
+          steps.pytest_live.outcome        == 'failure' ||
+          steps.pytest_integration.outcome == 'failure')
+        run: |
+          echo "One or more live checks failed:"
+          echo "  pytest-live        -> ${{ steps.pytest_live.outcome }}"
+          echo "  pytest-integration -> ${{ steps.pytest_integration.outcome }}"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -194,6 +332,8 @@ jobs:
     name: "Release2 / IJT Console Client"
     runs-on: ubuntu-latest
     needs: [build-server-image]
+    outputs:
+      mypy_result: ${{ steps.mypy.outcome }}
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
@@ -251,7 +391,12 @@ jobs:
         continue-on-error: true
         env:
           OPCUA_SERVER_URL: ${{ env.OPCUA_SERVER_URL }}
-        run: python -m pytest tests/ -q --junitxml=test-results/pytest.xml
+        run: |
+          python -m pytest tests/ -q \
+            --junitxml=test-results/pytest.xml \
+            --cov=. \
+            --cov-report=xml:test-results/coverage.xml \
+            --cov-report=term-missing
 
       - name: Bandit (Python Security)
         id: bandit
@@ -262,6 +407,11 @@ jobs:
         id: pylint
         continue-on-error: true
         run: python -m ruff check . --output-format=github
+
+      - name: mypy (Type Checking)
+        id: mypy
+        continue-on-error: true
+        run: python -m mypy . --ignore-missing-imports --no-error-summary
 
       - name: Publish Test Reports
         uses: dorny/test-reporter@v3
@@ -288,12 +438,14 @@ jobs:
         if: always() && (
           steps.pytest.outcome == 'failure' ||
           steps.bandit.outcome == 'failure' ||
-          steps.pylint.outcome == 'failure')
+          steps.pylint.outcome == 'failure' ||
+          steps.mypy.outcome   == 'failure')
         run: |
           echo "One or more checks failed:"
           echo "  pytest  -> ${{ steps.pytest.outcome }}"
           echo "  bandit  -> ${{ steps.bandit.outcome }}"
           echo "  ruff    -> ${{ steps.pylint.outcome }}"
+          echo "  mypy    -> ${{ steps.mypy.outcome }}"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -495,6 +647,18 @@ jobs:
       - name: Restore NuGet Packages
         run: dotnet restore IJT_CSharp_Client.sln
 
+      - name: Vulnerable Package Scan
+        id: vuln_scan
+        continue-on-error: true
+        run: |
+          $output = dotnet list package --vulnerable --include-transitive 2>&1
+          $output | Out-File test-results\vuln-scan.txt
+          Write-Host $output
+          if ($output -match "has the following vulnerable packages") {
+            Write-Host "##[error]Vulnerable NuGet packages detected — see vuln-scan.txt"
+            exit 1
+          }
+
       - name: Build (zero warnings)
         id: build
         continue-on-error: true
@@ -509,11 +673,14 @@ jobs:
           OPCUA_SERVER_URL: ${{ env.OPCUA_SERVER_URL }}
         run: |
           New-Item -ItemType Directory -Force -Path test-results | Out-Null
+          New-Item -ItemType Directory -Force -Path test-results/coverage | Out-Null
           dotnet test Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj `
             --no-restore `
             --configuration Release `
             --logger "trx;LogFileName=test-results\tests.trx" `
             --logger "console;verbosity=normal" `
+            --collect:"XPlat Code Coverage" `
+            --results-directory test-results/coverage `
             2>&1 | Tee-Object -Variable testOutput
           $testOutput | Out-File test-results\test-output.txt
 
@@ -583,14 +750,16 @@ jobs:
 
       - name: Fail if Any Check Failed
         if: always() && (
-          steps.build.outcome  == 'failure' ||
-          steps.tests.outcome  == 'failure' ||
-          steps.format.outcome == 'failure')
+          steps.build.outcome     == 'failure' ||
+          steps.tests.outcome     == 'failure' ||
+          steps.format.outcome    == 'failure' ||
+          steps.vuln_scan.outcome == 'failure')
         run: |
           echo "One or more C# checks failed:"
-          echo "  build  -> ${{ steps.build.outcome }}"
-          echo "  tests  -> ${{ steps.tests.outcome }}"
-          echo "  format -> ${{ steps.format.outcome }}"
+          echo "  build     -> ${{ steps.build.outcome }}"
+          echo "  tests     -> ${{ steps.tests.outcome }}"
+          echo "  format    -> ${{ steps.format.outcome }}"
+          echo "  vuln scan -> ${{ steps.vuln_scan.outcome }}"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -601,6 +770,8 @@ jobs:
     name: "Release2 / IJT Test Client"
     runs-on: ubuntu-latest
     needs: [build-server-image]
+    outputs:
+      mypy_result: ${{ steps.mypy.outcome }}
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
@@ -661,7 +832,12 @@ jobs:
           OPCUA_SERVER_URL: ${{ env.OPCUA_SERVER_URL }}
         run: |
           set -o pipefail
-          python -m pytest -q --tb=short --junitxml=test-results/pytest.xml 2>&1 | tee test-results/test-output.txt
+          python -m pytest -q --tb=short \
+            --junitxml=test-results/pytest.xml \
+            --cov=. \
+            --cov-report=xml:test-results/coverage.xml \
+            --cov-report=term-missing \
+            2>&1 | tee test-results/test-output.txt
 
       - name: Bandit (Python Security)
         id: bandit
@@ -672,6 +848,11 @@ jobs:
         id: pylint
         continue-on-error: true
         run: python -m ruff check . --output-format=github
+
+      - name: mypy (Type Checking)
+        id: mypy
+        continue-on-error: true
+        run: python -m mypy . --ignore-missing-imports --no-error-summary
 
       - name: Publish Test Reports
         uses: dorny/test-reporter@v3
@@ -698,18 +879,20 @@ jobs:
         if: always() && (
           steps.pytest.outcome == 'failure' ||
           steps.bandit.outcome == 'failure' ||
-          steps.pylint.outcome == 'failure')
+          steps.pylint.outcome == 'failure' ||
+          steps.mypy.outcome   == 'failure')
         run: |
           echo "One or more checks failed:"
           echo "  pytest  -> ${{ steps.pytest.outcome }}"
           echo "  bandit  -> ${{ steps.bandit.outcome }}"
           echo "  ruff    -> ${{ steps.pylint.outcome }}"
+          echo "  mypy    -> ${{ steps.mypy.outcome }}"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
   # OPC UA Server — Windows Smoke
   #   Extract OPC_UA_IJT_Server_Simulator.zip, launch the EXE directly,
-  #   wait for TCP 40451, run all 8 smoke checks, kill the process.
+  #   wait for TCP 40451, run all 10 smoke checks, kill the process.
   #
   # The server auto-creates its PKI directory (certificates) on first launch —
   # no pre-seeded certificates are needed.
@@ -763,7 +946,7 @@ jobs:
       - name: Install smoke test dependencies
         run: pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
 
-      - name: Run smoke test (8 checks)
+      - name: Run smoke test (10 checks)
         run: python OPC_UA_Servers/Release2/tests/smoke_test.py --tcp-timeout 30
 
       - name: Stop OPC UA Server
@@ -781,7 +964,7 @@ jobs:
   report:
     name: "📋 Test Report"
     runs-on: ubuntu-latest
-    needs: [build-server-image, web-client, console-client, node-client, docker-smoke, csharp-client, test-client, server-smoke-windows]
+    needs: [build-server-image, web-client, web-client-live, console-client, node-client, docker-smoke, csharp-client, test-client, server-smoke-windows]
     if: always()
     permissions:
       contents: read
@@ -800,12 +983,16 @@ jobs:
         env:
           BSI_RESULT:     ${{ needs.build-server-image.result }}
           WEB_RESULT:     ${{ needs.web-client.result }}
+          WEB_LIVE_RESULT: ${{ needs.web-client-live.result }}
           CONSOLE_RESULT: ${{ needs.console-client.result }}
           NODE_RESULT:    ${{ needs.node-client.result }}
           DOCKER_RESULT:  ${{ needs.docker-smoke.result }}
           CS_RESULT:      ${{ needs.csharp-client.result }}
           TC_RESULT:      ${{ needs.test-client.result }}
           SS_WIN_RESULT:  ${{ needs.server-smoke-windows.result }}
+          WEB_MYPY:       ${{ needs.web-client.outputs.mypy_result }}
+          CONSOLE_MYPY:   ${{ needs.console-client.outputs.mypy_result }}
+          TC_MYPY:        ${{ needs.test-client.outputs.mypy_result }}
         run: |
           python3 - << 'PYEOF'
           import xml.etree.ElementTree as ET, json, os, glob
@@ -882,13 +1069,19 @@ jobs:
               if r is None: return "—"
               return ("✅" if r == "success" else "❌") + f" `{r}`"
 
+          def fmt_mypy(r):
+              if not r or r in ("unknown", "skipped", ""): return "—"
+              return "✅" if r == "success" else "❌"
+
           # ── Load results ─────────────────────────────────────────────────
 
-          web_py  = parse_junit      ("all-results/results-web-client/pytest.xml")
-          web_js  = parse_junit      ("all-results/results-web-client/vitest.xml")
-          web_esl = parse_eslint_json("all-results/results-web-client/eslint.json")
-          web_ban = parse_bandit     ("all-results/results-web-client/bandit.json")
-          web_npm = parse_npm_audit  ("all-results/results-web-client/npm-audit.json")
+          web_py   = parse_junit      ("all-results/results-web-client/pytest.xml")
+          web_js   = parse_junit      ("all-results/results-web-client/vitest.xml")
+          web_esl  = parse_eslint_json("all-results/results-web-client/eslint.json")
+          web_ban  = parse_bandit     ("all-results/results-web-client/bandit.json")
+          web_npm  = parse_npm_audit  ("all-results/results-web-client/npm-audit.json")
+          wlv_py   = parse_junit      ("all-results/results-web-client-live/pytest-live.xml")
+          wlv_int  = parse_junit      ("all-results/results-web-client-live/pytest-integration.xml")
 
           con_py  = parse_junit      ("all-results/results-console-client/pytest.xml")
           con_ban = parse_bandit     ("all-results/results-console-client/bandit.json")
@@ -900,8 +1093,9 @@ jobs:
           tc_ban  = parse_bandit     ("all-results/results-test-client/bandit.json")
           tc_py   = parse_junit      ("all-results/results-test-client/pytest.xml")
 
-          web_r      = os.environ.get("WEB_RESULT",     "unknown")
-          con_r      = os.environ.get("CONSOLE_RESULT", "unknown")
+          web_r      = os.environ.get("WEB_RESULT",      "unknown")
+          web_live_r = os.environ.get("WEB_LIVE_RESULT", "unknown")
+          con_r      = os.environ.get("CONSOLE_RESULT",  "unknown")
           nod_r      = os.environ.get("NODE_RESULT",    "unknown")
           docker_r   = os.environ.get("DOCKER_RESULT",  "unknown")
           cs_r       = os.environ.get("CS_RESULT",      "unknown")
@@ -909,25 +1103,30 @@ jobs:
           ss_win_r   = os.environ.get("SS_WIN_RESULT",  "unknown")
           bsi_r      = os.environ.get("BSI_RESULT",     "unknown")
 
+          web_mypy = os.environ.get("WEB_MYPY",     "")
+          con_mypy = os.environ.get("CONSOLE_MYPY", "")
+          tc_mypy  = os.environ.get("TC_MYPY",      "")
+
           cs_tests = parse_junit("all-results/results-csharp-client/tests.xml")
 
-          overall = "✅ All Passed" if all(r == "success" for r in [bsi_r, web_r, con_r, nod_r, docker_r, cs_r, tc_r, ss_win_r]) else "❌ Some Failed"
+          overall = "✅ All Passed" if all(r == "success" for r in [bsi_r, web_r, web_live_r, con_r, nod_r, docker_r, cs_r, tc_r, ss_win_r]) else "❌ Some Failed"
 
           rows = [
-              f"| **Release2 / OPC UA Server (Docker Build)** | {job_icon(bsi_r)} `{bsi_r}` | — | — | — | — | — | — |",
-              f"| **Release2 / IJT Web Client**     | {job_icon(web_r)} `{web_r}` | {fmt_tests(*web_py)} | {fmt_tests(*web_js)} | {fmt_eslint(web_esl)} | {fmt_bandit(*web_ban)} | {fmt_npm(*web_npm)} | {fmt_docker(docker_r)} |",
-              f"| **Release2 / IJT Console Client** | {job_icon(con_r)} `{con_r}` | {fmt_tests(*con_py)} | — | — | {fmt_bandit(*con_ban)} | — | — |",
-              f"| **Release1 / IJT Node Client**    | {job_icon(nod_r)} `{nod_r}` | — | {fmt_tests(*nod_js)} | {fmt_eslint(nod_esl)} | — | {fmt_npm(*nod_npm)} | — |",
-              f"| **Release2 / IJT C# Client**      | {job_icon(cs_r)} `{cs_r}` | {fmt_tests(*cs_tests)} | — | — | — | — | — |",
-              f"| **Release2 / IJT Test Client**    | {job_icon(tc_r)} `{tc_r}` | {fmt_tests(*tc_py)} | — | — | {fmt_bandit(*tc_ban)} | — | — |",
-              f"| **Release2 / OPC UA Server (Win)**  | {job_icon(ss_win_r)} `{ss_win_r}` | — | — | — | — | — | — |",
+              f"| **Release2 / OPC UA Server (Docker Build)** | {job_icon(bsi_r)} `{bsi_r}` | — | — | — | — | — | — | — |",
+              f"| **Release2 / IJT Web Client**           | {job_icon(web_r)} `{web_r}` | {fmt_tests(*web_py)} | {fmt_tests(*web_js)} | {fmt_eslint(web_esl)} | {fmt_bandit(*web_ban)} | {fmt_npm(*web_npm)} | {fmt_mypy(web_mypy)} | {fmt_docker(docker_r)} |",
+              f"| **Release2 / IJT Web Client (Live)**    | {job_icon(web_live_r)} `{web_live_r}` | {fmt_tests(*wlv_py)} live + {fmt_tests(*wlv_int)} intg | — | — | — | — | — | — |",
+              f"| **Release2 / IJT Console Client**       | {job_icon(con_r)} `{con_r}` | {fmt_tests(*con_py)} | — | — | {fmt_bandit(*con_ban)} | — | {fmt_mypy(con_mypy)} | — |",
+              f"| **Release1 / IJT Node Client**          | {job_icon(nod_r)} `{nod_r}` | — | {fmt_tests(*nod_js)} | {fmt_eslint(nod_esl)} | — | {fmt_npm(*nod_npm)} | — | — |",
+              f"| **Release2 / IJT C# Client**            | {job_icon(cs_r)} `{cs_r}` | {fmt_tests(*cs_tests)} | — | — | — | — | — | — |",
+              f"| **Release2 / IJT Test Client**          | {job_icon(tc_r)} `{tc_r}` | {fmt_tests(*tc_py)} | — | — | {fmt_bandit(*tc_ban)} | — | {fmt_mypy(tc_mypy)} | — |",
+              f"| **Release2 / OPC UA Server (Win)**      | {job_icon(ss_win_r)} `{ss_win_r}` | — | — | — | — | — | — | — |",
           ]
 
           lines = [
               f"## 🏭 IJT OPC UA — CI Report &nbsp;&nbsp; {overall}",
               "",
-              "| Client | Job | Python Tests | JS Tests | ESLint | Bandit | npm audit | Docker |",
-              "|--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|",
+              "| Client | Job | Python Tests | JS Tests | ESLint | Bandit | npm audit | mypy | Docker |",
+              "|--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|",
               *rows,
               "",
               "---",

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import socket
 import sys
 import time
@@ -219,6 +220,32 @@ async def check_asset_management(client: Any) -> tuple[str, str]:
         return _STATUS_FAIL, str(exc)
 
 
+async def check_joining_process_management(client: Any) -> tuple[str, str]:
+    try:
+        ns1 = await client.get_namespace_index(_NS_IJT_SERVER)
+        ns_j = await client.get_namespace_index(_NS_IJT_BASE)
+        node = await client.nodes.root.get_child(
+            ["0:Objects", f"{ns1}:TighteningSystem", f"{ns_j}:JoiningProcessManagement"]
+        )
+        await node.read_browse_name()
+        return _STATUS_PASS, "JoiningProcessManagement node present"
+    except (_OpcUaError, ValueError, AttributeError) as exc:
+        return _STATUS_FAIL, str(exc)
+
+
+async def check_joint_management(client: Any) -> tuple[str, str]:
+    try:
+        ns1 = await client.get_namespace_index(_NS_IJT_SERVER)
+        ns_j = await client.get_namespace_index(_NS_IJT_BASE)
+        node = await client.nodes.root.get_child(
+            ["0:Objects", f"{ns1}:TighteningSystem", f"{ns_j}:JointManagement"]
+        )
+        await node.read_browse_name()
+        return _STATUS_PASS, "JointManagement node present"
+    except (_OpcUaError, ValueError, AttributeError) as exc:
+        return _STATUS_FAIL, str(exc)
+
+
 # -- Main runner ---------------------------------------------------------------
 
 
@@ -240,7 +267,7 @@ async def _run(endpoint: str, wait_s: float) -> int:
         print("\n[ABORT] Server not reachable — skipping OPC UA checks.")
         return 2
 
-    # 2–8: OPC UA layer checks
+    # 2–10: OPC UA layer checks
     client = _Client(endpoint, timeout=30)
     try:
         status, detail = await check_opc_connection(client)
@@ -255,6 +282,8 @@ async def _run(endpoint: str, wait_s: float) -> int:
                     "Simulations node",
                     "ResultManagement node",
                     "AssetManagement node",
+                    "JoiningProcessManagement node",
+                    "JointManagement node",
                 )
             ]
         else:
@@ -265,6 +294,8 @@ async def _run(endpoint: str, wait_s: float) -> int:
                 (check_simulations_node, "Simulations node"),
                 (check_result_management, "ResultManagement node"),
                 (check_asset_management, "AssetManagement node"),
+                (check_joining_process_management, "JoiningProcessManagement node"),
+                (check_joint_management, "JointManagement node"),
             ]:
                 s, d = await fn(client)
                 checks.append((s, label, d))
@@ -303,10 +334,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Smoke-test the OPC UA IJT Server Simulator."
     )
+    # OPCUA_SERVER_URL env var acts as default — consistent with all other clients.
+    # CLI --endpoint overrides it when specified explicitly.
+    _env_endpoint = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
     parser.add_argument(
         "--endpoint",
-        default="opc.tcp://localhost:40451",
-        help="OPC UA endpoint URL (default: opc.tcp://localhost:40451)",
+        default=_env_endpoint,
+        help=(
+            "OPC UA endpoint URL "
+            "(default: OPCUA_SERVER_URL env var, or opc.tcp://localhost:40451)"
+        ),
     )
     parser.add_argument(
         "--tcp-timeout",

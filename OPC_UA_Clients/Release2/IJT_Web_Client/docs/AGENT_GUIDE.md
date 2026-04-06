@@ -14,7 +14,7 @@ How to write effective requests for coding agents (Copilot, OpenAI, etc.) workin
 
 ## Guardrails (always apply)
 
-- Do **not** edit `venv/`, `venv_test/`, or `node_modules/`.
+- Do **not** edit `.venv/` or `node_modules/`.
 - Do **not** change Docker setup unless explicitly requested.
 - Prefer code that is easy to read and understand. This code is used for educational purpose.
 - Prefer minimal, targeted edits over broad rewrites.

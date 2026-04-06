@@ -9,7 +9,19 @@ import pytest
 
 from helpers.node_discovery import get_associated_assets
 
-pytestmark = [pytest.mark.live, pytest.mark.structure]
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.structure,
+    pytest.mark.xfail(
+        reason=(
+            "The current server binary does not yet expose AssociatedWith references between "
+            "asset nodes. These tests document spec-required behaviour (IJT Base §7.3 / CU-AM-008) "
+            "and will become xpass once the server implements them. "
+            "This is a server-implementation gap, not a client defect."
+        ),
+        strict=False,
+    ),
+]
 
 
 async def test_assets_have_associated_with_reference(controllers_instances):

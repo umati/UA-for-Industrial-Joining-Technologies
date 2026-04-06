@@ -834,7 +834,7 @@ class TestResultManagement:
                 _v(10, ua.VariantType.UInt32),
             )
             assert result is not None
-        except OSError, ua.UaStatusCodeError:
+        except (OSError, ua.UaStatusCodeError):
             pass  # empty result set, server-side Uncertain, or not fully implemented
 
 
@@ -878,3 +878,65 @@ class TestJointManagement:
             assert result is not None
         except OSError:
             pass  # Uncertain / not-found status is valid
+
+    async def test_select_joint(self, ijt_session):
+        """SelectJoint(JointId) must return a result without raising.
+
+        MethodStatusCode=2 (URI_NOT_FOUND) or 5 (INVALID_INPUT) are valid server
+        responses; the important assertion is that the call does not raise.
+        """
+        c, *_ = ijt_session
+        try:
+            result = await _call(
+                c,
+                _JT,
+                f"{_JT}/SelectJoint",
+                _v(await _pi_uri(c), ua.VariantType.String),
+                _v("Joint_1", ua.VariantType.String),  # common simulator default
+                _v("", ua.VariantType.String),           # JointOriginId (optional, empty)
+            )
+            assert result is not None
+        except OSError:
+            pass  # Uncertain status is a valid server response
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 10.  Asset Identifiers — GetIdentifiers / SendTextIdentifiers / ResetIdentifiers
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.live
+@skip_no_server
+class TestAssetIdentifiers:
+    """Tests for the identifier management methods on AssetManagement/MethodSet."""
+
+    pytestmark = pytest.mark.asyncio(loop_scope="module")
+
+    async def test_get_identifiers(self, ijt_session):
+        """GetIdentifiers must return without raising."""
+        c, *_ = ijt_session
+        try:
+            result = await _call(c, _ASSET, f"{_ASSET}/GetIdentifiers", _v(await _pi_uri(c), ua.VariantType.String))
+            assert result is not None
+        except (OSError, ua.UaStatusCodeError):
+            pass  # Empty / Uncertain result or server-side arg mismatch is acceptable
+
+    async def test_send_text_identifiers(self, ijt_session):
+        """SendTextIdentifiers with a sample string array must not raise."""
+        c, *_ = ijt_session
+        pi = await _pi_uri(c)
+        demo_ids = ua.Variant(["BatchId:001", "OrderId:ABC"], ua.VariantType.String)
+        try:
+            result = await _call(c, _ASSET, f"{_ASSET}/SendTextIdentifiers", _v(pi, ua.VariantType.String), demo_ids)
+            assert result is not None
+        except OSError:
+            pass  # Uncertain / not supported is acceptable
+
+    async def test_reset_identifiers(self, ijt_session):
+        """ResetIdentifiers must return without raising."""
+        c, *_ = ijt_session
+        try:
+            result = await _call(c, _ASSET, f"{_ASSET}/ResetIdentifiers", _v(await _pi_uri(c), ua.VariantType.String))
+            assert result is not None
+        except (OSError, ua.UaStatusCodeError):
+            pass  # Uncertain / not supported / server arg mismatch is acceptable

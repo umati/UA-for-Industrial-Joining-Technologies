@@ -206,7 +206,14 @@ def _relaunch_under_venv() -> None:
     _install_requirements()
     venv_py = str(_venv_python(_VENV))
     _log(f"  Re-launching under venv Python: {venv_py}")
-    os.execv(venv_py, [venv_py] + sys.argv)  # replaces the process
+    # subprocess.run() + sys.exit() instead of os.execv():
+    # On Windows, os.execv uses P_OVERLAY (CreateProcess + ExitProcess), creating a
+    # grandchild that inherits stdout/stderr pipe write-handles. Any parent using
+    # Popen(stdout=PIPE).communicate() then blocks forever because the grandchild
+    # keeps those handles open. subprocess.run() keeps the current process alive until
+    # the child finishes, so pipe handles close in the correct order on all platforms.
+    result = subprocess.run([venv_py] + sys.argv, check=False)
+    sys.exit(result.returncode)
 
 
 # ---------------------------------------------------------------------------
@@ -653,6 +660,7 @@ def _step_unit_tests(junit_xml: Optional[str]) -> _StepResult:
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage.xml'}",
             f"--cov-report=html:{_RESULTS_DIR / 'htmlcov'}",
             "--cov-report=term-missing",
+            "--cov-fail-under=70",
         ]
     rc, output = _run(cmd)
     result.duration = time.monotonic() - t0
@@ -799,6 +807,7 @@ def _step_live_tests(_junit_xml: Optional[str]) -> _StepResult:
             "--cov=.",
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage-live.xml'}",
             "--cov-report=term-missing",
+            "--cov-fail-under=70",
         ]
     rc, output = _run(cmd)
     result.duration = time.monotonic() - t0
@@ -855,7 +864,7 @@ def main() -> int:
     # Re-launch under venv if not already there
     if not _inside_venv():
         _relaunch_under_venv()
-        return 0  # unreachable after execv, satisfies type checker
+        return 0  # unreachable after sys.exit(); satisfies type checker
 
     shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)

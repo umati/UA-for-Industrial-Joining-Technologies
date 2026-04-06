@@ -427,7 +427,7 @@ def _check_semgrep(results: list) -> None:
         _record(results, 1, label, True, "SKIP (Install: pip install semgrep)")
         return
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    r = subprocess.run(
+    subprocess.run(
         ["semgrep", "--config=p/default", "--json",
          "--output", str(RESULTS_DIR / "semgrep.json"),
          "--exclude=.venv", "--exclude=test-results", "."],

@@ -121,7 +121,7 @@ async def main():
     global websocket_server
 
     try:
-        port = int(os.getenv("WS_PORT", 8001))
+        port = int(os.getenv("WS_PORT", "8001"))
     except ValueError:
         ijt_log.error("Invalid WS_PORT environment variable. Falling back to 8001.")
         port = 8001

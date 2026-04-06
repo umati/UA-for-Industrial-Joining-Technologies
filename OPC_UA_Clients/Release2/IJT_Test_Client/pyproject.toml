@@ -2,8 +2,14 @@
 requires-python = ">=3.14"
 
 [tool.bandit]
-exclude_dirs = ["venv", ".venv", "tests", "__pycache__", ".git"]
+exclude_dirs = ["venv", ".venv", ".venv-wsl", ".venv-wsl_backup", "tests", "__pycache__", ".git"]
 skips = ["B101"]
+
+[tool.vulture]
+# pytest fixture parameters are declared as function arguments but never referenced
+# by name in the function body — they are injected by pytest via the parameter name.
+# Vulture cannot distinguish fixture dependency injection from unused variables.
+ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
 
 [tool.ruff]
 line-length = 120

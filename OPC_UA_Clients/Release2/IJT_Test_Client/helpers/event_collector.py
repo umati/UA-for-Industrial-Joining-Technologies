@@ -66,10 +66,11 @@ class EventCollector:
             period_ms:         Subscription publishing interval in milliseconds.
             queue_size:        Maximum queued notifications per monitored item.
         """
-        self._subscription = await self._client.create_subscription(period_ms, self)
+        subscription = await self._client.create_subscription(period_ms, self)
+        self._subscription = subscription
         if not isinstance(event_type_nodes, (list, tuple)):
             event_type_nodes = [event_type_nodes]
-        await self._subscription.subscribe_events(server_node, event_type_nodes, queuesize=queue_size)
+        await subscription.subscribe_events(server_node, event_type_nodes, queuesize=queue_size)
 
     async def collect(self, count: int = 1, timeout_s: float = 30.0) -> List:
         """

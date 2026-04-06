@@ -293,7 +293,14 @@ def _relaunch_if_needed() -> None:
     # Tell the re-launched process to skip install (already done above)
     env = os.environ.copy()
     env["SKIP_VENV_INSTALL"] = "1"
-    os.execve(str(venv_py), [str(venv_py)] + sys.argv, env)
+    # subprocess.run() + sys.exit() instead of os.execve():
+    # On Windows, os.execve uses P_OVERLAY (CreateProcess + ExitProcess), creating a
+    # grandchild that inherits stdout/stderr pipe write-handles. Any parent using
+    # Popen(stdout=PIPE).communicate() then blocks forever because the grandchild
+    # keeps those handles open. subprocess.run() keeps the current process alive until
+    # the child finishes, so pipe handles close in the correct order on all platforms.
+    result = subprocess.run([str(venv_py)] + sys.argv, env=env, check=False)
+    sys.exit(result.returncode)
 
 
 # ---------------------------------------------------------------------------
@@ -707,6 +714,7 @@ def _step_unit_tests() -> _StepResult:
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage.xml'}",
             f"--cov-report=html:{_RESULTS_DIR / 'htmlcov'}",
             "--cov-report=term-missing",
+            "--cov-fail-under=70",
         ]
     rc, output = _run(cmd)
     result.duration = time.monotonic() - t0
@@ -841,6 +849,7 @@ def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _
             "--cov=.",
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage-live.xml'}",
             "--cov-report=term-missing",
+            "--cov-fail-under=70",
         ]
 
     rc = run_pytest(extra_pytest_args + cov_args)

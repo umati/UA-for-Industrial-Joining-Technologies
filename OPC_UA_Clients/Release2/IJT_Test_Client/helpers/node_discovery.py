@@ -36,10 +36,11 @@ async def _browse_refs(node: UANode, timeout: float = _BROWSE_TIMEOUT) -> list:
     Browse HierarchicalReferences forward from node without reading node values.
     Uses asyncio.wait_for to prevent hanging on slow or unresponsive server nodes.
     Returns a list of ReferenceDescription objects (BrowseName, NodeId, NodeClass).
+    HierarchicalReferences reference type id = 33 (ns=0, defined by OPC UA specification).
     """
     return await asyncio.wait_for(
         node.get_references(
-            refs=ua.NodeId(33, 0),  # HierarchicalReferences
+            refs=33,  # HierarchicalReferences (OPC UA Core NodeSet, ns=0, id=33)
             direction=ua.BrowseDirection.Forward,
             includesubtypes=True,
             nodeclassmask=0,
@@ -48,7 +49,7 @@ async def _browse_refs(node: UANode, timeout: float = _BROWSE_TIMEOUT) -> list:
     )
 
 
-async def find_joining_system(client) -> UANode:
+async def find_joining_system(client) -> UANode | None:
     """
     Browse the Objects folder to find the JoiningSystem node.
     Discovery is by HasTypeDefinition = JoiningSystemType (IJT Base ns, local id=1005).
@@ -87,7 +88,7 @@ async def find_joining_system(client) -> UANode:
 
 async def find_child_by_browse_name(
     parent_node: UANode, name: str, ns_index: int, timeout: float = _BROWSE_TIMEOUT
-) -> UANode:
+) -> UANode | None:
     """
     Find a direct child of parent_node whose BrowseName matches (ns_index, name).
     Uses get_references() with a timeout instead of get_children() to avoid hangs.
@@ -109,7 +110,7 @@ async def browse_folder_instances(folder_node: UANode, timeout: float = _BROWSE_
     browse_name_str is formatted as "{ns_index}:{Name}" (e.g. "3:MyController").
     Useful for iterating asset instances without assuming their names.
     """
-    results = []
+    results: list[tuple[str, UANode]] = []
     try:
         refs = await _browse_refs(folder_node, timeout=timeout)
     except Exception:
@@ -132,7 +133,7 @@ async def get_type_definition(node: UANode, ns_opc_ua: int = 0):
     """
     try:
         refs = await node.get_references(
-            refs=ua.NodeId(RefTypes.HAS_TYPE_DEFINITION, ns_opc_ua),
+            refs=RefTypes.HAS_TYPE_DEFINITION,  # ns=0; all OPC UA standard refs are in namespace 0
             direction=ua.BrowseDirection.Forward,
             includesubtypes=False,
             nodeclassmask=ua.NodeClass.Unspecified,
@@ -151,7 +152,7 @@ async def get_interface_types(node: UANode, ns_opc_ua: int = 0) -> list:
     """
     try:
         refs = await node.get_references(
-            refs=ua.NodeId(RefTypes.HAS_INTERFACE, ns_opc_ua),
+            refs=RefTypes.HAS_INTERFACE,  # ns=0; all OPC UA standard refs are in namespace 0
             direction=ua.BrowseDirection.Forward,
             includesubtypes=True,
             nodeclassmask=ua.NodeClass.Unspecified,
@@ -166,7 +167,7 @@ async def has_interface(node: UANode, ns_index: int, type_local_id: int, ns_opc_
     Check whether node has a HasInterface reference pointing to the given type.
     ns_opc_ua defaults to 0 — guaranteed by OPC UA specification §8.2.3.
     """
-    target = ua.NodeId(type_local_id, ns_index)
+    target = ua.NodeId(type_local_id, ns_index)  # type: ignore[arg-type]
     iface_types = await get_interface_types(node, ns_opc_ua)
     for nid in iface_types:
         if nid.Identifier == target.Identifier and nid.NamespaceIndex == target.NamespaceIndex:
@@ -181,7 +182,7 @@ async def get_associated_assets(node: UANode, ns_opc_ua: int = 0) -> list:
     """
     try:
         refs = await node.get_references(
-            refs=ua.NodeId(RefTypes.ASSOCIATED_WITH, ns_opc_ua),
+            refs=RefTypes.ASSOCIATED_WITH,  # ns=0; all OPC UA standard refs are in namespace 0
             direction=ua.BrowseDirection.Forward,
             includesubtypes=True,
             nodeclassmask=ua.NodeClass.Unspecified,
@@ -198,7 +199,7 @@ async def get_children_by_reference(node: UANode, ref_type_id: int, ns_opc_ua: i
     """
     try:
         refs = await node.get_references(
-            refs=ua.NodeId(ref_type_id, ns_opc_ua),
+            refs=ref_type_id,  # integer reference type id; ns=0 for all standard OPC UA refs
             direction=ua.BrowseDirection.Forward,
             includesubtypes=True,
             nodeclassmask=ua.NodeClass.Unspecified,

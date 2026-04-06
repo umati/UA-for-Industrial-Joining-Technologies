@@ -5,7 +5,8 @@ import pluginN from 'eslint-plugin-n'
 export default [
   {
     ignores: [
-      'node_modules/**'
+      'node_modules/**',
+      'eslint.config.js'
     ]
   },
   js.configs.recommended,

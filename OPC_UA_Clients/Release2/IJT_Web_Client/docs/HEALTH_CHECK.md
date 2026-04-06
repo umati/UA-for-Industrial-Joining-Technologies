@@ -18,5 +18,5 @@ Expected results:
 ```bash
 python run_all_tests.py
 ```
-Expected: ~310 Python pass, 162 JS pass, 0 lint errors.
-(Live OPC UA tests in `tests/test_opcua_methods.py` require a running server on `opc.tcp://localhost:40451`.)
+Expected: ~310 Python unit pass + 13 integration pass, 162 JS pass, 0 lint errors.
+(Live OPC UA tests in `tests/python/live/test_opcua_methods.py` require a running server on `opc.tcp://localhost:40451`.)

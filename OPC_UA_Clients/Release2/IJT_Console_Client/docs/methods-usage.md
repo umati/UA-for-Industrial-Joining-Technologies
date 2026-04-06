@@ -12,7 +12,7 @@ python setup_client.py --url "opc.tcp://localhost:40451"
 
 Activate the venv first:
 ```powershell
-.\venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 ```
 
 ### Select Joint
