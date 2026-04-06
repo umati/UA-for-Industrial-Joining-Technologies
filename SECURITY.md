@@ -42,4 +42,5 @@ We aim to acknowledge reports within **5 business days** and provide a fix or mi
 - The web client (`IJT_Web_Client`) binds its WebSocket backend to `localhost` by default.
   Review `client_config.py` and Docker port mappings before any network-accessible deployment.
 - Dependencies are kept up to date via [Renovate](renovate.json) and audited in CI via
-  `bandit` (Python) and `npm audit` (Node.js).
+  `bandit` (Python), `npm audit` (Node.js), and CodeQL static analysis (C#, Python, JavaScript)
+  using the `security-extended` query suite (`.github/workflows/codeql.yml`).

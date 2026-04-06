@@ -133,7 +133,7 @@ UA-for-Industrial-Joining-Technologies/
 
 ## CI/CD
 
-**Workflows**: `.github/workflows/ci.yml` and `.github/workflows/heavy-tests.yml` (both at **repo root**)
+**Workflows**: `.github/workflows/ci.yml`, `.github/workflows/heavy-tests.yml`, and `.github/workflows/codeql.yml` (all at **repo root**)
 
 ### Fast CI (`ci.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
@@ -145,10 +145,17 @@ UA-for-Industrial-Joining-Technologies/
 | `csharp-client` | dotnet build + test + NuGet CVE scan; Phase 2 with server (port 40451) |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
 | `report` |Combined markdown summary → Actions Summary tab |
-| `codeql` | GitHub CodeQL semantic analysis (Python + JS matrix), runs independently |
 
 Runtime: ~5–7 minutes. Python 3.14, Node.js 24, .NET 10 everywhere.
-Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `setup-dotnet@v4`, `upload-artifact@v7`, `download-artifact@v8`
+Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `setup-dotnet@v5`, `upload-artifact@v7`, `download-artifact@v8`
+
+### CodeQL (`codeql.yml`) — triggers on every push/PR to `main` + weekly
+Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries.
+| Language | Build method | Notes |
+|----------|-------------|-------|
+| C# | `dotnet build` (manual) | Types/ generated code excluded via `paths-ignore` in `codeql-config.yml` |
+| Python | autobuild | venv, node_modules, __pycache__ excluded |
+| JavaScript | autobuild | node_modules excluded |
 
 ### Port Ownership
 
