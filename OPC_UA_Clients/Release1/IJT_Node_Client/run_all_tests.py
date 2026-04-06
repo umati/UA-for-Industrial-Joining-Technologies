@@ -18,6 +18,7 @@ Flags:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import shutil
@@ -25,7 +26,7 @@ import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -43,7 +44,7 @@ _COVERAGE_THRESHOLD = 80.0
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-import socket
+import socket  # noqa: E402
 
 _SERVER_NATIVE_PORT = 40451
 _WELL_KNOWN_SIMULATOR_PATHS = [
@@ -209,15 +210,13 @@ def _parse_coverage_summary(results_dir: Path) -> Optional[float]:
     summary_path = results_dir / "coverage" / "coverage-summary.json"
     if not summary_path.exists():
         return None
-    try:
+    with contextlib.suppress(Exception):
         data = json.loads(summary_path.read_text(encoding="utf-8"))
         total = data.get("total", {})
         lines = total.get("lines", {})
         pct = lines.get("pct")
         if pct is not None:
             return float(pct)
-    except Exception:
-        pass
     return None
 
 
@@ -400,10 +399,8 @@ def _step_npm_audit(results_dir: Path) -> StepResult:
         capture_stdout=True,
     )
     dur = time.monotonic() - t0
-    try:
+    with contextlib.suppress(Exception):
         out_file.write_text(stdout, encoding="utf-8")
-    except Exception:
-        pass
     critical, high = _parse_audit_json(out_file)
     detail = f"{critical} critical, {high} high"
     if rc != 0 and (critical > 0 or high > 0):
@@ -467,13 +464,11 @@ def _step_detect_secrets() -> StepResult:
     dur = time.monotonic() - t0
     if rc != 0:
         return StepResult(label, "PHASE 1", "FAIL", f"exit {rc}", dur)
-    try:
+    with contextlib.suppress(Exception):
         data = json.loads(stdout)
         secrets_found = sum(len(v) for v in data.get("results", {}).values())
         if secrets_found > 0:
             return StepResult(label, "PHASE 1", "FAIL", f"{secrets_found} secrets found", dur)
-    except Exception:
-        pass
     return StepResult(label, "PHASE 1", "PASS", "", dur)
 
 
@@ -493,13 +488,11 @@ def _step_semgrep() -> StepResult:
     # semgrep exits 1 when findings are present, which is not a tool error
     if rc not in (0, 1):
         return StepResult(label, "PHASE 1", "WARN", f"exit {rc}", dur)
-    try:
+    with contextlib.suppress(Exception):
         data = json.loads(out_file.read_text(encoding="utf-8"))
         findings = len(data.get("results", []))
         if findings > 0:
             return StepResult(label, "PHASE 1", "WARN", f"{findings} findings", dur)
-    except Exception:
-        pass
     return StepResult(label, "PHASE 1", "PASS", "", dur)
 
 

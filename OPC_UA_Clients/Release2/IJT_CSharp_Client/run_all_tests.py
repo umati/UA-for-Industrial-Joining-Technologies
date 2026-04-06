@@ -20,6 +20,7 @@ Flags:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -31,7 +32,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # Paths & shared utilities
@@ -234,7 +235,7 @@ def _parse_cobertura_coverage(path: Path) -> Optional[float]:
     """
     if not path.exists():
         return None
-    try:
+    with contextlib.suppress(Exception):
         tree = ET.parse(str(path))
         root = tree.getroot()
         total_lines = 0
@@ -254,8 +255,6 @@ def _parse_cobertura_coverage(path: Path) -> Optional[float]:
         rate_str = root.get("line-rate")
         if rate_str is not None:
             return float(rate_str) * 100.0
-    except Exception:
-        pass
     return None
 
 
@@ -406,14 +405,12 @@ def _step_detect_secrets() -> StepResult:
     dur = time.monotonic() - t0
     if rc != 0:
         return StepResult(label, "PHASE 1", "FAIL", f"exit {rc}", dur)
-    try:
+    with contextlib.suppress(Exception):
         import json as _json
         data = _json.loads(stdout)
         secrets_found = sum(len(v) for v in data.get("results", {}).values())
         if secrets_found > 0:
             return StepResult(label, "PHASE 1", "FAIL", f"{secrets_found} secrets found", dur)
-    except Exception:
-        pass
     return StepResult(label, "PHASE 1", "PASS", "", dur)
 
 
@@ -431,7 +428,7 @@ def _step_test_unit() -> StepResult:
             "--logger", "trx;LogFileName=tests.trx",
             "--results-directory", str(_RESULTS_DIR),
             "--collect", "XPlat Code Coverage",
-            "--settings", str(_HERE / "coverlet.runsettings"),
+            "--settings", str(_PROJECT_DIR / "coverlet.runsettings"),
         ],
         env={"IJT_AUTO_ACCEPT": "true"},
     )
@@ -465,7 +462,7 @@ def _step_semgrep() -> StepResult:
         return StepResult(label, "PHASE 1", "SKIP", "Install: pip install semgrep", 0.0)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
-    r = subprocess.run(
+    subprocess.run(
         ["semgrep", "--config=p/default", "--json",
          "--output", str(_RESULTS_DIR / "semgrep.json"), "."],
         check=False, capture_output=True, text=True, cwd=str(_PROJECT_DIR),
@@ -495,10 +492,8 @@ def _step_semgrep() -> StepResult:
 def _resolve_server_url() -> str:
     port_env = os.environ.get("OPCUA_SERVER_PORT", "").strip()
     if port_env:
-        try:
+        with contextlib.suppress(ValueError):
             return f"opc.tcp://localhost:{int(port_env)}"
-        except ValueError:
-            pass
     return os.environ.get("OPCUA_SERVER_URL", "").strip() or _DEFAULT_SERVER_URL
 
 
@@ -533,7 +528,7 @@ def _try_launch_simulator() -> Optional[subprocess.Popen]:
             print(f"[PHASE 2] Simulator ready on port {_SERVER_NATIVE_PORT}.")
             os.environ["OPCUA_SERVER_URL"] = f"opc.tcp://localhost:{_SERVER_NATIVE_PORT}"
             return proc
-    print(f"[PHASE 2] Simulator did not become ready within 30s.", file=sys.stderr)
+    print("[PHASE 2] Simulator did not become ready within 30s.", file=sys.stderr)
     proc.terminate()
     return None
 

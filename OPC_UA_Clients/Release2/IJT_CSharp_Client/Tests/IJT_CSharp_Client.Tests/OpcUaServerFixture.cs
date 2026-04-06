@@ -252,7 +252,7 @@ public sealed class OpcUaServerFixture : IDisposable
         var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
         foreach (var segment in pathEnv.Split(Path.PathSeparator))
         {
-            var full = Path.Combine(segment, exe);
+            var full = Path.Join(segment, exe);
             if (File.Exists(full)) return full;
         }
         return null;
@@ -266,7 +266,7 @@ public sealed class OpcUaServerFixture : IDisposable
             tcp.Connect("127.0.0.1", port);
             return true;
         }
-        catch { return false; }
+        catch (Exception) { return false; }
     }
 
     private static bool WaitForPort(int port, int timeoutSeconds)
