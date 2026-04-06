@@ -43,7 +43,7 @@ async def _browse_refs(node: UANode, timeout: float = _BROWSE_TIMEOUT) -> list:
             refs=33,  # HierarchicalReferences (OPC UA Core NodeSet, ns=0, id=33)
             direction=ua.BrowseDirection.Forward,
             includesubtypes=True,
-            nodeclassmask=0,
+            nodeclassmask=ua.NodeClass.Unspecified,
         ),
         timeout=timeout,
     )
@@ -209,7 +209,7 @@ async def get_children_by_reference(node: UANode, ref_type_id: int, ns_opc_ua: i
         return []  # Reference type not present on node or node is unreachable
 
 
-async def find_method_node(parent: UANode, method_browse_name: str, method_ns_index: int) -> UANode:
+async def find_method_node(parent: UANode, method_browse_name: str, method_ns_index: int) -> UANode | None:
     """
     Find a method child of parent matching the given browse name and namespace index.
     Returns the method Node or None if not found.

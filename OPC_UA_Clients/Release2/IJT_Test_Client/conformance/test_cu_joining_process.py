@@ -122,8 +122,10 @@ async def test_cu_joining_process_abort_process_callable(opcua_client, ns_indice
         pytest.skip("IJT Base namespace not registered on server")
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await find_child_by_browse_name(jpm, BN.ABORT_JOINING_PROCESS, ns_ijt)
-    if method_node is None:
-        pytest.skip(f"'{BN.ABORT_JOINING_PROCESS}' method not found on JoiningProcessManagement")
+    assert method_node is not None, (
+        f"§11.1 CU-JP-004: '{BN.ABORT_JOINING_PROCESS}' is a required method on "
+        "JoiningProcessManagement but not found on this server"
+    )
     try:
         await jpm.call_method(method_node.nodeid)
     except ua.UaError as exc:

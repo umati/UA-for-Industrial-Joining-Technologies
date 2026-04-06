@@ -38,7 +38,6 @@ import os
 import socket
 import time
 
-
 import asyncua.client.ua_client as _uc
 import pytest
 import pytest_asyncio

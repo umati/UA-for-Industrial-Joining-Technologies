@@ -40,7 +40,6 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 # Ensure stdout/stderr use UTF-8 on Windows (cp1252 can't encode box-drawing chars)
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -817,7 +816,7 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
     # If user explicitly set the endpoint, don't auto-launch
     if os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL"):
         port = _opcua_server_port()
-        endpoint = os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL", "")
+        endpoint = os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL") or ""
         host, srv_port = _parse_opcua_host_port(endpoint)
         open_ = _port_open(host, srv_port)
         return False, open_, None

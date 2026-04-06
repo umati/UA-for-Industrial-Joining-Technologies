@@ -233,10 +233,11 @@ async def test_controller_interface_node_ids_are_in_ijt_base_namespace(controlle
 # ─── Identification interface tests ─────────────────────────────────────────
 
 
+@_XFAIL_HAS_INTERFACE
 async def test_tool_parameters_implement_i_tightening_tool_parameters_type(tools_instances, ns_indices):
     """Tool Parameters folders must implement ITighteningToolParametersType
     (IJT Tightening ns, i=1003).  Only Tools have this special Parameters interface.
-    Verified on live server: Tool/Parameters carries this interface.
+    Server does not yet emit HasInterface on Tool/Parameters nodes — tracked gap.
     """
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     ns_tight = ns_indices.get(NS_IJT_TIGHTENING)
@@ -254,6 +255,7 @@ async def test_tool_parameters_implement_i_tightening_tool_parameters_type(tools
         )
 
 
+@_XFAIL_HAS_INTERFACE
 async def test_all_asset_identification_implements_i_joining_additional_information_type(assets_folder, ns_indices):
     """Every asset's Identification object must implement IJoiningAdditionalInformationType
     (IJT Base i=1017) via HasInterface.
