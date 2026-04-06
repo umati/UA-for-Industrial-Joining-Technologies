@@ -314,7 +314,7 @@ def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: boo
                     log.info("Launching OPC UA simulator in separate terminal: %s", exe)
                     popen_kwargs: dict[str, Any] = {"cwd": str(exe.parent)}
                     if IS_WINDOWS:
-                        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+                        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE  # type: ignore[attr-defined]
                     proc = subprocess.Popen([str(exe)], **popen_kwargs)  # nosec B603 B607 — hardcoded path, not user input  # pylint: disable=consider-using-with
                     log.info("Launched OPC UA simulator with PID: %d", proc.pid)
                     if _wait_for_endpoint_ready(

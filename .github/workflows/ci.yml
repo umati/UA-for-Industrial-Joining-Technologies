@@ -459,6 +459,7 @@ jobs:
         id: vuln_scan
         continue-on-error: true
         run: |
+          New-Item -ItemType Directory -Force -Path test-results | Out-Null
           $output = dotnet list package --vulnerable --include-transitive 2>&1
           $output | Out-File test-results\vuln-scan.txt
           Write-Host $output

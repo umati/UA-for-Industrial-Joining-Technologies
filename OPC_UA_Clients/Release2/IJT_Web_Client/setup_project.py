@@ -413,7 +413,7 @@ def _stop_managed_processes(timeout_sec: float = 8.0) -> None:
         try:
             if IS_WINDOWS:
                 with contextlib.suppress(Exception):
-                    os.kill(pid, signal.CTRL_BREAK_EVENT)
+                    os.kill(pid, signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
             else:
                 os.kill(pid, signal.SIGTERM)
             log.info("Requested graceful stop for %s process (pid=%s).", label, pid)
