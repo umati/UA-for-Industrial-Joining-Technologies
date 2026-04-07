@@ -415,7 +415,7 @@ def _step_detect_secrets() -> StepResult:
 
 
 def _step_test_unit() -> StepResult:
-    """Run dotnet test with XPlat Code Coverage — live tests auto-skip via SkippableFact."""
+    """Run dotnet test with XPlat Code Coverage — live tests skip via IJT_PHASE1_ONLY=true."""
     label = "dotnet test (unit)"
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     trx_path = _RESULTS_DIR / "tests.trx"
@@ -429,8 +429,10 @@ def _step_test_unit() -> StepResult:
             "--results-directory", str(_RESULTS_DIR),
             "--collect", "XPlat Code Coverage",
             "--settings", str(_PROJECT_DIR / "coverlet.runsettings"),
+            "--blame-hang",
+            "--blame-hang-timeout", "60s",
         ],
-        env={"IJT_AUTO_ACCEPT": "true"},
+        env={"IJT_AUTO_ACCEPT": "true", "IJT_PHASE1_ONLY": "true"},
     )
     dur = time.monotonic() - t0
     passed, failed, skipped, total = _parse_trx(trx_path)

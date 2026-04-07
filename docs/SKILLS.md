@@ -168,7 +168,7 @@ UA-for-Industrial-Joining-Technologies/
 | `console-client` | Python unit tests (tests/unit/), Bandit, Ruff, mypy |
 | `node-client` | JS unit (~152), ESLint, npm audit |
 | `test-client` | pytest collect-only (import check), Bandit, Ruff, mypy |
-| `csharp-client` | dotnet build + test + NuGet CVE scan; Phase 2 with server (port 40451) |
+| `csharp-client` | dotnet build + test (`--blame-hang 60s`) + NuGet CVE scan; live tests against server (port 40451) |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
 | `report` |Combined markdown summary → Actions Summary tab |
 

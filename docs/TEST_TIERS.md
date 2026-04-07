@@ -13,7 +13,8 @@ All tests in this repository are classified into two tiers:
 
 ## ci-required (`ci-required.yml`)
 
-Fast, deterministic, environment-independent. **Must pass before any merge.**
+Fast and deterministic on GitHub-hosted runners. **Must pass before any merge.**
+Most jobs are fully environment-independent; `csharp-client` is the exception — it auto-launches the Windows OPC UA server binary on the runner.
 
 ### Jobs
 
@@ -22,7 +23,7 @@ Fast, deterministic, environment-independent. **Must pass before any merge.**
 | `web-client` | Python unit tests · Vitest · ESLint · Bandit · Ruff · mypy · npm audit |
 | `console-client` | Python unit tests · Bandit · Ruff · mypy |
 | `node-client` | Vitest · ESLint · npm audit |
-| `csharp-client` | dotnet build (zero warnings) · xUnit (live simulator auto-launched on Windows runner) · format check |
+| `csharp-client` | dotnet build (zero warnings) · phase1: unit/static only (`IJT_PHASE1_ONLY=true`, live tests skip) · phase2: xUnit live tests against auto-launched Windows server (`--blame-hang 60s` catches hangs) · format check |
 | `test-client` | pytest collect-only · Bandit · Ruff · mypy |
 | `server-smoke-windows` | OPC UA binary smoke — 10 checks, Windows native |
 | `docker-smoke` | Web Client Docker build · HTTP readiness · WebSocket port |

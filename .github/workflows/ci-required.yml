@@ -492,6 +492,7 @@ jobs:
             --logger "console;verbosity=normal" `
             --collect:"XPlat Code Coverage" `
             --results-directory test-results/coverage `
+            --blame-hang --blame-hang-timeout 60s `
             2>&1 | Tee-Object -Variable testOutput
           $testOutput | Out-File test-results\test-output.txt
 
