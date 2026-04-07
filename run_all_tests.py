@@ -893,7 +893,7 @@ _SOURCE_EXTS: frozenset[str] = frozenset({
 _SKIP_DIRS: frozenset[str] = frozenset({
     "node_modules", "__pycache__", "bin", "obj",
     ".git", "pki", "PKI", ".ruff_cache", ".mypy_cache", "dist",
-    ".pytest_cache", "tmp", "fixtures",
+    ".pytest_cache", "tmp", "fixtures", "test-results",
 })
 
 
