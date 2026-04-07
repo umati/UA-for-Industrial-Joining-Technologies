@@ -397,7 +397,8 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
         {
             if (Session.Connected)
             {
-                await Session.CloseSessionAsync(null, deleteSubscriptions: true, CancellationToken.None)
+                using var disposeCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
+                await Session.CloseSessionAsync(null, deleteSubscriptions: true, disposeCts.Token)
                              .ConfigureAwait(false);
             }
         }

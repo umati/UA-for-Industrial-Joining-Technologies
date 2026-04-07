@@ -59,12 +59,15 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
             "SimulateSingleResult method not found — server may not expose simulation nodes");
 
         // ResultType=0 (SIMPLE_OK), IncludeTraces=false — simplest trigger.
-        // Race the synchronous CallMethod against a hard 10s timeout so a stalled
-        // OPC UA call cannot block the test runner indefinitely.
+        // Race the synchronous CallMethod against a hard 10s deadline using an
+        // independent CTS so cancellation of the outer cts does not race with
+        // the timeout check. On timeout, throw immediately — do NOT await callTask.
         var callTask = Task.Run(() => session.CallMethod(simResultsNode, simMethodId, (uint)0, false));
-        if (await Task.WhenAny(callTask, Task.Delay(TimeSpan.FromSeconds(10), cts.Token)).ConfigureAwait(false) != callTask)
+        using var callTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var winner = await Task.WhenAny(callTask, Task.Delay(Timeout.Infinite, callTimeoutCts.Token)).ConfigureAwait(false);
+        if (winner != callTask)
             throw new TimeoutException("CallMethod(SimulateSingleResult) did not complete within 10 s");
-        await callTask.ConfigureAwait(false); // propagate any exception from CallMethod
+        await callTask.ConfigureAwait(false); // only reached on success — propagates CallMethod exceptions
 
         // Event should arrive within 1–2 s; allow up to 10 s as a generous safety margin
         var received = await Task.WhenAny(tcs.Task, Task.Delay(10_000, cts.Token)).ConfigureAwait(false) == tcs.Task;
