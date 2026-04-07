@@ -1363,7 +1363,26 @@ def main() -> int:
         if server_was_started:
             _stop_server()
 
-    return _print_summary(all_results, time.monotonic() - t_total)
+    rc = _print_summary(all_results, time.monotonic() - t_total)
+    _cleanup_caches(ROOT)
+    return rc
+
+
+def _cleanup_caches(root: Path) -> None:
+    """Remove root-level temp artifacts only.
+
+    The root runner invokes each sub-project runner as a subprocess — those runners
+    clean their own directories. This function only touches the repo root level so
+    each project remains fully self-contained.
+    """
+    _TEMP_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache", "pki", "PKI"}
+    for name in _TEMP_DIRS:
+        p = root / name
+        if p.is_dir():
+            shutil.rmtree(p, ignore_errors=True)
+    for p in root.iterdir():
+        if p.is_file() and (p.name == ".coverage" or p.name.startswith(".coverage.") or p.suffix == ".pyc"):
+            p.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

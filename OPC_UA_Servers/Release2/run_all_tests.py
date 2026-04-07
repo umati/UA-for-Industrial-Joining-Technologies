@@ -694,7 +694,23 @@ def main() -> int:
 
     all_ok = all(ok for _, _, ok, _ in results)
     _footer(results, time.monotonic() - t0)
+    _cleanup_caches(PROJ_DIR)
     return 0 if all_ok else 1
+
+
+def _cleanup_caches(root: Path) -> None:
+    """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
+    _SKIP = {"node_modules", ".git", "test-results"}
+    _CACHE_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache"}
+    for dirpath, dirs, files in os.walk(root, topdown=True):
+        dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith("venv") and not d.startswith(".venv")]
+        for d in list(dirs):
+            if d in _CACHE_DIRS:
+                shutil.rmtree(Path(dirpath) / d, ignore_errors=True)
+                dirs.remove(d)
+        for f in files:
+            if f == ".coverage" or f.startswith(".coverage.") or f.endswith(".pyc"):
+                (Path(dirpath) / f).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

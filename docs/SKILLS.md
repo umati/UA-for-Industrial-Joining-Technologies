@@ -27,6 +27,28 @@
 
 ---
 
+## Workspace Hygiene (Developers)
+
+### Automatic — post-run cache cleanup (every `run_all_tests.py`)
+Each runner removes `__pycache__`, `.ruff_cache`, `.mypy_cache`, `.coverage*` after writing reports.
+Cleanup is **self-contained** — each runner only affects its own directory.
+Running the root orchestrator triggers sub-project runners as subprocesses; each cleans itself.
+`.pytest_cache` and `test-results/` are always preserved.
+
+### Automatic — pytest temp dirs
+All three Python pytest projects (Web, Console, Test clients) are configured with:
+- `addopts = --basetemp=tests/fixtures/tmp` — temp dirs land inside the repo, avoiding OS temp ACL issues on Windows
+- `tmp_path_retention_count = 0` — pytest purges all previous-session dirs at the start of each new run
+
+### Manual — git-native cleanup (when needed)
+```bash
+git clean -fdXn                                              # dry-run: preview first
+git clean -fdX -e 'venv' -e '.venv*' -e 'node_modules' -e 'OPC_UA_IJT_Server_Simulator*'
+```
+Removes all gitignored artifacts while preserving venv/node_modules. See `docs/DEVELOPER_HYGIENE.md` for full detail.
+
+---
+
 ## Repo Structure
 
 ```
@@ -200,6 +222,7 @@ Runtime: ~7 minutes. NOT triggered on GUI/JS-only changes (deliberate — keep f
 | Path | Covers |
 |------|--------|
 | `docs/SKILLS.md` (this file) | Repo-level context, access rules, sub-project summary, CI/CD |
+| `docs/DEVELOPER_HYGIENE.md` | Automatic pytest cleanup config + manual `git clean` approach |
 | `OPC_UA_Servers/Release2/docs/SKILLS.md` | Server start/stop, simulation methods, smoke tests, env vars |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md` | Full Web Client context, file map, bugs, Docker, CI |
 | `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md` | Console Client context, patterns, test commands |

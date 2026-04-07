@@ -11,6 +11,7 @@
 #   docker-smoke         Release2 / IJT Web Client    Docker build + HTTP/WS readiness
 #   test-client          Release2 / IJT Test Client   pytest collect-only · Bandit
 #   server-smoke-windows Release2 / OPC UA Server     Windows native smoke (10 checks)
+#   actionlint           GHA workflow lint    actionlint (all .github/workflows/*.yml)
 #   report               Combined summary (always runs after all jobs)
 #
 # Heavy tests (nightly + manual): see .github/workflows/heavy-tests.yml
@@ -722,7 +723,7 @@ jobs:
   report:
     name: "📋 Test Report"
     runs-on: ubuntu-latest
-    needs: [web-client, console-client, node-client, docker-smoke, csharp-client, test-client, server-smoke-windows]
+    needs: [web-client, console-client, node-client, docker-smoke, csharp-client, test-client, server-smoke-windows, actionlint]
     if: always()
     permissions:
       contents: read
@@ -746,6 +747,7 @@ jobs:
           CS_RESULT:      ${{ needs.csharp-client.result }}
           TC_RESULT:      ${{ needs.test-client.result }}
           SS_WIN_RESULT:  ${{ needs.server-smoke-windows.result }}
+          AL_RESULT:      ${{ needs.actionlint.result }}
           WEB_MYPY:       ${{ needs.web-client.outputs.mypy_result }}
           CONSOLE_MYPY:   ${{ needs.console-client.outputs.mypy_result }}
           TC_MYPY:        ${{ needs.test-client.outputs.mypy_result }}
@@ -853,6 +855,7 @@ jobs:
           cs_r       = os.environ.get("CS_RESULT",      "unknown")
           tc_r       = os.environ.get("TC_RESULT",      "unknown")
           ss_win_r   = os.environ.get("SS_WIN_RESULT",  "unknown")
+          al_r       = os.environ.get("AL_RESULT",      "unknown")
 
           web_mypy = os.environ.get("WEB_MYPY",     "")
           con_mypy = os.environ.get("CONSOLE_MYPY", "")
@@ -876,7 +879,7 @@ jobs:
           _artifact_warn(cs_r,     cs_tests[0],  "csharp-client",        "tests.xml")
           _artifact_warn(tc_r,     tc_ban[0],    "test-client",          "bandit.json")
 
-          overall = "✅ All Passed" if all(r == "success" for r in [web_r, con_r, nod_r, docker_r, cs_r, tc_r, ss_win_r]) else "❌ Some Failed"
+          overall = "✅ All Passed" if all(r == "success" for r in [web_r, con_r, nod_r, docker_r, cs_r, tc_r, ss_win_r, al_r]) else "❌ Some Failed"
 
           rows = [
               f"| **Release2 / IJT Web Client**           | {job_icon(web_r)} `{web_r}` | {fmt_tests(*web_py)} | {fmt_tests(*web_js)} | {fmt_eslint(web_esl)} | {fmt_bandit(*web_ban)} | {fmt_npm(*web_npm)} | {fmt_mypy(web_mypy)} | {fmt_docker(docker_r)} |",
@@ -885,6 +888,7 @@ jobs:
               f"| **Release2 / IJT C# Client**            | {job_icon(cs_r)} `{cs_r}` | {fmt_tests(*cs_tests)} | — | — | — | — | — | — |",
               f"| **Release2 / IJT Test Client**          | {job_icon(tc_r)} `{tc_r}` | — (collect-only) | — | — | {fmt_bandit(*tc_ban)} | — | {fmt_mypy(tc_mypy)} | — |",
               f"| **Release2 / OPC UA Server (Win)**      | {job_icon(ss_win_r)} `{ss_win_r}` | — | — | — | — | — | — | — |",
+              f"| **GHA Workflow Lint (actionlint)**       | {job_icon(al_r)} `{al_r}` | — | — | — | — | — | — | — |",
           ]
 
           lines = [
@@ -907,6 +911,24 @@ jobs:
               fh.write("\n".join(lines) + "\n")
           print("Summary written.")
           PYEOF
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # GitHub Actions Workflow Lint (actionlint)
+  # ───────────────────────────────────────────────────────────────────────────
+  actionlint:
+    name: "GHA Workflow Lint (actionlint)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install actionlint
+        run: |
+          curl -L -o actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          tar xzf actionlint.tar.gz actionlint
+
+      - name: Run actionlint
+        run: ./actionlint -color
 
   # ───────────────────────────────────────────────────────────────────────────
   # CodeQL Analysis — handled by the dedicated .github/workflows/codeql.yml

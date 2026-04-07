@@ -1,7 +1,5 @@
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
-
 import pytest
 
 
@@ -31,7 +29,5 @@ def decode_last_message():
 
 
 @pytest.fixture
-def local_temp_dir():
-    path = Path("tests") / "fixtures" / "tmp"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+def local_temp_dir(tmp_path):
+    return tmp_path
