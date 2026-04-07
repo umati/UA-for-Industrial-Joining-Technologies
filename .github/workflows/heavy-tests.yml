@@ -190,7 +190,7 @@ jobs:
             python -m pytest tests/python/unit/ \
               -v --tb=short --no-header \
               --junitxml=/tmp/pytest-unit.xml
-          docker cp $(docker create --rm ijt-web-client:test-ci true):/tmp/pytest-unit.xml \
+          docker cp "$(docker create --rm ijt-web-client:test-ci true)":/tmp/pytest-unit.xml \
             pytest-unit.xml 2>/dev/null || true
 
       - name: Run JS unit tests (vitest) inside Docker

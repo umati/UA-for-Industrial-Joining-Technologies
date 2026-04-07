@@ -46,7 +46,6 @@
   --ui-scroll-track: rgb(0 0 0 / 35%);
   --ui-scroll-thumb: rgb(252 223 7 / 50%);
   --ui-scroll-thumb-hover: rgb(252 223 7 / 75%);
-  --ui-select-arrow-offset: 0.45rem;
 }
 
 body {
@@ -747,15 +746,11 @@ html {
 }
 
 .kvSelect {
-  appearance: none;
   color: var(--ui-text-main);
   cursor: pointer;
   background-color: var(--ui-control-bg);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23333'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right var(--ui-select-arrow-offset) center;
   width: 100%;
-  padding: 5px 1.5rem 5px 5px;
+  padding: 5px 1.75rem 5px 5px;
   border: 1px solid var(--ui-control-border);
   border-radius: 6px;
 }
@@ -1538,8 +1533,8 @@ html {
 }
 
 .resNew1 {
-  transition: box-shadow 0.3s ease;
-  animation: shadow1 15s;
+  transition: box-shadow 5s ease;
+  animation: shadow1 15s forwards;
 }
 
 @keyframes shadow1 {
@@ -1556,8 +1551,8 @@ html {
 }
 
 .resNew2 {
-  transition: box-shadow 0.3s ease;
-  animation: shadow2 30s;
+  transition: box-shadow 5s ease;
+  animation: shadow2 30s forwards;
 }
 
 @keyframes shadow2 {
@@ -1576,8 +1571,8 @@ html {
 
 
 .resNew3 {
-  transition: box-shadow 0.3s ease;
-  animation: shadow3 45s;
+  transition: box-shadow 5s ease;
+  animation: shadow3 45s forwards;
 }
 
 @keyframes shadow3 {
@@ -1595,8 +1590,8 @@ html {
 
 
 .resNew4 {
-  transition: box-shadow 0.3s ease;
-  animation: shadow4 60s;
+  transition: box-shadow 5s ease;
+  animation: shadow4 60s forwards;
 }
 
 @keyframes shadow4 {
@@ -1657,10 +1652,10 @@ html {
 }
 
 .horStack {
-  display:flex;
+  display: flex;
   flex-direction: row;
   justify-content: center;
-  align-items: flex-start;
+  align-items: start;
 }
 
 .rootChildRef {
@@ -1862,7 +1857,7 @@ html {
   height: 0;
   background: transparent;
   position: absolute;
-  top:0;
+  top: 0;
 }
 
 .drag-over {

@@ -359,7 +359,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for i in {1..60}; do
+          for _i in {1..60}; do
             if curl -fsS http://127.0.0.1:3000 >/dev/null; then
               echo "HTTP endpoint is ready."
               exit 0
