@@ -14,7 +14,7 @@
 | **Purpose** | Reference OPC UA IJT client: Python WebSocket backend + Node.js browser frontend |
 | **Stack** | Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vite/Vitest, ESLint |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
-| **Test baseline** | 310 Python / 0 skip, 162 JS, ESLint clean |
+| **Test baseline** | 310 Python / 0 skip, 229 JS, ESLint clean |
 | **Docker** | Container healthy on HTTP:3000 + WS:8001 (non-root `appuser`) |
 
 ---
@@ -104,7 +104,7 @@ IJT_Web_Client/
 │   │   └── live/                   # Needs real OPC UA server on :40451 (marker: live)
 │   │       ├── test_opcua_methods.py   # 70 method tests (asyncua monkey-patch)
 │   │       └── test_opcua_live.py      # Event subscription tests
-│   ├── js/unit/                    # Vitest JS unit tests (5 files, 70 tests)
+│   ├── js/unit/                    # Vitest JS unit tests (12 files, 229 tests: 162 unit + 67 source-coverage)
 │   ├── e2e/                        # Playwright E2E specs
 │   ├── shared_opcua/               # Shared OPC UA adapters (cross-client contracts)
 │   └── legacy/                     # Old Pytest stubs (historical only)

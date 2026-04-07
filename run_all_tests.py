@@ -5,6 +5,8 @@ UA-for-Industrial-Joining-Technologies repository.
 
 Architecture: Two-phase execution
   Phase 1 (PARALLEL)   -- unit / static tests, no OPC UA server required.
+                          Suites: csharp, console, webclient, testclient, node,
+                          git-sanity (verifies no source file is accidentally gitignored).
   Phase 2 (SEQUENTIAL) -- live integration tests, requires OPC UA server on
                           port 40451 (managed via Docker Compose by default).
 
@@ -12,7 +14,7 @@ Usage:
   python run_all_tests.py                    # full run (Phase 1 + Docker + Phase 2)
   python run_all_tests.py --phase1           # unit tests only (no server)
   python run_all_tests.py --phase2           # live tests only (server must exist)
-  python run_all_tests.py --suite csharp     # single suite by name
+  python run_all_tests.py --suite git-sanity # single suite by name
   python run_all_tests.py --skip-docker      # assume server already on :40451
   python run_all_tests.py --no-rebuild       # docker compose up --no-build
   python run_all_tests.py --verbose          # DEBUG-level logging
@@ -953,6 +955,126 @@ def _suite_node_unit() -> SuiteResult:
 
 
 # ---------------------------------------------------------------------------
+# Git-sanity suite -- verify no source file is accidentally gitignored
+# ---------------------------------------------------------------------------
+
+# Extensions that identify source files (not build artefacts or data files).
+_SOURCE_EXTS: frozenset[str] = frozenset({
+    ".py", ".mjs", ".js", ".ts", ".cs", ".csproj", ".sln",
+})
+
+# Exact directory names that are always build artefacts or runtime caches.
+_SKIP_DIRS: frozenset[str] = frozenset({
+    "node_modules", "__pycache__", "bin", "obj",
+    ".git", "pki", "PKI", ".ruff_cache", ".mypy_cache", "dist",
+    ".pytest_cache", "tmp", "fixtures",
+})
+
+
+def _skip_dir(name: str) -> bool:
+    """Return True if *name* is a build-artefact or runtime-cache directory.
+
+    Handles exact names (node_modules) and common prefix patterns (.venv*,
+    venv*, *.egg-info) without requiring an exhaustive list of every local
+    variant.
+    """
+    if name in _SKIP_DIRS:
+        return True
+    # All virtual-environment variants: .venv, .venv-wsl, venv, venv312, …
+    if name.startswith(".venv") or name.startswith("venv"):
+        return True
+    # Python packaging artefacts
+    if name.endswith(".egg-info") or name.endswith(".dist-info"):
+        return True
+    return False
+
+
+def _collect_source_files(base: Path) -> list[str]:
+    """Return all source file paths under *base* relative to REPO_ROOT.
+
+    Uses os.walk with in-place directory pruning so build artefacts, venvs,
+    and caches are never descended into.
+    """
+    files: list[str] = []
+    for root, dirs, filenames in os.walk(base):
+        # Prune in place — os.walk will not descend into pruned directories.
+        dirs[:] = [d for d in dirs if not _skip_dir(d)]
+        root_path = Path(root)
+        for fname in filenames:
+            if Path(fname).suffix in _SOURCE_EXTS:
+                rel = (root_path / fname).relative_to(REPO_ROOT)
+                files.append(str(rel).replace("\\", "/"))
+    return files
+
+
+def _suite_gitignore_sanity() -> SuiteResult:
+    """Verify that no on-disk source file is accidentally matched by a .gitignore rule.
+
+    Uses ``git check-ignore --stdin --no-index`` which evaluates .gitignore
+    patterns against file *paths* without requiring the files to be tracked.
+
+    SCOPE — what this check catches and what it does not:
+
+    ✔  A file exists in the developer's working tree but is matched by a
+       .gitignore rule (class of bug in commit 9598856).  On the developer
+       machine the file is present so os.walk finds it; check-ignore then
+       flags the offending pattern before the developer can commit.
+
+    ✘  A file that was accidentally gitignored and *never committed* will not
+       exist on a fresh CI checkout, so os.walk will not find it and this
+       check cannot flag it in CI.
+
+    The complementary CI-level guard is the Playwright smoke test suite: if
+    a JS/CSS module is missing the browser will fail to load the page, causing
+    the smoke tests to fail.  Together the two layers cover both local and CI
+    scenarios.
+    """
+    name = "git-sanity"
+    t0 = time.monotonic()
+
+    source_files = _collect_source_files(REPO_ROOT / "OPC_UA_Clients")
+    source_files += _collect_source_files(REPO_ROOT / "OPC_UA_Servers")
+
+    if not source_files:
+        return SuiteResult(name, True, notes=["no source files found to check"])
+
+    try:
+        proc = subprocess.run(
+            ["git", "check-ignore", "--stdin", "--no-index", "-v"],
+            input="\n".join(source_files),
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=30,
+        )
+    except FileNotFoundError:
+        return SuiteResult(name, True, skipped=True, notes=["git not in PATH"])
+    except subprocess.TimeoutExpired:
+        return SuiteResult(name, False, time.monotonic() - t0,
+                           notes=["git check-ignore timed out"])
+
+    # git check-ignore writes to stdout the paths it matched; any output = failure.
+    ignored = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+
+    if ignored:
+        lines = [
+            f"Scanned {len(source_files)} source files.\n",
+            "ERROR: the following source files are matched by .gitignore rules.",
+            "They will be MISSING on every fresh git clone:\n",
+        ]
+        lines.extend(f"  {entry}" for entry in ignored)
+        lines.append(
+            "\nFix: remove or narrow the offending .gitignore pattern, "
+            "then run: git add <file>"
+        )
+        return SuiteResult(name, False, time.monotonic() - t0,
+                           output="\n".join(lines))
+
+    notes = [f"{len(source_files)} source files checked — none gitignored"]
+    return SuiteResult(name, True, time.monotonic() - t0, notes=notes)
+
+
+# ---------------------------------------------------------------------------
 # Phase 2 suites -- live / integration (run sequentially, server required)
 # ---------------------------------------------------------------------------
 
@@ -1148,11 +1270,12 @@ def _suite_webclient_live() -> SuiteResult:
 # ---------------------------------------------------------------------------
 
 PHASE1_SUITES: dict[str, object] = {
-    "csharp":     _suite_csharp_unit,
-    "console":    _suite_console_unit,
-    "webclient":  _suite_webclient_unit,
-    "testclient": _suite_testclient_collect,
-    "node":       _suite_node_unit,
+    "csharp":       _suite_csharp_unit,
+    "console":      _suite_console_unit,
+    "webclient":    _suite_webclient_unit,
+    "testclient":   _suite_testclient_collect,
+    "node":         _suite_node_unit,
+    "git-sanity":   _suite_gitignore_sanity,
 }
 
 PHASE2_SUITES: dict[str, object] = {

@@ -99,7 +99,7 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vitest, ESLint, Docker
-- **Test baseline**: 310 Python pass / 0 skip / 0 warnings, 162 JS pass, ESLint clean
+- **Test baseline**: 310 Python pass / 0 skip / 0 warnings, 229 JS pass (162 unit + 67 source-coverage), ESLint clean
 - **Live tests**: `tests/python/live/` — excluded from default run (`norecursedirs = live`); requires running OPC UA server
 - **One test command**: `python run_all_tests.py`
 - **Docker**: healthy on HTTP:3000 + WS:8001
@@ -164,7 +164,7 @@ UA-for-Industrial-Joining-Technologies/
 ### Fast CI (`ci.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
 |-----|--------------|
-| `web-client` | Python unit (310), JS unit (162), ESLint, Bandit, npm audit |
+| `web-client` | Python unit (310), JS unit (229), ESLint, Bandit, npm audit |
 | `console-client` | Python unit tests (tests/unit/), Bandit, Ruff, mypy |
 | `node-client` | JS unit (~152), ESLint, npm audit |
 | `test-client` | pytest collect-only (import check), Bandit, Ruff, mypy |
@@ -199,7 +199,7 @@ Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJ
 | Job | What it tests |
 |-----|--------------|
 | `docker-smoke` | Full Docker build + server smoke (10/10) |
-| `webclient-docker` | Web Client Docker test image (Python 323, JS 162) + HTTP:3000 production health |
+| `webclient-docker` | Web Client Docker test image (Python 310 unit, JS 229) + HTTP:3000 production health |
 | `integration-tests` | Live OPC UA integration (191 pass + 20 xfail + 6 skip) against running server |
 
 Runtime: ~7 minutes. NOT triggered on GUI/JS-only changes (deliberate — keep fast CI fast).

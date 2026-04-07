@@ -11,7 +11,7 @@ Usage:
   python run_all_tests.py --list # print stages and exit
 
 Optional stages activate automatically when available:
-  Docker smoke  — if Docker daemon is running  (build + compose-up + readiness check + down)
+  Docker smoke  — if Docker daemon is running  (BuildKit build + compose-up + readiness + down)
   Live OPC UA   — if server reachable at OPCUA_TEST_ENDPOINT  (default: opc.tcp://localhost:40451)
   Playwright E2E — if WebSocket backend reachable at WS_TEST_URL (default: ws://localhost:8001)
 
@@ -24,6 +24,7 @@ Environment variables (all optional):
   OPCUA_TEST_ENDPOINT   default: opc.tcp://localhost:40451
   WS_TEST_URL           default: ws://localhost:8001
   UI_TEST_BASE_URL      default: http://127.0.0.1:3000
+  IJT_DOCKER_TIMEOUT    seconds to wait for Docker HTTP readiness (default: 90)
 """
 
 from __future__ import annotations
@@ -85,7 +86,11 @@ def _relaunch_under_venv() -> None:
     # because the grandchild keeps the handles open.
     # subprocess.run() keeps the current process alive until the child finishes,
     # ensuring pipe handles close in the correct order on all platforms.
-    result = subprocess.run([venv_py] + sys.argv, check=False)
+    result = subprocess.run(
+        [venv_py] + sys.argv,
+        check=False,
+        env={**os.environ, "_IJT_RELAUNCHED": "1"},
+    )
     sys.exit(result.returncode)
 
 
@@ -797,6 +802,33 @@ _WELL_KNOWN_SIMULATOR_PATHS: list[Path] = [
 _SERVER_NATIVE_PORT = 40451
 _CLIENT_DEFAULT_PORT = 40463
 
+def _parse_int_env(name: str, default: int) -> int:
+    """Parse an integer environment variable, falling back to *default* on bad input.
+
+    Warns on stderr when the value is not a valid integer.  The warning is
+    suppressed on venv-relaunched invocations (``_IJT_RELAUNCHED=1``) to avoid
+    printing the same message twice when the outer bootstrap process re-execs
+    this script under the isolated venv.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        # Suppress the duplicate warning in the inner (venv-relaunched) process.
+        if not os.environ.get("_IJT_RELAUNCHED"):
+            import warnings
+            warnings.warn(
+                f"IJT: {name}={raw!r} is not a valid integer — using default {default}s",
+                stacklevel=2,
+            )
+        return default
+
+# Configurable Docker readiness timeout (seconds).  90 s is ample for most
+# environments; override with IJT_DOCKER_TIMEOUT=<seconds> for slow CI runners.
+_DOCKER_TIMEOUT = _parse_int_env("IJT_DOCKER_TIMEOUT", 90)
+
 
 def _opcua_server_port() -> int:
     return int(os.getenv("OPCUA_SERVER_PORT", str(_CLIENT_DEFAULT_PORT)))
@@ -950,7 +982,7 @@ def _stage_python_integration(
 # Docker helpers
 # ---------------------------------------------------------------------------
 def _docker_available() -> bool:
-    """Return True if the Docker daemon is reachable."""
+    """Return True if the Docker daemon is reachable via the active context."""
     docker = shutil.which("docker") or shutil.which("docker.exe")
     if not docker:
         return False
@@ -967,8 +999,33 @@ def _docker_available() -> bool:
         return False
 
 
+def _docker_skip_reason() -> str:
+    """Return an actionable message explaining why Docker is unavailable."""
+    docker = shutil.which("docker") or shutil.which("docker.exe")
+    if not docker:
+        return (
+            "docker not in PATH — install Docker Desktop (Windows/Mac) "
+            "or 'sudo apt install docker.io' (Linux)"
+        )
+    # docker binary exists but daemon not responding
+    if sys.platform == "win32":
+        return (
+            "Docker daemon not running — start Docker Desktop, "
+            "wait for the whale icon in the system tray, then re-run"
+        )
+    if sys.platform == "darwin":
+        return (
+            "Docker daemon not running — start Docker Desktop for Mac "
+            "or run: open -a Docker"
+        )
+    return (
+        "Docker daemon not running — run: sudo systemctl start docker  "
+        "(or: sudo service docker start)"
+    )
+
+
 def _stage_docker_smoke() -> StageResult:
-    """Build image, start compose, verify HTTP + WS readiness, then tear down."""
+    """Build image with BuildKit layer caching, start compose, verify readiness, tear down."""
     _banner("STAGE 8  Docker smoke (build + compose up + readiness + down)")
     t0 = time.monotonic()
     docker = shutil.which("docker") or shutil.which("docker.exe")
@@ -976,7 +1033,15 @@ def _stage_docker_smoke() -> StageResult:
         return StageResult("docker-smoke", 0, skipped=True, notes=["docker not in PATH"])
     compose_cmd = [docker, "compose"]
 
-    rc = _run([docker, "build", "-t", "ijt_web_client", "."], label="docker build")
+    # DOCKER_BUILDKIT=1 enables layer caching — repeated local builds take seconds, not minutes.
+    build_env = {**os.environ, "DOCKER_BUILDKIT": "1", "BUILDKIT_INLINE_CACHE": "1"}
+    build_cmd = [
+        docker, "build",
+        "--cache-from", "ijt_web_client:latest",
+        "-t", "ijt_web_client",
+        ".",
+    ]
+    rc = _run(build_cmd, label="docker build (BuildKit)", env=build_env)
     if rc != 0:
         return StageResult("docker-smoke", rc, duration=time.monotonic() - t0, notes=["docker build failed"])
 
@@ -984,14 +1049,14 @@ def _stage_docker_smoke() -> StageResult:
     if rc != 0:
         return StageResult("docker-smoke", rc, duration=time.monotonic() - t0, notes=["docker compose up failed"])
 
-    # Wait up to 180 s for HTTP readiness (60 polls × up to 3 s each: 1 s connect timeout + 2 s sleep)
-    _info("Waiting for http://127.0.0.1:3000 ...")
+    # Wait up to _DOCKER_TIMEOUT seconds for HTTP readiness (1 poll per second).
+    _info(f"Waiting up to {_DOCKER_TIMEOUT} s for http://127.0.0.1:3000 ...")
     ready = False
-    for _ in range(60):
+    for _ in range(_DOCKER_TIMEOUT):
         if _port_open("127.0.0.1", 3000, timeout=1.0):
             ready = True
             break
-        time.sleep(2)
+        time.sleep(1)
 
     ws_ready = _port_open("127.0.0.1", 8001, timeout=2.0)
 
@@ -1000,7 +1065,8 @@ def _stage_docker_smoke() -> StageResult:
 
     if not ready:
         return StageResult(
-            "docker-smoke", 1, duration=time.monotonic() - t0, notes=["HTTP :3000 not ready within 180 s"]
+            "docker-smoke", 1, duration=time.monotonic() - t0,
+            notes=[f"HTTP :3000 not ready within {_DOCKER_TIMEOUT} s (set IJT_DOCKER_TIMEOUT to override)"]
         )
 
     notes = [] if ws_ready else ["WS :8001 not ready — backend may need OPC UA server"]
@@ -1193,7 +1259,7 @@ def main() -> int:
     if not args.phase1 and run_docker:
         results.append(_stage_docker_smoke())
     elif not args.phase1:
-        _skip("docker-smoke: Docker not available")
+        _skip(f"docker-smoke: {_docker_skip_reason()}")
         results.append(StageResult("docker-smoke", 0, skipped=True))
 
     rc = _print_summary(results, time.monotonic() - t_start)
