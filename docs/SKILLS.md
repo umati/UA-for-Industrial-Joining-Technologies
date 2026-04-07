@@ -190,7 +190,8 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `csharp-client` | `ci-required.yml` | 40451 | Windows native EXE |
 | `server-smoke-windows` | `ci-required.yml` | 40451 | Windows native EXE |
 | `server-smoke-docker` | `ci-extended.yml` | 40451 | Docker (Linux) |
-| `integration-tests` | `ci-extended.yml` | 40451 | Windows native EXE |
+| `int-testclient` | `ci-extended.yml` | 40451 | Windows native EXE |
+| `int-live-others` | `ci-extended.yml` | 40451 | Windows native EXE |
 
 > Release1 Node Client always uses 40451 (fixed — no dynamic port support). Release2 clients all use 40451 in ci-extended. The old per-job isolated Docker ports (40452–40455) are no longer used in CI.
 
@@ -200,9 +201,10 @@ Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJ
 |-----|--------------|
 | `docker-smoke` | Full Docker build + server smoke (10/10) |
 | `webclient-docker` | Web Client Docker test image (Python 310 unit, JS 229) + HTTP:3000 production health |
-| `integration-tests` | Live OPC UA integration (191 pass + 20 xfail + 6 skip) against running server |
+| `int-testclient` | Windows live: Test Client full suite (191 pass + 20 xfail + 6 skip) against running server |
+| `int-live-others` | Windows live: Web Client integration (13 tests) + Console Client live tests |
 
-Runtime: ~7 minutes. NOT triggered on GUI/JS-only changes (deliberate — keep fast CI fast).
+Runtime: ~5 minutes (int-testclient + int-live-others run in parallel). NOT triggered on GUI/JS-only changes (deliberate — keep fast CI fast).
 
 ---
 

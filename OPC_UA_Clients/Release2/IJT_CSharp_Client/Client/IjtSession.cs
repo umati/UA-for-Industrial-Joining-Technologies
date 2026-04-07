@@ -309,23 +309,25 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
         if (methodId == null || methodId.IsNullNodeId)
             throw new InvalidOperationException("CallMethod: methodId is null/empty.");
 
+        var request = new CallMethodRequestCollection
+        {
+            new CallMethodRequest
+            {
+                ObjectId       = objectId,
+                MethodId       = methodId,
+                InputArguments = inputArgs.Length > 0
+                    ? new VariantCollection(inputArgs.Select(a => new Variant(a)))
+                    : new VariantCollection(),
+            }
+        };
+
         Session.Call(
             requestHeader: null,
-            methodsToCall: new CallMethodRequestCollection
-            {
-                new CallMethodRequest
-                {
-                    ObjectId       = objectId,
-                    MethodId       = methodId,
-                    InputArguments = inputArgs.Length > 0
-                        ? new VariantCollection(inputArgs.Select(a => new Variant(a)))
-                        : new VariantCollection(),
-                }
-            },
+            methodsToCall: request,
             results: out var results,
             diagnosticInfos: out _);
 
-        ClientBase.ValidateResponse(results, new CallMethodRequestCollection());
+        ClientBase.ValidateResponse(results, request);
         var result = results[0];
         if (StatusCode.IsBad(result.StatusCode))
             throw new ServiceResultException(result.StatusCode);

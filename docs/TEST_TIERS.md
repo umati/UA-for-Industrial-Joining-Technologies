@@ -54,7 +54,8 @@ Live, integration, Docker, and optional security checks.
 |-----|----------------|
 | `server-smoke-docker` | Linux Release2 server: Docker image build · Dockerfile lint (hadolint) · smoke tests |
 | `webclient-docker` | Web Client Docker: test-target (Python + Vitest inside container) · prod-target (HTTP health on port 3000) |
-| `integration-tests` | Full end-to-end on Windows: OPC UA server + Test Client full suite + Web Client integration + Console live |
+| `int-testclient` | Windows: OPC UA server + Test Client full suite (runs in parallel with `int-live-others`) |
+| `int-live-others` | Windows: Web Client integration + Console live tests (runs in parallel with `int-testclient`) |
 | `zizmor` *(optional)* | GitHub Actions workflow security audit — non-blocking; findings tracked |
 
 ### Triggers
