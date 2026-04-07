@@ -55,8 +55,10 @@ logs/
 # Convention: scripts MUST write output to test-results/, never to directory root.
 # Any stray root-level output files use prefix test-run- and are caught by:
 test_output.txt
+TestOutput.txt
 test_run_err.log
 test-run-*.txt
+*_dump.txt
 
 # Phase run temp files (created by root orchestrator and CI parallel runners)
 phase1_*.txt
@@ -198,6 +200,21 @@ MSBuild_*.failure.txt
 **/pki/
 *.pfx
 *.p12
+
+# ---------------------------------------------------------------------------
+# actionlint binary — vendored docs and man pages bundled with the binary.
+# These are upstream actionlint files, not project documentation.
+# The binary itself is caught by the global gitignore (*.exe).
+# ---------------------------------------------------------------------------
+man/
+LICENSE.txt
+docs/README.md
+docs/checks.md
+docs/api.md
+docs/usage.md
+docs/config.md
+docs/install.md
+docs/reference.md
 
 # ---------------------------------------------------------------------------
 # Session / handoff artefacts

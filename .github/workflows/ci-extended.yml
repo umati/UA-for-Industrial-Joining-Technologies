@@ -1,17 +1,23 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Heavy Tests — OPC UA Server Docker Smoke + Integration Tests
+# CI Extended — Live / Integration / Docker / Security Tests
 #
-# Runs nightly, on manual trigger, or when OPC UA Server / Web Client code
-# changes are pushed to main. These jobs are excluded from the fast CI path
-# because they take 20-30 minutes (Docker build + live conformance tests).
+# TIER: ci-extended (non-blocking) — skips and failures are tracked but do
+# not gate merges. See docs/TEST_TIERS.md for the full tier policy and the
+# known-expected-skips table.
 #
 # Jobs:
 #   server-smoke-docker  Release2 / OPC UA Server        Linux native Docker build + smoke
 #   webclient-docker     Release2 / IJT Web Client        Docker unit/prod tests
 #   integration-tests    Release2 / Integration Tests     Windows: OPC UA + Test Client + Web Client + Console Client
+#   zizmor               GHA Security Audit               Optional — non-blocking; findings tracked
+#
+# Triggers:
+#   - Nightly at 2am UTC
+#   - Manual dispatch (workflow_dispatch)
+#   - Push / PR touching server or client code paths (see path filters below)
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: Heavy Tests
+name: CI Extended
 
 on:
   schedule:
@@ -42,7 +48,7 @@ on:
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/tests/live/**'
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/requirements*.txt'
       # Workflow file itself
-      - '.github/workflows/heavy-tests.yml'
+      - '.github/workflows/ci-extended.yml'
   pull_request:
     branches: [main]
     paths:
@@ -64,7 +70,7 @@ on:
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/*.py'
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/tests/live/**'
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/requirements*.txt'
-      - '.github/workflows/heavy-tests.yml'
+      - '.github/workflows/ci-extended.yml'
 
 permissions:
   contents: read
@@ -74,7 +80,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  group: heavy-${{ github.ref }}
+  group: ci-extended-${{ github.ref }}
   cancel-in-progress: true
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -352,3 +358,28 @@ jobs:
             Stop-Process -Id $env:WS_SERVER_PID -Force -ErrorAction SilentlyContinue
             Write-Host "Web server stopped"
           }
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # GHA Security Audit (zizmor) — OPTIONAL / NON-BLOCKING
+  #   Audits all GHA workflow files for supply-chain and injection risks.
+  #   continue-on-error: true — findings tracked, never block the workflow.
+  #   Install locally: pip install zizmor
+  #   Docs: https://woodruffw.github.io/zizmor/
+  # ───────────────────────────────────────────────────────────────────────────
+  zizmor:
+    name: "GHA Security Audit (zizmor) [optional]"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install zizmor
+        run: pip install zizmor
+
+      - name: Run zizmor (GHA security audit)
+        run: zizmor .github/workflows/

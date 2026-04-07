@@ -1,8 +1,9 @@
-﻿# ─────────────────────────────────────────────────────────────────────────────
-# CI — IJT OPC UA Full Test Suite
+# ─────────────────────────────────────────────────────────────────────────────
+# CI Required — IJT OPC UA Fast Test Suite
 #
-# Runs on every push / PR to main. Produces a combined summary table on the
-# Actions Summary page. Per-test drill-down is in the Checks tab.
+# TIER: ci-required (blocking) — must pass on every push / PR to main.
+# See docs/TEST_TIERS.md for tier policy, skip budget rules, and the full list
+# of known expected skips.
 #
 # Jobs:
 #   web-client           Release2 / IJT Web Client    Python pytest · Vitest · ESLint · Bandit · npm audit
@@ -14,7 +15,7 @@
 #   actionlint           GHA workflow lint    actionlint (all .github/workflows/*.yml)
 #   report               Combined summary (always runs after all jobs)
 #
-# Heavy tests (nightly + manual): see .github/workflows/heavy-tests.yml
+# Live / integration / security tests: see .github/workflows/ci-extended.yml
 #
 # Standards used:
 #   Python security : bandit    (pyproject.toml [tool.bandit]  ·  -c pyproject.toml)
@@ -24,7 +25,7 @@
 #   Summary table   : $GITHUB_STEP_SUMMARY (Actions Summary tab)
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: CI
+name: CI Required
 
 on:
   push:
@@ -42,7 +43,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-required-${{ github.ref }}
   cancel-in-progress: true
 
 # ─────────────────────────────────────────────────────────────────────────────

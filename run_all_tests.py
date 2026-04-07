@@ -4,15 +4,22 @@ run_all_tests.py -- Top-level test runner for the
 UA-for-Industrial-Joining-Technologies repository.
 
 Architecture: Two-phase execution
-  Phase 1 (PARALLEL)   -- unit / static tests, no OPC UA server required.
-                          Suites: csharp, console, webclient, testclient, node,
-                          git-sanity (verifies no source file is accidentally gitignored).
+  Phase 1 (PARALLEL)   -- static analysis + unit tests, no OPC UA server required.
+                          Delegates to each sub-project's own run_all_tests.py --phase1,
+                          ensuring local runs cover CI checks or stricter (e.g. testclient runs full phase1 locally vs collect-only in ci-required):
+                            - ruff, mypy, bandit (Python projects)
+                            - ESLint, npm audit (Node/JS projects)
+                            - dotnet format, NuGet vulnerability scan (C# project)
+                            - hadolint, yamllint (Server / Docker)
+                          Extra root-level checks: git-sanity, GHA workflow validation.
   Phase 2 (SEQUENTIAL) -- live integration tests, requires OPC UA server on
                           port 40451 (managed via Docker Compose by default).
+                          Delegates to each sub-project's own run_all_tests.py --phase2
+                          with OPCUA_SERVER_URL pointing to the Docker server root manages.
 
 Usage:
   python run_all_tests.py                    # full run (Phase 1 + Docker + Phase 2)
-  python run_all_tests.py --phase1           # unit tests only (no server)
+  python run_all_tests.py --phase1           # static + unit tests only (no server)
   python run_all_tests.py --phase2           # live tests only (server must exist)
   python run_all_tests.py --suite git-sanity # single suite by name
   python run_all_tests.py --skip-docker      # assume server already on :40451
@@ -278,34 +285,41 @@ def _run_captured(
             cwd=str(cwd),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
+            text=False,
             env=run_env,
             **popen_kwargs,
         )
     except FileNotFoundError:
         return 1, preamble + f"[ERROR: command not found: {cmd[0]}]\n"
 
+    def _decode(b):
+        if b is None:
+            return ""
+        return b.decode("utf-8", errors="replace")
+
     try:
-        stdout, stderr = proc.communicate(timeout=timeout)
-        body = stdout
-        if stderr:
-            body += "\n[stderr]\n" + stderr
+        raw_out, raw_err = proc.communicate(timeout=timeout)
+        body = _decode(raw_out)
+        err_text = _decode(raw_err)
+        if err_text:
+            body += "\n[stderr]\n" + err_text
         return proc.returncode, preamble + body
 
     except subprocess.TimeoutExpired:
         # Kill the whole tree so grandchild processes release pipe handles
         _kill_proc_tree(proc.pid)
         try:
-            stdout, stderr = proc.communicate(timeout=15)
+            raw_out, raw_err = proc.communicate(timeout=15)
         except subprocess.TimeoutExpired:
             if proc.stdout:
                 proc.stdout.close()
             if proc.stderr:
                 proc.stderr.close()
-            stdout, stderr = "", ""
-        body = stdout + f"\n[TIMEOUT after {timeout}s -- process tree killed]\n"
-        if stderr:
-            body += "\n[stderr]\n" + stderr
+            raw_out, raw_err = None, None
+        body = _decode(raw_out) + f"\n[TIMEOUT after {timeout}s -- process tree killed]\n"
+        err_text = _decode(raw_err)
+        if err_text:
+            body += "\n[stderr]\n" + err_text
         return 1, preamble + body
 
 
@@ -319,6 +333,45 @@ def _emit_suite_output(result: SuiteResult) -> None:
                  note=" | ".join(result.notes) if result.notes else "")
     sys.stdout.flush()
 
+
+def _delegate_to_runner(
+    name: str,
+    runner_dir: "Path",
+    phase_args: "list[str]",
+    label: str,
+    extra_env: "Optional[dict]" = None,
+) -> "SuiteResult":
+    """Delegate a test suite to a sub-project's own run_all_tests.py.
+
+    The sub-project runner is the single source of truth for what that
+    sub-project tests.  Calling it here ensures local runs cover CI checks
+    or are stricter (ruff, mypy, bandit, npm audit, dotnet format, ...).
+    Note: testclient runs full phase1 locally; ci-required uses collect-only.
+    """
+    t0 = time.monotonic()
+    runner = runner_dir / "run_all_tests.py"
+    if not runner_dir.exists() or not runner.exists():
+        return SuiteResult(
+            name=name,
+            ok=True,
+            skipped=True,
+            notes=[f"sub-project runner not found: {runner}"],
+        )
+    env = {**os.environ}
+    if extra_env:
+        env.update(extra_env)
+    rc, out = _run_captured(
+        [sys.executable, str(runner)] + phase_args,
+        cwd=runner_dir,
+        label=label,
+        env=env,
+    )
+    return SuiteResult(
+        name=name,
+        ok=(rc == 0),
+        duration=time.monotonic() - t0,
+        output=out,
+    )
 
 # ---------------------------------------------------------------------------
 # Docker / server management
@@ -748,211 +801,84 @@ def _run_gha_checks() -> list[SuiteResult]:
 # ---------------------------------------------------------------------------
 
 def _suite_csharp_unit() -> SuiteResult:
-    """C# unit tests -- live tests auto-skip when no server is reachable."""
-    name = "csharp"
-    t0 = time.monotonic()
+    """C# Client -- Phase 1 (static + unit).  Delegates to sub-project runner.
 
-    if not CSHARP_DIR.exists():
-        return SuiteResult(name, True, skipped=True, notes=["CSHARP_DIR not found"])
-    if not _check_tool(["dotnet", "--version"], "dotnet"):
-        return SuiteResult(name, True, skipped=True, notes=["dotnet not in PATH"])
-
-    sln = CSHARP_DIR / "IJT_CSharp_Client.sln"
-    csproj = (CSHARP_DIR / "Tests" / "IJT_CSharp_Client.Tests"
-              / "IJT_CSharp_Client.Tests.csproj")
-    env = _dotnet_env(IJT_AUTO_ACCEPT="true", IJT_PHASE1_ONLY="true")
-    outputs: list[str] = []
-
-    rc_restore, out = _run_captured(
-        ["dotnet", "restore", str(sln), "--nologo", "--verbosity:minimal"],
-        cwd=CSHARP_DIR, label="dotnet restore", env=env,
+    Covers: dotnet format, NuGet vulnerability scan, build, unit tests.
+    """
+    return _delegate_to_runner(
+        name="csharp",
+        runner_dir=CSHARP_DIR,
+        phase_args=["--phase1"],
+        label="csharp runner (phase1)",
     )
-    outputs.append(out)
-
-    rc_build, out = _run_captured(
-        ["dotnet", "build", str(sln), "--no-restore",
-         "-c", "Release", "--nologo", "--verbosity:minimal",
-         "-p:UseSharedCompilation=false"],
-        cwd=CSHARP_DIR, label="dotnet build", env=env,
-    )
-    outputs.append(out)
-
-    if rc_build != 0:
-        return SuiteResult(name, False, time.monotonic() - t0,
-                           output="\n".join(outputs),
-                           notes=["build failed -- skipping test run"])
-
-    rc_test, out = _run_captured(
-        [
-            "dotnet", "test", str(csproj),
-            "--no-build", "-c", "Release", "--nologo",
-            "--logger", "console;verbosity=minimal",
-        ],
-        cwd=CSHARP_DIR, label="dotnet test (unit)", env=env,
-    )
-    outputs.append(out)
-
-    ok = rc_restore == 0 and rc_build == 0 and rc_test == 0
-    return SuiteResult(name, ok, time.monotonic() - t0, output="\n".join(outputs))
 
 
 def _suite_console_unit() -> SuiteResult:
-    """Console Client -- unit tests only (tests/unit/) in client's own venv."""
-    name = "console"
-    t0 = time.monotonic()
+    """Console Client -- Phase 1 (static + unit).  Delegates to sub-project runner.
 
-    if not CONSOLE_DIR.exists():
-        return SuiteResult(name, True, skipped=True, notes=["CONSOLE_DIR not found"])
-
-    unit_dir = CONSOLE_DIR / "tests" / "unit"
-    if not unit_dir.exists():
-        return SuiteResult(name, True, skipped=True, notes=["tests/unit/ not found"])
-
-    outputs: list[str] = []
-    try:
-        venv_py = _ensure_client_venv(CONSOLE_DIR, outputs)
-    except RuntimeError as exc:
-        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
-
-    rc_pytest, out = _run_captured(
-        [str(venv_py), "-m", "pytest", "tests/unit/", "-v", "--tb=short", "--no-header"],
-        cwd=CONSOLE_DIR, label="pytest console unit",
+    Covers: ruff, mypy, bandit, pytest unit tests.
+    """
+    return _delegate_to_runner(
+        name="console",
+        runner_dir=CONSOLE_DIR,
+        phase_args=["--phase1"],
+        label="console runner (phase1)",
     )
-    outputs.append(out)
-
-    return SuiteResult(name, rc_pytest == 0,
-                       time.monotonic() - t0, output="\n".join(outputs))
 
 
 def _suite_webclient_unit() -> SuiteResult:
-    """Web Client -- Python unit tests (pytest) + JS unit tests (vitest) in client venv."""
-    name = "webclient"
-    t0 = time.monotonic()
+    """Web Client -- Phase 1 (static + unit).  Delegates to sub-project runner.
 
-    if not WEB_CLIENT_DIR.exists():
-        return SuiteResult(name, True, skipped=True, notes=["WEB_CLIENT_DIR not found"])
-
-    outputs: list[str] = []
-    try:
-        venv_py = _ensure_client_venv(WEB_CLIENT_DIR, outputs)
-    except RuntimeError as exc:
-        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
-
-    # Python unit tests — exclude live/integration markers so no server is needed
-    rc_py, out = _run_captured(
-        [
-            str(venv_py), "-m", "pytest", "tests/",
-            "-m", "not integration and not live and not live_ws and not legacy",
-            "-v", "--tb=short", "--no-header",
-        ],
-        cwd=WEB_CLIENT_DIR, label="pytest webclient unit",
+    Covers: ruff, mypy, bandit, pytest unit tests, ESLint, npm audit, vitest.
+    """
+    return _delegate_to_runner(
+        name="webclient",
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--phase1"],
+        label="webclient runner (phase1)",
     )
-    outputs.append(out)
-
-    # JS unit tests -- skip gracefully when npm is unavailable
-    rc_js = 0
-    npm = _find_cmd(["npm", "npm.cmd"])
-    if npm:
-        if not (WEB_CLIENT_DIR / "node_modules").exists():
-            rc_npm_i, out = _run_captured(
-                [npm, "install", "--legacy-peer-deps"],
-                cwd=WEB_CLIENT_DIR, label="npm install",
-            )
-            outputs.append(out)
-            if rc_npm_i != 0:
-                rc_js = rc_npm_i
-        if rc_js == 0:
-            rc_js, out = _run_captured(
-                [npm, "run", "test:unit:js"],
-                cwd=WEB_CLIENT_DIR, label="vitest",
-            )
-            outputs.append(out)
-    else:
-        outputs.append("npm not found in PATH -- JS unit tests skipped\n")
-
-    ok = rc_py == 0 and rc_js == 0
-    return SuiteResult(name, ok, time.monotonic() - t0, output="\n".join(outputs))
 
 
-def _suite_testclient_collect() -> SuiteResult:
-    """Test Client -- collect-only check in client venv (verifies all imports without a server)."""
-    name = "testclient"
-    t0 = time.monotonic()
+def _suite_testclient_phase1() -> SuiteResult:
+    """Test Client -- Phase 1 (static + full collection).  Delegates to sub-project runner.
 
-    if not TEST_CLIENT_DIR.exists():
-        return SuiteResult(name, True, skipped=True, notes=["TEST_CLIENT_DIR not found"])
-
-    outputs: list[str] = []
-    try:
-        venv_py = _ensure_client_venv(TEST_CLIENT_DIR, outputs)
-    except RuntimeError as exc:
-        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
-
-    rc, out = _run_captured(
-        [str(venv_py), "-m", "pytest", "--collect-only", "-q", "--tb=short"],
-        cwd=TEST_CLIENT_DIR, label="pytest --collect-only (testclient)",
+    Covers: ruff, mypy, bandit, pytest (import check + any unit tests).
+    Replaces the old collect-only stub with the full sub-project phase1.
+    """
+    return _delegate_to_runner(
+        name="testclient",
+        runner_dir=TEST_CLIENT_DIR,
+        phase_args=["--phase1"],
+        label="testclient runner (phase1)",
     )
-    outputs.append(out)
-    # rc=5 means "no tests collected" -- still a valid import check
-    ok = rc in (0, 5)
-    notes = ["no tests collected (rc=5)"] if rc == 5 else []
-    return SuiteResult(name, ok, time.monotonic() - t0,
-                       output="\n".join(outputs), notes=notes)
 
 
 def _suite_node_unit() -> SuiteResult:
-    """Node Client (Release1) -- JS unit tests (vitest) + ESLint static analysis.
+    """Node Client -- Phase 1 (static + unit).  Delegates to sub-project runner.
 
-    IMPORTANT: Only unit tests are run here (tests/js/unit/ via vitest with jsdom).
-    These tests make NO live OPC UA connections and use NO ports — safe for parallel
-    execution alongside all Release2 client suites.
-
-    NOTE: The Release1 OPC UA Server used by Node Client does NOT support dynamic
-    ports (always binds to 40451). The Release2 OPC UA Server supports dynamic ports
-    via OPCUA_SERVER_PORT. These two server versions have BREAKING CHANGES (renamed
-    types, new models) and are NOT interchangeable. Node Client E2E tests (Playwright)
-    are intentionally excluded here to avoid port-40451 conflicts with Release2 clients.
-    Run E2E tests manually or in a dedicated isolated environment.
+    Covers: npm ci, ESLint, npm audit, vitest unit tests.
     """
-    name = "node"
-    t0 = time.monotonic()
-
-    if not NODE_CLIENT_DIR.exists():
-        return SuiteResult(name, True, skipped=True, notes=["NODE_CLIENT_DIR not found"])
-
-    npm = _find_cmd(["npm", "npm.cmd"])
-    if not npm:
-        return SuiteResult(name, True, skipped=True, notes=["npm not in PATH"])
-
-    outputs: list[str] = []
-
-    # Install / update node_modules
-    rc_install, out = _run_captured(
-        [npm, "ci"],
-        cwd=NODE_CLIENT_DIR, label="npm ci (node)",
+    return _delegate_to_runner(
+        name="node",
+        runner_dir=NODE_CLIENT_DIR,
+        phase_args=["--phase1"],
+        label="node runner (phase1)",
     )
-    outputs.append(out)
-    if rc_install != 0:
-        return SuiteResult(name, False, time.monotonic() - t0,
-                           output="\n".join(outputs), notes=["npm ci failed"])
 
-    # ESLint
-    rc_lint, out = _run_captured(
-        [npm, "run", "lint:js"],
-        cwd=NODE_CLIENT_DIR, label="eslint (node)",
+
+
+
+def _suite_server_static() -> SuiteResult:
+    """Server -- Phase 1 (static).  Delegates to server sub-project runner.
+
+    Covers: hadolint (Dockerfile lint), yamllint, any server-side static checks.
+    """
+    return _delegate_to_runner(
+        name="server-static",
+        runner_dir=SERVER_DIR,
+        phase_args=["--phase1"],
+        label="server runner (phase1)",
     )
-    outputs.append(out)
-
-    # Vitest unit tests
-    rc_test, out = _run_captured(
-        [npm, "run", "test:unit:js"],
-        cwd=NODE_CLIENT_DIR, label="vitest (node)",
-    )
-    outputs.append(out)
-
-    ok = rc_lint == 0 and rc_test == 0
-    return SuiteResult(name, ok, time.monotonic() - t0, output="\n".join(outputs))
-
 
 # ---------------------------------------------------------------------------
 # Git-sanity suite -- verify no source file is accidentally gitignored
@@ -1110,159 +1036,62 @@ def _suite_server_smoke() -> SuiteResult:
 
 
 def _suite_csharp_live() -> SuiteResult:
-    """C# live integration tests (server on :40451 is up -- live tests will run)."""
-    name = "csharp-live"
-    t0 = time.monotonic()
+    """C# Client -- Phase 2 (live).  Delegates to sub-project runner.
 
-    if not CSHARP_DIR.exists():
-        return SuiteResult(name, True, skipped=True, notes=["CSHARP_DIR not found"])
-    if not _check_tool(["dotnet", "--version"], "dotnet"):
-        return SuiteResult(name, True, skipped=True, notes=["dotnet not in PATH"])
-
-    sln = CSHARP_DIR / "IJT_CSharp_Client.sln"
-    csproj = (CSHARP_DIR / "Tests" / "IJT_CSharp_Client.Tests"
-              / "IJT_CSharp_Client.Tests.csproj")
-    env = _dotnet_env(IJT_AUTO_ACCEPT="true",
-                      OPCUA_SERVER_URL=f"opc.tcp://localhost:{OPCUA_PORT}")
-    outputs: list[str] = []
-
-    # Always restore + build so --phase2 works standalone
-    rc_restore, out = _run_captured(
-        ["dotnet", "restore", str(sln), "--nologo", "--verbosity:minimal"],
-        cwd=CSHARP_DIR, label="dotnet restore", env=env,
+    Passes OPCUA_SERVER_URL so sub-project connects to the server root started.
+    """
+    return _delegate_to_runner(
+        name="csharp-live",
+        runner_dir=CSHARP_DIR,
+        phase_args=["--phase2"],
+        label="csharp runner (phase2)",
+        extra_env={"OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"},
     )
-    outputs.append(out)
-
-    rc_build, out = _run_captured(
-        ["dotnet", "build", str(sln), "--no-restore",
-         "-c", "Release", "--nologo", "--verbosity:minimal",
-         "-p:UseSharedCompilation=false"],
-        cwd=CSHARP_DIR, label="dotnet build", env=env,
-    )
-    outputs.append(out)
-
-    if rc_build != 0:
-        return SuiteResult(name, False, time.monotonic() - t0,
-                           output="\n".join(outputs), notes=["build failed"])
-
-    rc_test, out = _run_captured(
-        [
-            "dotnet", "test", str(csproj),
-            "--no-build", "-c", "Release", "--nologo",
-            "--logger", "console;verbosity=normal",
-        ],
-        cwd=CSHARP_DIR, label="dotnet test (live)", env=env,
-    )
-    outputs.append(out)
-
-    ok = rc_restore == 0 and rc_build == 0 and rc_test == 0
-    return SuiteResult(name, ok, time.monotonic() - t0, output="\n".join(outputs))
 
 
 def _suite_console_live() -> SuiteResult:
-    """Console Client -- live tests using the client's own venv Python."""
-    name = "console-live"
-    t0 = time.monotonic()
+    """Console Client -- Phase 2 (live).  Delegates to sub-project runner.
 
-    if not CONSOLE_DIR.exists():
-        return SuiteResult(name, True, skipped=True, notes=["CONSOLE_DIR not found"])
-
-    live_dir = CONSOLE_DIR / "tests" / "live"
-    if not live_dir.exists():
-        return SuiteResult(name, True, skipped=True, notes=["tests/live/ not found"])
-
-    outputs: list[str] = []
-    try:
-        venv_py = _ensure_client_venv(CONSOLE_DIR, outputs)
-    except RuntimeError as exc:
-        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
-    env = {**os.environ, "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"}
-    rc, out = _run_captured(
-        [str(venv_py), "-m", "pytest", "tests/live/", "-v", "--tb=short", "--no-header"],
-        cwd=CONSOLE_DIR,
-        label="pytest console live",
-        env=env,
+    Passes OPCUA_SERVER_URL so sub-project connects to the server root started.
+    """
+    return _delegate_to_runner(
+        name="console-live",
+        runner_dir=CONSOLE_DIR,
+        phase_args=["--phase2"],
+        label="console runner (phase2)",
+        extra_env={"OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"},
     )
-    outputs.append(out)
-    ok = rc in (0, 5)
-    notes = ["no live tests collected"] if rc == 5 else []
-    return SuiteResult(name, ok, time.monotonic() - t0, output="\n".join(outputs), notes=notes)
 
 
 def _suite_testclient_full() -> SuiteResult:
-    """Test Client -- full conformance suite via direct pytest in client venv.
+    """Test Client -- Phase 2 (live conformance).  Delegates to sub-project runner.
 
-    Uses ``_ensure_client_venv`` to create/populate ``.venv`` then calls pytest
-    directly — no subprocess chain through the client runner, no pipe deadlock.
-    pytest.ini in TEST_CLIENT_DIR configures ``testpaths`` for all conformance dirs.
+    Passes OPCUA_SERVER_URL so sub-project connects to the server root started.
     """
-    name = "testclient-full"
-    t0 = time.monotonic()
-
-    if not TEST_CLIENT_DIR.exists():
-        return SuiteResult(name, True, skipped=True, notes=["TEST_CLIENT_DIR not found"])
-
-    outputs: list[str] = []
-    try:
-        venv_py = _ensure_client_venv(TEST_CLIENT_DIR, outputs)
-    except RuntimeError as exc:
-        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
-    env = {**os.environ, "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"}
-    # pytest.ini testpaths = conformance events assets results joint joining_process common
-    rc, out = _run_captured(
-        [str(venv_py), "-m", "pytest", "-v", "--tb=short", "--no-header"],
-        cwd=TEST_CLIENT_DIR,
-        label="pytest testclient conformance (live)",
-        env=env,
+    return _delegate_to_runner(
+        name="testclient-full",
+        runner_dir=TEST_CLIENT_DIR,
+        phase_args=["--phase2"],
+        label="testclient runner (phase2)",
+        extra_env={"OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"},
     )
-    outputs.append(out)
-    ok = rc in (0, 5)
-    notes = ["no tests collected (rc=5)"] if rc == 5 else []
-    return SuiteResult(name, ok, time.monotonic() - t0,
-                       output="\n".join(outputs), notes=notes)
 
 
 def _suite_webclient_live() -> SuiteResult:
-    """Web Client -- live + integration tests via direct pytest in client venv.
+    """Web Client -- Phase 2 (live + integration).  Delegates to sub-project runner.
 
-    Uses ``_ensure_client_venv`` to create/populate ``.venv`` then calls pytest
-    directly on ``tests/python/live/`` and ``tests/python/integration/`` — no
-    subprocess chain through the client runner, no pipe deadlock.
+    Passes OPCUA_SERVER_URL so sub-project connects to the server root started.
     """
-    name = "webclient-live"
-    t0 = time.monotonic()
-
-    if not WEB_CLIENT_DIR.exists():
-        return SuiteResult(name, True, skipped=True, notes=["WEB_CLIENT_DIR not found"])
-
-    live_dir = WEB_CLIENT_DIR / "tests" / "python" / "live"
-    integ_dir = WEB_CLIENT_DIR / "tests" / "python" / "integration"
-    test_dirs = [str(d) for d in (live_dir, integ_dir) if d.exists()]
-    if not test_dirs:
-        return SuiteResult(name, True, skipped=True,
-                           notes=["no tests/python/live/ or integration/ dirs found"])
-
-    outputs: list[str] = []
-    try:
-        venv_py = _ensure_client_venv(WEB_CLIENT_DIR, outputs)
-    except RuntimeError as exc:
-        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(outputs), notes=[str(exc)])
-    env = {
-        **os.environ,
-        "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}",
-        "OPCUA_TEST_ENDPOINT": f"opc.tcp://localhost:{OPCUA_PORT}",
-    }
-    rc, out = _run_captured(
-        [str(venv_py), "-m", "pytest"] + test_dirs + ["-v", "--tb=short", "--no-header"],
-        cwd=WEB_CLIENT_DIR,
-        label="pytest webclient live+integration",
-        env=env,
+    return _delegate_to_runner(
+        name="webclient-live",
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--phase2"],
+        label="webclient runner (phase2)",
+        extra_env={
+            "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}",
+            "OPCUA_TEST_ENDPOINT": f"opc.tcp://localhost:{OPCUA_PORT}",
+        },
     )
-    outputs.append(out)
-    ok = rc in (0, 5)
-    notes = ["no tests collected (rc=5)"] if rc == 5 else []
-    return SuiteResult(name, ok, time.monotonic() - t0,
-                       output="\n".join(outputs), notes=notes)
 
 
 # ---------------------------------------------------------------------------
@@ -1270,12 +1099,13 @@ def _suite_webclient_live() -> SuiteResult:
 # ---------------------------------------------------------------------------
 
 PHASE1_SUITES: dict[str, object] = {
-    "csharp":       _suite_csharp_unit,
-    "console":      _suite_console_unit,
-    "webclient":    _suite_webclient_unit,
-    "testclient":   _suite_testclient_collect,
-    "node":         _suite_node_unit,
-    "git-sanity":   _suite_gitignore_sanity,
+    "csharp":         _suite_csharp_unit,
+    "console":        _suite_console_unit,
+    "webclient":      _suite_webclient_unit,
+    "testclient":     _suite_testclient_phase1,
+    "node":           _suite_node_unit,
+    "server-static":  _suite_server_static,
+    "git-sanity":     _suite_gitignore_sanity,
 }
 
 PHASE2_SUITES: dict[str, object] = {
@@ -1401,12 +1231,25 @@ def _build_parser() -> argparse.ArgumentParser:
         "--verbose", "-v", action="store_true",
         help="Enable DEBUG-level logging",
     )
+    parser.add_argument(
+        "--list", action="store_true",
+        help="List all available suite names and exit",
+    )
     return parser
 
 
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
+
+    if args.list:
+        print("Phase 1 suites (parallel, no server):")
+        for k in PHASE1_SUITES:
+            print(f"  {k}")
+        print("Phase 2 suites (sequential, server required):")
+        for k in PHASE2_SUITES:
+            print(f"  {k}")
+        return 0
 
     # Reconfigure stdout/stderr to UTF-8 so box-drawing characters render
     # correctly when output is piped or redirected (Windows defaults to cp1252).

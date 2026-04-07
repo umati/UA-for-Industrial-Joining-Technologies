@@ -2,6 +2,7 @@
 
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Configuration;
+using Opc.Ua;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests;
@@ -44,9 +45,25 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         session.EventSubscriber.OnResultReady += (_, _) => tcs.TrySetResult(true);
         session.EventSubscriber.Subscribe();
 
-        // Wait up to 20 s for a result event (server publishes results periodically)
-        var received = await Task.WhenAny(tcs.Task, Task.Delay(20_000, cts.Token)).ConfigureAwait(false) == tcs.Task;
-        Skip.IfNot(received, "Server did not publish a result event within 20 s — skipping (simulator may require a manual trigger)");
+        // The simulator does not publish events automatically — trigger one explicitly.
+        // Browse path: JoiningSystem → Simulations → SimulateResults → SimulateSingleResult
+        var simulationsNode = session.BrowseChild(session.JoiningSystemNodeId, "Simulations");
+        var simResultsNode = simulationsNode.IsNullNodeId
+            ? NodeId.Null
+            : session.BrowseChild(simulationsNode, "SimulateResults");
+        var simMethodId = simResultsNode.IsNullNodeId
+            ? NodeId.Null
+            : session.BrowseChild(simResultsNode, "SimulateSingleResult");
+
+        Skip.IfNot(!simMethodId.IsNullNodeId,
+            "SimulateSingleResult method not found — server may not expose simulation nodes");
+
+        // ResultType=0 (SIMPLE_OK), IncludeTraces=false — simplest trigger
+        session.CallMethod(simResultsNode, simMethodId, (uint)0, false);
+
+        // Event should arrive within 1–2 s; allow up to 10 s as a generous safety margin
+        var received = await Task.WhenAny(tcs.Task, Task.Delay(10_000, cts.Token)).ConfigureAwait(false) == tcs.Task;
+        Assert.True(received, "No result event received within 10 s after SimulateSingleResult trigger");
     }
 
     [SkippableFact]

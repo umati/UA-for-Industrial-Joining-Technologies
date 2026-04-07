@@ -159,9 +159,9 @@ UA-for-Industrial-Joining-Technologies/
 
 ## CI/CD
 
-**Workflows**: `.github/workflows/ci.yml`, `.github/workflows/heavy-tests.yml`, and `.github/workflows/codeql.yml` (all at **repo root**)
+**Workflows**: `.github/workflows/ci-required.yml`, `.github/workflows/ci-extended.yml`, and `.github/workflows/codeql.yml` (all at **repo root**)
 
-### Fast CI (`ci.yml`) — triggers on every push/PR to `main`
+### CI Required (`ci-required.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
 |-----|--------------|
 | `web-client` | Python unit (310), JS unit (229), ESLint, Bandit, npm audit |
@@ -187,14 +187,14 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 
 | Job | Workflow | Port | Protocol |
 |-----|----------|------|----------|
-| `csharp-client` | `ci.yml` | 40451 | Windows native EXE |
-| `server-smoke-windows` | `ci.yml` | 40451 | Windows native EXE |
-| `server-smoke-docker` | `heavy-tests.yml` | 40451 | Docker (Linux) |
-| `integration-tests` | `heavy-tests.yml` | 40451 | Windows native EXE |
+| `csharp-client` | `ci-required.yml` | 40451 | Windows native EXE |
+| `server-smoke-windows` | `ci-required.yml` | 40451 | Windows native EXE |
+| `server-smoke-docker` | `ci-extended.yml` | 40451 | Docker (Linux) |
+| `integration-tests` | `ci-extended.yml` | 40451 | Windows native EXE |
 
-> Release1 Node Client always uses 40451 (fixed — no dynamic port support). Release2 clients all use 40451 in heavy-tests. The old per-job isolated Docker ports (40452–40455) are no longer used in CI.
+> Release1 Node Client always uses 40451 (fixed — no dynamic port support). Release2 clients all use 40451 in ci-extended. The old per-job isolated Docker ports (40452–40455) are no longer used in CI.
 
-### Heavy Tests (`heavy-tests.yml`) — nightly + path-triggered
+### CI Extended (`ci-extended.yml`) — nightly + path-triggered
 Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJT_Test_Client/**`, or workflow file change.
 | Job | What it tests |
 |-----|--------------|

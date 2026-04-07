@@ -286,7 +286,7 @@ Same pattern applies to test files outside the package root.
 
 ## CI/CD Workflow
 
-**File:** `.github/workflows/ci.yml`
+**File:** `.github/workflows/ci-required.yml` (blocking) / `.github/workflows/ci-extended.yml` (non-blocking)
 
 | Step | Command |
 |------|---------|
