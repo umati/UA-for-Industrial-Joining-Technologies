@@ -1,7 +1,13 @@
 import json
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pytest
+
+
+def pytest_configure(config):
+    """Ensure tests/fixtures/ exists so --basetemp=tests/fixtures/tmp never fails."""
+    Path(__file__).parent.parent.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
 
 
 @dataclass

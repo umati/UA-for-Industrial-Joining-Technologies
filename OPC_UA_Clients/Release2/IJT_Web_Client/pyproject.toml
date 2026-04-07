@@ -11,6 +11,35 @@ line-length = 120
 select = ["E", "F", "I"]
 ignore = ["E501", "E402", "E731"]
 
+[tool.ruff.format]
+# Live test files have alignment comments and exception clauses that ruff misformats.
+# Excluding them from format checks while keeping lint checks active.
+exclude = ["tests/python/live/*.py"]
+
+[tool.coverage.run]
+# Measure only library + application source; exclude files that are never exercised
+# by unit tests (live/integration tests, runner infrastructure, scripts).
+omit = [
+    "run_all_tests.py",
+    "run_docker_setup.py",
+    "scripts/*",
+    "tests/python/live/*",
+    "tests/python/integration/*",
+    "tests/shared_opcua/*",
+    ".venv/*",
+    "venv/*",
+]
+
+[tool.coverage.report]
+# Threshold is achievable by unit tests alone with the omit list above (~74%).
+fail_under = 70
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
 [tool.mypy]
 ignore_missing_imports = true
 explicit_package_bases = true

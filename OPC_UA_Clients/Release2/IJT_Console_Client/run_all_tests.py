@@ -659,7 +659,7 @@ def _step_unit_tests(junit_xml: str | None) -> _StepResult:
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage.xml'}",
             f"--cov-report=html:{_RESULTS_DIR / 'htmlcov'}",
             "--cov-report=term-missing",
-            "--cov-fail-under=70",
+            # fail_under threshold is in [tool.coverage.report] in pyproject.toml
         ]
     rc, output = _run(cmd)
     result.duration = time.monotonic() - t0
@@ -806,7 +806,7 @@ def _step_live_tests(_junit_xml: str | None) -> _StepResult:
             "--cov=.",
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage-live.xml'}",
             "--cov-report=term-missing",
-            "--cov-fail-under=70",
+            # fail_under threshold is in [tool.coverage.report] in pyproject.toml
         ]
     rc, output = _run(cmd)
     result.duration = time.monotonic() - t0

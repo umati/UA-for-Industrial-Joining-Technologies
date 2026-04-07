@@ -1,62 +1,88 @@
 # Developer Hygiene
 
-This document covers local workspace cleanup and generated-artifact handling for the IJT reference repo.
+Covers workspace cleanup, test temp directory management, and coverage configuration for the IJT reference repo.
 
 ---
 
-## Automatic Cleanup — post-run (every `run_all_tests.py`)
+## Automatic Cleanup — post-run
 
-Every `run_all_tests.py` calls `_cleanup_caches()` after reports are written. Cleanup is **self-contained and scoped** — each runner only cleans its own directory:
+Every `run_all_tests.py` calls `_cleanup_caches()` after writing reports. Scope is **self-contained** — each runner cleans only its own directory tree.
 
-| Runner | Scope | What is removed |
-|--------|-------|-----------------|
-| Sub-project runners (Web, Console, Test, Server, C#, Node) | Own project directory (recursive) | `__pycache__`, `.ruff_cache`, `.mypy_cache`, `.coverage*`, `*.pyc` |
-| Root orchestrator (`run_all_tests.py`) | Repo root level only (non-recursive) | Same — sub-projects clean themselves via their own runners |
+| Runner | Scope | Removes |
+|--------|-------|---------|
+| Sub-project runners (Web, Console, Test, Server, C#, Node) | Own project dir (recursive) | `__pycache__`, `.ruff_cache`, `.mypy_cache`, `.coverage*`, `*.pyc` |
+| Root orchestrator | Repo root only (non-recursive) | Same + `pki/`, `PKI/` |
 
-`.pytest_cache` is intentionally **preserved** — it holds `--lf`/`--ff` (last-failed / first-failed) state for developer workflow.
-`test-results/` is always **preserved** — it holds the reports.
-
----
-
-## Automatic Cleanup — pytest temp dirs (primary mechanism)
-
-All Python pytest projects are configured so no manual intervention is needed for test temp dirs:
-
-| Setting | Value | Effect |
-|---------|-------|--------|
-| `--basetemp=tests/fixtures/tmp` | in each `pytest.ini` `addopts` | Temp dirs land inside the repo; avoids OS temp ACL permission errors on Windows |
-| `tmp_path_retention_count = 0` | in each `pytest.ini` | Pytest purges all previous-session dirs automatically at the start of each new run |
-
-Applies to: **IJT_Web_Client**, **IJT_Console_Client**, **IJT_Test_Client**.
-
-The `tests/fixtures/tmp/` dirs in each project are covered by `**/tests/fixtures/tmp/` in `.gitignore` — they will never be committed.
+**Always preserved:** `.pytest_cache` (holds `--lf`/`--ff` state for developers) and `test-results/` (reports).
 
 ---
 
-## Manual Cleanup — `git clean` (when needed)
+## pytest Temp Directory Design
 
-For occasional deep cleans (reclaiming disk space, guaranteed fresh state). Always do a dry-run first.
+All three Python projects (Web, Console, Test clients) share the same configuration:
+
+```ini
+# pytest.ini
+addopts = --basetemp=tests/fixtures/tmp
+tmp_path_retention_count = 0
+```
+
+`--basetemp` keeps temp files inside the repo (avoids OS temp ACL issues on Windows). `tmp_path_retention_count = 0` makes pytest self-clean on every run — no manual intervention needed.
+
+`tests/fixtures/tmp/` is gitignored (`**/tests/fixtures/tmp/`). The parent `tests/fixtures/` must exist before pytest starts; it is guaranteed by two layers:
+
+| Layer | Mechanism |
+|-------|-----------|
+| **Git** | `tests/fixtures/.gitkeep` committed — directory always exists on fresh clone |
+| **pytest** | `pytest_configure` hook in each `conftest.py` calls `mkdir(parents=True, exist_ok=True)` — recreates if somehow absent |
+
+---
+
+## Coverage Configuration
+
+Coverage is configured in each project's `pyproject.toml`. **Never hardcode thresholds in runner scripts** — config files are the version-controlled, reviewable source of truth.
+
+```toml
+[tool.coverage.run]
+omit = [
+    "run_all_tests.py",   # runner infrastructure
+    "setup_*.py",         # setup/install scripts
+    "tests/live/*",       # require live server; excluded from unit runs
+    ".venv/*", "venv/*",
+]
+
+[tool.coverage.report]
+fail_under = N            # calibrated per-project (see table below)
+skip_empty = true
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "if __name__ == .__main__.:"]
+```
+
+Thresholds are calibrated to what **unit tests alone** can achieve after omitting infrastructure and live-only files:
+
+| Project | `fail_under` | Notes |
+|---------|-------------|-------|
+| Web Client | 70% | Unit run achieves ~74% with omit list |
+| Console Client | 80% | Unit run achieves ~85% with omit list |
+| Test Client | 70% | No `tests/unit/`; threshold applies to live conformance stage |
+
+---
+
+## Manual Deep Clean — `git clean`
+
+For reclaiming disk space or guaranteeing a pristine state. **Always dry-run first.**
 
 ```bash
-# 1. Preview what would be removed
-git clean -fdXn
-
-# 2. Remove all gitignored artifacts — KEEPS venv/node_modules (excluded below)
+git clean -fdXn                                                              # preview
 git clean -fdX -e 'venv' -e '.venv*' -e 'node_modules' -e 'OPC_UA_IJT_Server_Simulator*'
 ```
 
-`-f` force, `-d` include dirs, `-X` only gitignored files (safe — never touches committed or untracked files).
+`-X` removes only gitignored files — never touches committed or untracked files.
 
-### What this removes
-Everything in `.gitignore` except the excluded items above:
-`__pycache__`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `.dotnet`, `test-results`,
-`playwright-report`, `TestResults`, `coverage`, `htmlcov`, `tests/fixtures/tmp/`, `.pyc`/`.pyo`, `.coverage*`, `logs/`, `.state/`, `pki/`, `PKI/`, `result_logs/`
+**Preserved by the excludes above:**
 
-### What is intentionally preserved
-
-| Excluded | Why |
-|----------|-----|
-| `venv/`, `.venv*` | Active Python environments — slow to recreate |
+| Item | Why |
+|------|-----|
+| `venv/`, `.venv*` | Python environments — slow to recreate |
 | `node_modules/` | npm cache — slow to recreate |
-| `OPC_UA_IJT_Server_Simulator*` | Extracted server binary — large, keep unless zip changes |
+| `OPC_UA_IJT_Server_Simulator*` | Large extracted binary |
 

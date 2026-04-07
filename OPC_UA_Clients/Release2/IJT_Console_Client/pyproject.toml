@@ -10,3 +10,27 @@ line-length = 120
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 ignore = ["E501", "E402", "E731"]
+
+[tool.coverage.run]
+# Omit files never exercised by unit tests: runner, setup script, live-only tests.
+omit = [
+    "run_all_tests.py",
+    "setup_client.py",
+    "tests/live/*",
+    ".venv/*",
+    "venv/*",
+]
+
+[tool.coverage.report]
+# Threshold achievable by unit tests alone with the omit list above (~85%).
+fail_under = 80
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
+[tool.mypy]
+ignore_missing_imports = true
+explicit_package_bases = true

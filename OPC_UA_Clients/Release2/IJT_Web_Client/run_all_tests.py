@@ -60,6 +60,7 @@ _VENV = ROOT / ".venv"
 # Venv bootstrap — ensure isolated Python environment (skipped in CI/Docker)
 # ---------------------------------------------------------------------------
 
+
 def _inside_venv() -> bool:
     """Return True if the current interpreter lives inside _VENV."""
     try:
@@ -73,9 +74,7 @@ def _relaunch_under_venv() -> None:
     if not _VENV.exists():
         print(f"[bootstrap] Creating venv: {_VENV}")
         subprocess.check_call([sys.executable, "-m", "venv", str(_VENV)])
-    venv_py_rel = Path("Scripts" if IS_WINDOWS else "bin") / (
-        "python.exe" if IS_WINDOWS else "python"
-    )
+    venv_py_rel = Path("Scripts" if IS_WINDOWS else "bin") / ("python.exe" if IS_WINDOWS else "python")
     venv_py = str(_VENV / venv_py_rel)
     print(f"[bootstrap] Re-launching under venv Python: {venv_py}")
     # subprocess.run() + sys.exit() instead of os.execv():
@@ -508,7 +507,7 @@ def _stage_python_unit(python: Path) -> StageResult:
             "--cov=.",
             f"--cov-report=xml:{results_dir / 'coverage-py.xml'}",
             f"--cov-report=html:{results_dir / 'htmlcov-py'}",
-            "--cov-fail-under=70",
+            # fail_under threshold is in [tool.coverage.report] in pyproject.toml
         ]
     else:
         _skip("pytest-cov not installed — coverage skipped (pip install pytest-cov)")
@@ -694,8 +693,7 @@ def _stage_playwright_install() -> StageResult:
         _warn("Playwright browser install failed (network issue) — smoke tests will be skipped")
         result = StageResult("playwright-install", 0, skipped=True)
         result.notes.append(
-            "Browser download failed — configure proxy/CA certs and run "
-            "'npx playwright install chromium' manually"
+            "Browser download failed — configure proxy/CA certs and run 'npx playwright install chromium' manually"
         )
         return result
     return StageResult("playwright-install", rc, duration=time.monotonic() - t0)
@@ -1152,20 +1150,21 @@ def main() -> int:
                     results.append(_stage_python_live(python))
                 else:
                     _skip("python-live: OPC UA server not available")
-                    results.append(StageResult("python-live", 0, skipped=True,
-                                               notes=["OPC UA server not available"]))
+                    results.append(StageResult("python-live", 0, skipped=True, notes=["OPC UA server not available"]))
 
             if run_live or docker_up or _srv_port_open:
                 # Pass prestarted so integration stage re-uses the running server
-                results.append(_stage_python_integration(
-                    python, prestarted=(_srv_started, _srv_port_open, _srv_proc)
-                ))
+                results.append(_stage_python_integration(python, prestarted=(_srv_started, _srv_port_open, _srv_proc)))
             else:
                 _skip("python-integration: OPC UA server not available and Docker not running")
-                results.append(StageResult(
-                    "python-integration", 0, skipped=True,
-                    notes=["start OPC UA server or Docker to enable"],
-                ))
+                results.append(
+                    StageResult(
+                        "python-integration",
+                        0,
+                        skipped=True,
+                        notes=["start OPC UA server or Docker to enable"],
+                    )
+                )
         finally:
             if _srv_started:
                 _stop_opcua_server(_srv_proc)

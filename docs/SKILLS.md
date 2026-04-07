@@ -40,6 +40,10 @@ All three Python pytest projects (Web, Console, Test clients) are configured wit
 - `addopts = --basetemp=tests/fixtures/tmp` — temp dirs land inside the repo, avoiding OS temp ACL issues on Windows
 - `tmp_path_retention_count = 0` — pytest purges all previous-session dirs at the start of each new run
 
+**Two-layer guarantee that `tests/fixtures/` always exists:**
+1. `tests/fixtures/.gitkeep` committed in each project — dir exists on fresh `git clone`
+2. `pytest_configure` hook in each root `conftest.py` — `mkdir(parents=True, exist_ok=True)` at pytest startup as safety net
+
 ### Manual — git-native cleanup (when needed)
 ```bash
 git clean -fdXn                                              # dry-run: preview first

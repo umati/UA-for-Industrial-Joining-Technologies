@@ -14,10 +14,16 @@ Design rules enforced here:
 
 import logging
 import os
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
 from asyncua import Client
+
+
+def pytest_configure(config):
+    """Ensure tests/fixtures/ exists so --basetemp=tests/fixtures/tmp never fails."""
+    Path(__file__).parent.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
 
 
 # Inline helpers

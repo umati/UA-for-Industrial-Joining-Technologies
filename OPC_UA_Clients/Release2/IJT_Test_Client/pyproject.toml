@@ -17,3 +17,22 @@ line-length = 120
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 ignore = ["E501", "E402", "E731"]
+
+[tool.coverage.run]
+# The unit stage is always skipped (no tests/unit/ directory exists).
+# This omit list applies to the live conformance stage; runner is excluded from measurement.
+omit = [
+    "run_all_tests.py",
+    ".venv/*",
+    "venv/*",
+]
+
+[tool.coverage.report]
+# Threshold for live conformance tests (full suite against real server).
+fail_under = 70
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

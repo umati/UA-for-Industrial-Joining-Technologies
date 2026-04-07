@@ -713,7 +713,7 @@ def _step_unit_tests() -> _StepResult:
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage.xml'}",
             f"--cov-report=html:{_RESULTS_DIR / 'htmlcov'}",
             "--cov-report=term-missing",
-            "--cov-fail-under=70",
+            # fail_under threshold is in [tool.coverage.report] in pyproject.toml
         ]
     rc, output = _run(cmd)
     result.duration = time.monotonic() - t0
@@ -848,7 +848,7 @@ def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _
             "--cov=.",
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage-live.xml'}",
             "--cov-report=term-missing",
-            "--cov-fail-under=70",
+            # fail_under threshold is in [tool.coverage.report] in pyproject.toml
         ]
 
     rc = run_pytest(extra_pytest_args + cov_args)
