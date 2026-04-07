@@ -802,6 +802,7 @@ _WELL_KNOWN_SIMULATOR_PATHS: list[Path] = [
 _SERVER_NATIVE_PORT = 40451
 _CLIENT_DEFAULT_PORT = 40463
 
+
 def _parse_int_env(name: str, default: int) -> int:
     """Parse an integer environment variable, falling back to *default* on bad input.
 
@@ -819,11 +820,13 @@ def _parse_int_env(name: str, default: int) -> int:
         # Suppress the duplicate warning in the inner (venv-relaunched) process.
         if not os.environ.get("_IJT_RELAUNCHED"):
             import warnings
+
             warnings.warn(
                 f"IJT: {name}={raw!r} is not a valid integer — using default {default}s",
                 stacklevel=2,
             )
         return default
+
 
 # Configurable Docker readiness timeout (seconds).  90 s is ample for most
 # environments; override with IJT_DOCKER_TIMEOUT=<seconds> for slow CI runners.
@@ -1003,25 +1006,15 @@ def _docker_skip_reason() -> str:
     """Return an actionable message explaining why Docker is unavailable."""
     docker = shutil.which("docker") or shutil.which("docker.exe")
     if not docker:
-        return (
-            "docker not in PATH — install Docker Desktop (Windows/Mac) "
-            "or 'sudo apt install docker.io' (Linux)"
-        )
+        return "docker not in PATH — install Docker Desktop (Windows/Mac) or 'sudo apt install docker.io' (Linux)"
     # docker binary exists but daemon not responding
     if sys.platform == "win32":
         return (
-            "Docker daemon not running — start Docker Desktop, "
-            "wait for the whale icon in the system tray, then re-run"
+            "Docker daemon not running — start Docker Desktop, wait for the whale icon in the system tray, then re-run"
         )
     if sys.platform == "darwin":
-        return (
-            "Docker daemon not running — start Docker Desktop for Mac "
-            "or run: open -a Docker"
-        )
-    return (
-        "Docker daemon not running — run: sudo systemctl start docker  "
-        "(or: sudo service docker start)"
-    )
+        return "Docker daemon not running — start Docker Desktop for Mac or run: open -a Docker"
+    return "Docker daemon not running — run: sudo systemctl start docker  (or: sudo service docker start)"
 
 
 def _stage_docker_smoke() -> StageResult:
@@ -1036,9 +1029,12 @@ def _stage_docker_smoke() -> StageResult:
     # DOCKER_BUILDKIT=1 enables layer caching — repeated local builds take seconds, not minutes.
     build_env = {**os.environ, "DOCKER_BUILDKIT": "1", "BUILDKIT_INLINE_CACHE": "1"}
     build_cmd = [
-        docker, "build",
-        "--cache-from", "ijt_web_client:latest",
-        "-t", "ijt_web_client",
+        docker,
+        "build",
+        "--cache-from",
+        "ijt_web_client:latest",
+        "-t",
+        "ijt_web_client",
         ".",
     ]
     rc = _run(build_cmd, label="docker build (BuildKit)", env=build_env)
@@ -1065,8 +1061,10 @@ def _stage_docker_smoke() -> StageResult:
 
     if not ready:
         return StageResult(
-            "docker-smoke", 1, duration=time.monotonic() - t0,
-            notes=[f"HTTP :3000 not ready within {_DOCKER_TIMEOUT} s (set IJT_DOCKER_TIMEOUT to override)"]
+            "docker-smoke",
+            1,
+            duration=time.monotonic() - t0,
+            notes=[f"HTTP :3000 not ready within {_DOCKER_TIMEOUT} s (set IJT_DOCKER_TIMEOUT to override)"],
         )
 
     notes = [] if ws_ready else ["WS :8001 not ready — backend may need OPC UA server"]

@@ -88,12 +88,9 @@ export default class BasicScreen {
   createLabel (text) {
     const a = document.createElement('label')
     a.classList.add('labelStyle')
-    const labelText = text || ''
-    if (typeof labelText === 'string' && labelText.includes('<') && labelText.includes('>')) {
-      a.innerHTML = labelText
-    } else {
-      a.textContent = labelText
-    }
+    // Always use textContent — OPC UA node names/descriptions are plain text,
+    // not HTML. Using innerHTML with server-supplied strings is an XSS risk.
+    a.textContent = text || ''
     delete a.textprediction
     return a
   }
