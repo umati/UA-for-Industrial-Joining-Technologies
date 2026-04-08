@@ -149,7 +149,9 @@ class TestGitignoreCoverage:
 
     def _gitignore_text(self) -> str:
         if not self._GITIGNORE_PATH.exists():
-            pytest.fail(f".gitignore not found at {self._GITIGNORE_PATH}")
+            if (_GIT_ROOT / ".git").exists():
+                pytest.fail(f".gitignore missing from git repo at {self._GITIGNORE_PATH}")
+            pytest.skip(f".gitignore not found at {self._GITIGNORE_PATH} (no .git — Docker / non-checkout environment)")
         return self._GITIGNORE_PATH.read_text(encoding="utf-8")
 
     def test_gitignore_covers_pycache(self):
@@ -211,7 +213,9 @@ class TestConnectionpointsDefault:
             _GIT_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "src" / "resources" / "connectionpoints.json"
         )
         if not path.exists():
-            pytest.fail(f"connectionpoints.json not found at {path}")
+            if (_GIT_ROOT / ".git").exists():
+                pytest.fail(f"connectionpoints.json missing from git repo at {path}")
+            pytest.skip(f"connectionpoints.json not found at {path} (no .git — Docker / non-checkout environment)")
 
         data = json.loads(path.read_text(encoding="utf-8"))
         points = data.get("connectionpoints", [])

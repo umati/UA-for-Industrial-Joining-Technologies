@@ -18,7 +18,7 @@ import pytest
 
 # ── Import setup_client from project root ────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parents[2]))
-import setup_client as sc
+import setup_client as sc  # noqa: I001  (must follow sys.path manipulation)
 
 
 # =============================================================================
