@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # Keep GitHub Actions SHA-pinned references up to date.
+  # Dependabot opens a single grouped PR weekly — low maintenance.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Stockholm
+    groups:
+      actions:
+        patterns: ["*"]
+    labels:
+      - dependencies

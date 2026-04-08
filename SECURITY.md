@@ -44,3 +44,7 @@ We aim to acknowledge reports within **5 business days** and provide a fix or mi
 - Dependencies are kept up to date via [Renovate](renovate.json) and audited in CI via
   `bandit` (Python), `npm audit` (Node.js), and CodeQL static analysis (C#, Python, JavaScript)
   using the `security-extended` query suite (`.github/workflows/codeql.yml`).
+- GitHub Actions workflow files are audited by [zizmor](https://woodruffw.github.io/zizmor/)
+  on push/PR touching `.github/workflows/` and nightly — findings are uploaded as SARIF to
+  GitHub Code Scanning (Security → Code scanning alerts). The audit job never fails CI;
+  it is skipped on fork PRs where `security-events: write` is unavailable.

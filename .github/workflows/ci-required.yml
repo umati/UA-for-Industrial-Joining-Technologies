@@ -36,7 +36,6 @@ on:
 
 permissions:
   contents: read
-  checks: write          # required by dorny/test-reporter
 
 # Opt into Node.js 24 for all actions (suppresses the Node.js 20 deprecation warning)
 env:
@@ -58,16 +57,21 @@ jobs:
   web-client:
     name: "Release2 / IJT Web Client"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     outputs:
-      mypy_result: ${{ steps.mypy.outcome }}
+      mypy_result: ${{ steps.mypy.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.14"
           cache: pip
@@ -75,7 +79,7 @@ jobs:
             OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
             OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f  # v6
         with:
           node-version: "24"
           cache: npm
@@ -132,7 +136,7 @@ jobs:
         run: npm audit --audit-level=high --json > test-results/npm-audit.json
 
       - name: Publish Test Reports
-        uses: dorny/test-reporter@v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
         if: always()
         with:
           name: "Web Client — Tests"
@@ -144,7 +148,7 @@ jobs:
           fail-on-empty: false
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
         if: always()
         with:
           name: results-web-client
@@ -159,15 +163,23 @@ jobs:
           steps.pylint.outcome    == 'failure' ||
           steps.mypy.outcome      == 'failure' ||
           steps.npm_audit.outcome == 'failure')
+        env:
+          PYTEST_OUTCOME:    ${{ steps.pytest.outcome }}
+          VITEST_OUTCOME:    ${{ steps.vitest.outcome }}
+          ESLINT_OUTCOME:    ${{ steps.eslint.outcome }}
+          BANDIT_OUTCOME:    ${{ steps.bandit.outcome }}
+          PYLINT_OUTCOME:    ${{ steps.pylint.outcome }}
+          MYPY_OUTCOME:      ${{ steps.mypy.outcome }}
+          NPM_AUDIT_OUTCOME: ${{ steps.npm_audit.outcome }}
         run: |
           echo "One or more checks failed:"
-          echo "  pytest     -> ${{ steps.pytest.outcome }}"
-          echo "  vitest     -> ${{ steps.vitest.outcome }}"
-          echo "  eslint     -> ${{ steps.eslint.outcome }}"
-          echo "  bandit     -> ${{ steps.bandit.outcome }}"
-          echo "  ruff       -> ${{ steps.pylint.outcome }}"
-          echo "  mypy       -> ${{ steps.mypy.outcome }}"
-          echo "  npm audit  -> ${{ steps.npm_audit.outcome }}"
+          echo "  pytest     -> $PYTEST_OUTCOME"
+          echo "  vitest     -> $VITEST_OUTCOME"
+          echo "  eslint     -> $ESLINT_OUTCOME"
+          echo "  bandit     -> $BANDIT_OUTCOME"
+          echo "  ruff       -> $PYLINT_OUTCOME"
+          echo "  mypy       -> $MYPY_OUTCOME"
+          echo "  npm audit  -> $NPM_AUDIT_OUTCOME"
           exit 1
 
 
@@ -178,16 +190,21 @@ jobs:
   console-client:
     name: "Release2 / IJT Console Client"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     outputs:
-      mypy_result: ${{ steps.mypy.outcome }}
+      mypy_result: ${{ steps.mypy.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.14"
           cache: pip
@@ -228,7 +245,7 @@ jobs:
         run: python -m mypy . --ignore-missing-imports --no-error-summary
 
       - name: Publish Test Reports
-        uses: dorny/test-reporter@v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
         if: always()
         with:
           name: "Console Client — Tests"
@@ -238,7 +255,7 @@ jobs:
           fail-on-empty: false
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
         if: always()
         with:
           name: results-console-client
@@ -250,12 +267,17 @@ jobs:
           steps.bandit.outcome == 'failure' ||
           steps.pylint.outcome == 'failure' ||
           steps.mypy.outcome   == 'failure')
+        env:
+          PYTEST_OUTCOME: ${{ steps.pytest.outcome }}
+          BANDIT_OUTCOME: ${{ steps.bandit.outcome }}
+          PYLINT_OUTCOME: ${{ steps.pylint.outcome }}
+          MYPY_OUTCOME:   ${{ steps.mypy.outcome }}
         run: |
           echo "One or more checks failed:"
-          echo "  pytest  -> ${{ steps.pytest.outcome }}"
-          echo "  bandit  -> ${{ steps.bandit.outcome }}"
-          echo "  ruff    -> ${{ steps.pylint.outcome }}"
-          echo "  mypy    -> ${{ steps.mypy.outcome }}"
+          echo "  pytest  -> $PYTEST_OUTCOME"
+          echo "  bandit  -> $BANDIT_OUTCOME"
+          echo "  ruff    -> $PYLINT_OUTCOME"
+          echo "  mypy    -> $MYPY_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -265,14 +287,19 @@ jobs:
   node-client:
     name: "Release1 / IJT Node Client"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release1/IJT_Node_Client
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f  # v6
         with:
           node-version: "24"
           cache: npm
@@ -299,7 +326,7 @@ jobs:
         run: npm audit --audit-level=high --json > test-results/npm-audit.json
 
       - name: Publish Test Reports
-        uses: dorny/test-reporter@v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
         if: always()
         with:
           name: "Node Client — Tests"
@@ -309,7 +336,7 @@ jobs:
           fail-on-empty: false
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
         if: always()
         with:
           name: results-node-client
@@ -320,11 +347,15 @@ jobs:
           steps.vitest.outcome    == 'failure' ||
           steps.eslint.outcome    == 'failure' ||
           steps.npm_audit.outcome == 'failure')
+        env:
+          VITEST_OUTCOME:    ${{ steps.vitest.outcome }}
+          ESLINT_OUTCOME:    ${{ steps.eslint.outcome }}
+          NPM_AUDIT_OUTCOME: ${{ steps.npm_audit.outcome }}
         run: |
           echo "One or more checks failed:"
-          echo "  vitest     -> ${{ steps.vitest.outcome }}"
-          echo "  eslint     -> ${{ steps.eslint.outcome }}"
-          echo "  npm audit  -> ${{ steps.npm_audit.outcome }}"
+          echo "  vitest     -> $VITEST_OUTCOME"
+          echo "  eslint     -> $ESLINT_OUTCOME"
+          echo "  npm audit  -> $NPM_AUDIT_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -339,13 +370,15 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
 
       - name: Build Docker Image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294  # v7
         with:
           context: OPC_UA_Clients/Release2/IJT_Web_Client
           tags: ijt_web_client:latest
@@ -397,12 +430,17 @@ jobs:
   csharp-client:
     name: "Release2 / IJT C# Client"
     runs-on: windows-latest
+    permissions:
+      contents: read
+      checks: write
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Extract server ZIP
         working-directory: ${{ github.workspace }}
@@ -442,12 +480,12 @@ jobs:
           Write-Host "ERROR: Timeout waiting for port 40451"
           exit 1
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7  # v5
         with:
           dotnet-version: "10.0.x"
 
       - name: Cache NuGet Packages
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
@@ -536,7 +574,7 @@ jobs:
           }
 
       - name: Publish Test Report
-        uses: dorny/test-reporter@v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
         if: always()
         with:
           name: "C# Client — xUnit Tests"
@@ -546,7 +584,7 @@ jobs:
           fail-on-empty: false
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
         if: always()
         with:
           name: results-csharp-client
@@ -566,12 +604,17 @@ jobs:
           steps.tests.outcome     == 'failure' ||
           steps.format.outcome    == 'failure' ||
           steps.vuln_scan.outcome == 'failure')
+        env:
+          BUILD_OUTCOME:     ${{ steps.build.outcome }}
+          TESTS_OUTCOME:     ${{ steps.tests.outcome }}
+          FORMAT_OUTCOME:    ${{ steps.format.outcome }}
+          VULN_SCAN_OUTCOME: ${{ steps.vuln_scan.outcome }}
         run: |
           echo "One or more C# checks failed:"
-          echo "  build     -> ${{ steps.build.outcome }}"
-          echo "  tests     -> ${{ steps.tests.outcome }}"
-          echo "  format    -> ${{ steps.format.outcome }}"
-          echo "  vuln scan -> ${{ steps.vuln_scan.outcome }}"
+          echo "  build     -> $BUILD_OUTCOME"
+          echo "  tests     -> $TESTS_OUTCOME"
+          echo "  format    -> $FORMAT_OUTCOME"
+          echo "  vuln scan -> $VULN_SCAN_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -582,15 +625,17 @@ jobs:
     name: "Release2 / IJT Test Client"
     runs-on: ubuntu-latest
     outputs:
-      mypy_result: ${{ steps.mypy.outcome }}
+      mypy_result: ${{ steps.mypy.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.14"
           cache: pip
@@ -630,7 +675,7 @@ jobs:
         run: python -m mypy . --ignore-missing-imports --no-error-summary
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
         if: always()
         with:
           name: results-test-client
@@ -642,12 +687,17 @@ jobs:
           steps.bandit.outcome == 'failure' ||
           steps.pylint.outcome == 'failure' ||
           steps.mypy.outcome   == 'failure')
+        env:
+          PYTEST_OUTCOME: ${{ steps.pytest.outcome }}
+          BANDIT_OUTCOME: ${{ steps.bandit.outcome }}
+          PYLINT_OUTCOME: ${{ steps.pylint.outcome }}
+          MYPY_OUTCOME:   ${{ steps.mypy.outcome }}
         run: |
           echo "One or more checks failed:"
-          echo "  pytest  -> ${{ steps.pytest.outcome }}"
-          echo "  bandit  -> ${{ steps.bandit.outcome }}"
-          echo "  ruff    -> ${{ steps.pylint.outcome }}"
-          echo "  mypy    -> ${{ steps.mypy.outcome }}"
+          echo "  pytest  -> $PYTEST_OUTCOME"
+          echo "  bandit  -> $BANDIT_OUTCOME"
+          echo "  ruff    -> $PYLINT_OUTCOME"
+          echo "  mypy    -> $MYPY_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -664,7 +714,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Extract server ZIP
         run: |
@@ -700,7 +752,7 @@ jobs:
           Write-Host "ERROR: Timeout waiting for port 40451"
           exit 1
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.14"
 
@@ -731,12 +783,12 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.14"
 
       - name: Download All Test Artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
           path: all-results/
 
@@ -921,7 +973,9 @@ jobs:
     name: "GHA Workflow Lint (actionlint)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Install actionlint
         run: |
