@@ -8,7 +8,7 @@ import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
  */
 export default class JointDemo extends BasicScreen {
   constructor (methodManager, resultManager, connectionManager, settings) {
-    super('JointDemo') // Setting the name of the tab
+    super('Joint Demo') // Setting the name of the tab
     this.methodManager = methodManager
     this.resultManager = resultManager
     this.connectionManager = connectionManager

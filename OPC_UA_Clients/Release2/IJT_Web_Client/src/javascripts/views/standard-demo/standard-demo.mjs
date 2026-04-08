@@ -10,9 +10,9 @@ import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
  * The purpose of this class is to generate an HTML representation of tightening selection and basic
  * display of a result for OPC UA Industrial Joining Technologies communication
  */
-export default class USDemo extends BasicScreen {
+export default class StandardDemo extends BasicScreen {
   constructor (methodManager, resultManager, connectionManager, settings) {
-    super('Demo') // Setting the name of the tab
+    super('Standard Demo') // Setting the name of the tab
     this.methodManager = methodManager
     this.resultManager = resultManager
     this.settings = settings

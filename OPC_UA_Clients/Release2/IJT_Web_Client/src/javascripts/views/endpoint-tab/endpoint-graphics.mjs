@@ -18,8 +18,8 @@ import TraceGraphics from 'views/trace/trace-graphics.mjs'
 import AddressSpaceGraphics from 'views/address-space/address-space-graphics.mjs'
 import EventGraphics from 'views/events/event-graphics.mjs'
 import MethodGraphics from 'views/methods/method-graphics.mjs'
-import USDemo from 'views/demo/us-demo.mjs'
-import JointDemo from 'views/demo/joint-demo.mjs'
+import StandardDemo from 'views/standard-demo/standard-demo.mjs'
+import JointDemo from 'views/standard-demo/joint-demo.mjs'
 import AssetGraphics from 'views/assets/asset-graphics.mjs'
 import EntityCacheView from 'views/entities/entities.mjs'
 import ConnectionGraphics from 'views/connection/connection-graphics.mjs'
@@ -30,6 +30,39 @@ import BasicScreen from 'views/graphic-support/basic-screen.mjs'
 
 /** Default view level shown when a new endpoint tab is opened (Detailed = 3). */
 const DEFAULT_VIEW_LEVEL = 3
+
+class NewDemoGraphics extends BasicScreen {
+  constructor (demoGraphics, jointDemoGraphics, resultGraphics, okRateGraphics, currentViewLevel) {
+    super('Demos')
+    this.tabGenerator = new TabGenerator(this.backGround, currentViewLevel)
+
+    if (demoGraphics) {
+      // Keep JointDemo as default when available to match previous behavior.
+      this.tabGenerator.generateTab(demoGraphics, 1, !jointDemoGraphics)
+    }
+    if (jointDemoGraphics) {
+      this.tabGenerator.generateTab(jointDemoGraphics, 1, true)
+    }
+    if (resultGraphics) {
+      this.tabGenerator.generateTab(resultGraphics, 4)
+    }
+    if (okRateGraphics) {
+      this.tabGenerator.generateTab(okRateGraphics, 4)
+    }
+  }
+
+  changeViewLevel (newLevel) {
+    if (this.tabGenerator) {
+      this.tabGenerator.changeViewLevel(newLevel)
+    }
+  }
+
+  close () {
+    if (this.tabGenerator) {
+      this.tabGenerator.close()
+    }
+  }
+}
 
 export default class EndpointGraphics extends BasicScreen {
   constructor (title, settings) {
@@ -123,10 +156,10 @@ export default class EndpointGraphics extends BasicScreen {
     const methodManager = new MethodManager(addressSpace)
     const methodGraphics = new MethodGraphics(methodManager, addressSpace, this.settings, entityCache)
 
-    // USDemo view is not critical
+    // StandardDemo view is not critical
     let demoGraphics = null
     try {
-      demoGraphics = new USDemo(methodManager, resultManager, this.connectionManager, this.settings)
+      demoGraphics = new StandardDemo(methodManager, resultManager, this.connectionManager, this.settings)
     } catch (error) {
       ijtLog.error(error)
     }
@@ -165,12 +198,20 @@ export default class EndpointGraphics extends BasicScreen {
 
     tabGenerator.changeViewLevel(2)
 
-    tabGenerator.generateTab(connectionGraphics, 2)
-    if (demoGraphics) {
-      tabGenerator.generateTab(demoGraphics, 1)
+    let newDemoGraphics = null
+    if (demoGraphics || jointDemoGraphics || resultGraphics || okRateGraphics) {
+      newDemoGraphics = new NewDemoGraphics(
+        demoGraphics,
+        jointDemoGraphics,
+        resultGraphics,
+        okRateGraphics,
+        DEFAULT_VIEW_LEVEL
+      )
     }
-    if (jointDemoGraphics) {
-      tabGenerator.generateTab(jointDemoGraphics, 1, true)
+
+    tabGenerator.generateTab(connectionGraphics, 2)
+    if (newDemoGraphics) {
+      tabGenerator.generateTab(newDemoGraphics, 2, true)
     }
 
     if (traceGraphics) {
@@ -180,12 +221,6 @@ export default class EndpointGraphics extends BasicScreen {
     tabGenerator.generateTab(eventGraphics, 2, false)
 
     tabGenerator.generateTab(addressSpaceGraphics, 3, false)
-    if (resultGraphics) {
-      tabGenerator.generateTab(resultGraphics, 4)
-    }
-    if (okRateGraphics) {
-      tabGenerator.generateTab(okRateGraphics, 4)
-    }
     if (assetGraphics) {
       tabGenerator.generateTab(assetGraphics, 5)
     }
