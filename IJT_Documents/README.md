@@ -7,8 +7,7 @@ This directory contains the following documents:
      This presentation provides an overview of OPC UA and IJT Companion Specifications.   
     **Note:** Use PDF Bookmarks for easier navigation to required sections. The presentation contains **various topics** as shown below:
 
-
-<img width="290" height="732" alt="image" src="https://github.com/user-attachments/assets/d762ae81-62a5-418a-883e-72a0210b4a0b" />
+<img width="720" height="1860" alt="image" src="https://github.com/user-attachments/assets/bd0f3b51-f6d6-4198-bd19-463aa84b191d" />
 
 
 
