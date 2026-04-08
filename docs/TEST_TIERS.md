@@ -57,13 +57,13 @@ Live, integration, Docker, and optional security checks.
 | `webclient-docker` | Web Client Docker: test-target (Python + Vitest inside container) · prod-target (HTTP health on port 3000) |
 | `int-testclient` | Windows: OPC UA server + Test Client full suite (runs in parallel with `int-live-others`) |
 | `int-live-others` | Windows: Web Client integration + Console live tests (runs in parallel with `int-testclient`) |
-| `zizmor` *(optional)* | GitHub Actions workflow security audit — non-blocking; findings tracked |
+| `zizmor` *(optional)* | GitHub Actions workflow security audit — findings uploaded as SARIF to GitHub Code Scanning (Security tab); job never fails CI; skipped on fork PRs (no `security-events: write` in fork context) |
 
 ### Triggers
 
 - **Nightly** at 2am UTC
 - **Manual dispatch** (`workflow_dispatch`)
-- **Push / PR** touching server or client code paths (see path filters in `ci-extended.yml`)
+- **Push / PR** touching server/client code paths **or any `.github/workflows/` file** (see path filters in `ci-extended.yml`)
 
 ### Skip budget: allowed, but auditable
 
@@ -78,7 +78,7 @@ Each skip still needs: reason, and a documented condition to unskip.
 | Test Client conformance × 6 | Demo server does not implement optional interfaces (`IControllerType`, `IToolType`, `AssociatedWith` references) | Reference server is minimal by design — not a defect |
 | Test Client × 20 `xfail` | Known unimplemented optional features in demo server | Correctly decorated `@pytest.mark.xfail` — expected and not a defect |
 | Web Client `TestBackendWebSocket` × 14 | WebSocket backend not running in this test phase | Start the backend process before running this test class |
-| `zizmor` job | Optional security tool; findings may be informational | Review findings in artifact; promote to required once stable |
+| `zizmor` job | SARIF upload to Code Scanning — see Security → Code scanning alerts | No action needed; job always passes (skipped on fork PRs). Review alerts in Security tab. |
 
 ---
 

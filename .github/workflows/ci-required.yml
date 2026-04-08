@@ -36,7 +36,6 @@ on:
 
 permissions:
   contents: read
-  checks: write          # required by dorny/test-reporter
 
 # Opt into Node.js 24 for all actions (suppresses the Node.js 20 deprecation warning)
 env:
@@ -58,6 +57,9 @@ jobs:
   web-client:
     name: "Release2 / IJT Web Client"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     outputs:
       mypy_result: ${{ steps.mypy.outcome }}
     defaults:
@@ -178,6 +180,9 @@ jobs:
   console-client:
     name: "Release2 / IJT Console Client"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     outputs:
       mypy_result: ${{ steps.mypy.outcome }}
     defaults:
@@ -265,6 +270,9 @@ jobs:
   node-client:
     name: "Release1 / IJT Node Client"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release1/IJT_Node_Client
@@ -397,6 +405,9 @@ jobs:
   csharp-client:
     name: "Release2 / IJT C# Client"
     runs-on: windows-latest
+    permissions:
+      contents: read
+      checks: write
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client

@@ -74,7 +74,7 @@ JS_SRC_ROOT = WEB_CLIENT_ROOT / "src" / "javascripts"
 def test_jointdemo_uses_absolute_image_path():
     """joint-demo.mjs must use /src/resources/ (absolute) for the digital_twin image.
     A relative ./resources/ path resolves from document root and breaks after src/ reorg."""
-    joint_demo = WEB_CLIENT_ROOT / "src" / "javascripts" / "views" / "demo" / "joint-demo.mjs"
+    joint_demo = WEB_CLIENT_ROOT / "src" / "javascripts" / "views" / "standard-demo" / "joint-demo.mjs"
     assert joint_demo.exists(), f"joint-demo.mjs not found at {joint_demo}"
     content = joint_demo.read_text(encoding="utf-8")
     assert "./resources/digital_twin" not in content, (

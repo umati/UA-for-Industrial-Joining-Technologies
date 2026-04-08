@@ -48,8 +48,8 @@ on:
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/*.py'
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/tests/live/**'
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/requirements*.txt'
-      # Workflow file itself
-      - '.github/workflows/ci-extended.yml'
+      # Any workflow file — zizmor audits all of .github/workflows/
+      - '.github/workflows/**'
   pull_request:
     branches: [main]
     paths:
@@ -71,11 +71,11 @@ on:
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/*.py'
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/tests/live/**'
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/requirements*.txt'
-      - '.github/workflows/ci-extended.yml'
+      # Any workflow file — zizmor audits all of .github/workflows/
+      - '.github/workflows/**'
 
 permissions:
   contents: read
-  checks: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -149,8 +149,6 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
-          cache: 'pip'
-          cache-dependency-path: OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Install smoke test dependencies
         run: |
@@ -418,24 +416,27 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   # GHA Security Audit (zizmor) — OPTIONAL / NON-BLOCKING
   #   Audits all GHA workflow files for supply-chain and injection risks.
-  #   continue-on-error: true — findings tracked, never block the workflow.
-  #   Install locally: pip install zizmor
+  #   Findings are uploaded to GitHub Code Scanning (Security tab) as SARIF —
+  #   the job never fails CI. Review alerts at: Security → Code scanning alerts.
+  #   Fork PRs are skipped: security-events: write is unavailable in fork context.
   #   Docs: https://woodruffw.github.io/zizmor/
   # ───────────────────────────────────────────────────────────────────────────
   zizmor:
     name: "GHA Security Audit (zizmor) [optional]"
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # Skip fork PRs: they cannot write to Code Scanning (no security-events: write).
+    # Non-PR events (push, schedule, workflow_dispatch) always run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      security-events: write  # required to upload SARIF to Code Scanning
 
     steps:
       - uses: actions/checkout@v6
-
-      - uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          persist-credentials: false
 
-      - name: Install zizmor
-        run: pip install zizmor
-
-      - name: Run zizmor (GHA security audit)
-        run: zizmor .github/workflows/
+      - name: Run zizmor (GHA security audit → SARIF upload)
+        uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8  # v0.5.2
+        with:
+          inputs: .github/workflows/
