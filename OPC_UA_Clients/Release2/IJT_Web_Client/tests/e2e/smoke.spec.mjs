@@ -100,7 +100,7 @@ test('chart.umd.js loads successfully (regression: src/ path depth)', async ({ p
   expect(chartFailed, 'chart.umd.js returned non-200').toHaveLength(0)
 })
 
-test('digital_twin.jpg loads without 404 (regression: JointDemo image path)', async ({ page }) => {
+test('digital_twin.jpg loads without 404 (regression: Joint Demo image path)', async ({ page }) => {
   const failures = []
   page.on('response', (resp) => {
     if (resp.url().includes('digital_twin') && resp.status() !== 200) {
@@ -108,12 +108,17 @@ test('digital_twin.jpg loads without 404 (regression: JointDemo image path)', as
     }
   })
   await page.goto('/')
-  // Navigate to Joint Demo tab — level 3+ required; use correct selector
+  // Navigate via Demos -> Joint Demo
   await page.selectOption('.mainDropDown', '3')
   await page.waitForTimeout(500)
-  const demoTab = page.locator('input.tabButton[value="JointDemo"], input.tabButton[value*="Demo"]').first()
-  if (await demoTab.count() > 0) {
-    await demoTab.click()
+  const demosTab = page.locator('input.tabButton[value="Demos"]').first()
+  if (await demosTab.count() > 0) {
+    await demosTab.click()
+    await page.waitForTimeout(300)
+  }
+  const jointDemoTab = page.locator('input.tabButton[value="Joint Demo"], input.tabButton[value*="Demo"]').first()
+  if (await jointDemoTab.count() > 0) {
+    await jointDemoTab.click()
     await page.waitForTimeout(1_000)
   }
   expect(failures, `digital_twin.jpg returned non-200:\n${failures.join('\n')}`).toHaveLength(0)
@@ -134,4 +139,3 @@ test('all Basic view tabs are clickable', async ({ page }) => {
   // Just verifying no crash — page still has a title
   await expect(page).toHaveTitle(/OPC UA IJT Demo/i)
 })
-

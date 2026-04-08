@@ -1,6 +1,6 @@
 # EndpointGraphics Tab Adder
 
-Implement tab additions in `src/javascripts/views/endpoint-tab/endpoint-graphics.mjs` using the project's manager-plus-view architecture.
+Implement tab additions in `src/javascripts/views/tab-setup/endpoint-graphics.mjs` using the project's manager-plus-view architecture.
 
 ## Key Principles
 
@@ -17,10 +17,11 @@ Implement tab additions in `src/javascripts/views/endpoint-tab/endpoint-graphics
 2. If creating a new manager, add `src/javascripts/ijt-support/feature-name/feature-name-manager.mjs` and export it from `src/javascripts/ijt-support/ijt-support.mjs`.
 3. Create a new view file in `src/javascripts/views/feature-name/feature-name-graphics.mjs`.
 4. Implement `constructor`, `initiate`, and `activate` in the new view class.
-5. Import and instantiate the chosen manager + new view in `src/javascripts/views/endpoint-tab/endpoint-graphics.mjs`.
-6. Register the tab with `tabGenerator.generateTab(viewInstance, level, selected?)`.
-7. Preserve ordering conventions and view-level grouping.
-8. Run lint to catch integration issues.
+5. Import and instantiate the chosen manager + new view in `src/javascripts/views/tab-setup/endpoint-graphics.mjs`.
+6. If the view is demo-related (`Standard Demo`, `Joint Demo`, `Consolidated Result`, `OK rate`), wire it through `src/javascripts/views/tab-setup/demo-tabs.mjs` so it appears under the `Demos` tab.
+7. Register the tab with `tabGenerator.generateTab(viewInstance, level, selected?)`.
+8. Preserve ordering conventions and view-level grouping.
+9. Run lint to catch integration issues.
 
 ## Patterns To Reuse
 

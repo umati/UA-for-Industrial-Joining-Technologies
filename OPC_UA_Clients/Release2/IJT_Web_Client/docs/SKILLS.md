@@ -80,9 +80,9 @@ IJT_Web_Client/
 │   │   └── settings/               # App config helpers
 │   └── views/              # UI screens (see docs/guides/views-guide.md)
 │       ├── servers/
-│       ├── endpoint-tab/
+│       ├── tab-setup/
 │       ├── methods/
-│       ├── trace/ events/ demo/ complex-result/
+│       ├── trace/ events/ standard-demo/ complex-result/
 │       ├── assets/ entities/ joints/
 │       └── graphic-support/  # TabGenerator, BasicScreen base
 │
@@ -322,7 +322,7 @@ Uses `CONNECTION_STATES` enum — not raw strings. Always import the enum when c
 ### Event Queue (`event-manager.mjs`)
 `maxSize=500` — oldest events dropped when full.
 
-### View Level Constants (`endpoint-graphics.mjs`)
+### View Level Constants (`views/tab-setup/endpoint-graphics.mjs`)
 ```js
 const DEFAULT_VIEW_LEVEL = 3;  // Detailed (Basic=1, Simple=2, Detailed=3, Specialized=4, Settings=5)
 ```
@@ -394,3 +394,4 @@ These files work with **any AI tool** (GitHub Copilot, Cursor, Claude, ChatGPT, 
 5. **Never** use raw string connection states in JS — use `CONNECTION_STATES` enum.
 6. **Never** change linked-value object shape `{ type, value, link }`.
 7. **Never** run `create_structure.py` again — it's a one-time script already executed.
+

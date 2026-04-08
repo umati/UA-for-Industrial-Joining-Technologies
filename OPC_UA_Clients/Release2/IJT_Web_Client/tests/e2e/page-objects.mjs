@@ -157,17 +157,20 @@ export class AppPage {
   }
 
   async openResults () {
+    await this.clickTab('Demos')
     await this.clickTab('Consolidated Result')
     return new ResultsPage(this.page)
   }
 
   async openJointDemo () {
-    await this.clickTab('JointDemo')
+    await this.clickTab('Demos')
+    await this.clickTab('Joint Demo')
     return new JointDemoPage(this.page)
   }
 
   async openOkRate () {
-    await this.clickTab('OkRate')
+    await this.clickTab('Demos')
+    await this.clickTab('OK rate')
     return new OkRatePage(this.page)
   }
 

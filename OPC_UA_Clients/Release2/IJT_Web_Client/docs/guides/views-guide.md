@@ -25,7 +25,7 @@ Tabs are managed by `GraphicSupport/TabGenerator.mjs`.
 
 - `Servers/`:
   endpoint list and connect/disconnect flow.
-- `EndpointTab/`:
+- `TabSetup/`:
   endpoint-specific tab composition.
 - `AddressSpace/`:
   browse/read visualization of the address space
@@ -35,8 +35,10 @@ Tabs are managed by `GraphicSupport/TabGenerator.mjs`.
   chart rendering, zoom, and interaction.
 - `Envelope/`:
   limit/selection configuration and validation overlays.
-- `Demo/`:
+- `Standard-Demo/`:
   demo screens for joint/program/result usage.
+- `Demos` tab composition:
+  demo-related screens are grouped under the `Demos` parent tab via `tab-setup/demo-tabs.mjs`.
 - `ComplexResult/`:
   hierarchical/enveloped result rendering of batches and jobs.
 - `Assets/`, `Entities/`, `Joints/`:

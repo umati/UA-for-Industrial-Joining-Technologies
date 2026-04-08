@@ -1,5 +1,5 @@
 import BasicScreen from '../graphic-support/basic-screen.mjs'
-import EndpointGraphics from '../endpoint-tab/endpoint-graphics.mjs'
+import EndpointGraphics from '../tab-setup/endpoint-graphics.mjs'
 
 /**
  * The purpose of this class is to generate a webpage that shows a list of OPC UA servers that the user is interested in

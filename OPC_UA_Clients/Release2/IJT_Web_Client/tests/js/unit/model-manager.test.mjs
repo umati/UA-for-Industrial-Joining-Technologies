@@ -236,6 +236,32 @@ describe('ModelManager.createModelFromRead()', () => {
     const model = mm.createModelFromRead(values)
     expect(model).toBeNull()
   })
+
+  it('normalizes ResultMetaData.AssociatedEntities to an iterable list', () => {
+    const values = {
+      ResultMetaData: {
+        ResultId: 'r-43',
+        Name: 'AssocEntityResult',
+        IsPartial: 'False',
+        Classification: '1',
+        ProcessingTimes: { EndTime: '2025-01-01T00:00:00' },
+        AssociatedEntities: {
+          Name: 'Tool A',
+          EntityId: 'tool-a'
+        }
+      }
+    }
+    const model = mm.createModelFromRead(values)
+    expect(model).toBeInstanceOf(ResultDataType)
+    expect(Array.isArray(model.ResultMetaData.AssociatedEntities)).toBe(true)
+    expect(model.ResultMetaData.AssociatedEntities).toHaveLength(1)
+
+    const names = []
+    for (const entity of model.ResultMetaData.AssociatedEntities) {
+      names.push(entity.Name)
+    }
+    expect(names).toEqual(['Tool A'])
+  })
 })
 
 // ---------------------------------------------------------------------------

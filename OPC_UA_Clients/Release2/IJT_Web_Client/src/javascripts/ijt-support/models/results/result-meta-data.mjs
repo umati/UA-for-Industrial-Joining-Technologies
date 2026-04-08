@@ -9,5 +9,13 @@ export default class ResultMetaData extends IJTBaseModel {
     }
 
     super(parameters, modelManager, castMapping)
+
+    // Some servers send a single AssociatedEntities object instead of a list.
+    // Normalize to an array so callers can always iterate safely.
+    if (!this.AssociatedEntities) {
+      this.AssociatedEntities = []
+    } else if (!Array.isArray(this.AssociatedEntities)) {
+      this.AssociatedEntities = [this.AssociatedEntities]
+    }
   }
 }
