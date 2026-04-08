@@ -61,13 +61,15 @@ jobs:
       contents: read
       checks: write
     outputs:
-      mypy_result: ${{ steps.mypy.outcome }}
+      mypy_result: ${{ steps.mypy.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
@@ -161,15 +163,23 @@ jobs:
           steps.pylint.outcome    == 'failure' ||
           steps.mypy.outcome      == 'failure' ||
           steps.npm_audit.outcome == 'failure')
+        env:
+          PYTEST_OUTCOME:    ${{ steps.pytest.outcome }}
+          VITEST_OUTCOME:    ${{ steps.vitest.outcome }}
+          ESLINT_OUTCOME:    ${{ steps.eslint.outcome }}
+          BANDIT_OUTCOME:    ${{ steps.bandit.outcome }}
+          PYLINT_OUTCOME:    ${{ steps.pylint.outcome }}
+          MYPY_OUTCOME:      ${{ steps.mypy.outcome }}
+          NPM_AUDIT_OUTCOME: ${{ steps.npm_audit.outcome }}
         run: |
           echo "One or more checks failed:"
-          echo "  pytest     -> ${{ steps.pytest.outcome }}"
-          echo "  vitest     -> ${{ steps.vitest.outcome }}"
-          echo "  eslint     -> ${{ steps.eslint.outcome }}"
-          echo "  bandit     -> ${{ steps.bandit.outcome }}"
-          echo "  ruff       -> ${{ steps.pylint.outcome }}"
-          echo "  mypy       -> ${{ steps.mypy.outcome }}"
-          echo "  npm audit  -> ${{ steps.npm_audit.outcome }}"
+          echo "  pytest     -> $PYTEST_OUTCOME"
+          echo "  vitest     -> $VITEST_OUTCOME"
+          echo "  eslint     -> $ESLINT_OUTCOME"
+          echo "  bandit     -> $BANDIT_OUTCOME"
+          echo "  ruff       -> $PYLINT_OUTCOME"
+          echo "  mypy       -> $MYPY_OUTCOME"
+          echo "  npm audit  -> $NPM_AUDIT_OUTCOME"
           exit 1
 
 
@@ -184,13 +194,15 @@ jobs:
       contents: read
       checks: write
     outputs:
-      mypy_result: ${{ steps.mypy.outcome }}
+      mypy_result: ${{ steps.mypy.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
@@ -255,12 +267,17 @@ jobs:
           steps.bandit.outcome == 'failure' ||
           steps.pylint.outcome == 'failure' ||
           steps.mypy.outcome   == 'failure')
+        env:
+          PYTEST_OUTCOME: ${{ steps.pytest.outcome }}
+          BANDIT_OUTCOME: ${{ steps.bandit.outcome }}
+          PYLINT_OUTCOME: ${{ steps.pylint.outcome }}
+          MYPY_OUTCOME:   ${{ steps.mypy.outcome }}
         run: |
           echo "One or more checks failed:"
-          echo "  pytest  -> ${{ steps.pytest.outcome }}"
-          echo "  bandit  -> ${{ steps.bandit.outcome }}"
-          echo "  ruff    -> ${{ steps.pylint.outcome }}"
-          echo "  mypy    -> ${{ steps.mypy.outcome }}"
+          echo "  pytest  -> $PYTEST_OUTCOME"
+          echo "  bandit  -> $BANDIT_OUTCOME"
+          echo "  ruff    -> $PYLINT_OUTCOME"
+          echo "  mypy    -> $MYPY_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -279,6 +296,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f  # v6
         with:
@@ -328,11 +347,15 @@ jobs:
           steps.vitest.outcome    == 'failure' ||
           steps.eslint.outcome    == 'failure' ||
           steps.npm_audit.outcome == 'failure')
+        env:
+          VITEST_OUTCOME:    ${{ steps.vitest.outcome }}
+          ESLINT_OUTCOME:    ${{ steps.eslint.outcome }}
+          NPM_AUDIT_OUTCOME: ${{ steps.npm_audit.outcome }}
         run: |
           echo "One or more checks failed:"
-          echo "  vitest     -> ${{ steps.vitest.outcome }}"
-          echo "  eslint     -> ${{ steps.eslint.outcome }}"
-          echo "  npm audit  -> ${{ steps.npm_audit.outcome }}"
+          echo "  vitest     -> $VITEST_OUTCOME"
+          echo "  eslint     -> $ESLINT_OUTCOME"
+          echo "  npm audit  -> $NPM_AUDIT_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -348,6 +371,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
@@ -414,6 +439,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Extract server ZIP
         working-directory: ${{ github.workspace }}
@@ -577,12 +604,17 @@ jobs:
           steps.tests.outcome     == 'failure' ||
           steps.format.outcome    == 'failure' ||
           steps.vuln_scan.outcome == 'failure')
+        env:
+          BUILD_OUTCOME:     ${{ steps.build.outcome }}
+          TESTS_OUTCOME:     ${{ steps.tests.outcome }}
+          FORMAT_OUTCOME:    ${{ steps.format.outcome }}
+          VULN_SCAN_OUTCOME: ${{ steps.vuln_scan.outcome }}
         run: |
           echo "One or more C# checks failed:"
-          echo "  build     -> ${{ steps.build.outcome }}"
-          echo "  tests     -> ${{ steps.tests.outcome }}"
-          echo "  format    -> ${{ steps.format.outcome }}"
-          echo "  vuln scan -> ${{ steps.vuln_scan.outcome }}"
+          echo "  build     -> $BUILD_OUTCOME"
+          echo "  tests     -> $TESTS_OUTCOME"
+          echo "  format    -> $FORMAT_OUTCOME"
+          echo "  vuln scan -> $VULN_SCAN_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -593,13 +625,15 @@ jobs:
     name: "Release2 / IJT Test Client"
     runs-on: ubuntu-latest
     outputs:
-      mypy_result: ${{ steps.mypy.outcome }}
+      mypy_result: ${{ steps.mypy.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
@@ -653,12 +687,17 @@ jobs:
           steps.bandit.outcome == 'failure' ||
           steps.pylint.outcome == 'failure' ||
           steps.mypy.outcome   == 'failure')
+        env:
+          PYTEST_OUTCOME: ${{ steps.pytest.outcome }}
+          BANDIT_OUTCOME: ${{ steps.bandit.outcome }}
+          PYLINT_OUTCOME: ${{ steps.pylint.outcome }}
+          MYPY_OUTCOME:   ${{ steps.mypy.outcome }}
         run: |
           echo "One or more checks failed:"
-          echo "  pytest  -> ${{ steps.pytest.outcome }}"
-          echo "  bandit  -> ${{ steps.bandit.outcome }}"
-          echo "  ruff    -> ${{ steps.pylint.outcome }}"
-          echo "  mypy    -> ${{ steps.mypy.outcome }}"
+          echo "  pytest  -> $PYTEST_OUTCOME"
+          echo "  bandit  -> $BANDIT_OUTCOME"
+          echo "  ruff    -> $PYLINT_OUTCOME"
+          echo "  mypy    -> $MYPY_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -676,6 +715,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Extract server ZIP
         run: |
@@ -933,6 +974,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Install actionlint
         run: |
