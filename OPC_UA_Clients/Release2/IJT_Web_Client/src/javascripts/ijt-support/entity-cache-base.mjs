@@ -80,9 +80,14 @@ export class EntityCacheBase {
    * Build a DOM element listing selectable entities grouped by type.
    * @param {Function} onselect  callback(event, entity) when an entity is clicked
    * @param {string}   title     label shown above the list
+   * @param {object}   options
+   * @param {Function} [options.labelBuilder] custom renderer: (entity) => string
+   * @param {string}   [options.itemClass] extra class added to each entity row
    * @returns {HTMLElement}
    */
-  makeSelectableEntityView (onselect, title) {
+  makeSelectableEntityView (onselect, title, options = {}) {
+    const labelBuilder = options?.labelBuilder
+    const itemClass = options?.itemClass
     const backGround = document.createElement('div')
     const label = document.createElement('label')
     label.textContent = title
@@ -96,7 +101,12 @@ export class EntityCacheBase {
       for (const entity of values) {
         const identifier = document.createElement('div')
         identifier.classList.add('identifier')
-        identifier.textContent = entity.Name
+        if (itemClass) {
+          identifier.classList.add(itemClass)
+        }
+        identifier.textContent = typeof labelBuilder === 'function'
+          ? (labelBuilder(entity) ?? '')
+          : entity.Name
         identifier.onclick = (a) => onselect(a, entity)
         area.appendChild(identifier)
       }

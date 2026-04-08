@@ -73,7 +73,10 @@ export default class EntityCacheView extends ControlSplitScreen {
 
     const overview = entityCache.makeSelectableEntityView((x, y) => {
       this.displayEntity(y, this)
-    }, '')
+    }, '', {
+      labelBuilder: (entity) => `${entity?.Name ?? ''} = ${entity?.EntityId ?? ''}`,
+      itemClass: 'entityListLabel'
+    })
 
     this.controls.appendChild(overview)
 
