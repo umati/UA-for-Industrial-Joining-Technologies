@@ -145,7 +145,6 @@ export default class EndpointGraphics extends BasicScreen {
       tabGenerator.generateTab(demosTabGraphics, 2, true)
     }
 
-
     tabGenerator.generateTab(methodGraphics, 2)
     tabGenerator.generateTab(eventGraphics, 2, false)
 
