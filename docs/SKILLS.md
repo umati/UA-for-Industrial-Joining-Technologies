@@ -37,12 +37,13 @@ Running the root orchestrator triggers sub-project runners as subprocesses; each
 
 ### Automatic — pytest temp dirs
 All three Python pytest projects (Web, Console, Test clients) are configured with:
-- `addopts = --basetemp=tests/fixtures/tmp` — temp dirs land inside the repo, avoiding OS temp ACL issues on Windows
-- `tmp_path_retention_count = 0` — pytest purges all previous-session dirs at the start of each new run
+- `addopts = --basetemp=.state/pytest_tmp` — temp dirs stay inside each project, avoiding OS temp ACL issues on restricted Windows machines
+- `tmp_path_retention_policy = all` — pytest never attempts to delete old session temp dirs (guards against `PermissionError` on locked artifacts from previous runs)
+- Each `run_all_tests.py` sets `TMP`, `TEMP`, `TMPDIR`, and `PYTEST_DEBUG_TEMPROOT` to project-local `.state/` paths for subprocess consistency
 
-**Two-layer guarantee that `tests/fixtures/` always exists:**
-1. `tests/fixtures/.gitkeep` committed in each project — dir exists on fresh `git clone`
-2. `pytest_configure` hook in each root `conftest.py` — `mkdir(parents=True, exist_ok=True)` at pytest startup as safety net
+**Console Client and Web Client additionally use `pyfakefs`** for all filesystem-touching unit tests (`test_setup_client.py` and `test_setup_project.py` respectively). The `fs` fixture virtualizes `pathlib`, `os`, `shutil`, and `zipfile` calls in-process, so those tests write no real files to disk. This eliminates the root cause of Windows ACL locks from tests that simulate virtual environment layouts (`venv/Scripts/python.exe`). Works identically on Windows, Linux, and macOS.
+
+`tests/fixtures/.gitkeep` is committed in each project — the directory always exists on a fresh clone.
 
 ### Manual — git-native cleanup (when needed)
 ```bash
@@ -107,7 +108,7 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Console Client (`OPC_UA_Clients/Release2/IJT_Console_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2
-- **Test baseline**: 288 Python pass, 0 skip (unit); live tests auto-skip when no server
+- **Test baseline**: 374 Python pass, 0 skip (unit); live tests call `pytest.fail()` if server unreachable — no silent skips
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Entry point**: `python setup_client.py --url="opc.tcp://..."`
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md`
@@ -222,7 +223,7 @@ Runtime: ~5 minutes (int-testclient + int-live-others run in parallel). NOT trig
 | No custom EventFilter | Full `ResultDataType` payload arrives in event without custom filter |
 | C# live-test sync OPC UA calls wrapped in hard timeouts | `BrowseChild`, `Subscribe`, `CallMethod`, and `Unsubscribe` are synchronous and can stall under server load; guarded `Task.WhenAny` timeouts prevent test-host hangs |
 | `IjtSession.DisposeAsync` cleanup guard timeout | Management-object dispose calls can perform synchronous network operations; timeout-bounded cleanup avoids indefinite teardown stalls |
-| Console live tests override coverage gate (`--cov-fail-under=0`) | Live tests intentionally exercise a narrow surface and often skip by environment; global unit-test threshold should not fail live stage |
+| Console live tests override coverage gate (`--cov-fail-under=0`) | Live tests intentionally exercise a narrow surface against a live server; global unit-test coverage threshold should not fail live stage |
 
 ---
 

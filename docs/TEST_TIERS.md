@@ -65,33 +65,46 @@ Live, integration, Docker, and optional security checks.
 - **Manual dispatch** (`workflow_dispatch`)
 - **Push / PR** touching server/client code paths **or any `.github/workflows/` file** (see path filters in `ci-extended.yml`)
 
-### Skip budget: allowed, but auditable
+### Zero-skip policy for live/integration tests
 
-Extended skips are acceptable when server/tool/environment is not available.
-Each skip still needs: reason, and a documented condition to unskip.
+Live and integration tests use **auto-start session fixtures** (conftest.py) — not
+module-level `skipif` port checks. If a required server cannot be started, the session
+fails with `pytest.fail()` (loud, never silent). This applies to:
 
-### Known expected skips in ci-extended
+- `IJT_Web_Client/tests/python/live/` — both OPC UA server and WebSocket backend
+- `IJT_Web_Client/tests/python/integration/` — both servers
+- `IJT_Console_Client/tests/live/` — OPC UA server
 
-| Test | Reason | Condition to unskip |
-|------|--------|---------------------|
-| Console `TestMethods` × 7 | `ProductInstanceUri not configured on server — method requires tool identity` | Configure the demo server with a real tool identity |
-| Test Client conformance × 6 | Demo server does not implement optional interfaces (`IControllerType`, `IToolType`, `AssociatedWith` references) | Reference server is minimal by design — not a defect |
-| Test Client × 20 `xfail` | Known unimplemented optional features in demo server | Correctly decorated `@pytest.mark.xfail` — expected and not a defect |
-| Web Client `TestBackendWebSocket` × 14 | WebSocket backend not running in this test phase | Start the backend process before running this test class |
-| `zizmor` job | SARIF upload to Code Scanning — see Security → Code scanning alerts | No action needed; job always passes (skipped on fork PRs). Review alerts in Security tab. |
+### Known expected non-skip conditions in ci-extended
+
+| Test | Status | Reason |
+|------|--------|--------|
+| Console `TestMethods` × 7 | `xfail` | `ProductInstanceUri` is NULL on demo server — tool identity not configured. Uses `pytest.xfail()` so the test runs and is reported as expected-failure, not silently skipped. |
+| Test Client conformance × 6 | skip | Demo server does not implement optional interfaces (`IControllerType`, `IToolType`, `AssociatedWith` references) — reference server is minimal by design |
+| Test Client × 20 | `xfail` | Known unimplemented optional features in demo server — correctly decorated `@pytest.mark.xfail` |
+| Test Client asset sub-type folders (controllers, tools, etc.) | skip | Individual asset category folders are optional per IJT spec — a conformant server may implement a subset |
+| `zizmor` job | pass | SARIF upload to Code Scanning — see Security → Code scanning alerts. No action needed; job always passes (skipped on fork PRs). |
 
 ---
 
 ## Skip Marker Standards
 
-Every skip must be explicit and auditable.
+Every skip must be explicit and auditable. Prefer `pytest.fail()` over `pytest.skip()`
+for infrastructure checks — missing servers, wrong paths, missing packages. Reserve
+`pytest.skip()` only for genuine "this feature is not available on this server/platform"
+conditions. Use `pytest.xfail()` for known server limitations that are expected to change.
 
 ### Python (pytest)
 
 ```python
-# Structured skip — reason and condition are clear:
-@pytest.mark.skipif(not OPCUA_UP, reason="OPC UA server not reachable at port 40451")
-pytest.skip("ProductInstanceUri not configured on server — method requires tool identity")
+# Infrastructure missing → fail loudly, never skip silently:
+pytest.fail("OPC UA server did not start within 60 s — check EXE output")
+
+# Server capability genuinely unavailable → xfail (runs but expected to fail):
+pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+
+# Test depends on optional feature known to be absent → skip with reason:
+pytest.skip("Server does not implement IControllerType (optional interface)")
 ```
 
 ### C# (xUnit + `SkippableFact`)
@@ -133,3 +146,4 @@ Separating them into an extended tier:
 2. Makes skips **visible and auditable** — not silently ignored
 3. Allows **gradual promotion** of extended tests to required as infrastructure matures
 4. Matches industry standard: smoke/unit = blocking; integration/e2e/security = non-blocking but tracked
+

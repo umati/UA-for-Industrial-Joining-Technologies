@@ -33,7 +33,7 @@ _COMPOSE_FILE = _PROJECT_ROOT / "docker-compose.yml"
 
 def _dockerfile_lines() -> list[str]:
     if not _DOCKERFILE.exists():
-        pytest.skip(f"Dockerfile not found at {_DOCKERFILE}")
+        pytest.fail(f"Dockerfile not found at {_DOCKERFILE}")
     return _DOCKERFILE.read_text(encoding="utf-8").splitlines()
 
 

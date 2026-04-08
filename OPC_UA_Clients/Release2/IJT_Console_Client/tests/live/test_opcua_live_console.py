@@ -2,7 +2,8 @@
 Live integration tests for IJT_Console_Client.
 
 Tests require a running OPC UA server at opc.tcp://localhost:40451 (or env override).
-All tests are automatically skipped if the server is unavailable (conftest.py).
+The server is auto-started by conftest.py if not already running; any startup
+failure raises pytest.fail() — tests never silently skip.
 
 Covered operations
 ------------------
@@ -180,7 +181,7 @@ class TestMethods:
             enable=True,
         )
         if result is None:
-            pytest.skip("ProductInstanceUri not configured on server — method requires tool identity")
+            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in result, f"Result must contain 'status' key, got: {result}"
 
     @pytest.mark.asyncio
@@ -192,7 +193,7 @@ class TestMethods:
             enable=False,
         )
         if result is None:
-            pytest.skip("ProductInstanceUri not configured on server — method requires tool identity")
+            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in result, f"Result must contain 'status' key, got: {result}"
 
     @pytest.mark.asyncio
@@ -202,12 +203,12 @@ class TestMethods:
             object_nodeid=_ASSET_OBJECT, method_nodeid=_ASSET_ENABLE, enable=False
         )
         if disable_result is None:
-            pytest.skip("ProductInstanceUri not configured on server — method requires tool identity")
+            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         enable_result = await connected_client.methods.enable_asset(
             object_nodeid=_ASSET_OBJECT, method_nodeid=_ASSET_ENABLE, enable=True
         )
         if enable_result is None:
-            pytest.skip("ProductInstanceUri not configured on server — method requires tool identity")
+            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in enable_result
 
     @pytest.mark.asyncio
@@ -225,7 +226,7 @@ class TestMethods:
             joint_origin_id="",
         )
         if result is None:
-            pytest.skip("ProductInstanceUri not configured on server — method requires tool identity")
+            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in result, f"Result must have 'status' key, got: {result}"
 
     @pytest.mark.asyncio
@@ -238,7 +239,7 @@ class TestMethods:
             joint_origin_id=None,  # None → "" inside method_caller
         )
         if result is None:
-            pytest.skip("ProductInstanceUri not configured on server — method requires tool identity")
+            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
 
     @pytest.mark.asyncio
     async def test_start_selected_joining_deselect_true(self, connected_client):
@@ -249,7 +250,7 @@ class TestMethods:
             deselect_after_joining=True,
         )
         if result is None:
-            pytest.skip("ProductInstanceUri not configured on server — method requires tool identity")
+            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in result, f"Result must contain 'status' key, got: {result}"
 
     @pytest.mark.asyncio
@@ -261,5 +262,5 @@ class TestMethods:
             deselect_after_joining=False,
         )
         if result is None:
-            pytest.skip("ProductInstanceUri not configured on server — method requires tool identity")
+            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in result

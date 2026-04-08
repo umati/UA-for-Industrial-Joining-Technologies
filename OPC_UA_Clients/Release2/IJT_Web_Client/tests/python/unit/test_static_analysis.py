@@ -642,7 +642,7 @@ def test_setup_project_version_check_uses_sysexit_not_assert():
     """
     path = _PROJECT_ROOT / "setup_project.py"
     if not path.exists():
-        pytest.skip("setup_project.py does not exist")
+        pytest.fail("setup_project.py does not exist")
     content = path.read_text(encoding="utf-8")
     assert "assert Version(asyncua.__version__)" not in content, (
         "setup_project.py uses 'assert' for asyncua version check — "

@@ -46,12 +46,19 @@ IJT_Console_Client/
 │   ├── SKILLS.md             # ← this file — AI context for all tools
 │   └── methods-usage.md      # IJT method invocation quick reference
 └── tests/
-    ├── conftest.py
-    ├── test_client_config_and_main.py
-    ├── test_method_caller.py
-    ├── test_result_event_handler.py
-    ├── test_serialize_data.py
-    └── test_utils.py
+    ├── conftest.py                       # shared fixtures (top-level)
+    ├── unit/
+    │   ├── conftest.py
+    │   ├── test_setup_client.py          # setup_client.py launcher unit tests (86 tests)
+    │   ├── test_client_config_and_main.py
+    │   ├── test_method_caller.py
+    │   ├── test_result_event_handler.py
+    │   ├── test_serialize_data.py
+    │   ├── test_utils.py
+    │   └── ... (18 total unit test files)
+    └── live/
+        ├── conftest.py                   # auto-starts OPC UA server; pytest.fail() if unreachable
+        └── test_opcua_live_console.py    # live OPC UA tests (xfail for ProductInstanceUri)
 ```
 
 ---
@@ -62,16 +69,17 @@ IJT_Console_Client/
 # Full suite — OPC UA server auto-launched if needed
 python run_all_tests.py
 
-# Unit tests only (no server)
-python -m pytest tests/ -v
+# Unit tests only (no server needed) — live/ excluded by norecursedirs
+python -m pytest tests/unit -v
 
-# With live OPC UA server
-set OPCUA_TEST_ENDPOINT=opc.tcp://localhost:40451
-python -m pytest tests/ -m live -v
+# Live tests with running OPC UA server (auto-starts server if not up)
+python -m pytest tests/live -v
 
 # Install test deps first (if needed)
-pip install pytest pytest-asyncio
+pip install -r requirements-dev.txt
 ```
+
+**Test isolation**: filesystem-touching unit tests in `test_setup_client.py` use the `pyfakefs` `fs` fixture — all `pathlib`/`os`/`shutil`/`zipfile` calls are intercepted in-process. No real files are written for those tests, eliminating OS ACL issues on all platforms. `pyfakefs~=6.1` is pinned in `requirements-dev.txt`.
 
 ## Zero-Escape Testing Tools (run_all_tests.py Phase 1)
 

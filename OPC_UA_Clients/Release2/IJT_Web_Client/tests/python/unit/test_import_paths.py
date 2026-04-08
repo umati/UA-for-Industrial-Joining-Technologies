@@ -101,7 +101,7 @@ def test_all_python_module_filenames_are_snake_case():
     src_python = _PROJECT_ROOT / "src" / "python"
 
     if not src_python.exists():
-        pytest.skip("src/python/ directory not found")
+        pytest.fail("src/python/ directory not found")
 
     violations: list[str] = []
     for path in src_python.glob("*.py"):

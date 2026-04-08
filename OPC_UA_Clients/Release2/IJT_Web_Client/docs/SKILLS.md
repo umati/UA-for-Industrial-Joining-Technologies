@@ -40,7 +40,7 @@ IJT_Web_Client/
 ├── vitest.config.mjs       # Vitest config for JS unit tests
 ├── eslint.config.mjs       # ESLint flat config
 ├── requirements.txt        # Python runtime deps
-├── requirements-dev.txt    # Pinned: pytest>=9.0.2, pytest-asyncio>=1.3.0, pytest-timeout>=2.4.0
+├── requirements-dev.txt    # Pinned: pytest~=9.0, pytest-asyncio~=1.3, pyfakefs~=6.1, and tooling
 ├── package.json            # Node deps + scripts (lint, test:unit:js, start)
 ├── Dockerfile              # FROM nikolaik/python-nodejs:python3.14-nodejs24; CMD setup_project.py
 ├── docker-compose.yaml     # Service: ijt_web_client; ports 3000+8001; command: setup_project.py
@@ -128,6 +128,9 @@ IJT_Web_Client/
 ## Test Commands
 
 ```bash
+# Install dev dependencies (includes pyfakefs for unit test isolation)
+pip install -r requirements-dev.txt
+
 # Full suite — OPC UA server auto-launched if needed
 python run_all_tests.py
 

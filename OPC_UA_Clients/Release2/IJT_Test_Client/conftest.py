@@ -22,8 +22,16 @@ from asyncua import Client
 
 
 def pytest_configure(config):
-    """Ensure tests/fixtures/ exists so --basetemp=tests/fixtures/tmp never fails."""
-    Path(__file__).parent.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
+    """Ensure tests/fixtures/ exists and pin basetemp to an absolute project-local path.
+
+    Using an absolute path for basetemp guarantees correct resolution regardless
+    of the working directory from which pytest is invoked (CI, repo root, etc.).
+    """
+    _project_root = Path(__file__).resolve().parent
+    _basetemp = _project_root / ".state" / "pytest_tmp"
+    _basetemp.mkdir(parents=True, exist_ok=True)
+    config.option.basetemp = str(_basetemp)
+    _project_root.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
 
 
 # Inline helpers
@@ -90,7 +98,7 @@ def pytest_sessionstart(session) -> None:
                 "    OPCUA_SIMULATOR_EXE=<path>   enable auto-launch on test start",
                 "    OPCUA_SERVER_URL=opc.tcp://host:port   custom endpoint",
                 "",
-                "  All tests require a live server and will be SKIPPED if unreachable.",
+                "  All tests require a live server and will FAIL if unreachable.",
                 border,
                 "",
             ]
@@ -111,7 +119,7 @@ def managed_server():
     manager = ServerManager()
     available = manager.ensure_running()
     if not available:
-        pytest.skip("OPC UA server not available. Start the server manually or set OPCUA_SIMULATOR_EXE env var.")
+        pytest.fail("OPC UA server did not start. Start the server manually or set OPCUA_SIMULATOR_EXE env var.")
     yield manager
     manager.teardown()
 
@@ -129,7 +137,7 @@ async def session_client(managed_server):
     try:
         await client.connect()
     except Exception as exc:
-        pytest.skip(f"Could not connect to OPC UA server at {SERVER_URL}: {exc}")
+        pytest.fail(f"Could not connect to OPC UA server at {SERVER_URL}: {exc}")
     try:
         await client.load_type_definitions()
     except Exception as exc:
@@ -151,7 +159,8 @@ async def ns_indices(session_client) -> dict:
     """
     Dict mapping each namespace URI to its runtime namespace index.
     Resolved once per session.  Value is None for any namespace not registered
-    on the server.  Tests should pytest.skip() when required namespaces are None.
+    on the server.  Fixtures for required namespaces call pytest.fail() when None;
+    fixtures for optional/vendor namespaces call pytest.skip() when None.
     """
     indices: dict = {}
     for uri in ALL_NAMESPACE_URIS:
@@ -168,11 +177,11 @@ async def joining_system(session_client, ns_indices):
     """
     JoiningSystem node discovered by HasTypeDefinition = JoiningSystemType.
     The system's browse name is implementation-defined and is never used
-    for discovery.  Skips if the node cannot be found.
+    for discovery.  Fails if the node cannot be found — required per IJT spec.
     """
     js = await find_joining_system(session_client)
     if js is None:
-        pytest.skip("JoiningSystem node not found in address space (by type definition)")
+        pytest.fail("JoiningSystem node not found in address space (by type definition) — required per IJT spec")
     return js
 
 
@@ -182,10 +191,10 @@ async def asset_management(joining_system, ns_indices):
     """AssetManagement AddIn node on the JoiningSystem (IJT Base ns)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered")
+        pytest.fail("IJT Base namespace not registered — required for IJT conformance")
     node = await find_child_by_browse_name(joining_system, BN.ASSET_MANAGEMENT, ns_ijt)
     if node is None:
-        pytest.skip("AssetManagement node not found on JoiningSystem")
+        pytest.fail("AssetManagement node not found on JoiningSystem — required per IJT spec")
     return node
 
 
@@ -194,10 +203,10 @@ async def assets_folder(asset_management, ns_indices):
     """Assets folder node inside AssetManagement (IJT Base ns)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered")
+        pytest.fail("IJT Base namespace not registered — required for IJT conformance")
     node = await find_child_by_browse_name(asset_management, BN.ASSETS, ns_ijt)
     if node is None:
-        pytest.skip("Assets folder not found inside AssetManagement")
+        pytest.fail("Assets folder not found inside AssetManagement — required per IJT spec")
     return node
 
 
@@ -206,10 +215,10 @@ async def result_management(joining_system, ns_indices):
     """ResultManagement AddIn node on the JoiningSystem (Machinery/Result ns)."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered")
+        pytest.fail("Machinery/Result namespace not registered — required for IJT conformance")
     node = await find_child_by_browse_name(joining_system, BN.RESULT_MANAGEMENT, ns_mr)
     if node is None:
-        pytest.skip("ResultManagement node not found on JoiningSystem")
+        pytest.fail("ResultManagement node not found on JoiningSystem — required per IJT spec")
     return node
 
 
@@ -218,10 +227,10 @@ async def joining_process_management(joining_system, ns_indices):
     """JoiningProcessManagement AddIn node on the JoiningSystem (IJT Base ns)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered")
+        pytest.fail("IJT Base namespace not registered — required for IJT conformance")
     node = await find_child_by_browse_name(joining_system, BN.JOINING_PROCESS_MANAGEMENT, ns_ijt)
     if node is None:
-        pytest.skip("JoiningProcessManagement node not found on JoiningSystem")
+        pytest.fail("JoiningProcessManagement node not found on JoiningSystem — required per IJT spec")
     return node
 
 
@@ -230,10 +239,10 @@ async def joint_management(joining_system, ns_indices):
     """JointManagement AddIn node on the JoiningSystem (IJT Base ns)."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered")
+        pytest.fail("IJT Base namespace not registered — required for IJT conformance")
     node = await find_child_by_browse_name(joining_system, BN.JOINT_MANAGEMENT, ns_ijt)
     if node is None:
-        pytest.skip("JointManagement node not found on JoiningSystem")
+        pytest.fail("JointManagement node not found on JoiningSystem — required per IJT spec")
     return node
 
 

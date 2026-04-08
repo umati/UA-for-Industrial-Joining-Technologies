@@ -1,36 +1,27 @@
 # IJT Console Client
 
 ## Contact
-- **Author:** Mohit Agarwal: mohit.agarwal@atlascopco.com
+- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
 
 ## Overview
-- This application uses the open source OPC UA Python `opcua-asyncio` stack.
-- This is a minimal **reference client** based on the **OPC UA Industrial Joining Technologies (IJT) Companion Specification**.
-- Demonstrates: connecting to a live OPC UA IJT server, subscribing to events (tightening results), calling simulation methods, and reading result data.
+- A minimal **reference client** based on the **OPC UA Industrial Joining Technologies (IJT) Companion Specification** using the open source `opcua-asyncio` stack.
+- Demonstrates connecting to a live OPC UA IJT server, subscribing to events (tightening results), calling simulation methods, and reading result data.
 
 ## Prerequisites
--  **Internet Connection**
--  **Download** the project directory: **`IJT_Console_Client`** and launch a terminal from the project directory.
--  **Install** **Python 3.14+** from the **official** **website** and **add** the installation directory to the system **PATH**.
--  A running **OPC UA IJT Server** — see [OPC UA IJT Server Simulator](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2).
+- **Internet Connection**
+- **Download** the project directory `IJT_Console_Client` and open a terminal there.
+- Install **Python 3.14+** from the [official website](https://www.python.org/downloads/) and add it to `PATH`.
+- A running **OPC UA IJT Server** — see [OPC UA IJT Server Simulator](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2).
 
-## Run the client application
-- **Note:** On Linux, the command should be **python3** instead of **python**.
+## Run
+- **Note:** On Linux use `python3` instead of `python`.
 ### Option 1 — pass endpoint on command line
-```bash
-python setup_client.py --url="opc.tcp://<ip>:<port>"
-```
+- `python setup_client.py --url="opc.tcp://<ip>:<port>"`
 ### Option 2 — edit config file
-- **Update** the **SERVER_URL** in **`client_config.py`** to the OPC UA Server EndpointUrl.
-```bash
-python setup_client.py
-```
+- Update `SERVER_URL` in `client_config.py` to the OPC UA server endpoint URL, then: `python setup_client.py`
 
 ## Testing
-
-```bash
-python run_all_tests.py
-```
+- Run all tests: `python run_all_tests.py`
 
 ## Project Structure
 ```

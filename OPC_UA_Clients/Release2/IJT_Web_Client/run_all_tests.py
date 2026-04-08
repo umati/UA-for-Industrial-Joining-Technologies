@@ -55,6 +55,8 @@ IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 IS_CI = bool(os.getenv("CI"))
 _VENV = ROOT / ".venv"
+_LOCAL_TEMP_DIR = ROOT / ".state" / "tmp"
+_PYTEST_TEMP_ROOT = ROOT / ".state" / "pytest_tmproot"
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +222,16 @@ def _py_module_available(mod: str) -> bool:
 def _cmd_available(cmd: str) -> bool:
     """Return True if *cmd* is found on PATH."""
     return shutil.which(cmd) is not None
+
+
+def _configure_local_temp_env() -> None:
+    """Force temp files into project-local .state/ paths for reproducible ACL behavior."""
+    _LOCAL_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    _PYTEST_TEMP_ROOT.mkdir(parents=True, exist_ok=True)
+    os.environ["TMP"] = str(_LOCAL_TEMP_DIR)
+    os.environ["TEMP"] = str(_LOCAL_TEMP_DIR)
+    os.environ["TMPDIR"] = str(_LOCAL_TEMP_DIR)
+    os.environ["PYTEST_DEBUG_TEMPROOT"] = str(_PYTEST_TEMP_ROOT)
 
 
 # ---------------------------------------------------------------------------
@@ -1120,6 +1132,8 @@ STAGES = [
 
 
 def main() -> int:
+    _configure_local_temp_env()
+
     parser = argparse.ArgumentParser(
         description="IJT Web Client cross-platform test runner",
         epilog=__doc__,

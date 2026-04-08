@@ -76,36 +76,39 @@ def test_is_port_in_use_false_when_connection_refused(monkeypatch):
 # =============================================================================
 
 
-def test_extract_skipped_when_simulator_dir_exists(tmp_path, monkeypatch):
-    sim_dir = tmp_path / "sim"
-    sim_dir.mkdir()
+def test_extract_skipped_when_simulator_dir_exists(fs, monkeypatch):
+    sim_dir = Path("/fake/sim")
+    sim_dir.mkdir(parents=True)
     monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
-    monkeypatch.setattr(sp, "SIMULATOR_ZIP", tmp_path / "sim.zip")
-    sp._extract_simulator_zip_if_needed()  # no exception
+    monkeypatch.setattr(sp, "SIMULATOR_ZIP", Path("/fake/sim.zip"))
+    sp._extract_simulator_zip_if_needed()
 
 
-def test_extract_skipped_when_zip_does_not_exist(tmp_path, monkeypatch):
-    monkeypatch.setattr(sp, "SIMULATOR_DIR", tmp_path / "missing_dir")
-    monkeypatch.setattr(sp, "SIMULATOR_ZIP", tmp_path / "nonexistent.zip")
-    sp._extract_simulator_zip_if_needed()  # no exception
+def test_extract_skipped_when_zip_does_not_exist(fs, monkeypatch):
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", Path("/fake/missing_dir"))
+    monkeypatch.setattr(sp, "SIMULATOR_ZIP", Path("/fake/nonexistent.zip"))
+    sp._extract_simulator_zip_if_needed()
 
 
-def test_extract_unzips_when_zip_exists_and_dir_missing(tmp_path, monkeypatch):
-    sim_dir = tmp_path / "Release2"
-    zip_path = tmp_path / "sim.zip"
+def test_extract_unzips_when_zip_exists_and_dir_missing(fs, monkeypatch):
+    base = Path("/fake")
+    base.mkdir(parents=True, exist_ok=True)
+    sim_dir = base / "Release2"
+    zip_path = base / "sim.zip"
     with zipfile.ZipFile(zip_path, "w") as zf:
         zf.writestr("opcua_ijt_demo_application.exe", "fake")
     monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
     monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
     sp._extract_simulator_zip_if_needed()
-    assert (tmp_path / "opcua_ijt_demo_application.exe").exists()
+    assert (base / "opcua_ijt_demo_application.exe").exists()
 
 
-def test_extract_logs_warning_on_bad_zip(tmp_path, monkeypatch, caplog):
-    sim_dir = tmp_path / "missing_dir"
-    zip_path = tmp_path / "corrupt.zip"
+def test_extract_logs_warning_on_bad_zip(fs, monkeypatch, caplog):
+    base = Path("/fake")
+    base.mkdir(parents=True, exist_ok=True)
+    zip_path = base / "corrupt.zip"
     zip_path.write_bytes(b"not a zip")
-    monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", base / "missing_dir")
     monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
     import logging
 
@@ -114,16 +117,16 @@ def test_extract_logs_warning_on_bad_zip(tmp_path, monkeypatch, caplog):
     assert any("Failed to extract" in r.message for r in caplog.records)
 
 
-def test_extract_skipped_when_dir_is_newer_than_zip(tmp_path, monkeypatch):
+def test_extract_skipped_when_dir_is_newer_than_zip(fs, monkeypatch):
     """Dir mtime > zip mtime → already up-to-date, no re-extraction."""
     import os
 
-    sim_dir = tmp_path / "sim"
-    sim_dir.mkdir()
-    zip_path = tmp_path / "sim.zip"
+    base = Path("/fake")
+    sim_dir = base / "sim"
+    sim_dir.mkdir(parents=True)
+    zip_path = base / "sim.zip"
     with zipfile.ZipFile(zip_path, "w") as zf:
         zf.writestr("opcua_ijt_demo_application.exe", "fake")
-    # Make the zip appear older than the directory.
     old_time = sim_dir.stat().st_mtime - 60
     os.utime(zip_path, (old_time, old_time))
     monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
@@ -132,34 +135,35 @@ def test_extract_skipped_when_dir_is_newer_than_zip(tmp_path, monkeypatch):
     assert sim_dir.exists()  # old dir was NOT removed
 
 
-def test_extract_replaces_dir_when_zip_is_newer(tmp_path, monkeypatch):
+def test_extract_replaces_dir_when_zip_is_newer(fs, monkeypatch):
     """Zip mtime > dir mtime → old dir removed, contents re-extracted."""
     import os
 
-    sim_dir = tmp_path / "sim"
-    sim_dir.mkdir()
+    base = Path("/fake")
+    sim_dir = base / "sim"
+    sim_dir.mkdir(parents=True)
     (sim_dir / "old_file.txt").write_text("stale")
-    zip_path = tmp_path / "sim.zip"
+    zip_path = base / "sim.zip"
     with zipfile.ZipFile(zip_path, "w") as zf:
         zf.writestr("new_file.txt", "fresh")
-    # Make the zip appear newer than the directory.
     future_time = sim_dir.stat().st_mtime + 60
     os.utime(zip_path, (future_time, future_time))
     monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
     monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
     sp._extract_simulator_zip_if_needed()
     assert not sim_dir.exists()  # old dir was removed
-    assert (tmp_path / "new_file.txt").exists()  # new contents extracted
+    assert (base / "new_file.txt").exists()  # new contents extracted
 
 
-def test_extract_replaces_dir_logs_info_for_newer_zip(tmp_path, monkeypatch, caplog):
+def test_extract_replaces_dir_logs_info_for_newer_zip(fs, monkeypatch, caplog):
     """Info message is emitted when a newer ZIP triggers a folder replacement."""
     import logging
     import os
 
-    sim_dir = tmp_path / "sim"
-    sim_dir.mkdir()
-    zip_path = tmp_path / "sim.zip"
+    base = Path("/fake")
+    sim_dir = base / "sim"
+    sim_dir.mkdir(parents=True)
+    zip_path = base / "sim.zip"
     with zipfile.ZipFile(zip_path, "w") as zf:
         zf.writestr("dummy.txt", "x")
     future_time = sim_dir.stat().st_mtime + 60
@@ -176,22 +180,22 @@ def test_extract_replaces_dir_logs_info_for_newer_zip(tmp_path, monkeypatch, cap
 # =============================================================================
 
 
-def test_find_simulator_returns_none_when_dir_missing(tmp_path, monkeypatch):
-    monkeypatch.setattr(sp, "SIMULATOR_DIR", tmp_path / "nonexistent")
+def test_find_simulator_returns_none_when_dir_missing(fs, monkeypatch):
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", Path("/fake/nonexistent"))
     assert sp._find_simulator_executable() is None
 
 
-def test_find_simulator_finds_direct_exe(tmp_path, monkeypatch):
-    sim_dir = tmp_path / "sim"
-    sim_dir.mkdir()
+def test_find_simulator_finds_direct_exe(fs, monkeypatch):
+    sim_dir = Path("/fake/sim")
+    sim_dir.mkdir(parents=True)
     exe = sim_dir / sp.SIMULATOR_EXE_NAME
     exe.write_bytes(b"fake exe")
     monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
     assert sp._find_simulator_executable() == exe
 
 
-def test_find_simulator_finds_nested_exe(tmp_path, monkeypatch):
-    sim_dir = tmp_path / "sim"
+def test_find_simulator_finds_nested_exe(fs, monkeypatch):
+    sim_dir = Path("/fake/sim")
     nested = sim_dir / "subdir"
     nested.mkdir(parents=True)
     exe = nested / sp.SIMULATOR_EXE_NAME
@@ -200,9 +204,9 @@ def test_find_simulator_finds_nested_exe(tmp_path, monkeypatch):
     assert sp._find_simulator_executable() == exe
 
 
-def test_find_simulator_returns_none_when_no_exe(tmp_path, monkeypatch):
-    sim_dir = tmp_path / "sim"
-    sim_dir.mkdir()
+def test_find_simulator_returns_none_when_no_exe(fs, monkeypatch):
+    sim_dir = Path("/fake/sim")
+    sim_dir.mkdir(parents=True)
     monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
     assert sp._find_simulator_executable() is None
 
@@ -248,9 +252,8 @@ class TestEnsureOpcServerRunning:
         sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=False, context="no-launch")
         assert not launched
 
-    def test_auto_launch_succeeds(self, monkeypatch, tmp_path):
-        exe = tmp_path / sp.SIMULATOR_EXE_NAME
-        exe.write_bytes(b"fake")
+    def test_auto_launch_succeeds(self, monkeypatch):
+        exe = Path("/fake") / sp.SIMULATOR_EXE_NAME
         popen_calls = []
         monkeypatch.setattr(sp, "endpoint_reachable", lambda _ep, timeout=1.0: False)
         monkeypatch.setattr(sp, "IS_WSL", False)
@@ -263,9 +266,8 @@ class TestEnsureOpcServerRunning:
         assert result is True
         assert len(popen_calls) == 1
 
-    def test_auto_launch_fails_when_not_ready_after_launch(self, monkeypatch, tmp_path):
-        exe = tmp_path / sp.SIMULATOR_EXE_NAME
-        exe.write_bytes(b"fake")
+    def test_auto_launch_fails_when_not_ready_after_launch(self, monkeypatch):
+        exe = Path("/fake") / sp.SIMULATOR_EXE_NAME
         monkeypatch.setattr(sp, "endpoint_reachable", lambda _ep, timeout=1.0: False)
         monkeypatch.setattr(sp, "IS_WSL", False)
         monkeypatch.setattr(sp, "IS_DOCKER", False)
@@ -295,9 +297,8 @@ class TestEnsureOpcServerRunning:
         result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=False, context="wait-ready")
         assert result is True
 
-    def test_popen_exception_handled_gracefully(self, monkeypatch, tmp_path, caplog):
-        exe = tmp_path / sp.SIMULATOR_EXE_NAME
-        exe.write_bytes(b"fake")
+    def test_popen_exception_handled_gracefully(self, monkeypatch, caplog):
+        exe = Path("/fake") / sp.SIMULATOR_EXE_NAME
         monkeypatch.setattr(sp, "endpoint_reachable", lambda _ep, timeout=1.0: False)
         monkeypatch.setattr(sp, "IS_WSL", False)
         monkeypatch.setattr(sp, "IS_DOCKER", False)
@@ -326,14 +327,20 @@ class TestEnsureOpcServerRunning:
 
 class TestIsRuntimeReady:
     def _patch_basics(
-        self, monkeypatch, tmp_path, *, venv_exists=True, npm=True, npx=True, deps_ok=True, age_days=1, docker=False
+        self, monkeypatch, base: Path, *, venv_exists=True, npm=True, npx=True, deps_ok=True, age_days=1, docker=False
     ):
-        venv = tmp_path / "venv"
+        venv = base / "venv"
         if venv_exists:
-            venv.mkdir()
+            venv.mkdir(parents=True, exist_ok=True)
             python = venv / ("Scripts/python.exe" if sp.IS_WINDOWS else "bin/python")
             python.parent.mkdir(parents=True, exist_ok=True)
             python.write_bytes(b"fake")
+        if docker:
+            # sys.executable doesn't exist in fake FS; patch _get_python_path with a fake entry
+            fake_python = base / ("python.exe" if sp.IS_WINDOWS else "python")
+            fake_python.parent.mkdir(parents=True, exist_ok=True)
+            fake_python.write_bytes(b"fake")
+            monkeypatch.setattr(sp, "_get_python_path", lambda: fake_python)
 
         monkeypatch.setattr(sp, "VENV_DIR", venv)
         monkeypatch.setattr(sp, "IS_DOCKER", docker)
@@ -350,40 +357,40 @@ class TestIsRuntimeReady:
         monkeypatch.setattr(sp, "_get_last_setup_age_days", lambda: age_days)
         monkeypatch.monkeypatch_env = monkeypatch.setenv("ENV_MAX_AGE_DAYS", "14")
 
-    def test_ready_when_all_present_and_fresh(self, monkeypatch, tmp_path):
-        self._patch_basics(monkeypatch, tmp_path)
+    def test_ready_when_all_present_and_fresh(self, monkeypatch, fs):
+        self._patch_basics(monkeypatch, Path("/fake"))
         assert sp._is_runtime_ready() is True
 
-    def test_not_ready_when_venv_missing(self, monkeypatch, tmp_path):
-        self._patch_basics(monkeypatch, tmp_path, venv_exists=False)
+    def test_not_ready_when_venv_missing(self, monkeypatch, fs):
+        self._patch_basics(monkeypatch, Path("/fake"), venv_exists=False)
         assert sp._is_runtime_ready() is False
 
-    def test_not_ready_when_npm_missing(self, monkeypatch, tmp_path):
-        self._patch_basics(monkeypatch, tmp_path, npm=False)
+    def test_not_ready_when_npm_missing(self, monkeypatch, fs):
+        self._patch_basics(monkeypatch, Path("/fake"), npm=False)
         assert sp._is_runtime_ready() is False
 
-    def test_not_ready_when_npx_missing(self, monkeypatch, tmp_path):
-        self._patch_basics(monkeypatch, tmp_path, npx=False)
+    def test_not_ready_when_npx_missing(self, monkeypatch, fs):
+        self._patch_basics(monkeypatch, Path("/fake"), npx=False)
         assert sp._is_runtime_ready() is False
 
-    def test_not_ready_when_deps_missing(self, monkeypatch, tmp_path):
-        self._patch_basics(monkeypatch, tmp_path, deps_ok=False)
+    def test_not_ready_when_deps_missing(self, monkeypatch, fs):
+        self._patch_basics(monkeypatch, Path("/fake"), deps_ok=False)
         assert sp._is_runtime_ready() is False
 
-    def test_not_ready_when_env_stale(self, monkeypatch, tmp_path):
-        self._patch_basics(monkeypatch, tmp_path, age_days=30)
+    def test_not_ready_when_env_stale(self, monkeypatch, fs):
+        self._patch_basics(monkeypatch, Path("/fake"), age_days=30)
         assert sp._is_runtime_ready() is False
 
-    def test_ready_in_docker_mode_without_venv(self, monkeypatch, tmp_path):
-        self._patch_basics(monkeypatch, tmp_path, venv_exists=False, docker=True)
+    def test_ready_in_docker_mode_without_venv(self, monkeypatch, fs):
+        self._patch_basics(monkeypatch, Path("/fake"), venv_exists=False, docker=True)
         assert sp._is_runtime_ready() is True
 
-    def test_ready_at_boundary_age(self, monkeypatch, tmp_path):
-        self._patch_basics(monkeypatch, tmp_path, age_days=14)
+    def test_ready_at_boundary_age(self, monkeypatch, fs):
+        self._patch_basics(monkeypatch, Path("/fake"), age_days=14)
         assert sp._is_runtime_ready() is True  # 14 == threshold, not > 14
 
-    def test_not_ready_just_over_boundary_age(self, monkeypatch, tmp_path):
-        self._patch_basics(monkeypatch, tmp_path, age_days=15)
+    def test_not_ready_just_over_boundary_age(self, monkeypatch, fs):
+        self._patch_basics(monkeypatch, Path("/fake"), age_days=15)
         assert sp._is_runtime_ready() is False
 
 
@@ -393,28 +400,32 @@ class TestIsRuntimeReady:
 
 
 class TestRuntimeState:
-    def test_write_and_read_roundtrip(self, tmp_path, monkeypatch):
-        state_file = tmp_path / "runtime_processes.json"
+    def test_write_and_read_roundtrip(self, fs, monkeypatch):
+        base = Path("/fake")
+        base.mkdir(parents=True, exist_ok=True)
+        state_file = base / "runtime_processes.json"
         monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", state_file)
-        monkeypatch.setattr(sp, "STATE_DIR", tmp_path)
+        monkeypatch.setattr(sp, "STATE_DIR", base)
         sp._write_runtime_state({"frontend_pid": 1234, "backend_pid": 5678})
         result = sp._read_runtime_state()
         assert result["frontend_pid"] == 1234
         assert result["backend_pid"] == 5678
 
-    def test_read_returns_empty_when_file_missing(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", tmp_path / "nonexistent.json")
+    def test_read_returns_empty_when_file_missing(self, fs, monkeypatch):
+        monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", Path("/fake/nonexistent.json"))
         assert sp._read_runtime_state() == {}
 
-    def test_clear_removes_state(self, tmp_path, monkeypatch):
-        state_file = tmp_path / "runtime_processes.json"
+    def test_clear_removes_state(self, fs, monkeypatch):
+        base = Path("/fake")
+        base.mkdir(parents=True, exist_ok=True)
+        state_file = base / "runtime_processes.json"
         state_file.write_text('{"frontend_pid": 99}')
         monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", state_file)
         sp._clear_runtime_state()
         assert not state_file.exists()
 
-    def test_clear_is_safe_when_file_missing(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", tmp_path / "missing.json")
+    def test_clear_is_safe_when_file_missing(self, fs, monkeypatch):
+        monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", Path("/fake/missing.json"))
         sp._clear_runtime_state()  # must not raise
 
 
@@ -424,10 +435,12 @@ class TestRuntimeState:
 
 
 class TestCollectManagedProcesses:
-    def test_returns_running_pids(self, monkeypatch, tmp_path):
-        state_file = tmp_path / "runtime_processes.json"
+    def test_returns_running_pids(self, monkeypatch, fs):
+        base = Path("/fake")
+        base.mkdir(parents=True, exist_ok=True)
+        state_file = base / "runtime_processes.json"
         monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", state_file)
-        monkeypatch.setattr(sp, "STATE_DIR", tmp_path)
+        monkeypatch.setattr(sp, "STATE_DIR", base)
         sp._write_runtime_state({"frontend_pid": 1111, "backend_pid": 2222})
         monkeypatch.setattr(sp, "_pid_is_running", lambda pid: True)
         procs = sp._collect_managed_processes()
@@ -435,16 +448,18 @@ class TestCollectManagedProcesses:
         assert 1111 in pids
         assert 2222 in pids
 
-    def test_skips_stale_pids(self, monkeypatch, tmp_path):
-        state_file = tmp_path / "runtime_processes.json"
+    def test_skips_stale_pids(self, monkeypatch, fs):
+        base = Path("/fake")
+        base.mkdir(parents=True, exist_ok=True)
+        state_file = base / "runtime_processes.json"
         monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", state_file)
-        monkeypatch.setattr(sp, "STATE_DIR", tmp_path)
+        monkeypatch.setattr(sp, "STATE_DIR", base)
         sp._write_runtime_state({"frontend_pid": 9999, "backend_pid": 8888})
         monkeypatch.setattr(sp, "_pid_is_running", lambda pid: False)
         assert sp._collect_managed_processes() == []
 
-    def test_returns_empty_when_no_state(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", tmp_path / "missing.json")
+    def test_returns_empty_when_no_state(self, monkeypatch, fs):
+        monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", Path("/fake/missing.json"))
         assert sp._collect_managed_processes() == []
 
 
@@ -501,10 +516,9 @@ class TestForceFull:
 
 
 class TestOpcUaServerRelaunch:
-    def test_relaunch_after_termination(self, monkeypatch, tmp_path):
+    def test_relaunch_after_termination(self, monkeypatch):
         """1st check: server up. 2nd check: terminated → auto-relaunch → up again."""
-        exe = tmp_path / sp.SIMULATOR_EXE_NAME
-        exe.write_bytes(b"fake exe")
+        exe = Path("/fake") / sp.SIMULATOR_EXE_NAME
         call_count = [0]
         popen_calls = []
 
@@ -528,9 +542,8 @@ class TestOpcUaServerRelaunch:
         assert r2 is True
         assert len(popen_calls) == 1  # launched exactly once
 
-    def test_no_relaunch_when_allow_launch_false(self, monkeypatch, tmp_path):
-        exe = tmp_path / sp.SIMULATOR_EXE_NAME
-        exe.write_bytes(b"fake exe")
+    def test_no_relaunch_when_allow_launch_false(self, monkeypatch):
+        exe = Path("/fake") / sp.SIMULATOR_EXE_NAME
         popen_calls = []
         monkeypatch.setattr(sp, "endpoint_reachable", lambda _ep, timeout=1.0: False)
         monkeypatch.setattr(sp, "IS_WSL", False)
@@ -542,10 +555,9 @@ class TestOpcUaServerRelaunch:
         assert result is False
         assert popen_calls == []
 
-    def test_zip_extracted_before_launch(self, monkeypatch, tmp_path):
+    def test_zip_extracted_before_launch(self, monkeypatch):
         """ZIP extraction happens before trying to find the exe."""
-        exe = tmp_path / sp.SIMULATOR_EXE_NAME
-        exe.write_bytes(b"fake")
+        exe = Path("/fake") / sp.SIMULATOR_EXE_NAME
         extract_calls = []
         monkeypatch.setattr(sp, "endpoint_reachable", lambda _ep, timeout=1.0: False)
         monkeypatch.setattr(sp, "IS_WSL", False)
@@ -564,16 +576,16 @@ class TestOpcUaServerRelaunch:
 
 
 class TestVenvScenarios:
-    def test_fresh_start_no_venv_no_npm(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(sp, "VENV_DIR", tmp_path / "venv")
+    def test_fresh_start_no_venv_no_npm(self, monkeypatch, fs):
+        monkeypatch.setattr(sp, "VENV_DIR", Path("/fake/venv"))
         monkeypatch.setattr(sp, "IS_DOCKER", False)
         monkeypatch.setattr(sp, "_get_npm_path", lambda: None)
         monkeypatch.setattr(sp, "_get_npx_path", lambda: None)
         assert sp._is_runtime_ready() is False
 
-    def test_venv_dir_exists_but_python_missing(self, monkeypatch, tmp_path):
-        venv = tmp_path / "venv"
-        venv.mkdir()
+    def test_venv_dir_exists_but_python_missing(self, monkeypatch, fs):
+        venv = Path("/fake/venv")
+        venv.mkdir(parents=True)
         # python binary NOT created
         monkeypatch.setattr(sp, "VENV_DIR", venv)
         monkeypatch.setattr(sp, "IS_DOCKER", False)
@@ -581,16 +593,20 @@ class TestVenvScenarios:
         monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx")
         assert sp._is_runtime_ready() is False
 
-    def test_deleted_venv_not_ready(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(sp, "VENV_DIR", tmp_path / "venv")  # doesn't exist
+    def test_deleted_venv_not_ready(self, monkeypatch, fs):
+        monkeypatch.setattr(sp, "VENV_DIR", Path("/fake/venv"))  # doesn't exist
         monkeypatch.setattr(sp, "IS_DOCKER", False)
         monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm")
         monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx")
         assert sp._is_runtime_ready() is False
 
-    def test_docker_ready_without_venv(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(sp, "VENV_DIR", tmp_path / "venv")  # doesn't exist
+    def test_docker_ready_without_venv(self, monkeypatch, fs):
+        monkeypatch.setattr(sp, "VENV_DIR", Path("/fake/venv"))  # doesn't exist
         monkeypatch.setattr(sp, "IS_DOCKER", True)
+        fake_python = Path("/fake/python.exe" if sp.IS_WINDOWS else "/fake/python")
+        fake_python.parent.mkdir(parents=True, exist_ok=True)
+        fake_python.write_bytes(b"fake")
+        monkeypatch.setattr(sp, "_get_python_path", lambda: fake_python)
         monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm")
         monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx")
         monkeypatch.setattr(sp, "_run_command", lambda cmd, **kw: None)

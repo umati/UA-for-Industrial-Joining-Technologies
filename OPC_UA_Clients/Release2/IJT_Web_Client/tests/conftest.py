@@ -6,8 +6,16 @@ import pytest
 
 
 def pytest_configure(config):
-    """Ensure tests/fixtures/ exists so --basetemp=tests/fixtures/tmp never fails."""
-    Path(__file__).parent.parent.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
+    """Ensure tests/fixtures/ exists and pin basetemp to an absolute project-local path.
+
+    Using an absolute path for basetemp guarantees correct resolution regardless
+    of the working directory from which pytest is invoked (CI, repo root, etc.).
+    """
+    _project_root = Path(__file__).resolve().parent.parent
+    _basetemp = _project_root / ".state" / "pytest_tmp"
+    _basetemp.mkdir(parents=True, exist_ok=True)
+    config.option.basetemp = str(_basetemp)
+    _project_root.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
 
 
 @dataclass

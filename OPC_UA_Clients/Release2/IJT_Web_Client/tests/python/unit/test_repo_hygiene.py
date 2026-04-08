@@ -149,7 +149,7 @@ class TestGitignoreCoverage:
 
     def _gitignore_text(self) -> str:
         if not self._GITIGNORE_PATH.exists():
-            pytest.skip(f".gitignore not found at {self._GITIGNORE_PATH}")
+            pytest.fail(f".gitignore not found at {self._GITIGNORE_PATH}")
         return self._GITIGNORE_PATH.read_text(encoding="utf-8")
 
     def test_gitignore_covers_pycache(self):
@@ -211,7 +211,7 @@ class TestConnectionpointsDefault:
             _GIT_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "src" / "resources" / "connectionpoints.json"
         )
         if not path.exists():
-            pytest.skip(f"connectionpoints.json not found at {path}")
+            pytest.fail(f"connectionpoints.json not found at {path}")
 
         data = json.loads(path.read_text(encoding="utf-8"))
         points = data.get("connectionpoints", [])
@@ -279,7 +279,7 @@ class TestNoHardcodedSecrets:
         """No hardcoded password/secret/token literals in src/python/."""
         src_python = _PROJECT_ROOT / "src" / "python"
         if not src_python.exists():
-            pytest.skip("src/python/ not found")
+            pytest.fail("src/python/ not found")
 
         all_violations: list[str] = []
         for py_file in src_python.rglob("*.py"):
@@ -310,7 +310,7 @@ class TestJsCodeQuality:
         """
         path = _JS_SRC_ROOT / "views" / "address-space" / "model-to-html.mjs"
         if not path.exists():
-            pytest.skip(f"model-to-html.mjs not found at {path}")
+            pytest.fail(f"model-to-html.mjs not found at {path}")
         content = path.read_text(encoding="utf-8")
         # The fix removes 'const onScreen = this.toHTML(...)' and uses assignment instead
         assert "const onScreen = this.toHTML(" not in content, (
@@ -327,7 +327,7 @@ class TestJsCodeQuality:
         """
         path = _JS_SRC_ROOT / "ijt-support" / "results" / "result-manager.mjs"
         if not path.exists():
-            pytest.skip(f"result-manager.mjs not found at {path}")
+            pytest.fail(f"result-manager.mjs not found at {path}")
         content = path.read_text(encoding="utf-8")
         assert "Object.assign(stored, newResult)" not in content, (
             "result-manager.mjs uses bare Object.assign(stored, newResult) which is vulnerable "
@@ -342,7 +342,7 @@ class TestJsCodeQuality:
         """
         path = _JS_SRC_ROOT / "views" / "connection" / "connection-graphics.mjs"
         if not path.exists():
-            pytest.skip(f"connection-graphics.mjs not found at {path}")
+            pytest.fail(f"connection-graphics.mjs not found at {path}")
         content = path.read_text(encoding="utf-8")
         assert "innerHTML = 'ESTABLISHED'" not in content, (
             "connection-graphics.mjs still uses innerHTML = 'ESTABLISHED'. "
@@ -361,7 +361,7 @@ class TestJsCodeQuality:
         """
         path = _JS_SRC_ROOT / "views" / "graphic-support" / "settings.mjs"
         if not path.exists():
-            pytest.skip(f"settings.mjs not found at {path}")
+            pytest.fail(f"settings.mjs not found at {path}")
         content = path.read_text(encoding="utf-8")
         # None of the label assignments should use innerHTML any more
         for label in (
@@ -383,9 +383,9 @@ class TestJsCodeQuality:
         used a template literal with only hardcoded content, but the fix uses DOM construction
         which is safer and immune to future variable interpolation accidents.
         """
-        path = _JS_SRC_ROOT / "views" / "demo" / "joint-demo.mjs"
+        path = _JS_SRC_ROOT / "views" / "standard-demo" / "joint-demo.mjs"
         if not path.exists():
-            pytest.skip(f"joint-demo.mjs not found at {path}")
+            pytest.fail(f"joint-demo.mjs not found at {path}")
         content = path.read_text(encoding="utf-8")
         assert "thead.innerHTML" not in content, (
             "joint-demo.mjs still uses thead.innerHTML. Replace with DOM createElement/textContent/appendChild calls."
@@ -400,7 +400,7 @@ class TestJsCodeQuality:
         """
         path = _JS_SRC_ROOT / "ijt-support" / "address-space" / "address-space.mjs"
         if not path.exists():
-            pytest.skip(f"address-space.mjs not found at {path}")
+            pytest.fail(f"address-space.mjs not found at {path}")
         content = path.read_text(encoding="utf-8")
         # The fix adds 'reject(error)' inside the readAndStructure error handler
         assert "reject(error)" in content, (

@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import socket
 import time
 
 import asyncua.client.ua_client as _uc
@@ -71,6 +70,8 @@ NS = 1
 NS_MACHINERY = "http://opcfoundation.org/UA/Machinery/Result/"
 NS_IJT_BASE = "http://opcfoundation.org/UA/IJT/Base/"
 
+pytestmark = pytest.mark.live
+
 _SIM_R = "TighteningSystem/Simulations/SimulateResults"
 _SIM_E = "TighteningSystem/Simulations/SimulateEventsAndConditions"
 _ASSET = "TighteningSystem/AssetManagement/MethodSet"
@@ -78,18 +79,6 @@ _JP = "TighteningSystem/JoiningProcessManagement"
 _JT = "TighteningSystem/JointManagement"
 _RM = "TighteningSystem/ResultManagement"
 _PI_URI = "TighteningSystem/AssetManagement/Assets/Tools/TighteningTool/Identification/ProductInstanceUri"
-
-
-def _port_open(host: str, port: int, timeout: float = 2.0) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
-
-
-OPCUA_UP = _port_open("localhost", 40451)
-skip_no_server = pytest.mark.skipif(not OPCUA_UP, reason="OPC UA server not reachable at port 40451")
 
 # Expected (ResultEvaluation, ResultEvaluationCode) per SimulateSingleResult ResultType
 _SINGLE_EXPECT = {
@@ -294,7 +283,6 @@ def _assert_meta(events, *, cls, ev, code, state=1, simulated=True, idx=-1):
 
 
 @pytest.mark.live
-@skip_no_server
 class TestSimulateSingleResult:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
@@ -384,7 +372,6 @@ class TestSimulateSingleResult:
 
 
 @pytest.mark.live
-@skip_no_server
 class TestSimulateBatchOrSync:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
@@ -450,7 +437,6 @@ class TestSimulateBatchOrSync:
 
 
 @pytest.mark.live
-@skip_no_server
 class TestSimulateJobResult:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
@@ -479,7 +465,6 @@ class TestSimulateJobResult:
 
 
 @pytest.mark.live
-@skip_no_server
 class TestSimulateBulkResults:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
@@ -566,7 +551,6 @@ class TestSimulateBulkResults:
 
 
 @pytest.mark.live
-@skip_no_server
 class TestSimulateEvents:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
@@ -674,7 +658,6 @@ class TestSimulateEvents:
 
 
 @pytest.mark.live
-@skip_no_server
 class TestEnableAsset:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
@@ -724,7 +707,6 @@ class TestEnableAsset:
 
 
 @pytest.mark.live
-@skip_no_server
 class TestJoiningProcess:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
@@ -797,7 +779,6 @@ class TestJoiningProcess:
 
 
 @pytest.mark.live
-@skip_no_server
 class TestResultManagement:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
@@ -843,7 +824,6 @@ class TestResultManagement:
 
 
 @pytest.mark.live
-@skip_no_server
 class TestJointManagement:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
@@ -905,7 +885,6 @@ class TestJointManagement:
 
 
 @pytest.mark.live
-@skip_no_server
 class TestAssetIdentifiers:
     """Tests for the identifier management methods on AssetManagement/MethodSet."""
 

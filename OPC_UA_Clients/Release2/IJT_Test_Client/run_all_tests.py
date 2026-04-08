@@ -55,6 +55,8 @@ REQUIREMENTS = _HERE / "requirements.txt"
 _REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
 _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest-live.xml"
+_LOCAL_TEMP_DIR = _HERE / ".state" / "tmp"
+_PYTEST_TEMP_ROOT = _HERE / ".state" / "pytest_tmproot"
 
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40462"
 _MIN_PYTHON = (3, 14)
@@ -93,6 +95,16 @@ def _parse_opcua_endpoint(url: str) -> tuple[str, int]:
 
     parsed = urlparse(url)
     return parsed.hostname or "localhost", parsed.port or 40451
+
+
+def _configure_local_temp_env() -> None:
+    """Force temp files into project-local .state/ paths for reproducible ACL behavior."""
+    _LOCAL_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    _PYTEST_TEMP_ROOT.mkdir(parents=True, exist_ok=True)
+    os.environ["TMP"] = str(_LOCAL_TEMP_DIR)
+    os.environ["TEMP"] = str(_LOCAL_TEMP_DIR)
+    os.environ["TMPDIR"] = str(_LOCAL_TEMP_DIR)
+    os.environ["PYTEST_DEBUG_TEMPROOT"] = str(_PYTEST_TEMP_ROOT)
 
 
 # ---------------------------------------------------------------------------
@@ -898,6 +910,7 @@ def main() -> int:
     global _USE_COLOUR
 
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
+    _configure_local_temp_env()
 
     args = _build_parser().parse_args()
     run_phase1 = not args.phase2

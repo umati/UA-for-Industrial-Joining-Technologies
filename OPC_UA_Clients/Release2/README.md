@@ -1,14 +1,13 @@
 # IJT Reference Clients
 
 ## Contact
-### Mohit Agarwal: mohit.agarwal@atlascopco.com
+- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
 
 ## Overview
-- There following are OPC UA Reference Clients with complete source code to demonstrate the usage of getting data from the OPC UA Server based on the OPC UA Industrial Joining Technologies (IJT) Companion Specifications.
+OPC UA Reference Clients with complete source code demonstrating how to consume data from an OPC UA server based on the **IJT Companion Specifications**.
 
 ## IJT Web Client
-- This is a GUI based client for understanding the concepts, demonstration. It has features such as Trace Graphs, Visual Representation of Combined Results and many more features.
-- It is based on OPC UA python asyncua framework in the backend and NodeJS as frontend. 
+- A GUI-based client for understanding and demonstrating IJT concepts — Trace Graphs, Combined Result visualization, and more. Python (`asyncua`) backend, Node.js frontend.
 
 ## IJT Console Client
 - This is a simple console client useful for integration of automated testing and evaluation of Result performance. It demonstrates a simple way to consume the Results and parse them in JSON.

@@ -6,18 +6,21 @@ These tests verify the complete stack:
   2. WebSocket layer — Python backend at ws://localhost:8001
   3. Integration   — full simulation→event→serialization pipeline
 
+Both servers are auto-started by conftest.py if not already running.
+Tests never silently skip — any startup failure raises pytest.fail() immediately.
+
 Markers:
   @pytest.mark.live       - requires OPC UA server
   @pytest.mark.live_ws    - requires backend WebSocket
 
 Run all:
-    python -m pytest tests/test_opcua_live.py -v
+    python -m pytest tests/python/live/ -v
 
 Run only OPC UA:
-    python -m pytest tests/test_opcua_live.py -v -m live
+    python -m pytest tests/python/live/ -v -m live
 
 Run only WS:
-    python -m pytest tests/test_opcua_live.py -v -m live_ws
+    python -m pytest tests/python/live/ -v -m live_ws
 """
 
 from __future__ import annotations
@@ -26,7 +29,6 @@ import asyncio
 import contextlib
 import json
 import os
-import socket
 import time
 from typing import Any
 
@@ -86,24 +88,8 @@ OPCUA_ENDPOINT = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
 WS_URL = os.getenv("WS_TEST_URL", "ws://localhost:8001")
 
 _OPCUA_HOST, _OPCUA_PORT = "localhost", 40451
-_WS_PORT = 8001
 
 IJT_NAMESPACE_URI = "http://opcfoundation.org/UA/IJT/Base/"
-
-
-def _port_open(host: str, port: int, timeout: float = 2.0) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError, ConnectionRefusedError:
-        return False
-
-
-OPCUA_UP = _port_open(_OPCUA_HOST, _OPCUA_PORT)
-WS_UP = _port_open("localhost", _WS_PORT)
-
-skip_no_opcua = pytest.mark.skipif(not OPCUA_UP, reason=f"OPC UA server not reachable at {OPCUA_ENDPOINT}")
-skip_no_ws = pytest.mark.skipif(not WS_UP, reason=f"Backend WebSocket not reachable at {WS_URL}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared asyncua client fixture
@@ -122,7 +108,7 @@ async def opcua_client():
     try:
         from asyncua import Client
     except ImportError:
-        pytest.skip("asyncua not installed")
+        pytest.fail("asyncua not installed — pip install asyncua")
 
     client = Client(OPCUA_ENDPOINT, timeout=60)
     await client.connect()
@@ -137,7 +123,7 @@ async def ws_client():
     try:
         import websockets
     except ImportError:
-        pytest.skip("websockets not installed")
+        pytest.fail("websockets not installed — pip install websockets")
 
     _next_id = 0
 
@@ -168,7 +154,6 @@ async def ws_client():
 
 
 @pytest.mark.live
-@skip_no_opcua
 class TestOpcuaDirectConnection:
     async def test_connect_and_disconnect(self):
         """Connection to the IJT server must succeed."""
@@ -290,7 +275,6 @@ class TestOpcuaDirectConnection:
 
 
 @pytest.mark.live
-@skip_no_opcua
 class TestOpcuaSubscription:
     async def test_subscribe_to_events_succeeds(self, opcua_client):
         """Event subscription must be established without error."""
@@ -368,7 +352,6 @@ class TestOpcuaSubscription:
 
 
 @pytest.mark.live_ws
-@skip_no_ws
 class TestBackendWebSocket:
     async def test_connect_command_succeeds(self, ws_client):
         resp = await ws_client.send_recv("connect to")
@@ -482,7 +465,6 @@ class TestBackendWebSocket:
 
 
 @pytest.mark.live_ws
-@skip_no_ws
 class TestResponseTimeSLA:
     """Backend WebSocket operations must respond within defined SLA windows.
 

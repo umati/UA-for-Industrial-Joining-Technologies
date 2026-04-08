@@ -1,7 +1,7 @@
 # IJT Test Client
 
 ## Contact
-- **Author:** Mohit Agarwal: mohit.agarwal@atlascopco.com
+- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
 
 ## Overview
 
@@ -18,10 +18,7 @@ event subscriptions, joining process management, joint management, and
 - Default endpoint: `opc.tcp://localhost:40451`
 
 ## Quick Start
-
-```bash
-python run_all_tests.py
-```
+- Run all tests: `python run_all_tests.py`
 
 ## Project Structure
 
@@ -38,5 +35,3 @@ IJT_Test_Client/
 ├── joint/            # JointManagement structure + methods
 └── conformance/      # §11.1 Conformance Unit tests (CU-AM, CU-RM, CU-EM, CU-JP, CU-JT)
 ```
-
-
