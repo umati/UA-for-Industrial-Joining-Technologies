@@ -145,13 +145,6 @@ export default class EndpointGraphics extends BasicScreen {
       ijtLog.error(error)
     }
 
-    // Trace view is not critical
-    let traceGraphics = null
-    try {
-      traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
-    } catch (error) {
-      ijtLog.error(error)
-    }
 
     const methodManager = new MethodManager(addressSpace)
     const methodGraphics = new MethodGraphics(methodManager, addressSpace, this.settings, entityCache)
@@ -168,6 +161,14 @@ export default class EndpointGraphics extends BasicScreen {
     let jointDemoGraphics = null
     try {
       jointDemoGraphics = new JointDemo(methodManager, resultManager, this.connectionManager, this.settings)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    // Trace view is not critical
+    let traceGraphics = null
+    try {
+      traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
     } catch (error) {
       ijtLog.error(error)
     }
@@ -214,16 +215,18 @@ export default class EndpointGraphics extends BasicScreen {
       tabGenerator.generateTab(newDemoGraphics, 2, true)
     }
 
-    if (traceGraphics) {
-      tabGenerator.generateTab(traceGraphics, 2)
-    }
-    tabGenerator.generateTab(methodGraphics, 2)
-    tabGenerator.generateTab(eventGraphics, 2, false)
-
     tabGenerator.generateTab(addressSpaceGraphics, 3, false)
     if (assetGraphics) {
       tabGenerator.generateTab(assetGraphics, 5)
     }
+
+    tabGenerator.generateTab(methodGraphics, 2)
+    tabGenerator.generateTab(eventGraphics, 2, false)
+
+    if (traceGraphics) {
+      tabGenerator.generateTab(traceGraphics, 2)
+    }
+
     if (entityCacheView) {
       tabGenerator.generateTab(entityCacheView, 3)
     }
