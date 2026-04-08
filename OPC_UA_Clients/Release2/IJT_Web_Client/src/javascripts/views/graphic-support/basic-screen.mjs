@@ -187,17 +187,23 @@ export default class BasicScreen {
     return container
   }
 
-  createDropdownFromImport (importList, onchange) {
-    const dropDown = this.createDropdown(null, (cname) => {
-      const newSelection = new importList[cname]()
+  createDropdownFromImport (name, importList, onchange) {
+    const candidates = Object.values(importList || {}).filter((item) => typeof item === 'function')
+
+    const dropDown = this.createDropdown(name || null, (cname) => {
+      const SelectedCtor = candidates.find((item) => item.name === cname)
+      if (!SelectedCtor) {
+        return
+      }
+      const newSelection = new SelectedCtor()
 
       if (onchange) {
         onchange(newSelection)
       }
     })
 
-    for (const subclass of Object.values(importList)) {
-      dropDown.addOption(subclass.displayText, subclass.name)
+    for (const subclass of candidates) {
+      dropDown.addOption(subclass.displayText || subclass.name || 'Unnamed option', subclass.name)
     }
     return dropDown
   }

@@ -52,10 +52,6 @@ export default class EndpointGraphics extends BasicScreen {
   async loadOptionalEnvelopeTab (tabGenerator, resultManager) {
     const modulePath = '/src/javascripts/views/envelope/envelope-graphics.mjs'
     try {
-      const probe = await fetch(modulePath, { method: 'GET', cache: 'no-store' })
-      if (!probe.ok) {
-        return
-      }
       const { default: EnvelopeScreen } = await import(modulePath)
       if (EnvelopeScreen) {
         const envelopeScreen = new EnvelopeScreen(
@@ -63,10 +59,11 @@ export default class EndpointGraphics extends BasicScreen {
           resultManager,
           this.settings
         )
-        tabGenerator.generateTab(envelopeScreen, 3, true)
+        tabGenerator.generateTab(envelopeScreen, 2, false)
       }
     } catch (error) {
       // Envelope view is optional. Skip quietly if unavailable.
+      ijtLog.warn('Optional Envelope tab unavailable:', error)
     }
   }
 
@@ -144,7 +141,6 @@ export default class EndpointGraphics extends BasicScreen {
     if (demosTabGraphics) {
       tabGenerator.generateTab(demosTabGraphics, 2, true)
     }
-
 
     tabGenerator.generateTab(methodGraphics, 2)
     tabGenerator.generateTab(eventGraphics, 2, false)

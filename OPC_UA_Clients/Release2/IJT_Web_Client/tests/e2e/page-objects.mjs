@@ -71,6 +71,7 @@ export const SEL = {
   // Joints / Entities view
   ENTITY_NEW_BTN: 'button:has-text("New")',
   ENTITY_DELETE_BTN: 'button:has-text("Delete")',
+
 }
 
 // Result type codes (matches server-side classification)
