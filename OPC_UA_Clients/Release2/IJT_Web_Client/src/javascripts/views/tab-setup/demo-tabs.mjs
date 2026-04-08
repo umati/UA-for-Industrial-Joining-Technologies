@@ -9,6 +9,7 @@ import BasicScreen from 'views/graphic-support/basic-screen.mjs'
 class DemoTabsGraphics extends BasicScreen {
   constructor (demoGraphics, jointDemoGraphics, resultGraphics, okRateGraphics, currentViewLevel) {
     super('Demos')
+    this.tabHelpText = 'Grouped demo tools and result dashboards: Standard Demo, Joint Demo, Consolidated Result, and OK rate.'
     this.tabGenerator = new TabGenerator(this.backGround, currentViewLevel)
 
     if (demoGraphics) {

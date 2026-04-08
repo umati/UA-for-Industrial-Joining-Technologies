@@ -13,6 +13,7 @@ const nodeClassColor = {
 export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
   constructor (addressSpace) {
     super('Address Space', 'Address Space', 'Messages')
+    this.tabHelpText = 'Browse and inspect the OPC UA address space tree, including read and browse responses.'
     this.backGround.classList.add('addressSpaceScreen')
     this.addressSpace = addressSpace
 

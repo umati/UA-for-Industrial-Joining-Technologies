@@ -7,6 +7,7 @@ import BasicScreen from '../graphic-support/basic-screen.mjs'
 export default class AssetGraphics extends BasicScreen {
   constructor (assetManager) {
     super('Assets')
+    this.tabHelpText = 'Visual overview of tools and related assets connected to the selected controller.'
     this.assetManager = assetManager
 
     const displayArea = document.createElement('div')

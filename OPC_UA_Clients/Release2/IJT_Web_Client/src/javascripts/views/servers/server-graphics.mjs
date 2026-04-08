@@ -8,6 +8,7 @@ import EndpointGraphics from '../tab-setup/endpoint-graphics.mjs'
 export default class ServerGraphics extends BasicScreen {
   constructor (webSocketManager, endpointTabGenerator, settings) {
     super('+')
+    this.tabHelpText = 'Manage OPC UA server endpoints. Add, edit, save, and connect to server profiles.'
     this.backGround.classList.add('serversScreen')
     this.webSocketManager = webSocketManager
     this.endpointTabGenerator = endpointTabGenerator

@@ -5,6 +5,7 @@ import MethodGUICreator from '../methods/method-gui-creator.mjs'
 export default class EntityCacheView extends ControlSplitScreen {
   constructor (entityManager) {
     super('Entities', 'Identifier entities', 'Values')
+    this.tabHelpText = 'Manage identifier entities used in method inputs and result context (create, edit, delete).'
     this.backGround.classList.add('entitiesScreen')
     this.entityManager = entityManager
     this.methodGUICreator = new MethodGUICreator(this, null, entityManager, null)

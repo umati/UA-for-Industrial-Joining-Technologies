@@ -3,6 +3,7 @@ import ControlMessageSplitScreen from 'views/graphic-support/control-message-spl
 export default class ConnectionGraphics extends ControlMessageSplitScreen {
   constructor (connectionManager) {
     super('Connection', 'Overview', 'Messages')
+    this.tabHelpText = 'Shows endpoint connectivity health: connection, subscriptions, and TighteningSystem discovery state.'
 
     this.connectionManager = connectionManager
     this.backGround.classList.add('connectionScreen')

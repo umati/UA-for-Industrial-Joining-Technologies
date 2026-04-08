@@ -5,6 +5,7 @@ import BasicScreen from '../graphic-support/basic-screen.mjs'
 export default class ResultGraphics extends BasicScreen {
   constructor (resultManager) {
     super('Consolidated Result')
+    this.tabHelpText = 'Inspect aggregated results (tightening, batch, job) in hierarchical or enveloped view.'
     this.resultManager = resultManager
     this.backGround.classList.add('consolidatedResultScreen')
 

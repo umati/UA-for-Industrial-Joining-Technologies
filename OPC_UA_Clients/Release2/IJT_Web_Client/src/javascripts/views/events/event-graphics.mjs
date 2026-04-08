@@ -7,6 +7,7 @@ import SingleScreen from '../graphic-support/single-screen.mjs'
 export default class EventGraphics extends SingleScreen {
   constructor (eventManager) {
     super('Events', 'Events')
+    this.tabHelpText = 'Live event stream from the endpoint. Queue, step through, and inspect event payloads.'
     this.eventManager = eventManager
     this.modelToHTML = new ModelToHTML()
     this.toggleQueueingState = false

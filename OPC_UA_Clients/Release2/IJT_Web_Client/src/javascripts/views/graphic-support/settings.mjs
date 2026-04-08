@@ -10,6 +10,7 @@ const FADE_STEPS = 5
 export default class Settings extends BasicScreen {
   constructor (webSocketManager) {
     super('Settings')
+    this.tabHelpText = 'Configure default product, program, joint, and initial view-level preferences.'
     this.loaded = false
     this.resolvers = []
 

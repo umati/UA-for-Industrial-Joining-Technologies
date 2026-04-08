@@ -18,20 +18,55 @@ import TraceGraphics from 'views/trace/trace-graphics.mjs'
 import AddressSpaceGraphics from 'views/address-space/address-space-graphics.mjs'
 import EventGraphics from 'views/events/event-graphics.mjs'
 import MethodGraphics from 'views/methods/method-graphics.mjs'
+import StandardDemo from 'views/standard-demo/standard-demo.mjs'
+import JointDemo from 'views/standard-demo/joint-demo.mjs'
 import AssetGraphics from 'views/assets/asset-graphics.mjs'
 import EntityCacheView from 'views/entities/entities.mjs'
 import ConnectionGraphics from 'views/connection/connection-graphics.mjs'
+import ResultGraphics from 'views/complex-result/result-graphics.mjs'
+import OkRateGraphics from 'views/ok-rate/ok-rate-graphics.mjs'
 import TabGenerator from 'views/graphic-support/tab-generator.mjs'
 import BasicScreen from 'views/graphic-support/basic-screen.mjs'
-import { createDemoTabs } from 'views/tab-setup/demo-tabs.mjs'
 
 /** Default view level shown when a new endpoint tab is opened (Detailed = 3). */
 const DEFAULT_VIEW_LEVEL = 3
 
+class NewDemoGraphics extends BasicScreen {
+  constructor (demoGraphics, jointDemoGraphics, resultGraphics, okRateGraphics, currentViewLevel) {
+    super('Demos')
+    this.tabGenerator = new TabGenerator(this.backGround, currentViewLevel)
+
+    if (demoGraphics) {
+      // Keep JointDemo as default when available to match previous behavior.
+      this.tabGenerator.generateTab(demoGraphics, 1, !jointDemoGraphics)
+    }
+    if (jointDemoGraphics) {
+      this.tabGenerator.generateTab(jointDemoGraphics, 1, true)
+    }
+    if (resultGraphics) {
+      this.tabGenerator.generateTab(resultGraphics, 4)
+    }
+    if (okRateGraphics) {
+      this.tabGenerator.generateTab(okRateGraphics, 4)
+    }
+  }
+
+  changeViewLevel (newLevel) {
+    if (this.tabGenerator) {
+      this.tabGenerator.changeViewLevel(newLevel)
+    }
+  }
+
+  close () {
+    if (this.tabGenerator) {
+      this.tabGenerator.close()
+    }
+  }
+}
+
 export default class EndpointGraphics extends BasicScreen {
   constructor (title, settings) {
     super(title)
-    this.tabHelpText = 'Workspace for this endpoint. Open connection status, methods, events, traces, demos, and data views.'
     this.endpointUrl = ''
     this.tabGenerator = null
     this.settings = settings
@@ -110,13 +145,46 @@ export default class EndpointGraphics extends BasicScreen {
       ijtLog.error(error)
     }
 
+
     const methodManager = new MethodManager(addressSpace)
     const methodGraphics = new MethodGraphics(methodManager, addressSpace, this.settings, entityCache)
+
+    // StandardDemo view is not critical
+    let demoGraphics = null
+    try {
+      demoGraphics = new StandardDemo(methodManager, resultManager, this.connectionManager, this.settings)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    // JointDemo view is not critical
+    let jointDemoGraphics = null
+    try {
+      jointDemoGraphics = new JointDemo(methodManager, resultManager, this.connectionManager, this.settings)
+    } catch (error) {
+      ijtLog.error(error)
+    }
 
     // Trace view is not critical
     let traceGraphics = null
     try {
       traceGraphics = new TraceGraphics(['angle', 'torque'], addressSpace, resultManager)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    // Consolidated view is not critical
+    let resultGraphics = null
+    try {
+      resultGraphics = new ResultGraphics(resultManager)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
+    // OK rate view is not critical
+    let okRateGraphics = null
+    try {
+      okRateGraphics = new OkRateGraphics(resultManager, methodManager, addressSpace)
     } catch (error) {
       ijtLog.error(error)
     }
@@ -131,20 +199,25 @@ export default class EndpointGraphics extends BasicScreen {
 
     tabGenerator.changeViewLevel(2)
 
-    const demosTabGraphics = createDemoTabs({
-      methodManager,
-      resultManager,
-      connectionManager: this.connectionManager,
-      addressSpace,
-      settings: this.settings,
-      currentViewLevel: DEFAULT_VIEW_LEVEL
-    })
-
-    tabGenerator.generateTab(connectionGraphics, 2)
-    if (demosTabGraphics) {
-      tabGenerator.generateTab(demosTabGraphics, 2, true)
+    let newDemoGraphics = null
+    if (demoGraphics || jointDemoGraphics || resultGraphics || okRateGraphics) {
+      newDemoGraphics = new NewDemoGraphics(
+        demoGraphics,
+        jointDemoGraphics,
+        resultGraphics,
+        okRateGraphics,
+      )
     }
 
+    tabGenerator.generateTab(connectionGraphics, 2)
+    if (newDemoGraphics) {
+      tabGenerator.generateTab(newDemoGraphics, 2, true)
+    }
+
+    tabGenerator.generateTab(addressSpaceGraphics, 3, false)
+    if (assetGraphics) {
+      tabGenerator.generateTab(assetGraphics, 5)
+    }
 
     tabGenerator.generateTab(methodGraphics, 2)
     tabGenerator.generateTab(eventGraphics, 2, false)
@@ -156,12 +229,6 @@ export default class EndpointGraphics extends BasicScreen {
     if (entityCacheView) {
       tabGenerator.generateTab(entityCacheView, 3)
     }
-
-    tabGenerator.generateTab(addressSpaceGraphics, 3, false)
-    if (assetGraphics) {
-      tabGenerator.generateTab(assetGraphics, 4)
-    }
-
     // Joints tab intentionally hidden.
   }
 }

@@ -5,6 +5,7 @@
  * @public
  */
 import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
+const TAB_HELP_DELAY_MS = 1000
 
 export default class TabGenerator {
   constructor (container, currentViewLevel = 3, settings) {
@@ -224,6 +225,8 @@ class Tab {
     this.tabViewLevel = tabViewLevel
     this.tabGenerator = tabGenerator
     this.selected = false
+    this.helpTimer = null
+    this.helpTooltip = null
 
     this.button = document.createElement('input')
     this.button.type = 'button'
@@ -234,6 +237,7 @@ class Tab {
     this.button.aaNAME = content.title || 'Untitled'
     this.button.onclick = () => {
       try {
+        this.clearHelpTooltip()
         this.container.innerHTML = ''
         if (!this.content || !this.content.backGround) {
           throw new Error('Tab content has no backGround node')
@@ -257,6 +261,24 @@ class Tab {
     this.button.reset = () => {
       this.button.classList.remove('is-selected')
       this.selected = false
+    }
+
+    this.button.onmouseenter = (evt) => {
+      const helpText = this.getHelpText()
+      if (!helpText) return
+      this.clearHelpTimer()
+      this.helpTimer = window.setTimeout(() => {
+        this.showHelpTooltip(helpText, evt)
+      }, TAB_HELP_DELAY_MS)
+    }
+
+    this.button.onmousemove = (evt) => {
+      this.positionHelpTooltip(evt)
+    }
+
+    this.button.onmouseleave = () => {
+      this.clearHelpTimer()
+      this.clearHelpTooltip()
     }
 
     this.changeViewLevel(currentViewLevel)
@@ -291,11 +313,54 @@ class Tab {
    * When closing this area, make sure to close the connections and such things
    */
   close () {
+    this.clearHelpTimer()
+    this.clearHelpTooltip()
     if (this.selectorArea && this.button && this.button.parentNode === this.selectorArea) {
       this.selectorArea.removeChild(this.button)
     }
     if (this.content && this.content.close) {
       this.content.close()
     }
+  }
+
+  getHelpText () {
+    return this.content?.tabHelpText || this.content?.tabDescription || ''
+  }
+
+  clearHelpTimer () {
+    if (this.helpTimer) {
+      window.clearTimeout(this.helpTimer)
+      this.helpTimer = null
+    }
+  }
+
+  showHelpTooltip (helpText, evt) {
+    if (!helpText || this.helpTooltip) return
+    this.helpTooltip = document.createElement('div')
+    this.helpTooltip.classList.add('tabHelpTooltip')
+    this.helpTooltip.textContent = helpText
+    document.body.appendChild(this.helpTooltip)
+    if (evt) {
+      this.positionHelpTooltip(evt)
+    } else {
+      const bounds = this.button.getBoundingClientRect()
+      this.helpTooltip.style.left = `${bounds.left + 12}px`
+      this.helpTooltip.style.top = `${bounds.bottom + 8}px`
+    }
+  }
+
+  positionHelpTooltip (evt) {
+    if (!this.helpTooltip || !evt) return
+    const xOffset = 12
+    const yOffset = 18
+    this.helpTooltip.style.left = `${evt.clientX + xOffset}px`
+    this.helpTooltip.style.top = `${evt.clientY + yOffset}px`
+  }
+
+  clearHelpTooltip () {
+    if (this.helpTooltip && this.helpTooltip.parentNode) {
+      this.helpTooltip.parentNode.removeChild(this.helpTooltip)
+    }
+    this.helpTooltip = null
   }
 }

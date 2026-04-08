@@ -13,6 +13,7 @@ import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
 export default class StandardDemo extends BasicScreen {
   constructor (methodManager, resultManager, connectionManager, settings) {
     super('Standard Demo') // Setting the name of the tab
+    this.tabHelpText = 'Guided demo for selecting joining programs and observing live result and trace feedback.'
     this.methodManager = methodManager
     this.resultManager = resultManager
     this.settings = settings
