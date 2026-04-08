@@ -3,6 +3,7 @@ import SingleScreen from 'views/graphic-support/single-screen.mjs'
 export default class OkRateGraphics extends SingleScreen {
   constructor (resultManager, methodManager, addressSpace) {
     super('OK rate', 'OK rate')
+    this.tabHelpText = 'This is an example of an AI agent generated tab when asked to create a demo tab that tracks OK/NOK ration and buttons to call simulated results.'
     this.resultManager = resultManager
     this.methodManager = methodManager
     this.addressSpace = addressSpace

@@ -5,6 +5,7 @@ import MethodGUICreator from '../methods/method-gui-creator.mjs'
 export default class JointGraphics extends ControlSplitScreen {
   constructor (jointManager) {
     super('Joints', 'Joints', 'Joint Data')
+    this.tabHelpText = 'Inspect and edit joint entities (currently hidden unless enabled in tab setup).'
     this.jointManager = jointManager
     this.methodGUICreator = new MethodGUICreator(this, null, jointManager, null)
 

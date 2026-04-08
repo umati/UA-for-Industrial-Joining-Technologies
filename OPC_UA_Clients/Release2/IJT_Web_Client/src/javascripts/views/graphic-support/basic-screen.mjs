@@ -9,6 +9,9 @@ const DEFAULT_INPUT_WIDTH_PCT = 45
 export default class BasicScreen {
   constructor (title) {
     this.title = title
+    // Optional per-tab help text. Set in each view constructor if desired.
+    // Example: this.tabHelpText = 'Shows connection state and server status.'
+    this.tabHelpText = ''
     this.backGround = document.createElement('div')
     this.backGround.classList.add('basescreen')
   }

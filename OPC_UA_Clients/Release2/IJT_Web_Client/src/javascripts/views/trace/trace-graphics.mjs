@@ -10,6 +10,7 @@ import BasicScreen from '../graphic-support/basic-screen.mjs' // Basic functiona
 export default class TraceGraphics extends BasicScreen {
   constructor (dimensions, addressSpace, resultManager) {
     super('Traces')
+    this.tabHelpText = 'Plot tightening traces and explore them with zoom, alignment, and step-level selection.'
     this.backGround.classList.add('traceScreen')
     this.traceInterface = new ButtonTraceInterface(this.backGround)
     this.traceDisplay = new TraceDisplay(dimensions, resultManager, this, this.traceInterface.traceArea, 'Main trace tab')
