@@ -1,24 +1,34 @@
-# UA-for-Industrial-Joining-Technologies
+# OPC UA for Industrial Joining Technologies (IJT)
 
-The **VDMA OPC UA Industrial Joining Technologies (IJT)** Working Group defines a standard information model for **joining technologies** such as Tightening, Gluing, Riveting, Flow Drill Fastening, etc.
+[![CI Required](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/ci-required.yml/badge.svg)](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/ci-required.yml)
+[![CI Extended](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/ci-extended.yml/badge.svg)](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/ci-extended.yml)
+[![CodeQL](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/codeql.yml/badge.svg)](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/codeql.yml)
+
+The **VDMA OPC UA Industrial Joining Technologies (IJT)** Working Group defines a standard information model for **joining technologies** such as Tightening, Gluing, Riveting, Flow Drill Fastening, etc. This repository provides reference implementations of OPC UA IJT Clients and Servers.
 
 ## Contact
-- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
-- **Coordinator:** Bernd Heitzmann — bernd.heitzmann@vdma.eu
+- Mohit Agarwal — mohit.agarwal@atlascopco.com
+- Bernd Heitzmann — bernd.heitzmann@vdma.eu
 
-## OPC UA IJT Documentation
-- [**IJT Group Presentation**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/IJT_Documents)
-- [**OPC Foundation Page**](https://opcfoundation.org/markets-collaboration/IJT/)
-- [**VDMA Page**](https://vdma.org/viewer/-/v2article/render/88084510)
-- [**OPC 40450-1 Joining — Online Reference**](https://reference.opcfoundation.org/IJT/Base/v100/docs/)
-- [**OPC 40451-1 Tightening — Online Reference**](https://reference.opcfoundation.org/IJT/Tightening/v200/docs/)
+## Clients & Servers
 
-## OPC UA IJT Reference Implementation
-- **Server:** [IJT Server Simulator](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2) — `OPC_UA_Servers/Release2`
-- **Clients:** [Release2](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2)
-  - [**IJT Web Client**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2/IJT_Web_Client) — `OPC_UA_Clients/Release2/IJT_Web_Client`
-  - [**IJT Console Client**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2/IJT_Console_Client) — `OPC_UA_Clients/Release2/IJT_Console_Client`
-  - [**IJT Test Client**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2/IJT_Test_Client) — `OPC_UA_Clients/Release2/IJT_Test_Client`
-  - [**IJT C# Client**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Clients/Release2/IJT_CSharp_Client) — `OPC_UA_Clients/Release2/IJT_CSharp_Client`
+| Component | Description |
+|-----------|-------------|
+| [IJT Server Simulator](OPC_UA_Servers/Release2) | OPC UA server exposing the IJT information model |
+| [IJT Web Client](OPC_UA_Clients/Release2/IJT_Web_Client) | GUI client — trace graphs, result visualization (Python + Node.js) |
+| [IJT Console Client](OPC_UA_Clients/Release2/IJT_Console_Client) | Minimal reference client — event subscription and result parsing (Python) |
+| [IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client) | Conformance test suite against the IJT specification (Python pytest) |
+| [IJT C# Client](OPC_UA_Clients/Release2/IJT_CSharp_Client) | Reference client using the OPC Foundation .NET Standard SDK |
 
+## Specifications & References
+
+- [OPC 40450-1 Joining — Online Reference](https://reference.opcfoundation.org/IJT/Base/v100/docs/)
+- [OPC 40451-1 Tightening — Online Reference](https://reference.opcfoundation.org/IJT/Tightening/v200/docs/)
+- [OPC Foundation IJT Page](https://opcfoundation.org/markets-collaboration/IJT/)
+- [VDMA IJT Page](https://vdma.org/viewer/-/v2article/render/88084510)
+- [IJT Documents](IJT_Documents)
+
+## Test Suite
+
+Run `python run_all_tests.py` — covers all clients, static analysis, and live tests.
 
