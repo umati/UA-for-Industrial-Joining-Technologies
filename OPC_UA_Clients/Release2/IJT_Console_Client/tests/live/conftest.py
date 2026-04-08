@@ -46,6 +46,6 @@ def pytest_collection_modifyitems(items):
         if item.fspath and "live" in str(item.fspath):
             item.add_marker(pytest.mark.live)
             if not _SERVER_AVAILABLE:
-                item.add_marker(pytest.mark.skip(
-                    reason=f"OPC UA server not available at {_SERVER_HOST}:{_SERVER_PORT}"
-                ))
+                item.add_marker(
+                    pytest.mark.skip(reason=f"OPC UA server not available at {_SERVER_HOST}:{_SERVER_PORT}")
+                )

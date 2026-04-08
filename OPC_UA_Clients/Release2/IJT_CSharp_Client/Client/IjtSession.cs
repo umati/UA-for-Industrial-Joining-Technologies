@@ -386,12 +386,20 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
     /// <summary>Closes the OPC UA session and disposes the underlying connection.</summary>
     public async ValueTask DisposeAsync()
     {
-        // Dispose management objects (which may hold subscriptions) before closing the session
-        // so their cleanup calls can still communicate with the server.
-        EventSubscriber.Dispose();
-        ResultManagement.Dispose();
-        AssetManagement.Dispose();
-        JoiningProcessManagement.Dispose();
+        // Dispose management objects before closing the session. Each Dispose may issue
+        // synchronous OPC UA network calls (e.g. DeleteSubscription). Guard with a total
+        // timeout so a stalled server cannot block teardown beyond 8 s.
+        using var cleanupCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8));
+        await Task.WhenAny(
+            Task.Run(() =>
+            {
+                EventSubscriber.Dispose();
+                ResultManagement.Dispose();
+                AssetManagement.Dispose();
+                JoiningProcessManagement.Dispose();
+            }),
+            Task.Delay(Timeout.Infinite, cleanupCts.Token)
+        ).ConfigureAwait(false);
 
         try
         {

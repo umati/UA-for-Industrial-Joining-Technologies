@@ -806,7 +806,7 @@ def _step_live_tests(_junit_xml: str | None) -> _StepResult:
             "--cov=.",
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage-live.xml'}",
             "--cov-report=term-missing",
-            # fail_under threshold is in [tool.coverage.report] in pyproject.toml
+            "--cov-fail-under=0",  # coverage threshold is for unit tests only; live tests skip many paths
         ]
     rc, output = _run(cmd)
     result.duration = time.monotonic() - t0

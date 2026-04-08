@@ -14,5 +14,5 @@ if str(_CONSOLE_ROOT) not in sys.path:
 
 def pytest_configure(config):
     """Ensure tests/fixtures/ exists so --basetemp=tests/fixtures/tmp never fails."""
+    del config  # required parameter name in pytest hookspec; not needed in body
     Path(__file__).parent.joinpath("fixtures").mkdir(parents=True, exist_ok=True)
-

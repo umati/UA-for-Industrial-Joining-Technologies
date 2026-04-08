@@ -15,6 +15,7 @@ Run all live tests:
 Run a single class:
     pytest tests/live/ -v -k "TestMethods"
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures shadow outer names by design
 
 from __future__ import annotations
 

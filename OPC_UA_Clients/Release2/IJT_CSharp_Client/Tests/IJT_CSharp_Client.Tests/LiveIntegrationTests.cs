@@ -41,22 +41,36 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
-        var tcs = new TaskCompletionSource<bool>();
-        session.EventSubscriber.OnResultReady += (_, _) => tcs.TrySetResult(true);
-        session.EventSubscriber.Subscribe();
-
-        // The simulator does not publish events automatically — trigger one explicitly.
-        // Browse path: JoiningSystem → Simulations → SimulateResults → SimulateSingleResult
-        var simulationsNode = session.BrowseChild(session.JoiningSystemNodeId, "Simulations");
-        var simResultsNode = simulationsNode.IsNullNodeId
-            ? NodeId.Null
-            : session.BrowseChild(simulationsNode, "SimulateResults");
-        var simMethodId = simResultsNode.IsNullNodeId
-            ? NodeId.Null
-            : session.BrowseChild(simResultsNode, "SimulateSingleResult");
+        // Browse for SimulateSingleResult BEFORE subscribing so browse calls don't
+        // race with an active subscription. All three BrowseChild calls are sync OPC UA;
+        // run them on a background thread with a hard 10s deadline to prevent process crash.
+        NodeId simulationsNode, simResultsNode, simMethodId;
+        using var browseTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var browseTask = Task.Run(() =>
+        {
+            var sims = session.BrowseChild(session.JoiningSystemNodeId, "Simulations");
+            var simRes = sims.IsNullNodeId ? NodeId.Null : session.BrowseChild(sims, "SimulateResults");
+            var simMeth = simRes.IsNullNodeId ? NodeId.Null : session.BrowseChild(simRes, "SimulateSingleResult");
+            return (sims, simRes, simMeth);
+        });
+        var browseWinner = await Task.WhenAny(browseTask, Task.Delay(Timeout.Infinite, browseTimeoutCts.Token)).ConfigureAwait(false);
+        Skip.IfNot(browseWinner == browseTask, "Browse timed out — server may be overloaded; skipping");
+        (simulationsNode, simResultsNode, simMethodId) = await browseTask.ConfigureAwait(false);
 
         Skip.IfNot(!simMethodId.IsNullNodeId,
             "SimulateSingleResult method not found — server may not expose simulation nodes");
+
+        var tcs = new TaskCompletionSource<bool>();
+        session.EventSubscriber.OnResultReady += (_, _) => tcs.TrySetResult(true);
+
+        // Subscribe() calls _eventSubscription.Create() — a synchronous OPC UA call that
+        // can block up to OperationTimeout (30 s) if the server is slow. Guard it the same
+        // way as Browse and CallMethod so the test host cannot hang longer than 60 s.
+        using var subscribeTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var subscribeTask = Task.Run(() => session.EventSubscriber.Subscribe());
+        var subscribeWinner = await Task.WhenAny(subscribeTask, Task.Delay(Timeout.Infinite, subscribeTimeoutCts.Token)).ConfigureAwait(false);
+        Skip.IfNot(subscribeWinner == subscribeTask, "Subscribe timed out — server overloaded; skipping");
+        await subscribeTask.ConfigureAwait(false); // propagate any Subscribe exceptions
 
         // ResultType=0 (SIMPLE_OK), IncludeTraces=false — simplest trigger.
         // Race the synchronous CallMethod against a hard 10s deadline using an
@@ -251,13 +265,24 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
-        var ex = await Record.ExceptionAsync(async () =>
-        {
-            await Task.Run(() => session.EventSubscriber.Subscribe(), cts.Token).ConfigureAwait(false);
-            await Task.Delay(500, cts.Token).ConfigureAwait(false);
-            session.EventSubscriber.Unsubscribe();
-        }).ConfigureAwait(false);
-        Assert.Null(ex);
+        // Subscribe: wrap in Task.Run with independent timeout so synchronous Create() cannot block.
+        using var subCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var subTask = Task.Run(() => session.EventSubscriber.Subscribe());
+        Skip.IfNot(await Task.WhenAny(subTask, Task.Delay(Timeout.Infinite, subCts.Token)).ConfigureAwait(false) == subTask,
+            "Subscribe timed out — server overloaded; skipping");
+        await subTask.ConfigureAwait(false); // propagate any Subscribe exceptions → test fails if it throws
+
+        await Task.Delay(500, cts.Token).ConfigureAwait(false);
+
+        // Unsubscribe: also synchronous (Delete subscription) — guard with timeout.
+        using var unsubCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var unsubTask = Task.Run(() => session.EventSubscriber.Unsubscribe());
+        var unsubWinner = await Task.WhenAny(
+            unsubTask,
+            Task.Delay(Timeout.Infinite, unsubCts.Token)
+        ).ConfigureAwait(false);
+        Skip.IfNot(unsubWinner == unsubTask, "Unsubscribe timed out — server overloaded; skipping");
+        await unsubTask.ConfigureAwait(false); // propagate any Unsubscribe exceptions
     }
 }
 

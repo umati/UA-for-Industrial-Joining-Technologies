@@ -63,6 +63,12 @@ IJT_CSharp_Client/
 # Full static analysis + build + unit tests + coverage
 python run_all_tests.py
 
+# Phase 1 only (restore/build/format/CVE/unit+coverage)
+python run_all_tests.py --phase1
+
+# Phase 2 live tests only
+python run_all_tests.py --phase2
+
 # Build only
 dotnet build IJT_CSharp_Client.sln
 
@@ -110,6 +116,18 @@ dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | OPC UA server endpoint for live tests |
+| `OPCUA_SERVER_PORT` | `40451` | Alternative port-based server endpoint selection |
+| `OPCUA_SIMULATOR_EXE` | *(auto-discover)* | Explicit simulator binary path for fixture launch |
+| `IJT_PHASE1_ONLY` | `false` | Forces fixture to skip auto-launch so live tests skip in unit phase |
+
+---
+
+## Live Test Stability Guards
+
+- `run_all_tests.py` uses `--blame-hang --blame-hang-timeout 60s` in both unit and live dotnet test runs.
+- `LiveIntegrationTests` wraps synchronous OPC UA calls (`BrowseChild`, `Subscribe`, `CallMethod`, `Unsubscribe`) in `Task.Run` + hard timeout guards.
+- On timeout in environment-sensitive live paths, tests use explicit `Skip` messages instead of hanging the test host.
+- `IjtSession.DisposeAsync` cleanup is timeout-bounded so teardown cannot block indefinitely on slow or stalled server calls.
 
 ---
 

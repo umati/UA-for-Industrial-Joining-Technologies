@@ -540,19 +540,24 @@ def _step_live_tests(server_url: str) -> StepResult:
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     trx_path = _RESULTS_DIR / "live-tests.trx"
     t0 = time.monotonic()
-    rc, _ = _run(
+    rc, stdout = _run(
         [
             "dotnet", "test", str(_TEST_PROJ),
             "--no-restore",
             "--configuration", "Release",
             "--logger", "trx;LogFileName=live-tests.trx",
             "--results-directory", str(_RESULTS_DIR),
+            "--blame-hang",
+            "--blame-hang-timeout", "60s",
         ],
         env={
             "IJT_AUTO_ACCEPT": "true",
             "OPCUA_SERVER_URL": server_url,
         },
+        capture_stdout=True,
     )
+    if stdout:
+        print(stdout, end="")
     dur = time.monotonic() - t0
     passed, failed, skipped, total = _parse_trx(trx_path)
     detail = f"{passed}/{total}" if not skipped else f"{passed}/{total}, {skipped} skipped"
