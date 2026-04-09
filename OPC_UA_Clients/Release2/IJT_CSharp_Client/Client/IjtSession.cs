@@ -61,10 +61,33 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
 
     private readonly ILogger<IjtSession> _log = IjtLog.For<IjtSession>();
 
-    private IjtSession(ISession session, ClientConfig config)
+    internal IjtSession(ISession session, ClientConfig config)
     {
         Session = session;
         Config = config;
+    }
+
+    /// <summary>
+    /// Creates a pre-configured <see cref="IjtSession"/> for unit testing,
+    /// bypassing the live OPC UA server connection path.
+    /// </summary>
+    internal static IjtSession CreateForTesting(
+        ISession session,
+        ClientConfig? config = null,
+        ushort ijtBaseNsIdx = 7,
+        ushort ijtTighteningNsIdx = 8,
+        ushort machineryResultNsIdx = 6,
+        ushort diNsIdx = 5)
+    {
+        var wrapper = new IjtSession(
+            session,
+            config ?? new ClientConfig { ServerUrl = "opc.tcp://localhost:4840" });
+        wrapper.IjtBaseNsIdx = ijtBaseNsIdx;
+        wrapper.IjtTighteningNsIdx = ijtTighteningNsIdx;
+        wrapper.MachineryResultNsIdx = machineryResultNsIdx;
+        wrapper.DiNsIdx = diNsIdx;
+        wrapper.InitManagement();
+        return wrapper;
     }
 
     /// <summary>
@@ -270,7 +293,7 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
 
     // ── Keep-alive / reconnect ────────────────────────────────────────────────
 
-    private void OnKeepAlive(ISession session, KeepAliveEventArgs e)
+    internal void OnKeepAlive(ISession session, KeepAliveEventArgs e)
     {
         if (!ServiceResult.IsBad(e.Status)) return;
 
