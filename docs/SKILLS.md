@@ -147,7 +147,7 @@ UA-for-Industrial-Joining-Technologies/
 - **Start (Windows)**: run `opcua_ijt_demo_application.exe` as Administrator
 - **Start (Linux)**: `chmod +x opcua_ijt_demo_application && ./opcua_ijt_demo_application`
 - **Start (Docker)**: `docker compose up` from `OPC_UA_Servers/Release2/`
-- **Smoke tests**: `python OPC_UA_Servers/Release2/tests/smoke_test.py` — 10 checks, fails fast if asyncua missing
+- **Smoke tests**: `python OPC_UA_Servers/Release2/tests/smoke_test.py` — 10 checks, fails fast if asyncua missing; pass `--junitxml PATH` to emit JUnit XML for CI reporting
 - **Key simulation methods** (all require boolean `IsSimulated` argument):
   - `SimulateResults` — single tightening result
   - `SimulateBulkResults` — multiple results, sent one by one in detached thread
@@ -177,7 +177,7 @@ UA-for-Industrial-Joining-Technologies/
 | `test-client` | pytest collect-only (import check), Bandit, Ruff, mypy |
 | `csharp-client` | dotnet build + test (`--blame-hang 60s`) + NuGet CVE scan; phase1 unit/static (`IJT_PHASE1_ONLY=true`) + phase2 live tests against server (port 40451) |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
-| `report` |Combined markdown summary → Actions Summary tab |
+| `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |
 
 Runtime: ~5–7 minutes. Python 3.14, Node.js 24, .NET 10 everywhere.
 Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `setup-dotnet@v5`, `upload-artifact@v7`, `download-artifact@v8`
