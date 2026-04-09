@@ -125,10 +125,12 @@ UA-for-Industrial-Joining-Technologies/
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md`
 
 ### IJT CSharp Client (`OPC_UA_Clients/Release2/IJT_CSharp_Client/`)
-- **Stack**: C# .NET 10+, OPC Foundation UA SDK
+- **Stack**: C# .NET 10+, OPC Foundation UA SDK, xUnit, Moq, coverlet
 - **Purpose**: C# reference OPC UA IJT client — asset mgmt, result mgmt, event subscriptions
+- **Test baseline**: 413 unit tests pass · **93% line coverage / 81% branch coverage**
 - **One test command**: `python run_all_tests.py` (dotnet build + test + NuGet CVE scan)
 - **Live tests**: skipped unless `OPCUA_SERVER_URL` is set or `OPCUA_SIMULATOR_EXE` points to server binary
+- **Details**: read `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md`
 
 ### IJT Node Client (`OPC_UA_Clients/Release1/IJT_Node_Client/`)
 - **Stack**: Node.js 24+, node-opcua, Socket.io, Vitest

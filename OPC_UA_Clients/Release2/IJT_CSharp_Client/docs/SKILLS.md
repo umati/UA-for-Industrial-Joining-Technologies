@@ -52,10 +52,17 @@ IJT_CSharp_Client/
 │   ├── JoiningProcessManagement.cs  # Joining process list and details
 │   └── JointManagement.cs       # Joint CRUD: SendJoint, GetJoint, SelectJoint, DeleteJoint
 └── Tests/
-    ├── AssetManagementTests.cs
-    ├── ResultManagementTests.cs
-    ├── JoiningProcessManagementTests.cs
-    └── JointManagementTests.cs
+    ├── IJT_CSharp_Client.Tests/
+    │   ├── UnitTests/
+    │   │   ├── IjtSessionUnitTests.cs           # IjtSession internals (CallMethod, NodeId factories, IsConnected, OnKeepAlive, DisposeAsync)
+    │   │   ├── EventSubscriberHelperUnitTests.cs # EventSubscriber helpers and notification processors
+    │   │   ├── MockSessionBuilder.cs            # Shared Mock<ISession> factory
+    │   │   ├── AssetManagementTests.cs
+    │   │   ├── ResultManagementTests.cs
+    │   │   ├── JoiningProcessManagementTests.cs
+    │   │   └── JointManagementTests.cs
+    │   └── Client/
+    │       └── LiveIntegrationTests.cs          # 15 live tests (skip without server)
 ```
 
 ---
@@ -92,7 +99,7 @@ dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 **Coverage:**
 - Target: 80% (WARN if below, not FAIL)
 - `coverlet.runsettings` excludes `UAModel.*` (auto-generated) and `Program` (entry point)
-- App-code coverage: ~40% (deferred improvement — needs OPC UA session mocking)
+- App-code coverage: **93% lines / 81% branches** (IJT_CSharp_Client package)
 
 ---
 
@@ -100,7 +107,6 @@ dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 
 | Issue | Status | Notes |
 |-------|--------|-------|
-| **Coverage < 80%** | Deferred | Reaching 80% requires mocking `ISession` for AssetManagement, ResultManagement, JoiningProcessManagement, AddressSpaceHelper (~20h effort) |
 | **Menu integration failures** | Deferred | Multiple menu items fail when run against live OPC UA server — walk all items with live server, fix all failures |
 
 ---
@@ -140,5 +146,6 @@ dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 |---------|---------|---------|
 | `OPCFoundation.NetStandard.Opc.Ua` | latest stable | OPC UA SDK (client + types) |
 | `xunit` | latest | Unit test framework |
+| `Moq` | 4.20.72+ | Mocking `ISession` and `IIjtSession` in unit tests |
 | `coverlet.collector` | latest | Code coverage collection |
 | `Microsoft.NET.Test.Sdk` | latest | dotnet test runner |
