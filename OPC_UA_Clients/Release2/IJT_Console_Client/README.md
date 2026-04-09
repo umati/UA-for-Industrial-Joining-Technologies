@@ -33,6 +33,6 @@ IJT_Console_Client/
 ├── result_event_handler.py  # Tightening result processing
 ├── utils.py                 # Shared utilities
 ├── requirements.txt         # Python dependencies
-├── pytest.ini               # Test configuration
+├── pyproject.toml           # Test configuration (pytest, ruff, coverage, bandit)
 └── tests/                   # Unit and integration tests
 ```

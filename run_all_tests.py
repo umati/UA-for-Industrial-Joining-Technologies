@@ -164,6 +164,11 @@ TEST_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Test_Client"
 WEB_CLIENT_DIR  = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client"
 NODE_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release1" / "IJT_Node_Client"
 SMOKE_TEST      = SERVER_DIR / "tests" / "smoke_test.py"
+
+# OPC UA server port — all sub-runners receive OPCUA_SERVER_URL pointing here.
+# Sub-runners may probe additional ports (Console: 40461, Test: 40462) as
+# convenience defaults for standalone use, but always fall back to this port.
+# Web internal client port: 40463. Node: no OPC UA server needed.
 OPCUA_PORT      = 40451
 
 IS_WINDOWS = sys.platform == "win32"
@@ -1341,7 +1346,7 @@ def _cleanup_caches(root: Path) -> None:
     clean their own directories. This function only touches the repo root level so
     each project remains fully self-contained.
     """
-    _TEMP_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache", "pki", "PKI"}
+    _TEMP_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "pki", "PKI"}
     for name in _TEMP_DIRS:
         p = root / name
         if p.is_dir():

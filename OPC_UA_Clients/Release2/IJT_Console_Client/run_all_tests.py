@@ -57,8 +57,7 @@ _TESTS_UNIT = _TESTS_DIR / "unit"
 _TESTS_LIVE = _TESTS_DIR / "live"
 _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest-unit.xml"
-_LOCAL_TEMP_DIR = _HERE / ".state" / "tmp"
-_PYTEST_TEMP_ROOT = _HERE / ".state" / "pytest_tmproot"
+_TMP_DIR = _HERE / "tmp"
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40461"
 _MIN_PYTHON = (3, 14)
 
@@ -87,14 +86,13 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return val in ("1", "true", "yes", "on") if val else default
 
 
-def _configure_local_temp_env() -> None:
-    """Force temp files into project-local .state/ paths for reproducible ACL behavior."""
-    _LOCAL_TEMP_DIR.mkdir(parents=True, exist_ok=True)
-    _PYTEST_TEMP_ROOT.mkdir(parents=True, exist_ok=True)
-    os.environ["TMP"] = str(_LOCAL_TEMP_DIR)
-    os.environ["TEMP"] = str(_LOCAL_TEMP_DIR)
-    os.environ["TMPDIR"] = str(_LOCAL_TEMP_DIR)
-    os.environ["PYTEST_DEBUG_TEMPROOT"] = str(_PYTEST_TEMP_ROOT)
+def _prepare_tmp_dir() -> None:
+    """Ensure project-local tmp/pytest/ exists for pytest basetemp.
+    pip uses system temp — overriding TMP/TEMP causes pip wheel ACL locking on Windows.
+    Pre-run deletion is intentionally omitted: tmp_path_retention_policy='failed' keeps
+    artifacts from failing tests available for inspection until the developer clears them."""
+    pytest_tmp = _TMP_DIR / "pytest"
+    pytest_tmp.mkdir(parents=True, exist_ok=True)
 
 
 def _parse_server_url(url: str) -> tuple[str, int]:
@@ -203,8 +201,9 @@ def _install_requirements() -> None:
         _log("  Skipping pip install (SKIP_VENV_INSTALL=1)")
         return
     pip = str(_venv_pip(_VENV))
-    # Always upgrade pip itself first to avoid stale CVE warnings
-    subprocess.check_call([pip, "install", "--quiet", "--upgrade", "pip"])
+    python = str(_venv_python(_VENV))
+    # Use python -m pip for self-upgrade (newer pip requires this on Windows)
+    subprocess.check_call([python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"])
     for req in (_REQUIREMENTS, _REQUIREMENTS_DEV):
         if req.exists():
             _log(f"  Installing {req.name} …")
@@ -636,14 +635,14 @@ def _step_detect_secrets() -> _StepResult:
         result.ok = secret_count == 0
         if secret_count:
             result.note = f"{secret_count} potential secret(s) — review .secrets.baseline"
-    except json.JSONDecodeError, AttributeError:
+    except (json.JSONDecodeError, AttributeError):
         result.ok = rc == 0
     if not result.ok:
         _log(output)
     return result
 
 
-def _step_unit_tests(junit_xml: str | None) -> _StepResult:
+def _step_unit_tests(junit_xml: str | None, verbose: bool = False) -> _StepResult:
     """Run pytest over tests/unit/ with coverage; uses tests/ if unit/ absent."""
     result = _StepResult("[PHASE 1] pytest unit")
     t0 = time.monotonic()
@@ -656,12 +655,13 @@ def _step_unit_tests(junit_xml: str | None) -> _StepResult:
         return result
 
     unit_xml = junit_xml or str(_DEFAULT_JUNIT)
+    verbosity = "-v" if verbose else "-q"
     cmd: list[str] = [
         sys.executable,
         "-m",
         "pytest",
         str(test_dir),
-        "-q",
+        verbosity,
         "--tb=short",
         f"--junitxml={unit_xml}",
     ]
@@ -776,7 +776,7 @@ def _step_pyright() -> _StepResult:
 # ---------------------------------------------------------------------------
 
 
-def _step_live_tests(_junit_xml: str | None) -> _StepResult:
+def _step_live_tests(_junit_xml: str | None, verbose: bool = False) -> _StepResult:
     """Run pytest over tests/live/ (or -m live); requires a reachable OPC UA server."""
     result = _StepResult("[PHASE 2] pytest live")
     t0 = time.monotonic()
@@ -803,12 +803,13 @@ def _step_live_tests(_junit_xml: str | None) -> _StepResult:
         return result
 
     live_xml = str(_RESULTS_DIR / "pytest-live.xml")
+    verbosity = "-v" if verbose else "-q"
     cmd: list[str] = [
         sys.executable,
         "-m",
         "pytest",
         *test_target,
-        "-q",
+        verbosity,
         "--tb=short",
         f"--junitxml={live_xml}",
         *extra_args,
@@ -847,6 +848,7 @@ def _build_parser() -> argparse.ArgumentParser:
     group = p.add_mutually_exclusive_group()
     group.add_argument("--phase1", action="store_true", help="Unit / static tests only")
     group.add_argument("--phase2", action="store_true", help="Live tests only (server must be up)")
+    p.add_argument("--verbose", "-v", action="store_true", help="Verbose pytest output (-v flag)")
     p.add_argument(
         "--junit-xml",
         metavar="PATH",
@@ -865,7 +867,7 @@ def main() -> int:
     """Entry point; returns 0 on success, 1 on any failure."""
     global _USE_COLOUR  # pylint: disable=global-statement
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
-    _configure_local_temp_env()
+    _prepare_tmp_dir()
 
     args = _build_parser().parse_args()
     junit_xml: str | None = args.junit_xml
@@ -905,14 +907,14 @@ def main() -> int:
             results.append(_step_vulture())
             results.append(_step_interrogate())
             results.append(_step_detect_secrets())
-            results.append(_step_unit_tests(junit_xml))
+            results.append(_step_unit_tests(junit_xml, verbose=args.verbose))
             results.append(_step_semgrep())
             results.append(_step_pyright())
 
         if run_phase2:
             _section("Phase 2: Live Tests")
             server_proc = _ensure_server()
-            results.append(_step_live_tests(junit_xml))
+            results.append(_step_live_tests(junit_xml, verbose=args.verbose))
 
     finally:
         if server_proc is not None:
@@ -947,8 +949,8 @@ def main() -> int:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}
-    _CACHE_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache"}
+    _SKIP = {"node_modules", ".git", "test-results", "tmp"}
+    _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith("venv") and not d.startswith(".venv")]
         for d in list(dirs):

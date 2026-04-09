@@ -12,7 +12,7 @@ def pytest_configure(config):
     of the working directory from which pytest is invoked (CI, repo root, etc.).
     """
     _project_root = Path(__file__).resolve().parent.parent
-    _basetemp = _project_root / ".state" / "pytest_tmp"
+    _basetemp = _project_root / "tmp" / "pytest"
     _basetemp.mkdir(parents=True, exist_ok=True)
     config.option.basetemp = str(_basetemp)
     _project_root.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)

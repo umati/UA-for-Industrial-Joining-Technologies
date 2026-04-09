@@ -122,10 +122,10 @@ Objects/
 
 ```
 IJT_Test_Client/
-├── AGENTS.md                     ← you are here
+├── .cursorrules                  ← AI tools start here; points to docs/SKILLS.md
 ├── docs/opc-ua-server-context.md ← full technical OPC UA reference
 ├── conftest.py                   ← all pytest fixtures (session + function scoped)
-├── pytest.ini                    ← asyncio_mode=auto, timeout=120
+├── pyproject.toml                ← asyncio_mode=auto, timeout=120 (+ ruff, coverage, bandit, vulture)
 ├── helpers/
 │   ├── namespaces.py             ← ALL type IDs and BrowseName constants
 │   ├── node_discovery.py         ← async browse helpers (_browse_refs, find_child_by_browse_name)

@@ -700,8 +700,8 @@ def main() -> int:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}
-    _CACHE_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache"}
+    _SKIP = {"node_modules", ".git", "test-results", "tmp"}
+    _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith("venv") and not d.startswith(".venv")]
         for d in list(dirs):

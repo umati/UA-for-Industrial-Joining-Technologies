@@ -104,6 +104,8 @@ OLD/
 .pytest_basetemp/
 **/.pytest_basetemp/
 .pytest_basetemp*/
+pytest-cache-files-*/
+tmp/
 test-results/
 playwright-report/
 *.tmp
@@ -125,10 +127,17 @@ coverage.xml
 MockCache/
 
 # ---------------------------------------------------------------------------
+# IJT C# Client — project-specific
+# ---------------------------------------------------------------------------
+OPC_UA_Clients/Release2/IJT_CSharp_Client/.state/
+OPC_UA_Clients/Release2/IJT_CSharp_Client/tmp/
+
+# ---------------------------------------------------------------------------
 # IJT Web Client — project-specific
 # (.state/ scoped here — used by setup_project.py for install timestamp / lock / runtime state)
 # ---------------------------------------------------------------------------
 OPC_UA_Clients/Release2/IJT_Web_Client/.state/
+OPC_UA_Clients/Release2/IJT_Web_Client/tmp/
 # Test-fixture temp directories and any pytest basetemp directories
 **/tests/fixtures/tmp*/
 .pytest_tmp*/
@@ -140,13 +149,15 @@ OPC_UA_Clients/Release2/IJT_Web_Client/cross_client_regression_report.json
 # (.state/ scoped here — used by setup_client.py for tmp working directory)
 # ---------------------------------------------------------------------------
 OPC_UA_Clients/Release2/IJT_Console_Client/.state/
-OPC_UA_Clients/Release2/IJT_Console_Client/result_logs/
+OPC_UA_Clients/Release2/IJT_Console_Client/tmp/
+OPC_UA_Clients/Release2/IJT_Console_Client/logs/
 
 # ---------------------------------------------------------------------------
 # IJT Test Client — project-specific
 # (.state/ scoped here — local pytest temp roots and transient test artifacts)
 # ---------------------------------------------------------------------------
 OPC_UA_Clients/Release2/IJT_Test_Client/.state/
+OPC_UA_Clients/Release2/IJT_Test_Client/tmp/
 
 # ---------------------------------------------------------------------------
 # OPC UA Servers — project-specific
@@ -167,6 +178,8 @@ OPC_UA_Servers/Release1/IJT_OPC_UA_Server_Simulator/Usage_IJT_OPC_UA_Server_Simu
 
 # .NET SDK local telemetry/sentinel cache (created on first dotnet run per machine)
 .dotnet/
+# .NET CLI home directory when DOTNET_CLI_HOME is redirected (e.g., Docker CI)
+.dotnet-home/
 
 # Build output directories
 [Bb]in/
@@ -238,3 +251,4 @@ envelope/
 # Repo-root .state/ guard — created if any tool is accidentally run from repo root
 /.state/
 
+OPC_UA_Clients/Release2/IJT_CSharp_Client/STEPS.md

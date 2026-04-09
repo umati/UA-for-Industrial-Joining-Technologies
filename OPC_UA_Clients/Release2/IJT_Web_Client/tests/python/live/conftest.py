@@ -35,6 +35,8 @@ from pathlib import Path
 
 import pytest
 
+from .._asyncua_compat import apply_send_request_timeout_patch
+
 # ── Path constants ─────────────────────────────────────────────────────────────
 _LIVE_DIR = Path(__file__).resolve().parent
 _WEB_CLIENT_ROOT = _LIVE_DIR.parents[2]          # …/IJT_Web_Client/
@@ -154,6 +156,10 @@ def ensure_live_servers():
             with contextlib.suppress(Exception):
                 proc.terminate()
                 proc.wait(timeout=5)
+
+
+# Apply asyncua _send_request timeout workaround for all live tests in this dir.
+apply_send_request_timeout_patch()
 
 
 # ── Auto-mark all live tests ──────────────────────────────────────────────────

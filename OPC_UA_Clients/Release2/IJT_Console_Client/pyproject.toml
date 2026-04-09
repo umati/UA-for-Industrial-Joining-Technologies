@@ -1,10 +1,41 @@
 [project]
 requires-python = ">=3.14"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
+addopts = "-v --basetemp=tmp/pytest"
+tmp_path_retention_policy = "failed"
+norecursedirs = ["live", "fixtures"]
+markers = [
+    "integration: tests requiring a running OPC UA server",
+    "live: tests requiring a live OPC UA server connection",
+]
+
 [tool.bandit]
 exclude_dirs = ["venv", ".venv", ".venv-wsl", ".venv-wsl_backup", "tests", "__pycache__", ".git"]
 
+[tool.vulture]
+# pytest fixture parameters are declared as function arguments but never referenced
+# by name in the function body — they are injected by pytest via the parameter name.
+# Vulture cannot distinguish fixture dependency injection from unused variables.
+ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
+
+[tool.interrogate]
+# 30% minimum docstring coverage; advisory — low bar to avoid blocking new code.
+fail-under = 30
+ignore-init-method = true
+ignore-magic = true
+ignore-semiprivate = true
+ignore-private = true
+verbose = 0
+
 [tool.ruff]
+# Intentionally overrides root pyproject.toml: line-length=120 (matches existing code style)
+# and select=["E","F","I"] (minimal rules; security/complexity rules not enforced here).
+target-version = "py314"
 line-length = 120
 
 [tool.ruff.lint]
@@ -34,3 +65,44 @@ exclude_lines = [
 [tool.mypy]
 ignore_missing_imports = true
 explicit_package_bases = true
+
+[tool.pylint.main]
+# asyncua members are generated at runtime from OPC UA NodeSet XML;
+# orjson is a C-extension whose .dumps member is not visible to pylint.
+ignore-paths = ["^\\.venv.*", "^venv", "^\\.venv-wsl.*"]
+
+[tool.pylint.messages-control]
+disable = [
+    "no-member",               # asyncua.ua.* and orjson.dumps: C-extension / runtime-generated
+    "broad-exception-caught",  # OPC UA can raise many exception types; broad catch is intentional
+    "logging-fstring-interpolation",  # f-strings in log calls chosen for readability
+    "logging-not-lazy",        # see above
+    "invalid-name",            # OPC UA / asyncua use PascalCase; legacy camelCase mirrors API
+    "wrong-import-order",      # minor style; not a correctness issue
+    "wrong-import-position",   # setup_client.py sets os.environ between imports intentionally
+    "import-outside-toplevel", # intentional where used
+    "disallowed-name",         # test scaffolding uses short names
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "line-too-long",           # subprocess command strings; enforced by ruff line-length instead
+    "duplicate-code",          # tracked for future refactoring
+    "too-many-instance-attributes",  # OPC UA client state requires multiple fields
+    "too-few-public-methods",  # dataclasses / handler classes
+    "too-many-return-statements",
+    "too-many-branches",
+    "too-many-locals",
+    "too-many-statements",
+    "unused-argument",         # pytest fixtures are injected by name; can't use _
+    "protected-access",        # tests legitimately access private methods
+    "subprocess-run-check",    # test helpers use check= explicitly where needed
+    "consider-using-with",     # subprocess management is intentionally manual
+    "too-many-arguments",
+    "too-many-positional-arguments",
+]
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.design]
+max-args = 10

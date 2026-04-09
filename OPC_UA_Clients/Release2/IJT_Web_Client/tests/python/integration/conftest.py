@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from .._asyncua_compat import apply_send_request_timeout_patch
+
 # ── Path constants ─────────────────────────────────────────────────────────────
 _INTEGRATION_DIR = Path(__file__).resolve().parent
 _WEB_CLIENT_ROOT = _INTEGRATION_DIR.parents[2]  # …/IJT_Web_Client/
@@ -36,26 +38,8 @@ _SERVER_EXE = _SERVER_DIR / "opcua_ijt_demo_application.exe"
 _OPCUA_PORT = 40451
 _WS_PORT = 8001
 
-
-# ── asyncua 1.2b2 bug-fix ─────────────────────────────────────────────────────
-# UaClient.call() passes no timeout → falls back to 1 s; heavy calls fail.
-# Fix: substitute self._timeout (set from Client(timeout=60)) when none given.
-def _patch_asyncua_send_timeout() -> None:
-    with contextlib.suppress(ImportError):
-        import asyncua.client.ua_client as _uc
-        from asyncua import ua
-
-        _orig = _uc.UaClient._send_request
-
-        async def _fixed(self, request, timeout=None, message_type=ua.MessageType.SecureMessage):
-            if timeout is None:
-                timeout = self._timeout
-            return await _orig(self, request, timeout, message_type)
-
-        _uc.UaClient._send_request = _fixed  # type: ignore[method-assign]
-
-
-_patch_asyncua_send_timeout()
+# Apply asyncua _send_request timeout workaround for all integration tests.
+apply_send_request_timeout_patch()
 
 
 # ── Port utilities ─────────────────────────────────────────────────────────────

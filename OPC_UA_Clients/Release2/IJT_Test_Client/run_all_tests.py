@@ -55,8 +55,7 @@ REQUIREMENTS = _HERE / "requirements.txt"
 _REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
 _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest-live.xml"
-_LOCAL_TEMP_DIR = _HERE / ".state" / "tmp"
-_PYTEST_TEMP_ROOT = _HERE / ".state" / "pytest_tmproot"
+_TMP_DIR = _HERE / "tmp"
 
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40462"
 _MIN_PYTHON = (3, 14)
@@ -97,14 +96,13 @@ def _parse_opcua_endpoint(url: str) -> tuple[str, int]:
     return parsed.hostname or "localhost", parsed.port or 40451
 
 
-def _configure_local_temp_env() -> None:
-    """Force temp files into project-local .state/ paths for reproducible ACL behavior."""
-    _LOCAL_TEMP_DIR.mkdir(parents=True, exist_ok=True)
-    _PYTEST_TEMP_ROOT.mkdir(parents=True, exist_ok=True)
-    os.environ["TMP"] = str(_LOCAL_TEMP_DIR)
-    os.environ["TEMP"] = str(_LOCAL_TEMP_DIR)
-    os.environ["TMPDIR"] = str(_LOCAL_TEMP_DIR)
-    os.environ["PYTEST_DEBUG_TEMPROOT"] = str(_PYTEST_TEMP_ROOT)
+def _prepare_tmp_dir() -> None:
+    """Ensure project-local tmp/pytest/ exists for pytest basetemp.
+    pip uses system temp — overriding TMP/TEMP causes pip wheel ACL locking on Windows.
+    Pre-run deletion is intentionally omitted: tmp_path_retention_policy='failed' keeps
+    artifacts from failing tests available for inspection until the developer clears them."""
+    pytest_tmp = _TMP_DIR / "pytest"
+    pytest_tmp.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -276,8 +274,9 @@ def install_requirements() -> None:
         logger.info("Skipping pip install (SKIP_VENV_INSTALL=1)")
         return
     pip = str(_venv_pip(VENV))
-    # Always upgrade pip itself first to avoid stale CVE warnings in pip-audit
-    subprocess.run([pip, "install", "--quiet", "--upgrade", "pip"], check=False)
+    python = str(_venv_python(VENV))
+    # Use python -m pip for self-upgrade (newer pip requires this on Windows)
+    subprocess.run([python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"], check=False)
     for req_file in (REQUIREMENTS, _REQUIREMENTS_DEV):
         if req_file.exists():
             logger.info("Installing requirements from %s...", req_file.name)
@@ -692,7 +691,7 @@ def _step_detect_secrets() -> _StepResult:
         result.ok = secret_count == 0
         if secret_count:
             result.note = f"{secret_count} potential secret(s) — review .secrets.baseline"
-    except json.JSONDecodeError, AttributeError:
+    except (json.JSONDecodeError, AttributeError):
         result.ok = rc == 0
     if not result.ok:
         _log(output)
@@ -910,7 +909,7 @@ def main() -> int:
     global _USE_COLOUR
 
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
-    _configure_local_temp_env()
+    _prepare_tmp_dir()
 
     args = _build_parser().parse_args()
     run_phase1 = not args.phase2
@@ -998,8 +997,8 @@ def main() -> int:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}
-    _CACHE_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache"}
+    _SKIP = {"node_modules", ".git", "test-results", "tmp"}
+    _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith("venv") and not d.startswith(".venv")]
         for d in list(dirs):

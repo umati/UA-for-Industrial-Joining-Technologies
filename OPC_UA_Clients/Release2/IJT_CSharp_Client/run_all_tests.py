@@ -43,7 +43,7 @@ _REPO_ROOT: Path = Path(__file__).resolve().parents[3]
 _SLN = _PROJECT_DIR / "IJT_CSharp_Client.sln"
 _TEST_PROJ = _PROJECT_DIR / "Tests" / "IJT_CSharp_Client.Tests" / "IJT_CSharp_Client.Tests.csproj"
 _RESULTS_DIR = _PROJECT_DIR / "test-results"
-_DEFAULT_SERVER_URL = "opc.tcp://localhost:40465"
+_DEFAULT_SERVER_URL = "opc.tcp://localhost:40451"
 _MIN_DOTNET_MAJOR = 10
 _COVERAGE_THRESHOLD = 80.0
 
@@ -414,17 +414,19 @@ def _step_detect_secrets() -> StepResult:
     return StepResult(label, "PHASE 1", "PASS", "", dur)
 
 
-def _step_test_unit() -> StepResult:
+def _step_test_unit(verbose: bool = False) -> StepResult:
     """Run dotnet test with XPlat Code Coverage — live tests skip via IJT_PHASE1_ONLY=true."""
     label = "dotnet test (unit)"
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     trx_path = _RESULTS_DIR / "tests.trx"
     t0 = time.monotonic()
+    verbosity = ["--verbosity", "normal"] if verbose else ["--verbosity", "minimal"]
     rc, _ = _run(
         [
             "dotnet", "test", str(_TEST_PROJ),
             "--no-restore",
             "--configuration", "Release",
+            *verbosity,
             "--logger", "trx;LogFileName=tests.trx",
             "--results-directory", str(_RESULTS_DIR),
             "--collect", "XPlat Code Coverage",
@@ -535,16 +537,18 @@ def _try_launch_simulator() -> Optional[subprocess.Popen]:
     return None
 
 
-def _step_live_tests(server_url: str) -> StepResult:
+def _step_live_tests(server_url: str, verbose: bool = False) -> StepResult:
     label = "Live Tests"
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     trx_path = _RESULTS_DIR / "live-tests.trx"
     t0 = time.monotonic()
+    verbosity = ["--verbosity", "normal"] if verbose else ["--verbosity", "minimal"]
     rc, stdout = _run(
         [
             "dotnet", "test", str(_TEST_PROJ),
             "--no-restore",
             "--configuration", "Release",
+            *verbosity,
             "--logger", "trx;LogFileName=live-tests.trx",
             "--results-directory", str(_RESULTS_DIR),
             "--blame-hang",
@@ -578,6 +582,7 @@ def _parse_args() -> argparse.Namespace:
     group = p.add_mutually_exclusive_group()
     group.add_argument("--phase1", action="store_true", help="Build + unit tests only (no server)")
     group.add_argument("--phase2", action="store_true", help="Live integration tests only")
+    p.add_argument("--verbose", "-v", action="store_true", help="Verbose dotnet test output (--verbosity normal)")
     p.add_argument(
         "--junit-xml",
         default="test-results/run_all_tests.xml",
@@ -641,7 +646,7 @@ def main() -> int:
         results.append(r)
         _row(r.phase, r.label, r.status, r.detail)
 
-        r = _step_test_unit()
+        r = _step_test_unit(verbose=args.verbose)
         results.append(r)
         _row(r.phase, r.label, r.status, r.detail)
 
@@ -676,7 +681,7 @@ def main() -> int:
             server_url = _resolve_server_url()
             if server_ready:
                 print(f"[PHASE 2] OPC UA server reachable at {server_url}")
-                r = _step_live_tests(server_url)
+                r = _step_live_tests(server_url, verbose=args.verbose)
             else:
                 print(
                     f"[PHASE 2] OPC UA server not reachable at {server_url}"
@@ -711,8 +716,8 @@ def main() -> int:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}
-    _CACHE_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache"}
+    _SKIP = {"node_modules", ".git", "test-results", "TestResults", "tmp"}
+    _CACHE_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache", "bin", "obj"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith("venv") and not d.startswith(".venv")]
         for d in list(dirs):

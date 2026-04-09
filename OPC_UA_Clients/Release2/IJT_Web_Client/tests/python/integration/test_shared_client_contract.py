@@ -78,7 +78,7 @@ def _is_websocket_startup_error(exc: Exception) -> bool:
                 ws_related.append(typ)
         if ws_related and isinstance(exc, tuple(ws_related)):
             return True
-    except ImportError, AttributeError:
+    except (ImportError, AttributeError):
         # If the optional 'websockets' dependency is missing or does not expose
         # the expected exception types, fall back to the heuristic checks below.
         pass

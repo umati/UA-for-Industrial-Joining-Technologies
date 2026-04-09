@@ -33,17 +33,16 @@
 Each runner removes `__pycache__`, `.ruff_cache`, `.mypy_cache`, `.coverage*` after writing reports.
 Cleanup is **self-contained** — each runner only affects its own directory.
 Running the root orchestrator triggers sub-project runners as subprocesses; each cleans itself.
-`.pytest_cache` and `test-results/` are always preserved.
+`.pytest_cache` is cleaned post-run by each runner. `test-results/` is always preserved.
 
 ### Automatic — pytest temp dirs
 All three Python pytest projects (Web, Console, Test clients) are configured with:
-- `addopts = --basetemp=.state/pytest_tmp` — temp dirs stay inside each project, avoiding OS temp ACL issues on restricted Windows machines
-- `tmp_path_retention_policy = all` — pytest never attempts to delete old session temp dirs (guards against `PermissionError` on locked artifacts from previous runs)
-- Each `run_all_tests.py` sets `TMP`, `TEMP`, `TMPDIR`, and `PYTEST_DEBUG_TEMPROOT` to project-local `.state/` paths for subprocess consistency
+- `addopts = "-v --basetemp=tmp/pytest"` — temp dirs stay inside each project under `tmp/pytest/`, avoiding OS temp ACL issues on restricted Windows machines
+- `tmp_path_retention_policy = "failed"` — only failing test artifacts are retained; passing test temps are cleaned automatically by pytest
 
 **Console Client and Web Client additionally use `pyfakefs`** for all filesystem-touching unit tests (`test_setup_client.py` and `test_setup_project.py` respectively). The `fs` fixture virtualizes `pathlib`, `os`, `shutil`, and `zipfile` calls in-process, so those tests write no real files to disk. This eliminates the root cause of Windows ACL locks from tests that simulate virtual environment layouts (`venv/Scripts/python.exe`). Works identically on Windows, Linux, and macOS.
 
-`tests/fixtures/.gitkeep` is committed in each project — the directory always exists on a fresh clone.
+The `tests/fixtures/` directory is created at runtime by `conftest.py` (`pytest_configure`) — no `.gitkeep` needed.
 
 ### Manual — git-native cleanup (when needed)
 ```bash

@@ -29,12 +29,13 @@ Running multiple Python clients together in a single root `pytest` invocation ca
 
 All three Python pytest projects (Web, Console, Test clients) keep temp files **inside each project directory** to avoid host-level permission issues in protected OS temp folders:
 
-- `IJT_Console_Client/pytest.ini` — `--basetemp=.state/pytest_tmp`, `tmp_path_retention_policy = all`
-- `IJT_Web_Client/pytest.ini` — `--basetemp=.state/pytest_tmp`, `tmp_path_retention_policy = all`
-- `IJT_Test_Client/pytest.ini` — `--basetemp=.state/pytest_tmp`, `tmp_path_retention_policy = all`
-- Each project's `run_all_tests.py` also sets `TMP`, `TEMP`, `TMPDIR`, and `PYTEST_DEBUG_TEMPROOT` to project-local `.state/` paths so subprocesses never fall back to machine temp locations.
+- `IJT_Console_Client/pyproject.toml` — `addopts = "-v --basetemp=tmp/pytest"`, `tmp_path_retention_policy = "failed"`
+- `IJT_Web_Client/pyproject.toml` — `addopts = "-v --basetemp=tmp/pytest"`, `tmp_path_retention_policy = "failed"`
+- `IJT_Test_Client/pyproject.toml` — `addopts = "-v --basetemp=tmp/pytest"`, `tmp_path_retention_policy = "failed"`
 
-`.state/` is gitignored in each project.
+`tmp/` is gitignored in each project. Only failed-test artifacts are retained between runs (`failed` policy); passing test temps are removed automatically by pytest.
+
+**Never override `TMP`/`TEMP`/`TMPDIR` env vars** to redirect pip's temp directories — this causes ACL-locked wheel build directories on Windows. pytest basetemp is the only temp path that should be redirected.
 
 ---
 
@@ -47,27 +48,28 @@ Every `run_all_tests.py` calls `_cleanup_caches()` after writing reports. Scope 
 | Sub-project runners (Web, Console, Test, Server, C#, Node) | Own project dir (recursive) | `__pycache__`, `.ruff_cache`, `.mypy_cache`, `.coverage*`, `*.pyc` |
 | Root orchestrator | Repo root only (non-recursive) | Same + `pki/`, `PKI/` |
 
-**Always preserved:** `.pytest_cache` (holds `--lf`/`--ff` state for developers) and `test-results/` (reports).
+**Cleaned post-run:** `.pytest_cache` (regenerates on next run; `--lf`/`--ff` only works within the same session). Always preserved: `test-results/` (reports).
 
 ---
 
 ## pytest Temp Directory Design
 
-All three Python projects share the same `pytest.ini` configuration for temp management:
+All three Python projects share the same `[tool.pytest.ini_options]` configuration in their `pyproject.toml`:
 
-```ini
-# pytest.ini (all three Python clients)
-addopts = --basetemp=.state/pytest_tmp
-tmp_path_retention_policy = all
+```toml
+# pyproject.toml (all three Python clients)
+[tool.pytest.ini_options]
+addopts = "-v --basetemp=tmp/pytest"
+tmp_path_retention_policy = "failed"
 ```
 
-`--basetemp` keeps pytest session directories inside each project under `.state/pytest_tmp`, avoiding OS/user temp folders whose ACLs can be restrictive on corporate Windows machines. `tmp_path_retention_policy = all` prevents pytest from attempting to delete old session directories at startup, which avoids `PermissionError` in edge cases where previous runs left locked artifacts.
+`--basetemp=tmp/pytest` keeps pytest session directories inside each project under `tmp/pytest/`, avoiding OS/user temp folders whose ACLs can be restrictive on corporate Windows machines. `tmp_path_retention_policy = "failed"` retains artifacts only for failing tests, keeping disk usage minimal.
 
 ### Console Client: pyfakefs for filesystem-touching unit tests
 
 `IJT_Console_Client` and `IJT_Web_Client` go one step further. Tests in `test_setup_client.py` and `test_setup_project.py` simulate virtual environment layouts (checking for `venv/Scripts/python.exe`, extracting simulator ZIPs, etc.). On hardened Windows setups, writing `.exe` files inside a `Scripts/` path can trigger OS security policies that lock the containing directory.
 
-The solution: all filesystem-touching unit tests use the **`fs` fixture from `pyfakefs`** instead of `tmp_path`. The fake filesystem intercepts `pathlib`, `os`, `shutil`, and `zipfile` calls in-process — no real files are written to disk for those tests. Pytest cache, coverage, and report files are still written normally to `.state/pytest_tmp`.
+The solution: all filesystem-touching unit tests use the **`fs` fixture from `pyfakefs`** instead of `tmp_path`. The fake filesystem intercepts `pathlib`, `os`, `shutil`, and `zipfile` calls in-process — no real files are written to disk for those tests. Pytest cache, coverage, and report files are still written normally to `tmp/pytest`.
 
 This approach works identically on Windows, Linux, and macOS, and requires no per-machine workarounds.
 
@@ -87,8 +89,6 @@ def test_finds_direct_exe(self, fs, monkeypatch):
 ```
 
 `pyfakefs~=6.1` is listed in `IJT_Console_Client/requirements-dev.txt` and `IJT_Web_Client/requirements-dev.txt`.
-
-The `tests/fixtures/` directory is guaranteed to exist on fresh clones via `tests/fixtures/.gitkeep` committed in the project.
 
 ---
 

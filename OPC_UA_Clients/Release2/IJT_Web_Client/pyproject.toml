@@ -1,10 +1,46 @@
 [project]
 requires-python = ">=3.14"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
+norecursedirs = [".*", "node_modules", "__pycache__", "venv", "live"]
+timeout = 30
+pythonpath = ["src"]
+addopts = "-v --basetemp=tmp/pytest"
+tmp_path_retention_policy = "failed"
+markers = [
+    "core: core regression tests for IJT client behavior",
+    "integration: tests requiring running OPC UA + WebSocket services",
+    "live: direct OPC UA server tests (requires opc.tcp://localhost:40451)",
+    "live_ws: WebSocket backend tests (requires ws://localhost:8001)",
+    "legacy: old developer exploration tests — not run in CI",
+]
+
 [tool.bandit]
 exclude_dirs = ["venv", ".venv", ".venv-wsl", ".venv-wsl_backup", "tests", "node_modules", "__pycache__", ".git", ".state"]
 
+[tool.vulture]
+# pytest fixture parameters are declared as function arguments but never referenced
+# by name in the function body — they are injected by pytest via the parameter name.
+# Vulture cannot distinguish fixture dependency injection from unused variables.
+ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
+
+[tool.interrogate]
+# 30% minimum docstring coverage; advisory — low bar to avoid blocking new code.
+fail-under = 30
+ignore-init-method = true
+ignore-magic = true
+ignore-semiprivate = true
+ignore-private = true
+verbose = 0
+
 [tool.ruff]
+# Intentionally overrides root pyproject.toml: line-length=120 (matches existing code style)
+# and select=["E","F","I"] (minimal rules; security/complexity rules not enforced here).
+target-version = "py314"
 line-length = 120
 
 [tool.ruff.lint]
@@ -43,3 +79,28 @@ exclude_lines = [
 [tool.mypy]
 ignore_missing_imports = true
 explicit_package_bases = true
+
+[tool.pylint.messages-control]
+disable = [
+    "import-error",            # false positive: python.xxx imports resolve at runtime via sys.path
+    "no-member",               # asyncua dynamically generates ua.* types from OPC UA NodeSet XML
+    "broad-exception-caught",  # OPC UA code must handle broad exceptions; narrowing would be fragile
+    "logging-fstring-interpolation",  # f-strings chosen for readability and consistency
+    "logging-not-lazy",        # see above
+    "invalid-name",            # OPC UA uses PascalCase for event fields; legacy camelCase mirrors API
+    "wrong-import-order",      # minor style; not a correctness issue
+    "import-outside-toplevel", # serialize_data.py imports inside functions to avoid circular imports
+    "duplicate-code",          # EventHandler/ResultEventHandler share logic; tracked for refactor
+    "too-many-instance-attributes",  # Connection and EventHandler manage multiple OPC UA state fields
+    "too-few-public-methods",  # short dataclasses and single-responsibility handler classes
+    "too-many-return-statements",
+    "too-many-branches",
+    "too-many-locals",
+    "too-many-statements",     # methodcall() and utils functions are complex by protocol necessity
+]
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.design]
+max-args = 10

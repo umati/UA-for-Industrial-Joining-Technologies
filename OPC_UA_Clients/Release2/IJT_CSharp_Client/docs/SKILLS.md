@@ -42,7 +42,10 @@ IJT_CSharp_Client/
 │   ├── AddressSpaceHelper.cs    # Node browsing and address space utilities
 │   └── UaTypeConverter.cs       # OPC UA type ↔ C# type conversion helpers
 ├── Types/                       # Auto-generated OPC UA type bindings (UAModel.*)
-│   └── ...                      # Do NOT edit — regenerate with UA Model Compiler
+│   ├── Directory.Build.props    # Dual-mode build config (OpcFoundationVersion, TypesTargetFrameworks)
+│   ├── Directory.Build.targets  # Client-compat: excludes *.Classes.cs when OpcUaClientOnly=true
+│   ├── nuget.config             # Scoped NuGet config for client-compat restore
+│   └── ...                      # Do NOT edit generated files — regenerate with UA Model Compiler
 ├── Client/
 │   ├── AssetManagement.cs       # Asset read/write operations (IJoiningSystemAssetType)
 │   ├── ResultManagement.cs      # Result retrieval (GetResultById, GetLatestResult, RequestResults)

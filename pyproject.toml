@@ -1,0 +1,17 @@
+# Root pyproject.toml — monorepo-level tool configuration.
+# Each sub-project (Console, Web, Test clients) has its own pyproject.toml
+# for project-specific settings. This file holds repo-root concerns only.
+
+[tool.pytest.ini_options]
+# Guard: prevents accidental bare `pytest` runs from the repo root.
+# All tests must be run via each sub-project's own run_all_tests.py.
+collect_ignore_glob = ["*"]
+
+[tool.ruff]
+# Repo-wide ruff defaults; sub-projects may override in their own pyproject.toml.
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "S", "B", "C4", "SIM"]
+ignore = ["S101"]  # allow assert in tests

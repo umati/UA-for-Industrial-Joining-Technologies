@@ -55,8 +55,7 @@ IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 IS_CI = bool(os.getenv("CI"))
 _VENV = ROOT / ".venv"
-_LOCAL_TEMP_DIR = ROOT / ".state" / "tmp"
-_PYTEST_TEMP_ROOT = ROOT / ".state" / "pytest_tmproot"
+_TMP_DIR = ROOT / "tmp"
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +110,7 @@ def _enable_ansi_windows() -> bool:
             kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
             return True
         return False
-    except AttributeError, OSError:
+    except (AttributeError, OSError):
         return False
 
 
@@ -224,14 +223,13 @@ def _cmd_available(cmd: str) -> bool:
     return shutil.which(cmd) is not None
 
 
-def _configure_local_temp_env() -> None:
-    """Force temp files into project-local .state/ paths for reproducible ACL behavior."""
-    _LOCAL_TEMP_DIR.mkdir(parents=True, exist_ok=True)
-    _PYTEST_TEMP_ROOT.mkdir(parents=True, exist_ok=True)
-    os.environ["TMP"] = str(_LOCAL_TEMP_DIR)
-    os.environ["TEMP"] = str(_LOCAL_TEMP_DIR)
-    os.environ["TMPDIR"] = str(_LOCAL_TEMP_DIR)
-    os.environ["PYTEST_DEBUG_TEMPROOT"] = str(_PYTEST_TEMP_ROOT)
+def _prepare_tmp_dir() -> None:
+    """Ensure project-local tmp/pytest/ exists for pytest basetemp.
+    pip uses system temp — overriding TMP/TEMP causes pip wheel ACL locking on Windows.
+    Pre-run deletion is intentionally omitted: tmp_path_retention_policy='failed' keeps
+    artifacts from failing tests available for inspection until the developer clears them."""
+    pytest_tmp = _TMP_DIR / "pytest"
+    pytest_tmp.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -424,6 +422,36 @@ def _stage_python_lint(python: Path) -> StageResult:
     else:
         _skip("vulture not installed — pip install vulture")
         notes.append("vulture not installed")
+
+    if _py_module_available("pylint"):
+        results_dir.mkdir(parents=True, exist_ok=True)
+        rc = _run(
+            [
+                python,
+                "-m",
+                "pylint",
+                "src/",
+                "--output-format=json",
+                f"--output={results_dir / 'pylint.json'}",
+            ],
+            label="pylint",
+        )
+        if rc not in (0, 4):  # 0 = clean, 4 = warnings only (non-fatal)
+            overall_rc = rc
+    else:
+        _skip("pylint not installed — pip install pylint")
+        notes.append("pylint not installed")
+
+    if _py_module_available("interrogate"):
+        rc = _run(
+            [python, "-m", "interrogate", "-v", "--fail-under", "30", "."],
+            label="interrogate",
+        )
+        if rc != 0:
+            overall_rc = rc
+    else:
+        _skip("interrogate not installed — pip install interrogate")
+        notes.append("interrogate not installed")
 
     if _cmd_available("detect-secrets"):
         rc = _run(["detect-secrets", "scan"], label="detect-secrets scan")
@@ -1132,7 +1160,7 @@ STAGES = [
 
 
 def main() -> int:
-    _configure_local_temp_env()
+    _prepare_tmp_dir()
 
     parser = argparse.ArgumentParser(
         description="IJT Web Client cross-platform test runner",
@@ -1281,8 +1309,8 @@ def main() -> int:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}
-    _CACHE_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache"}
+    _SKIP = {"node_modules", ".git", "test-results", "tmp"}
+    _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith("venv") and not d.startswith(".venv")]
         for d in list(dirs):
