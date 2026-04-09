@@ -90,7 +90,11 @@ exclude_lines = [
 ignore_missing_imports = true
 explicit_package_bases = true
 # Exclude pyfakefs/pytest bookkeeping dirs that may be locked on Windows.
-exclude = ["pytest-cache-files-.*"]
+exclude = [
+    "pytest-cache-files-.*",
+    "tests[\\\\/]fixtures[\\\\/]tmp[\\\\/].*",
+    "\\.state[\\\\/]tmp[\\\\/].*",
+]
 
 [tool.pylint.main]
 # Exclude pyfakefs/pytest bookkeeping dirs that may be locked on Windows.

@@ -1272,14 +1272,14 @@ def _is_runtime_ready():
 # ---------------------------------------------------------------------------
 
 
-def _run_cmd(args: list[str], *, check: bool = True, shell: bool = False) -> int:
+def _run_cmd(args: list[str], *, check: bool = True) -> int:
     """Run a system command, stream output live, and return the exit code.
 
     Raises subprocess.CalledProcessError when check=True and the command fails,
     mirroring ``set -e`` behaviour from the original bootstrap_wsl.sh.
     """
-    log.info("$ %s", " ".join(args) if not shell else args[0])
-    result = subprocess.run(args, check=check, shell=shell)  # noqa: S603
+    log.info("$ %s", " ".join(args))
+    result = subprocess.run(args, check=check)  # noqa: S603
     return result.returncode
 
 
@@ -1380,11 +1380,16 @@ def _bootstrap_install_python_314() -> None:
 
 def _bootstrap_install_node_24() -> None:
     log.info("Installing Node.js 24.x via NodeSource.")
-    # Download and pipe the NodeSource setup script.  The script adds the
-    # apt source entry and key; we then install nodejs normally.
-    _run_cmd(
-        "curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -",
-        shell=True,
+    # Fetch and run the NodeSource setup script without shell piping.
+    setup_script = subprocess.check_output(
+        ["curl", "-fsSL", "https://deb.nodesource.com/setup_24.x"],
+        text=True,
+    )
+    subprocess.run(  # noqa: S603
+        ["sudo", "-E", "bash", "-"],
+        input=setup_script,
+        text=True,
+        check=True,
     )
     _run_cmd(["sudo", "apt-get", "install", "-y", "nodejs"])
 

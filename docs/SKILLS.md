@@ -36,9 +36,14 @@ Running the root orchestrator triggers sub-project runners as subprocesses; each
 `.pytest_cache` is cleaned post-run by each runner. `test-results/` is always preserved.
 
 ### Automatic — pytest temp dirs
-All three Python pytest projects (Web, Console, Test clients) are configured with:
+Console and Test clients are configured with:
 - `addopts = "-v --basetemp=tmp/pytest"` — temp dirs stay inside each project under `tmp/pytest/`, avoiding OS temp ACL issues on restricted Windows machines
 - `tmp_path_retention_policy = "failed"` — only failing test artifacts are retained; passing test temps are cleaned automatically by pytest
+
+Web client is configured with:
+- `addopts = "-v -p no:cacheprovider"` — disables pytest cacheprovider to avoid `pytest-cache-files-*` ACL churn on hardened Windows machines
+- `tmp_path_retention_policy = "failed"`
+- `local_temp_dir` fixture writes to `.state/tmp/test-fixtures/{uuid}` with explicit `yield`/`finally` cleanup
 
 **Console Client and Web Client additionally use `pyfakefs`** for all filesystem-touching unit tests (`test_setup_client.py` and `test_setup_project.py` respectively). The `fs` fixture virtualizes `pathlib`, `os`, `shutil`, and `zipfile` calls in-process, so those tests write no real files to disk. This eliminates the root cause of Windows ACL locks from tests that simulate virtual environment layouts (`.venv/Scripts/python.exe`). Works identically on Windows, Linux, and macOS.
 
