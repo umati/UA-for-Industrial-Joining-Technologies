@@ -146,4 +146,3 @@ Separating them into an extended tier:
 2. Makes skips **visible and auditable** — not silently ignored
 3. Allows **gradual promotion** of extended tests to required as infrastructure matures
 4. Matches industry standard: smoke/unit = blocking; integration/e2e/security = non-blocking but tracked
-

@@ -4,6 +4,82 @@ Covers workspace cleanup, test temp directory management, and coverage configura
 
 ---
 
+## Pre-Commit Hooks — Auto-Fix on Every Commit
+
+This repo uses [pre-commit](https://pre-commit.com/) to automatically fix formatting and line-ending issues
+**before any commit is recorded**.  Most hooks are auto-fixers that never block a contributor — they silently
+reformat files so the commit succeeds on the second attempt.
+
+> **Note:** A small set of *detector* hooks do block by design if they find real problems:
+> `check-json`, `check-yaml`, `check-toml` (config syntax errors), `check-merge-conflict` (stray `<<<<<<<`
+> markers), and `debug-statements` (stray `breakpoint()`).  These require manual fixes before committing.
+
+### First-time setup (once per machine, per clone)
+
+```sh
+pip install pre-commit          # or: pip install -r requirements-dev.txt
+pre-commit install              # installs the hooks into .git/hooks/
+```
+
+The three Python test runners (Console, Web, Test) call `pre-commit install` automatically, so hooks are
+installed the first time you run `python run_all_tests.py`.  For other runners (CSharp, Node, Server) or
+direct git use, run `pre-commit install` manually once after cloning.
+
+### What happens on `git commit`
+
+1. `ruff-format` rewrites any Python files with wrong indentation / quotes / blank-lines.
+2. `ruff --fix` auto-applies safe lint fixes.
+3. `end-of-file-fixer` and `mixed-line-ending` normalise LF/CRLF on all text files.
+4. `trailing-whitespace` strips trailing spaces.
+
+If any hook modifies files the commit is aborted and you see:
+
+```
+ruff format..............................................................Failed
+- hook id: ruff-format
+- files were modified by this hook
+```
+
+**Simply run `git add -u && git commit` again** — the fixed files are already staged.  One extra command,
+then it's done.  No manual reformatting required.
+
+Hooks that detect problems without auto-fixing (and do block the commit until resolved):
+- `check-merge-conflict` — stray `<<<<<<` markers
+- `check-json` / `check-yaml` / `check-toml` — syntax errors in config files
+- `debug-statements` — stray `breakpoint()` / `pdb.set_trace()`
+
+### Auto-generated files are excluded
+
+Everything under `OPC_UA_Clients/Release2/IJT_CSharp_Client/Types/` is generated from UA-ModelCompiler and
+is excluded from **all** hooks globally (set in `.pre-commit-config.yaml` `exclude:` key and in root
+`pyproject.toml` `[tool.ruff] exclude`).  Never edit those files manually.
+
+---
+
+## Virtual Environment Naming Convention
+
+Each project creates **two independent environments** so that running tests never pollutes the launch
+environment and vice versa.
+
+| Directory | Created by | Contents | Typical use |
+|-----------|-----------|----------|-------------|
+| `.venv` | `setup_client.py` / `setup_project.py` | `requirements.txt` only | `python main.py` / standalone launch (Windows, Linux, macOS, WSL) |
+| `.venv_test` | `run_all_tests.py` | `requirements.txt` + `requirements-dev.txt` | Test runs, CI |
+| `/opt/ijt_venv` | Docker `ENTRYPOINT` | `requirements.txt` | Docker container runtime |
+
+> **WSL note:** `bootstrap_wsl.sh` calls `setup_project.py` after OS provisioning, which creates the standard
+> `.venv`.  There is no separate `.venv_wsl` at runtime — WSL non-Docker uses `.venv` like every other host.
+
+**Rule:** never activate `.venv_test` to run the application, and never run tests inside `.venv`.
+
+Both `setup_*.py` and `run_all_tests.py` remove stale legacy directories (`venv/`, `venv_test/`, `env/`,
+`ENV/`, `.venv_backup/`) on startup.  A fresh clone always gets a clean state automatically.
+
+The `.gitignore` uses `.venv*/` which covers all variants.  The `.gitattributes` `eol=lf` rule applies to
+all text files so line endings are always normalised regardless of the editor or OS.
+
+---
+
 ## Running Tests — Project Isolation Rule
 
 **Always run tests from each project's own directory — never from repo root.**
@@ -67,7 +143,7 @@ tmp_path_retention_policy = "failed"
 
 ### Console Client: pyfakefs for filesystem-touching unit tests
 
-`IJT_Console_Client` and `IJT_Web_Client` go one step further. Tests in `test_setup_client.py` and `test_setup_project.py` simulate virtual environment layouts (checking for `venv/Scripts/python.exe`, extracting simulator ZIPs, etc.). On hardened Windows setups, writing `.exe` files inside a `Scripts/` path can trigger OS security policies that lock the containing directory.
+`IJT_Console_Client` and `IJT_Web_Client` go one step further. Tests in `test_setup_client.py` and `test_setup_project.py` simulate virtual environment layouts (checking for `.venv/Scripts/python.exe`, extracting simulator ZIPs, etc.). On hardened Windows setups, writing `.exe` files inside a `Scripts/` path can trigger OS security policies that lock the containing directory.
 
 The solution: all filesystem-touching unit tests use the **`fs` fixture from `pyfakefs`** instead of `tmp_path`. The fake filesystem intercepts `pathlib`, `os`, `shutil`, and `zipfile` calls in-process — no real files are written to disk for those tests. Pytest cache, coverage, and report files are still written normally to `tmp/pytest`.
 
@@ -102,7 +178,7 @@ omit = [
     "run_all_tests.py",   # runner infrastructure
     "setup_*.py",         # setup/install scripts
     "tests/live/*",       # require live server; excluded from unit runs
-    ".venv/*", "venv/*",
+    ".venv/*", ".venv_test/*",
 ]
 
 [tool.coverage.report]

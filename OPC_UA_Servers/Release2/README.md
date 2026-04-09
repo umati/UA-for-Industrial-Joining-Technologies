@@ -94,7 +94,7 @@ OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](htt
 3. **Removed** the DRAFT **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** since the **primary simulator** is **updated** with the **released** version.
 4. The **latest** simulator **consists** of **multiple features and enhancements** as given below:
 	- **Added** **50+ event simulations** in the existing **SimulateEvents** method.
-	- **Added** simulation logic for **GetResultById, GetLatestResult and RequestResults** methods.	
+	- **Added** simulation logic for **GetResultById, GetLatestResult and RequestResults** methods.
  	- **RequestResults** method is useful for **getting Historical Results** using **Subscription** instead of **polling** each Result.
 	- **Added** Engineering Units for relevant data with valid values.
 	- **Updated** simulation of **SYNC** Result to be reported as **parallel** operation when sent as references compared to **BATCH** Result where partial results are sent **sequentially**.
@@ -107,7 +107,7 @@ OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](htt
 
 **2025-08-05:**
 1. Uploaded **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** based on OPC 40450-1 **v1.01.0** (pre-release). Will be merged with **OPC_UA_IJT_Server_Simulator.zip** once the specification is published.
-   
+
 **2025-07-04:**
 1. Created a default Single Result on start-up for easier testing.
 2. Updated Docker logic to log the correct EndpointUrl while running in Docker.

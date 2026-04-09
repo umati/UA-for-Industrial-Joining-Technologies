@@ -95,7 +95,7 @@ export class ModelManager {
         content = content.value
       }
       // If the model itself provides a typecasting, then use it
-      
+
       if ( castMapping) {
         for (const name of Object.entries(castMapping)) {
           if (parameterName.toLowerCase() === name[0].toLowerCase()) {
@@ -103,18 +103,18 @@ export class ModelManager {
             const resultMetaData = content.ResultMetaData || content.Value?.ResultMetaData
             // const resultMetaData = content.ResultMetaData || content.Value?.ResultMetaData
             if (resultMetaData && resultMetaData.CreationTime) { // We got a result
-                const classification = resultMetaData.Classification 
+                const classification = resultMetaData.Classification
                 let result
-                
+
                 // console.log('Classification number' + classification)
                 switch (parseInt(classification)) {
-                  case RESULT_CLASS.JOB: 
+                  case RESULT_CLASS.JOB:
                     result= new JobDataModel(content, this)
                     break
-                  case RESULT_CLASS.BATCH: 
+                  case RESULT_CLASS.BATCH:
                     result = new BatchDataModel(content, this)
                     break
-                  case RESULT_CLASS.TIGHTENING: 
+                  case RESULT_CLASS.TIGHTENING:
                     result = new TighteningDataType(content, this)
                     break
                   default:
@@ -136,7 +136,7 @@ export class ModelManager {
       if (content && content.Locale) {
         return new LocalizationModel(content, this)
       } else if (content && (
-          content.pythonclass === 'NodeId' || 
+          content.pythonclass === 'NodeId' ||
           content.pythonclass === 'QualifiedName')) {
         return new NodeId(content, this)
       } else if (content && content.key) {
@@ -157,7 +157,7 @@ export class ModelManager {
 
   /**
    * This method handles the top level interpretation of a message that should be
-   * converted to a model. 
+   * converted to a model.
    * @param {*} msg
    * @returns
    */
@@ -180,7 +180,7 @@ export class ModelManager {
   }
   /**
    * This method handles the top level interpretation of a message that should be
-   * converted to a model. 
+   * converted to a model.
    * @param {*} values
    * @returns
    */

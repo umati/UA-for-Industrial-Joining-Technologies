@@ -33,6 +33,7 @@ def _asyncua_version() -> Version:
 
 ASYNCUA_VERSION: Version = _asyncua_version()
 
+
 # ---------------------------------------------------------------------------
 # Patch 1 — _send_request timeout
 #

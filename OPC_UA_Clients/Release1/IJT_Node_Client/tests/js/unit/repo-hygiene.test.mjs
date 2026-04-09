@@ -100,4 +100,3 @@ describe('security — promise error handling', () => {
     expect(src).toContain('.catch(reject)')
   })
 })
-

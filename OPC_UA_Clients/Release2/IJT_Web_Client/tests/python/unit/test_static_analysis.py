@@ -24,12 +24,16 @@ import pytest
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]  # = IJT_Web_Client root
 _SRC_PYTHON = _PROJECT_ROOT / "src" / "python"
 
-_SKIP_DIRS = {"venv", ".venv", "env", ".env", "__pycache__", "node_modules", ".git", ".state"}
+_SKIP_DIRS = {"__pycache__", "node_modules", ".git", ".state"}
 
 
 def _all_py_files(root: Path) -> list[Path]:
     """All .py files in the project, excluding generated/dependency dirs."""
-    return [f for f in root.rglob("*.py") if not any(part in _SKIP_DIRS for part in f.parts)]
+
+    def _skip(part: str) -> bool:
+        return part in _SKIP_DIRS or part.startswith(".venv") or part.startswith("venv")
+
+    return [f for f in root.rglob("*.py") if not any(_skip(part) for part in f.parts)]
 
 
 def _tool_available(name: str) -> bool:
@@ -426,7 +430,7 @@ def _collect_all_imported_names(root: Path) -> set[str]:
         try:
             src = py_file.read_text(encoding="utf-8")
             tree = ast.parse(src)
-        except (SyntaxError, OSError):
+        except SyntaxError, OSError:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):

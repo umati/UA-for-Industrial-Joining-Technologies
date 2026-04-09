@@ -60,10 +60,10 @@ from the IJT specification.
 ```
 Endpoint:       opc.tcp://localhost:40451   (override: OPCUA_SERVER_URL env var)
 Binary:         OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe
-Python:         3.14+  (venv at .venv/)
+Python:         3.14+  (test venv at .venv_test/)
 Key packages:   asyncua>=1.2b2, pytest>=9.0.2, pytest-asyncio>=1.3.0, pytest-timeout>=2.4.0
-Run tests:      .venv/bin/python -m pytest -v          (Linux)
-                .venv\Scripts\python -m pytest -v      (Windows)
+Run tests:      .venv_test/bin/python -m pytest -v          (Linux)
+                .venv_test\Scripts\python -m pytest -v      (Windows)
 Auto-launch:    set OPCUA_SIMULATOR_EXE=<path>  to auto-start server if not running
 ```
 
@@ -234,4 +234,3 @@ assert len(events) >= 1
 | `OPCUA_SIMULATOR_EXE` | (none) | Path to simulator binary for auto-launch |
 | `OPCUA_STARTUP_TIMEOUT_SEC` | `30` | Seconds to wait for server OPC UA readiness |
 | `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install on run_all_tests.py |
-

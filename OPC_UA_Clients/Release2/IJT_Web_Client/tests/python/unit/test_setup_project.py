@@ -58,7 +58,7 @@ def test_is_port_in_use_true_when_connection_succeeds(monkeypatch):
     mock_sock.__enter__ = MagicMock(return_value=mock_sock)
     mock_sock.__exit__ = MagicMock(return_value=False)
     mock_sock.connect_ex.return_value = 0
-    monkeypatch.setattr(socket, "socket", lambda *a, **kw: mock_sock)
+    monkeypatch.setattr(socket, "socket", lambda *a, **_kw: mock_sock)
     assert sp._is_port_in_use("localhost", 40451) is True
 
 
@@ -67,7 +67,7 @@ def test_is_port_in_use_false_when_connection_refused(monkeypatch):
     mock_sock.__enter__ = MagicMock(return_value=mock_sock)
     mock_sock.__exit__ = MagicMock(return_value=False)
     mock_sock.connect_ex.return_value = 111
-    monkeypatch.setattr(socket, "socket", lambda *a, **kw: mock_sock)
+    monkeypatch.setattr(socket, "socket", lambda *a, **_kw: mock_sock)
     assert sp._is_port_in_use("localhost", 40451) is False
 
 
@@ -237,7 +237,7 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "IS_DOCKER", True)
         monkeypatch.setattr(sp, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: None)
-        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **kw: False)
+        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **_kw: False)
         result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="docker-test")
         assert result is False
 
@@ -247,8 +247,8 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "IS_WSL", False)
         monkeypatch.setattr(sp, "IS_DOCKER", False)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: Path("fake.exe"))
-        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **kw: False)
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: launched.append(True))
+        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **_kw: False)
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **_kw: launched.append(True))
         sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=False, context="no-launch")
         assert not launched
 
@@ -260,8 +260,8 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "IS_DOCKER", False)
         monkeypatch.setattr(sp, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: exe)
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: popen_calls.append(a[0]))
-        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **kw: True)
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **_kw: popen_calls.append(a[0]))
+        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **_kw: True)
         result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="auto-launch")
         assert result is True
         assert len(popen_calls) == 1
@@ -273,8 +273,8 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "IS_DOCKER", False)
         monkeypatch.setattr(sp, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: exe)
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: None)
-        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **kw: False)
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **_kw: None)
+        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **_kw: False)
         result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="launch-timeout")
         assert result is False
 
@@ -284,7 +284,7 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "IS_DOCKER", False)
         monkeypatch.setattr(sp, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: None)
-        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **kw: False)
+        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **_kw: False)
         result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="no-exe")
         assert result is False
 
@@ -293,7 +293,7 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "IS_WSL", False)
         monkeypatch.setattr(sp, "IS_DOCKER", False)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: None)
-        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **kw: True)
+        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **_kw: True)
         result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=False, context="wait-ready")
         assert result is True
 
@@ -305,11 +305,11 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sp, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: exe)
 
-        def _bad_popen(*a, **kw):
+        def _bad_popen(*a, **_kw):
             raise OSError("Access denied")
 
         monkeypatch.setattr(subprocess, "Popen", _bad_popen)
-        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **kw: False)
+        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **_kw: False)
         import logging
 
         with caplog.at_level(logging.WARNING, logger="setup_project"):
@@ -347,10 +347,10 @@ class TestIsRuntimeReady:
         monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm" if npm else None)
         monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx" if npx else None)
         if deps_ok:
-            monkeypatch.setattr(sp, "_run_command", lambda cmd, **kw: None)
+            monkeypatch.setattr(sp, "_run_command", lambda cmd, **_kw: None)
         else:
 
-            def _fail(*a, **kw):
+            def _fail(*a, **_kw):
                 raise Exception("missing dep")
 
             monkeypatch.setattr(sp, "_run_command", _fail)
@@ -531,8 +531,8 @@ class TestOpcUaServerRelaunch:
         monkeypatch.setattr(sp, "IS_DOCKER", False)
         monkeypatch.setattr(sp, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: exe)
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: popen_calls.append(a[0]))
-        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **kw: True)
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **_kw: popen_calls.append(a[0]))
+        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **_kw: True)
 
         r1 = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="first")
         assert r1 is True
@@ -549,8 +549,8 @@ class TestOpcUaServerRelaunch:
         monkeypatch.setattr(sp, "IS_WSL", False)
         monkeypatch.setattr(sp, "IS_DOCKER", False)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: exe)
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: popen_calls.append(a[0]))
-        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **kw: False)
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **_kw: popen_calls.append(a[0]))
+        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **_kw: False)
         result = sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=False, context="no-relaunch")
         assert result is False
         assert popen_calls == []
@@ -564,8 +564,8 @@ class TestOpcUaServerRelaunch:
         monkeypatch.setattr(sp, "IS_DOCKER", False)
         monkeypatch.setattr(sp, "_extract_simulator_zip_if_needed", lambda: extract_calls.append(1))
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: exe)
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: None)
-        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **kw: True)
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **_kw: None)
+        monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **_kw: True)
         sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="zip-test")
         assert len(extract_calls) == 1  # ZIP extracted before launch attempt
 
@@ -609,7 +609,7 @@ class TestVenvScenarios:
         monkeypatch.setattr(sp, "_get_python_path", lambda: fake_python)
         monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm")
         monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx")
-        monkeypatch.setattr(sp, "_run_command", lambda cmd, **kw: None)
+        monkeypatch.setattr(sp, "_run_command", lambda cmd, **_kw: None)
         monkeypatch.setattr(sp, "_get_last_setup_age_days", lambda: 1)
         monkeypatch.setenv("ENV_MAX_AGE_DAYS", "14")
         assert sp._is_runtime_ready() is True

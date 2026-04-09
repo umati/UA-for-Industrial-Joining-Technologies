@@ -23,12 +23,13 @@ build/
 # Mypy (Python type checker) cache
 .mypy_cache/
 
-# Virtual environments
+# Virtual environments — canonical names: .venv (runtime) and .venv_test (tests).
+# Docker runtime uses /opt/ijt_venv inside the container.
+# Legacy aliases (.venv_wsl, venv, venv_test, etc.) are kept here as a safety
+# net for developer machines mid-transition.
+.venv*/
 venv/
 venv_test/
-.venv/
-.venv-wsl/
-.venv*/
 ENV/
 env/
 

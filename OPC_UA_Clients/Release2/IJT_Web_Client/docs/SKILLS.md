@@ -396,4 +396,3 @@ These files work with **any AI tool** (GitHub Copilot, Cursor, Claude, ChatGPT, 
 5. **Never** use raw string connection states in JS — use `CONNECTION_STATES` enum.
 6. **Never** change linked-value object shape `{ type, value, link }`.
 7. **Never** run `create_structure.py` again — it's a one-time script already executed.
-

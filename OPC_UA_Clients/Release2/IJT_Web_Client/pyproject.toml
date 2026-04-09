@@ -6,10 +6,10 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "module"
-norecursedirs = [".*", "node_modules", "__pycache__", "venv", "live"]
+norecursedirs = [".*", "node_modules", "__pycache__", "live", "tmp", "pytest-cache-files-*"]
 timeout = 30
 pythonpath = ["src"]
-addopts = "-v --basetemp=tmp/pytest"
+addopts = "-v -p no:cacheprovider"
 tmp_path_retention_policy = "failed"
 markers = [
     "core: core regression tests for IJT client behavior",
@@ -20,17 +20,27 @@ markers = [
 ]
 
 [tool.bandit]
-exclude_dirs = ["venv", ".venv", ".venv-wsl", ".venv-wsl_backup", "tests", "node_modules", "__pycache__", ".git", ".state"]
+exclude_dirs = [".venv", ".venv_test", ".venv_wsl", ".venv_wsl_backup", "tests", "node_modules", "__pycache__", ".git", ".state"]
 
 [tool.vulture]
-# pytest fixture parameters are declared as function arguments but never referenced
-# by name in the function body — they are injected by pytest via the parameter name.
-# Vulture cannot distinguish fixture dependency injection from unused variables.
+# Vulture finds dead code in source. Tests are excluded because pytest fixture
+# injection makes parameter names appear "unused" — they are not; pytest wires
+# them by name. Scanning tests adds only false positives with no value.
+exclude = ["tests/", ".venv/", ".venv_test/", "tmp/", "test-results/", "logs/"]
 ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
 
 [tool.interrogate]
-# 30% minimum docstring coverage; advisory — low bar to avoid blocking new code.
-fail-under = 30
+# Calibrated floor based on real in-repo coverage after excluding venv/cache
+# artefacts. Keep tests included for an honest signal and ratchet upward over time.
+fail-under = 42
+exclude = [
+    "node_modules/*",
+    ".venv/*",
+    ".venv_test/*",
+    "tmp/*",
+    "test-results/*",
+    ".state/*",
+]
 ignore-init-method = true
 ignore-magic = true
 ignore-semiprivate = true
@@ -63,7 +73,7 @@ omit = [
     "tests/python/integration/*",
     "tests/shared_opcua/*",
     ".venv/*",
-    "venv/*",
+    ".venv_test/*",
 ]
 
 [tool.coverage.report]
@@ -79,6 +89,12 @@ exclude_lines = [
 [tool.mypy]
 ignore_missing_imports = true
 explicit_package_bases = true
+# Exclude pyfakefs/pytest bookkeeping dirs that may be locked on Windows.
+exclude = ["pytest-cache-files-.*"]
+
+[tool.pylint.main]
+# Exclude pyfakefs/pytest bookkeeping dirs that may be locked on Windows.
+ignore-paths = ["^pytest-cache-files-.*", "^\\.venv.*", "^\\.venv_test.*"]
 
 [tool.pylint.messages-control]
 disable = [
@@ -97,6 +113,7 @@ disable = [
     "too-many-branches",
     "too-many-locals",
     "too-many-statements",     # methodcall() and utils functions are complex by protocol necessity
+    "line-too-long",           # enforced by ruff line-length instead
 ]
 
 [tool.pylint.format]

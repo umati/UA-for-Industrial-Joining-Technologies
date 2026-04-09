@@ -55,7 +55,7 @@ def _resolve_server_host_port() -> tuple[str, int]:
         try:
             parsed = urlparse(url.replace("opc.tcp://", "http://"))
             return parsed.hostname or "localhost", parsed.port or _OPCUA_PORT
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             pass
     return "localhost", _OPCUA_PORT
 
@@ -131,9 +131,7 @@ def ensure_opcua_server():
                 f"Start it manually or via Docker before running live tests."
             )
 
-    os.environ.setdefault(
-        "OPCUA_SERVER_URL", f"opc.tcp://{host}:{port}"
-    )
+    os.environ.setdefault("OPCUA_SERVER_URL", f"opc.tcp://{host}:{port}")
 
     yield
 
@@ -149,4 +147,3 @@ def pytest_collection_modifyitems(items):
     for item in items:
         if item.fspath and "live" in str(item.fspath):
             item.add_marker(pytest.mark.live)
-

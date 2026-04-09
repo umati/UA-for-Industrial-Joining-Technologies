@@ -44,10 +44,10 @@ class EventCollector:
         except asyncio.QueueFull:
             logger.warning("EventCollector queue full, dropping event: %s", event)
 
-    def datachange_notification(self, node, val, data) -> None:
+    def datachange_notification(self, _node, _val, _data) -> None:
         """Required by asyncua handler interface; not used by EventCollector."""
 
-    def status_change_notification(self, status) -> None:
+    def status_change_notification(self, _status) -> None:
         """Required by asyncua handler interface; not used by EventCollector."""
 
     # ── public API ────────────────────────────────────────────────────────

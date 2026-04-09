@@ -21,18 +21,20 @@ markers = [
 ]
 
 [tool.bandit]
-exclude_dirs = ["venv", ".venv", ".venv-wsl", ".venv-wsl_backup", "tests", "__pycache__", ".git"]
+exclude_dirs = [".venv", ".venv_test", ".venv_wsl", ".venv_wsl_backup", "tests", "__pycache__", ".git"]
 skips = ["B101"]
 
 [tool.vulture]
-# pytest fixture parameters are declared as function arguments but never referenced
-# by name in the function body — they are injected by pytest via the parameter name.
-# Vulture cannot distinguish fixture dependency injection from unused variables.
+# Vulture finds dead code in source. Tests are excluded because pytest fixture
+# injection makes parameter names appear "unused" — they are not; pytest wires
+# them by name. Scanning tests adds only false positives with no value.
+exclude = ["tests/", "conftest.py", ".venv/", ".venv_test/", "tmp/", "test-results/", "logs/"]
 ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
 
 [tool.interrogate]
-# 60% minimum docstring coverage; higher bar reflects the structured conformance test suite.
-fail-under = 60
+# 65% minimum docstring coverage (committed baseline was 60%; kept higher).
+# Measures all Python files. Increase gradually as coverage improves.
+fail-under = 65
 ignore-init-method = true
 ignore-magic = true
 ignore-semiprivate = true
@@ -55,7 +57,7 @@ ignore = ["E501", "E402", "E731"]
 omit = [
     "run_all_tests.py",
     ".venv/*",
-    "venv/*",
+    ".venv_test/*",
 ]
 
 [tool.coverage.report]

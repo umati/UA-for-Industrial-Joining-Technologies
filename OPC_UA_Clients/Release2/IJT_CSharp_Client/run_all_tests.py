@@ -17,6 +17,7 @@ Environment variables:
 Flags:
     --junit-xml=PATH         Write combined JUnit XML (default: test-results/run_all_tests.xml)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -32,7 +33,6 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # Paths & shared utilities
@@ -52,13 +52,22 @@ if str(_REPO_ROOT) not in sys.path:
 
 _SERVER_NATIVE_PORT = 40451
 _WELL_KNOWN_SIMULATOR_PATHS = [
-    _REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe",
-    _REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application",
+    _REPO_ROOT
+    / "OPC_UA_Servers"
+    / "Release2"
+    / "OPC_UA_IJT_Server_Simulator"
+    / "opcua_ijt_demo_application.exe",
+    _REPO_ROOT
+    / "OPC_UA_Servers"
+    / "Release2"
+    / "OPC_UA_IJT_Server_Simulator_Linux"
+    / "opcua_ijt_demo_application",
 ]
 
 
 def _is_port_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
     import socket
+
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
@@ -66,8 +75,9 @@ def _is_port_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
         return False
 
 
-def _parse_opcua_endpoint(url: str) -> Tuple[str, int]:
+def _parse_opcua_endpoint(url: str) -> tuple[str, int]:
     from urllib.parse import urlparse
+
     stripped = url.strip()
     if "://" in stripped:
         parsed = urlparse(stripped)
@@ -86,9 +96,7 @@ def _dotnet_available() -> bool:
 
 
 def _dotnet_version() -> str:
-    result = subprocess.run(
-        ["dotnet", "--version"], capture_output=True, text=True, check=False
-    )
+    result = subprocess.run(["dotnet", "--version"], capture_output=True, text=True, check=False)
     return result.stdout.strip()
 
 
@@ -96,11 +104,12 @@ def _dotnet_version() -> str:
 # Result dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class StepResult:
     label: str
     phase: str
-    status: str          # "PASS", "FAIL", "SKIP", "WARN", "ERROR"
+    status: str  # "PASS", "FAIL", "SKIP", "WARN", "ERROR"
     detail: str = ""
     duration: float = 0.0
     passed: int = 0
@@ -124,7 +133,7 @@ def _banner(title: str) -> None:
     print("=" * _W)
 
 
-def _footer(ok: bool, elapsed: float, results: List[StepResult]) -> None:
+def _footer(ok: bool, elapsed: float, results: list[StepResult]) -> None:
     n_pass = sum(1 for r in results if r.status == "PASS")
     n_fail = sum(1 for r in results if r.status in {"FAIL", "ERROR"})
     n_skip = sum(1 for r in results if r.status == "SKIP")
@@ -147,13 +156,14 @@ def _row(phase: str, label: str, status: str, detail: str = "") -> None:
 # Subprocess helper
 # ---------------------------------------------------------------------------
 
+
 def _run(
-    cmd: List[str],
+    cmd: list[str],
     *,
     cwd: Path = _PROJECT_DIR,
-    env: Optional[dict] = None,
+    env: dict | None = None,
     capture_stdout: bool = False,
-) -> Tuple[int, str]:
+) -> tuple[int, str]:
     """Run *cmd* and return (returncode, stdout_text).
 
     stderr is inherited (visible in terminal).
@@ -174,7 +184,8 @@ def _run(
 # Output parsers
 # ---------------------------------------------------------------------------
 
-def _parse_trx(path: Path) -> Tuple[int, int, int, int]:
+
+def _parse_trx(path: Path) -> tuple[int, int, int, int]:
     """Return (passed, failed, skipped, total) from a dotnet TRX file."""
     if not path.exists():
         return 0, 0, 0, 0
@@ -204,7 +215,7 @@ def _parse_build_warnings(stdout: str) -> int:
     return 0
 
 
-def _parse_nuget_vulnerabilities(stdout: str) -> Tuple[int, int]:
+def _parse_nuget_vulnerabilities(stdout: str) -> tuple[int, int]:
     """Return (critical_count, high_count) from `dotnet list package --vulnerable` output."""
     if "has the following vulnerable packages" not in stdout:
         return 0, 0
@@ -213,7 +224,7 @@ def _parse_nuget_vulnerabilities(stdout: str) -> Tuple[int, int]:
     return critical, high
 
 
-def _find_cobertura_file() -> Optional[Path]:
+def _find_cobertura_file() -> Path | None:
     """Search test-results/ for a Cobertura coverage XML produced by coverlet."""
     for candidate in [
         _RESULTS_DIR / "coverage.xml",
@@ -226,7 +237,7 @@ def _find_cobertura_file() -> Optional[Path]:
     return None
 
 
-def _parse_cobertura_coverage(path: Path) -> Optional[float]:
+def _parse_cobertura_coverage(path: Path) -> float | None:
     """Return line coverage % (0-100) for IJT_CSharp_Client.* classes only.
 
     Auto-generated UAModel.* type bindings and the Program entry point are
@@ -262,7 +273,8 @@ def _parse_cobertura_coverage(path: Path) -> Optional[float]:
 # JUnit XML writer (combined summary)
 # ---------------------------------------------------------------------------
 
-def _write_junit_xml(path: Path, results: List[StepResult]) -> None:
+
+def _write_junit_xml(path: Path, results: list[StepResult]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     suites = ET.Element("testsuites", name="IJT C# Client")
     for r in results:
@@ -289,6 +301,7 @@ def _write_junit_xml(path: Path, results: List[StepResult]) -> None:
 # Prerequisite check
 # ---------------------------------------------------------------------------
 
+
 def _check_prerequisites() -> bool:
     if not _dotnet_available():
         print(
@@ -301,7 +314,7 @@ def _check_prerequisites() -> bool:
     ver = _dotnet_version()
     try:
         major = int(ver.split(".")[0])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         major = 0
     if major < _MIN_DOTNET_MAJOR:
         print(
@@ -318,6 +331,7 @@ def _check_prerequisites() -> bool:
 # Phase 1 steps
 # ---------------------------------------------------------------------------
 
+
 def _step_restore() -> StepResult:
     label = "dotnet restore"
     t0 = time.monotonic()
@@ -332,8 +346,15 @@ def _step_build() -> StepResult:
     label = "dotnet build"
     t0 = time.monotonic()
     rc, stdout = _run(
-        ["dotnet", "build", str(_SLN), "--no-restore", "-warnaserror",
-         "--configuration", "Release"],
+        [
+            "dotnet",
+            "build",
+            str(_SLN),
+            "--no-restore",
+            "-warnaserror",
+            "--configuration",
+            "Release",
+        ],
         capture_stdout=True,
     )
     if stdout:
@@ -362,8 +383,7 @@ def _step_nuget_cve() -> StepResult:
     label = "NuGet CVE scan"
     t0 = time.monotonic()
     rc, stdout = _run(
-        ["dotnet", "list", str(_SLN), "package",
-         "--vulnerable", "--include-transitive"],
+        ["dotnet", "list", str(_SLN), "package", "--vulnerable", "--include-transitive"],
         capture_stdout=True,
     )
     if stdout:
@@ -407,6 +427,7 @@ def _step_detect_secrets() -> StepResult:
         return StepResult(label, "PHASE 1", "FAIL", f"exit {rc}", dur)
     with contextlib.suppress(Exception):
         import json as _json
+
         data = _json.loads(stdout)
         secrets_found = sum(len(v) for v in data.get("results", {}).values())
         if secrets_found > 0:
@@ -423,16 +444,24 @@ def _step_test_unit(verbose: bool = False) -> StepResult:
     verbosity = ["--verbosity", "normal"] if verbose else ["--verbosity", "minimal"]
     rc, _ = _run(
         [
-            "dotnet", "test", str(_TEST_PROJ),
+            "dotnet",
+            "test",
+            str(_TEST_PROJ),
             "--no-restore",
-            "--configuration", "Release",
+            "--configuration",
+            "Release",
             *verbosity,
-            "--logger", "trx;LogFileName=tests.trx",
-            "--results-directory", str(_RESULTS_DIR),
-            "--collect", "XPlat Code Coverage",
-            "--settings", str(_PROJECT_DIR / "coverlet.runsettings"),
+            "--logger",
+            "trx;LogFileName=tests.trx",
+            "--results-directory",
+            str(_RESULTS_DIR),
+            "--collect",
+            "XPlat Code Coverage",
+            "--settings",
+            str(_PROJECT_DIR / "coverlet.runsettings"),
             "--blame-hang",
-            "--blame-hang-timeout", "60s",
+            "--blame-hang-timeout",
+            "60s",
         ],
         env={"IJT_AUTO_ACCEPT": "true", "IJT_PHASE1_ONLY": "true"},
     )
@@ -467,9 +496,18 @@ def _step_semgrep() -> StepResult:
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
     subprocess.run(
-        ["semgrep", "--config=p/default", "--json",
-         "--output", str(_RESULTS_DIR / "semgrep.json"), "."],
-        check=False, capture_output=True, text=True, cwd=str(_PROJECT_DIR),
+        [
+            "semgrep",
+            "--config=p/default",
+            "--json",
+            "--output",
+            str(_RESULTS_DIR / "semgrep.json"),
+            ".",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=str(_PROJECT_DIR),
     )
     dur = time.monotonic() - t0
     try:
@@ -478,13 +516,14 @@ def _step_semgrep() -> StepResult:
         errors = [f for f in findings if f.get("extra", {}).get("severity") == "ERROR"]
         warns = [f for f in findings if f.get("extra", {}).get("severity") == "WARNING"]
         if errors:
-            return StepResult(label, "PHASE 1", "FAIL",
-                              f"{len(errors)} error(s), {len(warns)} warning(s)", dur)
+            return StepResult(
+                label, "PHASE 1", "FAIL", f"{len(errors)} error(s), {len(warns)} warning(s)", dur
+            )
         if warns:
-            return StepResult(label, "PHASE 1", "WARN",
-                              f"0 errors, {len(warns)} warning(s)", dur)
-        return StepResult(label, "PHASE 1", "PASS",
-                          f"{len(findings)} finding(s), none critical", dur)
+            return StepResult(label, "PHASE 1", "WARN", f"0 errors, {len(warns)} warning(s)", dur)
+        return StepResult(
+            label, "PHASE 1", "PASS", f"{len(findings)} finding(s), none critical", dur
+        )
     except Exception:
         return StepResult(label, "PHASE 1", "WARN", "could not parse semgrep output", dur)
 
@@ -492,6 +531,7 @@ def _step_semgrep() -> StepResult:
 # ---------------------------------------------------------------------------
 # Phase 2 steps
 # ---------------------------------------------------------------------------
+
 
 def _resolve_server_url() -> str:
     port_env = os.environ.get("OPCUA_SERVER_PORT", "").strip()
@@ -501,14 +541,14 @@ def _resolve_server_url() -> str:
     return os.environ.get("OPCUA_SERVER_URL", "").strip() or _DEFAULT_SERVER_URL
 
 
-def _try_launch_simulator() -> Optional[subprocess.Popen]:
+def _try_launch_simulator() -> subprocess.Popen | None:
     """Launch the OPC UA simulator and wait up to 30s for it to open its port.
 
     Checks OPCUA_SIMULATOR_EXE first, then well-known paths.
     Sets os.environ["OPCUA_SERVER_URL"] to the server's native port when launched.
     Returns a Popen handle on success, None on failure.
     """
-    exe: Optional[str] = os.environ.get("OPCUA_SIMULATOR_EXE", "").strip() or None
+    exe: str | None = os.environ.get("OPCUA_SIMULATOR_EXE", "").strip() or None
     if not exe:
         for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
             if candidate.exists():
@@ -545,14 +585,20 @@ def _step_live_tests(server_url: str, verbose: bool = False) -> StepResult:
     verbosity = ["--verbosity", "normal"] if verbose else ["--verbosity", "minimal"]
     rc, stdout = _run(
         [
-            "dotnet", "test", str(_TEST_PROJ),
+            "dotnet",
+            "test",
+            str(_TEST_PROJ),
             "--no-restore",
-            "--configuration", "Release",
+            "--configuration",
+            "Release",
             *verbosity,
-            "--logger", "trx;LogFileName=live-tests.trx",
-            "--results-directory", str(_RESULTS_DIR),
+            "--logger",
+            "trx;LogFileName=live-tests.trx",
+            "--results-directory",
+            str(_RESULTS_DIR),
             "--blame-hang",
-            "--blame-hang-timeout", "60s",
+            "--blame-hang-timeout",
+            "60s",
         ],
         env={
             "IJT_AUTO_ACCEPT": "true",
@@ -574,6 +620,7 @@ def _step_live_tests(server_url: str, verbose: bool = False) -> StepResult:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="run_all_tests.py",
@@ -582,7 +629,12 @@ def _parse_args() -> argparse.Namespace:
     group = p.add_mutually_exclusive_group()
     group.add_argument("--phase1", action="store_true", help="Build + unit tests only (no server)")
     group.add_argument("--phase2", action="store_true", help="Live integration tests only")
-    p.add_argument("--verbose", "-v", action="store_true", help="Verbose dotnet test output (--verbosity normal)")
+    p.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Verbose dotnet test output (--verbosity normal)",
+    )
     p.add_argument(
         "--junit-xml",
         default="test-results/run_all_tests.xml",
@@ -593,6 +645,8 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+    _cleanup_caches(_PROJECT_DIR)  # pre-run: clear stale caches from interrupted runs
     args = _parse_args()
 
     run_phase1 = not args.phase2
@@ -606,7 +660,7 @@ def main() -> int:
     shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    results: List[StepResult] = []
+    results: list[StepResult] = []
     t_start = time.monotonic()
 
     skip_restore = os.environ.get("SKIP_DOTNET_RESTORE", "0").strip() in {"1", "true", "yes"}
@@ -660,7 +714,7 @@ def main() -> int:
 
     # -- Phase 2 --------------------------------------------------------------
     if run_phase2:
-        sim_proc: Optional[subprocess.Popen] = None
+        sim_proc: subprocess.Popen | None = None
         user_url_was_set = bool(os.environ.get("OPCUA_SERVER_URL"))
         if not user_url_was_set:
             server_url = _resolve_server_url()
@@ -684,11 +738,12 @@ def main() -> int:
                 r = _step_live_tests(server_url, verbose=args.verbose)
             else:
                 print(
-                    f"[PHASE 2] OPC UA server not reachable at {server_url}"
-                    " — skipping live tests"
+                    f"[PHASE 2] OPC UA server not reachable at {server_url} — skipping live tests"
                 )
                 r = StepResult(
-                    "Live Tests", "PHASE 2", "SKIP",
+                    "Live Tests",
+                    "PHASE 2",
+                    "SKIP",
                     f"server not reachable ({server_url})",
                 )
         finally:
@@ -714,19 +769,52 @@ def main() -> int:
     return 1 if any_fail else 0
 
 
+def _force_rmtree(path: Path) -> None:
+    """Remove a directory tree, handling Windows read-only / locked files."""
+    import stat as _stat
+
+    def _on_exc(func, fpath, exc):
+        try:
+            os.chmod(fpath, _stat.S_IWRITE)
+            func(fpath)
+        except OSError:
+            time.sleep(0.05)
+            with contextlib.suppress(OSError):
+                func(fpath)
+
+    shutil.rmtree(path, onexc=_on_exc)
+
+
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results", "TestResults", "tmp"}
-    _CACHE_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache", "bin", "obj"}
+    _SKIP = {
+        "node_modules",
+        ".git",
+        "test-results",
+        "TestResults",
+    }  # "tmp" intentionally removed — now cleaned
+    _CACHE_DIRS = {
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        "bin",
+        "obj",
+    }
     for dirpath, dirs, files in os.walk(root, topdown=True):
-        dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith("venv") and not d.startswith(".venv")]
+        dirs[:] = [
+            d
+            for d in dirs
+            if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")
+        ]
         for d in list(dirs):
-            if d in _CACHE_DIRS:
-                shutil.rmtree(Path(dirpath) / d, ignore_errors=True)
+            if d in _CACHE_DIRS or d.startswith("pytest-cache-files-") or d.startswith(".dotnet"):
+                _force_rmtree(Path(dirpath) / d)
                 dirs.remove(d)
         for f in files:
             if f == ".coverage" or f.startswith(".coverage.") or f.endswith(".pyc"):
-                (Path(dirpath) / f).unlink(missing_ok=True)
+                with contextlib.suppress(OSError):
+                    (Path(dirpath) / f).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

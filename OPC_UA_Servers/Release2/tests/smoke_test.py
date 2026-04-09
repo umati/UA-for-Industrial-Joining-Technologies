@@ -42,6 +42,7 @@ def _is_port_reachable_fallback(host: str, port: int, timeout: float = 2.0) -> b
     except OSError:
         return False
 
+
 _OPC_SESSION_TIMEOUT_S = 30.0
 
 # asyncua is a required dependency — all asyncua symbols are imported here so
@@ -49,6 +50,7 @@ _OPC_SESSION_TIMEOUT_S = 30.0
 try:
     from asyncua import Client as _Client
     from asyncua import ua as _ua
+
     _OpcUaError = _ua.UaError
 except ImportError as exc:
     raise ImportError(
@@ -91,7 +93,9 @@ def _parse_endpoint(endpoint: str) -> tuple[str, int]:
     """
     expected_scheme = "opc.tcp://"
     if not endpoint.startswith(expected_scheme):
-        raise ValueError(f"Invalid OPC UA endpoint '{endpoint}': expected scheme '{expected_scheme}'.")
+        raise ValueError(
+            f"Invalid OPC UA endpoint '{endpoint}': expected scheme '{expected_scheme}'."
+        )
 
     without_scheme = endpoint[len(expected_scheme) :]
     host, sep, port_str = without_scheme.partition(":")
@@ -173,9 +177,7 @@ async def check_namespaces(client: Any) -> tuple[str, str]:
 async def check_tightening_system(client: Any) -> tuple[str, str]:
     try:
         ns1 = await client.get_namespace_index(_NS_IJT_SERVER)
-        node = await client.nodes.root.get_child(
-            ["0:Objects", f"{ns1}:TighteningSystem"]
-        )
+        node = await client.nodes.root.get_child(["0:Objects", f"{ns1}:TighteningSystem"])
         bn = await node.read_browse_name()
         return _STATUS_PASS, f"TighteningSystem found ({bn})"
     except (_OpcUaError, ValueError, AttributeError) as exc:
@@ -331,9 +333,7 @@ async def _run(endpoint: str, wait_s: float) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Smoke-test the OPC UA IJT Server Simulator."
-    )
+    parser = argparse.ArgumentParser(description="Smoke-test the OPC UA IJT Server Simulator.")
     # OPCUA_SERVER_URL env var acts as default — consistent with all other clients.
     # CLI --endpoint overrides it when specified explicitly.
     _env_endpoint = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
@@ -341,8 +341,7 @@ def main() -> None:
         "--endpoint",
         default=_env_endpoint,
         help=(
-            "OPC UA endpoint URL "
-            "(default: OPCUA_SERVER_URL env var, or opc.tcp://localhost:40451)"
+            "OPC UA endpoint URL (default: OPCUA_SERVER_URL env var, or opc.tcp://localhost:40451)"
         ),
     )
     parser.add_argument(

@@ -37,6 +37,8 @@ _BANDIT_AVAILABLE = (
     == 0
 )
 
+_BANDIT_EXCLUDES = "./tests,./.state,./venv,./venv_test,./.venv,./.venv_test,./env,./ENV"
+
 
 # ---------------------------------------------------------------------------
 # No hardcoded secrets
@@ -126,7 +128,7 @@ def test_bandit_scan_no_medium_severity():
             ".",
             "-ll",
             "--exclude",
-            "./tests,./venv,./.venv,./.venv-wsl,./.state",
+            _BANDIT_EXCLUDES,
         ],
         cwd=str(_CONSOLE_ROOT),
         capture_output=True,

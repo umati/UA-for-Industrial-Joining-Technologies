@@ -41,4 +41,3 @@
 - Set endpoint to a Windows-reachable IP: `export OPCUA_TEST_ENDPOINT="opc.tcp://<windows-host-or-ip>:40451"`
 - Start web client services: `python3 setup_project.py --detach`
 - Open in Windows browser: `http://localhost:3000`
-

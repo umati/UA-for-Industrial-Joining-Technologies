@@ -187,12 +187,12 @@ class TestIsEndpointReachable:
 
     def test_returns_true_when_connect_ex_is_zero(self, monkeypatch):
         mock_sock = self._make_mock_socket(0)
-        monkeypatch.setattr(socket, "socket", lambda *a, **kw: mock_sock)
+        monkeypatch.setattr(socket, "socket", lambda *a, **_kw: mock_sock)
         assert sc._is_endpoint_reachable("opc.tcp://localhost:40451") is True
 
     def test_returns_false_when_connect_ex_nonzero(self, monkeypatch):
         mock_sock = self._make_mock_socket(111)
-        monkeypatch.setattr(socket, "socket", lambda *a, **kw: mock_sock)
+        monkeypatch.setattr(socket, "socket", lambda *a, **_kw: mock_sock)
         assert sc._is_endpoint_reachable("opc.tcp://localhost:40451") is False
 
     def test_uses_parse_endpoint_host_port(self, monkeypatch):
@@ -204,19 +204,19 @@ class TestIsEndpointReachable:
             return 0
 
         mock_sock.connect_ex.side_effect = fake_connect_ex
-        monkeypatch.setattr(socket, "socket", lambda *a, **kw: mock_sock)
+        monkeypatch.setattr(socket, "socket", lambda *a, **_kw: mock_sock)
         sc._is_endpoint_reachable("opc.tcp://myhost:9999")
         assert captured == [("myhost", 9999)]
 
     def test_socket_close_called_on_success(self, monkeypatch):
         mock_sock = self._make_mock_socket(0)
-        monkeypatch.setattr(socket, "socket", lambda *a, **kw: mock_sock)
+        monkeypatch.setattr(socket, "socket", lambda *a, **_kw: mock_sock)
         sc._is_endpoint_reachable("opc.tcp://localhost:40451")
         mock_sock.close.assert_called_once()
 
     def test_socket_close_called_on_failure(self, monkeypatch):
         mock_sock = self._make_mock_socket(111)
-        monkeypatch.setattr(socket, "socket", lambda *a, **kw: mock_sock)
+        monkeypatch.setattr(socket, "socket", lambda *a, **_kw: mock_sock)
         sc._is_endpoint_reachable("opc.tcp://localhost:40451")
         mock_sock.close.assert_called_once()
 
@@ -267,19 +267,19 @@ class TestIsSimulatorProcessRunning:
     def test_returns_true_when_exe_in_tasklist(self, monkeypatch):
         monkeypatch.setattr(sc, "IS_WINDOWS", True)
         output = f"Image Name                     PID\n{sc.SIMULATOR_EXE_NAME}    1234\n"
-        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: output)
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **_kw: output)
         assert sc._is_simulator_process_running() is True
 
     def test_returns_false_when_exe_not_in_tasklist(self, monkeypatch):
         monkeypatch.setattr(sc, "IS_WINDOWS", True)
         output = "Image Name                     PID\nnotepad.exe    5678\n"
-        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: output)
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **_kw: output)
         assert sc._is_simulator_process_running() is False
 
     def test_returns_false_when_tasklist_raises(self, monkeypatch):
         monkeypatch.setattr(sc, "IS_WINDOWS", True)
 
-        def _fail(*a, **kw):
+        def _fail(*a, **_kw):
             raise OSError("No such command")
 
         monkeypatch.setattr(subprocess, "check_output", _fail)
@@ -369,13 +369,13 @@ class TestFindSimulatorExecutable:
 
 class TestEnsureOpcServerRunning:
     def test_returns_true_when_already_reachable(self, monkeypatch):
-        monkeypatch.setattr(sc, "_wait_for_endpoint_ready", lambda _ep, **kw: True)
+        monkeypatch.setattr(sc, "_wait_for_endpoint_ready", lambda _ep, **_kw: True)
         assert sc._ensure_opc_server_running("opc.tcp://localhost:40451", context="test", allow_launch=True) is True
 
     def test_docker_skips_launch_returns_false(self, monkeypatch):
         call_count = [0]
 
-        def fake_wait(_ep, **kw):
+        def fake_wait(_ep, **_kw):
             call_count[0] += 1
             return False
 
@@ -387,10 +387,10 @@ class TestEnsureOpcServerRunning:
     def test_allow_launch_false_skips_popen(self, monkeypatch):
         popen_calls = []
         exe = Path("/fake") / sc.SIMULATOR_EXE_NAME
-        monkeypatch.setattr(sc, "_wait_for_endpoint_ready", lambda _ep, **kw: False)
+        monkeypatch.setattr(sc, "_wait_for_endpoint_ready", lambda _ep, **_kw: False)
         monkeypatch.setattr(sc, "IS_DOCKER", False)
         monkeypatch.setattr(sc, "_find_simulator_executable", lambda: exe)
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: popen_calls.append(a[0]))
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **_kw: popen_calls.append(a[0]))
         result = sc._ensure_opc_server_running("opc.tcp://localhost:40451", context="no-launch", allow_launch=False)
         assert result is False
         assert popen_calls == []
@@ -400,7 +400,7 @@ class TestEnsureOpcServerRunning:
         popen_calls = []
         wait_count = [0]
 
-        def fake_wait(_ep, **kw):
+        def fake_wait(_ep, **_kw):
             wait_count[0] += 1
             # 1st call: not ready; 2nd call (post-launch): ready
             return wait_count[0] >= 2
@@ -413,7 +413,7 @@ class TestEnsureOpcServerRunning:
 
         mock_proc = MagicMock()
         mock_proc.pid = 9999
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: (popen_calls.append(a[0]), mock_proc)[1])
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **_kw: (popen_calls.append(a[0]), mock_proc)[1])
 
         result = sc._ensure_opc_server_running("opc.tcp://localhost:40451", context="auto-launch", allow_launch=True)
         assert result is True
@@ -423,17 +423,17 @@ class TestEnsureOpcServerRunning:
         exe = Path("/fake") / sc.SIMULATOR_EXE_NAME
         mock_proc = MagicMock()
         mock_proc.pid = 9999
-        monkeypatch.setattr(sc, "_wait_for_endpoint_ready", lambda _ep, **kw: False)
+        monkeypatch.setattr(sc, "_wait_for_endpoint_ready", lambda _ep, **_kw: False)
         monkeypatch.setattr(sc, "IS_DOCKER", False)
         monkeypatch.setattr(sc, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sc, "_find_simulator_executable", lambda: exe)
         monkeypatch.setattr(sc, "_is_simulator_process_running", lambda: False)
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: mock_proc)
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **_kw: mock_proc)
         result = sc._ensure_opc_server_running("opc.tcp://localhost:40451", context="launch-timeout", allow_launch=True)
         assert result is False
 
     def test_no_exe_found_returns_false(self, monkeypatch):
-        monkeypatch.setattr(sc, "_wait_for_endpoint_ready", lambda _ep, **kw: False)
+        monkeypatch.setattr(sc, "_wait_for_endpoint_ready", lambda _ep, **_kw: False)
         monkeypatch.setattr(sc, "IS_DOCKER", False)
         monkeypatch.setattr(sc, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sc, "_find_simulator_executable", lambda: None)
@@ -443,10 +443,10 @@ class TestEnsureOpcServerRunning:
     def test_popen_oserror_returns_false_with_warning(self, monkeypatch, caplog):
         exe = Path("/fake") / sc.SIMULATOR_EXE_NAME
 
-        def _bad_popen(*a, **kw):
+        def _bad_popen(*a, **_kw):
             raise OSError("Access denied")
 
-        monkeypatch.setattr(sc, "_wait_for_endpoint_ready", lambda _ep, **kw: False)
+        monkeypatch.setattr(sc, "_wait_for_endpoint_ready", lambda _ep, **_kw: False)
         monkeypatch.setattr(sc, "IS_DOCKER", False)
         monkeypatch.setattr(sc, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sc, "_find_simulator_executable", lambda: exe)
@@ -464,7 +464,7 @@ class TestEnsureOpcServerRunning:
         popen_calls = []
         wait_count = [0]
 
-        def fake_wait(_ep, **kw):
+        def fake_wait(_ep, **_kw):
             wait_count[0] += 1
             return wait_count[0] >= 2
 
@@ -473,7 +473,7 @@ class TestEnsureOpcServerRunning:
         monkeypatch.setattr(sc, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sc, "_find_simulator_executable", lambda: exe)
         monkeypatch.setattr(sc, "_is_simulator_process_running", lambda: True)
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: popen_calls.append(1))
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **_kw: popen_calls.append(1))
         sc._ensure_opc_server_running("opc.tcp://localhost:40451", context="already-running", allow_launch=True)
         assert popen_calls == []
 
@@ -558,10 +558,10 @@ class TestIsRuntimeReady:
             venv = base / "venv"
         monkeypatch.setattr(sc, "VENV_DIR", venv)
         if deps_ok:
-            monkeypatch.setattr(sc, "_run_command", lambda cmd, **kw: None)
+            monkeypatch.setattr(sc, "_run_command", lambda cmd, **_kw: None)
         else:
 
-            def _fail(*a, **kw):
+            def _fail(*a, **_kw):
                 raise Exception("missing dep")
 
             monkeypatch.setattr(sc, "_run_command", _fail)
@@ -620,7 +620,7 @@ class TestIsRuntimeReady:
         base.mkdir()
         venv = self._make_venv(base)
         monkeypatch.setattr(sc, "VENV_DIR", venv)
-        monkeypatch.setattr(sc, "_run_command", lambda cmd, **kw: None)
+        monkeypatch.setattr(sc, "_run_command", lambda cmd, **_kw: None)
         monkeypatch.setattr(sc, "_get_last_setup_age_days", lambda: None)
         monkeypatch.setattr(sc, "_get_environment_age_days", lambda: None)
         monkeypatch.setenv("ENV_MAX_AGE_DAYS", "14")
@@ -737,19 +737,19 @@ class TestRunClient:
 class TestListPythonsWindows:
     def test_parses_version_from_v_colon_prefix(self, monkeypatch):
         output = " -V:3.14 *       Python 3.14.0\n -V:3.13          Python 3.13.0\n"
-        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: output)
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **_kw: output)
         versions = sc._list_pythons_windows()
         assert "3.14" in versions
         assert "3.13" in versions
 
     def test_parses_version_from_dash_prefix(self, monkeypatch):
         output = " -3.14 *          Python 3.14.0\n"
-        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: output)
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **_kw: output)
         versions = sc._list_pythons_windows()
         assert "3.14" in versions
 
     def test_returns_empty_list_when_py_fails(self, monkeypatch):
-        def _fail(*a, **kw):
+        def _fail(*a, **_kw):
             raise FileNotFoundError("py not found")
 
         monkeypatch.setattr(subprocess, "check_output", _fail)
@@ -757,19 +757,18 @@ class TestListPythonsWindows:
 
     def test_ignores_non_version_lines(self, monkeypatch):
         output = "Installed Pythons found by py Launcher for Windows\n -V:3.14 *\n"
-        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: output)
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **_kw: output)
         versions = sc._list_pythons_windows()
         # Should only have 3.14, not the header line
         assert versions == ["3.14"]
 
     def test_ignores_three_part_versions(self, monkeypatch):
         output = " -V:3.14.1        Python 3.14.1\n"
-        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: output)
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **_kw: output)
         versions = sc._list_pythons_windows()
         # 3.14.1 has two dots, so count(".") != 1 — should be excluded
         assert "3.14.1" not in versions
 
     def test_returns_empty_on_empty_output(self, monkeypatch):
-        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: "")
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **_kw: "")
         assert sc._list_pythons_windows() == []
-

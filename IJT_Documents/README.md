@@ -10,8 +10,3 @@
 
 
 <img width="720" height="1860" alt="image" src="https://github.com/user-attachments/assets/bd0f3b51-f6d6-4198-bd19-463aa84b191d" />
-
-
-
-
-

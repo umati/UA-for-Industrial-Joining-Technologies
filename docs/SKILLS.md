@@ -40,7 +40,7 @@ All three Python pytest projects (Web, Console, Test clients) are configured wit
 - `addopts = "-v --basetemp=tmp/pytest"` — temp dirs stay inside each project under `tmp/pytest/`, avoiding OS temp ACL issues on restricted Windows machines
 - `tmp_path_retention_policy = "failed"` — only failing test artifacts are retained; passing test temps are cleaned automatically by pytest
 
-**Console Client and Web Client additionally use `pyfakefs`** for all filesystem-touching unit tests (`test_setup_client.py` and `test_setup_project.py` respectively). The `fs` fixture virtualizes `pathlib`, `os`, `shutil`, and `zipfile` calls in-process, so those tests write no real files to disk. This eliminates the root cause of Windows ACL locks from tests that simulate virtual environment layouts (`venv/Scripts/python.exe`). Works identically on Windows, Linux, and macOS.
+**Console Client and Web Client additionally use `pyfakefs`** for all filesystem-touching unit tests (`test_setup_client.py` and `test_setup_project.py` respectively). The `fs` fixture virtualizes `pathlib`, `os`, `shutil`, and `zipfile` calls in-process, so those tests write no real files to disk. This eliminates the root cause of Windows ACL locks from tests that simulate virtual environment layouts (`.venv/Scripts/python.exe`). Works identically on Windows, Linux, and macOS.
 
 The `tests/fixtures/` directory is created at runtime by `conftest.py` (`pytest_configure`) — no `.gitkeep` needed.
 
