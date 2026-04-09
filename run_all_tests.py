@@ -1265,7 +1265,7 @@ def main() -> int:
     global _USE_COLOUR
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
 
-    _banner("IJT Monorepo Test Runner")
+    _banner("IJT Repository Test Runner")
     log.info("Python    : %s", sys.version.split()[0])
     log.info("Platform  : %s", platform.platform())
     log.info("Repo root : %s", REPO_ROOT)
@@ -1353,3 +1353,4 @@ def _cleanup_caches(root: Path) -> None:
 
 if __name__ == "__main__":
     sys.exit(main())
+

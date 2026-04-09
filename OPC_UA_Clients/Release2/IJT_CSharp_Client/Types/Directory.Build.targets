@@ -1,0 +1,16 @@
+<Project>
+
+  <!--
+    Client-compat mode: exclude server-side TypeState classes that use
+    RemoveExplicitlyDefinedChild(BaseInstanceState) — a method that only exists in
+    OPC Foundation >= 1.5.378.65 and is absent in the 1.5.376.235 that Softing SDK requires.
+
+    This ItemGroup lives in Directory.Build.targets (not Directory.Build.props) because
+    <Compile Remove> must run AFTER the SDK has populated the default **\*.cs glob.
+    Placing it in .props causes it to fire before the glob exists, so nothing gets removed.
+  -->
+  <ItemGroup Condition="'$(OpcUaClientOnly)' == 'true'">
+    <Compile Remove="**\*.Classes.cs" />
+  </ItemGroup>
+
+</Project>

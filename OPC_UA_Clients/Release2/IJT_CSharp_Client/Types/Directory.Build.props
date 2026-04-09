@@ -1,0 +1,49 @@
+<!--
+  Types Build Configuration
+  Controls OPC Foundation SDK version and target frameworks for all 7 UAModel.* projects.
+
+  DEFAULT (standard build, no flag needed):
+    dotnet build
+    - OPC Foundation : 1.5.378.134
+    - Targets        : net8.0; net9.0; net10.0
+    - Includes       : DataTypes.cs + Constants.cs + Classes.cs (full server + client types)
+
+  CLIENT-COMPAT (for vendors locked to OPC Foundation 1.5.376.x, e.g. Softing SDK 3.90):
+    dotnet build -p:OpcUaClientOnly=true
+    - OPC Foundation : 1.5.376.235  (highest version Softing SDK 3.90 supports)
+    - Targets        : net48; net6.0; net8.0; net9.0; netstandard2.1
+                       (mirrors the exact set of targets shipped by Softing SDK 3.90)
+    - Excludes       : *.Classes.cs  (server-side TypeState classes, see note below)
+    - No net10.0     : OPC Foundation 1.5.376.235 has no net10.0 TFM; Softing 3.90 also
+                       does not ship a net10.0 binary
+
+  Why Classes.cs is excluded in client-compat mode:
+  Classes.cs contains TypeState classes (e.g. TopologyElementTypeState) that override
+  RemoveExplicitlyDefinedChild(BaseInstanceState).  This virtual method was introduced in
+  OPC Foundation 1.5.378.65 (December 2025) and does NOT exist in 1.5.376.x or 1.5.377.x.
+  Client applications only need DataTypes.cs (encode/decode IJT structures) and
+  Constants.cs (NodeId / BrowseName constants) - Classes.cs is server infrastructure.
+-->
+<Project>
+
+  <PropertyGroup>
+    <!-- OPC Foundation NuGet package version — used by PackageReference in each .csproj -->
+    <OpcFoundationVersion Condition="'$(OpcUaClientOnly)' != 'true'">1.5.378.134</OpcFoundationVersion>
+    <OpcFoundationVersion Condition="'$(OpcUaClientOnly)' == 'true'">1.5.376.235</OpcFoundationVersion>
+
+    <!--
+      TypesTargetFrameworks is consumed by each .csproj via:
+        <TargetFrameworks>$(TypesTargetFrameworks)</TargetFrameworks>
+      Setting it via an intermediate property (not directly as TargetFrameworks here)
+      avoids NETSDK1013 in the outer multi-target build pass with .NET SDK 7+.
+    -->
+    <TypesTargetFrameworks Condition="'$(OpcUaClientOnly)' != 'true'">net8.0;net9.0;net10.0</TypesTargetFrameworks>
+    <TypesTargetFrameworks Condition="'$(OpcUaClientOnly)' == 'true'">net48;net6.0;net8.0;net9.0;netstandard2.1</TypesTargetFrameworks>
+  </PropertyGroup>
+
+  <!-- Client-compat: strip server-side TypeState classes that require OPC Foundation 1.5.378+ -->
+  <!-- NOTE: this ItemGroup is in Directory.Build.targets (not .props) intentionally.
+       Compile Remove must run AFTER the SDK adds its default "**\*.cs" glob (done in SDK .props).
+       If placed in Directory.Build.props it fires before the glob exists and has no effect. -->
+
+</Project>
