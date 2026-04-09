@@ -526,7 +526,7 @@ jobs:
           dotnet test Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj `
             --no-restore `
             --configuration Release `
-            --logger "trx;LogFileName=test-results\tests.trx" `
+            --logger "trx;LogFileName=tests.trx" `
             --logger "console;verbosity=normal" `
             --collect:"XPlat Code Coverage" `
             --results-directory test-results/coverage `
@@ -543,7 +543,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $trx = "test-results\tests.trx"
+          $trx = "test-results\coverage\tests.trx"
           $junit = "test-results\tests.xml"
           if (Test-Path $trx) {
             [xml]$x = Get-Content $trx
