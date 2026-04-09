@@ -607,6 +607,7 @@ ul {
   background-color: yellow;
   border: var(--ui-line-width) solid var(--ui-line-color);
   position: absolute;
+  pointer-events: none;
 }
 
 .limitDragboxStart {
@@ -615,6 +616,7 @@ ul {
   margin: -10px;
   background-color: rgb(0 0 0 / 15%);
   position: absolute;
+  pointer-events: none;
 }
 
 .limitDragboxEnd {
@@ -623,6 +625,7 @@ ul {
   margin: -15px;
   background-color: rgb(0 0 0 / 15%);
   position: absolute;
+  pointer-events: none;
 }
 
 .ViolationBox {
@@ -2229,7 +2232,25 @@ html {
 }
 
 .envelopeTopGrid--wide {
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.envelopeFlowColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.envelopeFlowSection {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.envelopeFlowSection .methodDiv {
+  flex-wrap: wrap;
+  align-items: flex-start;
 }
 
 .envelopePanel {
@@ -2427,6 +2448,61 @@ html {
   background: rgb(0 0 0 / 20%);
 }
 
+.envelopeFilterModalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  background: rgb(0 0 0 / 58%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.envelopeFilterModalCard {
+  display: flex;
+  flex-direction: column;
+  width: min(78rem, 96vw);
+  max-height: 90vh;
+  border: 1px solid var(--ui-line-color);
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
+  box-shadow: 0 12px 26px rgb(0 0 0 / 45%);
+}
+
+.envelopeFilterModalBody {
+  display: grid;
+  grid-template-columns: minmax(14rem, 18rem) minmax(20rem, 1fr);
+  gap: 10px;
+  padding: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.envelopeFilterModalColumn {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.envelopeFilterModalColumn .methodBorder {
+  min-height: 0;
+}
+
+.envelopeFilterModalColumnWide .methodBorder {
+  flex: 1 1 auto;
+}
+
+.envelopeFilterModalFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px;
+  border-top: 1px solid var(--connection-panel-border);
+  background-color: rgb(0 0 0 / 22%);
+}
+
 @media (width <= 860px) {
   .envelopeSidebar {
     flex-basis: 8.4rem;
@@ -2447,6 +2523,10 @@ html {
   .envelopeTopGrid,
   .envelopeTopGrid--wide {
     grid-template-columns: 1fr;
+  }
+
+  .envelopeFlowColumn {
+    gap: 8px;
   }
 
   .envelopeSection {
