@@ -15,7 +15,7 @@ import argparse
 import os
 import re
 import sys
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405 — xml source is trusted JUnit XML written by pytest
 from datetime import datetime, timezone
 from pathlib import Path
 

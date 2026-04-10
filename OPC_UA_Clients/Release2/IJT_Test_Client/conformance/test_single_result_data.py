@@ -10,6 +10,7 @@ Tests validate the complete structure and content of a
 JoiningResultDataType returned by GetLatestResult after a
 single joining operation.
 """
+# pylint: disable=too-many-lines
 
 import logging
 
@@ -1541,7 +1542,7 @@ async def test_multiple_results_produce_separate_events_with_distinct_ids(
 
     event_ids = []
     result_ids = []
-    for i, ev in enumerate(events[:3]):
+    for ev in events[:3]:
         eid = getattr(ev, "EventId", None)
         if eid is not None:
             event_ids.append(bytes(eid) if isinstance(eid, (bytes, bytearray)) else str(eid))

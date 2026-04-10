@@ -345,7 +345,7 @@ def _unwrap_sub_result(item):
                 inner = inner.Value
             return inner
     except Exception:  # noqa: BLE001
-        pass
+        pass  # nosec B110 — intentional: guard against malformed items; return unchanged
     return item
 
 

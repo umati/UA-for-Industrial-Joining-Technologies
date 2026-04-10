@@ -100,6 +100,18 @@ disable = [
     "too-many-locals",
     "consider-using-with",
     "duplicate-code",
+    # Conformance test files are inherently large — splitting would break readability
+    "too-many-lines",
+    # Local imports inside helper functions shadow top-level imports — intentional test pattern
+    "reimported",
+    # Fixture parameter names shadow module-level imports — standard pytest convention
+    "redefined-outer-name",
+    # Optional loop vars are sometimes retained for diagnostics in assertions/logging.
+    "unused-variable",
+    # Direct lambda calls used in test parametrize scaffolding
+    "unnecessary-direct-lambda-call",
+    # not (expr) style is sometimes clearer in assertion messages
+    "superfluous-parens",
 ]
 
 [tool.pylint.format]

@@ -120,7 +120,7 @@ UA-for-Industrial-Joining-Technologies/
 ### IJT Test Client (`OPC_UA_Clients/Release2/IJT_Test_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2, pytest
 - **Purpose**: OPC UA IJT spec conformance test suite — validates server against OPC 40450-1 / 40451-1
-- **Test baseline**: 191 pass + 20 xfail + 6 skip (requires running OPC UA server on port 40451)
+- **Test baseline**: 564 passed, 343 skipped, 19 xfailed, 0 failed (926 total) — requires running OPC UA server on port 40451
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md`
 
@@ -208,10 +208,10 @@ Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJ
 |-----|--------------|
 | `docker-smoke` | Full Docker build + server smoke (10/10) |
 | `webclient-docker` | Web Client Docker test image (Python 310 unit, JS 229) + HTTP:3000 production health |
-| `int-testclient` | Windows live: Test Client full suite (191 pass + 20 xfail + 6 skip) against running server |
+| `int-testclient` | Windows live: Test Client full suite (564 passed, 343 skipped, 19 xfailed, 0 failed — 926 total) against running server |
 | `int-live-others` | Windows live: Web Client integration (13 tests) + Console Client live tests |
 
-Runtime: ~5 minutes (int-testclient + int-live-others run in parallel). NOT triggered on GUI/JS-only changes (deliberate — keep fast CI fast).
+Runtime: ~10 minutes (int-testclient + int-live-others run in parallel). NOT triggered on GUI/JS-only changes (deliberate — keep fast CI fast).
 
 ---
 

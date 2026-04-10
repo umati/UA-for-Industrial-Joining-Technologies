@@ -111,6 +111,7 @@ asset_management_additional_information
 asset_management_machinery_building_blocks
     The Server supports all asset instances which include the optional MachineryBuildingBlocks.
 """
+# pylint: disable=too-many-lines
 
 import pytest
 from asyncua import ua
@@ -1153,7 +1154,7 @@ async def test_controller_product_instance_uri_unique_across_instances(controlle
     if ns_di is None:
         pytest.skip("DI namespace not registered on server")
     uris: list[str] = []
-    for asset_name, asset_node in controllers_instances:
+    for _, asset_node in controllers_instances:
         ident = await find_child_by_browse_name(asset_node, BN.IDENTIFICATION, ns_di)
         if ident is None:
             continue
@@ -1175,8 +1176,6 @@ async def test_controller_product_instance_uri_unique_across_instances(controlle
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_CONTROLLER)
 async def test_controller_serial_number_write_rejected(controllers_instances, ns_indices, opcua_client):
     """Write to a read-only Controller SerialNumber must return Bad_NotWritable or Bad_UserAccessDenied."""
-    from asyncua import ua as _ua
-
     ns_di = ns_indices.get(NS_DI)
     if ns_di is None:
         pytest.skip("DI namespace not registered on server")
@@ -1189,17 +1188,17 @@ async def test_controller_serial_number_write_rejected(controllers_instances, ns
         pytest.skip(f"Controller '{_name}' Identification has no SerialNumber — skipping write rejection test")
     try:
         await serial_node.write_attribute(
-            _ua.AttributeIds.Value,
-            _ua.DataValue(_ua.Variant("__test_write__", _ua.VariantType.String)),
+            ua.AttributeIds.Value,
+            ua.DataValue(ua.Variant("__test_write__", ua.VariantType.String)),
         )
         pytest.fail(
             f"Write to Controller '{_name}' SerialNumber succeeded — "
             "server must reject writes to mandatory read-only identification properties"
         )
-    except _ua.UaStatusCodeError as exc:
+    except ua.UaStatusCodeError as exc:
         assert exc.code in (
-            _ua.StatusCodes.BadNotWritable,
-            _ua.StatusCodes.BadUserAccessDenied,
+            ua.StatusCodes.BadNotWritable,
+            ua.StatusCodes.BadUserAccessDenied,
         ), f"Expected Bad_NotWritable or Bad_UserAccessDenied; got {exc.code:#010x}"
 
 

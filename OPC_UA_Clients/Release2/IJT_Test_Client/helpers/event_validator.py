@@ -280,7 +280,7 @@ class BaseEventFieldsValidator:
                 sev_int = int(severity)  # type: ignore[arg-type]
             except TypeError, ValueError:
                 sev_int = None
-            if sev_int is None or not (_SEVERITY_MIN <= sev_int <= _SEVERITY_MAX):
+            if sev_int is None or not _SEVERITY_MIN <= sev_int <= _SEVERITY_MAX:
                 vr.add(
                     ctx.child("Severity"),
                     f"expected integer in {{{_SEVERITY_MIN}..{_SEVERITY_MAX}}}, got {severity!r}",
