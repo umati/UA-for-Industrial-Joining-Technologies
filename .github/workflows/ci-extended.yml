@@ -166,7 +166,7 @@ jobs:
             --junitxml test-results/smoke.xml
 
       - name: Upload Server Smoke results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
           name: results-server-smoke-docker
@@ -225,7 +225,7 @@ jobs:
             npx vitest run --reporter=verbose --reporter=junit --outputFile.junit=/out/vitest.xml
 
       - name: Upload Web Client Docker results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
           name: results-webclient-docker
@@ -366,7 +366,7 @@ jobs:
             test-results/summary.md -ErrorAction SilentlyContinue
 
       - name: Upload Test Client results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
           name: results-testclient
@@ -464,7 +464,7 @@ jobs:
             --junitxml=test-results/pytest-live.xml
 
       - name: Upload Web Client + Console results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
           name: results-live-others
