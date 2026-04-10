@@ -564,7 +564,7 @@ async def test_step_trace_content_array_lengths_are_consistent_across_results(op
             continue
 
         results_checked += 1
-        for result_idx, jr in enumerate(content):
+        for _, jr in enumerate(content):
             td = getattr(jr, "TraceData", None)
             if td is None:
                 continue
@@ -623,9 +623,9 @@ async def test_trace_point_time_offset_present_when_trace_point_index_absent(opc
     failures = []
     for jr in content:
         step_results = getattr(jr, "StepResults", None) or []
-        for step_idx, step in enumerate(step_results):
+        for _, step in enumerate(step_results):
             step_values = getattr(step, "StepResultValues", None) or []
-            for val_idx, val in enumerate(step_values):
+            for _, val in enumerate(step_values):
                 tpi = getattr(val, "TracePointIndex", None)
                 tpo = getattr(val, "TracePointOffset", None)
                 # If neither field is present: the value has no trace reference — that is

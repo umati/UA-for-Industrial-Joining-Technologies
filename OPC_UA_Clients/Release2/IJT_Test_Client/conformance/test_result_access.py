@@ -141,7 +141,7 @@ async def _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indice
 @pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
 async def test_get_latest_result_returns_handle_and_result_data(opcua_client, result_trigger, ns_indices):
     """The Server supports GetLatestResult method — returns a non-None handle and a valid ResultDataType."""
-    rm, handle, result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    _, handle, result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
 
     assert handle is not None, "GetLatestResult must return a non-None handle (output[0])"
     assert result_data is not None, "GetLatestResult must return result data (output[1])"

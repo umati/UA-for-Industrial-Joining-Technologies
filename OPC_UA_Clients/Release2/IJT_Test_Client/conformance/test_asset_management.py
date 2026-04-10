@@ -1154,7 +1154,7 @@ async def test_controller_product_instance_uri_unique_across_instances(controlle
     if ns_di is None:
         pytest.skip("DI namespace not registered on server")
     uris: list[str] = []
-    for asset_name, asset_node in controllers_instances:
+    for _, asset_node in controllers_instances:
         ident = await find_child_by_browse_name(asset_node, BN.IDENTIFICATION, ns_di)
         if ident is None:
             continue

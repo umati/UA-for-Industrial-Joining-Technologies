@@ -597,6 +597,8 @@ def _step_pylint() -> _StepResult:
         result.note = "not installed  (pip install pylint)"
         result.duration = time.monotonic() - t0
         return result
+    pylint_home = _TMP_DIR / "pylint"
+    pylint_home.mkdir(parents=True, exist_ok=True)
     rc, output = _run(
         [
             sys.executable,
@@ -606,14 +608,34 @@ def _step_pylint() -> _StepResult:
             "--output-format=json",
             "--recursive=y",
             "--ignore=.venv,.venv_test,.venv_wsl",
-        ]
+        ],
+        extra_env={"PYLINTHOME": str(pylint_home)},
     )
     result.duration = time.monotonic() - t0
-    result.ok = rc == 0
     (_RESULTS_DIR / "pylint.json").write_text(output, encoding="utf-8")
-    if not result.ok:
-        result.note = f"exit {rc} — see test-results/pylint.json"
-        _log(output)
+    if rc == 0:
+        result.ok = True
+        return result
+
+    # Pylint exit code 20 usually means only warning/refactor/convention messages.
+    # Treat those as advisory in this orchestrator; fail only on error/fatal.
+    try:
+        findings = json.loads(output) if output.strip() else []
+    except json.JSONDecodeError:
+        findings = []
+
+    severe_types = {"error", "fatal"}
+    severe_count = sum(1 for item in findings if item.get("type") in severe_types)
+    advisory_count = sum(1 for item in findings if item.get("type") not in severe_types)
+
+    if severe_count == 0 and rc == 20:
+        result.ok = True
+        result.note = f"advisory findings (exit 20) — {advisory_count} item(s), see test-results/pylint.json"
+        return result
+
+    result.ok = False
+    result.note = f"exit {rc} — {severe_count} error/fatal finding(s), see test-results/pylint.json"
+    _log(output)
     return result
 
 
@@ -651,7 +673,16 @@ def _step_pip_audit() -> _StepResult:
         result.note = "not installed  (pip install pip-audit)"
         result.duration = time.monotonic() - t0
         return result
-    rc, output = _run([sys.executable, "-m", "pip_audit", "--format", "json"])
+    pip_audit_cache = _TMP_DIR / "pip-audit-cache"
+    pip_audit_cache.mkdir(parents=True, exist_ok=True)
+    rc, output = _run(
+        [sys.executable, "-m", "pip_audit", "--format", "json"],
+        extra_env={
+            # Keep cache local to project temp dir to avoid user-profile permission issues.
+            "PIP_AUDIT_CACHE_DIR": str(pip_audit_cache),
+            "PIP_CACHE_DIR": str(pip_audit_cache),
+        },
+    )
     result.duration = time.monotonic() - t0
     (_RESULTS_DIR / "pip-audit.json").write_text(output, encoding="utf-8")
     try:
@@ -674,9 +705,25 @@ def _step_pip_audit() -> _StepResult:
             result.ok = True
             result.note = "0 vulnerabilities"
     except Exception:
+        # When pip-audit cannot reach PyPI (offline/corporate firewall), do not fail the full
+        # test run as "CVEs found" — treat it as a skipped network-dependent check.
+        network_error_markers = (
+            "Failed to establish a new connection",
+            "Max retries exceeded",
+            "ConnectionError",
+            "CERTIFICATE_VERIFY_FAILED",
+            "NameResolutionError",
+            "Temporary failure in name resolution",
+            "socket operation was attempted to an unreachable network",
+        )
+        if any(marker in output for marker in network_error_markers):
+            result.ok = True
+            result.skipped = True
+            result.note = "network unavailable for pip-audit (security check skipped)"
+            return result
         result.ok = rc == 0
         if not result.ok:
-            result.note = "CVEs found — see test-results/pip-audit.json"
+            result.note = "pip-audit failed — see test-results/pip-audit.json"
             _log(output)
     return result
 

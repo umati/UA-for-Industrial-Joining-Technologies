@@ -391,7 +391,7 @@ async def test_result_associated_entities_is_always_a_list(opcua_client, result_
     An absent field (attribute not set at all) is acceptable — only a non-None
     non-list value is a fault.
     """
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, _ = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     meta = getattr(result_data, "ResultMetaData", None) if result_data else None
@@ -430,7 +430,7 @@ def _entity_type_int(entity) -> int:
 async def test_result_associated_entities_field_is_accessible(opcua_client, result_trigger, ns_indices):
     """ResultMetaData.AssociatedEntities must be accessible on a real result — the
     field may be empty but must not raise an error when accessed."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, _ = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     meta = getattr(result_data, "ResultMetaData", None) if result_data else None
