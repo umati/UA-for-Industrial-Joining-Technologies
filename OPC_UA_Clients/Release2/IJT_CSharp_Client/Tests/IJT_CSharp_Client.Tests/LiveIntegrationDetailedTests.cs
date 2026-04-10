@@ -717,7 +717,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset).ConfigureAwait(false);
         Skip.IfNot(!methodId.IsNullNodeId, "EnableAsset method not found; skipping");
 
-        var disableEx= await Record.ExceptionAsync(() =>
+        var disableEx = await Record.ExceptionAsync(() =>
             WithTimeout(() => session.CallMethod(methodSetNode, methodId, string.Empty, false),
                 10, "EnableAsset(false)")).ConfigureAwait(false);
         Assert.Null(disableEx);

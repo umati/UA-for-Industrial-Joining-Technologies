@@ -23,7 +23,7 @@ from pathlib import Path
 
 
 def _parse(xml_path: Path):
-    tree = ET.parse(xml_path)
+    tree = ET.parse(xml_path)  # nosec B314 — source is trusted JUnit XML written by pytest
     root = tree.getroot()
     suites = root.findall(".//testsuite") if root.tag == "testsuites" else [root]
 

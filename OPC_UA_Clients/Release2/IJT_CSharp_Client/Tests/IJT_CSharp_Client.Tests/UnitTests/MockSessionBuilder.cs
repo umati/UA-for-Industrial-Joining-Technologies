@@ -12,7 +12,7 @@ namespace IJT_CSharp_Client.Tests.UnitTests;
 /// Shared Moq-based factory for building a mock <see cref="IIjtSession"/> in unit tests.
 /// The mock is pre-configured so that:
 ///   - BrowseChild returns a valid NodeId by default (simulating a live server address space).
-///   - IjtBaseMethodId / IjtBaseObjectId / IjtBaseVariableId return valid NodeIds.
+///   - IjtBaseMethodId / BrowseMethod / IjtBaseObjectId / IjtBaseVariableId return valid NodeIds.
 ///   - CallMethod returns an empty output list (success, no result data).
 ///   - Config returns a default <see cref="ClientConfig"/>.
 ///   - Session returns a Mock ISession with DefaultSubscription set up.
@@ -65,6 +65,10 @@ internal static class MockSessionBuilder
             .Returns(browseChildResult ?? ValidNodeId);
 
         session.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>()))
+            .Returns(methodResult ?? ValidMethodId);
+
+        session.Setup(s => s.BrowseMethod(
+                It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
             .Returns(methodResult ?? ValidMethodId);
 
         session.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>()))

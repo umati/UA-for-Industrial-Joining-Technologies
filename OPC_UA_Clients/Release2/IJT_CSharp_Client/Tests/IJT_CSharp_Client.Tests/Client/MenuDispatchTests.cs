@@ -44,6 +44,9 @@ public sealed class MenuDispatchTests
             .Returns(ObjectId);
         mock.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>())).Returns(MethodId);
         mock.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>())).Returns(ObjectId);
+        mock.Setup(s => s.BrowseMethod(
+                It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
+            .Returns(MethodId);
         mock.Setup(s => s.CallMethod(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Returns(new List<object>());
@@ -633,13 +636,12 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem13_GetSelectedJoiningProgram_WhenBrowseMethodFails_FallsBackToTypeNodeId()
+    public void MenuItem13_GetSelectedJoiningProgram_WhenBrowseMethodReturns_CallsMethod()
     {
-        // BrowseChild for the method by name returns Null → fallback to IjtBaseMethodId
+        // BrowseChild for the JPM object node returns ObjectId;
+        // BrowseMethod encapsulates method lookup and returns MethodId directly.
         var mock = new Mock<IIjtSession>();
         mock.Setup(s => s.JoiningSystemNodeId).Returns(SystemId);
-        // First BrowseChild (for JPM node) returns ObjectId
-        // Subsequent BrowseChild calls (for method) return Null
         var callCount = 0;
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
@@ -647,14 +649,15 @@ public sealed class MenuDispatchTests
             .Returns(() => ++callCount == 1 ? ObjectId : NodeId.Null);
         mock.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>())).Returns(MethodId);
         mock.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>())).Returns(ObjectId);
+        mock.Setup(s => s.BrowseMethod(
+                It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
+            .Returns(MethodId);
         mock.Setup(s => s.CallMethod(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Returns(new List<object>());
 
         new JoiningProcessManagement(mock.Object).GetSelectedJoiningProgram();
 
-        // Fallback to type-level method NodeId was used
-        mock.Verify(s => s.IjtBaseMethodId(It.IsAny<uint>()), Times.Once);
         mock.Verify(s => s.CallMethod(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }

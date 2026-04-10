@@ -28,6 +28,9 @@ public sealed class ResultManagementTests
             .Returns(RmNodeId);
         mock.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>())).Returns(MethodId);
         mock.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>())).Returns(RmNodeId);
+        mock.Setup(s => s.BrowseMethod(
+                It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
+            .Returns(MethodId);
         mock.Setup(s => s.CallMethod(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Returns(new List<object>());
