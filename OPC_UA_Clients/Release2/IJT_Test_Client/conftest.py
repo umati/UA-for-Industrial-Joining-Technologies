@@ -20,18 +20,66 @@ import pytest
 import pytest_asyncio
 from asyncua import Client
 
+from helpers.profile_loader import get_skip_reason, load_supported_cus
+
+# Loaded once at collection time — all tests see the same supported-CU set.
+# None means "no capabilities file / no gating" — all tests run.
+# frozenset() means "file present but no CUs supported" — all CU-gated tests skip.
+# Override the config file path via OPCUA_CAPABILITIES_FILE env var.
+_SUPPORTED_CUS: frozenset[str] | None = None
+
 
 def pytest_configure(config):
-    """Ensure tests/fixtures/ exists and pin basetemp to an absolute project-local path.
+    """Register markers, load server capability profile, and set up fixture paths.
 
-    Using an absolute path for basetemp guarantees correct resolution regardless
-    of the working directory from which pytest is invoked (CI, repo root, etc.).
+    Reads server_capabilities.yaml (or OPCUA_CAPABILITIES_FILE env var) once.
+    Tests decorated with @pytest.mark.requires_cu(CU.SOME_KEY) are automatically
+    skipped when that key is absent from the loaded supported-CU set — they are
+    never failed just because a feature is not implemented on the server under test.
     """
+    global _SUPPORTED_CUS  # noqa: PLW0603
+
+    config.addinivalue_line(
+        "markers",
+        "requires_cu(cu_key, ...): skip this test if the given conformance unit "
+        "key(s) are not supported per server_capabilities.yaml",
+    )
+    config.addinivalue_line("markers", "live: requires a live OPC UA server")
+    config.addinivalue_line("markers", "conformance: IJT conformance unit test")
+    config.addinivalue_line("markers", "negative: negative / error-path test")
+    config.addinivalue_line("markers", "simulation: requires the OPC UA IJT Server Simulator")
+
     _project_root = Path(__file__).resolve().parent
     _basetemp = _project_root / "tmp" / "pytest"
     _basetemp.mkdir(parents=True, exist_ok=True)
     config.option.basetemp = str(_basetemp)
     _project_root.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
+
+    try:
+        _SUPPORTED_CUS = load_supported_cus()
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning(
+            "Could not load server_capabilities.yaml (%s) — all conformance units treated as supported",
+            exc,
+        )
+        _SUPPORTED_CUS = None  # None = no gating; run everything
+
+
+def pytest_runtest_setup(item):
+    """Skip any test whose required conformance units are not in the supported set.
+
+    Reads @pytest.mark.requires_cu(CU.KEY) markers.
+    When _SUPPORTED_CUS is None (no capabilities file loaded) every test runs — safe default.
+    When _SUPPORTED_CUS is an empty frozenset (file present but declares nothing) all
+    CU-gated tests are skipped — this is the correct behaviour for an explicit empty profile.
+    """
+    if _SUPPORTED_CUS is None:
+        return  # no profile loaded → run everything
+
+    for marker in item.iter_markers("requires_cu"):
+        for cu_key in marker.args:
+            if cu_key not in _SUPPORTED_CUS:
+                pytest.skip(get_skip_reason(cu_key))
 
 
 # Inline helpers
@@ -520,3 +568,96 @@ async def subscription_client(managed_server):
         await client.disconnect()
     except Exception as exc:
         logger.debug("subscription_client disconnect failed (ignored): %s", exc)
+
+
+# ─── Trigger fixtures (function-scoped) ──────────────────────────────────────
+@pytest_asyncio.fixture(scope="function")
+async def result_trigger(opcua_client, simulate_results_folder, ns_indices):
+    """
+    Function-scoped ResultTrigger.
+    Returns SimulatorResultTrigger when the simulator's SimulateResults folder is available.
+    Returns ExternalResultTrigger (no-op, causes test to skip) when running against a real
+    controller that does not expose simulator methods.
+    Controller teams can override this by setting OPCUA_TRIGGER_CLASS env var.
+    """
+    from helpers.trigger import make_result_trigger
+
+    ns_app = ns_indices.get(NS_APP)
+    trigger = make_result_trigger(opcua_client, simulate_results_folder, ns_app)
+    # Allow controller teams to inject their own trigger implementation
+    trigger_class_path = os.environ.get("OPCUA_TRIGGER_CLASS")
+    if trigger_class_path:
+        try:
+            module_path, class_name = trigger_class_path.rsplit(".", 1)
+            import importlib
+
+            module = importlib.import_module(module_path)
+            cls = getattr(module, class_name)
+            trigger = cls(opcua_client, simulate_results_folder, ns_app)
+            logger.info("Using custom trigger class: %s", trigger_class_path)
+        except Exception as exc:
+            logger.warning(
+                "Failed to load OPCUA_TRIGGER_CLASS='%s': %s — falling back to default", trigger_class_path, exc
+            )
+    return trigger
+
+
+@pytest_asyncio.fixture(scope="function")
+async def event_trigger(opcua_client, simulate_events_folder, ns_indices):
+    """
+    Function-scoped EventTrigger.
+    Returns SimulatorEventTrigger when the simulator's SimulateEventsAndConditions folder is available.
+    Returns ExternalEventTrigger (no-op, causes test to skip) otherwise.
+    """
+    from helpers.trigger import make_event_trigger
+
+    ns_app = ns_indices.get(NS_APP)
+    return make_event_trigger(opcua_client, simulate_events_folder, ns_app)
+
+
+# ─── JointManagement folder fixtures ─────────────────────────────────────────
+@pytest_asyncio.fixture(scope="session")
+async def joint_designs_folder(joint_management, ns_indices):
+    """JointDesigns folder under JointManagement (IJT Base ns)."""
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered")
+    node = await find_child_by_browse_name(joint_management, "JointDesigns", ns_ijt)
+    if node is None:
+        pytest.skip("JointDesigns folder not found under JointManagement")
+    return node
+
+
+@pytest_asyncio.fixture(scope="session")
+async def joint_components_folder(joint_management, ns_indices):
+    """JointComponents folder under JointManagement (IJT Base ns)."""
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered")
+    node = await find_child_by_browse_name(joint_management, "JointComponents", ns_ijt)
+    if node is None:
+        pytest.skip("JointComponents folder not found under JointManagement")
+    return node
+
+
+# ─── JoiningProcessManagement folder fixtures ────────────────────────────────
+@pytest_asyncio.fixture(scope="session")
+async def joining_process_list_folder(joining_process_management, ns_indices):
+    """JoiningProcesses folder under JoiningProcessManagement (IJT Base ns)."""
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered")
+    node = await find_child_by_browse_name(joining_process_management, "JoiningProcesses", ns_ijt)
+    if node is None:
+        pytest.skip("JoiningProcesses folder not found under JoiningProcessManagement")
+    return node
+
+
+# ─── Virtual stations instances ───────────────────────────────────────────────
+@pytest_asyncio.fixture(scope="session")
+async def virtual_stations_instances(virtual_stations_folder):
+    """List of (browse_name_str, Node) for all virtual station instances. Skips if empty."""
+    instances = await browse_folder_instances(virtual_stations_folder)
+    if not instances:
+        pytest.skip("No virtual station instances found in VirtualStations folder")
+    return instances

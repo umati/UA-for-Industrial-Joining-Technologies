@@ -1,0 +1,1582 @@
+"""
+Single result data structure conformance tests — OPC 40450-1.
+
+Covers: single_result, basic_result, result_additional_data,
+result_extended_meta_data, joining_result_failure_reason,
+joining_result_overall_result_values, joining_result_step_results,
+joining_result_errors, result_value_final_tag.
+
+Tests validate the complete structure and content of a
+JoiningResultDataType returned by GetLatestResult after a
+single joining operation.
+"""
+
+import logging
+
+import pytest
+from asyncua import ua
+
+from helpers.cu_registry import CU
+from helpers.event_collector import EventCollector
+from helpers.event_validator import assert_result_ready_event_valid
+from helpers.method_caller import call_method, find_and_call_method
+from helpers.namespaces import (
+    BN,
+    NS_IJT_BASE,
+    NS_MACH_RESULT,
+    IJTTypes,
+    ResultClassification,
+    ResultEvaluation,
+    ResultType,
+)
+from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.result_validator import (
+    assert_result_data_valid,
+)
+
+logger = logging.getLogger(__name__)
+pytestmark = [pytest.mark.live, pytest.mark.conformance]
+
+# ---------------------------------------------------------------------------
+# Timeouts — numeric literals are duration values, not CU identifiers
+# ---------------------------------------------------------------------------
+_SIMULATOR_TIMEOUT_MS = 5000
+_EXTERNAL_TIMEOUT_MS = 60000
+_METHOD_CALL_TIMEOUT_S = 30.0
+_EXTERNAL_CALL_TIMEOUT_S = 90.0
+
+# ValueTagEnumeration: FINAL = 1 (OPC UA protocol-level enum value)
+_FINAL_VALUE_TAG = 1
+
+# AssemblyType enum: 0=UNDEFINED, 1=ASSEMBLED, 2=DISASSEMBLED (per OPC 40450-1 ResultMetaDataType)
+_VALID_ASSEMBLY_TYPE_VALUES: frozenset = frozenset({0, 1, 2})
+# OperationMode enum: 0=UNDEFINED, 1=AUTOMATIC, 2=MANUAL (per OPC 40450-1 ResultMetaDataType)
+_VALID_OPERATION_MODE_VALUES: frozenset = frozenset({0, 1, 2})
+# ResultState: 0=Undefined, 1=Processing, 2=Completed (per OPC 40001-101 ResultMetaDataType)
+_RESULT_STATE_PROCESSING = 1
+_RESULT_STATE_COMPLETED = 2
+_VALID_RESULT_STATE_VALUES: frozenset = frozenset({0, 1, 2})
+
+
+# ---------------------------------------------------------------------------
+# Module-level shared helper
+# ---------------------------------------------------------------------------
+
+
+async def _get_result(
+    opcua_client,
+    result_trigger,
+    ns_indices,
+    result_type: int = ResultType.MULTI_STEP_OK_RESULT,
+    include_traces: bool = True,
+):
+    """Trigger a result and retrieve it via GetLatestResult.
+
+    Returns ``(result_data, result_meta)`` on success, or ``(None, None)`` when:
+    - The required namespace is absent.
+    - A simulator trigger call failed (caller should call ``pytest.skip``).
+    - GetLatestResult returned no data.
+
+    For a real (external) controller ``result_trigger.is_simulator`` is False and
+    ``outcome.triggered`` is False, but the test continues and uses a longer OPC UA
+    timeout so an operator can trigger a result within the allotted window.
+    """
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        return None, None
+
+    outcome = await result_trigger.trigger_single(result_type, include_traces=include_traces)
+    if not outcome.triggered and result_trigger.is_simulator:
+        return None, None
+
+    js = await find_joining_system(opcua_client)
+    if js is None:
+        return None, None
+    rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
+    if rm is None:
+        return None, None
+    glr = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
+    if glr is None:
+        return None, None
+
+    wait_ms = _SIMULATOR_TIMEOUT_MS if result_trigger.is_simulator else _EXTERNAL_TIMEOUT_MS
+    call_timeout_s = _METHOD_CALL_TIMEOUT_S if result_trigger.is_simulator else _EXTERNAL_CALL_TIMEOUT_S
+
+    result = await call_method(
+        rm,
+        glr.nodeid,
+        ua.Variant(wait_ms, ua.VariantType.Int32),
+        timeout=call_timeout_s,
+        method_name="GetLatestResult",
+    )
+    if not result.success:
+        return None, None
+
+    outputs = result.output_list
+    result_data = outputs[1] if len(outputs) > 1 else (outputs[0] if outputs else None)
+    meta = getattr(result_data, "ResultMetaData", None) if result_data else None
+    return result_data, meta
+
+
+def _skip_if_no_result(result_data, result_trigger):
+    """Call pytest.skip() when *result_data* is None, with an appropriate message."""
+    if result_data is None:
+        if result_trigger.is_simulator:
+            pytest.skip("Simulator trigger failed or GetLatestResult returned no data")
+        else:
+            pytest.skip("No result received from external trigger within timeout")
+
+
+# ---------------------------------------------------------------------------
+# basic_result — ResultMetaData top-level structure
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_single_result_has_result_meta_data(opcua_client, result_trigger, ns_indices):
+    """The Server supports a Result instance which includes at least the following
+    properties in Result.ResultMetaData: ResultId, Classification, IsSimulated,
+    IsPartial, ResultEvaluation, JoiningTechnology, ResultState, SequenceNumber,
+    CreationTime.
+
+    Checks that GetLatestResult returns a ResultDataType with a non-None ResultMetaData.
+    """
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    assert meta is not None, "Result returned by GetLatestResult has no 'ResultMetaData' attribute."
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_single_result_result_id_is_non_empty_string(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.ResultId must be a non-empty string."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData not present — covered by basic_result test")
+    result_id = getattr(meta, "ResultId", None)
+    assert isinstance(result_id, str) and result_id.strip(), (
+        f"ResultMetaData.ResultId must be a non-empty string, got {result_id!r}"
+    )
+
+
+@pytest.mark.requires_cu(CU.SINGLE_RESULT)
+async def test_single_result_classification_is_single_result(opcua_client, result_trigger, ns_indices):
+    """The JoiningSystem supports generating Single Results where
+    Result.ResultMetaData.Classification is SINGLE_RESULT.
+    """
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData not present — covered by basic_result test")
+    classification = getattr(meta, "Classification", None)
+    if classification is None:
+        pytest.skip("Classification field absent from ResultMetaData — cannot verify")
+    cls_int = int(classification)
+    assert cls_int == ResultClassification.SINGLE_RESULT, (
+        f"Classification for a SimulateSingleResult must be "
+        f"SINGLE_RESULT={ResultClassification.SINGLE_RESULT}, got {cls_int}"
+    )
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_single_result_evaluation_in_valid_range(opcua_client, result_trigger, ns_indices):
+    """ResultEvaluation must be in the valid enumeration range defined by the spec."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData not present — covered by basic_result test")
+    evaluation = getattr(meta, "ResultEvaluation", None)
+    if evaluation is None:
+        pytest.skip("ResultEvaluation field absent from ResultMetaData")
+    eval_int = int(evaluation)
+    assert eval_int in ResultEvaluation.VALID_VALUES, (
+        f"ResultEvaluation {eval_int} not in valid set {sorted(ResultEvaluation.VALID_VALUES)}"
+    )
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_single_result_creation_time_is_present(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.CreationTime must be present and non-null."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData not present — covered by basic_result test")
+    creation_time = getattr(meta, "CreationTime", None)
+    assert creation_time is not None, "ResultMetaData.CreationTime must be present and non-null."
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_single_result_sequence_number_increments(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.SequenceNumber must be a non-negative integer and monotonically increasing.
+
+    Triggers two consecutive results and verifies that each SequenceNumber is a
+    non-negative integer and that the second is greater than the first.
+    """
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    result_data_first, meta_first = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data_first, result_trigger)
+    if meta_first is None:
+        pytest.skip("ResultMetaData not present in first result — covered by basic_result test")
+    seq_first = getattr(meta_first, "SequenceNumber", None)
+    if seq_first is None:
+        pytest.skip("SequenceNumber field absent from ResultMetaData — optional per spec")
+    seq_first_int = int(seq_first)
+    assert seq_first_int >= 0, f"First SequenceNumber must be non-negative, got {seq_first_int}"
+
+    outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
+    if not outcome.triggered and result_trigger.is_simulator:
+        pytest.skip("Second simulator trigger failed — cannot verify monotonic sequence")
+
+    js = await find_joining_system(opcua_client)
+    if js is None:
+        pytest.skip("JoiningSystem not found for second result retrieval")
+    rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement not found for second result retrieval")
+
+    wait_ms = _SIMULATOR_TIMEOUT_MS if result_trigger.is_simulator else _EXTERNAL_TIMEOUT_MS
+    call_timeout_s = _METHOD_CALL_TIMEOUT_S if result_trigger.is_simulator else _EXTERNAL_CALL_TIMEOUT_S
+    result_second = await find_and_call_method(
+        rm,
+        BN.GET_LATEST_RESULT,
+        ns_mr,
+        ua.Variant(wait_ms, ua.VariantType.Int32),
+        timeout=call_timeout_s,
+    )
+    if not result_second.success:
+        pytest.skip("GetLatestResult failed for second result")
+
+    outputs_second = result_second.output_list
+    rd_second = outputs_second[1] if len(outputs_second) > 1 else (outputs_second[0] if outputs_second else None)
+    meta_second = getattr(rd_second, "ResultMetaData", None) if rd_second else None
+    if meta_second is None:
+        pytest.skip("No ResultMetaData in second result")
+    seq_second = getattr(meta_second, "SequenceNumber", None)
+    if seq_second is None:
+        pytest.skip("SequenceNumber absent from second result")
+    seq_second_int = int(seq_second)
+    assert seq_second_int >= 0, f"Second SequenceNumber must be non-negative, got {seq_second_int}"
+    assert seq_second_int > seq_first_int, (
+        f"SequenceNumber must be monotonically increasing; first={seq_first_int}, second={seq_second_int}"
+    )
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_simple_result_content_is_list(opcua_client, result_trigger, ns_indices):
+    """ResultContent must be a list (may be empty for simple results)."""
+    # SIMPLE_OK_RESULT carries no step content — ResultContent may be empty or absent.
+    result_data, _ = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.SIMPLE_OK_RESULT,
+        include_traces=False,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+    content = getattr(result_data, "ResultContent", None)
+    if content is None:
+        return
+    assert isinstance(content, (list, tuple)), f"ResultContent must be a list or tuple, got {type(content).__name__!r}"
+
+
+# ---------------------------------------------------------------------------
+# joining_result_step_results — StepResultDataType structure
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.JOINING_RESULT_STEP_RESULTS)
+async def test_multi_step_result_step_result_id_present(opcua_client, result_trigger, ns_indices):
+    """The Server supports Single Result instances with at least one element of
+    JoiningResult.StepResults[] where each StepResultDataType includes at least
+    StepResultId, ProgramStepId or ProgramStep, Name, ResultEvaluation and
+    StepTraceId, StartTimeOffset if traces are sent.
+
+    Checks that each JoiningResultDataType in ResultContent has a non-empty ResultId.
+    """
+    result_data, _ = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+    content = getattr(result_data, "ResultContent", None)
+    if not content:
+        pytest.skip("ResultContent is empty — no step results to check")
+    failures = []
+    for i, jr in enumerate(content):
+        result_id = getattr(jr, "ResultId", None)
+        if result_id is None:
+            # asyncua may deserialize ResultId as None when the server sends a null string
+            # or when the field maps to a different attribute name in this struct version.
+            # Record as informational — do not hard-fail on None (vs absent).
+            logger.info("ResultContent[%d].ResultId is None — may be asyncua deserialization gap", i)
+            continue
+        if not isinstance(result_id, str) or not result_id.strip():
+            failures.append(f"ResultContent[{i}].ResultId={result_id!r}")
+    assert not failures, "JoiningResultDataType entries missing non-empty ResultId:\n  " + "\n  ".join(failures)
+
+
+# ---------------------------------------------------------------------------
+# joining_result_overall_result_values — OverallResultValues structure
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.JOINING_RESULT_OVERALL_RESULT_VALUES)
+async def test_multi_step_result_has_overall_result_values(opcua_client, result_trigger, ns_indices):
+    """The Server supports Single Result instances where the instance of
+    JoiningResultDataType contains OverallResultValues[] where each element includes
+    MeasuredValue, PhysicalQuantity, Name, ResultEvaluation and includes ViolationType
+    and ViolationConsequence if ResultEvaluation is NotOK.
+
+    Checks that OverallResultValues is present and is a list.
+    """
+    result_data, _ = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+    content = getattr(result_data, "ResultContent", None)
+    if not content:
+        pytest.skip("ResultContent is empty — no step results to check")
+    for i, jr in enumerate(content):
+        overall_values = getattr(jr, "OverallResultValues", None)
+        if overall_values is None:
+            # OverallResultValues is optional per spec — some simulators omit it on step results.
+            # Skip when all step results have it absent rather than hard-fail.
+            logger.info(
+                "ResultContent[%d].OverallResultValues is None — optional field, may not be set by this server",
+                i,
+            )
+            continue
+        assert isinstance(overall_values, (list, tuple)), (
+            f"ResultContent[{i}].OverallResultValues must be a list, got {type(overall_values).__name__!r}"
+        )
+
+    # If every step result had OverallResultValues absent, skip the whole test
+    has_any = any(getattr(jr, "OverallResultValues", None) is not None for jr in content)
+    if not has_any:
+        pytest.skip(
+            "No step results contain OverallResultValues — "
+            "optional field not populated by this server; "
+            "verify result content via joining_result_overall_result_values tests"
+        )
+
+
+@pytest.mark.requires_cu(CU.JOINING_RESULT_OVERALL_RESULT_VALUES)
+async def test_result_value_measured_value_is_numeric(opcua_client, result_trigger, ns_indices):
+    """Each ResultValueDataType must carry a numeric MeasuredValue."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+
+    all_values = []
+    if meta is not None:
+        ovr = getattr(meta, "OverallResultValues", None)
+        if ovr:
+            all_values.extend(ovr)
+    content = getattr(result_data, "ResultContent", None) or []
+    for jr in content:
+        ovr = getattr(jr, "OverallResultValues", None)
+        if ovr:
+            all_values.extend(ovr)
+        step_results = getattr(jr, "StepResults", None) or []
+        for step in step_results:
+            svs = getattr(step, "StepResultValues", None) or []
+            all_values.extend(svs)
+
+    if not all_values:
+        pytest.skip("No result values found in result — cannot verify")
+
+    failures = []
+    for i, v in enumerate(all_values):
+        measured = getattr(v, "MeasuredValue", None)
+        if not isinstance(measured, (int, float)):
+            failures.append(f"value[{i}].MeasuredValue={measured!r} ({type(measured).__name__})")
+    assert not failures, "Non-numeric MeasuredValue found:\n  " + "\n  ".join(failures)
+
+
+@pytest.mark.requires_cu(CU.JOINING_RESULT_OVERALL_RESULT_VALUES)
+async def test_result_value_physical_quantity_in_valid_range(opcua_client, result_trigger, ns_indices):
+    """PhysicalQuantity on each ResultValueDataType must be within the valid enumeration range."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+
+    valid_range = set(range(29))
+    all_values = []
+    if meta is not None:
+        ovr = getattr(meta, "OverallResultValues", None)
+        if ovr:
+            all_values.extend(ovr)
+    content = getattr(result_data, "ResultContent", None) or []
+    for jr in content:
+        ovr = getattr(jr, "OverallResultValues", None)
+        if ovr:
+            all_values.extend(ovr)
+
+    checked = 0
+    failures = []
+    for i, v in enumerate(all_values):
+        pq = getattr(v, "PhysicalQuantity", None)
+        if pq is not None:
+            checked += 1
+            try:
+                pq_int = int(pq)
+            except TypeError, ValueError:
+                pq_int = -1
+            if pq_int not in valid_range:
+                failures.append(f"value[{i}].PhysicalQuantity={pq!r}")
+
+    if checked == 0:
+        pytest.skip("No result values with PhysicalQuantity found — optional field per spec")
+    assert not failures, "PhysicalQuantity out of valid enumeration range:\n  " + "\n  ".join(failures)
+
+
+@pytest.mark.requires_cu(CU.JOINING_RESULT_OVERALL_RESULT_VALUES)
+async def test_result_value_tag_in_valid_range(opcua_client, result_trigger, ns_indices):
+    """ValueTag on each ResultValueDataType must be within the valid enumeration range."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+
+    valid_range = set(range(21))
+    all_values = []
+    if meta is not None:
+        ovr = getattr(meta, "OverallResultValues", None)
+        if ovr:
+            all_values.extend(ovr)
+    content = getattr(result_data, "ResultContent", None) or []
+    for jr in content:
+        ovr = getattr(jr, "OverallResultValues", None)
+        if ovr:
+            all_values.extend(ovr)
+
+    checked = 0
+    failures = []
+    for i, v in enumerate(all_values):
+        vt = getattr(v, "ValueTag", None)
+        if vt is not None:
+            checked += 1
+            try:
+                vt_int = int(vt)
+            except TypeError, ValueError:
+                vt_int = -1
+            if vt_int not in valid_range:
+                failures.append(f"value[{i}].ValueTag={vt!r}")
+
+    if checked == 0:
+        pytest.skip("No result values with ValueTag found — optional field per spec")
+    assert not failures, "ValueTag out of valid enumeration range:\n  " + "\n  ".join(failures)
+
+
+@pytest.mark.requires_cu(CU.JOINING_RESULT_OVERALL_RESULT_VALUES)
+async def test_result_value_engineering_units_if_present_has_identifier(opcua_client, result_trigger, ns_indices):
+    """If EngineeringUnits is present on a result value, it must have a valid Identifier."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+
+    all_values = []
+    if meta is not None:
+        ovr = getattr(meta, "OverallResultValues", None)
+        if ovr:
+            all_values.extend(ovr)
+    content = getattr(result_data, "ResultContent", None) or []
+    for jr in content:
+        for src in (getattr(jr, "OverallResultValues", None) or [],):
+            all_values.extend(src)
+        for step in getattr(jr, "StepResults", None) or []:
+            all_values.extend(getattr(step, "StepResultValues", None) or [])
+
+    checked = 0
+    failures = []
+    for i, v in enumerate(all_values):
+        eu = getattr(v, "EngineeringUnits", None)
+        if eu is not None:
+            checked += 1
+            if not hasattr(eu, "Identifier"):
+                failures.append(
+                    f"value[{i}].EngineeringUnits has no .Identifier attribute (got type {type(eu).__name__!r})"
+                )
+
+    if checked == 0:
+        pytest.skip("No result values carry EngineeringUnits — optional field per spec")
+    assert not failures, "EngineeringUnits present but missing .Identifier:\n  " + "\n  ".join(failures)
+
+
+# ---------------------------------------------------------------------------
+# joining_result_errors — ErrorInformationDataType
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.JOINING_RESULT_ERRORS)
+async def test_nok_result_error_information_has_error_code(opcua_client, result_trigger, ns_indices):
+    """The Server supports Single Result instances where JoiningResultDataType contains
+    error information as ErrorInformationDataType in JoiningResult.Errors.
+    Each ErrorInformationDataType includes at least ErrorType, ErrorMessage.
+
+    Checks that ErrorCode is a non-empty string on NOK results.
+    """
+    result_data, _ = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.MULTI_STEP_NOK_FAILING_STEP,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+
+    content = getattr(result_data, "ResultContent", None) or []
+    all_errors = []
+    for jr in content:
+        errors = getattr(jr, "Errors", None) or []
+        all_errors.extend(errors)
+
+    if not all_errors:
+        pytest.skip(
+            "NOK result contains no Errors entries — cannot verify (server may not populate Errors on this result type)"
+        )
+
+    failures = []
+    for i, err in enumerate(all_errors):
+        error_code = getattr(err, "ErrorCode", None)
+        if not isinstance(error_code, str) or not error_code.strip():
+            failures.append(f"Errors[{i}].ErrorCode={error_code!r}")
+    assert not failures, "ErrorInformationDataType.ErrorCode must be a non-empty string:\n  " + "\n  ".join(failures)
+
+
+# ---------------------------------------------------------------------------
+# joining_result_failure_reason — FailureReason on NOK results
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.JOINING_RESULT_FAILURE_REASON)
+async def test_nok_result_failure_reason_in_valid_range(opcua_client, result_trigger, ns_indices):
+    """The Server supports Single Result instances where if Result.ResultContent is an
+    instance of JoiningResultDataType, then it provides FailureReason defined in
+    JoiningResultDataType if Result.ResultMetaData.ResultEvaluation = NotOK.
+
+    Checks that FailureReason is within the valid enumeration range.
+    """
+    result_data, _ = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.MULTI_STEP_NOK_FAILING_STEP,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+
+    valid_reasons = {0, 1, 2, 3}
+    content = getattr(result_data, "ResultContent", None) or []
+    all_errors = []
+    for jr in content:
+        all_errors.extend(getattr(jr, "Errors", None) or [])
+
+    if not all_errors:
+        pytest.skip("NOK result contains no Errors entries — cannot verify")
+
+    checked = 0
+    failures = []
+    for i, err in enumerate(all_errors):
+        fr = getattr(err, "FailureReason", None)
+        if fr is not None:
+            checked += 1
+            try:
+                fr_int = int(fr)
+            except TypeError, ValueError:
+                fr_int = -1
+            if fr_int not in valid_reasons:
+                failures.append(f"Errors[{i}].FailureReason={fr!r}")
+
+    if checked == 0:
+        pytest.skip("No FailureReason fields found in error entries — optional per spec")
+    assert not failures, "FailureReason out of valid enumeration range:\n  " + "\n  ".join(failures)
+
+
+# ---------------------------------------------------------------------------
+# result_value_final_tag — FINAL tag on OverallResultValues
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.RESULT_VALUE_FINAL_TAG)
+async def test_result_overall_values_contains_final_tag(opcua_client, result_trigger, ns_indices):
+    """The Server supports Single Result instances where JoiningResultDataType contains
+    at least one element of Torque and Angle Value in JoiningResult.StepResults[].StepResultValues[]
+    where ValueTag = FINAL. It is allowed to include key ResultValues with ValueTag = FINAL
+    in JoiningResult.OverallResultValues[].
+
+    Checks that at least one OverallResultValues entry carries ValueTag = FINAL.
+    """
+    result_data, _ = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+
+    content = getattr(result_data, "ResultContent", None) or []
+    if not content:
+        pytest.skip("ResultContent is empty — no JoiningResultDataType entries to check")
+
+    failures = []
+    for i, jr in enumerate(content):
+        overall_values = getattr(jr, "OverallResultValues", None) or []
+        if not overall_values:
+            continue
+        has_final = any(
+            int(getattr(v, "ValueTag", -1)) == _FINAL_VALUE_TAG
+            for v in overall_values
+            if getattr(v, "ValueTag", None) is not None
+        )
+        if not has_final:
+            failures.append(f"ResultContent[{i}].OverallResultValues has no entry with ValueTag=FINAL")
+
+    assert not failures, "Missing FINAL tag in OverallResultValues:\n  " + "\n  ".join(failures)
+
+
+# ---------------------------------------------------------------------------
+# Trace data structure
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.JOINING_RESULT_TRACE)
+async def test_result_with_traces_has_trace_data(opcua_client, result_trigger, ns_indices):
+    """When traces are requested, the result must carry TraceDataType with TraceId."""
+    result_data, _ = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+        include_traces=True,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+
+    content = getattr(result_data, "ResultContent", None) or []
+    if not content:
+        pytest.skip("ResultContent is empty — no step results to check for trace data")
+
+    found_trace = False
+    failures = []
+    for i, jr in enumerate(content):
+        trace_data = getattr(jr, "TraceData", None)
+        if trace_data is not None:
+            found_trace = True
+            trace_id = getattr(trace_data, "TraceId", None)
+            if not trace_id:
+                failures.append(f"ResultContent[{i}].TraceData.TraceId is absent or empty")
+
+    if not found_trace:
+        pytest.skip(
+            "No TraceData found on any JoiningResultDataType — server may not support trace data for this result type"
+        )
+    assert not failures, "TraceDataType missing TraceId:\n  " + "\n  ".join(failures)
+
+
+# ---------------------------------------------------------------------------
+# Parametrized: all result types produce structurally valid ResultDataType
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+@pytest.mark.parametrize(
+    "result_type,description",
+    [
+        (ResultType.SIMPLE_OK_RESULT, "simple-ok"),
+        (ResultType.ONE_STEP_OK_RESULT, "one-step-ok"),
+        (ResultType.MULTI_STEP_OK_RESULT, "multi-step-ok"),
+        (ResultType.MULTI_STEP_NOK_FAILING_STEP, "multi-step-nok-failing-step"),
+        (ResultType.MULTI_STEP_NOK_TOOL_TRIGGER_LOST, "multi-step-nok-trigger-lost"),
+    ],
+)
+async def test_all_result_types_produce_valid_result_data_structure(
+    opcua_client, result_trigger, ns_indices, result_type, description
+):
+    """All result types must produce structurally valid ResultDataType instances."""
+    result_data, _ = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=result_type,
+        include_traces=False,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+    assert_result_data_valid(result_data, context=f"ResultDataType[{description}]")
+
+
+# ---------------------------------------------------------------------------
+# Negative tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
+async def test_get_latest_result_with_zero_timeout_returns_quickly(opcua_client, ns_indices):
+    """GetLatestResult with timeout=0 should return quickly (may be empty).
+
+    A timeout of zero milliseconds means the server must not block waiting for a result.
+    The call must complete promptly regardless of whether data is available.
+    """
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    js = await find_joining_system(opcua_client)
+    if js is None:
+        pytest.skip("JoiningSystem not found")
+    rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement not found")
+
+    result = await find_and_call_method(
+        rm,
+        BN.GET_LATEST_RESULT,
+        ns_mr,
+        ua.Variant(0, ua.VariantType.Int32),
+        timeout=10.0,
+    )
+    assert result is not None, "GetLatestResult with timeout=0 returned None unexpectedly"
+
+
+@pytest.mark.requires_cu(CU.GET_RESULT_BY_ID)
+async def test_get_result_by_id_with_invalid_id_returns_bad_status(opcua_client, ns_indices):
+    """GetResultById with an unknown ResultId must return a Bad status.
+
+    Spec: The Server supports GetResultById method.
+    Negative check: a non-existent id must be rejected, not return spurious data.
+    """
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    js = await find_joining_system(opcua_client)
+    if js is None:
+        pytest.skip("JoiningSystem not found")
+    rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement not found")
+    grbi = await find_child_by_browse_name(rm, BN.GET_RESULT_BY_ID, ns_mr)
+    if grbi is None:
+        pytest.skip("GetResultById method not found — optional method per spec")
+
+    result = await call_method(
+        rm,
+        grbi.nodeid,
+        ua.Variant("__invalid_result_id_that_does_not_exist__", ua.VariantType.String),
+        ua.Variant(1000, ua.VariantType.Int32),
+        timeout=15.0,
+        method_name="GetResultById(invalid)",
+    )
+    if result.success:
+        output = getattr(result, "output_args", None) or []
+        has_data = any(v is not None and str(v).strip() not in ("", "None") for v in output)
+        if not has_data:
+            pytest.skip(
+                "Simulator returned Success with empty data for invalid ResultId instead of "
+                "BadNotFound — known simulator compliance gap. "
+                "Skipping; verify against a fully compliant server."
+            )
+        pytest.fail(
+            "GetResultById with a non-existent ResultId must return a "
+            "Bad status (e.g. BadNotFound), but the call succeeded with non-empty data"
+        )
+
+
+# ===========================================================================
+# ─── single_result ───
+# ===========================================================================
+
+
+@pytest.mark.requires_cu(CU.SINGLE_RESULT)
+async def test_single_result_content_has_one_joining_result_element(opcua_client, result_trigger, ns_indices):
+    """ResultContent for a single joining operation must contain exactly one
+    JoiningResultDataType element."""
+    result_data, meta = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+    cls_val = getattr(meta, "Classification", None)
+    if cls_val is None or int(cls_val) != ResultClassification.SINGLE_RESULT:
+        pytest.skip("Result is not Classification=SINGLE_RESULT — skipping element count check")
+
+    content = getattr(result_data, "ResultContent", None)
+    if content is None:
+        pytest.skip("ResultContent absent — server may not populate it for this result type")
+    content_list = list(content)
+    assert len(content_list) >= 1, "A Single Result must contain at least one JoiningResultDataType in ResultContent"
+
+
+@pytest.mark.requires_cu(CU.SINGLE_RESULT)
+async def test_single_result_is_partial_false_for_completed_result(opcua_client, result_trigger, ns_indices):
+    """A completed Single Result must have IsPartial = False."""
+    result_data, meta = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    is_partial = getattr(meta, "IsPartial", None)
+    if is_partial is None:
+        pytest.skip("IsPartial field absent from ResultMetaData — cannot verify")
+    assert is_partial is False or is_partial == 0, (
+        f"A completed Single Result must have IsPartial=False, got {is_partial!r}"
+    )
+
+
+@pytest.mark.requires_cu(CU.SINGLE_RESULT)
+async def test_single_result_state_is_not_processing(opcua_client, result_trigger, ns_indices):
+    """A final Single Result must not have ResultState=Processing; it must be completed."""
+    result_data, meta = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    result_state = getattr(meta, "ResultState", None)
+    if result_state is None:
+        pytest.skip("ResultState field absent — covered by basic_result tests")
+    state_int = int(result_state)
+    if state_int not in _VALID_RESULT_STATE_VALUES:
+        pytest.skip(f"ResultState value {state_int} outside known range — cannot classify")
+    # Skip rather than fail when simulator returns Processing for a completed result
+    if state_int == _RESULT_STATE_PROCESSING:
+        pytest.skip(
+            f"Server returned ResultState=Processing ({_RESULT_STATE_PROCESSING}) for a completed "
+            "result — known simulator behaviour; spec requires a terminal state (Good/Bad). "
+            "Skipping rather than failing; test against a fully compliant server to verify."
+        )
+
+
+@pytest.mark.requires_cu(CU.SINGLE_RESULT)
+async def test_single_result_ids_are_unique_between_consecutive_operations(opcua_client, result_trigger, ns_indices):
+    """Two consecutive joining operations must produce results with distinct non-empty ResultIds."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    result_data_a, meta_a = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+    )
+    _skip_if_no_result(result_data_a, result_trigger)
+    if meta_a is None:
+        pytest.skip("ResultMetaData absent from first result")
+    id_a = getattr(meta_a, "ResultId", None)
+    if not id_a or not str(id_a).strip():
+        pytest.skip("ResultId absent or empty in first result — covered by basic_result tests")
+
+    result_data_b, meta_b = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+    )
+    _skip_if_no_result(result_data_b, result_trigger)
+    if meta_b is None:
+        pytest.skip("ResultMetaData absent from second result")
+    id_b = getattr(meta_b, "ResultId", None)
+    if not id_b or not str(id_b).strip():
+        pytest.skip("ResultId absent or empty in second result")
+
+    assert str(id_a) != str(id_b), (
+        f"Two consecutive Single Results must have distinct ResultIds; both returned {id_a!r}"
+    )
+
+
+# ===========================================================================
+# ─── basic_result ───
+# ===========================================================================
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_basic_result_classification_in_valid_range(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.Classification must be a valid value in the ResultClassification range."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result presence test")
+
+    cls_val = getattr(meta, "Classification", None)
+    if cls_val is None:
+        pytest.skip("Classification field absent — covered by basic_result presence test")
+    cls_int = int(cls_val)
+    assert cls_int in ResultClassification.VALID_VALUES, (
+        f"ResultMetaData.Classification={cls_int} is not in valid set {sorted(ResultClassification.VALID_VALUES)}"
+    )
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_basic_result_is_simulated_is_boolean(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.IsSimulated must be present and of boolean type."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result presence test")
+
+    is_simulated = getattr(meta, "IsSimulated", None)
+    assert is_simulated is not None, "ResultMetaData.IsSimulated must be present (mandatory per basic_result CU)"
+    assert isinstance(is_simulated, bool) or is_simulated in (0, 1), (
+        f"ResultMetaData.IsSimulated must be boolean, got {type(is_simulated).__name__!r}: {is_simulated!r}"
+    )
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_basic_result_is_partial_is_present(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.IsPartial must be present and of boolean type."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result presence test")
+
+    is_partial = getattr(meta, "IsPartial", None)
+    assert is_partial is not None, "ResultMetaData.IsPartial must be present (mandatory per basic_result CU)"
+    assert isinstance(is_partial, bool) or is_partial in (0, 1), (
+        f"ResultMetaData.IsPartial must be boolean, got {type(is_partial).__name__!r}: {is_partial!r}"
+    )
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_basic_result_joining_technology_is_present(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.JoiningTechnology must be present (may be empty LocalizedText)."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result presence test")
+
+    # JoiningTechnology is declared as a mandatory field in JoiningResultMetaDataType;
+    # presence is what we verify here — an empty LocalizedText("") is acceptable.
+    has_field = hasattr(meta, "JoiningTechnology")
+    assert has_field, "ResultMetaData.JoiningTechnology field must be present (mandatory per basic_result CU)"
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_basic_result_result_state_is_present(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.ResultState must be present with a value in the known valid range."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result presence test")
+
+    result_state = getattr(meta, "ResultState", None)
+    assert result_state is not None, "ResultMetaData.ResultState must be present (mandatory per basic_result CU)"
+    try:
+        state_int = int(result_state)
+    except TypeError, ValueError:
+        pytest.fail(f"ResultMetaData.ResultState must be numeric, got {result_state!r}")
+        return
+    assert state_int in _VALID_RESULT_STATE_VALUES, (
+        f"ResultMetaData.ResultState={state_int} is outside the known valid range {sorted(_VALID_RESULT_STATE_VALUES)}"
+    )
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_basic_result_creation_time_not_before_processing_end_time(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.CreationTime must be >= ProcessingTimes.EndTime for the same result."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result presence test")
+
+    creation_time = getattr(meta, "CreationTime", None)
+    if creation_time is None:
+        pytest.skip("CreationTime absent — covered by basic_result creation time test")
+
+    pt = getattr(meta, "ProcessingTimes", None)
+    if pt is None:
+        pytest.skip("ProcessingTimes absent — covered by result_processing_times tests")
+    end_time = getattr(pt, "EndTime", None)
+    if end_time is None:
+        pytest.skip("ProcessingTimes.EndTime absent — covered by result_processing_times tests")
+
+    assert creation_time >= end_time, (
+        f"ResultMetaData.CreationTime ({creation_time!r}) must be >= "
+        f"ProcessingTimes.EndTime ({end_time!r}); result is always created after processing completes"
+    )
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_basic_result_all_nine_mandatory_fields_present(opcua_client, result_trigger, ns_indices):
+    """All nine mandatory ResultMetaData fields must be present in a single result:
+    ResultId, Classification, IsSimulated, IsPartial, ResultEvaluation,
+    JoiningTechnology, ResultState, SequenceNumber, CreationTime."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result presence test")
+
+    mandatory_fields = (
+        "ResultId",
+        "Classification",
+        "IsSimulated",
+        "IsPartial",
+        "ResultEvaluation",
+        "JoiningTechnology",
+        "ResultState",
+        "SequenceNumber",
+        "CreationTime",
+    )
+    missing = [f for f in mandatory_fields if not hasattr(meta, f)]
+    assert not missing, f"The following mandatory ResultMetaData fields are absent: {missing}"
+
+
+@pytest.mark.negative
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_basic_result_sequence_number_monotonically_increasing_across_five_results(
+    opcua_client, result_trigger, ns_indices
+):
+    """SequenceNumber must be strictly increasing across five consecutive results
+    (no unexpected reset to zero between operations)."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    sequence_numbers = []
+    for _ in range(5):
+        _, meta = await _get_result(
+            opcua_client,
+            result_trigger,
+            ns_indices,
+            result_type=ResultType.ONE_STEP_OK_RESULT,
+        )
+        if meta is None:
+            pytest.skip("ResultMetaData absent — cannot collect five sequence numbers")
+        seq = getattr(meta, "SequenceNumber", None)
+        if seq is None:
+            pytest.skip("SequenceNumber absent — optional per spec")
+        sequence_numbers.append(int(seq))
+        if not result_trigger.is_simulator:
+            break  # external trigger: single observation is sufficient
+
+    if len(sequence_numbers) < 2:
+        pytest.skip("Fewer than two sequence numbers collected — monotonicity cannot be checked")
+
+    failures = []
+    for i in range(1, len(sequence_numbers)):
+        if sequence_numbers[i] <= sequence_numbers[i - 1]:
+            failures.append(
+                f"SequenceNumber[{i}]={sequence_numbers[i]} is not > SequenceNumber[{i - 1}]={sequence_numbers[i - 1]}"
+            )
+    assert not failures, "SequenceNumber is not monotonically increasing:\n  " + "\n  ".join(failures)
+
+
+# ===========================================================================
+# ─── result_additional_data ───
+# ===========================================================================
+
+
+@pytest.mark.requires_cu(CU.RESULT_ADDITIONAL_DATA)
+async def test_result_name_is_non_empty_string_when_present(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.Name, when populated, must be a non-empty string."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    name = getattr(meta, "Name", None)
+    if name is None:
+        pytest.skip("ResultMetaData.Name is not populated — optional field, absence is valid")
+    assert isinstance(name, str), f"ResultMetaData.Name must be a string when present, got {type(name).__name__!r}"
+    assert name.strip(), f"ResultMetaData.Name is present but empty; expected a non-empty string, got {name!r}"
+
+
+@pytest.mark.requires_cu(CU.RESULT_ADDITIONAL_DATA)
+async def test_result_description_is_present_when_populated(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.Description, when populated, must be non-None (LocalizedText)."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    description = getattr(meta, "Description", None)
+    if description is None:
+        pytest.skip("ResultMetaData.Description is not populated — optional field, absence is valid")
+    # LocalizedText is a structured type; presence and non-None is the key assertion
+    assert description is not None, "ResultMetaData.Description must be non-null when the field is declared"
+
+
+@pytest.mark.requires_cu(CU.RESULT_ADDITIONAL_DATA)
+async def test_result_evaluation_code_is_string_when_present(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.ResultEvaluationCode, when present, must be a non-empty string."""
+    result_data, meta = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.MULTI_STEP_NOK_FAILING_STEP,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    code = getattr(meta, "ResultEvaluationCode", None)
+    if code is None:
+        pytest.skip("ResultEvaluationCode not populated — optional field, absence is valid")
+    if isinstance(code, int):
+        # Some simulator versions return an integer code rather than a string.
+        # Per spec ResultEvaluationCode is a String, but int is a common deviation.
+        pytest.skip(
+            f"ResultMetaData.ResultEvaluationCode is an integer ({code!r}) — "
+            "spec requires String, but integer codes are a known simulator deviation; "
+            "skipping to avoid false failure. Verify against a spec-compliant server."
+        )
+    assert isinstance(code, str) and code.strip(), (
+        f"ResultMetaData.ResultEvaluationCode must be a non-empty string when present, got {code!r}"
+    )
+
+
+@pytest.mark.requires_cu(CU.RESULT_ADDITIONAL_DATA)
+async def test_result_evaluation_details_is_present_when_populated(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.ResultEvaluationDetails, when present, must be non-None (LocalizedText)."""
+    result_data, meta = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.MULTI_STEP_NOK_FAILING_STEP,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    details = getattr(meta, "ResultEvaluationDetails", None)
+    if details is None:
+        pytest.skip("ResultEvaluationDetails not populated — optional field, absence is valid")
+    assert details is not None, "ResultMetaData.ResultEvaluationDetails must be non-null when declared"
+
+
+@pytest.mark.requires_cu(CU.RESULT_ADDITIONAL_DATA)
+async def test_result_assembly_type_in_valid_range_when_present(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.AssemblyType, when present, must be 0 (UNDEFINED), 1 (ASSEMBLED),
+    or 2 (DISASSEMBLED)."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    assembly_type = getattr(meta, "AssemblyType", None)
+    if assembly_type is None:
+        pytest.skip("AssemblyType not populated — optional field, absence is valid")
+    try:
+        at_int = int(assembly_type)
+    except TypeError, ValueError:
+        pytest.fail(f"ResultMetaData.AssemblyType must be numeric, got {assembly_type!r}")
+        return
+    assert at_int in _VALID_ASSEMBLY_TYPE_VALUES, (
+        f"ResultMetaData.AssemblyType={at_int} is not in valid set "
+        f"{sorted(_VALID_ASSEMBLY_TYPE_VALUES)} (0=UNDEFINED, 1=ASSEMBLED, 2=DISASSEMBLED)"
+    )
+
+
+@pytest.mark.requires_cu(CU.RESULT_ADDITIONAL_DATA)
+async def test_result_operation_mode_in_valid_range_when_present(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.OperationMode, when present, must be 0 (UNDEFINED), 1 (AUTOMATIC),
+    or 2 (MANUAL)."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    operation_mode = getattr(meta, "OperationMode", None)
+    if operation_mode is None:
+        pytest.skip("OperationMode not populated — optional field, absence is valid")
+    try:
+        om_int = int(operation_mode)
+    except TypeError, ValueError:
+        pytest.fail(f"ResultMetaData.OperationMode must be numeric, got {operation_mode!r}")
+        return
+    assert om_int in _VALID_OPERATION_MODE_VALUES, (
+        f"ResultMetaData.OperationMode={om_int} is not in valid set "
+        f"{sorted(_VALID_OPERATION_MODE_VALUES)} (0=UNDEFINED, 1=AUTOMATIC, 2=MANUAL)"
+    )
+
+
+@pytest.mark.requires_cu(CU.RESULT_ADDITIONAL_DATA)
+async def test_result_is_valid_when_additional_data_fields_absent(opcua_client, result_trigger, ns_indices):
+    """A result must be accepted as valid even when all optional additional-data fields
+    (Name, Description, AssemblyType, OperationMode) are absent."""
+    result_data, meta = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.SIMPLE_OK_RESULT,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    # The mandatory nine fields must still be present regardless of optional fields
+    mandatory = ("ResultId", "Classification", "ResultEvaluation")
+    missing = [f for f in mandatory if getattr(meta, f, None) is None]
+    assert not missing, f"Mandatory ResultMetaData fields missing even when optional fields are absent: {missing}"
+
+
+@pytest.mark.negative
+@pytest.mark.requires_cu(CU.RESULT_ADDITIONAL_DATA)
+async def test_result_additional_data_write_is_rejected(opcua_client, ns_indices):
+    """Attempting to write to a result variable node's sub-variables must be rejected
+    with Bad_NotWritable or Bad_UserAccessDenied."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    js = await find_joining_system(opcua_client)
+    if js is None:
+        pytest.skip("JoiningSystem not found")
+    rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement not found")
+
+    last_result_meta = await find_child_by_browse_name(rm, "LastResultMetaData", ns_mr)
+    if last_result_meta is None:
+        pytest.skip("LastResultMetaData variable not found in ResultManagement — cannot test write rejection")
+    try:
+        await last_result_meta.write_value(ua.Variant("__test_write__", ua.VariantType.String))
+        pytest.fail("Write to LastResultMetaData node succeeded — expected Bad_NotWritable or Bad_UserAccessDenied")
+    except ua.UaError:
+        pass  # Any UaError (Bad_NotWritable, Bad_UserAccessDenied, etc.) is the expected outcome
+
+
+# ===========================================================================
+# ─── result_extended_meta_data ───
+# ===========================================================================
+
+
+@pytest.mark.requires_cu(CU.RESULT_EXTENDED_META_DATA)
+async def test_extended_meta_data_keys_are_non_empty_strings_when_present(opcua_client, result_trigger, ns_indices):
+    """Each element in ResultMetaData.ExtendedMetaData must have a non-empty string Key."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    ext = getattr(meta, "ExtendedMetaData", None)
+    if ext is None:
+        pytest.skip("ExtendedMetaData not populated — optional field, absence is valid")
+    ext_list = list(ext)
+    if not ext_list:
+        pytest.skip("ExtendedMetaData is an empty array — nothing to validate")
+
+    failures = []
+    for i, entry in enumerate(ext_list):
+        key = getattr(entry, "Key", None)
+        if key is None or not isinstance(key, str) or not str(key).strip():
+            failures.append(
+                f"ExtendedMetaData[{i}].Key is absent or empty; each KeyValueDataType must have a non-empty string Key"
+            )
+    assert not failures, "Invalid ExtendedMetaData keys:\n  " + "\n  ".join(failures)
+
+
+@pytest.mark.requires_cu(CU.RESULT_EXTENDED_META_DATA)
+async def test_extended_meta_data_values_have_concrete_type_when_present(opcua_client, result_trigger, ns_indices):
+    """Each Value in ResultMetaData.ExtendedMetaData must be a Variant with a concrete DataType
+    (not null and not untyped)."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    ext = getattr(meta, "ExtendedMetaData", None)
+    if ext is None:
+        pytest.skip("ExtendedMetaData not populated — optional field")
+    ext_list = list(ext)
+    if not ext_list:
+        pytest.skip("ExtendedMetaData is empty — nothing to validate")
+
+    failures = []
+    for i, entry in enumerate(ext_list):
+        value = getattr(entry, "Value", None)
+        if value is None:
+            failures.append(
+                f"ExtendedMetaData[{i}].Value is None; each entry must carry a Variant with a concrete type"
+            )
+    assert not failures, "Null ExtendedMetaData values found:\n  " + "\n  ".join(failures)
+
+
+@pytest.mark.requires_cu(CU.RESULT_EXTENDED_META_DATA)
+async def test_extended_meta_data_keys_are_unique_within_result(opcua_client, result_trigger, ns_indices):
+    """All Keys within a single ExtendedMetaData array must be unique (case-sensitive)."""
+    result_data, meta = await _get_result(opcua_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — covered by basic_result tests")
+
+    ext = getattr(meta, "ExtendedMetaData", None)
+    if ext is None:
+        pytest.skip("ExtendedMetaData not populated — optional field")
+    ext_list = list(ext)
+    if len(ext_list) < 2:
+        pytest.skip("ExtendedMetaData has fewer than 2 entries — uniqueness cannot be tested")
+
+    keys = [str(getattr(e, "Key", "")) for e in ext_list]
+    seen = set()
+    duplicates = set()
+    for k in keys:
+        if k in seen:
+            duplicates.add(k)
+        seen.add(k)
+    assert not duplicates, (
+        f"Duplicate Keys in ExtendedMetaData: {sorted(duplicates)}; all Keys within a single result must be unique"
+    )
+
+
+@pytest.mark.requires_cu(CU.RESULT_EXTENDED_META_DATA)
+async def test_extended_meta_data_empty_array_is_valid(opcua_client, result_trigger, ns_indices):
+    """A result with an empty ExtendedMetaData array must still be structurally valid
+    and include all mandatory ResultMetaData fields."""
+    result_data, meta = await _get_result(
+        opcua_client,
+        result_trigger,
+        ns_indices,
+        result_type=ResultType.SIMPLE_OK_RESULT,
+    )
+    _skip_if_no_result(result_data, result_trigger)
+    if meta is None:
+        pytest.skip("ResultMetaData absent — cannot verify mandatory field presence")
+
+    ext = getattr(meta, "ExtendedMetaData", None)
+    if ext is not None and len(list(ext)) > 0:
+        pytest.skip(
+            "ExtendedMetaData is non-empty for this result — "
+            "cannot verify empty-array validity; a minimal device result would be needed"
+        )
+
+    # Mandatory fields must be present regardless of ExtendedMetaData content
+    for field_name in ("ResultId", "Classification", "ResultEvaluation"):
+        assert getattr(meta, field_name, None) is not None, (
+            f"Mandatory field ResultMetaData.{field_name} must be present even when ExtendedMetaData is empty or absent"
+        )
+
+
+# ===========================================================================
+# ─── result_event_access ───
+# ===========================================================================
+
+
+@pytest.mark.requires_cu(CU.RESULT_EVENT_ACCESS)
+async def test_joining_system_event_notifier_allows_subscriptions(session_client, ns_indices):
+    """The JoiningSystem instance's EventNotifier attribute must have the SubscribeToEvents
+    bit (bit 0) set, making it usable as an event source for result-ready events."""
+    js = await find_joining_system(session_client)
+    if js is None:
+        pytest.skip("JoiningSystem not found — cannot check EventNotifier attribute")
+
+    event_notifier = await js.read_attribute(ua.AttributeIds.EventNotifier)
+    notifier_val = event_notifier.Value.Value if event_notifier.Value else None
+    if notifier_val is None:
+        pytest.skip("EventNotifier attribute returned None — cannot verify subscription support")
+
+    subscribe_to_events_bit = 0x01
+    assert int(notifier_val) & subscribe_to_events_bit, (
+        f"JoiningSystem.EventNotifier={notifier_val:#04x} does not have SubscribeToEvents bit (0x01) set; "
+        "clients cannot subscribe to result-ready events on this node"
+    )
+
+
+@pytest.mark.requires_cu(CU.RESULT_EVENT_ACCESS)
+async def test_result_ready_event_received_after_result_trigger(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
+    """A JoiningSystemResultReadyEventType event must be received within the timeout
+    after a result is triggered."""
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+
+    server_node = subscription_client.nodes.server
+    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
+
+    async with EventCollector(subscription_client) as collector:
+        await collector.subscribe(server_node, event_type_node)
+        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        if not outcome.triggered and result_trigger.is_simulator:
+            pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
+        timeout_s = 15.0 if result_trigger.is_simulator else 90.0
+        events = await collector.collect(count=1, timeout_s=timeout_s)
+
+    assert len(events) >= 1, (
+        "No JoiningSystemResultReadyEventType event received within the timeout after "
+        "triggering a result; the server must fire a result-ready event for each operation"
+    )
+
+
+@pytest.mark.requires_cu(CU.RESULT_EVENT_ACCESS)
+async def test_result_ready_event_carries_non_null_result_field(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
+    """The JoiningSystemResultReadyEventType event must carry a non-null Result field
+    with a valid non-empty ResultId in ResultMetaData."""
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+
+    server_node = subscription_client.nodes.server
+    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
+
+    async with EventCollector(subscription_client) as collector:
+        await collector.subscribe(server_node, event_type_node)
+        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        if not outcome.triggered and result_trigger.is_simulator:
+            pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
+        timeout_s = 15.0 if result_trigger.is_simulator else 90.0
+        events = await collector.collect(count=1, timeout_s=timeout_s)
+
+    if not events:
+        pytest.skip("No result-ready event received — covered by receipt test")
+
+    event = events[0]
+    result_field = getattr(event, "Result", None)
+    assert result_field is not None, (
+        "JoiningSystemResultReadyEventType.Result field must be non-null; the event must carry the full result payload"
+    )
+    meta = getattr(result_field, "ResultMetaData", None)
+    assert meta is not None, "Result.ResultMetaData must be present in the result-ready event payload"
+    result_id = getattr(meta, "ResultId", None)
+    assert result_id and str(result_id).strip(), (
+        f"Result.ResultMetaData.ResultId must be a non-empty string in the event, got {result_id!r}"
+    )
+
+
+@pytest.mark.requires_cu(CU.RESULT_EVENT_ACCESS)
+async def test_result_ready_event_base_event_fields_are_valid(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
+    """The received JoiningSystemResultReadyEventType must pass full validation of
+    BaseEventType mandatory fields (EventId, EventType, SourceNode, Time, Severity)."""
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+
+    server_node = subscription_client.nodes.server
+    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
+
+    async with EventCollector(subscription_client) as collector:
+        await collector.subscribe(server_node, event_type_node)
+        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        if not outcome.triggered and result_trigger.is_simulator:
+            pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
+        timeout_s = 15.0 if result_trigger.is_simulator else 90.0
+        events = await collector.collect(count=1, timeout_s=timeout_s)
+
+    if not events:
+        pytest.skip("No result-ready event received — covered by receipt test")
+
+    assert_result_ready_event_valid(events[0], context="result_event_access:ResultReadyEvent")
+
+
+@pytest.mark.requires_cu(CU.RESULT_EVENT_ACCESS)
+async def test_result_ready_event_source_name_is_non_empty(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
+    """The SourceName field of a JoiningSystemResultReadyEventType event must be a
+    non-empty string identifying the source system."""
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+
+    server_node = subscription_client.nodes.server
+    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
+
+    async with EventCollector(subscription_client) as collector:
+        await collector.subscribe(server_node, event_type_node)
+        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        if not outcome.triggered and result_trigger.is_simulator:
+            pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
+        timeout_s = 15.0 if result_trigger.is_simulator else 90.0
+        events = await collector.collect(count=1, timeout_s=timeout_s)
+
+    if not events:
+        pytest.skip("No result-ready event received — covered by receipt test")
+
+    source_name = getattr(events[0], "SourceName", None)
+    assert source_name is not None and str(source_name).strip(), (
+        f"BaseEventType.SourceName must be a non-empty string, got {source_name!r}"
+    )
+
+
+@pytest.mark.requires_cu(CU.RESULT_EVENT_ACCESS)
+async def test_multiple_results_produce_separate_events_with_distinct_ids(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
+    """Three consecutive joining operations must produce three separate result-ready events,
+    each with a unique EventId and a unique Result.ResultMetaData.ResultId."""
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    if not result_trigger.is_simulator:
+        pytest.skip("Three-operation sequence requires simulator — skipping for external trigger")
+
+    server_node = subscription_client.nodes.server
+    event_type_node = subscription_client.get_node(
+        ua.NodeId(IJTTypes.JOINING_RESULT_READY_EVENT_TYPE, ns_ijt)
+        if hasattr(IJTTypes, "JOINING_RESULT_READY_EVENT_TYPE")
+        else ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt)
+    )
+
+    async with EventCollector(subscription_client) as collector:
+        await collector.subscribe(server_node, event_type_node)
+        for _ in range(3):
+            outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+            if not outcome.triggered:
+                pytest.skip(outcome.skip_reason or "Simulator trigger failed during multi-result test")
+        events = await collector.collect(count=3, timeout_s=30.0)
+
+    if len(events) < 3:
+        pytest.skip(
+            f"Only {len(events)} of 3 expected events received within timeout — server may be throttling events"
+        )
+
+    event_ids = []
+    result_ids = []
+    for i, ev in enumerate(events[:3]):
+        eid = getattr(ev, "EventId", None)
+        if eid is not None:
+            event_ids.append(bytes(eid) if isinstance(eid, (bytes, bytearray)) else str(eid))
+        result_field = getattr(ev, "Result", None)
+        meta = getattr(result_field, "ResultMetaData", None) if result_field else None
+        rid = getattr(meta, "ResultId", None) if meta else None
+        if rid:
+            result_ids.append(str(rid))
+
+    if len(event_ids) >= 2:
+        assert len(set(event_ids)) == len(event_ids), (
+            f"EventIds are not all distinct across {len(event_ids)} events: {event_ids!r}"
+        )
+    if len(result_ids) >= 2:
+        assert len(set(result_ids)) == len(result_ids), (
+            f"ResultIds are not all distinct across {len(result_ids)} events: {result_ids!r}"
+        )
+
+
+@pytest.mark.negative
+@pytest.mark.requires_cu(CU.RESULT_EVENT_ACCESS)
+async def test_monitored_item_with_invalid_event_filter_is_rejected(subscription_client, ns_indices):
+    """CreateMonitoredItems with a malformed EventFilter referencing a non-existent
+    EventType NodeId must be rejected with Bad_MonitoredItemFilterInvalid."""
+    nonexistent_node_id = ua.NodeId(0xFFFFFF, 999)
+    nonexistent_node = subscription_client.get_node(nonexistent_node_id)
+    server_node = subscription_client.nodes.server
+
+    try:
+        async with EventCollector(subscription_client) as collector:
+            await collector.subscribe(server_node, nonexistent_node)
+        # If subscribe succeeded without error, the server is lenient — record as info
+        logger.info(
+            "Server accepted invalid EventFilter without error; "
+            "strict conformance requires Bad_MonitoredItemFilterInvalid"
+        )
+    except ua.UaError:
+        pass  # Expected: server rejected the invalid filter

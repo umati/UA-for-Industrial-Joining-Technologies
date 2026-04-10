@@ -139,7 +139,7 @@ IJT_Test_Client/
 │   └── data_types/
 ├── joining_process/              ← JoiningProcessManagement structure + methods
 ├── joint/                        ← JointManagement structure + methods
-└── conformance/                  ← §11.1 Conformance Unit tests (CU-AM, CU-RM, CU-EM, CU-JP, CU-JT)
+└── conformance/                  ← Conformance Unit tests (asset, result, event, joining process, joint)
 ```
 
 ### Key Fixtures (conftest.py)
@@ -198,6 +198,42 @@ async with EventCollector(subscription_client) as collector:
     events = await collector.collect(count=1, timeout_s=20.0)
 assert len(events) >= 1
 ```
+
+---
+
+## When to Skip vs Fail
+
+| Situation | What to do |
+|-----------|-----------|
+| Feature is optional and not present | `pytest.skip(...)` |
+| Server behaves differently from spec (documented deviation) | `pytest.skip("known deviation: ...")` |
+| Feature is mandatory and missing | `pytest.fail(...)` |
+| Feature is present but returns wrong data | `assert ...` |
+
+---
+
+## Custom Trigger Adapter (for Real Controllers)
+
+For servers that cannot simulate their own results, implement a trigger adapter:
+
+```python
+# my_server/trigger.py
+from helpers.trigger import ResultTrigger, TriggerOutcome, ResultType
+
+class MyServerTrigger(ResultTrigger):
+    async def trigger_single(self, result_type: ResultType, include_traces=False):
+        await self._api.run_program(result_type.value)
+        return TriggerOutcome(triggered=True, method="api.run_program")
+```
+
+Register it before running:
+
+```bash
+export OPCUA_TRIGGER_CLASS=my_server.trigger.MyServerTrigger
+pytest conformance/
+```
+
+All tests call `result_trigger.trigger_single(...)` and skip gracefully if no trigger is available.
 
 ---
 

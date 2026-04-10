@@ -237,17 +237,31 @@ class BN:
     # AssetManagement MethodSet methods (IJT Base ns, under AssetManagement/MethodSet)
     ENABLE_ASSET = "EnableAsset"
     DISABLE_ASSET = "DisableAsset"
+    DISCONNECT_ASSET = "DisconnectAsset"
+    SET_CALIBRATION = "SetCalibration"
+    REBOOT_ASSET = "RebootAsset"
+    GET_ERROR_INFORMATION = "GetErrorInformation"
+    EXECUTE_OPERATION = "ExecuteOperation"
     RESET_IDENTIFIERS = "ResetIdentifiers"
     SEND_IDENTIFIERS = "SendIdentifiers"
     SEND_TEXT_IDENTIFIERS = "SendTextIdentifiers"
     GET_IDENTIFIERS = "GetIdentifiers"
     ALL_ASSET_MANAGEMENT_METHODS: list[str] = [
         "EnableAsset",
+        "DisconnectAsset",
+        "SetCalibration",
+        "RebootAsset",
+        "GetErrorInformation",
+        "ExecuteOperation",
         "ResetIdentifiers",
         "SendIdentifiers",
         "SendTextIdentifiers",
         "GetIdentifiers",
     ]
+    # Maintenance sub-node properties (IJT Base ns)
+    LAST_SERVICE = "LastService"
+    SERVICE_PLACE = "ServicePlace"
+    LAST_CALIBRATION = "LastCalibration"
     # ── Machinery/Result namespace BrowseNames (http://opcfoundation.org/UA/Machinery/Result/) ──
     RESULT_MANAGEMENT = "ResultManagement"
     RESULTS = "Results"
@@ -283,7 +297,8 @@ class BN:
     # ── IJT Base ResultManagement additions ──
     REQUEST_RESULTS = "RequestResults"
     REQUEST_UNACKNOWLEDGED_RESULTS = "RequestUnacknowledgedResults"
-    # ── App namespace simulation paths (urn:AtlasCopco:IJT:Tightening:Server/) ──
+    REQUESTED_RESULT = "RequestedResult"
+    # ── App namespace simulation paths (NS_APP — server simulation extension namespace) ──
     # Container nodes under TighteningSystem
     SIMULATIONS = "Simulations"
     SIMULATE_RESULTS = "SimulateResults"
@@ -530,16 +545,22 @@ class ResultType:
 # ResultClassification enum
 # ---------------------------------------------------------------------------
 class ResultClassification:
-    """Valid ResultClassification enum values per IJT Base spec."""
+    """
+    Valid ResultClassification enum values per OPC 40450-1 §9 (ResultMetaDataType).
+    Defines the *type* of result, not its quality.
+    Source: Opc.Ua.Ijt.Base.NodeSet2.xml, enum ResultClassificationEnumeration.
+    NOTE: these are intentionally different from ResultEvaluation.
+    """
 
     UNDEFINED = 0
-    OK = 1
-    NOK = 2
-    ABORTED = 3
-    OTHER = 4
-    REJECTED = 5
-    REWORK = 6
-    VALID_VALUES: set[int] = {0, 1, 2, 3, 4, 5, 6}
+    SINGLE_RESULT = 1
+    SYNC_RESULT = 2
+    BATCH_RESULT = 3
+    JOB_RESULT = 4
+    STITCHING_RESULT = 5
+    INTERVENTION_RESULT = 6
+    TEXT_RESULT = 7
+    VALID_VALUES: set[int] = {0, 1, 2, 3, 4, 5, 6, 7}
 
 
 # ---------------------------------------------------------------------------

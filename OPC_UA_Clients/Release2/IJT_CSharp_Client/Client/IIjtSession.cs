@@ -51,6 +51,12 @@ public interface IIjtSession
         ushort nsIndex = 0,
         NodeClass nodeClassMask = NodeClass.Unspecified);
 
+    /// <summary>
+    /// Resolves a method node under <paramref name="objectId"/> by browse name.
+    /// Falls back to <see cref="IjtBaseMethodId"/> if the browse yields nothing.
+    /// </summary>
+    NodeId BrowseMethod(NodeId objectId, string methodBrowseName, uint fallbackConstant = 0);
+
     /// <summary>Creates a NodeId from an IJTBase Methods constant and the runtime namespace index.</summary>
     NodeId IjtBaseMethodId(uint methodConstant);
 

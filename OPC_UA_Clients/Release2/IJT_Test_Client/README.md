@@ -9,7 +9,7 @@ A Python pytest suite that validates an OPC UA server against the
 **OPC UA Industrial Joining Technologies (IJT) Companion Specification**.
 Tests cover address space structure, asset management, result retrieval,
 event subscriptions, joining process management, joint management, and
-§11.1 Conformance Units — all against a live running OPC UA IJT server.
+Conformance Units — all against a live running OPC UA IJT server.
 
 ## Prerequisites
 
@@ -19,6 +19,8 @@ event subscriptions, joining process management, joint management, and
 
 ## Quick Start
 - Run all tests: `python run_all_tests.py`
+- Generate Excel report after a test run: `python scripts/make_excel_report.py`
+- See [docs/test-results.md](docs/test-results.md) for report formats and skip/xfail explanations
 
 ## Project Structure
 
@@ -33,5 +35,5 @@ IJT_Test_Client/
 ├── events/           # Event type hierarchy and subscriptions
 ├── joining_process/  # JoiningProcessManagement structure + methods
 ├── joint/            # JointManagement structure + methods
-└── conformance/      # §11.1 Conformance Unit tests (CU-AM, CU-RM, CU-EM, CU-JP, CU-JT)
+└── conformance/      # Conformance Unit tests (asset, result, event, joining process, joint)
 ```

@@ -51,7 +51,7 @@ public sealed class ResultManagement : IDisposable
         _log.LogInformation("\n── GetLatestResult ──────────────────────────────────");
 
         var objectId = GetResultManagementNode();
-        var methodId = _s.IjtBaseMethodId(
+        var methodId = _s.BrowseMethod(objectId, "GetLatestResult",
             UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -88,7 +88,7 @@ public sealed class ResultManagement : IDisposable
         _log.LogInformation("\n── GetResultById (id={ResultId}) ──────────────────────", resultId);
 
         var objectId = GetResultManagementNode();
-        var methodId = _s.IjtBaseMethodId(
+        var methodId = _s.BrowseMethod(objectId, "GetResultById",
             UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetResultById);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)

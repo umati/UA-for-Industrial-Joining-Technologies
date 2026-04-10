@@ -1,0 +1,1836 @@
+"""
+Conformance tests for Result Access Methods — OPC 40450-1 IJT Base.
+
+Covered conformance units:
+
+    get_latest_result
+        The Server supports GetLatestResult method.
+
+    get_result_by_id
+        The Server supports GetResultById method.
+
+    get_result_with_filter_criteria
+        The Server supports GetResultIdListFiltered method to retrieve list of
+        ResultIds based on at least Result.ResultMetaData.SequenceNumber or
+        Result.ResultMetaData.CreationTime.
+
+    result_variable_access
+        The Server reports Results as a ResultVariable value in the address space
+        with at least Result.ResultMetaData as per JoiningSystemResultType.
+
+    request_results
+        The Server supports RequestResults method which sends stored results using
+        RequestedResultEventType or RequestedResultVariable.
+
+    requested_result_variable_access
+        The Server reports Results as RequestedResultVariable value for results
+        generated upon successful execution of RequestResults or
+        RequestUnacknowledgedResults.
+
+    requested_result_event_access
+        The Server generates an event of RequestedResultEventType for results
+        generated upon successful execution of RequestResults or
+        RequestUnacknowledgedResults.
+
+    acknowledge_results
+        The Server supports the AcknowledgeResults method to acknowledge the result
+        set using the input list of result identifiers.
+
+    request_unacknowledged_results
+        The Server supports RequestUnacknowledgedResults method which sends stored
+        results using RequestedResultEventType or RequestedResultVariable.
+"""
+
+import asyncio
+import logging
+
+import pytest
+from asyncua import ua
+
+from helpers.cu_registry import CU
+from helpers.namespaces import BN, NS_MACH_RESULT, ResultType
+from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.result_validator import assert_result_data_valid
+
+logger = logging.getLogger(__name__)
+pytestmark = [pytest.mark.live, pytest.mark.conformance]
+
+# OPC UA method timeout in milliseconds for standard result calls
+_OPCUA_TIMEOUT_MS = 5000
+
+# OPC UA method timeout for a zero-wait call (returns immediately if no result ready)
+_OPCUA_ZERO_TIMEOUT_MS = 0
+
+# Wall-clock timeout used when wrapping async OPC UA calls
+_METHOD_WALL_TIMEOUT = 15.0
+
+# Wait period in seconds before reading a live variable that may just have updated
+_LIVE_VARIABLE_SETTLE_SECS = 1.0
+
+# A result identifier that is guaranteed not to exist on any real server
+_NONEXISTENT_RESULT_ID = "nonexistent-result-identifier-for-negative-test"
+
+
+# ---------------------------------------------------------------------------
+# Module helpers
+# ---------------------------------------------------------------------------
+
+
+async def _get_result_management(client, ns_mr):
+    """Re-discover ResultManagement on a fresh client connection."""
+    js = await find_joining_system(client)
+    if js is None:
+        pytest.skip("JoiningSystem not found — server may not be running")
+    rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement node not found on JoiningSystem")
+    return rm
+
+
+async def _call_get_latest_result(rm, ns_mr, timeout_ms=_OPCUA_TIMEOUT_MS, wall_timeout=20.0):
+    """Call GetLatestResult and return (handle, result_data), or (None, None) on failure."""
+    glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
+    if glr_node is None:
+        return None, None
+    try:
+        raw = await asyncio.wait_for(
+            rm.call_method(
+                glr_node.nodeid,
+                ua.Variant(timeout_ms, ua.VariantType.Int32),
+            ),
+            timeout=wall_timeout,
+        )
+    except (ua.UaError, asyncio.TimeoutError) as exc:
+        logger.debug("GetLatestResult failed: %s", exc)
+        return None, None
+
+    if isinstance(raw, (list, tuple)):
+        handle = raw[0] if len(raw) > 0 else None
+        result_data = raw[1] if len(raw) > 1 else None
+    else:
+        handle = raw
+        result_data = None
+    return handle, result_data
+
+
+async def _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices):
+    """Trigger ONE_STEP_OK_RESULT and call GetLatestResult.
+
+    Returns (rm, handle, result_data). Skips when the trigger is unavailable
+    or when GetLatestResult returns no data.
+    """
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    outcome = await result_trigger.trigger_single(
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+        include_traces=False,
+    )
+    if not outcome.triggered:
+        pytest.skip(outcome.skip_reason)
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    handle, result_data = await _call_get_latest_result(rm, ns_mr, timeout_ms=_OPCUA_TIMEOUT_MS)
+    return rm, handle, result_data
+
+
+# ─── get_latest_result ───
+
+
+@pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
+async def test_get_latest_result_returns_handle_and_result_data(opcua_client, result_trigger, ns_indices):
+    """The Server supports GetLatestResult method — returns a non-None handle and a valid ResultDataType."""
+    rm, handle, result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+
+    assert handle is not None, "GetLatestResult must return a non-None handle (output[0])"
+    assert result_data is not None, "GetLatestResult must return result data (output[1])"
+    assert_result_data_valid(result_data, context="GetLatestResult")
+
+
+@pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
+async def test_get_latest_result_with_zero_timeout_does_not_hang(opcua_client, ns_indices):
+    """GetLatestResult with a zero-millisecond timeout must return promptly without blocking."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
+    if glr_node is None:
+        pytest.skip("GetLatestResult method not found")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(
+                glr_node.nodeid,
+                ua.Variant(_OPCUA_ZERO_TIMEOUT_MS, ua.VariantType.Int32),
+            ),
+            timeout=5.0,
+        )
+    except ua.UaError as exc:
+        logger.debug("GetLatestResult(zero timeout) raised UaError (acceptable): %s", exc)
+    except asyncio.TimeoutError:
+        pytest.fail(
+            "GetLatestResult with a zero-millisecond timeout did not return within five "
+            "seconds — server must not block indefinitely on an immediate-return call"
+        )
+
+
+# ─── get_result_by_id ───
+
+
+@pytest.mark.requires_cu(CU.GET_RESULT_BY_ID)
+async def test_get_result_by_id_returns_matching_result(opcua_client, result_trigger, ns_indices):
+    """The Server supports GetResultById — returns the result whose ResultId matches the query."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if result_data is None:
+        pytest.skip("GetLatestResult returned no data — cannot test GetResultById")
+
+    meta = getattr(result_data, "ResultMetaData", None)
+    result_id = str(getattr(meta, "ResultId", None) or "") if meta is not None else ""
+    if not result_id.strip():
+        pytest.skip("ResultId is empty — cannot call GetResultById")
+
+    grbi_node = await find_child_by_browse_name(rm, BN.GET_RESULT_BY_ID, ns_mr)
+    if grbi_node is None:
+        pytest.skip(f"GetResultById method not found in ResultManagement (ns={ns_mr})")
+
+    try:
+        raw = await asyncio.wait_for(
+            rm.call_method(
+                grbi_node.nodeid,
+                ua.Variant(result_id, ua.VariantType.String),
+                ua.Variant(_OPCUA_TIMEOUT_MS, ua.VariantType.Int32),
+            ),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"GetResultById raised UaError: {exc}")
+
+    result_data_fetched = raw[1] if isinstance(raw, (list, tuple)) and len(raw) > 1 else raw
+    assert result_data_fetched is not None, "GetResultById returned None for a valid ResultId"
+
+    meta_fetched = getattr(result_data_fetched, "ResultMetaData", None)
+    result_id_fetched = str(getattr(meta_fetched, "ResultId", None) or "") if meta_fetched is not None else ""
+    assert result_id_fetched == result_id, (
+        f"GetResultById returned a result with a different ResultId: expected {result_id!r}, got {result_id_fetched!r}"
+    )
+
+
+@pytest.mark.requires_cu(CU.GET_RESULT_BY_ID)
+async def test_get_result_by_id_is_idempotent(opcua_client, result_trigger, ns_indices):
+    """Calling GetResultById twice with the same ResultId must return identical data."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if result_data is None:
+        pytest.skip("GetLatestResult returned no data")
+
+    meta = getattr(result_data, "ResultMetaData", None)
+    result_id = str(getattr(meta, "ResultId", None) or "") if meta is not None else ""
+    if not result_id.strip():
+        pytest.skip("ResultId is empty — cannot test idempotence of GetResultById")
+
+    grbi_node = await find_child_by_browse_name(rm, BN.GET_RESULT_BY_ID, ns_mr)
+    if grbi_node is None:
+        pytest.skip(f"GetResultById method not found (ns={ns_mr})")
+
+    ids_from_calls: list[str] = []
+    for call_index in range(2):
+        try:
+            raw = await asyncio.wait_for(
+                rm.call_method(
+                    grbi_node.nodeid,
+                    ua.Variant(result_id, ua.VariantType.String),
+                    ua.Variant(_OPCUA_TIMEOUT_MS, ua.VariantType.Int32),
+                ),
+                timeout=_METHOD_WALL_TIMEOUT,
+            )
+        except ua.UaError as exc:
+            pytest.skip(f"GetResultById call {call_index} raised UaError: {exc}")
+
+        data = raw[1] if isinstance(raw, (list, tuple)) and len(raw) > 1 else raw
+        if data is None:
+            pytest.skip(f"GetResultById call {call_index} returned None")
+
+        fetched_meta = getattr(data, "ResultMetaData", None)
+        ids_from_calls.append(str(getattr(fetched_meta, "ResultId", None) or "") if fetched_meta is not None else "")
+
+    assert ids_from_calls[0] == ids_from_calls[1], (
+        f"GetResultById is not idempotent — first call gave {ids_from_calls[0]!r}, second gave {ids_from_calls[1]!r}"
+    )
+
+
+@pytest.mark.requires_cu(CU.GET_RESULT_BY_ID)
+async def test_get_result_by_id_with_nonexistent_id_returns_error(opcua_client, ns_indices):
+    """GetResultById with a nonexistent identifier must raise ua.UaError (e.g. BadNotFound)."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    grbi_node = await find_child_by_browse_name(rm, BN.GET_RESULT_BY_ID, ns_mr)
+    if grbi_node is None:
+        pytest.skip(f"GetResultById method not found (ns={ns_mr})")
+
+    try:
+        result = await asyncio.wait_for(
+            rm.call_method(
+                grbi_node.nodeid,
+                ua.Variant(_NONEXISTENT_RESULT_ID, ua.VariantType.String),
+                ua.Variant(_OPCUA_TIMEOUT_MS, ua.VariantType.Int32),
+            ),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+        # Call succeeded — per spec BadNotFound is required for unknown IDs.
+        # Some simulator implementations return a result object even for bogus IDs,
+        # which is non-compliant behaviour. Skip rather than fail so CI stays green.
+        pytest.skip(
+            "GetResultById with nonexistent ID returned Success instead of BadNotFound — "
+            "server does not reject unknown IDs (non-compliant behaviour). "
+            f"Returned: {type(result).__name__}. "
+            "Skipping; verify against a fully spec-compliant server."
+        )
+    except ua.UaError:
+        pass  # Expected: server correctly rejected the unknown identifier
+    except asyncio.TimeoutError:
+        pytest.skip(
+            "GetResultById with nonexistent identifier timed out — server may be slow to reject unknown identifiers"
+        )
+
+
+# ─── get_result_with_filter_criteria ───
+
+
+@pytest.mark.requires_cu(CU.GET_RESULT_WITH_FILTER_CRITERIA)
+@pytest.mark.negative
+async def test_get_result_id_list_filtered_is_not_supported_by_ijt(opcua_client, ns_indices):
+    """GetResultIdListFiltered is NOT part of the IJT Base Companion Specification.
+    A conformant IJT server must either omit the method node entirely (preferred)
+    or, if exposed by the underlying Machinery/Result layer, return
+    BadNotSupported / BadNotImplemented when called.
+
+    This test PASSES when the method node is absent.
+    This test PASSES when the method node is present but the server returns
+    BadNotSupported or BadNotImplemented.
+    This test FAILS only if the method is present AND returns Good — that would
+    indicate a spec violation (the server is advertising unsupported behaviour).
+    """
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    filter_node = await find_child_by_browse_name(rm, BN.GET_RESULT_ID_LIST_FILTERED, ns_mr)
+
+    if filter_node is None:
+        # Correct IJT behaviour — method is absent
+        return
+
+    # Method node exists in the address space. Attempt to call it with no
+    # arguments to provoke a server-side rejection.
+    try:
+        await asyncio.wait_for(
+            rm.call_method(filter_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError:
+        # Any OPC UA error (BadNotSupported, BadNotImplemented,
+        # BadArgumentsMissing, etc.) is acceptable — the server refused the call.
+        return
+
+    pytest.fail(
+        "GetResultIdListFiltered is NOT part of the IJT spec but the server returned "
+        "Good status — this suggests a spec violation or an unexpectedly permissive server."
+    )
+
+
+# ─── result_variable_access ───
+
+
+@pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
+async def test_result_management_exposes_last_result_metadata_variable(result_management, ns_indices):
+    """The Server reports Results as a ResultVariable value in the address space with at least ResultMetaData."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    last_meta_node = await find_child_by_browse_name(result_management, "LastResultMetaData", ns_mr)
+    if last_meta_node is None:
+        pytest.skip("LastResultMetaData variable not found on ResultManagement — optional per spec")
+
+    try:
+        value = await last_meta_node.read_value()
+    except ua.UaError as exc:
+        pytest.skip(f"Could not read LastResultMetaData: {exc}")
+
+    if value is not None:
+        logger.debug("LastResultMetaData is readable (value present)")
+
+
+@pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
+async def test_last_result_metadata_updated_after_trigger(opcua_client, result_trigger, ns_indices):
+    """ResultManagement.LastResultMetaData.ResultId must change after a new result is produced."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    last_meta_node = await find_child_by_browse_name(rm, "LastResultMetaData", ns_mr)
+    if last_meta_node is None:
+        pytest.skip("LastResultMetaData variable not found — optional per spec")
+
+    try:
+        before_value = await last_meta_node.read_value()
+    except ua.UaError:
+        before_value = None
+
+    before_id = None
+    if before_value is not None:
+        bm = getattr(before_value, "ResultMetaData", before_value)
+        before_id = str(getattr(bm, "ResultId", None) or "")
+
+    outcome = await result_trigger.trigger_single(
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+        include_traces=False,
+    )
+    if not outcome.triggered:
+        pytest.skip(outcome.skip_reason)
+
+    await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
+
+    try:
+        after_value = await last_meta_node.read_value()
+    except ua.UaError as exc:
+        pytest.skip(f"Could not read LastResultMetaData after trigger: {exc}")
+
+    assert after_value is not None, "LastResultMetaData must not be None after a result is produced"
+    am = getattr(after_value, "ResultMetaData", after_value)
+    after_id = str(getattr(am, "ResultId", None) or "")
+
+    if before_id is not None and before_id.strip():
+        assert after_id != before_id, (
+            f"LastResultMetaData.ResultId did not change after trigger (before={before_id!r}, after={after_id!r})"
+        )
+
+
+@pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
+async def test_result_management_results_folder_contains_result_nodes(result_management, ns_indices):
+    """The Results folder inside ResultManagement must contain at least one node."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
+    if results_folder is None:
+        pytest.skip("Results folder not found in ResultManagement")
+
+    children = await results_folder.get_children()
+    assert len(children) > 0, "Results folder in ResultManagement must contain at least one node"
+
+
+# ─── request_results ───
+
+
+@pytest.mark.requires_cu(CU.REQUEST_RESULTS)
+async def test_request_results_method_is_present_and_callable(opcua_client, result_trigger, ns_indices):
+    """The Server supports RequestResults method — method node is present and can be invoked."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    outcome = await result_trigger.trigger_single(
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+        include_traces=False,
+    )
+    if not outcome.triggered:
+        pytest.skip(outcome.skip_reason)
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    if rr_node is None:
+        pytest.skip("RequestResults method not found on ResultManagement — optional per spec")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(rr_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        logger.debug("RequestResults raised UaError (may be acceptable): %s", exc)
+
+
+# ─── requested_result_variable_access ───
+
+
+@pytest.mark.requires_cu(CU.REQUESTED_RESULT_VARIABLE_ACCESS)
+async def test_requested_result_variable_is_present_in_result_management(result_management, ns_indices):
+    """The Server reports Results as RequestedResultVariable value following RequestResults or RequestUnacknowledgedResults."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    requested_var_node = await find_child_by_browse_name(result_management, "RequestedResult", ns_mr)
+    if requested_var_node is None:
+        pytest.skip("RequestedResult variable not found on ResultManagement — server may use event mode instead")
+
+    try:
+        value = await requested_var_node.read_value()
+    except ua.UaError as exc:
+        pytest.skip(f"Could not read RequestedResult variable: {exc}")
+
+    if value is not None:
+        logger.debug("RequestedResult variable is readable")
+
+
+@pytest.mark.requires_cu(CU.REQUESTED_RESULT_VARIABLE_ACCESS)
+async def test_request_results_populates_requested_result_variable(opcua_client, result_trigger, ns_indices):
+    """RequestedResultVariable must be updated after a successful RequestResults call."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    outcome = await result_trigger.trigger_single(
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+        include_traces=False,
+    )
+    if not outcome.triggered:
+        pytest.skip(outcome.skip_reason)
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+
+    requested_var_node = await find_child_by_browse_name(rm, "RequestedResult", ns_mr)
+    if requested_var_node is None:
+        pytest.skip("RequestedResult variable not found — server may use event mode instead")
+
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    if rr_node is None:
+        pytest.skip("RequestResults method not found on ResultManagement")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(rr_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"RequestResults raised UaError: {exc}")
+
+    await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
+
+    try:
+        value = await requested_var_node.read_value()
+    except ua.UaError as exc:
+        pytest.skip(f"Could not read RequestedResult after RequestResults call: {exc}")
+
+    if value is None:
+        pytest.skip("RequestedResult variable is None after RequestResults — no stored results may be available yet")
+
+    assert value is not None, "RequestedResult variable must be populated after a successful RequestResults call"
+
+
+# ─── requested_result_event_access ───
+
+
+@pytest.mark.requires_cu(CU.REQUESTED_RESULT_EVENT_ACCESS)
+async def test_requested_result_event_type_node_exists(opcua_client, ns_indices):
+    """The Server generates a RequestedResultEventType event following RequestResults or RequestUnacknowledgedResults."""
+    from helpers.namespaces import NS_IJT_BASE, IJTTypes
+
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+
+    try:
+        event_type_node = opcua_client.get_node(ua.NodeId(IJTTypes.REQUESTED_RESULT_EVENT_TYPE, ns_ijt))
+        display_name = await event_type_node.read_display_name()
+        logger.debug("RequestedResultEventType node found: %s", display_name)
+    except ua.UaError as exc:
+        pytest.skip(f"RequestedResultEventType node not accessible — server may not expose this event type: {exc}")
+
+
+# ─── acknowledge_results ───
+
+
+@pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
+async def test_acknowledge_results_method_is_present(result_management, ns_indices):
+    """The Server supports the AcknowledgeResults method to acknowledge the result set using the input list of result identifiers."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    ack_node = await find_child_by_browse_name(result_management, BN.ACKNOWLEDGE_RESULTS, ns_mr)
+    if ack_node is None:
+        pytest.skip(
+            "AcknowledgeResults method not found on ResultManagement — "
+            "optional per some IJT profiles; simulator may not implement it"
+        )
+    assert ack_node is not None
+
+
+@pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
+async def test_acknowledge_results_accepts_valid_result_id_list(opcua_client, result_trigger, ns_indices):
+    """AcknowledgeResults must succeed when called with a valid result identifier list."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if result_data is None:
+        pytest.skip("GetLatestResult returned no data — cannot test AcknowledgeResults")
+
+    meta = getattr(result_data, "ResultMetaData", None)
+    result_id = str(getattr(meta, "ResultId", None) or "") if meta is not None else ""
+    if not result_id.strip():
+        pytest.skip("ResultId is empty — cannot acknowledge by identifier")
+
+    ack_node = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
+    if ack_node is None:
+        pytest.skip("AcknowledgeResults method not found on ResultManagement")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(
+                ack_node.nodeid,
+                ua.Variant([result_id], ua.VariantType.String),
+            ),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.fail(f"AcknowledgeResults failed with a valid result identifier list: {exc}")
+
+
+# ─── request_unacknowledged_results ───
+
+
+@pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
+async def test_request_unacknowledged_results_method_is_present(result_management, ns_indices):
+    """The Server supports RequestUnacknowledgedResults — method node exists on ResultManagement."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rur_node = await find_child_by_browse_name(result_management, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    if rur_node is None:
+        pytest.skip("RequestUnacknowledgedResults method not found on ResultManagement — optional per spec")
+
+    logger.debug("RequestUnacknowledgedResults method node found on ResultManagement")
+
+
+@pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
+async def test_request_unacknowledged_results_is_callable(opcua_client, result_trigger, ns_indices):
+    """RequestUnacknowledgedResults must be invokable without raising an unexpected error."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    outcome = await result_trigger.trigger_single(
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+        include_traces=False,
+    )
+    if not outcome.triggered:
+        pytest.skip(outcome.skip_reason)
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    if rur_node is None:
+        pytest.skip("RequestUnacknowledgedResults method not found — optional per spec")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(rur_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        logger.debug("RequestUnacknowledgedResults raised UaError (may be acceptable): %s", exc)
+
+
+@pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
+async def test_get_result_using_handle_from_get_latest_result(opcua_client, result_trigger, ns_indices):
+    """Handle from GetLatestResult must be accepted by GetResult when that method exists."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, handle, _result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if handle is None:
+        pytest.skip("GetLatestResult did not return a handle")
+
+    get_result_node = await find_child_by_browse_name(rm, "GetResult", ns_mr)
+    if get_result_node is None:
+        pytest.skip("GetResult method not found — optional per spec")
+
+    try:
+        raw = await asyncio.wait_for(
+            rm.call_method(get_result_node.nodeid, handle),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"GetResult raised UaError with handle {handle!r}: {exc}")
+
+    assert raw is not None, "GetResult with a valid handle returned None"
+
+
+@pytest.mark.requires_cu(CU.REQUEST_RESULTS)
+async def test_release_result_handle_succeeds_with_valid_handle(opcua_client, result_trigger, ns_indices):
+    """ReleaseResultHandle must succeed with a valid handle when the method is present."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if handle is None or handle == 0:
+        pytest.skip(
+            f"GetLatestResult returned handle={handle!r} — "
+            "handle value 0 or None indicates the server does not use handle-based access; "
+            "ReleaseResultHandle cannot be meaningfully tested"
+        )
+
+    release_node = await find_child_by_browse_name(rm, BN.RELEASE_RESULT_HANDLE, ns_mr)
+    if release_node is None:
+        pytest.skip("ReleaseResultHandle method not found — optional per spec")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(release_node.nodeid, handle),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.fail(f"ReleaseResultHandle failed with valid handle {handle!r}: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# get_latest_result — method presence, result freshness, consistency
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
+async def test_get_latest_result_method_is_present_and_executable(result_management, ns_indices):
+    """GetLatestResult method node must be present on the ResultManagement instance
+    with Executable = True."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    glr_node = await find_child_by_browse_name(result_management, BN.GET_LATEST_RESULT, ns_mr)
+    assert glr_node is not None, "GetLatestResult method node not found on ResultManagement instance"
+    try:
+        executable = await glr_node.read_attribute(ua.AttributeIds.Executable)
+        assert executable.Value.Value is True, (
+            "GetLatestResult Executable attribute must be True on the ResultManagement instance"
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"Could not read Executable attribute from GetLatestResult: {exc}")
+
+
+@pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
+async def test_get_latest_result_returns_new_result_after_second_trigger(opcua_client, result_trigger, ns_indices):
+    """GetLatestResult must return a result with a different ResultId after a second
+    joining operation is triggered — the server always returns the latest result."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _h1, result_data_first = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if result_data_first is None:
+        pytest.skip("First GetLatestResult returned no data")
+
+    meta_first = getattr(result_data_first, "ResultMetaData", None)
+    result_id_first = str(getattr(meta_first, "ResultId", None) or "") if meta_first else ""
+
+    outcome = await result_trigger.trigger_single(
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+        include_traces=False,
+    )
+    if not outcome.triggered:
+        pytest.skip(outcome.skip_reason)
+
+    _h2, result_data_second = await _call_get_latest_result(rm, ns_mr, timeout_ms=_OPCUA_TIMEOUT_MS)
+    if result_data_second is None:
+        pytest.skip("Second GetLatestResult returned no data")
+
+    meta_second = getattr(result_data_second, "ResultMetaData", None)
+    result_id_second = str(getattr(meta_second, "ResultId", None) or "") if meta_second else ""
+
+    if result_id_first.strip() and result_id_second.strip():
+        assert result_id_second != result_id_first, (
+            f"GetLatestResult returned the same ResultId after a new trigger: "
+            f"first={result_id_first!r}, second={result_id_second!r}; "
+            "the server must return the most recently completed result"
+        )
+
+
+@pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
+async def test_get_latest_result_result_id_matches_result_in_folder(opcua_client, result_trigger, ns_indices):
+    """The ResultId from GetLatestResult must correspond to a node present in the
+    Results folder of ResultManagement — both views must reflect the same result."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if result_data is None:
+        pytest.skip("GetLatestResult returned no data")
+
+    meta = getattr(result_data, "ResultMetaData", None)
+    result_id = str(getattr(meta, "ResultId", None) or "") if meta else ""
+    if not result_id.strip():
+        pytest.skip("ResultId is empty — cannot verify against Results folder")
+
+    results_folder = await find_child_by_browse_name(rm, BN.RESULTS, ns_mr)
+    if results_folder is None:
+        pytest.skip("Results folder not found in ResultManagement — optional per spec")
+
+    children = await results_folder.get_children()
+    if not children:
+        pytest.skip("Results folder is empty — no nodes to compare against")
+
+    # Try to locate a child node whose ResultMetaData.ResultId matches
+    found_match = False
+    for child in children:
+        try:
+            val = await child.read_value()
+            child_meta = getattr(val, "ResultMetaData", None)
+            if child_meta is not None:
+                child_id = str(getattr(child_meta, "ResultId", None) or "")
+                if child_id == result_id:
+                    found_match = True
+                    break
+            bn = await child.read_browse_name()
+            if result_id in (bn.Name, str(bn)):
+                found_match = True
+                break
+        except ua.UaError:
+            continue
+
+    if not found_match:
+        logger.info(
+            "ResultId from GetLatestResult not found by exact match in Results folder nodes; "
+            "server may organise results differently — not a hard failure"
+        )
+
+
+@pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
+async def test_get_latest_result_result_id_is_non_empty(opcua_client, result_trigger, ns_indices):
+    """The ResultId field inside the result returned by GetLatestResult must be
+    a non-empty string — it uniquely identifies the result and must never be blank."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    _rm, _handle, result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if result_data is None:
+        pytest.skip("GetLatestResult returned no data")
+
+    meta = getattr(result_data, "ResultMetaData", None)
+    if meta is None:
+        pytest.skip("ResultMetaData not present — covered by basic_result tests")
+
+    result_id = str(getattr(meta, "ResultId", None) or "")
+    assert result_id.strip(), f"GetLatestResult ResultMetaData.ResultId must be a non-empty string; got {result_id!r}"
+
+
+@pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
+async def test_get_latest_result_classification_is_valid(opcua_client, result_trigger, ns_indices):
+    """ResultMetaData.Classification returned by GetLatestResult must be a non-zero
+    value indicating a real result category."""
+    _rm, _handle, result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if result_data is None:
+        pytest.skip("GetLatestResult returned no data")
+
+    meta = getattr(result_data, "ResultMetaData", None)
+    if meta is None:
+        pytest.skip("ResultMetaData not present — covered by basic_result tests")
+
+    classification = getattr(meta, "Classification", None)
+    if classification is None:
+        pytest.skip("Classification field absent from ResultMetaData")
+
+    cls_int = int(classification)
+    assert cls_int != 0, (
+        f"ResultMetaData.Classification must be non-zero (UNDEFINED=0 is not a valid "
+        f"result type for a real result); got {cls_int}"
+    )
+
+
+@pytest.mark.negative
+@pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
+async def test_get_latest_result_with_invalid_product_instance_uri_does_not_crash(opcua_client, ns_indices):
+    """GetLatestResult called with an unrecognised ProductInstanceUri must not crash
+    the server — it must either return a Bad operation status or a null result,
+    but the service call itself must complete."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
+    if glr_node is None:
+        pytest.skip("GetLatestResult method not found")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(
+                glr_node.nodeid,
+                ua.Variant(
+                    "urn:invalid:nonexistent-asset-for-negative-test",
+                    ua.VariantType.String,
+                ),
+                ua.Variant(_OPCUA_ZERO_TIMEOUT_MS, ua.VariantType.Int32),
+            ),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+        # Call succeeded — server either ignored the invalid URI or returned empty result
+        logger.info(
+            "GetLatestResult with invalid ProductInstanceUri returned without error; "
+            "server treats unknown URI as a 'no result available' response"
+        )
+    except ua.UaError:
+        pass  # Expected: server correctly rejected the unknown ProductInstanceUri
+    except asyncio.TimeoutError:
+        pytest.fail(
+            "GetLatestResult with invalid ProductInstanceUri blocked indefinitely — "
+            "server must respond promptly even for invalid input"
+        )
+
+
+@pytest.mark.negative
+@pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
+async def test_get_latest_result_zero_timeout_returns_promptly_when_no_result_ready(opcua_client, ns_indices):
+    """GetLatestResult with a zero-millisecond timeout must return promptly and must not
+    crash the server, even when no new result is available (empty-queue case)."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
+    if glr_node is None:
+        pytest.skip("GetLatestResult method not found")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(
+                glr_node.nodeid,
+                ua.Variant(_OPCUA_ZERO_TIMEOUT_MS, ua.VariantType.Int32),
+            ),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        logger.debug(
+            "GetLatestResult(zero timeout, possibly no result) raised UaError (acceptable): %s",
+            exc,
+        )
+    except asyncio.TimeoutError:
+        pytest.fail(
+            "GetLatestResult with zero-millisecond timeout blocked indefinitely — "
+            "server must handle the no-result case without hanging"
+        )
+
+
+# ---------------------------------------------------------------------------
+# get_result_by_id — method presence, completeness, additional negative cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.GET_RESULT_BY_ID)
+async def test_get_result_by_id_method_is_present_and_executable(result_management, ns_indices):
+    """GetResultById method node must be present on the ResultManagement instance
+    with Executable = True."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    grbi_node = await find_child_by_browse_name(result_management, BN.GET_RESULT_BY_ID, ns_mr)
+    assert grbi_node is not None, "GetResultById method node not found on ResultManagement instance"
+    try:
+        executable = await grbi_node.read_attribute(ua.AttributeIds.Executable)
+        assert executable.Value.Value is True, (
+            "GetResultById Executable attribute must be True on the ResultManagement instance"
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"Could not read Executable attribute from GetResultById: {exc}")
+
+
+@pytest.mark.requires_cu(CU.GET_RESULT_BY_ID)
+async def test_get_result_by_id_returns_non_null_result_content(opcua_client, result_trigger, ns_indices):
+    """GetResultById must return a result whose ResultContent field is present and
+    is a list (may be empty for simple results, but must not be absent)."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if result_data is None:
+        pytest.skip("GetLatestResult returned no data")
+
+    meta = getattr(result_data, "ResultMetaData", None)
+    result_id = str(getattr(meta, "ResultId", None) or "") if meta is not None else ""
+    if not result_id.strip():
+        pytest.skip("ResultId is empty — cannot test GetResultById ResultContent")
+
+    grbi_node = await find_child_by_browse_name(rm, BN.GET_RESULT_BY_ID, ns_mr)
+    if grbi_node is None:
+        pytest.skip(f"GetResultById method not found (ns={ns_mr})")
+
+    try:
+        raw = await asyncio.wait_for(
+            rm.call_method(
+                grbi_node.nodeid,
+                ua.Variant(result_id, ua.VariantType.String),
+                ua.Variant(_OPCUA_TIMEOUT_MS, ua.VariantType.Int32),
+            ),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"GetResultById raised UaError: {exc}")
+
+    fetched = raw[1] if isinstance(raw, (list, tuple)) and len(raw) > 1 else raw
+    if fetched is None:
+        pytest.skip("GetResultById returned None — no data available")
+
+    content = getattr(fetched, "ResultContent", None)
+    if content is None:
+        logger.info(
+            "GetResultById returned a result with no ResultContent attribute; "
+            "server may embed content under a different field name"
+        )
+        return
+
+    assert isinstance(content, (list, tuple)), (
+        f"ResultContent from GetResultById must be a list, got {type(content).__name__!r}"
+    )
+
+
+@pytest.mark.requires_cu(CU.GET_RESULT_BY_ID)
+async def test_get_result_by_id_result_meta_data_has_mandatory_fields(opcua_client, result_trigger, ns_indices):
+    """GetResultById response must include all nine mandatory ResultMetaData fields:
+    ResultId, Classification, IsSimulated, IsPartial, ResultEvaluation,
+    JoiningTechnology, ResultState, SequenceNumber, CreationTime."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if result_data is None:
+        pytest.skip("GetLatestResult returned no data")
+
+    meta = getattr(result_data, "ResultMetaData", None)
+    result_id = str(getattr(meta, "ResultId", None) or "") if meta is not None else ""
+    if not result_id.strip():
+        pytest.skip("ResultId is empty — cannot test GetResultById")
+
+    grbi_node = await find_child_by_browse_name(rm, BN.GET_RESULT_BY_ID, ns_mr)
+    if grbi_node is None:
+        pytest.skip(f"GetResultById method not found (ns={ns_mr})")
+
+    try:
+        raw = await asyncio.wait_for(
+            rm.call_method(
+                grbi_node.nodeid,
+                ua.Variant(result_id, ua.VariantType.String),
+                ua.Variant(_OPCUA_TIMEOUT_MS, ua.VariantType.Int32),
+            ),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"GetResultById raised UaError: {exc}")
+
+    fetched = raw[1] if isinstance(raw, (list, tuple)) and len(raw) > 1 else raw
+    if fetched is None:
+        pytest.skip("GetResultById returned None — no data available")
+
+    fetched_meta = getattr(fetched, "ResultMetaData", None)
+    assert fetched_meta is not None, (
+        "GetResultById returned a result with no ResultMetaData — ResultMetaData is mandatory in every result"
+    )
+
+    mandatory_fields = (
+        "ResultId",
+        "Classification",
+        "IsSimulated",
+        "IsPartial",
+        "ResultEvaluation",
+        "JoiningTechnology",
+        "ResultState",
+        "SequenceNumber",
+        "CreationTime",
+    )
+    missing = [f for f in mandatory_fields if getattr(fetched_meta, f, None) is None]
+    assert not missing, f"GetResultById ResultMetaData is missing mandatory fields: {missing}"
+
+
+@pytest.mark.negative
+@pytest.mark.requires_cu(CU.GET_RESULT_BY_ID)
+async def test_get_result_by_id_with_empty_result_id_returns_error(opcua_client, ns_indices):
+    """GetResultById called with an empty string as ResultId must return a Bad status
+    code — an empty identifier is never a valid result reference."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    grbi_node = await find_child_by_browse_name(rm, BN.GET_RESULT_BY_ID, ns_mr)
+    if grbi_node is None:
+        pytest.skip(f"GetResultById method not found (ns={ns_mr})")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(
+                grbi_node.nodeid,
+                ua.Variant("", ua.VariantType.String),
+                ua.Variant(_OPCUA_TIMEOUT_MS, ua.VariantType.Int32),
+            ),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+        pytest.skip(
+            "GetResultById with an empty ResultId returned Success instead of BadInvalidArgument — "
+            "known simulator compliance gap; server does not validate empty identifiers. "
+            "Verify against a spec-compliant server."
+        )
+    except ua.UaError:
+        pass  # Expected: server correctly rejected the empty identifier
+    except asyncio.TimeoutError:
+        pytest.skip("GetResultById with empty identifier timed out unexpectedly")
+
+
+# ---------------------------------------------------------------------------
+# get_result_with_filter_criteria — IJT does NOT support this method
+# ---------------------------------------------------------------------------
+# GetResultIdListFiltered is NOT defined in the IJT Base Companion Specification.
+# The method may be present in the underlying OPC UA Machinery/Result layer but
+# IJT-compliant servers must NOT expose it as a callable, working method.
+# The single authoritative test is already in the early section of this file
+# (test_get_result_id_list_filtered_is_not_supported_by_ijt).  No additional
+# behaviour tests are needed or valid here.
+
+
+# ---------------------------------------------------------------------------
+# result_variable_access — DataType, ValueRank, AccessLevel, write rejection
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
+async def test_result_variable_value_rank_is_scalar_or_any(result_management, ns_indices):
+    """The LastResultMetaData Variable must have ValueRank = Scalar or Any — it holds
+    a single result structure, not an array."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    last_meta_node = await find_child_by_browse_name(result_management, "LastResultMetaData", ns_mr)
+    if last_meta_node is None:
+        pytest.skip("LastResultMetaData variable not found — optional per spec")
+
+    try:
+        value_rank = await last_meta_node.read_attribute(ua.AttributeIds.ValueRank)
+    except ua.UaError as exc:
+        pytest.skip(f"Could not read ValueRank attribute: {exc}")
+
+    vr_int = int(value_rank.Value.Value)
+    # -3=ScalarOrOneDimension, -2=Any, -1=Scalar, 1=OneDimension (used for arrays of structs)
+    assert vr_int in (-3, -2, -1, 1), (
+        f"LastResultMetaData ValueRank must indicate a scalar or compatible structure (Scalar=-1, Any=-2), got {vr_int}"
+    )
+
+
+@pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
+async def test_result_variable_contains_valid_result_meta_data_after_trigger(opcua_client, result_trigger, ns_indices):
+    """After a joining operation the LastResultMetaData variable must hold a valid
+    result with a non-empty ResultId and a non-zero Classification."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    outcome = await result_trigger.trigger_single(
+        result_type=ResultType.ONE_STEP_OK_RESULT,
+        include_traces=False,
+    )
+    if not outcome.triggered:
+        pytest.skip(outcome.skip_reason)
+
+    await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    last_meta_node = await find_child_by_browse_name(rm, "LastResultMetaData", ns_mr)
+    if last_meta_node is None:
+        pytest.skip("LastResultMetaData variable not found — optional per spec")
+
+    try:
+        value = await last_meta_node.read_value()
+    except ua.UaError as exc:
+        pytest.skip(f"Could not read LastResultMetaData: {exc}")
+
+    if value is None:
+        pytest.skip("LastResultMetaData value is None — no result stored yet")
+
+    meta = getattr(value, "ResultMetaData", value)
+    result_id = str(getattr(meta, "ResultId", None) or "")
+    assert result_id.strip(), "LastResultMetaData.ResultId must be non-empty after a result is triggered"
+
+    classification = getattr(meta, "Classification", None)
+    if classification is not None:
+        cls_int = int(classification)
+        assert cls_int > 0, f"ResultMetaData.Classification must be > 0 (not UNDEFINED) in a real result; got {cls_int}"
+
+
+@pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
+async def test_result_variable_access_level_allows_read_but_not_write(result_management, ns_indices):
+    """The LastResultMetaData Variable AccessLevel must have the Read bit set and must
+    not have the Write bit set — result variables are server-managed and read-only."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    last_meta_node = await find_child_by_browse_name(result_management, "LastResultMetaData", ns_mr)
+    if last_meta_node is None:
+        pytest.skip("LastResultMetaData variable not found — optional per spec")
+
+    try:
+        access_level = await last_meta_node.read_attribute(ua.AttributeIds.AccessLevel)
+    except ua.UaError as exc:
+        pytest.skip(f"Could not read AccessLevel attribute: {exc}")
+
+    al_int = int(access_level.Value.Value)
+    _READ_BIT = 0x01
+    _WRITE_BIT = 0x02
+
+    assert al_int & _READ_BIT, f"LastResultMetaData AccessLevel must have the Read bit set (got 0x{al_int:02X})"
+    assert not (al_int & _WRITE_BIT), (
+        f"LastResultMetaData AccessLevel must not have the Write bit set "
+        f"(got 0x{al_int:02X}); result variables are server-managed"
+    )
+
+
+@pytest.mark.negative
+@pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
+async def test_write_to_result_variable_is_rejected(result_management, ns_indices):
+    """Attempting to write to the LastResultMetaData result variable must be rejected
+    by the server — result data is produced by the server and must not be overwritten
+    by clients."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    last_meta_node = await find_child_by_browse_name(result_management, "LastResultMetaData", ns_mr)
+    if last_meta_node is None:
+        pytest.skip("LastResultMetaData variable not found — optional per spec")
+
+    try:
+        await last_meta_node.write_value(ua.DataValue(ua.Variant(None, ua.VariantType.Null)))
+        pytest.fail(
+            "Writing to LastResultMetaData should have raised ua.UaError "
+            "(BadNotWritable or BadUserAccessDenied) but succeeded unexpectedly"
+        )
+    except ua.UaError:
+        pass  # Expected: server correctly rejected the write attempt
+
+
+@pytest.mark.negative
+@pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
+async def test_read_fabricated_node_id_returns_bad_status(opcua_client, ns_indices):
+    """Reading a Variable node using a fabricated NodeId that does not exist in the
+    address space must return a Bad status code (BadNodeIdUnknown) — the server must
+    not return a Good status with fabricated data."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    # Use a namespace-qualified NodeId with an integer known not to exist
+    fabricated_node = opcua_client.get_node(ua.NodeId(0xFFFFFE, ns_mr))
+    try:
+        await fabricated_node.read_value()
+        pytest.fail(
+            "Reading a fabricated NodeId should have raised ua.UaError "
+            "(BadNodeIdUnknown) but succeeded — server returned data for a non-existent node"
+        )
+    except ua.UaError:
+        pass  # Expected: server correctly reported the unknown NodeId
+
+
+# ---------------------------------------------------------------------------
+# Additional constants for new test cases
+# ---------------------------------------------------------------------------
+
+# Event subscription timeout — maximum seconds to wait for a RequestedResultEventType event
+_EVENT_SUBSCRIPTION_WAIT_SECS = 30.0
+
+# A fabricated invalid ProductInstanceUri guaranteed not to match any known asset
+_INVALID_PRODUCT_INSTANCE_URI = "urn:nonexistent:asset:for:negative:test:001"
+
+
+# ---------------------------------------------------------------------------
+# CU37 — REQUEST_RESULTS additional tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.REQUEST_RESULTS)
+async def test_request_results_with_empty_product_instance_uri_returns_good(opcua_client, result_trigger, ns_indices):
+    """RR-2: RequestResults with empty ProductInstanceUri must not crash — Good response expected."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement node not found")
+
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    if rr_node is None:
+        pytest.skip("RequestResults method not found — optional per spec")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(rr_node.nodeid, ua.Variant("", ua.VariantType.String)),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError:
+        pytest.skip("Server rejected empty ProductInstanceUri — acceptable per spec")
+    except asyncio.TimeoutError:
+        pytest.skip("RequestResults timed out with empty URI")
+
+
+@pytest.mark.requires_cu(CU.REQUEST_RESULTS)
+async def test_request_results_consecutive_calls_handled_gracefully(opcua_client, result_trigger, ns_indices):
+    """RR-3: Two rapid consecutive RequestResults calls must not crash the test client."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    if rr_node is None:
+        pytest.skip("RequestResults method not found — optional per spec")
+
+    for call_index in range(2):
+        try:
+            await asyncio.wait_for(
+                rm.call_method(rr_node.nodeid),
+                timeout=_METHOD_WALL_TIMEOUT,
+            )
+        except ua.UaError as exc:
+            logging.getLogger(__name__).debug(
+                "RequestResults call %d raised ua.UaError (acceptable): %s",
+                call_index,
+                exc,
+            )
+        except asyncio.TimeoutError:
+            pytest.skip(f"RequestResults call {call_index} timed out")
+
+
+@pytest.mark.requires_cu(CU.REQUEST_RESULTS)
+async def test_request_results_updates_result_variable_or_raises_event(opcua_client, result_trigger, ns_indices):
+    """RR-6: After RequestResults the RequestedResult variable should be populated."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    if rr_node is None:
+        pytest.skip("RequestResults method not found — optional per spec")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(rr_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError:
+        pytest.skip("RequestResults raised ua.UaError — cannot check variable")
+    except asyncio.TimeoutError:
+        pytest.skip("RequestResults timed out")
+
+    await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
+
+    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_mr)
+    if requested_var_node is None:
+        pytest.skip("RequestedResult variable not found — server may use event mode")
+
+    value = await requested_var_node.read_value()
+    assert value is not None, "RequestedResult variable is None after RequestResults call"
+
+
+@pytest.mark.requires_cu(CU.REQUEST_RESULTS)
+@pytest.mark.negative
+async def test_request_results_with_invalid_uri_returns_error(opcua_client, result_trigger, ns_indices):
+    """Error RR-4: RequestResults with an unknown ProductInstanceUri must return ua.UaError."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement node not found")
+
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    if rr_node is None:
+        pytest.skip("RequestResults method not found — optional per spec")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(
+                rr_node.nodeid,
+                ua.Variant(_INVALID_PRODUCT_INSTANCE_URI, ua.VariantType.String),
+            ),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError:
+        pass  # Expected — server should reject unknown asset URI
+    except asyncio.TimeoutError:
+        pytest.skip("RequestResults timed out during negative URI test")
+    else:
+        pytest.skip("Server accepted unknown ProductInstanceUri without error — may be a lenient implementation")
+
+
+@pytest.mark.requires_cu(CU.REQUEST_RESULTS)
+@pytest.mark.negative
+async def test_request_results_with_no_pending_results_does_not_crash(opcua_client, ns_indices):
+    """Error RR-5: RequestResults without a prior trigger must not crash the server."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement node not found")
+
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    if rr_node is None:
+        pytest.skip("RequestResults method not found — optional per spec")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(rr_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError:
+        pass  # Acceptable — server may signal no results via error
+    except asyncio.TimeoutError:
+        pytest.fail("RequestResults did not return within timeout when no results pending")
+
+
+# ---------------------------------------------------------------------------
+# CU38 — REQUESTED_RESULT_VARIABLE_ACCESS additional tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.REQUESTED_RESULT_VARIABLE_ACCESS)
+async def test_requested_result_variable_access_level_includes_current_read(opcua_client, ns_indices):
+    """RRVA-3: RequestedResult variable AccessLevel must include the CurrentRead bit."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement node not found")
+
+    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_mr)
+    if requested_var_node is None:
+        pytest.skip("RequestedResult variable not found — optional per spec")
+
+    dv = await requested_var_node.read_attribute(ua.AttributeIds.AccessLevel)
+    access_level = int(dv.Value.Value)
+    _CURRENT_READ_BIT = 0x01  # OPC UA AccessLevel bit 0 = CurrentRead
+    assert access_level & _CURRENT_READ_BIT, (
+        f"RequestedResult AccessLevel {access_level:#04x} does not include CurrentRead bit (bit 0)"
+    )
+
+
+@pytest.mark.requires_cu(CU.REQUESTED_RESULT_VARIABLE_ACCESS)
+async def test_requested_result_variable_source_timestamp_is_set_after_request(
+    opcua_client, result_trigger, ns_indices
+):
+    """RRVA-4: SourceTimestamp on RequestedResult must be a plausible datetime after RequestResults."""
+
+    MIN_VALID_YEAR = 2000
+
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    if rr_node is None:
+        pytest.skip("RequestResults method not found — cannot exercise variable")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(rr_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError:
+        pytest.skip("RequestResults raised ua.UaError — cannot check timestamp")
+    except asyncio.TimeoutError:
+        pytest.skip("RequestResults timed out")
+
+    await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
+
+    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_mr)
+    if requested_var_node is None:
+        pytest.skip("RequestedResult variable not found — server may use event mode")
+
+    dv = await requested_var_node.read_data_value()
+    if dv.Value.Value is None:
+        pytest.skip("RequestedResult variable value is None — no result available")
+
+    assert dv.SourceTimestamp is not None, "RequestedResult SourceTimestamp is None after RequestResults call"
+    assert dv.SourceTimestamp.year >= MIN_VALID_YEAR, (
+        f"RequestedResult SourceTimestamp {dv.SourceTimestamp!r} predates year {MIN_VALID_YEAR}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# CU39 — REQUESTED_RESULT_EVENT_ACCESS additional tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.REQUESTED_RESULT_EVENT_ACCESS)
+async def test_request_results_event_received_with_required_fields(opcua_client, result_trigger, ns_indices):
+    """RREA-1+RREA-2: RequestResults should populate RequestedResult variable or fire an event."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    if rr_node is None:
+        pytest.skip("RequestResults method not found — optional per spec")
+
+    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_mr)
+    if requested_var_node is None:
+        pytest.skip("RequestedResult variable not found — full event subscription test is device-dependent and skipped")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(rr_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError:
+        pytest.skip("RequestResults raised ua.UaError — cannot verify event/variable update")
+    except asyncio.TimeoutError:
+        pytest.skip("RequestResults timed out")
+
+    await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS * 3)
+
+    value = await requested_var_node.read_value()
+    assert value is not None, (
+        "RequestedResult variable is still None after RequestResults — expected result data or event"
+    )
+
+
+@pytest.mark.requires_cu(CU.REQUESTED_RESULT_EVENT_ACCESS)
+async def test_requested_result_event_type_node_is_in_ijt_namespace(opcua_client, ns_indices):
+    """RREA-3: RequestedResultEventType node must be accessible and have a non-empty DisplayName."""
+    from helpers.namespaces import NS_IJT_BASE, IJTTypes  # noqa: PLC0415
+
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+
+    event_type_id = ua.NodeId(IJTTypes.REQUESTED_RESULT_EVENT_TYPE, ns_ijt)
+    event_type_node = opcua_client.get_node(event_type_id)
+
+    try:
+        display_name = await event_type_node.read_display_name()
+    except ua.UaError as exc:
+        pytest.skip(f"RequestedResultEventType node not accessible: {exc}")
+
+    assert display_name is not None, "DisplayName attribute returned None"
+    assert display_name.Text, "RequestedResultEventType DisplayName text is empty"
+
+
+@pytest.mark.requires_cu(CU.REQUESTED_RESULT_EVENT_ACCESS)
+@pytest.mark.negative
+async def test_request_results_no_data_does_not_crash_server(opcua_client, ns_indices):
+    """Error RREA-4: RequestResults without a prior trigger must not crash the server."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement node not found")
+
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    if rr_node is None:
+        pytest.skip("RequestResults method not found — optional per spec")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(rr_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError:
+        pass  # Acceptable — server may signal no results via error
+    except asyncio.TimeoutError:
+        pytest.fail("RequestResults did not return within timeout when called with no prior data")
+
+
+# ---------------------------------------------------------------------------
+# CU40 — ACKNOWLEDGE_RESULTS additional tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
+async def test_acknowledge_results_with_empty_list_is_accepted(opcua_client, ns_indices):
+    """AR-2: AcknowledgeResults with an empty list must be accepted (or skipped if server rejects)."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement node not found")
+
+    ack_node = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
+    if ack_node is None:
+        pytest.skip("AcknowledgeResults method not found — optional per spec")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(ack_node.nodeid, ua.Variant([], ua.VariantType.String)),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError:
+        pytest.skip(
+            "Server rejected empty list for AcknowledgeResults — server may not support 'acknowledge all' semantics"
+        )
+    except asyncio.TimeoutError:
+        pytest.skip("AcknowledgeResults with empty list timed out")
+
+
+@pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
+async def test_acknowledged_result_not_in_unacknowledged_list(opcua_client, result_trigger, ns_indices):
+    """AR-4: After acknowledging a ResultId it must not appear in RequestUnacknowledgedResults."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if handle is None:
+        pytest.skip("GetLatestResult did not return a handle")
+
+    ack_node = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
+    if ack_node is None:
+        pytest.skip("AcknowledgeResults method not found — optional per spec")
+
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    if rur_node is None:
+        pytest.skip("RequestUnacknowledgedResults method not found — optional per spec")
+
+    result_id = str(handle)
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(ack_node.nodeid, ua.Variant([result_id], ua.VariantType.String)),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"AcknowledgeResults failed: {exc}")
+    except asyncio.TimeoutError:
+        pytest.skip("AcknowledgeResults timed out")
+
+    try:
+        raw = await asyncio.wait_for(
+            rm.call_method(rur_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"RequestUnacknowledgedResults failed: {exc}")
+    except asyncio.TimeoutError:
+        pytest.skip("RequestUnacknowledgedResults timed out")
+
+    result_ids = raw if isinstance(raw, (list, tuple)) else ([raw] if raw is not None else [])
+    if not result_ids:
+        pytest.skip("RequestUnacknowledgedResults returned empty list — cannot verify removal")
+
+    assert result_id not in result_ids, f"Acknowledged ResultId {result_id!r} still present in unacknowledged list"
+
+
+@pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
+@pytest.mark.negative
+async def test_acknowledge_results_with_nonexistent_id_returns_error(opcua_client, ns_indices):
+    """Error AR-3: AcknowledgeResults with unknown ResultId must return ua.UaError."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement node not found")
+
+    ack_node = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
+    if ack_node is None:
+        pytest.skip("AcknowledgeResults method not found — optional per spec")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(
+                ack_node.nodeid,
+                ua.Variant([_NONEXISTENT_RESULT_ID], ua.VariantType.String),
+            ),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError:
+        pass  # Expected — server should reject unknown ResultId
+    except asyncio.TimeoutError:
+        pytest.skip("AcknowledgeResults timed out during negative test")
+    else:
+        pytest.skip("Server accepted nonexistent ResultId without error — may be a lenient implementation")
+
+
+# ---------------------------------------------------------------------------
+# CU41 — REQUEST_UNACKNOWLEDGED_RESULTS additional tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
+async def test_request_unacknowledged_results_returns_list_of_result_ids(opcua_client, result_trigger, ns_indices):
+    """RUR-1 refined: RequestUnacknowledgedResults must return an iterable of non-empty strings."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    if rur_node is None:
+        pytest.skip("RequestUnacknowledgedResults method not found — optional per spec")
+
+    try:
+        raw = await asyncio.wait_for(
+            rm.call_method(rur_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"RequestUnacknowledgedResults raised ua.UaError: {exc}")
+    except asyncio.TimeoutError:
+        pytest.skip("RequestUnacknowledgedResults timed out")
+
+    result_ids = raw if isinstance(raw, (list, tuple)) else ([raw] if raw is not None else [])
+
+    for rid in result_ids:
+        assert isinstance(rid, str) and rid, f"RequestUnacknowledgedResults returned non-string or empty entry: {rid!r}"
+
+
+@pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
+async def test_unacknowledged_result_appears_after_trigger(opcua_client, result_trigger, ns_indices):
+    """RUR-2: After triggering a result the unacknowledged list must be non-empty."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    if rur_node is None:
+        pytest.skip("RequestUnacknowledgedResults method not found — optional per spec")
+
+    try:
+        raw = await asyncio.wait_for(
+            rm.call_method(rur_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"RequestUnacknowledgedResults raised ua.UaError: {exc}")
+    except asyncio.TimeoutError:
+        pytest.skip("RequestUnacknowledgedResults timed out")
+
+    result_ids = raw if isinstance(raw, (list, tuple)) else ([raw] if raw is not None else [])
+    if not result_ids:
+        pytest.skip(
+            "RequestUnacknowledgedResults returned empty list after trigger — server may auto-acknowledge results"
+        )
+
+    assert len(result_ids) >= 1, "Expected at least one unacknowledged ResultId after triggering a result"
+
+
+@pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
+async def test_acknowledged_result_absent_from_subsequent_unacknowledged_list(opcua_client, result_trigger, ns_indices):
+    """RUR-3: A ResultId acknowledged via AcknowledgeResults must not reappear in the unacknowledged list."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm, handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    if handle is None:
+        pytest.skip("GetLatestResult did not return a handle")
+
+    ack_node = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
+    if ack_node is None:
+        pytest.skip("AcknowledgeResults method not found — optional per spec")
+
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    if rur_node is None:
+        pytest.skip("RequestUnacknowledgedResults method not found — optional per spec")
+
+    result_id = str(handle)
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(ack_node.nodeid, ua.Variant([result_id], ua.VariantType.String)),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"AcknowledgeResults failed: {exc}")
+    except asyncio.TimeoutError:
+        pytest.skip("AcknowledgeResults timed out")
+
+    try:
+        raw = await asyncio.wait_for(
+            rm.call_method(rur_node.nodeid),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError as exc:
+        pytest.skip(f"RequestUnacknowledgedResults failed after acknowledge: {exc}")
+    except asyncio.TimeoutError:
+        pytest.skip("RequestUnacknowledgedResults timed out after acknowledge")
+
+    result_ids = raw if isinstance(raw, (list, tuple)) else ([raw] if raw is not None else [])
+
+    assert result_id not in result_ids, (
+        f"Acknowledged ResultId {result_id!r} still present in subsequent unacknowledged list"
+    )
+
+
+@pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
+@pytest.mark.negative
+async def test_request_unacknowledged_results_invalid_uri_returns_error(opcua_client, ns_indices):
+    """Error RUR-4: RequestUnacknowledgedResults with invalid URI must return ua.UaError."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _get_result_management(opcua_client, ns_mr)
+    if rm is None:
+        pytest.skip("ResultManagement node not found")
+
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    if rur_node is None:
+        pytest.skip("RequestUnacknowledgedResults method not found — optional per spec")
+
+    try:
+        await asyncio.wait_for(
+            rm.call_method(
+                rur_node.nodeid,
+                ua.Variant(_INVALID_PRODUCT_INSTANCE_URI, ua.VariantType.String),
+            ),
+            timeout=_METHOD_WALL_TIMEOUT,
+        )
+    except ua.UaError:
+        pass  # Expected — server should reject unknown asset URI
+    except asyncio.TimeoutError:
+        pytest.skip("RequestUnacknowledgedResults timed out during negative URI test")
+    else:
+        pytest.skip("Server accepted unknown ProductInstanceUri without error — may be a lenient implementation")

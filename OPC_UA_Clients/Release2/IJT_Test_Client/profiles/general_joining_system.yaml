@@ -1,0 +1,17 @@
+# General Joining System Profile
+#
+# Extends the basic profile with result management and identifier tracking.
+# Maps to the "General Joining System Server Facet" from the OPC UA IJT spec.
+# Use for servers that produce and expose joining results.
+
+profile:
+  name: "General Joining System"
+  description: >
+    Extends the basic joining system with result management (GetLatestResult,
+    GetResultById, result variables), result identifiers, and method input
+    argument validation. Suitable for a controller that exposes results but
+    may not implement full asset management or joint management.
+
+  facets:
+    - basic_joining_system_server_facet
+    - general_joining_system_server_facet

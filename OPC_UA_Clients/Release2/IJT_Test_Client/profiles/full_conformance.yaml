@@ -1,0 +1,24 @@
+# Full Conformance Profile
+#
+# Declares all 123 conformance units as supported.
+# Use this profile when testing against the OPC UA IJT Server Simulator
+# or any other server that claims complete IJT Base implementation.
+
+profile:
+  name: "Full IJT Base Conformance"
+  description: >
+    All 123 conformance units from OPC 40450-1 IJT Base Companion Specification.
+    Use for simulators and full-featured servers. Tests for unsupported optional
+    features will still skip gracefully via the trigger layer.
+
+  facets:
+    - basic_joining_system_server_facet
+    - general_joining_system_server_facet
+    - result_management_server_facet
+    - asset_management_assets_server_facet
+    - disconnect_asset_facet
+    - identifiers_methods_server_facet
+    - extended_asset_operations_server_facet
+    - event_management_server_facet
+    - joining_process_management_server_facet
+    - joint_management_server_facet

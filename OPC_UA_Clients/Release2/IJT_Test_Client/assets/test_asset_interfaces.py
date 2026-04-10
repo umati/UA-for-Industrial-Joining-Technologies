@@ -6,8 +6,8 @@ HasInterface (RefType i=17603).  The IJT Base spec defines a concrete interface
 type for every asset category; each is a subtype of IJoiningSystemAssetType
 (IJT Base i=1002) in the NodeSet type hierarchy.
 
-Servers may declare only the most-derived interface on each instance — OPC UA
-convention, and what the Atlas Copco simulator does.
+Servers may declare only the most-derived interface on each instance — per OPC UA
+convention. The reference simulator follows this pattern.
 
 Interface placement (authoritative — from asset_management_t.cpp + NodeSet):
   - Asset instance node  → concrete interface (IControllerType, IToolType, etc.)

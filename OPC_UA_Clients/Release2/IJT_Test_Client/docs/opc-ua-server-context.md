@@ -220,7 +220,7 @@ Full list (1–60): see `helpers/namespaces.py` `SimulateEventType` class.
 | STUB-001 | GetResultIdListFiltered | Returns BadNotImplemented — not implemented by server |
 | STUB-002 | ReleaseResultHandle | Returns BadNotImplemented — not implemented by server |
 | GAP-001 | HasInterface references | Asset instance nodes do not carry HasInterface references to IControllerType, IToolType, etc. (spec-mandated, not yet emitted by server binary). Tests are marked `xfail` accordingly. |
-| GAP-002 | AssociatedWith references | Controller/tool nodes do not carry symmetric AssociatedWith references (spec §7.3 / CU-AM-008/009). Tests are marked `xfail` accordingly. |
+| GAP-002 | AssociatedWith references | Controller/tool nodes do not carry symmetric AssociatedWith references (spec requirement on associated assets). Tests are marked `xfail` accordingly. |
 | GAP-003 | ProductInstanceUri | The `TighteningTool/Identification/ProductInstanceUri` variable is empty in the simulator. Methods that require a valid ProductInstanceUri (EnableAsset, SelectJoint, StartSelectedJoining) return None from the client; live tests skip gracefully. |
 | GAP-004 | GetIdentifiers / ResetIdentifiers | Server requires additional input arguments beyond ProductInstanceUri. Calling with only ProductInstanceUri returns BadArgumentsMissing. Client tests catch this as an acceptable server-side response. |
 

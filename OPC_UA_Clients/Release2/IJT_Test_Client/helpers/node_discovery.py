@@ -223,3 +223,74 @@ async def get_add_in_nodes(node: UANode, ns_opc_ua: int = 0) -> list:
     ns_opc_ua defaults to 0 — guaranteed by OPC UA specification §8.2.3.
     """
     return await get_children_by_reference(node, RefTypes.HAS_ADD_IN, ns_opc_ua)
+
+
+async def find_method_set(
+    parent_node: UANode,
+    ns_di: int,
+    ns_ijt: int | None = None,
+    ns_app: int | None = None,
+) -> UANode | None:
+    """
+    Locate the MethodSet child of parent_node.
+
+    Tries namespace candidates in order to maximise vendor interoperability:
+    1. ns_di  — DI-specification-conformant servers use the DI namespace browse name
+    2. ns_ijt — the IJT Server Simulator uses IJT Base namespace for the MethodSet browse name
+    3. ns_app — application-specific namespace as a last-resort fallback
+
+    Confirmed from live simulator browse (QualifiedName(NamespaceIndex=7, Name='MethodSet')):
+    the NodeId is in ns_app but the BrowseName NamespaceIndex is ns_ijt.
+    """
+    for ns in (ns_di, ns_ijt, ns_app):
+        if ns is not None:
+            ms = await find_child_by_browse_name(parent_node, "MethodSet", ns)
+            if ms is not None:
+                return ms
+    return None
+
+
+async def read_tool_product_instance_uri(client, ns_ijt: int, ns_di: int, ns_app: int | None = None) -> str:
+    """
+    Read ProductInstanceUri from the first tool in AssetManagement/Assets/Tools.
+
+    Navigation path: JoiningSystem → AssetManagement → Assets → Tools →
+    <first tool instance> → Identification → ProductInstanceUri.
+
+    This is the ProductInstanceUri used by all JoiningProcessManagement and
+    AssetManagement method calls per IJT spec and confirmed by the Web Client
+    reference implementation.
+
+    Returns empty string if any navigation step fails.
+    """
+    try:
+        js = await find_joining_system(client)
+        if js is None:
+            return ""
+        am = await find_child_by_browse_name(js, "AssetManagement", ns_ijt)
+        if am is None:
+            return ""
+        assets = await find_child_by_browse_name(am, "Assets", ns_ijt)
+        if assets is None:
+            return ""
+        tools_folder = await find_child_by_browse_name(assets, "Tools", ns_ijt)
+        if tools_folder is None:
+            return ""
+        # Get first tool instance — do not hardcode the instance name; it varies by server
+        tool_refs = await _browse_refs(tools_folder)
+        if not tool_refs:
+            return ""
+        first_tool = _node_from_ref(tools_folder, tool_refs[0].NodeId)
+        ident = await find_child_by_browse_name(first_tool, "Identification", ns_di)
+        if ident is None:
+            return ""
+        # ProductInstanceUri browse name uses ns_di on standard servers
+        pi_node = await find_child_by_browse_name(ident, "ProductInstanceUri", ns_di)
+        if pi_node is None and ns_app is not None:
+            pi_node = await find_child_by_browse_name(ident, "ProductInstanceUri", ns_app)
+        if pi_node is None:
+            return ""
+        value = await asyncio.wait_for(pi_node.read_value(), timeout=_BROWSE_TIMEOUT)
+        return str(value) if value is not None else ""
+    except Exception:  # noqa: BLE001
+        return ""

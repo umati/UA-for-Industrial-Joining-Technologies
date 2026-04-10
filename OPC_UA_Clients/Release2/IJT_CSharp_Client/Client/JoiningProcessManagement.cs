@@ -58,7 +58,7 @@ public sealed class JoiningProcessManagement : IDisposable
         _log.LogInformation("\n── GetJoiningProcessList (uri={Uri}) ────────────────", productInstanceUri);
 
         var objectId = GetJpmNode();
-        var methodId = _s.IjtBaseMethodId(
+        var methodId = _s.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -106,7 +106,7 @@ public sealed class JoiningProcessManagement : IDisposable
         _log.LogInformation("\n── SelectJoiningProcess (id={Id}) ──────────────────", joiningProcessId);
 
         var objectId = GetJpmNode();
-        var methodId = _s.IjtBaseMethodId(
+        var methodId = _s.BrowseMethod(objectId, "SelectJoiningProcess",
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -152,18 +152,9 @@ public sealed class JoiningProcessManagement : IDisposable
         _log.LogInformation("\n── GetSelectedJoiningProgram ────────────────────────");
 
         var jpmNode = GetJpmNode();
-
-        // Browse for the method by name first, then fall back to type-level constant
-        var methodId = _s.BrowseChild(
-            jpmNode,
+        var methodId = _s.BrowseMethod(jpmNode,
             UAModel.IJTBase.BrowseNames.GetSelectedJoiningProgram,
-            nodeClassMask: NodeClass.Method);
-
-        if (methodId.IsNullNodeId)
-        {
-            methodId = _s.IjtBaseMethodId(
-                UAModel.IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram);
-        }
+            UAModel.IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram);
 
         if (jpmNode.IsNullNodeId || methodId.IsNullNodeId)
         {

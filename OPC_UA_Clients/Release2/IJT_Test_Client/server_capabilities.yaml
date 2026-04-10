@@ -1,0 +1,100 @@
+# OPC UA IJT Server Capabilities Configuration
+#
+# Edit this file to declare exactly what your IJT server supports.
+# Conformance unit tests for features listed as "unsupported" will be
+# SKIPPED (not failed) automatically. This mirrors how OPC UA Profiles
+# and Facets work — servers claim specific facets and tests respect that.
+#
+# ─── How to use ───────────────────────────────────────────────────────────────
+#
+# 1. Set "active_profile" to the pre-defined profile closest to your server.
+#    Pre-defined profiles live in profiles/ and are additive (each inherits
+#    the previous one). Choose the highest that matches your implementation.
+#
+# 2. Use "supported_facets" to add individual OPC UA IJT facets beyond the
+#    base profile (or leave empty to use only the profile defaults).
+#
+# 3. Use "cu_overrides" for fine-grained control — mark individual conformance
+#    units as "unsupported" to skip their tests regardless of the active profile.
+#    You can also force "supported" to test a CU that the profile excludes.
+#
+# ─── Available pre-defined profiles ──────────────────────────────────────────
+#   basic_joining_system   — mandatory structure CUs only
+#   general_joining_system — adds result management and identifiers
+#   asset_management       — adds all asset type and operation CUs
+#   full_conformance       — all 123 CUs (use for simulator / full server)
+#
+# ─── Available facets (additive on top of profile) ────────────────────────────
+# See profiles/facets.yaml for the full list and each facet's CU membership.
+#
+# ─── CU key names ─────────────────────────────────────────────────────────────
+# All keys use meaningful names matching the spec section titles.
+# See helpers/cu_registry.py for the complete list.
+# ──────────────────────────────────────────────────────────────────────────────
+
+server:
+  name: "My IJT Server"
+  vendor: "My Company"
+  version: "1.0.0"
+  description: "Edit this to describe your specific server implementation"
+
+# URL used when OPCUA_SERVER_URL environment variable is not set
+connection:
+  default_url: "opc.tcp://localhost:40451"
+  connect_timeout_seconds: 30
+  session_timeout_seconds: 300
+
+# Active base profile — choose ONE of the profiles listed above
+active_profile: full_conformance
+
+# Additional facets supported beyond the base profile (list of facet names)
+supported_facets: []
+
+# Fine-grained overrides per conformance unit
+# Values: "supported" | "unsupported"
+# "unsupported" → test is skipped with an informative message
+# "supported"   → test runs even if the active profile excludes it
+#
+# ─── OPC UA IJT Server Simulator known limitations ────────────────────────────
+# These overrides reflect known behaviours of the OPC UA IJT Server Simulator
+# (Release 2). They do NOT mean those CUs are unsupported
+# by the spec — only that this specific simulator diverges from the spec in
+# those areas. Remove or change entries when using a fully compliant server.
+#
+# Simulator behaviours that differ from OPC 40450-1:
+#   • GetResultById with an unknown ResultId → returns empty result instead
+#     of a Bad_NotFound status code (non-compliant negative-path behaviour).
+#   • VirtualStation instances → no AssignedTools property exposed
+#     (spec says it SHOULD be present; simulator omits it).
+#   • Controller assets → OperationCycleCounter present in OperationCounters
+#     (spec designates this as Tool-specific; simulator adds it to Controllers).
+#   • JoiningTechnology → serialised as LocalizedText not as a bare integer
+#     by some asyncua versions (handled in test code gracefully).
+cu_overrides: {}
+
+# ─── Example: minimal tightening controller ───────────────────────────────────
+# active_profile: general_joining_system
+# supported_facets:
+#   - asset_management_assets_server_facet
+# cu_overrides:
+#   joint_management: unsupported
+#   send_joint: unsupported
+#   get_joint_list: unsupported
+#   select_joint: unsupported
+#   get_joint: unsupported
+#   joint_data: unsupported
+#   delete_joint: unsupported
+#   send_joint_design: unsupported
+#   get_joint_design_list: unsupported
+#   get_joint_design: unsupported
+#   joint_design_data: unsupported
+#   delete_joint_design: unsupported
+#   send_joint_component: unsupported
+#   get_joint_component_list: unsupported
+#   get_joint_component: unsupported
+#   joint_component_data: unsupported
+#   delete_joint_component: unsupported
+#   get_joint_revision_list: unsupported
+#   feedback_methods: unsupported
+#   set_offline_timer: unsupported
+#   io_signals_methods: unsupported

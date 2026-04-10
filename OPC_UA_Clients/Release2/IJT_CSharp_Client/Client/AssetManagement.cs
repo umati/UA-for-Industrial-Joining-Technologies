@@ -63,7 +63,7 @@ public sealed class AssetManagement : IDisposable
             productInstanceUri, enable);
 
         var objectId = GetMethodSetNode();
-        var methodId = _s.IjtBaseMethodId(
+        var methodId = _s.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.EnableAsset,
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -92,17 +92,15 @@ public sealed class AssetManagement : IDisposable
 
     /// <summary>
     /// Calls <c>AssetManagement/MethodSet/SendIdentifiers</c> (NodeId 7085).
-    /// Input: array of <see cref="UAModel.IJTBase.EntityDataType"/> wrapped as ExtensionObjects.
+    /// Input: ProductInstanceUri (string), array of <see cref="UAModel.IJTBase.EntityDataType"/> wrapped as ExtensionObjects.
     /// </summary>
-    public void SendIdentifiers(IList<UAModel.IJTBase.EntityDataType> entities)
+    public void SendIdentifiers(IList<UAModel.IJTBase.EntityDataType> entities, string productInstanceUri = "")
     {
         _log.LogInformation("\n── SendIdentifiers ({Count} entities) ─────────────", entities.Count);
 
         var objectId = GetMethodSetNode();
-        var methodId = _s.IjtBaseMethodId(
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId)
         {
             _log.LogError("✗ MethodSet node or SendIdentifiers method not found.");
             return;
@@ -110,8 +108,15 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
+            var methodId = _s.BrowseMethod(objectId, "SendIdentifiers",
+                UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers);
+            if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+            {
+                _log.LogError("✗ MethodSet node or SendIdentifiers method not found.");
+                return;
+            }
             var extObjects = entities.Select(e => new ExtensionObject(e)).ToArray();
-            var outputs = _s.CallMethod(objectId, methodId, (object)extObjects);
+            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, (object)extObjects);
             _log.LogInformation("✓ SendIdentifiers called ({Count} entities).", extObjects.Length);
             IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
         }
@@ -136,7 +141,7 @@ public sealed class AssetManagement : IDisposable
         _log.LogInformation("\n── SendTextIdentifiers ({Uri}) ────────────────────", productInstanceUri);
 
         var objectId = GetMethodSetNode();
-        var methodId = _s.IjtBaseMethodId(
+        var methodId = _s.BrowseMethod(objectId, "SendTextIdentifiers",
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -172,7 +177,7 @@ public sealed class AssetManagement : IDisposable
         _log.LogInformation("\n── ResetIdentifiers ({Uri}) ──────────────────────", productInstanceUri);
 
         var objectId = GetMethodSetNode();
-        var methodId = _s.IjtBaseMethodId(
+        var methodId = _s.BrowseMethod(objectId, "ResetIdentifiers",
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -183,7 +188,7 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri);
+            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, Array.Empty<string>(), true, false);
             _log.LogInformation("✓ ResetIdentifiers called.");
             IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
         }
@@ -208,7 +213,7 @@ public sealed class AssetManagement : IDisposable
         _log.LogInformation("\n── GetIdentifiers ({Uri}) ────────────────────────", productInstanceUri);
 
         var objectId = GetMethodSetNode();
-        var methodId = _s.IjtBaseMethodId(
+        var methodId = _s.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.GetIdentifiers,
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -219,7 +224,7 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri);
+            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, Array.Empty<string>());
             _log.LogInformation("✓ GetIdentifiers result:");
             IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
         }

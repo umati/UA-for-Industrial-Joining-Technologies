@@ -114,9 +114,13 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
         log.LogInformation("Discovering endpoints at {Url} …", config.ServerUrl);
         var session = await DiscoverAndConnectAsync(appConfig, config, log, ct).ConfigureAwait(false);
 
-        // Register all IJT encodeable types so the SDK can encode/decode ExtensionObjects
+        // Register all IJT encodeable types so the SDK can encode/decode ExtensionObjects.
+        // Must cover every assembly that contributes encoded types so ExtensionObject bodies
+        // arrive as typed objects, not raw byte[].
         session.MessageContext.Factory.AddEncodeableTypes(
             typeof(UAModel.IJTBase.EntityDataType).Assembly);
+        session.MessageContext.Factory.AddEncodeableTypes(
+            typeof(UAModel.MachineryResult.ResultDataType).Assembly);
 
         var wrapper = new IjtSession(session, config);
         session.KeepAliveInterval = KeepAliveIntervalMs;
@@ -388,6 +392,19 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
             (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
 
         return match != null ? (NodeId)match.NodeId : NodeId.Null;
+    }
+
+    // ── BrowseMethod helper ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resolves a method node under <paramref name="objectId"/> by browse name.
+    /// Falls back to <see cref="IjtBaseMethodId"/> if the browse yields nothing.
+    /// </summary>
+    public NodeId BrowseMethod(NodeId objectId, string methodBrowseName, uint fallbackConstant = 0)
+    {
+        var m = BrowseChild(objectId, methodBrowseName, nodeClassMask: NodeClass.Method);
+        if (!m.IsNullNodeId) return m;
+        return fallbackConstant > 0 ? IjtBaseMethodId(fallbackConstant) : NodeId.Null;
     }
 
     // ── Typed NodeId factory helpers ──────────────────────────────────────────

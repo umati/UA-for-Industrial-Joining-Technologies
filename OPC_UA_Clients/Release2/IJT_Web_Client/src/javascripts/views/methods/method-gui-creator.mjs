@@ -350,4 +350,3 @@ export default class MethodGUICreator {
     }
   }
 }
-

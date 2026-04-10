@@ -335,9 +335,20 @@ jobs:
         env:
           OPCUA_SERVER_URL: opc.tcp://localhost:40451
         run: |
-          python -m pytest . `
-            -v --tb=short --timeout=120 `
-            --junitxml=test-results/pytest.xml
+          python -m pytest `
+            conformance/ assets/ joining_process/ results/ joint/ events/ common/ `
+            -v --tb=short -rs --timeout=120 `
+            --junitxml=test-results/pytest.xml `
+            --html=test-results/report.html --self-contained-html
+
+      - name: Generate Excel report and CI Step Summary
+        if: always()
+        working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
+        env:
+          OPCUA_SERVER_URL: opc.tcp://localhost:40451
+        run: |
+          python scripts/make_excel_report.py
+          python scripts/make_ci_summary.py
 
       - name: Collect test results into flat directory
         if: always()
@@ -347,13 +358,24 @@ jobs:
           # single root (avoiding LCA path expansion from multi-root uploads).
           Copy-Item OPC_UA_Clients/Release2/IJT_Test_Client/test-results/pytest.xml `
             test-results/pytest.xml -ErrorAction SilentlyContinue
+          Copy-Item OPC_UA_Clients/Release2/IJT_Test_Client/test-results/report.html `
+            test-results/report.html -ErrorAction SilentlyContinue
+          Copy-Item OPC_UA_Clients/Release2/IJT_Test_Client/test-results/report.xlsx `
+            test-results/report.xlsx -ErrorAction SilentlyContinue
+          Copy-Item OPC_UA_Clients/Release2/IJT_Test_Client/test-results/summary.md `
+            test-results/summary.md -ErrorAction SilentlyContinue
 
       - name: Upload Test Client results
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
         if: always()
         with:
           name: results-testclient
-          path: test-results/
+          path: |
+            test-results/pytest.xml
+            test-results/smoke-sanity.xml
+            test-results/report.html
+            test-results/report.xlsx
+            test-results/summary.md
 
       - name: Stop server
         if: always()
