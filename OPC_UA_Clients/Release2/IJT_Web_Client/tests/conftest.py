@@ -1,4 +1,6 @@
 import json
+import shutil
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -6,15 +8,8 @@ import pytest
 
 
 def pytest_configure(config):
-    """Ensure tests/fixtures/ exists and pin basetemp to an absolute project-local path.
-
-    Using an absolute path for basetemp guarantees correct resolution regardless
-    of the working directory from which pytest is invoked (CI, repo root, etc.).
-    """
+    """Ensure tests/fixtures/ exists for tests that materialize JSON fixtures."""
     _project_root = Path(__file__).resolve().parent.parent
-    _basetemp = _project_root / ".state" / "pytest_tmp"
-    _basetemp.mkdir(parents=True, exist_ok=True)
-    config.option.basetemp = str(_basetemp)
     _project_root.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
 
 
@@ -44,5 +39,13 @@ def decode_last_message():
 
 
 @pytest.fixture
-def local_temp_dir(tmp_path):
-    return tmp_path
+def local_temp_dir():
+    project_root = Path(__file__).resolve().parent.parent
+    tmp_root = project_root / ".state" / "tmp" / "test-fixtures"
+    tmp_root.mkdir(parents=True, exist_ok=True)
+    path = tmp_root / f"ijt-web-{uuid.uuid4().hex[:8]}"
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)

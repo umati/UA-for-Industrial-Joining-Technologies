@@ -1,17 +1,50 @@
 [project]
 requires-python = ">=3.14"
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+pythonpath = ["."]
+# Test Client has no tests/ dir — suites live at project root in named subdirs.
+testpaths = ["conformance", "events", "assets", "results", "joint", "joining_process", "common"]
+python_files = ["test_*.py"]
+addopts = "-v --basetemp=tmp/pytest"
+tmp_path_retention_policy = "failed"
+timeout = 120
+markers = [
+    "live: Tests requiring a running OPC UA server",
+    "structure: Address space structure tests (read-only, no state changes)",
+    "methods: Method call tests (trigger simulation — state changes expected)",
+    "events: Event subscription and notification tests",
+    "conformance: Full §11.1 specification conformance scenarios",
+]
+
 [tool.bandit]
-exclude_dirs = ["venv", ".venv", ".venv-wsl", ".venv-wsl_backup", "tests", "__pycache__", ".git"]
+exclude_dirs = [".venv", ".venv_test", ".venv_wsl", ".venv_wsl_backup", "tests", "__pycache__", ".git"]
 skips = ["B101"]
 
 [tool.vulture]
-# pytest fixture parameters are declared as function arguments but never referenced
-# by name in the function body — they are injected by pytest via the parameter name.
-# Vulture cannot distinguish fixture dependency injection from unused variables.
+# Vulture finds dead code in source. Tests are excluded because pytest fixture
+# injection makes parameter names appear "unused" — they are not; pytest wires
+# them by name. Scanning tests adds only false positives with no value.
+exclude = ["tests/", "conftest.py", ".venv/", ".venv_test/", "tmp/", "test-results/", "logs/"]
 ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
 
+[tool.interrogate]
+# 65% minimum docstring coverage (committed baseline was 60%; kept higher).
+# Measures all Python files. Increase gradually as coverage improves.
+fail-under = 65
+ignore-init-method = true
+ignore-magic = true
+ignore-semiprivate = true
+ignore-private = true
+verbose = 0
+
 [tool.ruff]
+# Intentionally overrides root pyproject.toml: line-length=120 (matches existing code style)
+# and select=["E","F","I"] (minimal rules; security/complexity rules not enforced here).
+target-version = "py314"
 line-length = 120
 
 [tool.ruff.lint]
@@ -24,7 +57,7 @@ ignore = ["E501", "E402", "E731"]
 omit = [
     "run_all_tests.py",
     ".venv/*",
-    "venv/*",
+    ".venv_test/*",
 ]
 
 [tool.coverage.report]
@@ -36,3 +69,50 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
 ]
+
+[tool.pylint.main]
+# sys.path insert ensures conformance test modules resolve when pylint runs from project root.
+init-hook = "import sys; sys.path.insert(0, '.')"
+
+[tool.pylint.messages-control]
+disable = [
+    "import-outside-toplevel",
+    "wrong-import-position",
+    "import-error",            # false positive: conformance modules resolve via pythonpath = ["."]
+    "broad-exception-caught",  # OPC UA can raise many exception types; broad catch is intentional
+    "unused-argument",         # pytest fixtures injected by name; can't use _
+    "not-callable",
+    "invalid-name",            # OPC UA PascalCase event fields and NodeIds
+    "line-too-long",           # enforced by ruff line-length instead
+    "missing-function-docstring",
+    "disallowed-name",         # test scaffolding uses short names
+    "too-few-public-methods",
+    "too-many-public-methods",
+    "too-many-instance-attributes",
+    "too-many-statements",
+    "too-many-branches",
+    "too-many-return-statements",
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "too-many-locals",
+    "consider-using-with",
+    "duplicate-code",
+]
+
+[tool.pylint.format]
+max-line-length = 120
+max-module-lines = 1200
+
+[tool.mypy]
+explicit_package_bases = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# helpers/ contains generated OPC UA type stubs — too many unresolvable imports to check.
+module = "helpers.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# run_all_tests.py uses sys/subprocess/platform APIs that vary; not worth strict checking.
+module = "run_all_tests"
+ignore_errors = true

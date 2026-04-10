@@ -25,9 +25,10 @@ Most jobs are fully environment-independent; `csharp-client` is the exception �
 | `node-client` | Vitest · ESLint · npm audit |
 | `csharp-client` | dotnet build (zero warnings) · phase1: unit/static only (`IJT_PHASE1_ONLY=true`, live tests skip) · phase2: xUnit live tests against auto-launched Windows server (`--blame-hang 60s` catches hangs) · format check |
 | `test-client` | pytest collect-only · Bandit · Ruff · mypy |
-| `server-smoke-windows` | OPC UA binary smoke — 10 checks, Windows native |
+| `server-smoke-windows` | OPC UA binary smoke — 10 checks, Windows native, JUnit XML |
 | `docker-smoke` | Web Client Docker build · HTTP readiness · WebSocket port |
 | `actionlint` | GHA workflow lint (local runner also checks `*.yml` action-pin versions) |
+| `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to job summary with full pass · fail · skip counts · artifact sanity gate · `continue-on-error` on all dorny steps (fork PR safe) |
 
 ### Skip budget: **0 unexpected skips**
 
@@ -53,11 +54,12 @@ Live, integration, Docker, and optional security checks.
 
 | Job | What it checks |
 |-----|----------------|
-| `server-smoke-docker` | Linux Release2 server: Docker image build · Dockerfile lint (hadolint) · smoke tests |
+| `server-smoke-docker` | Linux Release2 server: Docker image build · Dockerfile lint (hadolint) · smoke tests (10 checks, JUnit XML) |
 | `webclient-docker` | Web Client Docker: test-target (Python + Vitest inside container) · prod-target (HTTP health on port 3000) |
-| `int-testclient` | Windows: OPC UA server + Test Client full suite (runs in parallel with `int-live-others`) |
+| `int-testclient` | Windows: OPC UA server + Test Client full suite (runs in parallel with `int-live-others`) — pytest.xml + smoke-sanity.xml collected flat before artifact upload |
 | `int-live-others` | Windows: Web Client integration + Console live tests (runs in parallel with `int-testclient`) |
 | `zizmor` *(optional)* | GitHub Actions workflow security audit — findings uploaded as SARIF to GitHub Code Scanning (Security tab); job never fails CI; skipped on fork PRs (no `security-events: write` in fork context) |
+| `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to job summary with full pass · fail · skip counts · artifact sanity gate warns on missing XMLs · zizmor-aware overall status |
 
 ### Triggers
 
@@ -146,4 +148,3 @@ Separating them into an extended tier:
 2. Makes skips **visible and auditable** — not silently ignored
 3. Allows **gradual promotion** of extended tests to required as infrastructure matures
 4. Matches industry standard: smoke/unit = blocking; integration/e2e/security = non-blocking but tracked
-

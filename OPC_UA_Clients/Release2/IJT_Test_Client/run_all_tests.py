@@ -25,6 +25,7 @@ Environment variables:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import os
@@ -50,13 +51,15 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 _HERE = Path(__file__).resolve().parent
 _PYPROJECT = _HERE / "pyproject.toml"
-VENV = _HERE / ".venv"
+# .venv_test is the test-runner venv (requirements.txt + requirements-dev.txt).
+# .venv is the runtime-only venv — kept separate so tests never alter the
+# launch environment and vice versa.
+VENV = _HERE / ".venv_test"
 REQUIREMENTS = _HERE / "requirements.txt"
 _REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
 _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest-live.xml"
-_LOCAL_TEMP_DIR = _HERE / ".state" / "tmp"
-_PYTEST_TEMP_ROOT = _HERE / ".state" / "pytest_tmproot"
+_TMP_DIR = _HERE / "tmp"
 
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40462"
 _MIN_PYTHON = (3, 14)
@@ -97,14 +100,12 @@ def _parse_opcua_endpoint(url: str) -> tuple[str, int]:
     return parsed.hostname or "localhost", parsed.port or 40451
 
 
-def _configure_local_temp_env() -> None:
-    """Force temp files into project-local .state/ paths for reproducible ACL behavior."""
-    _LOCAL_TEMP_DIR.mkdir(parents=True, exist_ok=True)
-    _PYTEST_TEMP_ROOT.mkdir(parents=True, exist_ok=True)
-    os.environ["TMP"] = str(_LOCAL_TEMP_DIR)
-    os.environ["TEMP"] = str(_LOCAL_TEMP_DIR)
-    os.environ["TMPDIR"] = str(_LOCAL_TEMP_DIR)
-    os.environ["PYTEST_DEBUG_TEMPROOT"] = str(_PYTEST_TEMP_ROOT)
+def _prepare_tmp_dir() -> None:
+    """Ensure project-local tmp/pytest/ exists for pytest basetemp (clean slate each run)."""
+    pytest_tmp = _TMP_DIR / "pytest"
+    if pytest_tmp.exists():
+        _force_rmtree(pytest_tmp)
+    pytest_tmp.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -256,13 +257,52 @@ def _binary_available(name: str) -> bool:
     return shutil.which(name) is not None
 
 
+def _ensure_precommit_hooks() -> None:
+    """Install pre-commit hooks into .git/hooks/ if not already present."""
+    git_root = _HERE
+    # Walk up to find .git directory (project may be nested in a monorepo)
+    for parent in [_HERE] + list(_HERE.parents):
+        if (parent / ".git").exists():
+            git_root = parent
+            break
+    hook_path = git_root / ".git" / "hooks" / "pre-commit"
+    if hook_path.exists():
+        return  # already installed
+    if not _tool_available("pre_commit"):
+        return  # pre-commit not installed — skip silently
+    logger.info("Installing pre-commit hooks …")
+    subprocess.check_call(
+        [str(_venv_python(VENV)), "-m", "pre_commit", "install", "--install-hooks"],
+        cwd=str(git_root),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Venv management
 # ---------------------------------------------------------------------------
 
+# Legacy venv directory names predating the .venv / .venv_test convention.
+_STALE_VENV_NAMES: tuple[str, ...] = ("venv", "venv_test", "env", "ENV", ".venv_backup")
+
+
+def _remove_stale_venvs() -> None:
+    """Delete obsolete virtual-environment directories from the project root.
+
+    Canonical dirs (``.venv`` runtime, ``.venv_test`` tests) are never touched.
+    Legacy aliases (for example ``.venv_wsl``) are also preserved.
+    Everything in :data:`_STALE_VENV_NAMES` is removed so that users who pull
+    fresh code start from a known-clean state.
+    """
+    for name in _STALE_VENV_NAMES:
+        stale = _HERE / name
+        if stale.is_dir():
+            logger.info("[cleanup] Removing stale virtual environment: %s", stale)
+            shutil.rmtree(stale, ignore_errors=True)
+
 
 def ensure_venv() -> None:
     """Create the virtual environment if it does not already exist."""
+    _remove_stale_venvs()
     if not VENV.exists():
         logger.info("Creating virtual environment: %s", VENV)
         subprocess.run([sys.executable, "-m", "venv", str(VENV)], check=False)
@@ -270,14 +310,31 @@ def ensure_venv() -> None:
         logger.info("Using existing virtual environment: %s", VENV)
 
 
+def _requirements_hash() -> str:
+    """Return a short hash of all requirements files combined."""
+    import hashlib
+
+    h = hashlib.sha256()
+    for req in (REQUIREMENTS, _REQUIREMENTS_DEV):
+        if req.exists():
+            h.update(req.read_bytes())
+    return h.hexdigest()[:16]
+
+
 def install_requirements() -> None:
-    """Install packages from requirements.txt and requirements-dev.txt into the venv."""
+    """Install packages; reinstall automatically when requirements files change."""
     if os.environ.get("SKIP_VENV_INSTALL") == "1":
         logger.info("Skipping pip install (SKIP_VENV_INSTALL=1)")
         return
+    hash_file = VENV / ".req-hash"
+    current_hash = _requirements_hash()
+    if hash_file.exists() and hash_file.read_text().strip() == current_hash:
+        logger.info("Requirements unchanged — skipping pip install")
+        return
     pip = str(_venv_pip(VENV))
-    # Always upgrade pip itself first to avoid stale CVE warnings in pip-audit
-    subprocess.run([pip, "install", "--quiet", "--upgrade", "pip"], check=False)
+    python = str(_venv_python(VENV))
+    # Use python -m pip for self-upgrade (newer pip requires this on Windows)
+    subprocess.run([python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"], check=False)
     for req_file in (REQUIREMENTS, _REQUIREMENTS_DEV):
         if req_file.exists():
             logger.info("Installing requirements from %s...", req_file.name)
@@ -287,6 +344,7 @@ def install_requirements() -> None:
             )
         else:
             logger.info("No %s found — skipping", req_file.name)
+    hash_file.write_text(current_hash)
 
 
 def _relaunch_if_needed() -> None:
@@ -547,7 +605,7 @@ def _step_pylint() -> _StepResult:
             ".",
             "--output-format=json",
             "--recursive=y",
-            "--ignore=.venv,venv,.venv-wsl",
+            "--ignore=.venv,.venv_test,.venv_wsl",
         ]
     )
     result.duration = time.monotonic() - t0
@@ -641,7 +699,7 @@ def _step_vulture() -> _StepResult:
             "--min-confidence",
             "80",
             "--exclude",
-            ".venv,venv,.venv-wsl,conftest.py",
+            ".venv,.venv_test,.venv_wsl,tests,conftest.py",
         ]
     )
     result.duration = time.monotonic() - t0
@@ -661,7 +719,7 @@ def _step_interrogate() -> _StepResult:
         result.note = "not installed  (pip install interrogate)"
         result.duration = time.monotonic() - t0
         return result
-    rc, output = _run([sys.executable, "-m", "interrogate", "-v", "--fail-under", "60", "."])
+    rc, output = _run([sys.executable, "-m", "interrogate", "-v"])
     result.duration = time.monotonic() - t0
     result.ok = rc == 0
     if not result.ok:
@@ -757,7 +815,7 @@ def _step_semgrep() -> _StepResult:
             "--json",
             "--output",
             str(_RESULTS_DIR / "semgrep.json"),
-            "--exclude=.venv",
+            "--exclude=.venv,.venv_test",
             "--exclude=test-results",
             ".",
         ],
@@ -907,10 +965,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     """Entry point; returns 0 on success, 1 on any failure."""
+    os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+    _cleanup_caches(_HERE)  # pre-run: clear stale caches from interrupted runs
     global _USE_COLOUR
 
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
-    _configure_local_temp_env()
+    _prepare_tmp_dir()
 
     args = _build_parser().parse_args()
     run_phase1 = not args.phase2
@@ -919,6 +979,7 @@ def main() -> int:
     # Step 1: Ensure venv exists and all dependencies are installed
     ensure_venv()
     install_requirements()
+    _ensure_precommit_hooks()
 
     # Step 2: Re-exec under the venv Python so all tools use the same interpreter
     _relaunch_if_needed()
@@ -996,19 +1057,36 @@ def main() -> int:
     return 1 if any_failed else 0
 
 
+def _force_rmtree(path: Path) -> None:
+    """Remove a directory tree, handling Windows read-only / locked files."""
+    import stat as _stat
+
+    def _on_exc(func, fpath, exc):
+        try:
+            os.chmod(fpath, _stat.S_IWRITE)
+            func(fpath)
+        except OSError:
+            time.sleep(0.05)
+            with contextlib.suppress(OSError):
+                func(fpath)
+
+    shutil.rmtree(path, onexc=_on_exc)
+
+
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}
-    _CACHE_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache"}
+    _SKIP = {"node_modules", ".git", "test-results"}  # "tmp" intentionally removed — now cleaned
+    _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
-        dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith("venv") and not d.startswith(".venv")]
+        dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")]
         for d in list(dirs):
-            if d in _CACHE_DIRS:
-                shutil.rmtree(Path(dirpath) / d, ignore_errors=True)
+            if d in _CACHE_DIRS or d.startswith("pytest-cache-files-"):
+                _force_rmtree(Path(dirpath) / d)
                 dirs.remove(d)
         for f in files:
             if f == ".coverage" or f.startswith(".coverage.") or f.endswith(".pyc"):
-                (Path(dirpath) / f).unlink(missing_ok=True)
+                with contextlib.suppress(OSError):
+                    (Path(dirpath) / f).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

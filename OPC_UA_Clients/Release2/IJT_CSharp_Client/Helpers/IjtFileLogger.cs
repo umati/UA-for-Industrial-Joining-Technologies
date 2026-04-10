@@ -11,8 +11,8 @@ namespace IJT_CSharp_Client.Helpers;
 ///
 /// File layout (relative to executable):
 ///   logs/
-///     result_logs/result.log   — last ResultDataType received
-///     event_logs/event.log     — last JoiningSystemEvent received
+///     results/result.log   — last ResultDataType received
+///     events/event.log     — last JoiningSystemEvent received
 /// </summary>
 public static class IjtFileLogger
 {
@@ -22,10 +22,10 @@ public static class IjtFileLogger
         Path.Combine(AppContext.BaseDirectory, "logs");
 
     private static readonly string _resultLogPath =
-        Path.Combine(_baseDir, "result_logs", "result.log");
+        Path.Combine(_baseDir, "results", "result.log");
 
     private static readonly string _eventLogPath =
-        Path.Combine(_baseDir, "event_logs", "event.log");
+        Path.Combine(_baseDir, "events", "event.log");
 
     /// <summary>Overwrites result.log with the given text content.</summary>
     public static void WriteResult(string content)

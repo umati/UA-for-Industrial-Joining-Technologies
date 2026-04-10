@@ -526,7 +526,7 @@ jobs:
           dotnet test Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj `
             --no-restore `
             --configuration Release `
-            --logger "trx;LogFileName=test-results\tests.trx" `
+            --logger "trx;LogFileName=tests.trx" `
             --logger "console;verbosity=normal" `
             --collect:"XPlat Code Coverage" `
             --results-directory test-results/coverage `
@@ -543,7 +543,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $trx = "test-results\tests.trx"
+          $trx = "test-results\coverage\tests.trx"
           $junit = "test-results\tests.xml"
           if (Test-Path $trx) {
             [xml]$x = Get-Content $trx
@@ -572,16 +572,6 @@ jobs:
             Write-Host "No TRX file found — creating empty JUnit"
             '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests" tests="0"/></testsuites>' | Out-File $junit -Encoding UTF8
           }
-
-      - name: Publish Test Report
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
-        if: always()
-        with:
-          name: "C# Client — xUnit Tests"
-          path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/tests.xml
-          reporter: java-junit
-          fail-on-error: false
-          fail-on-empty: false
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
@@ -760,7 +750,18 @@ jobs:
         run: pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Run smoke test (10 checks)
-        run: python OPC_UA_Servers/Release2/tests/smoke_test.py --tcp-timeout 30
+        run: |
+          New-Item -ItemType Directory -Force -Path test-results | Out-Null
+          python OPC_UA_Servers/Release2/tests/smoke_test.py `
+            --tcp-timeout 30 `
+            --junitxml test-results/smoke.xml
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
+        if: always()
+        with:
+          name: results-server-smoke
+          path: test-results/smoke.xml
 
       - name: Stop OPC UA Server
         if: always()
@@ -781,6 +782,7 @@ jobs:
     if: always()
     permissions:
       contents: read
+      checks: write
 
     steps:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
@@ -791,6 +793,72 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
           path: all-results/
+
+      - name: "Report — Web Client Python Tests"
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
+        with:
+          name: "Web Client — Python Tests"
+          path: all-results/results-web-client/pytest.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: "Report — Web Client JS Tests"
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
+        with:
+          name: "Web Client — JS Tests (Vitest)"
+          path: all-results/results-web-client/vitest.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: "Report — Console Client Python Tests"
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
+        with:
+          name: "Console Client — Python Tests"
+          path: all-results/results-console-client/pytest.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: "Report — Node Client JS Tests"
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
+        with:
+          name: "Node Client — JS Tests (Vitest)"
+          path: all-results/results-node-client/vitest.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: "Report — C# Client xUnit Tests"
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
+        with:
+          name: "C# Client — xUnit Tests"
+          path: all-results/results-csharp-client/tests.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: "Report — OPC UA Server Smoke (Windows)"
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
+        with:
+          name: "OPC UA Server — Smoke Tests (Windows)"
+          path: all-results/results-server-smoke/smoke.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
 
       - name: Generate Summary Table
         env:
@@ -812,16 +880,20 @@ jobs:
           # ── Parsers ──────────────────────────────────────────────────────
 
           def parse_junit(pattern):
-              for path in glob.glob(pattern, recursive=True):
+              matches = glob.glob(pattern, recursive=True)
+              if not matches:
+                  return None, None, None, None
+              for path in matches:
                   try:
                       root   = ET.parse(path).getroot()
                       suites = root.findall("testsuite") if root.tag == "testsuites" else [root]
                       t = sum(int(s.get("tests",    0)) for s in suites)
                       f = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
-                      return t, t - f, f
-                  except Exception:
-                      pass
-              return None, None, None
+                      sk = sum(int(s.get("skipped",  0)) for s in suites)
+                      return t, t - f - sk, f, sk
+                  except Exception as exc:
+                      print(f"[WARN] parse_junit: failed to read {path}: {exc}")
+              return None, None, None, None
 
           def parse_bandit(pattern):
               for path in glob.glob(pattern, recursive=True):
@@ -861,9 +933,12 @@ jobs:
           def job_icon(r):
               return {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
 
-          def fmt_tests(total, passed, failed):
+          def fmt_tests(total, passed, failed, skipped=0):
               if total is None: return "—"
-              return ("✅" if failed == 0 else "❌") + f" **{passed}/{total}**"
+              icon = "✅" if failed == 0 else "❌"
+              fail_str = f"**{failed} fail**" if failed else "0 fail"
+              skip_str = f" · {skipped} skip" if skipped else ""
+              return f"{icon} **{passed} pass** · {fail_str}{skip_str}"
 
           def fmt_bandit(high, medium):
               if high is None: return "—"
@@ -915,7 +990,8 @@ jobs:
           con_mypy = os.environ.get("CONSOLE_MYPY", "")
           tc_mypy  = os.environ.get("TC_MYPY",      "")
 
-          cs_tests = parse_junit("all-results/results-csharp-client/tests.xml")
+          cs_tests  = parse_junit("all-results/results-csharp-client/tests.xml")
+          ss_smoke  = parse_junit("all-results/results-server-smoke/smoke.xml")
 
           # ── Sanity gate ─────────────────────────────────────────────────────
           # Flag jobs that reported "success" but produced no test artifacts —
@@ -932,6 +1008,7 @@ jobs:
           _artifact_warn(nod_r,    nod_js[0],    "node-client",          "vitest.xml")
           _artifact_warn(cs_r,     cs_tests[0],  "csharp-client",        "tests.xml")
           _artifact_warn(tc_r,     tc_ban[0],    "test-client",          "bandit.json")
+          _artifact_warn(ss_win_r, ss_smoke[0],  "server-smoke-windows", "smoke.xml")
 
           overall = "✅ All Passed" if all(r == "success" for r in [web_r, con_r, nod_r, docker_r, cs_r, tc_r, ss_win_r, al_r]) else "❌ Some Failed"
 
@@ -941,7 +1018,7 @@ jobs:
               f"| **Release1 / IJT Node Client**          | {job_icon(nod_r)} `{nod_r}` | — | {fmt_tests(*nod_js)} | {fmt_eslint(nod_esl)} | — | {fmt_npm(*nod_npm)} | — | — |",
               f"| **Release2 / IJT C# Client**            | {job_icon(cs_r)} `{cs_r}` | {fmt_tests(*cs_tests)} | — | — | — | — | — | — |",
               f"| **Release2 / IJT Test Client**          | {job_icon(tc_r)} `{tc_r}` | — (collect-only) | — | — | {fmt_bandit(*tc_ban)} | — | {fmt_mypy(tc_mypy)} | — |",
-              f"| **Release2 / OPC UA Server (Win)**      | {job_icon(ss_win_r)} `{ss_win_r}` | — | — | — | — | — | — | — |",
+              f"| **Release2 / OPC UA Server (Win)**      | {job_icon(ss_win_r)} `{ss_win_r}` | {fmt_tests(*ss_smoke)} | — | — | — | — | — | — |",
               f"| **GHA Workflow Lint (actionlint)**       | {job_icon(al_r)} `{al_r}` | — | — | — | — | — | — | — |",
           ]
 

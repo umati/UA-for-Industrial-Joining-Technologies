@@ -33,17 +33,21 @@
 Each runner removes `__pycache__`, `.ruff_cache`, `.mypy_cache`, `.coverage*` after writing reports.
 Cleanup is **self-contained** — each runner only affects its own directory.
 Running the root orchestrator triggers sub-project runners as subprocesses; each cleans itself.
-`.pytest_cache` and `test-results/` are always preserved.
+`.pytest_cache` is cleaned post-run by each runner. `test-results/` is always preserved.
 
 ### Automatic — pytest temp dirs
-All three Python pytest projects (Web, Console, Test clients) are configured with:
-- `addopts = --basetemp=.state/pytest_tmp` — temp dirs stay inside each project, avoiding OS temp ACL issues on restricted Windows machines
-- `tmp_path_retention_policy = all` — pytest never attempts to delete old session temp dirs (guards against `PermissionError` on locked artifacts from previous runs)
-- Each `run_all_tests.py` sets `TMP`, `TEMP`, `TMPDIR`, and `PYTEST_DEBUG_TEMPROOT` to project-local `.state/` paths for subprocess consistency
+Console and Test clients are configured with:
+- `addopts = "-v --basetemp=tmp/pytest"` — temp dirs stay inside each project under `tmp/pytest/`, avoiding OS temp ACL issues on restricted Windows machines
+- `tmp_path_retention_policy = "failed"` — only failing test artifacts are retained; passing test temps are cleaned automatically by pytest
 
-**Console Client and Web Client additionally use `pyfakefs`** for all filesystem-touching unit tests (`test_setup_client.py` and `test_setup_project.py` respectively). The `fs` fixture virtualizes `pathlib`, `os`, `shutil`, and `zipfile` calls in-process, so those tests write no real files to disk. This eliminates the root cause of Windows ACL locks from tests that simulate virtual environment layouts (`venv/Scripts/python.exe`). Works identically on Windows, Linux, and macOS.
+Web client is configured with:
+- `addopts = "-v -p no:cacheprovider"` — disables pytest cacheprovider to avoid `pytest-cache-files-*` ACL churn on hardened Windows machines
+- `tmp_path_retention_policy = "failed"`
+- `local_temp_dir` fixture writes to `.state/tmp/test-fixtures/{uuid}` with explicit `yield`/`finally` cleanup
 
-`tests/fixtures/.gitkeep` is committed in each project — the directory always exists on a fresh clone.
+**Console Client and Web Client additionally use `pyfakefs`** for all filesystem-touching unit tests (`test_setup_client.py` and `test_setup_project.py` respectively). The `fs` fixture virtualizes `pathlib`, `os`, `shutil`, and `zipfile` calls in-process, so those tests write no real files to disk. This eliminates the root cause of Windows ACL locks from tests that simulate virtual environment layouts (`.venv/Scripts/python.exe`). Works identically on Windows, Linux, and macOS.
+
+The `tests/fixtures/` directory is created at runtime by `conftest.py` (`pytest_configure`) — no `.gitkeep` needed.
 
 ### Manual — git-native cleanup (when needed)
 ```bash
@@ -121,10 +125,12 @@ UA-for-Industrial-Joining-Technologies/
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md`
 
 ### IJT CSharp Client (`OPC_UA_Clients/Release2/IJT_CSharp_Client/`)
-- **Stack**: C# .NET 10+, OPC Foundation UA SDK
+- **Stack**: C# .NET 10+, OPC Foundation UA SDK, xUnit, Moq, coverlet
 - **Purpose**: C# reference OPC UA IJT client — asset mgmt, result mgmt, event subscriptions
+- **Test baseline**: 413 unit tests pass · **93% line coverage / 81% branch coverage**
 - **One test command**: `python run_all_tests.py` (dotnet build + test + NuGet CVE scan)
 - **Live tests**: skipped unless `OPCUA_SERVER_URL` is set or `OPCUA_SIMULATOR_EXE` points to server binary
+- **Details**: read `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md`
 
 ### IJT Node Client (`OPC_UA_Clients/Release1/IJT_Node_Client/`)
 - **Stack**: Node.js 24+, node-opcua, Socket.io, Vitest
@@ -141,7 +147,7 @@ UA-for-Industrial-Joining-Technologies/
 - **Start (Windows)**: run `opcua_ijt_demo_application.exe` as Administrator
 - **Start (Linux)**: `chmod +x opcua_ijt_demo_application && ./opcua_ijt_demo_application`
 - **Start (Docker)**: `docker compose up` from `OPC_UA_Servers/Release2/`
-- **Smoke tests**: `python OPC_UA_Servers/Release2/tests/smoke_test.py` — 10 checks, fails fast if asyncua missing
+- **Smoke tests**: `python OPC_UA_Servers/Release2/tests/smoke_test.py` — 10 checks, fails fast if asyncua missing; pass `--junitxml PATH` to emit JUnit XML for CI reporting
 - **Key simulation methods** (all require boolean `IsSimulated` argument):
   - `SimulateResults` — single tightening result
   - `SimulateBulkResults` — multiple results, sent one by one in detached thread
@@ -171,7 +177,7 @@ UA-for-Industrial-Joining-Technologies/
 | `test-client` | pytest collect-only (import check), Bandit, Ruff, mypy |
 | `csharp-client` | dotnet build + test (`--blame-hang 60s`) + NuGet CVE scan; phase1 unit/static (`IJT_PHASE1_ONLY=true`) + phase2 live tests against server (port 40451) |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
-| `report` |Combined markdown summary → Actions Summary tab |
+| `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |
 
 Runtime: ~5–7 minutes. Python 3.14, Node.js 24, .NET 10 everywhere.
 Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `setup-dotnet@v5`, `upload-artifact@v7`, `download-artifact@v8`

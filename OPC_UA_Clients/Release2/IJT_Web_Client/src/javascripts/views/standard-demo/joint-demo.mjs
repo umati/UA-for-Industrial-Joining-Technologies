@@ -196,7 +196,7 @@ export default class JointDemo extends BasicScreen {
     Bolt geometry: Hex
     Bolt Material: 304 Stainless steel
     Bolt grade: 4.8 / A2-70
-     
+
     Associated program name: Program_4_Steps
     Associated program identity: 153X-FFTS-LJ67-99MM
     `
@@ -220,7 +220,7 @@ export default class JointDemo extends BasicScreen {
     Nut geometry: Hex
     Bolt Material: 304 Stainless steel
     Bolt grade: 4.8 / A2-70
-     
+
     Associated program name: Program_One_Step
     Associated program identity: 66JA-UUOJ-FFTS-8MMM
     `

@@ -54,13 +54,10 @@ async def test_cu_joining_process_required_methods_present(joining_process_manag
         assert node is not None, f"Required method '{method_name}' not found in JoiningProcessManagement (ns={ns_ijt})"
     # EnableAsset is on AssetManagement MethodSet
     method_set = await find_child_by_browse_name(asset_management, BN.METHOD_SET, ns_ijt)
-    assert method_set is not None, (
-        "§11.1 CU-JP-002: AssetManagement MethodSet is required but not found on this server"
-    )
+    assert method_set is not None, "§11.1 CU-JP-002: AssetManagement MethodSet is required but not found on this server"
     enable_node = await find_child_by_browse_name(method_set, BN.ENABLE_ASSET, ns_ijt)
     assert enable_node is not None, (
-        "§11.1 CU-JP-002: EnableAsset is a required method in AssetManagement MethodSet "
-        "but not found on this server"
+        "§11.1 CU-JP-002: EnableAsset is a required method in AssetManagement MethodSet but not found on this server"
     )
 
 
@@ -77,9 +74,7 @@ async def test_cu_joining_process_enable_disable_asset_callable(opcua_client, ns
     if am is None:
         pytest.skip("AssetManagement not found")
     method_set = await find_child_by_browse_name(am, BN.METHOD_SET, ns_ijt)
-    assert method_set is not None, (
-        "§11.1 CU-JP-003: AssetManagement MethodSet is required but not found on this server"
-    )
+    assert method_set is not None, "§11.1 CU-JP-003: AssetManagement MethodSet is required but not found on this server"
     enable_node = await find_child_by_browse_name(method_set, BN.ENABLE_ASSET, ns_ijt)
     assert enable_node is not None, (
         f"§11.1 CU-JP-003: '{BN.ENABLE_ASSET}' is a required method but not found on this server"

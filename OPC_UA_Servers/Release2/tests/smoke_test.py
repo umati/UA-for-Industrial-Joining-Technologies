@@ -26,6 +26,7 @@ import os
 import socket
 import sys
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,7 @@ def _is_port_reachable_fallback(host: str, port: int, timeout: float = 2.0) -> b
     except OSError:
         return False
 
+
 _OPC_SESSION_TIMEOUT_S = 30.0
 
 # asyncua is a required dependency — all asyncua symbols are imported here so
@@ -49,6 +51,7 @@ _OPC_SESSION_TIMEOUT_S = 30.0
 try:
     from asyncua import Client as _Client
     from asyncua import ua as _ua
+
     _OpcUaError = _ua.UaError
 except ImportError as exc:
     raise ImportError(
@@ -91,7 +94,9 @@ def _parse_endpoint(endpoint: str) -> tuple[str, int]:
     """
     expected_scheme = "opc.tcp://"
     if not endpoint.startswith(expected_scheme):
-        raise ValueError(f"Invalid OPC UA endpoint '{endpoint}': expected scheme '{expected_scheme}'.")
+        raise ValueError(
+            f"Invalid OPC UA endpoint '{endpoint}': expected scheme '{expected_scheme}'."
+        )
 
     without_scheme = endpoint[len(expected_scheme) :]
     host, sep, port_str = without_scheme.partition(":")
@@ -173,9 +178,7 @@ async def check_namespaces(client: Any) -> tuple[str, str]:
 async def check_tightening_system(client: Any) -> tuple[str, str]:
     try:
         ns1 = await client.get_namespace_index(_NS_IJT_SERVER)
-        node = await client.nodes.root.get_child(
-            ["0:Objects", f"{ns1}:TighteningSystem"]
-        )
+        node = await client.nodes.root.get_child(["0:Objects", f"{ns1}:TighteningSystem"])
         bn = await node.read_browse_name()
         return _STATUS_PASS, f"TighteningSystem found ({bn})"
     except (_OpcUaError, ValueError, AttributeError) as exc:
@@ -246,10 +249,45 @@ async def check_joint_management(client: Any) -> tuple[str, str]:
         return _STATUS_FAIL, str(exc)
 
 
+# -- JUnit XML output ----------------------------------------------------------
+
+
+def _write_junit(checks: list[tuple[str, str, str]], path: str) -> None:
+    """Write smoke check results as JUnit XML so CI can show a test count."""
+    total = len(checks)
+    failures = sum(1 for s, _, _ in checks if s == _STATUS_FAIL)
+    skipped = sum(1 for s, _, _ in checks if s == _STATUS_SKIP)
+
+    suite = ET.Element(
+        "testsuite",
+        name="OPC_UA_Server_Smoke",
+        tests=str(total),
+        failures=str(failures),
+        skipped=str(skipped),
+    )
+    for status, name, detail in checks:
+        tc = ET.SubElement(suite, "testcase", name=name, classname="smoke")
+        if status == _STATUS_SKIP:
+            ET.SubElement(tc, "skipped", message=detail)
+        elif status == _STATUS_FAIL:
+            ET.SubElement(tc, "failure", message=detail)
+
+    root = ET.Element("testsuites", tests=str(total), failures=str(failures))
+    root.append(suite)
+
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    ET.indent(root, space="  ")
+    out.write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding="unicode"),
+        encoding="utf-8",
+    )
+
+
 # -- Main runner ---------------------------------------------------------------
 
 
-async def _run(endpoint: str, wait_s: float) -> int:
+async def _run(endpoint: str, wait_s: float) -> tuple[int, list[tuple[str, str, str]]]:
     host, port = _parse_endpoint(endpoint)
     checks: list[tuple[str, str, str]] = []  # (status, name, detail)
     failures = 0
@@ -265,7 +303,7 @@ async def _run(endpoint: str, wait_s: float) -> int:
     if status != _STATUS_PASS:
         print(_result_line(status, "TCP port reachable", detail))
         print("\n[ABORT] Server not reachable — skipping OPC UA checks.")
-        return 2
+        return 2, checks
 
     # 2–10: OPC UA layer checks
     client = _Client(endpoint, timeout=30)
@@ -327,13 +365,11 @@ async def _run(endpoint: str, wait_s: float) -> int:
     print(summary)
     print()
 
-    return 0 if failures == 0 else 1
+    return 0 if failures == 0 else 1, checks
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Smoke-test the OPC UA IJT Server Simulator."
-    )
+    parser = argparse.ArgumentParser(description="Smoke-test the OPC UA IJT Server Simulator.")
     # OPCUA_SERVER_URL env var acts as default — consistent with all other clients.
     # CLI --endpoint overrides it when specified explicitly.
     _env_endpoint = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
@@ -341,8 +377,7 @@ def main() -> None:
         "--endpoint",
         default=_env_endpoint,
         help=(
-            "OPC UA endpoint URL "
-            "(default: OPCUA_SERVER_URL env var, or opc.tcp://localhost:40451)"
+            "OPC UA endpoint URL (default: OPCUA_SERVER_URL env var, or opc.tcp://localhost:40451)"
         ),
     )
     parser.add_argument(
@@ -355,8 +390,18 @@ def main() -> None:
             f"Does not affect the OPC UA session timeout (fixed at {_OPC_SESSION_TIMEOUT_S:.0f} s)."
         ),
     )
+    parser.add_argument(
+        "--junitxml",
+        default=None,
+        dest="junitxml",
+        metavar="PATH",
+        help="Write smoke check results as JUnit XML to PATH (for CI test reporting).",
+    )
     args = parser.parse_args()
-    sys.exit(asyncio.run(_run(args.endpoint, args.tcp_timeout)))
+    exit_code, checks = asyncio.run(_run(args.endpoint, args.tcp_timeout))
+    if args.junitxml:
+        _write_junit(checks, args.junitxml)
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

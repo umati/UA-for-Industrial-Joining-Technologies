@@ -41,7 +41,7 @@ IJT_Console_Client/
 ├── ijt_logger.py            # Logging setup (ijt_log)
 ├── utils.py                 # nodeid_to_str, localizedtext_to_str, log_joining_system_event
 ├── requirements.txt         # asyncua>=1.2b2, pytz, aiofiles, orjson, cryptography, pyOpenSSL
-├── pytest.ini               # asyncio_mode=auto
+├── pyproject.toml           # asyncio_mode=auto (+ ruff, coverage, bandit, mypy)
 ├── docs/
 │   ├── SKILLS.md             # ← this file — AI context for all tools
 │   └── methods-usage.md      # IJT method invocation quick reference
@@ -130,7 +130,7 @@ python3 setup_client.py --url="opc.tcp://<ip>:<port>"
   - Dynamically call `GetJointList` to discover real IDs before calling `GetJoint`/`SelectJoint`.
 
 ### Serialization (`serialize_data.py`)
-- Shared serialization logic with IJT Web Client (`Python/serialize_data.py`).
+- Shared serialization logic with IJT Web Client (`src/python/serialize_data.py`).
 - Converts `ua.ExtensionObject`, `ua.NodeId`, `ua.LocalizedText`, `datetime` → JSON-safe types.
 
 ---
@@ -138,14 +138,12 @@ python3 setup_client.py --url="opc.tcp://<ip>:<port>"
 ## asyncua Known Issues (Python 3.14)
 
 ### `UaClient.call()` hardcoded 1-second timeout
-Monkey-patch in tests:
+Centralized patch in `IJT_Web_Client/tests/python/_asyncua_compat.py` (version-gated, auto-expires when asyncua ≥ 1.2.0 stable):
 ```python
-import asyncua.client.ua_client as _ua_client_mod
-original_send = _ua_client_mod.UaClient._send_request
-async def _patched_send(self, request, timeout=None, message_type=None):
-    return await original_send(self, request, self._timeout, message_type)
-_ua_client_mod.UaClient._send_request = _patched_send
+from tests.python._asyncua_compat import apply_send_request_timeout_patch
+apply_send_request_timeout_patch()
 ```
+The patch wraps `UaClient._send_request` to use `self._timeout` instead of the 1-second hard-coded fallback. A `DeprecationWarning` is emitted automatically when asyncua ships 1.2.0 stable, signalling the patch can be removed.
 
 ### `BadTooManyOperations` on bulk simulation
 Retry 5× with 1s sleep before raising.
@@ -162,10 +160,10 @@ sub = await client.create_subscription(params, handler)
 
 | Concern | Console Client | Web Client |
 |---------|---------------|------------|
-| Event subscription | `event_handler.py` | `Python/event_handler.py` |
-| Result processing | `result_event_handler.py` | `Python/result_event_handler.py` |
-| Serialization | `serialize_data.py` | `Python/serialize_data.py` |
-| Method calls | `method_caller.py` | `Python/ijt_interface.py` |
+| Event subscription | `event_handler.py` | `src/python/event_handler.py` |
+| Result processing | `result_event_handler.py` | `src/python/result_event_handler.py` |
+| Serialization | `serialize_data.py` | `src/python/serialize_data.py` |
+| Method calls | `method_caller.py` | `src/python/ijt_interface.py` |
 | Shared contract tests | `tests/test_serialize_data.py` | `tests/test_shared_client_contract.py` |
 
 Both clients share the same OPC UA IJT method NodeId patterns and event subscription approach. When fixing a bug in one, check if the same fix is needed in the other.

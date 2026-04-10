@@ -4,7 +4,7 @@ Session fixtures are created once per test run and shared across all tests that
 perform read-only address-space discovery.
 Function fixtures (opcua_client, subscription_client) create fresh connections
 per test to provide state isolation for method calls and event subscriptions.
-All async fixtures require pytest-asyncio with asyncio_mode = "auto" (pytest.ini).
+All async fixtures require pytest-asyncio with asyncio_mode = "auto" (pyproject.toml).
 Design rules enforced here:
   - JoiningSystem is discovered by HasTypeDefinition, never by browse name.
   - Namespace indices are resolved once and cached in ns_indices dict.
@@ -28,7 +28,7 @@ def pytest_configure(config):
     of the working directory from which pytest is invoked (CI, repo root, etc.).
     """
     _project_root = Path(__file__).resolve().parent
-    _basetemp = _project_root / ".state" / "pytest_tmp"
+    _basetemp = _project_root / "tmp" / "pytest"
     _basetemp.mkdir(parents=True, exist_ok=True)
     config.option.basetemp = str(_basetemp)
     _project_root.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)

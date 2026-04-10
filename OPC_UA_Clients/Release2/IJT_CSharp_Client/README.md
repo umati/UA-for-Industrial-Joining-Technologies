@@ -51,10 +51,13 @@ Types/           C# type libraries from IJT NodeSet files
 The `Types/` directory contains auto-generated C# libraries for all IJT OPC UA
 data types. They can be used independently of this client in any .NET project.
 
-They depend on `OPCFoundation.NetStandard.Opc.Ua.Core >= 1.5.0`. When using a
-third-party OPC UA SDK (e.g. Softing), add an explicit NuGet reference to the
-OPC Foundation Core package to resolve compiler error CS0012:
+**Standard build** (net8.0, net9.0, net10.0 — OPC Foundation 1.5.378.134):
+```
+dotnet build Types\UAModel.IJTTightening
+```
 
-```xml
-<PackageReference Include="OPCFoundation.NetStandard.Opc.Ua" Version="[1.5.0,)" />
+**Softing SDK compatible build** (net48, net6.0, net8.0, net9.0, netstandard2.1 — OPC Foundation 1.5.376.235):
+```
+dotnet restore Types\UAModel.IJTTightening -p:OpcUaClientOnly=true --configfile Types\nuget.config
+dotnet build   Types\UAModel.IJTTightening -p:OpcUaClientOnly=true --no-restore
 ```

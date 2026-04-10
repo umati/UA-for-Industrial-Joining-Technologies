@@ -1,10 +1,44 @@
 [project]
 requires-python = ">=3.14"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
+addopts = "-v --basetemp=tmp/pytest"
+tmp_path_retention_policy = "failed"
+norecursedirs = ["live", "fixtures", "pytest-cache-files-*"]
+markers = [
+    "integration: tests requiring a running OPC UA server",
+    "live: tests requiring a live OPC UA server connection",
+]
+
 [tool.bandit]
-exclude_dirs = ["venv", ".venv", ".venv-wsl", ".venv-wsl_backup", "tests", "__pycache__", ".git"]
+exclude_dirs = [".venv", ".venv_test", ".venv_wsl", ".venv_wsl_backup", "tests", "__pycache__", ".git"]
+
+[tool.vulture]
+# Vulture finds dead code in source. Tests are excluded because pytest fixture
+# injection makes parameter names appear "unused" — they are not; pytest wires
+# them by name. Scanning tests adds only false positives with no value.
+exclude = ["tests/", ".venv/", ".venv_test/", "tmp/", "test-results/", "logs/"]
+ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
+
+[tool.interrogate]
+# Calibrated floor based on real in-repo coverage after excluding venv/cache
+# artefacts. Keep tests included for an honest signal and ratchet upward over time.
+fail-under = 25
+exclude = [".venv/*", ".venv_test/*", "tmp/*", "test-results/*", ".state/*"]
+ignore-init-method = true
+ignore-magic = true
+ignore-semiprivate = true
+ignore-private = true
+verbose = 0
 
 [tool.ruff]
+# Intentionally overrides root pyproject.toml: line-length=120 (matches existing code style)
+# and select=["E","F","I"] (minimal rules; security/complexity rules not enforced here).
+target-version = "py314"
 line-length = 120
 
 [tool.ruff.lint]
@@ -18,7 +52,7 @@ omit = [
     "setup_client.py",
     "tests/live/*",
     ".venv/*",
-    "venv/*",
+    ".venv_test/*",
 ]
 
 [tool.coverage.report]
@@ -34,3 +68,46 @@ exclude_lines = [
 [tool.mypy]
 ignore_missing_imports = true
 explicit_package_bases = true
+# Exclude pyfakefs/pytest bookkeeping dirs that may be locked on Windows.
+exclude = ["pytest-cache-files-.*"]
+
+[tool.pylint.main]
+# asyncua members are generated at runtime from OPC UA NodeSet XML;
+# orjson is a C-extension whose .dumps member is not visible to pylint.
+ignore-paths = ["^\\.venv.*", "^\\.venv_test.*", "^\\.venv_wsl.*", "^pytest-cache-files-.*"]
+
+[tool.pylint.messages-control]
+disable = [
+    "no-member",               # asyncua.ua.* and orjson.dumps: C-extension / runtime-generated
+    "broad-exception-caught",  # OPC UA can raise many exception types; broad catch is intentional
+    "logging-fstring-interpolation",  # f-strings in log calls chosen for readability
+    "logging-not-lazy",        # see above
+    "invalid-name",            # OPC UA / asyncua use PascalCase; legacy camelCase mirrors API
+    "wrong-import-order",      # minor style; not a correctness issue
+    "wrong-import-position",   # setup_client.py sets os.environ between imports intentionally
+    "import-outside-toplevel", # intentional where used
+    "disallowed-name",         # test scaffolding uses short names
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "line-too-long",           # subprocess command strings; enforced by ruff line-length instead
+    "duplicate-code",          # tracked for future refactoring
+    "too-many-instance-attributes",  # OPC UA client state requires multiple fields
+    "too-few-public-methods",  # dataclasses / handler classes
+    "too-many-return-statements",
+    "too-many-branches",
+    "too-many-locals",
+    "too-many-statements",
+    "unused-argument",         # pytest fixtures are injected by name; can't use _
+    "protected-access",        # tests legitimately access private methods
+    "subprocess-run-check",    # test helpers use check= explicitly where needed
+    "consider-using-with",     # subprocess management is intentionally manual
+    "too-many-arguments",
+    "too-many-positional-arguments",
+]
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.design]
+max-args = 10

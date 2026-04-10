@@ -1,0 +1,29 @@
+# Root pyproject.toml — monorepo-level tool configuration.
+# Each sub-project (Console, Web, Test clients) has its own pyproject.toml
+# for project-specific settings. This file holds repo-root concerns only.
+
+[tool.pytest.ini_options]
+# Guard: prevents accidental bare `pytest` runs from the repo root.
+# All tests must be run via each sub-project's own run_all_tests.py.
+collect_ignore_glob = ["*"]
+
+[tool.ruff]
+# Repo-wide ruff defaults; sub-projects may override in their own pyproject.toml.
+target-version = "py314"
+line-length = 100
+# Exclude auto-generated files (UA-ModelCompiler output) — never hand-edit these.
+exclude = [
+    "OPC_UA_Clients/Release2/IJT_CSharp_Client/Types/",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "S", "B", "C4", "SIM"]
+ignore = ["S101"]  # allow assert in tests
+
+[tool.ruff.lint.per-file-ignores]
+# Test runners and infrastructure scripts call subprocess with trusted,
+# hard-coded args — S603/S314/S607 are false positives here.
+"**/run_all_tests.py" = ["S603", "S314", "S607"]
+"**/tests/**" = ["S603", "S314"]
+# _STATUS_PASS is a display string, not a credential — S105 is a false positive.
+"**/smoke_test.py" = ["S105"]

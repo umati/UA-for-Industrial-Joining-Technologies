@@ -45,7 +45,7 @@ public class IjtFileLoggerTests
     {
         Assert.Contains("logs", IjtFileLogger.ResultLogPath);
         Assert.Contains("logs", IjtFileLogger.EventLogPath);
-        Assert.Contains("result_logs", IjtFileLogger.ResultLogPath);
-        Assert.Contains("event_logs", IjtFileLogger.EventLogPath);
+        Assert.Contains("results", IjtFileLogger.ResultLogPath);
+        Assert.Contains("events", IjtFileLogger.EventLogPath);
     }
 }

@@ -1,10 +1,56 @@
 [project]
 requires-python = ">=3.14"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
+norecursedirs = [".*", "node_modules", "__pycache__", "live", "tmp", "pytest-cache-files-*"]
+timeout = 30
+pythonpath = ["src"]
+addopts = "-v -p no:cacheprovider"
+tmp_path_retention_policy = "failed"
+markers = [
+    "core: core regression tests for IJT client behavior",
+    "integration: tests requiring running OPC UA + WebSocket services",
+    "live: direct OPC UA server tests (requires opc.tcp://localhost:40451)",
+    "live_ws: WebSocket backend tests (requires ws://localhost:8001)",
+    "legacy: old developer exploration tests — not run in CI",
+]
+
 [tool.bandit]
-exclude_dirs = ["venv", ".venv", ".venv-wsl", ".venv-wsl_backup", "tests", "node_modules", "__pycache__", ".git", ".state"]
+exclude_dirs = [".venv", ".venv_test", ".venv_wsl", ".venv_wsl_backup", "tests", "node_modules", "__pycache__", ".git", ".state"]
+
+[tool.vulture]
+# Vulture finds dead code in source. Tests are excluded because pytest fixture
+# injection makes parameter names appear "unused" — they are not; pytest wires
+# them by name. Scanning tests adds only false positives with no value.
+exclude = ["tests/", ".venv/", ".venv_test/", "tmp/", "test-results/", "logs/"]
+ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
+
+[tool.interrogate]
+# Calibrated floor based on real in-repo coverage after excluding venv/cache
+# artefacts. Keep tests included for an honest signal and ratchet upward over time.
+fail-under = 42
+exclude = [
+    "node_modules/*",
+    ".venv/*",
+    ".venv_test/*",
+    "tmp/*",
+    "test-results/*",
+    ".state/*",
+]
+ignore-init-method = true
+ignore-magic = true
+ignore-semiprivate = true
+ignore-private = true
+verbose = 0
 
 [tool.ruff]
+# Intentionally overrides root pyproject.toml: line-length=120 (matches existing code style)
+# and select=["E","F","I"] (minimal rules; security/complexity rules not enforced here).
+target-version = "py314"
 line-length = 120
 
 [tool.ruff.lint]
@@ -27,7 +73,7 @@ omit = [
     "tests/python/integration/*",
     "tests/shared_opcua/*",
     ".venv/*",
-    "venv/*",
+    ".venv_test/*",
 ]
 
 [tool.coverage.report]
@@ -43,3 +89,39 @@ exclude_lines = [
 [tool.mypy]
 ignore_missing_imports = true
 explicit_package_bases = true
+# Exclude pyfakefs/pytest bookkeeping dirs that may be locked on Windows.
+exclude = [
+    "pytest-cache-files-.*",
+    "tests[\\\\/]fixtures[\\\\/]tmp[\\\\/].*",
+    "\\.state[\\\\/]tmp[\\\\/].*",
+]
+
+[tool.pylint.main]
+# Exclude pyfakefs/pytest bookkeeping dirs that may be locked on Windows.
+ignore-paths = ["^pytest-cache-files-.*", "^\\.venv.*", "^\\.venv_test.*"]
+
+[tool.pylint.messages-control]
+disable = [
+    "import-error",            # false positive: python.xxx imports resolve at runtime via sys.path
+    "no-member",               # asyncua dynamically generates ua.* types from OPC UA NodeSet XML
+    "broad-exception-caught",  # OPC UA code must handle broad exceptions; narrowing would be fragile
+    "logging-fstring-interpolation",  # f-strings chosen for readability and consistency
+    "logging-not-lazy",        # see above
+    "invalid-name",            # OPC UA uses PascalCase for event fields; legacy camelCase mirrors API
+    "wrong-import-order",      # minor style; not a correctness issue
+    "import-outside-toplevel", # serialize_data.py imports inside functions to avoid circular imports
+    "duplicate-code",          # EventHandler/ResultEventHandler share logic; tracked for refactor
+    "too-many-instance-attributes",  # Connection and EventHandler manage multiple OPC UA state fields
+    "too-few-public-methods",  # short dataclasses and single-responsibility handler classes
+    "too-many-return-statements",
+    "too-many-branches",
+    "too-many-locals",
+    "too-many-statements",     # methodcall() and utils functions are complex by protocol necessity
+    "line-too-long",           # enforced by ruff line-length instead
+]
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.design]
+max-args = 10

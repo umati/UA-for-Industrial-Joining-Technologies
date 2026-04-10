@@ -6,7 +6,8 @@ UA-for-Industrial-Joining-Technologies repository.
 Architecture: Two-phase execution
   Phase 1 (PARALLEL)   -- static analysis + unit tests, no OPC UA server required.
                           Delegates to each sub-project's own run_all_tests.py --phase1,
-                          ensuring local runs cover CI checks or stricter (e.g. testclient runs full phase1 locally vs collect-only in ci-required):
+                          ensuring local runs cover CI checks or stricter (e.g. testclient
+                          runs full phase1 locally vs collect-only in ci-required):
                             - ruff, mypy, bandit (Python projects)
                             - ESLint, npm audit (Node/JS projects)
                             - dotnet format, NuGet vulnerability scan (C# project)
@@ -31,9 +32,11 @@ Environment variables:
   OPCUA_SERVER_URL      Override server URL (default: opc.tcp://localhost:40451)
   IJT_SUITE_TIMEOUT     Per-suite timeout in seconds (default: 600)
 """
+
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import os
@@ -46,16 +49,17 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Colour / ANSI helpers
 # ---------------------------------------------------------------------------
 
+
 def _enable_ansi_windows() -> bool:
     """Enable virtual-terminal processing on Windows 10+ consoles."""
     try:
         import ctypes
+
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
         handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
         mode = ctypes.c_ulong()
@@ -78,12 +82,13 @@ def _c(ansi: str, text: str) -> str:
 # Logging setup -- single stream to stdout, optional colour
 # ---------------------------------------------------------------------------
 
+
 class _ColourFormatter(logging.Formatter):
     _CODES = {
-        logging.DEBUG:    "\033[2m",
-        logging.INFO:     "",
-        logging.WARNING:  "\033[93m",
-        logging.ERROR:    "\033[91m",
+        logging.DEBUG: "\033[2m",
+        logging.INFO: "",
+        logging.WARNING: "\033[93m",
+        logging.ERROR: "\033[91m",
         logging.CRITICAL: "\033[91m\033[1m",
     }
     _RESET = "\033[0m"
@@ -121,6 +126,7 @@ log = logging.getLogger("run_all_tests")
 # Banner / result helpers
 # ---------------------------------------------------------------------------
 
+
 def _banner(title: str) -> None:
     width = 64
     bar = "\u2550" * width
@@ -135,8 +141,7 @@ def _banner(title: str) -> None:
     sys.stdout.flush()
 
 
-def _result_line(ok: bool, skipped: bool, name: str, duration: float,
-                 note: str = "") -> None:
+def _result_line(ok: bool, skipped: bool, name: str, duration: float, note: str = "") -> None:
     if skipped:
         icon, colour, status = "\u25cb", "\033[93m", " (skipped)"
     elif ok:
@@ -153,21 +158,28 @@ def _result_line(ok: bool, skipped: bool, name: str, duration: float,
 # Key paths
 # ---------------------------------------------------------------------------
 
-REPO_ROOT       = Path(__file__).resolve().parent
-ROOT            = REPO_ROOT  # alias used by GHA validation helpers
-SERVER_DIR      = REPO_ROOT / "OPC_UA_Servers" / "Release2"
-_NATIVE_BINARY_WIN   = SERVER_DIR / "OPC_UA_IJT_Server_Simulator"        / "opcua_ijt_demo_application.exe"
-_NATIVE_BINARY_LINUX = SERVER_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
-CSHARP_DIR      = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_CSharp_Client"
-CONSOLE_DIR     = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Console_Client"
+REPO_ROOT = Path(__file__).resolve().parent
+ROOT = REPO_ROOT  # alias used by GHA validation helpers
+SERVER_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2"
+_NATIVE_BINARY_WIN = SERVER_DIR / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe"
+_NATIVE_BINARY_LINUX = (
+    SERVER_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
+)
+CSHARP_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_CSharp_Client"
+CONSOLE_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Console_Client"
 TEST_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Test_Client"
-WEB_CLIENT_DIR  = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client"
+WEB_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client"
 NODE_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release1" / "IJT_Node_Client"
-SMOKE_TEST      = SERVER_DIR / "tests" / "smoke_test.py"
-OPCUA_PORT      = 40451
+SMOKE_TEST = SERVER_DIR / "tests" / "smoke_test.py"
+
+# OPC UA server port — all sub-runners receive OPCUA_SERVER_URL pointing here.
+# Sub-runners may probe additional ports (Console: 40461, Test: 40462) as
+# convenience defaults for standalone use, but always fall back to this port.
+# Web internal client port: 40463. Node: no OPC UA server needed.
+OPCUA_PORT = 40451
 
 IS_WINDOWS = sys.platform == "win32"
-IS_CI      = bool(os.getenv("CI"))
+IS_CI = bool(os.getenv("CI"))
 
 SUITE_TIMEOUT = int(os.getenv("IJT_SUITE_TIMEOUT", "600"))  # 10 min default
 
@@ -175,27 +187,30 @@ SUITE_TIMEOUT = int(os.getenv("IJT_SUITE_TIMEOUT", "600"))  # 10 min default
 # Suite result
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SuiteResult:
     name: str
     ok: bool
     duration: float = 0.0
     skipped: bool = False
-    output: str = ""   # captured stdout+stderr; printed atomically after run
+    output: str = ""  # captured stdout+stderr; printed atomically after run
     notes: list[str] = field(default_factory=list)
 
 
 @dataclass
 class StepResult:
     """Lightweight result for root-level pre-flight checks (GHA validation, etc.)."""
+
     name: str
-    status: str   # PASS | FAIL | SKIP | WARN
+    status: str  # PASS | FAIL | SKIP | WARN
     detail: str = ""
 
 
 # ---------------------------------------------------------------------------
 # Tool availability
 # ---------------------------------------------------------------------------
+
 
 def _check_tool(cmd: list[str], name: str) -> bool:
     """Return True if the tool runs successfully; warn (not error) if missing."""
@@ -207,13 +222,16 @@ def _check_tool(cmd: list[str], name: str) -> bool:
             timeout=10,
         )
         return r.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        log.warning("Tool unavailable: %s (%s) -- dependent suites will fail naturally.",
-                    name, " ".join(cmd))
+    except FileNotFoundError, subprocess.TimeoutExpired, OSError:
+        log.warning(
+            "Tool unavailable: %s (%s) -- dependent suites will fail naturally.",
+            name,
+            " ".join(cmd),
+        )
         return False
 
 
-def _find_cmd(names: list[str]) -> Optional[str]:
+def _find_cmd(names: list[str]) -> str | None:
     for name in names:
         found = shutil.which(name)
         if found:
@@ -228,6 +246,7 @@ def _current_python() -> str:
 # ---------------------------------------------------------------------------
 # Subprocess -- capture stdout+stderr, process-tree kill on timeout
 # ---------------------------------------------------------------------------
+
 
 def _kill_proc_tree(pid: int) -> None:
     """Kill a process and all its descendants.
@@ -244,10 +263,9 @@ def _kill_proc_tree(pid: int) -> None:
         )
     else:
         import signal
-        try:
+
+        with contextlib.suppress(ProcessLookupError):
             os.killpg(os.getpgid(pid), signal.SIGKILL)
-        except ProcessLookupError:
-            pass
 
 
 def _run_captured(
@@ -255,7 +273,7 @@ def _run_captured(
     *,
     cwd: Path,
     timeout: int = SUITE_TIMEOUT,
-    env: Optional[dict] = None,
+    env: dict | None = None,
     label: str = "",
 ) -> tuple[int, str]:
     """
@@ -329,18 +347,23 @@ def _emit_suite_output(result: SuiteResult) -> None:
         sys.stdout.write(result.output)
         if not result.output.endswith("\n"):
             sys.stdout.write("\n")
-    _result_line(result.ok, result.skipped, result.name, result.duration,
-                 note=" | ".join(result.notes) if result.notes else "")
+    _result_line(
+        result.ok,
+        result.skipped,
+        result.name,
+        result.duration,
+        note=" | ".join(result.notes) if result.notes else "",
+    )
     sys.stdout.flush()
 
 
 def _delegate_to_runner(
     name: str,
-    runner_dir: "Path",
-    phase_args: "list[str]",
+    runner_dir: Path,
+    phase_args: list[str],
     label: str,
-    extra_env: "Optional[dict]" = None,
-) -> "SuiteResult":
+    extra_env: dict | None = None,
+) -> SuiteResult:
     """Delegate a test suite to a sub-project's own run_all_tests.py.
 
     The sub-project runner is the single source of truth for what that
@@ -373,11 +396,12 @@ def _delegate_to_runner(
         output=out,
     )
 
+
 # ---------------------------------------------------------------------------
 # Docker / server management
 # ---------------------------------------------------------------------------
 
-_native_server_proc: Optional[subprocess.Popen] = None
+_native_server_proc: subprocess.Popen | None = None
 
 
 def _try_native_binary() -> bool:
@@ -417,16 +441,16 @@ def _ensure_docker_running() -> None:
         )
         sys.exit(1)
 
-    try:
+    with contextlib.suppress(Exception):
         r = subprocess.run(
             [docker, "info"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=20,
         )
         if r.returncode == 0:
             log.info("Docker daemon is running.")
             return
-    except Exception:
-        pass
 
     if not IS_WINDOWS:
         log.error("Docker daemon is not running. Please start Docker and retry.")
@@ -434,16 +458,20 @@ def _ensure_docker_running() -> None:
 
     # Windows -- attempt to launch Docker Desktop
     candidates = [
-        Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-        / "Docker" / "Docker" / "Docker Desktop.exe",
-        Path(os.environ.get("LocalAppData", ""))
-        / "Programs" / "Docker" / "Docker" / "Docker Desktop.exe",
+        Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+        / "Docker"
+        / "Docker"
+        / "Docker Desktop.exe",
+        Path(os.environ.get("LOCALAPPDATA", ""))
+        / "Programs"
+        / "Docker"
+        / "Docker"
+        / "Docker Desktop.exe",
     ]
     exe = next((p for p in candidates if p.exists()), None)
     if not exe:
         log.error(
-            "Docker Desktop not found. "
-            "Install from: https://www.docker.com/products/docker-desktop"
+            "Docker Desktop not found. Install from: https://www.docker.com/products/docker-desktop"
         )
         sys.exit(1)
 
@@ -456,16 +484,16 @@ def _ensure_docker_running() -> None:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         time.sleep(3)
-        try:
+        with contextlib.suppress(Exception):
             r = subprocess.run(
                 [docker, "info"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
             )
             if r.returncode == 0:
                 log.info("Docker Desktop started.")
                 return
-        except Exception:
-            pass
 
     log.error("Docker Desktop did not start within 60s.")
     sys.exit(1)
@@ -563,6 +591,7 @@ def _stop_server() -> None:
 # Client venv management
 # ---------------------------------------------------------------------------
 
+
 def _ensure_client_venv(client_dir: Path, outputs: list[str]) -> Path:
     """Ensure *client_dir/.venv* exists and requirements are installed.
 
@@ -576,11 +605,7 @@ def _ensure_client_venv(client_dir: Path, outputs: list[str]) -> Path:
     write-handles after the intermediate process exits (Windows P_OVERLAY).
     """
     venv_dir = client_dir / ".venv"
-    venv_py = (
-        venv_dir / "Scripts" / "python.exe"
-        if IS_WINDOWS
-        else venv_dir / "bin" / "python"
-    )
+    venv_py = venv_dir / "Scripts" / "python.exe" if IS_WINDOWS else venv_dir / "bin" / "python"
 
     if not venv_py.exists():
         log.info("[venv] Creating %s/.venv ...", client_dir.name)
@@ -602,9 +627,15 @@ def _ensure_client_venv(client_dir: Path, outputs: list[str]) -> Path:
         if req_path.exists():
             rc, out = _run_captured(
                 [
-                    str(venv_py), "-m", "pip", "install",
-                    "--quiet", "--disable-pip-version-check", "--pre",
-                    "-r", str(req_path),
+                    str(venv_py),
+                    "-m",
+                    "pip",
+                    "install",
+                    "--quiet",
+                    "--disable-pip-version-check",
+                    "--pre",
+                    "-r",
+                    str(req_path),
                 ],
                 cwd=client_dir,
                 label=f"pip install {req_name} ({client_dir.name})",
@@ -614,7 +645,9 @@ def _ensure_client_venv(client_dir: Path, outputs: list[str]) -> Path:
             if rc != 0:
                 log.error(
                     "[venv] pip install %s failed (exit %d) for %s",
-                    req_name, rc, client_dir.name,
+                    req_name,
+                    rc,
+                    client_dir.name,
                 )
                 raise RuntimeError(
                     f"pip install {req_name} failed with exit {rc} for {client_dir.name}"
@@ -626,6 +659,7 @@ def _ensure_client_venv(client_dir: Path, outputs: list[str]) -> Path:
 # ---------------------------------------------------------------------------
 # Dotnet environment helper
 # ---------------------------------------------------------------------------
+
 
 def _dotnet_env(**extra: str) -> dict:
     """
@@ -671,14 +705,19 @@ _ACTION_MIN_VERSIONS = {
 def _check_actionlint(results_dir: Path) -> StepResult:
     """Validate GitHub Actions workflow syntax with actionlint."""
     if not shutil.which("actionlint"):
-        return StepResult("GHA actionlint", "SKIP",
-                         "Install: go install github.com/rhysd/actionlint/cmd/actionlint@latest")
+        return StepResult(
+            "GHA actionlint",
+            "SKIP",
+            "Install: go install github.com/rhysd/actionlint/cmd/actionlint@latest",
+        )
     workflows = list((ROOT / ".github/workflows").glob("*.yml"))
     if not workflows:
         return StepResult("GHA actionlint", "SKIP", "No workflow files found")
     result = subprocess.run(
         ["actionlint", "-format", "{{json .}}", *[str(w) for w in workflows]],
-        capture_output=True, text=True, check=False
+        capture_output=True,
+        text=True,
+        check=False,
     )
     out_file = results_dir / "actionlint.json"
     out_file.write_text(result.stdout or "[]", encoding="utf-8")
@@ -694,12 +733,13 @@ def _check_actionlint(results_dir: Path) -> StepResult:
 def _check_action_versions() -> StepResult:
     """Detect any GitHub Actions pinned below their known minimum major version."""
     import re
+
     workflows_dir = ROOT / ".github/workflows"
     if not workflows_dir.exists():
         return StepResult("GHA version guard", "SKIP", "No .github/workflows/ directory")
 
     issues = []
-    pattern = re.compile(r'uses:\s+([\w/-]+)@v(\d+)')
+    pattern = re.compile(r"uses:\s+([\w/-]+)@v(\d+)")
 
     for wf_file in sorted(workflows_dir.glob("*.yml")):
         text = wf_file.read_text(encoding="utf-8")
@@ -708,20 +748,17 @@ def _check_action_versions() -> StepResult:
             version = int(version_str)
             min_ver = _ACTION_MIN_VERSIONS.get(action)
             if min_ver and version < min_ver:
-                issues.append(
-                    f"{wf_file.name}: {action}@v{version} "
-                    f"(minimum: v{min_ver})"
-                )
+                issues.append(f"{wf_file.name}: {action}@v{version} (minimum: v{min_ver})")
 
     if issues:
         for issue in issues:
             print(f"  \u26a0  {issue}", flush=True)
-        return StepResult("GHA version guard", "FAIL",
-                         f"{len(issues)} downgraded action(s) detected")
+        return StepResult(
+            "GHA version guard", "FAIL", f"{len(issues)} downgraded action(s) detected"
+        )
 
     total = sum(
-        len(pattern.findall(f.read_text(encoding="utf-8")))
-        for f in workflows_dir.glob("*.yml")
+        len(pattern.findall(f.read_text(encoding="utf-8"))) for f in workflows_dir.glob("*.yml")
     )
     return StepResult("GHA version guard", "PASS", f"{total} action pins verified")
 
@@ -729,12 +766,15 @@ def _check_action_versions() -> StepResult:
 def _check_zizmor(results_dir: Path) -> StepResult:
     """Security audit GitHub Actions workflows with zizmor."""
     if not shutil.which("zizmor"):
-        return StepResult("GHA zizmor (security)", "SKIP",
-                         "Install: cargo install zizmor  OR  pip install zizmor")
+        return StepResult(
+            "GHA zizmor (security)", "SKIP", "Install: cargo install zizmor  OR  pip install zizmor"
+        )
     workflows_dir = ROOT / ".github/workflows"
     result = subprocess.run(
         ["zizmor", "--format", "json", str(workflows_dir)],
-        capture_output=True, text=True, check=False
+        capture_output=True,
+        text=True,
+        check=False,
     )
     out_file = results_dir / "zizmor.json"
     out_file.write_text(result.stdout or "{}", encoding="utf-8")
@@ -745,10 +785,12 @@ def _check_zizmor(results_dir: Path) -> StepResult:
         findings = data.get("findings", [])
         high = [f for f in findings if f.get("severity") in ("high", "critical")]
         if high:
-            return StepResult("GHA zizmor (security)", "FAIL",
-                             f"{len(high)} high/critical finding(s)")
-        return StepResult("GHA zizmor (security)", "PASS",
-                         f"{len(findings)} finding(s), none high/critical")
+            return StepResult(
+                "GHA zizmor (security)", "FAIL", f"{len(high)} high/critical finding(s)"
+            )
+        return StepResult(
+            "GHA zizmor (security)", "PASS", f"{len(findings)} finding(s), none high/critical"
+        )
     except Exception:
         return StepResult("GHA zizmor (security)", "WARN", "Could not parse output")
 
@@ -787,18 +829,21 @@ def _run_gha_checks() -> list[SuiteResult]:
         _print_step_result(sr)
         ok = sr.status in ("PASS", "WARN")
         skipped = sr.status == "SKIP"
-        suite_results.append(SuiteResult(
-            name=sr.name,
-            ok=ok,
-            skipped=skipped,
-            notes=[sr.detail] if sr.detail else [],
-        ))
+        suite_results.append(
+            SuiteResult(
+                name=sr.name,
+                ok=ok,
+                skipped=skipped,
+                notes=[sr.detail] if sr.detail else [],
+            )
+        )
     return suite_results
 
 
 # ---------------------------------------------------------------------------
 # Phase 1 suites -- unit / static (run in parallel, no server)
 # ---------------------------------------------------------------------------
+
 
 def _suite_csharp_unit() -> SuiteResult:
     """C# Client -- Phase 1 (static + unit).  Delegates to sub-project runner.
@@ -866,8 +911,6 @@ def _suite_node_unit() -> SuiteResult:
     )
 
 
-
-
 def _suite_server_static() -> SuiteResult:
     """Server -- Phase 1 (static).  Delegates to server sub-project runner.
 
@@ -880,21 +923,43 @@ def _suite_server_static() -> SuiteResult:
         label="server runner (phase1)",
     )
 
+
 # ---------------------------------------------------------------------------
 # Git-sanity suite -- verify no source file is accidentally gitignored
 # ---------------------------------------------------------------------------
 
 # Extensions that identify source files (not build artefacts or data files).
-_SOURCE_EXTS: frozenset[str] = frozenset({
-    ".py", ".mjs", ".js", ".ts", ".cs", ".csproj", ".sln",
-})
+_SOURCE_EXTS: frozenset[str] = frozenset(
+    {
+        ".py",
+        ".mjs",
+        ".js",
+        ".ts",
+        ".cs",
+        ".csproj",
+        ".sln",
+    }
+)
 
 # Exact directory names that are always build artefacts or runtime caches.
-_SKIP_DIRS: frozenset[str] = frozenset({
-    "node_modules", "__pycache__", "bin", "obj",
-    ".git", "pki", "PKI", ".ruff_cache", ".mypy_cache", "dist",
-    ".pytest_cache", "tmp", "fixtures", "test-results",
-})
+_SKIP_DIRS: frozenset[str] = frozenset(
+    {
+        "node_modules",
+        "__pycache__",
+        "bin",
+        "obj",
+        ".git",
+        "pki",
+        "PKI",
+        ".ruff_cache",
+        ".mypy_cache",
+        "dist",
+        ".pytest_cache",
+        "tmp",
+        "fixtures",
+        "test-results",
+    }
+)
 
 
 def _skip_dir(name: str) -> bool:
@@ -906,13 +971,13 @@ def _skip_dir(name: str) -> bool:
     """
     if name in _SKIP_DIRS:
         return True
-    # All virtual-environment variants: .venv, .venv-wsl, venv, venv312, …
+    # Canonical virtual-environment dirs (.venv*, .venv_test*) and legacy forms
+    # (venv*, .venv_wsl etc.) are both skipped so machines mid-transition are
+    # handled safely before cleanup fires.
     if name.startswith(".venv") or name.startswith("venv"):
         return True
     # Python packaging artefacts
-    if name.endswith(".egg-info") or name.endswith(".dist-info"):
-        return True
-    return False
+    return name.endswith(".egg-info") or name.endswith(".dist-info")
 
 
 def _collect_source_files(base: Path) -> list[str]:
@@ -976,8 +1041,7 @@ def _suite_gitignore_sanity() -> SuiteResult:
     except FileNotFoundError:
         return SuiteResult(name, True, skipped=True, notes=["git not in PATH"])
     except subprocess.TimeoutExpired:
-        return SuiteResult(name, False, time.monotonic() - t0,
-                           notes=["git check-ignore timed out"])
+        return SuiteResult(name, False, time.monotonic() - t0, notes=["git check-ignore timed out"])
 
     # git check-ignore writes to stdout the paths it matched; any output = failure.
     ignored = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
@@ -990,11 +1054,9 @@ def _suite_gitignore_sanity() -> SuiteResult:
         ]
         lines.extend(f"  {entry}" for entry in ignored)
         lines.append(
-            "\nFix: remove or narrow the offending .gitignore pattern, "
-            "then run: git add <file>"
+            "\nFix: remove or narrow the offending .gitignore pattern, then run: git add <file>"
         )
-        return SuiteResult(name, False, time.monotonic() - t0,
-                           output="\n".join(lines))
+        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(lines))
 
     notes = [f"{len(source_files)} source files checked — none gitignored"]
     return SuiteResult(name, True, time.monotonic() - t0, notes=notes)
@@ -1003,6 +1065,7 @@ def _suite_gitignore_sanity() -> SuiteResult:
 # ---------------------------------------------------------------------------
 # Phase 2 suites -- live / integration (run sequentially, server required)
 # ---------------------------------------------------------------------------
+
 
 def _suite_server_smoke() -> SuiteResult:
     """OPC UA server smoke test (TCP connection + basic node browse)."""
@@ -1018,18 +1081,33 @@ def _suite_server_smoke() -> SuiteResult:
     smoke_reqs = SERVER_DIR / "tests" / "requirements.txt"
     if smoke_reqs.exists():
         rc_pip, out = _run_captured(
-            [python, "-m", "pip", "install", "-q", "--disable-pip-version-check",
-             "-r", str(smoke_reqs)],
-            cwd=SERVER_DIR, label="pip install (smoke)",
+            [
+                python,
+                "-m",
+                "pip",
+                "install",
+                "-q",
+                "--disable-pip-version-check",
+                "-r",
+                str(smoke_reqs),
+            ],
+            cwd=SERVER_DIR,
+            label="pip install (smoke)",
         )
         outputs.append(out)
         if rc_pip != 0:
-            return SuiteResult(name, False, time.monotonic() - t0,
-                               output="\n".join(outputs), notes=["pip install failed"])
+            return SuiteResult(
+                name,
+                False,
+                time.monotonic() - t0,
+                output="\n".join(outputs),
+                notes=["pip install failed"],
+            )
 
     rc, out = _run_captured(
         [python, str(SMOKE_TEST), "--tcp-timeout", "30"],
-        cwd=SERVER_DIR, label="smoke_test.py --tcp-timeout 30",
+        cwd=SERVER_DIR,
+        label="smoke_test.py --tcp-timeout 30",
     )
     outputs.append(out)
     return SuiteResult(name, rc == 0, time.monotonic() - t0, output="\n".join(outputs))
@@ -1099,21 +1177,21 @@ def _suite_webclient_live() -> SuiteResult:
 # ---------------------------------------------------------------------------
 
 PHASE1_SUITES: dict[str, object] = {
-    "csharp":         _suite_csharp_unit,
-    "console":        _suite_console_unit,
-    "webclient":      _suite_webclient_unit,
-    "testclient":     _suite_testclient_phase1,
-    "node":           _suite_node_unit,
-    "server-static":  _suite_server_static,
-    "git-sanity":     _suite_gitignore_sanity,
+    "csharp": _suite_csharp_unit,
+    "console": _suite_console_unit,
+    "webclient": _suite_webclient_unit,
+    "testclient": _suite_testclient_phase1,
+    "node": _suite_node_unit,
+    "server-static": _suite_server_static,
+    "git-sanity": _suite_gitignore_sanity,
 }
 
 PHASE2_SUITES: dict[str, object] = {
-    "server":          _suite_server_smoke,
-    "csharp-live":     _suite_csharp_live,
-    "console-live":    _suite_console_live,
+    "server": _suite_server_smoke,
+    "csharp-live": _suite_csharp_live,
+    "console-live": _suite_console_live,
     "testclient-full": _suite_testclient_full,
-    "webclient-live":  _suite_webclient_live,
+    "webclient-live": _suite_webclient_live,
 }
 
 ALL_SUITE_KEYS: list[str] = list(PHASE1_SUITES) + list(PHASE2_SUITES)
@@ -1122,13 +1200,13 @@ ALL_SUITE_KEYS: list[str] = list(PHASE1_SUITES) + list(PHASE2_SUITES)
 # Phase runners
 # ---------------------------------------------------------------------------
 
+
 def run_phase1(suites: dict) -> list[SuiteResult]:
     """Run all Phase 1 suites in parallel; emit each result atomically as it completes."""
     _banner("PHASE 1 \u2014 Unit / Static tests  (parallel, no server required)")
     results: list[SuiteResult] = []
 
-    with ThreadPoolExecutor(max_workers=len(suites),
-                            thread_name_prefix="phase1") as ex:
+    with ThreadPoolExecutor(max_workers=len(suites), thread_name_prefix="phase1") as ex:
         future_to_key = {
             ex.submit(fn): key  # type: ignore[operator]
             for key, fn in suites.items()
@@ -1166,6 +1244,7 @@ def run_phase2(suites: dict) -> list[SuiteResult]:
 # Final summary table
 # ---------------------------------------------------------------------------
 
+
 def _print_summary(results: list[SuiteResult], total_time: float) -> int:
     _banner("FINAL SUMMARY")
     overall = 0
@@ -1198,6 +1277,7 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="run_all_tests.py",
@@ -1206,12 +1286,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
-        "--phase1", action="store_true",
+        "--phase1",
+        action="store_true",
         help="Phase 1 only: unit tests, no server required",
     )
     group.add_argument(
-        "--phase2", action="store_true",
-        help="Phase 2 only: live tests, server must already be on :%d" % OPCUA_PORT,
+        "--phase2",
+        action="store_true",
+        help=f"Phase 2 only: live tests, server must already be on :{OPCUA_PORT}",
     )
     group.add_argument(
         "--suite",
@@ -1220,25 +1302,32 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run a single named suite and exit",
     )
     parser.add_argument(
-        "--skip-docker", action="store_true",
+        "--skip-docker",
+        action="store_true",
         help="Skip Docker management -- assume OPC UA server already running",
     )
     parser.add_argument(
-        "--no-rebuild", action="store_true",
+        "--no-rebuild",
+        action="store_true",
         help="Pass --no-build to docker compose (use cached image)",
     )
     parser.add_argument(
-        "--verbose", "-v", action="store_true",
+        "--verbose",
+        "-v",
+        action="store_true",
         help="Enable DEBUG-level logging",
     )
     parser.add_argument(
-        "--list", action="store_true",
+        "--list",
+        action="store_true",
         help="List all available suite names and exit",
     )
     return parser
 
 
 def main() -> int:
+    os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+    _cleanup_caches(REPO_ROOT)  # pre-run: clear stale caches from interrupted runs
     parser = _build_parser()
     args = parser.parse_args()
 
@@ -1255,17 +1344,15 @@ def main() -> int:
     # correctly when output is piped or redirected (Windows defaults to cp1252).
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
-            try:
+            with contextlib.suppress(Exception):
                 stream.reconfigure(encoding="utf-8", errors="replace")
-            except Exception:
-                pass
 
     _setup_logging(verbose=args.verbose)
 
     global _USE_COLOUR
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
 
-    _banner("IJT Monorepo Test Runner")
+    _banner("IJT Repository Test Runner")
     log.info("Python    : %s", sys.version.split()[0])
     log.info("Platform  : %s", platform.platform())
     log.info("Repo root : %s", REPO_ROOT)
@@ -1317,7 +1404,10 @@ def main() -> int:
             else:
                 server_was_started = _start_server(no_rebuild=args.no_rebuild)
                 if not _wait_for_port(OPCUA_PORT, timeout=90):
-                    log.error("OPC UA server did not become ready on port %d. Aborting Phase 2.", OPCUA_PORT)
+                    log.error(
+                        "OPC UA server did not become ready on port %d. Aborting Phase 2.",
+                        OPCUA_PORT,
+                    )
                     return 1
 
         # -- Phase 2 ---------------------------------------------------------
@@ -1334,21 +1424,47 @@ def main() -> int:
     return rc
 
 
-def _cleanup_caches(root: Path) -> None:
-    """Remove root-level temp artifacts only.
+def _force_rmtree(path: Path) -> None:
+    """Remove a directory tree, handling Windows read-only / locked files."""
+    import stat as _stat
 
-    The root runner invokes each sub-project runner as a subprocess — those runners
-    clean their own directories. This function only touches the repo root level so
-    each project remains fully self-contained.
-    """
-    _TEMP_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache", "pki", "PKI"}
-    for name in _TEMP_DIRS:
-        p = root / name
-        if p.is_dir():
-            shutil.rmtree(p, ignore_errors=True)
-    for p in root.iterdir():
-        if p.is_file() and (p.name == ".coverage" or p.name.startswith(".coverage.") or p.suffix == ".pyc"):
-            p.unlink(missing_ok=True)
+    def _on_exc(func, fpath, exc):
+        try:
+            os.chmod(fpath, _stat.S_IWRITE)
+            func(fpath)
+        except OSError:
+            time.sleep(0.05)
+            with contextlib.suppress(OSError):
+                func(fpath)
+
+    shutil.rmtree(path, onexc=_on_exc)
+
+
+def _cleanup_caches(root: Path) -> None:
+    """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
+    _SKIP = {"node_modules", ".git", "test-results"}  # "tmp" intentionally removed — now cleaned
+    _CACHE_DIRS = {
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        "pki",
+        "PKI",
+    }
+    for dirpath, dirs, files in os.walk(root, topdown=True):
+        dirs[:] = [
+            d
+            for d in dirs
+            if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")
+        ]
+        for d in list(dirs):
+            if d in _CACHE_DIRS or d.startswith("pytest-cache-files-") or d.startswith(".dotnet"):
+                _force_rmtree(Path(dirpath) / d)
+                dirs.remove(d)
+        for f in files:
+            if f == ".coverage" or f.startswith(".coverage.") or f.endswith(".pyc"):
+                with contextlib.suppress(OSError):
+                    (Path(dirpath) / f).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,67 @@
+# Pre-commit configuration — AUTO-FIX philosophy
+#
+# All hooks here are auto-fixers, not hard blockers.
+# If a hook modifies a file, it will exit with a non-zero code (causing the
+# commit to be rejected), but the files are already corrected on disk.
+# Simply run:
+#
+#   git add -u && git commit
+#
+# …and the commit will succeed with the fixed content.
+#
+# Exceptions: check-merge-conflict, check-yaml, check-toml, check-json, and
+# debug-statements are detectors only — they do not modify files, but they
+# block commits that contain genuine errors (merge markers, syntax errors,
+# or stray debugger calls) that require manual intervention.
+
+# Global exclusion: auto-generated output from UA-ModelCompiler.
+# These files are never hand-edited and will be overwritten on next codegen run.
+exclude: 'OPC_UA_Clients/Release2/IJT_CSharp_Client/Types/'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # Ensures every file ends with exactly one newline (LF), matching
+      # the project's .gitattributes line-ending policy.
+      - id: end-of-file-fixer
+
+      # Strips trailing spaces and tabs from all lines.
+      - id: trailing-whitespace
+
+      # Converts any CRLF or CR line endings to LF throughout the repo.
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+      # Detects leftover merge-conflict markers (<<<<<<<, =======, >>>>>>>).
+      # Does NOT auto-fix — the developer must resolve conflicts manually.
+      - id: check-merge-conflict
+
+      # Validates YAML syntax. Fails on unparseable files; does not modify.
+      - id: check-yaml
+
+      # Validates TOML syntax. Fails on unparseable files; does not modify.
+      - id: check-toml
+
+      # Validates JSON syntax. Fails on unparseable files; does not modify.
+      # VS Code JSONC files (launch.json, settings.json, tasks.json) use
+      # comments which are not valid JSON — exclude them from this check.
+      - id: check-json
+        exclude: '(^|.*/)(launch|settings|tasks|keybindings)\.json$'
+
+      # Catches stray pdb.set_trace() / breakpoint() calls in Python files.
+      # Does NOT auto-fix — remove them manually before committing.
+      - id: debug-statements
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.9
+    hooks:
+      # Runs Ruff linter and applies safe auto-fixes only (no --unsafe-fixes).
+      # Unsafe fixes (e.g. SIM105 try→contextlib.suppress) can make structural
+      # rewrites that should be reviewed, not silently applied on commit.
+      - id: ruff
+        args: [--fix]
+
+      # Runs Ruff formatter (similar to Black) to normalise code style and
+      # ensure consistent line endings within Python source files.
+      - id: ruff-format

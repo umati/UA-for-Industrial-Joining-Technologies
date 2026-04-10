@@ -15,6 +15,7 @@ Flags:
     --no-audit           Skip npm audit (useful offline or slow networks)
     --junit-xml=PATH     Write combined JUnit XML (default: test-results/run_all_tests.xml)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -29,7 +30,6 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # Paths & shared utilities
@@ -48,8 +48,16 @@ import socket  # noqa: E402
 
 _SERVER_NATIVE_PORT = 40451
 _WELL_KNOWN_SIMULATOR_PATHS = [
-    _REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe",
-    _REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application",
+    _REPO_ROOT
+    / "OPC_UA_Servers"
+    / "Release2"
+    / "OPC_UA_IJT_Server_Simulator"
+    / "opcua_ijt_demo_application.exe",
+    _REPO_ROOT
+    / "OPC_UA_Servers"
+    / "Release2"
+    / "OPC_UA_IJT_Server_Simulator_Linux"
+    / "opcua_ijt_demo_application",
 ]
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40464"
 
@@ -66,21 +74,21 @@ _NODE: str = shutil.which("node") or "node"
 
 def _npm_pkg_available(pkg: str) -> bool:
     """Check if an npm package is available locally (node_modules or .bin)."""
-    return (
-        (_PROJECT_DIR / "node_modules" / pkg).exists()
-        or (_PROJECT_DIR / "node_modules" / ".bin" / pkg).exists()
-    )
+    return (_PROJECT_DIR / "node_modules" / pkg).exists() or (
+        _PROJECT_DIR / "node_modules" / ".bin" / pkg
+    ).exists()
 
 
 # ---------------------------------------------------------------------------
 # Result dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class StepResult:
     label: str
     phase: str
-    status: str          # "PASS", "FAIL", "SKIP", "WARN", "ERROR"
+    status: str  # "PASS", "FAIL", "SKIP", "WARN", "ERROR"
     detail: str = ""
     duration: float = 0.0
     passed: int = 0
@@ -104,7 +112,7 @@ def _banner(title: str) -> None:
     print("=" * _W)
 
 
-def _footer(ok: bool, elapsed: float, results: List[StepResult]) -> None:
+def _footer(ok: bool, elapsed: float, results: list[StepResult]) -> None:
     n_pass = sum(1 for r in results if r.status == "PASS")
     n_fail = sum(1 for r in results if r.status in {"FAIL", "ERROR"})
     n_skip = sum(1 for r in results if r.status == "SKIP")
@@ -127,13 +135,14 @@ def _row(phase: str, label: str, status: str, detail: str = "") -> None:
 # Subprocess helper
 # ---------------------------------------------------------------------------
 
+
 def _run(
-    cmd: List[str],
+    cmd: list[str],
     *,
     cwd: Path = _PROJECT_DIR,
-    env: Optional[dict] = None,
+    env: dict | None = None,
     capture_stdout: bool = False,
-) -> Tuple[int, str]:
+) -> tuple[int, str]:
     """Run *cmd* and return (returncode, stdout_text).
 
     stderr is inherited (visible in terminal).  stdout is captured when
@@ -156,7 +165,8 @@ def _run(
 # Output parsers
 # ---------------------------------------------------------------------------
 
-def _parse_junit_xml(path: Path) -> Tuple[int, int, int]:
+
+def _parse_junit_xml(path: Path) -> tuple[int, int, int]:
     """Return (passed, failed, total) from a JUnit XML file.
 
     Counts all <testcase> elements; failures/errors are counted by looking
@@ -180,7 +190,7 @@ def _parse_junit_xml(path: Path) -> Tuple[int, int, int]:
         return 0, 0, 0
 
 
-def _parse_eslint_json(path: Path) -> Tuple[int, int]:
+def _parse_eslint_json(path: Path) -> tuple[int, int]:
     """Return (error_count, warning_count) from an ESLint JSON report."""
     if not path.exists():
         return 0, 0
@@ -193,7 +203,7 @@ def _parse_eslint_json(path: Path) -> Tuple[int, int]:
         return 0, 0
 
 
-def _parse_audit_json(path: Path) -> Tuple[int, int]:
+def _parse_audit_json(path: Path) -> tuple[int, int]:
     """Return (critical, high) vulnerability counts from `npm audit --json`."""
     if not path.exists():
         return 0, 0
@@ -205,7 +215,7 @@ def _parse_audit_json(path: Path) -> Tuple[int, int]:
         return 0, 0
 
 
-def _parse_coverage_summary(results_dir: Path) -> Optional[float]:
+def _parse_coverage_summary(results_dir: Path) -> float | None:
     """Parse test-results/coverage/coverage-summary.json for line coverage %."""
     summary_path = results_dir / "coverage" / "coverage-summary.json"
     if not summary_path.exists():
@@ -224,7 +234,8 @@ def _parse_coverage_summary(results_dir: Path) -> Optional[float]:
 # JUnit XML writer (combined summary)
 # ---------------------------------------------------------------------------
 
-def _write_junit_xml(path: Path, results: List[StepResult]) -> None:
+
+def _write_junit_xml(path: Path, results: list[StepResult]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     suites = ET.Element("testsuites", name="IJT Node Client")
     for r in results:
@@ -250,6 +261,7 @@ def _write_junit_xml(path: Path, results: List[StepResult]) -> None:
 # Prerequisite check
 # ---------------------------------------------------------------------------
 
+
 def _check_prerequisites() -> bool:
     missing = []
     if not _NODE or not shutil.which(_NODE):
@@ -264,13 +276,15 @@ def _check_prerequisites() -> bool:
         )
         return False
 
-    node_ver_str = subprocess.run(
-        [_NODE, "--version"], capture_output=True, text=True, check=False
-    ).stdout.strip().lstrip("v")
+    node_ver_str = (
+        subprocess.run([_NODE, "--version"], capture_output=True, text=True, check=False)
+        .stdout.strip()
+        .lstrip("v")
+    )
     print(f"node {node_ver_str}")
     try:
         node_major = int(node_ver_str.split(".")[0])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         node_major = 0
     if node_major < _MIN_NODE_MAJOR:
         print(
@@ -284,7 +298,7 @@ def _check_prerequisites() -> bool:
     print(f"npm  {npm_ver_str}")
     try:
         npm_major = int(npm_ver_str.split(".")[0])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         npm_major = 0
     if npm_major < _MIN_NPM_MAJOR:
         print(
@@ -298,6 +312,7 @@ def _check_prerequisites() -> bool:
 # ---------------------------------------------------------------------------
 # Phase 1 steps
 # ---------------------------------------------------------------------------
+
 
 def _step_npm_ci() -> StepResult:
     label = "npm ci"
@@ -315,17 +330,21 @@ def _step_vitest(results_dir: Path) -> StepResult:
     junit_out = results_dir / "vitest.xml"
     coverage_dir = results_dir / "coverage"
     t0 = time.monotonic()
-    rc, _ = _run([
-        _NPX, "vitest", "run",
-        "--reporter=verbose",
-        "--reporter=junit",
-        f"--outputFile.junit={junit_out}",
-        "--coverage",
-        "--coverage.reporter=lcov",
-        "--coverage.reporter=json",
-        "--coverage.reporter=json-summary",
-        f"--coverage.dir={coverage_dir}",
-    ])
+    rc, _ = _run(
+        [
+            _NPX,
+            "vitest",
+            "run",
+            "--reporter=verbose",
+            "--reporter=junit",
+            f"--outputFile.junit={junit_out}",
+            "--coverage",
+            "--coverage.reporter=lcov",
+            "--coverage.reporter=json",
+            "--coverage.reporter=json-summary",
+            f"--coverage.dir={coverage_dir}",
+        ]
+    )
     dur = time.monotonic() - t0
     passed, failed, total = _parse_junit_xml(junit_out)
     detail = f"{passed}/{total}"
@@ -351,11 +370,17 @@ def _step_eslint(results_dir: Path) -> StepResult:
     results_dir.mkdir(parents=True, exist_ok=True)
     out_file = results_dir / "eslint.json"
     t0 = time.monotonic()
-    rc, _ = _run([
-        _NPX, "eslint", "javascripts/",
-        "--format", "json",
-        "--output-file", str(out_file),
-    ])
+    rc, _ = _run(
+        [
+            _NPX,
+            "eslint",
+            "javascripts/",
+            "--format",
+            "json",
+            "--output-file",
+            str(out_file),
+        ]
+    )
     dur = time.monotonic() - t0
     errors, warnings = _parse_eslint_json(out_file)
     detail = f"{errors} errors"
@@ -373,9 +398,8 @@ def _step_prettier() -> StepResult:
     label = "Prettier"
     try:
         pkg = json.loads((_PROJECT_DIR / "package.json").read_text(encoding="utf-8"))
-        has_prettier = (
-            "prettier" in pkg.get("devDependencies", {})
-            or "prettier" in pkg.get("dependencies", {})
+        has_prettier = "prettier" in pkg.get("devDependencies", {}) or "prettier" in pkg.get(
+            "dependencies", {}
         )
     except Exception:
         has_prettier = False
@@ -436,10 +460,9 @@ def _step_license_checker() -> StepResult:
     label = "license-checker"
     try:
         pkg = json.loads((_PROJECT_DIR / "package.json").read_text(encoding="utf-8"))
-        has_checker = (
-            "license-checker" in pkg.get("devDependencies", {})
-            or "license-checker" in pkg.get("dependencies", {})
-        )
+        has_checker = "license-checker" in pkg.get(
+            "devDependencies", {}
+        ) or "license-checker" in pkg.get("dependencies", {})
     except Exception:
         has_checker = False
     if not has_checker:
@@ -500,6 +523,7 @@ def _step_semgrep() -> StepResult:
 # Phase 2
 # ---------------------------------------------------------------------------
 
+
 def _is_port_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -508,7 +532,7 @@ def _is_port_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
         return False
 
 
-def _ensure_server() -> Optional[subprocess.Popen]:
+def _ensure_server() -> subprocess.Popen | None:
     """Start OPC UA server if not already running; returns Popen handle or None.
 
     Skips auto-launch if OPCUA_SERVER_URL is already set (user manages server).
@@ -523,7 +547,7 @@ def _ensure_server() -> Optional[subprocess.Popen]:
     if _is_port_reachable("localhost", _SERVER_NATIVE_PORT):
         os.environ["OPCUA_SERVER_URL"] = f"opc.tcp://localhost:{_SERVER_NATIVE_PORT}"
         return None
-    exe: Optional[str] = os.environ.get("OPCUA_SIMULATOR_EXE")
+    exe: str | None = os.environ.get("OPCUA_SIMULATOR_EXE")
     if not exe:
         for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
             if candidate.exists():
@@ -558,13 +582,11 @@ def _step_phase2_check(results_dir: Path) -> StepResult:
     try:
         host = host_port[0]
         port = int(host_port[1]) if len(host_port) > 1 else 40451
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         host, port = "localhost", 40451
     if not _is_port_reachable(host, port):
-        return StepResult(label, "PHASE 2", "SKIP",
-                          f"server not reachable at {server_url}", 0.0)
-    return StepResult(label, "PHASE 2", "PASS",
-                      f"server reachable at {server_url}", 0.0)
+        return StepResult(label, "PHASE 2", "SKIP", f"server not reachable at {server_url}", 0.0)
+    return StepResult(label, "PHASE 2", "PASS", f"server reachable at {server_url}", 0.0)
 
 
 def _phase2_skip() -> StepResult:
@@ -575,6 +597,7 @@ def _phase2_skip() -> StepResult:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="run_all_tests.py",
@@ -582,7 +605,9 @@ def _parse_args() -> argparse.Namespace:
     )
     group = p.add_mutually_exclusive_group()
     group.add_argument("--phase1", action="store_true", help="Unit/static tests only")
-    group.add_argument("--phase2", action="store_true", help="Live tests only (N/A for this project)")
+    group.add_argument(
+        "--phase2", action="store_true", help="Live tests only (N/A for this project)"
+    )
     p.add_argument(
         "--junit-xml",
         default="test-results/run_all_tests.xml",
@@ -598,6 +623,8 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+    _cleanup_caches(_PROJECT_DIR)  # pre-run: clear stale caches from interrupted runs
     args = _parse_args()
 
     run_phase1 = not args.phase2
@@ -612,7 +639,7 @@ def main() -> int:
     shutil.rmtree(results_dir, ignore_errors=True)
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    results: List[StepResult] = []
+    results: list[StepResult] = []
     t_start = time.monotonic()
 
     # -- Phase 1 --------------------------------------------------------------
@@ -666,7 +693,7 @@ def main() -> int:
 
     # -- Phase 2 --------------------------------------------------------------
     if run_phase2:
-        server_proc: Optional[subprocess.Popen] = None
+        server_proc: subprocess.Popen | None = None
         try:
             server_proc = _ensure_server()
             r = _step_phase2_check(results_dir)
@@ -693,19 +720,40 @@ def main() -> int:
     return 1 if any_fail else 0
 
 
+def _force_rmtree(path: Path) -> None:
+    """Remove a directory tree, handling Windows read-only / locked files."""
+    import stat as _stat
+
+    def _on_exc(func, fpath, exc):
+        try:
+            os.chmod(fpath, _stat.S_IWRITE)
+            func(fpath)
+        except OSError:
+            time.sleep(0.05)
+            with contextlib.suppress(OSError):
+                func(fpath)
+
+    shutil.rmtree(path, onexc=_on_exc)
+
+
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}
-    _CACHE_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache"}
+    _SKIP = {"node_modules", ".git", "test-results"}  # "tmp" intentionally removed — now cleaned
+    _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
-        dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith("venv") and not d.startswith(".venv")]
+        dirs[:] = [
+            d
+            for d in dirs
+            if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")
+        ]
         for d in list(dirs):
-            if d in _CACHE_DIRS:
-                shutil.rmtree(Path(dirpath) / d, ignore_errors=True)
+            if d in _CACHE_DIRS or d.startswith("pytest-cache-files-"):
+                _force_rmtree(Path(dirpath) / d)
                 dirs.remove(d)
         for f in files:
             if f == ".coverage" or f.startswith(".coverage.") or f.endswith(".pyc"):
-                (Path(dirpath) / f).unlink(missing_ok=True)
+                with contextlib.suppress(OSError):
+                    (Path(dirpath) / f).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

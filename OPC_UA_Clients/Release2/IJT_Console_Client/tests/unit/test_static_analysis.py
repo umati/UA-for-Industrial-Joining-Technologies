@@ -23,19 +23,22 @@ import pytest
 _CONSOLE_ROOT = Path(__file__).resolve().parent.parent.parent  # = IJT_Console_Client
 
 _SKIP_DIRS = {
-    "venv",
-    ".venv",
-    ".venv-wsl",
     ".state",
     "__pycache__",
     "node_modules",
     ".git",
 }
 
+_BANDIT_EXCLUDES = "./tests,./.state,./venv,./venv_test,./.venv,./.venv_test,./env,./ENV"
+
 
 def _all_py_files(root: Path) -> list[Path]:
     """All .py files in the project, excluding generated/dependency dirs."""
-    return [f for f in root.rglob("*.py") if not any(part in _SKIP_DIRS for part in f.parts)]
+
+    def _skip(part: str) -> bool:
+        return part in _SKIP_DIRS or part.startswith(".venv") or part.startswith("venv")
+
+    return [f for f in root.rglob("*.py") if not any(_skip(part) for part in f.parts)]
 
 
 _PYLINT_AVAILABLE = shutil.which("pylint") is not None or (
@@ -118,7 +121,7 @@ def test_bandit_no_high_severity():
             ".",
             "-ll",
             "--exclude",
-            "./tests,./venv,./.venv,./.venv-wsl,./.state",
+            _BANDIT_EXCLUDES,
         ],
         cwd=str(_CONSOLE_ROOT),
         capture_output=True,

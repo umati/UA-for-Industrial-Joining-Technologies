@@ -31,4 +31,3 @@ The **VDMA OPC UA Industrial Joining Technologies (IJT)** Working Group defines 
 ## Test Suite
 
 Run `python run_all_tests.py` — covers all clients, static analysis, and live tests.
-

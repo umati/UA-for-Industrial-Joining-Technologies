@@ -178,7 +178,7 @@ public sealed class EventSubscriber : IDisposable
     //  Select-clause indices for result events:
     //  0=EventId, 1=EventType, 2=Time, 3=Message, 4=SourceName, 5=Result (full ResultDataType)
 
-    private EventFilter BuildResultEventFilter()
+    internal EventFilter BuildResultEventFilter()
     {
         var ijtNs = _s.IjtBaseNsIdx;
         var mrNs = _s.MachineryResultNsIdx;
@@ -212,7 +212,7 @@ public sealed class EventSubscriber : IDisposable
     //  0=EventId, 1=EventType, 2=Time, 3=Message, 4=SourceName,
     //  5=EventCode, 6=EventText, 7=JoiningTechnology, 8=AssociatedEntities, 9=ReportedValues
 
-    private EventFilter BuildJoiningSystemEventFilter()
+    internal EventFilter BuildJoiningSystemEventFilter()
     {
         var ijtNs = _s.IjtBaseNsIdx;
         var sysTypeId = new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemEventType, ijtNs);
@@ -245,80 +245,84 @@ public sealed class EventSubscriber : IDisposable
     private void OnResultEventNotification(MonitoredItem item, MonitoredItemNotificationEventArgs e)
     {
         foreach (EventFieldList notification in item.DequeueEvents())
+            ProcessResultEvent(notification.EventFields);
+    }
+
+    internal void ProcessResultEvent(VariantCollection fields)
+    {
+        try
         {
-            var fields = notification.EventFields;
-            try
-            {
-                var map = BuildFieldMap(fields, ResultFieldNames);
+            var map = BuildFieldMap(fields, ResultFieldNames);
 
-                // Decode full Result (ResultDataType)
-                UAModel.MachineryResult.ResultDataType? result = null;
-                var rawResult = map.GetValueOrDefault("Result");
-                if (rawResult is ExtensionObject eo)
-                    result = eo.Body as UAModel.MachineryResult.ResultDataType;
-                else
-                    result = rawResult as UAModel.MachineryResult.ResultDataType;
+            // Decode full Result (ResultDataType)
+            UAModel.MachineryResult.ResultDataType? result = null;
+            var rawResult = map.GetValueOrDefault("Result");
+            if (rawResult is ExtensionObject eo)
+                result = eo.Body as UAModel.MachineryResult.ResultDataType;
+            else
+                result = rawResult as UAModel.MachineryResult.ResultDataType;
 
-                // Extract summary fields from JoiningResultMetaDataType (subtype of ResultMetaDataType)
-                var jMeta = result?.ResultMetaData as UAModel.IJTBase.JoiningResultMetaDataType;
-                var baseMeta = result?.ResultMetaData;
+            // Extract summary fields from JoiningResultMetaDataType (subtype of ResultMetaDataType)
+            var jMeta = result?.ResultMetaData as UAModel.IJTBase.JoiningResultMetaDataType;
+            var baseMeta = result?.ResultMetaData;
 
-                var args = new ResultReadyEventArgs
-                {
-                    EventTypeName = AsString(map, "EventType") ?? "",
-                    EventTime = AsDateTime(map, "Time"),
-                    Result = result,
-                    ResultId = baseMeta?.ResultId,
-                    Classification = jMeta?.Classification.ToString() ?? baseMeta?.ResultEvaluation.ToString(),
-                    Name = jMeta?.Name,
-                    SequenceNumber = (int)(jMeta?.SequenceNumber ?? 0),
-                    AssemblyType = jMeta?.AssemblyType.ToString(),
-                    OverallStatus = baseMeta?.ResultEvaluation.ToString(),
-                    AllFields = [.. map.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value))],
-                };
-                OnResultReady?.Invoke(this, args);
-            }
-            catch (Opc.Ua.ServiceResultException srex)
+            var args = new ResultReadyEventArgs
             {
-                _log.LogError("✗ OPC UA error processing event: {Status}", srex.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "✗ Unexpected error processing event");
-            }
+                EventTypeName = AsString(map, "EventType") ?? "",
+                EventTime = AsDateTime(map, "Time"),
+                Result = result,
+                ResultId = baseMeta?.ResultId,
+                Classification = jMeta?.Classification.ToString() ?? baseMeta?.ResultEvaluation.ToString(),
+                Name = jMeta?.Name,
+                SequenceNumber = (int)(jMeta?.SequenceNumber ?? 0),
+                AssemblyType = jMeta?.AssemblyType.ToString(),
+                OverallStatus = baseMeta?.ResultEvaluation.ToString(),
+                AllFields = [.. map.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value))],
+            };
+            OnResultReady?.Invoke(this, args);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error processing event: {Status}", srex.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "✗ Unexpected error processing event");
         }
     }
 
     private void OnJoiningSystemEventNotification(MonitoredItem item, MonitoredItemNotificationEventArgs e)
     {
         foreach (EventFieldList notification in item.DequeueEvents())
+            ProcessJoiningSystemEvent(notification.EventFields);
+    }
+
+    internal void ProcessJoiningSystemEvent(VariantCollection fields)
+    {
+        try
         {
-            var fields = notification.EventFields;
-            try
+            var map = BuildFieldMap(fields, SysFieldNames);
+            var args = new JoiningSystemEventArgs
             {
-                var map = BuildFieldMap(fields, SysFieldNames);
-                var args = new JoiningSystemEventArgs
-                {
-                    EventTime = AsDateTime(map, "Time"),
-                    EventCode = AsString(map, "EventCode"),
-                    EventText = AsString(map, "EventText"),
-                    JoiningTechnology = AsString(map, "JoiningTechnology"),
-                    AssociatedEntities = AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(
-                                             map, "AssociatedEntities"),
-                    ReportedValues = AsExtensionObjectArray<UAModel.IJTBase.ReportedValueDataType>(
-                                             map, "ReportedValues"),
-                    AllFields = [.. map.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value))],
-                };
-                OnJoiningSystemEvent?.Invoke(this, args);
-            }
-            catch (Opc.Ua.ServiceResultException srex)
-            {
-                _log.LogError("✗ OPC UA error processing event: {Status}", srex.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "✗ Unexpected error processing event");
-            }
+                EventTime = AsDateTime(map, "Time"),
+                EventCode = AsString(map, "EventCode"),
+                EventText = AsString(map, "EventText"),
+                JoiningTechnology = AsString(map, "JoiningTechnology"),
+                AssociatedEntities = AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(
+                                         map, "AssociatedEntities"),
+                ReportedValues = AsExtensionObjectArray<UAModel.IJTBase.ReportedValueDataType>(
+                                         map, "ReportedValues"),
+                AllFields = [.. map.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value))],
+            };
+            OnJoiningSystemEvent?.Invoke(this, args);
+        }
+        catch (Opc.Ua.ServiceResultException srex)
+        {
+            _log.LogError("✗ OPC UA error processing event: {Status}", srex.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "✗ Unexpected error processing event");
         }
     }
 
@@ -327,7 +331,7 @@ public sealed class EventSubscriber : IDisposable
     /// <summary>
     /// Appends a SimpleAttributeOperand to the event filter's select clauses.
     /// </summary>
-    private static void AddSelectClause(
+    internal static void AddSelectClause(
         EventFilter filter,
         NodeId typeDefinitionId,
         ushort browsePathNs,
@@ -343,7 +347,7 @@ public sealed class EventSubscriber : IDisposable
     }
 
     /// <summary>Maps incoming VariantCollection values to field names.</summary>
-    private static Dictionary<string, object?> BuildFieldMap(
+    internal static Dictionary<string, object?> BuildFieldMap(
         VariantCollection fields,
         string[] names)
     {
@@ -354,7 +358,7 @@ public sealed class EventSubscriber : IDisposable
         return map;
     }
 
-    private static string? AsString(Dictionary<string, object?> map, string key)
+    internal static string? AsString(Dictionary<string, object?> map, string key)
     {
         if (!map.TryGetValue(key, out var val)) return null;
         return val switch
@@ -365,7 +369,7 @@ public sealed class EventSubscriber : IDisposable
         };
     }
 
-    private static DateTime AsDateTime(Dictionary<string, object?> map, string key)
+    internal static DateTime AsDateTime(Dictionary<string, object?> map, string key)
     {
         if (!map.TryGetValue(key, out var val)) return DateTime.MinValue;
         return val is DateTime dt ? dt : DateTime.MinValue;
@@ -376,7 +380,7 @@ public sealed class EventSubscriber : IDisposable
     /// Handles ExtensionObject[], Variant wrapping, and single-item cases.
     /// Returns null if the field is absent or cannot be decoded.
     /// </summary>
-    private static T[]? AsExtensionObjectArray<T>(Dictionary<string, object?> map, string key)
+    internal static T[]? AsExtensionObjectArray<T>(Dictionary<string, object?> map, string key)
         where T : class
     {
         if (!map.TryGetValue(key, out var raw) || raw is null) return null;

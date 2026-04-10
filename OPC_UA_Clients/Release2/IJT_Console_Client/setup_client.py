@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import logging
 import os
 import shlex
@@ -35,7 +36,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-VENV_DIR = Path("venv")
+VENV_DIR = Path(".venv")  # Runtime venv — launch only (requirements.txt)
 SETUP_TIMESTAMP_FILE = Path(".setup_timestamp")
 IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
@@ -44,6 +45,65 @@ REPO_ROOT = _detect_repo_root(PROJECT_DIR)
 SIMULATOR_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
 SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
+
+# Legacy venv directory names that pre-date the .venv / .venv_test convention.
+# Detected and removed automatically so users who pull fresh code do not keep
+# orphaned, potentially-conflicting environments on disk.
+_STALE_VENV_NAMES: tuple[str, ...] = ("venv", "venv_test", "env", "ENV", ".venv_backup")
+
+
+def _remove_stale_venvs(project_dir: Path) -> None:
+    """Delete any legacy virtual-environment directories under *project_dir*.
+
+    Only ``.venv`` (runtime) and ``.venv_test`` are canonical on all hosts.
+    Anything matching :data:`_STALE_VENV_NAMES` is removed automatically so
+    that fresh clones start from a known-clean state.
+    """
+    for name in _STALE_VENV_NAMES:
+        stale = project_dir / name
+        if stale.is_dir():
+            log.info("[cleanup] Removing stale virtual environment: %s", stale)
+            shutil.rmtree(stale, ignore_errors=True)
+
+
+def _force_rmtree(path: Path) -> None:
+    """Remove a directory tree, handling Windows read-only / locked files."""
+    import stat as _stat
+
+    def _on_exc(func, fpath, exc):
+        try:
+            os.chmod(fpath, _stat.S_IWRITE)
+            func(fpath)
+        except OSError:
+            time.sleep(0.05)
+            with contextlib.suppress(OSError):
+                func(fpath)
+
+    shutil.rmtree(path, onexc=_on_exc)
+
+
+def _cleanup_local_project_artifacts(project_dir: Path) -> None:
+    """Remove safe transient cache artifacts under the local project only.
+
+    This is intentionally narrow and never touches virtual environments,
+    reports, logs, or runtime state folders.
+    """
+    skip_dirs = {"node_modules", ".git", "test-results", "logs", ".state", "tmp"}
+    cache_dirs = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
+    for dirpath, dirs, files in os.walk(project_dir, topdown=True):
+        dirs[:] = [d for d in dirs if d not in skip_dirs and not (d.startswith(".venv") or d.startswith("venv"))]
+        for d in list(dirs):
+            if d in cache_dirs:
+                _force_rmtree(Path(dirpath) / d)
+                dirs.remove(d)
+        for f in files:
+            if f == ".coverage" or f.startswith(".coverage.") or f.endswith(".pyc"):
+                with contextlib.suppress(OSError):
+                    (Path(dirpath) / f).unlink(missing_ok=True)
+    # Clean transient pip temp dir created by venv_bootstrap
+    state_tmp = project_dir / ".state" / "tmp"
+    if state_tmp.exists():
+        _force_rmtree(state_tmp)
 
 
 def _python_in_venv() -> Path:
@@ -573,12 +633,16 @@ def main() -> None:
     parser.add_argument("--url", type=str, help="OPC UA server URL (opc.tcp://...)")
     parser.add_argument("--force", action="store_true", help="Force full setup")
     parser.add_argument("--force_full", action="store_true", help="Force full setup")
-    parser.add_argument("--clean", action="store_true", help="Remove venv and exit")
+    parser.add_argument("--clean", action="store_true", help="Remove .venv and exit")
     args, unknown = parser.parse_known_args()
 
     latest_cmd, latest_ver = _find_latest_python_executable()
     _require_python_314_or_newer(latest_ver)
     _warn_if_untested_python(latest_ver)
+
+    # Remove any stale legacy venv directories left from previous naming conventions.
+    _remove_stale_venvs(PROJECT_DIR)
+    _cleanup_local_project_artifacts(PROJECT_DIR)
 
     if args.clean:
         if VENV_DIR.exists():

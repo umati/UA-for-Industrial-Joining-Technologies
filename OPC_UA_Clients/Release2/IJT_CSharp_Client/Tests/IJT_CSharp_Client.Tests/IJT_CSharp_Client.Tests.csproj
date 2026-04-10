@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Suppress CS0618 (obsolete sync ISession methods): test code intentionally exercises
+         the same sync paths used in production. Matches <NoWarn> in IJT_CSharp_Client.csproj. -->
+    <NoWarn>0618</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -65,8 +65,13 @@ IS_WSL = bool(os.getenv("WSL_DISTRO_NAME")) or (
     os.path.exists("/proc/version")
     and "microsoft" in Path("/proc/version").read_text(encoding="utf-8", errors="ignore").lower()
 )
-# Use an in-container venv path to avoid Windows bind-mount conflicts
-VENV_DIR = Path("/opt/ijt_venv") if IS_DOCKER else Path("venv")
+# Venv naming convention:
+#   .venv          — runtime launch (this script, Windows/Linux/macOS/WSL non-Docker)
+#   .venv_test     — test runner (run_all_tests.py, full dev deps)
+#   /opt/ijt_venv  — Docker container (avoids Windows bind-mount conflicts)
+# Note: .venv_wsl was previously documented as a separate WSL env but bootstrap_wsl.sh
+# calls this script, so WSL non-Docker also ends up using .venv (same as all other hosts).
+VENV_DIR = Path("/opt/ijt_venv") if IS_DOCKER else Path(".venv")
 SETUP_TIMESTAMP_FILE = STATE_DIR / "setup_timestamp"
 IS_WINDOWS = os.name == "nt"
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -76,6 +81,64 @@ SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_S
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
 SETUP_LOCK_FILE = STATE_DIR / "setup.lock"
 RUNTIME_STATE_FILE = STATE_DIR / "runtime_processes.json"
+
+# Legacy venv directory names that pre-date the .venv / .venv_test convention.
+_STALE_VENV_NAMES: tuple[str, ...] = ("venv", "venv_test", "env", "ENV", ".venv_backup")
+
+
+def _remove_stale_venvs(project_dir: Path) -> None:
+    """Delete any legacy virtual-environment directories under *project_dir*.
+
+    Only ``.venv`` and ``.venv_test`` are canonical on all hosts (including WSL).
+    The Docker path ``/opt/ijt_venv`` is canonical only inside containers.
+    Anything matching :data:`_STALE_VENV_NAMES` is obsolete and removed automatically so that
+    fresh clones start from a known-clean state.
+    """
+    for name in _STALE_VENV_NAMES:
+        stale = project_dir / name
+        if stale.is_dir():
+            log.info("[cleanup] Removing stale virtual environment: %s", stale)
+            shutil.rmtree(stale, ignore_errors=True)
+
+
+def _force_rmtree(path: Path) -> None:
+    """Remove a directory tree, handling Windows read-only / locked files."""
+    import stat as _stat
+
+    def _on_exc(func, fpath, exc):
+        try:
+            os.chmod(fpath, _stat.S_IWRITE)
+            func(fpath)
+        except OSError:
+            time.sleep(0.05)
+            with contextlib.suppress(OSError):
+                func(fpath)
+
+    shutil.rmtree(path, onexc=_on_exc)
+
+
+def _cleanup_local_project_artifacts(project_dir: Path) -> None:
+    """Remove safe transient cache artifacts under the local project only.
+
+    This is intentionally narrow and never touches virtual environments,
+    reports, logs, or runtime state folders.
+    """
+    skip_dirs = {"node_modules", ".git", "test-results", "logs", ".state", "tmp"}
+    cache_dirs = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
+    for dirpath, dirs, files in os.walk(project_dir, topdown=True):
+        dirs[:] = [d for d in dirs if d not in skip_dirs and not (d.startswith(".venv") or d.startswith("venv"))]
+        for d in list(dirs):
+            if d in cache_dirs:
+                _force_rmtree(Path(dirpath) / d)
+                dirs.remove(d)
+        for f in files:
+            if f == ".coverage" or f.startswith(".coverage.") or f.endswith(".pyc"):
+                with contextlib.suppress(OSError):
+                    (Path(dirpath) / f).unlink(missing_ok=True)
+    # Clean transient pip temp dir created by venv_bootstrap
+    state_tmp = project_dir / ".state" / "tmp"
+    if state_tmp.exists():
+        _force_rmtree(state_tmp)
 
 
 def _run_command(cmd: list[str], check: bool = True, capture_output: bool = False):
@@ -1205,14 +1268,200 @@ def _is_runtime_ready():
 
 
 # ---------------------------------------------------------------------------
+# WSL OS-level bootstrap
+# ---------------------------------------------------------------------------
+
+
+def _run_cmd(args: list[str], *, check: bool = True) -> int:
+    """Run a system command, stream output live, and return the exit code.
+
+    Raises subprocess.CalledProcessError when check=True and the command fails,
+    mirroring ``set -e`` behaviour from the original bootstrap_wsl.sh.
+    """
+    log.info("$ %s", " ".join(args))
+    result = subprocess.run(args, check=check)  # noqa: S603
+    return result.returncode
+
+
+def _bootstrap_disable_puppet_repo() -> None:
+    """Comment out Puppet apt repo entries whose key has expired (if present)."""
+    import glob as _glob
+
+    candidate_files = ["/etc/apt/sources.list"] + _glob.glob("/etc/apt/sources.list.d/*.list")
+    for path in candidate_files:
+        try:
+            text = Path(path).read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if "apt.puppet.com" not in text:
+            continue
+        log.info("Disabling Puppet apt repo entries in %s", path)
+        lines = []
+        for line in text.splitlines():
+            if line.startswith("deb ") and "apt.puppet.com" in line:
+                lines.append(f"# {line}")
+            else:
+                lines.append(line)
+        subprocess.run(  # noqa: S603
+            ["sudo", "tee", path],
+            input="\n".join(lines) + "\n",
+            text=True,
+            check=True,
+        )
+
+
+def _bootstrap_fix_system_python() -> None:
+    """Restore /usr/bin/python3 → python3.12 so apt tooling works correctly.
+
+    WSL images sometimes have python3 pointing at a newer interpreter that
+    lacks the ``apt_pkg`` C extension — breaking ``apt-get``.
+    """
+    py312 = Path("/usr/bin/python3.12")
+    if not py312.exists():
+        return
+    try:
+        current = Path("/usr/bin/python3").resolve()
+    except OSError:
+        current = Path()
+    if current != py312:
+        log.info("Restoring /usr/bin/python3 → python3.12 for apt tooling.")
+        _run_cmd(["sudo", "ln", "-sf", str(py312), "/usr/bin/python3"])
+
+
+def _bootstrap_install_base_packages() -> None:
+    log.info("Updating apt package index.")
+    _run_cmd(["sudo", "apt-get", "update", "-y"])
+    log.info("Installing base packages.")
+    _run_cmd(
+        [
+            "sudo",
+            "apt-get",
+            "install",
+            "-y",
+            "software-properties-common",
+            "curl",
+            "ca-certificates",
+            "build-essential",
+            "git",
+            "gnupg",
+        ]
+    )
+
+
+def _bootstrap_ensure_deadsnakes() -> None:
+    import glob as _glob
+
+    sources = ["/etc/apt/sources.list"] + _glob.glob("/etc/apt/sources.list.d/*.list")
+    already = any(
+        "deadsnakes/ppa" in Path(p).read_text(encoding="utf-8", errors="ignore") for p in sources if Path(p).exists()
+    )
+    if not already:
+        log.info("Adding deadsnakes PPA.")
+        _run_cmd(["sudo", "add-apt-repository", "-y", "ppa:deadsnakes/ppa"])
+
+
+def _bootstrap_install_python_314() -> None:
+    log.info("Installing Python 3.14 toolchain.")
+    _run_cmd(["sudo", "apt-get", "update", "-y"])
+    _run_cmd(
+        [
+            "sudo",
+            "apt-get",
+            "install",
+            "-y",
+            "python3.14",
+            "python3.14-venv",
+            "python3.14-dev",
+            "python3-apt",
+            "command-not-found",
+        ]
+    )
+
+
+def _bootstrap_install_node_24() -> None:
+    log.info("Installing Node.js 24.x via NodeSource.")
+    # Fetch and run the NodeSource setup script without shell piping.
+    setup_script = subprocess.check_output(
+        ["curl", "-fsSL", "https://deb.nodesource.com/setup_24.x"],
+        text=True,
+    )
+    subprocess.run(  # noqa: S603
+        ["sudo", "-E", "bash", "-"],
+        input=setup_script,
+        text=True,
+        check=True,
+    )
+    _run_cmd(["sudo", "apt-get", "install", "-y", "nodejs"])
+
+
+def _bootstrap_verify_runtime() -> None:
+    log.info("Verifying installed runtime versions.")
+    for cmd in (
+        ["python3", "--version"],
+        ["python3", "-c", "import apt_pkg; print('apt_pkg OK')"],
+        ["python3.14", "--version"],
+        ["node", "-v"],
+        ["npm", "-v"],
+        ["npx", "--version"],
+    ):
+        _run_cmd(cmd, check=False)
+
+
+def _bootstrap_print_next_steps(project_dir: Path) -> None:
+    print(f"""
+Completed WSL bootstrap.
+
+Next steps:
+  1. cd "{project_dir}"
+  2. python3 setup_project.py
+  3. python3 run_all_tests.py
+  4. python3 scripts/run_regression.py
+  5. python3 scripts/run_cross_client_regression.py
+
+Optional (run project setup automatically):
+  python3 setup_project.py --bootstrap-wsl --run-project-setup
+""")
+
+
+def wsl_bootstrap(project_dir: Path, *, run_project_setup: bool = False) -> None:
+    """Replicate bootstrap_wsl.sh OS-provisioning steps in Python.
+
+    Installs system-level dependencies (Python 3.14, Node 24, base apt packages)
+    into the WSL Linux environment.  Requires ``sudo`` to be available.
+
+    This is intentionally run with the *system* Python 3 that ships with WSL —
+    not the project venv — because it is bootstrapping the tools needed to
+    create that venv.
+    """
+    if sys.platform == "win32":
+        log.error("--bootstrap-wsl must be run inside WSL (Linux), not Windows.")
+        sys.exit(1)
+
+    if not shutil.which("sudo"):
+        log.error("sudo is required but not found in PATH.")
+        sys.exit(1)
+
+    _bootstrap_fix_system_python()
+    _bootstrap_disable_puppet_repo()
+    _bootstrap_install_base_packages()
+    _bootstrap_ensure_deadsnakes()
+    _bootstrap_install_python_314()
+    _bootstrap_install_node_24()
+    _bootstrap_verify_runtime()
+
+    if run_project_setup:
+        log.info("Running project setup in: %s", project_dir)
+        _run_cmd(["python3", str(project_dir / "setup_project.py")])
+
+    _bootstrap_print_next_steps(project_dir)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
-    # Always ensure we run under the newest Python available.
-    _relaunch_under_latest_python()
-    _require_python_314_or_newer()
-    _warn_if_untested_python()
-
+    # Parse args first so --bootstrap-wsl can skip the Python version checks
+    # (it is intentionally run under the system Python to install Python 3.14).
     parser = argparse.ArgumentParser(
         description="Setup and run the IJT Web Client environment.",
         epilog=(
@@ -1258,7 +1507,37 @@ def main():
         action="store_true",
         help="Run setup launcher in detached mode (do not block terminal).",
     )
+    parser.add_argument(
+        "--bootstrap-wsl",
+        action="store_true",
+        help=(
+            "WSL OS bootstrap mode: install system-level dependencies\n"
+            "(Python 3.14, Node 24, apt packages) into the WSL Linux environment.\n"
+            "Requires sudo. Run under system Python 3, not the project venv.\n"
+            "Equivalent to: bash scripts/bootstrap_wsl.sh"
+        ),
+    )
+    parser.add_argument(
+        "--run-project-setup",
+        action="store_true",
+        help="After --bootstrap-wsl, also run setup_project.py to create the venv.",
+    )
     args = parser.parse_args()
+
+    # --bootstrap-wsl runs under system Python (before 3.14 is installed),
+    # so skip the version gate and relaunch entirely.
+    if args.bootstrap_wsl:
+        wsl_bootstrap(PROJECT_DIR, run_project_setup=args.run_project_setup)
+        return
+
+    # Normal operation: ensure newest Python and 3.14+ requirement.
+    _relaunch_under_latest_python()
+    _require_python_314_or_newer()
+    _warn_if_untested_python()
+
+    # Remove any stale legacy venv directories left from previous naming conventions.
+    _remove_stale_venvs(PROJECT_DIR)
+    _cleanup_local_project_artifacts(PROJECT_DIR)
 
     if args.stop:
         _stop_managed_processes()

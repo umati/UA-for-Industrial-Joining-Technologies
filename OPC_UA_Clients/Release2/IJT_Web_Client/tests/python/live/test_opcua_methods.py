@@ -37,33 +37,15 @@ import asyncio
 import os
 import time
 
-import asyncua.client.ua_client as _uc
 import pytest
 import pytest_asyncio
 from asyncua import ua
 
+from .._asyncua_compat import apply_send_request_timeout_patch
 
-# ──────────────────────────────────────────────────────────────────────────────
-# asyncua 1.2b2 bug-fix: UaClient.call() calls self._send_request(request)
-# without a timeout, falling back to the method's default of 1 second.
-# Heavy calls (e.g. SimulateJobResult(refs=True) fires ~12 events synchronously
-# before the server sends the CallResponse) exceed 1 s and timeout.
-# Fix: replace _send_request so it uses self._timeout when no timeout is given.
-# ──────────────────────────────────────────────────────────────────────────────
-def _patch_asyncua_send_timeout():
-    _orig = _uc.UaClient._send_request
+apply_send_request_timeout_patch()
 
-    async def _fixed(self, request, timeout=None, message_type=ua.MessageType.SecureMessage):
-        if timeout is None:
-            timeout = self._timeout  # use the configured timeout (e.g. 60 s)
-        return await _orig(self, request, timeout, message_type)
-
-    _uc.UaClient._send_request = _fixed
-
-
-_patch_asyncua_send_timeout()
-
-# asyncio_default_fixture_loop_scope = module is set in pytest.ini for all async tests
+# asyncio_default_fixture_loop_scope = module is set in pyproject.toml for all async tests
 
 OPCUA_URL = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
 NS = 1
@@ -235,7 +217,7 @@ async def _pi_uri(c) -> str:
     """Read ProductInstanceUri (same as utils.read_tool_identifier)."""
     try:
         return str(await _node(c, _PI_URI).read_value()) or ""
-    except OSError, AttributeError:
+    except (OSError, AttributeError):
         return ""
 
 

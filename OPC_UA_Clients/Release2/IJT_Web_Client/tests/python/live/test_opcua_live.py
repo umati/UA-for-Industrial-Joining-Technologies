@@ -32,53 +32,23 @@ import os
 import time
 from typing import Any
 
-import asyncua.client.ua_client as _uc
 import pytest
 import pytest_asyncio
 from asyncua import ua
+
+from .._asyncua_compat import apply_send_request_timeout_patch
 
 # All async tests in this file share the module-scoped event loop so they can
 # use the module-scoped opcua_client fixture without cross-loop I/O hangs.
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# asyncua _send_request timeout patch
-#
-# Affected versions : asyncua 1.2b2 – 1.1.5 (confirmed; see asyncua issue #1)
-# Fixed upstream in : not yet fixed as of asyncua 1.1.5 (pinned: asyncua>=1.2b2,<2)
-# Symptom           : UaClient.call() invokes _send_request(timeout=None),
-#                     which asyncua resolves to a hard-coded 1-second fallback.
-#                     Heavy operations (load_type_definitions, browse-heavy calls)
-#                     exceed 1 s and raise spurious timeout errors.
-# Fix               : Wrap _send_request so that timeout=None inherits the
-#                     client's configured timeout (self._timeout) instead.
-# Compatibility     : If asyncua ever removes or renames _send_request, this
-#                     patch will raise AttributeError at import time — remove it
-#                     and rely on the upstream fix instead.
-# ─────────────────────────────────────────────────────────────────────────────
-def _patch_asyncua_send_timeout() -> None:
-    if not hasattr(_uc.UaClient, "_send_request"):
-        # Upstream has removed or renamed _send_request — patch is no longer needed.
-        return
-
-    _orig = _uc.UaClient._send_request
-
-    async def _fixed(self, request, timeout=None, message_type=ua.MessageType.SecureMessage):
-        if timeout is None:
-            timeout = self._timeout
-        return await _orig(self, request, timeout, message_type)
-
-    _uc.UaClient._send_request = _fixed  # type: ignore[method-assign]
-
-
-_patch_asyncua_send_timeout()
+apply_send_request_timeout_patch()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Module-level loop scope so all async fixtures and tests share one event loop.
 # (pytest-asyncio 0.21+ deprecates the custom event_loop fixture; use this instead.)
 # ─────────────────────────────────────────────────────────────────────────────
-# asyncio_default_fixture_loop_scope = module is set in pytest.ini for all async tests
+# asyncio_default_fixture_loop_scope = module is set in pyproject.toml for all async tests
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration
@@ -189,8 +159,6 @@ class TestOpcuaDirectConnection:
 
     async def test_tightening_system_node_exists(self, opcua_client):
         """TighteningSystem node must exist under Objects."""
-        from asyncua import ua
-
         _ = await opcua_client.get_namespace_index(IJT_NAMESPACE_URI)
         objects = await opcua_client.nodes.root.get_child(["0:Objects"])
         children = await objects.get_children()
@@ -202,7 +170,7 @@ class TestOpcuaDirectConnection:
                 if "TighteningSystem" in str(bn.Name):
                     ts_node = child
                     break
-            except ua.UaError, OSError:
+            except (ua.UaError, OSError):
                 continue
 
         assert ts_node is not None, "TighteningSystem node not found under Objects"
@@ -215,8 +183,6 @@ class TestOpcuaDirectConnection:
 
     async def test_browse_tightening_system_has_methods(self, opcua_client):
         """TighteningSystem must expose at least one Method node."""
-        from asyncua import ua
-
         objects = await opcua_client.nodes.root.get_child(["0:Objects"])
         children = await objects.get_children()
 
@@ -239,8 +205,6 @@ class TestOpcuaDirectConnection:
 
     async def test_simulate_single_result_method_exists(self, opcua_client):
         """SimulateSingleResult method must be discoverable."""
-        from asyncua import ua
-
         target_names = {"SimulateSingleResult", "SimulateJobResult"}
         found: set[str] = set()
 
@@ -303,7 +267,7 @@ class TestOpcuaSubscription:
         Uses direct node IDs (NS=1, string identifier) instead of tree traversal
         to avoid the server dropping the subscription under heavy read load.
         """
-        from asyncua import Client, ua
+        from asyncua import Client
 
         received: list = []
 

@@ -2,7 +2,7 @@
 
 > **Works with any AI tool — GitHub Copilot, Claude, Cursor, ChatGPT, Gemini, or anything else.**
 > Read this file before doing any work on this project. It is the single source of truth.
-> Tool-specific entry points (`AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`, `.cursorrules`) all reference this file.
+> Tool-specific entry point: `.cursorrules` (auto-discovered by Cursor and Copilot CLI) references this file.
 
 ---
 
@@ -36,7 +36,7 @@ IJT_Web_Client/
 ├── index.py                # Python WebSocket backend (asyncio + websockets, port 8001)
 ├── config.js               # Shared JS config (WS_PORT, endpoints, timeouts)
 ├── run_all_tests.py        # PRIMARY TEST RUNNER — one command for everything
-├── pytest.ini              # pytest settings: asyncio_mode=auto, timeout=30
+├── pyproject.toml          # pytest settings: asyncio_mode=auto, timeout=30 (+ ruff, coverage, bandit, mypy)
 ├── vitest.config.mjs       # Vitest config for JS unit tests
 ├── eslint.config.mjs       # ESLint flat config
 ├── requirements.txt        # Python runtime deps
@@ -337,7 +337,7 @@ const DEFAULT_VIEW_LEVEL = 3;  // Detailed (Basic=1, Simple=2, Detailed=3, Speci
 ### Root Level (keep clean — 20 files max)
 Only standard files at root: `index.html`, `index.py`, `config.js`, `run_all_tests.py`,
 `setup_project.py`, `run_docker_setup.py`,
-`pytest.ini`, `vitest.config.mjs`, `eslint.config.mjs`, `Dockerfile`, `docker-compose.yaml`,
+`pyproject.toml`, `vitest.config.mjs`, `eslint.config.mjs`, `Dockerfile`, `docker-compose.yaml`,
 `Makefile`, `package.json`, `package-lock.json`, `playwright.config.mjs`,
 `requirements.txt`, `requirements-dev.txt`, `README.md`, `.env`, `.env.example`, `.gitignore`
 
@@ -366,8 +366,7 @@ Any AI tool can be pointed at these files. They all reference `docs/SKILLS.md` a
 |------|------|-----------------|
 | `docs/SKILLS.md` | **All tools — start here** | Point any tool at this |
 | `docs/skills/*.md` | All tools — focused task guides | Point tool at specific skill |
-| `.github/copilot-instructions.md` | GitHub Copilot | ✅ Yes |
-| `.cursorrules` | Cursor | ✅ Yes |
+| `.cursorrules` | Cursor, Copilot CLI | ✅ Yes |
 
 ## Agent Guides Index
 
@@ -397,4 +396,3 @@ These files work with **any AI tool** (GitHub Copilot, Cursor, Claude, ChatGPT, 
 5. **Never** use raw string connection states in JS — use `CONNECTION_STATES` enum.
 6. **Never** change linked-value object shape `{ type, value, link }`.
 7. **Never** run `create_structure.py` again — it's a one-time script already executed.
-

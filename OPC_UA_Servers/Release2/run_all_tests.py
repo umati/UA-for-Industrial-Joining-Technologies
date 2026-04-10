@@ -37,9 +37,11 @@ Environment:
     OPCUA_SERVER_URL       OPC UA endpoint (default: opc.tcp://localhost:40451)
     OPCUA_SIMULATOR_EXE    Path to server executable for auto-launch
 """
+
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime
 import json
 import os
@@ -61,19 +63,17 @@ if hasattr(sys.stderr, "reconfigure"):
 # Paths / constants
 # ---------------------------------------------------------------------------
 
-PROJ_DIR    = Path(__file__).resolve().parent       # OPC_UA_Servers/Release2
-_REPO_ROOT  = Path(__file__).resolve().parents[2]   # repo root
+PROJ_DIR = Path(__file__).resolve().parent  # OPC_UA_Servers/Release2
+_REPO_ROOT = Path(__file__).resolve().parents[2]  # repo root
 RESULTS_DIR = PROJ_DIR / "test-results"
 
 _IS_WINDOWS = sys.platform == "win32"
 
-_LINUX_BINARY = (
-    PROJ_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
-)
+_LINUX_BINARY = PROJ_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
 _WINDOWS_ZIP = PROJ_DIR / "OPC_UA_IJT_Server_Simulator.zip"
 
 _DEFAULT_PORT = 40451
-_DEFAULT_URL  = f"opc.tcp://localhost:{_DEFAULT_PORT}"
+_DEFAULT_URL = f"opc.tcp://localhost:{_DEFAULT_PORT}"
 
 # ---------------------------------------------------------------------------
 # Output helpers
@@ -108,8 +108,8 @@ def _record(
 
 
 def _footer(results: list, elapsed: float) -> None:
-    passed  = sum(1 for _, _, ok, s in results if ok and not s.startswith("SKIP"))
-    failed  = sum(1 for _, _, ok, _ in results if not ok)
+    passed = sum(1 for _, _, ok, s in results if ok and not s.startswith("SKIP"))
+    failed = sum(1 for _, _, ok, _ in results if not ok)
     skipped = sum(1 for _, _, _, s in results if s.startswith("SKIP"))
     _print(_BAR_SINGLE)
     _print(
@@ -124,26 +124,36 @@ def _footer(results: list, elapsed: float) -> None:
 # Helper predicates
 # ---------------------------------------------------------------------------
 
+
 def _cmd_available(cmd: str) -> bool:
     return shutil.which(cmd) is not None
 
 
 def _py_module_available(mod: str) -> bool:
-    return subprocess.run(
-        [sys.executable, "-c", f"import {mod}"],
-        check=False, capture_output=True,
-    ).returncode == 0
+    return (
+        subprocess.run(
+            [sys.executable, "-c", f"import {mod}"],
+            check=False,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
 
 
 def _is_docker_running() -> bool:
     if not shutil.which("docker"):
         return False
     try:
-        return subprocess.run(
-            ["docker", "info"],
-            check=False, capture_output=True, timeout=10,
-        ).returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return (
+            subprocess.run(
+                ["docker", "info"],
+                check=False,
+                capture_output=True,
+                timeout=10,
+            ).returncode
+            == 0
+        )
+    except subprocess.TimeoutExpired, FileNotFoundError:
         return False
 
 
@@ -151,11 +161,17 @@ def _is_docker_running() -> bool:
 # Phase 1 — individual check functions
 # ---------------------------------------------------------------------------
 
+
 def _check_hadolint(results: list) -> None:
     label = "Dockerfile (hadolint)"
     if not _cmd_available("hadolint"):
-        _record(results, 1, label, True,
-                "SKIP (hadolint not installed — brew install hadolint / scoop install hadolint)")
+        _record(
+            results,
+            1,
+            label,
+            True,
+            "SKIP (hadolint not installed — brew install hadolint / scoop install hadolint)",
+        )
         return
     dockerfile = PROJ_DIR / "Dockerfile"
     if not dockerfile.exists():
@@ -164,7 +180,9 @@ def _check_hadolint(results: list) -> None:
 
     r = subprocess.run(
         ["hadolint", "--format", "json", str(dockerfile)],
-        capture_output=True, text=True, check=False,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     (RESULTS_DIR / "hadolint.json").write_text(r.stdout or "[]", encoding="utf-8")
@@ -174,7 +192,7 @@ def _check_hadolint(results: list) -> None:
     except json.JSONDecodeError:
         issues = []
 
-    errors   = sum(1 for i in issues if i.get("level") == "error")
+    errors = sum(1 for i in issues if i.get("level") == "error")
     warnings = sum(1 for i in issues if i.get("level") == "warning")
 
     if errors:
@@ -195,6 +213,7 @@ def _check_docker_compose(results: list) -> None:
     stdlib_detail = "valid YAML"
     try:
         import yaml  # type: ignore[import-untyped]
+
         with path.open(encoding="utf-8") as fh:
             data = yaml.safe_load(fh)
         services = list((data or {}).get("services", {}).keys())
@@ -210,11 +229,12 @@ def _check_docker_compose(results: list) -> None:
     if _cmd_available("yamllint"):
         yl = subprocess.run(
             ["yamllint", "-f", "parsable", str(path)],
-            capture_output=True, text=True, check=False,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if yl.returncode != 0:
-            _record(results, 1, label, False,
-                    f"FAIL (yamllint)\n{yl.stdout}".rstrip())
+            _record(results, 1, label, False, f"FAIL (yamllint)\n{yl.stdout}".rstrip())
             return
         _record(results, 1, label, True, f"PASS ({stdlib_detail}, yamllint clean)")
     else:
@@ -228,13 +248,16 @@ def _check_shellcheck(results: list) -> None:
         _record(results, 1, label, True, "SKIP (no .sh files found)")
         return
     if not _cmd_available("shellcheck"):
-        _record(results, 1, label, True,
-                "SKIP (shellcheck not installed — https://www.shellcheck.net)")
+        _record(
+            results, 1, label, True, "SKIP (shellcheck not installed — https://www.shellcheck.net)"
+        )
         return
 
     r = subprocess.run(
         ["shellcheck", "--format=json"] + sh_files,
-        capture_output=True, text=True, check=False,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     (RESULTS_DIR / "shellcheck.json").write_text(r.stdout or "[]", encoding="utf-8")
@@ -244,10 +267,9 @@ def _check_shellcheck(results: list) -> None:
     else:
         try:
             issues = json.loads(r.stdout or "[]")
-            errors   = sum(1 for i in issues if i.get("level") == "error")
+            errors = sum(1 for i in issues if i.get("level") == "error")
             warnings = sum(1 for i in issues if i.get("level") == "warning")
-            _record(results, 1, label, False,
-                    f"FAIL ({errors} error(s), {warnings} warning(s))")
+            _record(results, 1, label, False, f"FAIL ({errors} error(s), {warnings} warning(s))")
         except json.JSONDecodeError:
             _record(results, 1, label, False, "FAIL")
 
@@ -269,8 +291,7 @@ def _check_server_config(results: list) -> None:
             data = json.load(fh)
         port = (data.get("serverConfigurationData") or {}).get("serverEndpointTCPPort")
         if port is None:
-            _record(results, 1, label, False,
-                    "FAIL (missing serverEndpointTCPPort key)")
+            _record(results, 1, label, False, "FAIL (missing serverEndpointTCPPort key)")
         else:
             _record(results, 1, label, True, f"PASS (valid JSON, port={port})")
     except Exception as exc:
@@ -300,12 +321,20 @@ def _check_simulated_data(results: list) -> None:
 def _check_detect_secrets(results: list) -> None:
     label = "Secrets scan (detect-secrets)"
     if not _cmd_available("detect-secrets"):
-        _record(results, 1, label, True,
-                "SKIP (detect-secrets not installed — pip install detect-secrets)")
+        _record(
+            results,
+            1,
+            label,
+            True,
+            "SKIP (detect-secrets not installed — pip install detect-secrets)",
+        )
         return
     r = subprocess.run(
         ["detect-secrets", "scan", "--baseline", ".secrets.baseline"],
-        capture_output=True, text=True, check=False, cwd=str(PROJ_DIR),
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=str(PROJ_DIR),
     )
     if r.returncode == 0:
         _record(results, 1, label, True, "PASS")
@@ -320,23 +349,32 @@ def _check_pip_audit(results: list) -> None:
         _record(results, 1, label, True, "SKIP (tests/requirements.txt not found)")
         return
     if not _py_module_available("pip_audit"):
-        _record(results, 1, label, True,
-                "SKIP (pip-audit not installed — pip install pip-audit)")
+        _record(results, 1, label, True, "SKIP (pip-audit not installed — pip install pip-audit)")
         return
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     audit_out = RESULTS_DIR / "pip-audit.json"
     r = subprocess.run(
-        [sys.executable, "-m", "pip_audit",
-         "-r", str(reqs), "--format", "json", "-o", str(audit_out)],
-        capture_output=True, text=True, check=False,
+        [
+            sys.executable,
+            "-m",
+            "pip_audit",
+            "-r",
+            str(reqs),
+            "--format",
+            "json",
+            "-o",
+            str(audit_out),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if r.returncode == 0:
         try:
             data = json.loads(audit_out.read_text(encoding="utf-8"))
             vuln_count = sum(
-                len(pkg.get("vulns") or [])
-                for pkg in (data.get("dependencies") or [])
+                len(pkg.get("vulns") or []) for pkg in (data.get("dependencies") or [])
             )
             _record(results, 1, label, True, f"PASS ({vuln_count} CVEs)")
         except Exception:
@@ -352,20 +390,27 @@ def _check_docker_validate(results: list) -> None:
         return
     r = subprocess.run(
         ["docker", "compose", "config", "--quiet"],
-        capture_output=True, text=True, check=False, cwd=str(PROJ_DIR),
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=str(PROJ_DIR),
     )
     if r.returncode == 0:
         _record(results, 1, label, True, "PASS")
     else:
-        _record(results, 1, label, False,
-                f"FAIL\n{(r.stdout + r.stderr).strip()}")
+        _record(results, 1, label, False, f"FAIL\n{(r.stdout + r.stderr).strip()}")
 
 
 def _check_trivy(results: list) -> None:
     label = "Image scan (trivy)"
     if not _cmd_available("trivy"):
-        _record(results, 1, label, True,
-                "SKIP (trivy not installed — https://aquasecurity.github.io/trivy)")
+        _record(
+            results,
+            1,
+            label,
+            True,
+            "SKIP (trivy not installed — https://aquasecurity.github.io/trivy)",
+        )
         return
     if not _is_docker_running():
         _record(results, 1, label, True, "SKIP (Docker not running)")
@@ -374,19 +419,30 @@ def _check_trivy(results: list) -> None:
     _print("  Building Docker image for trivy scan (opcua-ijt-server-scan:latest) ...")
     build_r = subprocess.run(
         ["docker", "build", "-t", "opcua-ijt-server-scan:latest", "."],
-        capture_output=True, text=True, check=False, cwd=str(PROJ_DIR),
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=str(PROJ_DIR),
     )
     if build_r.returncode != 0:
-        _record(results, 1, label, False,
-                f"FAIL (docker build failed)\n{build_r.stderr[:300]}")
+        _record(results, 1, label, False, f"FAIL (docker build failed)\n{build_r.stderr[:300]}")
         return
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     trivy_out = RESULTS_DIR / "trivy.json"
     r = subprocess.run(
-        ["trivy", "image", "--format", "json",
-         "--output", str(trivy_out), "opcua-ijt-server-scan:latest"],
-        capture_output=True, text=True, check=False,
+        [
+            "trivy",
+            "image",
+            "--format",
+            "json",
+            "--output",
+            str(trivy_out),
+            "opcua-ijt-server-scan:latest",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if r.returncode != 0:
         _record(results, 1, label, False, f"FAIL (trivy exit {r.returncode})")
@@ -396,16 +452,13 @@ def _check_trivy(results: list) -> None:
         scan_results = data.get("Results") or []
         total_vulns = sum(len(res.get("Vulnerabilities") or []) for res in scan_results)
         criticals = sum(
-            sum(1 for v in (res.get("Vulnerabilities") or [])
-                if v.get("Severity") == "CRITICAL")
+            sum(1 for v in (res.get("Vulnerabilities") or []) if v.get("Severity") == "CRITICAL")
             for res in scan_results
         )
         if criticals:
-            _record(results, 1, label, False,
-                    f"FAIL ({total_vulns} vulns, {criticals} CRITICAL)")
+            _record(results, 1, label, False, f"FAIL ({total_vulns} vulns, {criticals} CRITICAL)")
         else:
-            _record(results, 1, label, True,
-                    f"PASS ({total_vulns} vulns, 0 CRITICAL)")
+            _record(results, 1, label, True, f"PASS ({total_vulns} vulns, 0 CRITICAL)")
     except Exception:
         _record(results, 1, label, True, "PASS")
 
@@ -428,10 +481,20 @@ def _check_semgrep(results: list) -> None:
         return
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     subprocess.run(
-        ["semgrep", "--config=p/default", "--json",
-         "--output", str(RESULTS_DIR / "semgrep.json"),
-         "--exclude=.venv", "--exclude=test-results", "."],
-        check=False, capture_output=True, text=True, cwd=str(PROJ_DIR),
+        [
+            "semgrep",
+            "--config=p/default",
+            "--json",
+            "--output",
+            str(RESULTS_DIR / "semgrep.json"),
+            "--exclude=.venv",
+            "--exclude=test-results",
+            ".",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=str(PROJ_DIR),
     )
     try:
         data = json.loads((RESULTS_DIR / "semgrep.json").read_text(encoding="utf-8"))
@@ -439,14 +502,13 @@ def _check_semgrep(results: list) -> None:
         errors = [f for f in findings if f.get("extra", {}).get("severity") == "ERROR"]
         warns = [f for f in findings if f.get("extra", {}).get("severity") == "WARNING"]
         if errors:
-            _record(results, 1, label, False,
-                    f"FAIL ({len(errors)} error(s), {len(warns)} warning(s))")
+            _record(
+                results, 1, label, False, f"FAIL ({len(errors)} error(s), {len(warns)} warning(s))"
+            )
         elif warns:
-            _record(results, 1, label, True,
-                    f"WARN (0 errors, {len(warns)} warning(s))")
+            _record(results, 1, label, True, f"WARN (0 errors, {len(warns)} warning(s))")
         else:
-            _record(results, 1, label, True,
-                    f"PASS ({len(findings)} finding(s), none critical)")
+            _record(results, 1, label, True, f"PASS ({len(findings)} finding(s), none critical)")
     except Exception:
         _record(results, 1, label, True, "WARN (could not parse semgrep output)")
 
@@ -455,13 +517,11 @@ def _check_semgrep(results: list) -> None:
 # Phase 2 helpers
 # ---------------------------------------------------------------------------
 
+
 def _venv_python() -> Path:
     """Return path to venv Python, creating the venv + installing deps if needed."""
     venv_dir = PROJ_DIR / ".venv"
-    python_exe = (
-        venv_dir / "Scripts" / "python.exe" if _IS_WINDOWS
-        else venv_dir / "bin" / "python"
-    )
+    python_exe = venv_dir / "Scripts" / "python.exe" if _IS_WINDOWS else venv_dir / "bin" / "python"
     if not python_exe.exists():
         _print(f"  Creating venv at {venv_dir} ...")
         venv.create(str(venv_dir), with_pip=True)
@@ -469,8 +529,17 @@ def _venv_python() -> Path:
     reqs = PROJ_DIR / "tests" / "requirements.txt"
     if reqs.exists():
         subprocess.run(
-            [str(python_exe), "-m", "pip", "install", "-q",
-             "--disable-pip-version-check", "--pre", "-r", str(reqs)],
+            [
+                str(python_exe),
+                "-m",
+                "pip",
+                "install",
+                "-q",
+                "--disable-pip-version-check",
+                "--pre",
+                "-r",
+                str(reqs),
+            ],
             check=True,
         )
     return python_exe
@@ -481,7 +550,7 @@ def _parse_opcua_url(url: str) -> tuple[str, int]:
     scheme = "opc.tcp://"
     if not url.startswith(scheme):
         raise ValueError(f"Expected opc.tcp:// URL, got: {url!r}")
-    rest = url[len(scheme):]
+    rest = url[len(scheme) :]
     host, _, port_str = rest.partition(":")
     port = int(port_str) if port_str else _DEFAULT_PORT
     return host, port
@@ -509,14 +578,15 @@ def _run_smoke_test(venv_py: Path, server_url: str) -> tuple[bool, str, int]:
     env = {**os.environ, "OPCUA_SERVER_URL": server_url}
     result = subprocess.run(
         [str(venv_py), "tests/smoke_test.py"],
-        check=False, cwd=str(PROJ_DIR), env=env,
-        capture_output=True, text=True,
+        check=False,
+        cwd=str(PROJ_DIR),
+        env=env,
+        capture_output=True,
+        text=True,
     )
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    (RESULTS_DIR / "smoke-results.txt").write_text(
-        result.stdout + result.stderr, encoding="utf-8"
-    )
+    (RESULTS_DIR / "smoke-results.txt").write_text(result.stdout + result.stderr, encoding="utf-8")
 
     if result.stdout:
         sys.stdout.write(result.stdout)
@@ -525,9 +595,7 @@ def _run_smoke_test(venv_py: Path, server_url: str) -> tuple[bool, str, int]:
     sys.stdout.flush()
 
     check_count = (
-        result.stdout.count("[OK]")
-        + result.stdout.count("[FAIL]")
-        + result.stdout.count("[SKIP]")
+        result.stdout.count("[OK]") + result.stdout.count("[FAIL]") + result.stdout.count("[SKIP]")
     )
 
     if result.returncode == 0:
@@ -540,6 +608,7 @@ def _run_smoke_test(venv_py: Path, server_url: str) -> tuple[bool, str, int]:
 # ---------------------------------------------------------------------------
 # Phase runners
 # ---------------------------------------------------------------------------
+
 
 def run_phase1(results: list) -> None:
     """Run all static checks, appending result tuples to ``results``."""
@@ -558,7 +627,7 @@ def run_phase1(results: list) -> None:
 
 def run_phase2(results: list) -> None:
     """Run the live smoke test with auto-server-launch. Appends to ``results``."""
-    server_url    = os.environ.get("OPCUA_SERVER_URL", _DEFAULT_URL)
+    server_url = os.environ.get("OPCUA_SERVER_URL", _DEFAULT_URL)
     simulator_exe = os.environ.get("OPCUA_SIMULATOR_EXE", "")
 
     try:
@@ -567,8 +636,8 @@ def run_phase2(results: list) -> None:
         _record(results, 2, "OPC UA Smoke", False, f"FAIL (bad URL: {exc})")
         return
 
-    already_up      = _is_reachable(host, port)
-    launched_proc   = None
+    already_up = _is_reachable(host, port)
+    launched_proc = None
     launched_docker = False
 
     try:
@@ -578,8 +647,13 @@ def run_phase2(results: list) -> None:
                 try:
                     launched_proc = subprocess.Popen([simulator_exe])
                 except Exception as exc:
-                    _record(results, 2, "OPC UA Smoke", False,
-                            f"FAIL (could not launch OPCUA_SIMULATOR_EXE: {exc})")
+                    _record(
+                        results,
+                        2,
+                        "OPC UA Smoke",
+                        False,
+                        f"FAIL (could not launch OPCUA_SIMULATOR_EXE: {exc})",
+                    )
                     return
 
             elif _LINUX_BINARY.exists() and not _IS_WINDOWS:
@@ -590,20 +664,32 @@ def run_phase2(results: list) -> None:
                         cwd=str(_LINUX_BINARY.parent),
                     )
                 except Exception as exc:
-                    _record(results, 2, "OPC UA Smoke", False,
-                            f"FAIL (could not launch Linux binary: {exc})")
+                    _record(
+                        results,
+                        2,
+                        "OPC UA Smoke",
+                        False,
+                        f"FAIL (could not launch Linux binary: {exc})",
+                    )
                     return
 
             elif _is_docker_running() and (PROJ_DIR / "docker-compose.yml").exists():
                 _print("  Launching via: docker compose up -d --build ...")
                 r = subprocess.run(
                     ["docker", "compose", "up", "-d", "--build"],
-                    check=False, cwd=str(PROJ_DIR),
-                    capture_output=True, text=True,
+                    check=False,
+                    cwd=str(PROJ_DIR),
+                    capture_output=True,
+                    text=True,
                 )
                 if r.returncode != 0:
-                    _record(results, 2, "OPC UA Smoke", False,
-                            f"FAIL (docker compose up failed)\n{r.stderr[:300]}")
+                    _record(
+                        results,
+                        2,
+                        "OPC UA Smoke",
+                        False,
+                        f"FAIL (docker compose up failed)\n{r.stderr[:300]}",
+                    )
                     return
                 launched_docker = True
 
@@ -621,8 +707,13 @@ def run_phase2(results: list) -> None:
             _print(f"  Waiting for OPC UA port {port} ...")
             t_launch = time.monotonic()
             if not _wait_for_port(host, port, timeout=60.0):
-                _record(results, 2, "OPC UA Smoke", False,
-                        f"FAIL (server did not open port {port} within 60 s)")
+                _record(
+                    results,
+                    2,
+                    "OPC UA Smoke",
+                    False,
+                    f"FAIL (server did not open port {port} within 60 s)",
+                )
                 return
             response_time = time.monotonic() - t_launch
             if response_time > 5.0:
@@ -635,10 +726,7 @@ def run_phase2(results: list) -> None:
             return
 
         ok, detail, check_count = _run_smoke_test(venv_py, server_url)
-        smoke_label = (
-            f"OPC UA Smoke ({check_count} checks)" if check_count > 0
-            else "OPC UA Smoke"
-        )
+        smoke_label = f"OPC UA Smoke ({check_count} checks)" if check_count > 0 else "OPC UA Smoke"
         _record(results, 2, smoke_label, ok, detail)
 
     finally:
@@ -652,13 +740,16 @@ def run_phase2(results: list) -> None:
             _print("  Stopping Docker container (docker compose down) ...")
             subprocess.run(
                 ["docker", "compose", "down"],
-                cwd=str(PROJ_DIR), check=False, capture_output=True,
+                cwd=str(PROJ_DIR),
+                check=False,
+                capture_output=True,
             )
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -667,14 +758,16 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--phase1", action="store_true",
-                       help="Static checks only (no server required)")
-    group.add_argument("--phase2", action="store_true",
-                       help="Live smoke test only")
+    group.add_argument(
+        "--phase1", action="store_true", help="Static checks only (no server required)"
+    )
+    group.add_argument("--phase2", action="store_true", help="Live smoke test only")
     return parser
 
 
 def main() -> int:
+    os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+    _cleanup_caches(PROJ_DIR)  # pre-run: clear stale caches from interrupted runs
     parser = _build_parser()
     args = parser.parse_args()
 
@@ -698,19 +791,40 @@ def main() -> int:
     return 0 if all_ok else 1
 
 
+def _force_rmtree(path: Path) -> None:
+    """Remove a directory tree, handling Windows read-only / locked files."""
+    import stat as _stat
+
+    def _on_exc(func, fpath, exc):
+        try:
+            os.chmod(fpath, _stat.S_IWRITE)
+            func(fpath)
+        except OSError:
+            time.sleep(0.05)
+            with contextlib.suppress(OSError):
+                func(fpath)
+
+    shutil.rmtree(path, onexc=_on_exc)
+
+
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}
-    _CACHE_DIRS = {"__pycache__", ".ruff_cache", ".mypy_cache"}
+    _SKIP = {"node_modules", ".git", "test-results"}  # "tmp" intentionally removed — now cleaned
+    _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
-        dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith("venv") and not d.startswith(".venv")]
+        dirs[:] = [
+            d
+            for d in dirs
+            if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")
+        ]
         for d in list(dirs):
-            if d in _CACHE_DIRS:
-                shutil.rmtree(Path(dirpath) / d, ignore_errors=True)
+            if d in _CACHE_DIRS or d.startswith("pytest-cache-files-"):
+                _force_rmtree(Path(dirpath) / d)
                 dirs.remove(d)
         for f in files:
             if f == ".coverage" or f.startswith(".coverage.") or f.endswith(".pyc"):
-                (Path(dirpath) / f).unlink(missing_ok=True)
+                with contextlib.suppress(OSError):
+                    (Path(dirpath) / f).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,13 @@
     <None Remove="Tests\**" />
   </ItemGroup>
 
+  <!-- Allow unit-test assembly to access internal members -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>IJT_CSharp_Client.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <!-- OPC Foundation .NET SDK (MIT licensed) -->
   <ItemGroup>
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua" Version="1.5.378.134" />

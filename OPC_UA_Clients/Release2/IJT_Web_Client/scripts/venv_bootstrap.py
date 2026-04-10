@@ -179,7 +179,7 @@ def _ensure_requirements(
 
 def ensure_runtime_env(project_root: Path | None = None) -> Path:
     root = project_root.resolve() if project_root else PROJECT_ROOT
-    venv_dir = root / "venv"
+    venv_dir = root / ".venv"
     python_path = _ensure_venv(venv_dir)
     _ensure_requirements(
         python_path,
@@ -192,11 +192,11 @@ def ensure_runtime_env(project_root: Path | None = None) -> Path:
 
 def ensure_test_env(project_root: Path | None = None) -> Path:
     root = project_root.resolve() if project_root else PROJECT_ROOT
-    venv_dir = root / "venv_test"
+    venv_dir = root / ".venv_test"
     try:
         python_path = _ensure_venv(venv_dir)
     except Exception:
-        runtime_dir = root / "venv"
+        runtime_dir = root / ".venv"
         if not _python_in_venv(runtime_dir).exists():
             ensure_runtime_env(root)
         if not _python_in_venv(runtime_dir).exists():
@@ -214,11 +214,11 @@ def ensure_test_env(project_root: Path | None = None) -> Path:
 
 def ensure_regression_env(project_root: Path | None = None) -> Path:
     root = project_root.resolve() if project_root else PROJECT_ROOT
-    venv_dir = root / "venv_test"
+    venv_dir = root / ".venv_test"
     try:
         python_path = _ensure_venv(venv_dir)
     except Exception:
-        runtime_dir = root / "venv"
+        runtime_dir = root / ".venv"
         if not _python_in_venv(runtime_dir).exists():
             ensure_runtime_env(root)
         if not _python_in_venv(runtime_dir).exists():
