@@ -190,7 +190,8 @@ select option:checked {
 }
 
 canvas {
-  margin: 0 0 40px;
+  margin: 0;
+  display: block;
 }
 
 .messages>li:nth-child(odd) {
@@ -244,9 +245,7 @@ canvas {
 .basescreen {
   display: flex;
   flex-direction: column;
-
-  /* default value; can be omitted */
-  justify-content: space-between;
+  justify-content: flex-start;
   font-weight: lighter;
   color: yellow;
   height: 100%;
@@ -267,7 +266,7 @@ canvas {
 }
 
 .tabSelect {
-  width: 99%;
+  width: 100%;
   min-height: 22px;
   height: auto;
   padding: 5px 5px 01px;
@@ -337,8 +336,9 @@ canvas {
 
   /* overflow: hidden; */
   border-top: none;
-  width: 99%;
-  height: 95%;
+  width: 100%;
+  flex: 1 1 auto;
+  height: auto;
   min-height: 0;
   overflow: hidden;
 
@@ -528,13 +528,6 @@ ul {
   border-radius: 5px;
 }
 
-.envelopeleft {
-  background: var(--ui-bg-light);
-  width: 98%;
-  overflow: auto;
-  min-height: 0;
-}
-
 .envSelect {
   width: 100%;
 }
@@ -600,34 +593,6 @@ ul {
   width: 50%;
 }
 
-.limitDragbox {
-  width: 10px;
-  height: 10px;
-  margin: -5px;
-  background-color: yellow;
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  position: absolute;
-  pointer-events: none;
-}
-
-.limitDragboxStart {
-  width: 20px;
-  height: 20px;
-  margin: -10px;
-  background-color: rgb(0 0 0 / 15%);
-  position: absolute;
-  pointer-events: none;
-}
-
-.limitDragboxEnd {
-  width: 30px;
-  height: 30px;
-  margin: -15px;
-  background-color: rgb(0 0 0 / 15%);
-  position: absolute;
-  pointer-events: none;
-}
-
 .ViolationBox {
   width: 10px;
   height: 10px;
@@ -639,15 +604,6 @@ ul {
 .errorBackground {
   background-color: red;
   color: yellow;
-}
-
-.triggerDragbox {
-  width: 10px;
-  height: 10px;
-  margin: -5px;
-  background-color: green;
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  position: absolute;
 }
 
 .thinView {
@@ -667,8 +623,9 @@ html {
 .tabrow {
   display: flex;
   flex-direction: row;
-  width: 98%;
+  width: 100%;
   color: yellow;
+  flex: 0 0 auto;
 }
 
 .tableft {
@@ -726,7 +683,7 @@ html {
   position: relative;
   min-height: 0;
   background: rgb(0 0 0 / 20%);
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: none;
   border-radius: 0;
 }
 
@@ -821,7 +778,6 @@ html {
 .jointDemoToolsUseButton,
 .methodBorder,
 .serverRow,
-.traceArea,
 .mainDropDown,
 .zoomwindow,
 .connectionStatusCard,
@@ -1851,24 +1807,6 @@ html {
   overflow: hidden;
 }
 
-.envelopeArea {
-  color: black;
-  overflow: hidden;
-  width: 30%;
-  margin: 0 5px 0 0;
-  padding: 0;
-  height: 100%;
-}
-
-.envdarken {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgb(0 0 0 / 70%);
-}
-
 .coverLayer {
   width: 0;
   height: 0;
@@ -2165,378 +2103,6 @@ html {
 /* =========================================================
    End
    ========================================================= */
-
-.envelopeScreen {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  padding: 10px;
-  box-sizing: border-box;
-}
-
-.envelopeLayout {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 12px;
-  align-items: stretch;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-.envelopeSidebar {
-  display: flex;
-  flex: 0 1 8.4rem;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 6rem;
-  min-height: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-.envelopeSidebar.envelopeleft {
-  width: auto;
-}
-
-.envelopeSidebarFooter {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 0;
-  margin: 0;
-}
-
-.envelopeMain {
-  display: flex;
-  flex: 1 1 30rem;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.envelopeTopGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  grid-auto-rows: max-content;
-  gap: 12px;
-  align-items: stretch;
-  flex: 0 0 auto;
-  min-height: 0;
-}
-
-.envelopeTopGrid--wide {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.envelopeFlowColumn {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-}
-
-.envelopeFlowSection {
-  flex: 0 0 auto;
-  min-height: 0;
-  overflow: visible;
-}
-
-.envelopeFlowSection .methodDiv {
-  flex-wrap: wrap;
-  align-items: flex-start;
-}
-
-.envelopePanel {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 0;
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
-  box-shadow: 0 10px 24px var(--connection-panel-shadow);
-}
-
-.envelopeScreen .myHeader {
-  background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
-  color: var(--ui-text-main);
-  border-bottom: 1px solid var(--connection-panel-border);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 8px 10px;
-}
-
-.envelopeSection {
-  flex: 1 1 0;
-  height: auto;
-  min-height: 12rem;
-}
-
-.envelopePanel.scrollableInfoArea,
-.envelopePanel.selectionArea,
-.envelopePanel.myInfoArea {
-  width: auto;
-  height: auto;
-  overflow: hidden;
-}
-
-.envelopePanel .tightUL,
-.envelopePanel.contentArea,
-.envelopePanel .standardCol {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  padding: 8px;
-  box-sizing: border-box;
-  color: var(--ui-text-main);
-}
-
-.envelopeScreen .labelStyle,
-.envelopeScreen .methodLabel {
-  color: var(--ui-text-main);
-  font-size: var(--demo-font-small);
-}
-
-.envelopeScreen .methodBorder {
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--connection-card-border);
-  border-radius: 8px;
-  background-color: rgb(0 0 0 / 20%);
-}
-
-.envelopeScreen .methodBorder > .labelStyle:first-child {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--ui-text-main);
-  font-size: var(--demo-font-body);
-  font-weight: 700;
-}
-
-.envelopeScreen .myButton {
-  background-color: var(--demo-button-bg);
-  color: var(--ui-text-main);
-  border: 1px solid var(--ui-text-main);
-  border-radius: 6px;
-  font-size: var(--demo-font-button);
-  font-weight: 600;
-}
-
-.envelopeScreen .myButton:hover {
-  background: var(--demo-button-bg-hover);
-  color: var(--demo-button-text-hover);
-}
-
-.envelopeScreen .methodInputRight input,
-.envelopeScreen .methodInputRight select,
-.envelopeScreen .methodInput,
-.envelopeScreen .inputStyle {
-  border: 1px solid var(--connection-panel-border);
-  border-radius: 6px;
-  background-color: var(--ui-control-bg);
-  color: var(--ui-text-main);
-}
-
-.envelopeSidebar .methodBorder,
-.envelopeTopGrid .methodBorder,
-.envelopeTraceCard .methodBorder {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.envelopeSidebar .methodBorder > *,
-.envelopeTopGrid .methodBorder > *,
-.envelopeTraceCard .methodBorder > * {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.envelopeBorderCard .tightUL,
-.envelopeBorderCard .contentArea,
-.envelopeBorderCard .standardCol {
-  place-content: flex-start flex-start;
-  padding-top: 0;
-}
-
-.envelopeBorderCard .myHeader + .tightUL,
-.envelopeBorderCard .myHeader + .contentArea,
-.envelopeBorderCard .myHeader + .standardCol {
-  padding-top: 0;
-}
-
-.envelopeSidebar .methodDiv,
-.envelopeTopGrid .methodDiv,
-.envelopeTraceCard .methodDiv {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.envelopeScreen .envelopeDynamicSection {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-}
-
-.envelopeSidebar .methodLabel,
-.envelopeTopGrid .methodLabel,
-.envelopeTraceCard .methodLabel {
-  flex: 0 0 6.3rem;
-  width: 6.3rem;
-}
-
-.envelopeSidebar .methodInputRight,
-.envelopeSidebar .inputStyle,
-.envelopeTopGrid .methodInputRight,
-.envelopeTopGrid .inputStyle,
-.envelopeTraceCard .methodInputRight,
-.envelopeTraceCard .inputStyle {
-  width: auto !important;
-  min-width: 0;
-  max-width: 100%;
-  flex: 1 1 0;
-  box-sizing: border-box;
-}
-
-.envelopeSidebar .methodInputRight select,
-.envelopeTopGrid .methodInputRight select,
-.envelopeTraceCard .methodInputRight select {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.envelopeTraceShell {
-  display: flex;
-  flex: 1 1 18rem;
-  min-height: 16rem;
-  min-width: 0;
-}
-
-.envelopeTraceCard {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
-  box-shadow: 0 10px 24px var(--connection-panel-shadow);
-}
-
-.envelopeTraceField {
-  flex: 1 1 auto;
-  min-height: 18rem;
-  min-width: 0;
-  padding: 8px;
-  box-sizing: border-box;
-}
-
-.envelopeTraceField .traceArea,
-.envelopeTraceField #myChart {
-  background: rgb(0 0 0 / 20%);
-}
-
-.envelopeFilterModalBackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 2100;
-  background: rgb(0 0 0 / 58%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  box-sizing: border-box;
-}
-
-.envelopeFilterModalCard {
-  display: flex;
-  flex-direction: column;
-  width: min(78rem, 96vw);
-  max-height: 90vh;
-  border: 1px solid var(--ui-line-color);
-  border-radius: 10px;
-  overflow: hidden;
-  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
-  box-shadow: 0 12px 26px rgb(0 0 0 / 45%);
-}
-
-.envelopeFilterModalBody {
-  display: grid;
-  grid-template-columns: minmax(14rem, 18rem) minmax(20rem, 1fr);
-  gap: 10px;
-  padding: 10px;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.envelopeFilterModalColumn {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.envelopeFilterModalColumn .methodBorder {
-  min-height: 0;
-}
-
-.envelopeFilterModalColumnWide .methodBorder {
-  flex: 1 1 auto;
-}
-
-.envelopeFilterModalFooter {
-  display: flex;
-  justify-content: flex-end;
-  padding: 10px;
-  border-top: 1px solid var(--connection-panel-border);
-  background-color: rgb(0 0 0 / 22%);
-}
-
-@media (width <= 860px) {
-  .envelopeSidebar {
-    flex-basis: 8.4rem;
-  }
-}
-
-@media (width <= 720px) {
-  .envelopeLayout {
-    padding: 6px;
-    gap: 8px;
-  }
-
-  .envelopeSidebar,
-  .envelopeMain {
-    gap: 8px;
-  }
-
-  .envelopeTopGrid,
-  .envelopeTopGrid--wide {
-    grid-template-columns: 1fr;
-  }
-
-  .envelopeFlowColumn {
-    gap: 8px;
-  }
-
-  .envelopeSection {
-    min-height: 10rem;
-  }
-
-  .envelopeTraceShell {
-    min-height: 18rem;
-  }
-}
 
 .okRateView {
   display: flex;

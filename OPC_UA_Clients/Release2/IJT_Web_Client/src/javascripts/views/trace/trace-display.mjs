@@ -92,6 +92,13 @@ export default class TraceDisplay {
    * @returns {string} possible error message
    */
   createNewTrace (model) {
+    if (typeof this.traceManager?.shouldDisplayResult === 'function') {
+      const shouldDisplay = this.traceManager.shouldDisplayResult(model)
+      if (!shouldDisplay) {
+        return 'Filtered out by active envelope filters'
+      }
+    }
+
     if (parseInt(model?.ResultMetaData.Classification) !== 1) { // Only for single traces
       return 'Only traces for single results'
     }
@@ -394,7 +401,7 @@ class GraphicalLimit {
     for (let x = start; x <= end; x += (end - start) / 100) {
       dataList.push({
         x,
-        y: limit.polynomial.value(x - limit.range.offset),
+        y: limit.polynomial.value(x - limit.range.offset) + (limit.range.yOffset || 0),
       })
     }
     this.glimit.data = dataList

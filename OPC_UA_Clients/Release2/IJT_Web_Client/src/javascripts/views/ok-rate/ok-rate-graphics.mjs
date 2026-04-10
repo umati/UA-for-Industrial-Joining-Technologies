@@ -1,4 +1,5 @@
 import SingleScreen from 'views/graphic-support/single-screen.mjs'
+import SimulateSingleResultInvoker from 'views/graphic-support/simulate-single-result.mjs'
 
 export default class OkRateGraphics extends SingleScreen {
   constructor (resultManager, methodManager, addressSpace) {
@@ -7,7 +8,7 @@ export default class OkRateGraphics extends SingleScreen {
     this.resultManager = resultManager
     this.methodManager = methodManager
     this.addressSpace = addressSpace
-    this.simulateMethodData = null
+    this.simulateInvoker = new SimulateSingleResultInvoker(methodManager, addressSpace)
     this.okCounter = 0
     this.nokCounter = 0
 
@@ -78,7 +79,7 @@ export default class OkRateGraphics extends SingleScreen {
   activate (state) {
     if (state) {
       this.updateDisplay()
-      this.ensureSimulateMethod().catch((error) => {
+      this.simulateInvoker.prepare().catch((error) => {
         this.actionStatusLabel.innerText = 'Method setup failed: ' + (error?.message || error)
       })
     }
@@ -129,36 +130,10 @@ export default class OkRateGraphics extends SingleScreen {
     this.lastUpdateLabel.innerText = `Last update: ${new Date().toLocaleTimeString()}`
   }
 
-  async ensureSimulateMethod () {
-    if (this.simulateMethodData) {
-      return this.simulateMethodData
-    }
-
-    let methodData = this.methodManager.getMethod('SimulateSingleResult')
-    if (!methodData) {
-      const methodFolders = [
-        [{ namespaceindex: this.addressSpace.nsTighteningServer, identifier: 'Simulations' },
-          { namespaceindex: this.addressSpace.nsTighteningServer, identifier: 'SimulateResults' }]
-      ]
-      await this.methodManager.setupMethodsInFolders(methodFolders)
-      methodData = this.methodManager.getMethod('SimulateSingleResult')
-    }
-
-    if (!methodData) {
-      throw new Error('SimulateSingleResult method not available')
-    }
-    this.simulateMethodData = methodData
-    return methodData
-  }
-
   async invokeSingleResultSimulation (evaluationValue, label, includeTraces = false) {
     try {
       this.actionStatusLabel.innerText = `Invoking SimulateSingleResult (${label}, traces: ${includeTraces})...`
-      const methodData = await this.ensureSimulateMethod()
-      await this.methodManager.call(methodData, [
-        { value: evaluationValue, type: { Identifier: '7' } },
-        { value: includeTraces, type: { Identifier: '1' } }
-      ])
+      await this.simulateInvoker.invoke(evaluationValue, includeTraces)
       this.actionStatusLabel.innerText = `SimulateSingleResult called for ${label}`
     } catch (error) {
       this.actionStatusLabel.innerText = `Simulation failed: ${error?.message || error}`

@@ -49,7 +49,7 @@ export default class EndpointGraphics extends BasicScreen {
     this.tabGenerator.changeViewLevel(newLevel)
   }
 
-  async loadOptionalEnvelopeTab (tabGenerator, resultManager) {
+  async loadOptionalEnvelopeTab (tabGenerator, resultManager, methodManager, addressSpace) {
     const modulePath = '/src/javascripts/views/envelope/envelope-graphics.mjs'
     try {
       const { default: EnvelopeScreen } = await import(modulePath)
@@ -57,7 +57,9 @@ export default class EndpointGraphics extends BasicScreen {
         const envelopeScreen = new EnvelopeScreen(
           this.connectionManager,
           resultManager,
-          this.settings
+          this.settings,
+          methodManager,
+          addressSpace
         )
         tabGenerator.generateTab(envelopeScreen, 2, true)
       }
@@ -95,9 +97,6 @@ export default class EndpointGraphics extends BasicScreen {
 
     const resultManager = new ResultManager(eventManager)
 
-    // Optional local-only tab: load if module exists, otherwise skip silently.
-    this.loadOptionalEnvelopeTab(tabGenerator, resultManager)
-
     // Asset view is not critical
     let assetGraphics = null
     try {
@@ -109,6 +108,9 @@ export default class EndpointGraphics extends BasicScreen {
 
     const methodManager = new MethodManager(addressSpace)
     const methodGraphics = new MethodGraphics(methodManager, addressSpace, this.settings, entityCache)
+
+    // Optional local-only tab: load if module exists, otherwise skip silently.
+    this.loadOptionalEnvelopeTab(tabGenerator, resultManager, methodManager, addressSpace)
 
     // Trace view is not critical
     let traceGraphics = null

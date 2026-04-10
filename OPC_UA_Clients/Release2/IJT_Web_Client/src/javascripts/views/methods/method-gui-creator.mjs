@@ -5,8 +5,8 @@ import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
 
 /** Result-type options for SimulateSingleResult / SimulateBulkResults */
 const RESULT_TYPE_OPTIONS = [
-  ['ONE_STEP_OK (0)', 0],
-  ['ONE_STEP_NOK (1)', 1],
+  ['SIMPLE_OK (0)', 0],
+  ['SINGLE_STEP_OK (1)', 1],
   ['MULTI_STEP_OK (2)', 2],
   ['MULTI_STEP_NOK — Failed Step (3)', 3],
   ['MULTI_STEP_NOK — Trigger Lost (4)', 4],
@@ -101,7 +101,7 @@ export default class MethodGUICreator {
     if (defaultValue !== '' && typeof defaultValue !== 'undefined') return defaultValue
     const name = arg?.Name ?? ''
     // Simulation — result type & traces
-    if (name === 'Result Type') return 2
+    if (name === 'Result Type') return 1
     if (name === 'Include Traces') return true
     if (name === 'Include Traces For Child Results') return true
     // Batch/Sync/Job — references
@@ -286,7 +286,7 @@ export default class MethodGUICreator {
           for (const [label, val] of RESULT_TYPE_OPTIONS) {
             drop.addOption(label, val)
           }
-          drop.select.value = String(defaultValue ?? 2)
+          drop.select.value = String(defaultValue ?? 1)
           area.appendChild(drop)
           return function () {
             return { value: parseInt(drop.select.value, 10), type: arg.DataType }
@@ -350,3 +350,4 @@ export default class MethodGUICreator {
     }
   }
 }
+
