@@ -40,7 +40,7 @@ def pytest_configure(config):
     skipped when that key is absent from the loaded supported-CU set — they are
     never failed just because a feature is not implemented on the server under test.
     """
-    global _SUPPORTED_CUS  # noqa: PLW0603
+    global _SUPPORTED_CUS  # noqa: PLW0603  # pylint: disable=global-statement
 
     config.addinivalue_line(
         "markers",
