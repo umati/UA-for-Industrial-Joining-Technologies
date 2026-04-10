@@ -32,6 +32,7 @@ export default class TraceDisplay {
     this.canvasCoverLayer = document.createElement('div')
     this.canvasCoverLayer.classList.add('traceArea')
     container.appendChild(this.canvasCoverLayer)
+    this.mouseDownInTraceArea = false
 
     this.canvas = document.createElement('canvas')
     this.canvas.setAttribute('id', 'myChart')
@@ -39,7 +40,12 @@ export default class TraceDisplay {
 
     this.chartManager = new ChartManager(traceManager, this.canvas, debugSourceText)
 
+    this.canvasCoverLayer.addEventListener('mousedown', () => {
+      this.mouseDownInTraceArea = true
+    })
+
     this.canvasCoverLayer.addEventListener('mouseup', (evt) => {
+      this.mouseDownInTraceArea = false
       const points = this.chartManager.myChart.getElementsAtEventForMode(evt,
         'nearest', { intersect: true }, true)
 
@@ -58,6 +64,18 @@ export default class TraceDisplay {
         this.chartManager.pixelToValue(evt),
         resultId,
         stepId)
+    })
+
+    window.addEventListener('mouseup', (evt) => {
+      if (!this.mouseDownInTraceArea) {
+        return
+      }
+      this.mouseDownInTraceArea = false
+      this.traceManager.onclick(
+        evt,
+        this.chartManager.pixelToValue(evt),
+        null,
+        null)
     })
 
     // this.setupEventListeners()
