@@ -152,8 +152,8 @@ IJT_Test_Client/
 | `result_management` | session | ResultManagement AddIn |
 | `simulate_results_folder` | session | `Simulations/SimulateResults/` node |
 | `simulate_events_folder` | session | `Simulations/SimulateEventsAndConditions/` node |
-| `opcua_client` | **function** | Fresh client for method calls (state-changing) |
-| `subscription_client` | **function** | Separate client for event subscriptions |
+| `opcua_client` | **module** | One connection shared across all tests in a file — avoids per-test OPC UA handshake overhead |
+| `subscription_client` | **function** | Separate client for event subscriptions (function-scoped for event isolation) |
 
 ---
 
