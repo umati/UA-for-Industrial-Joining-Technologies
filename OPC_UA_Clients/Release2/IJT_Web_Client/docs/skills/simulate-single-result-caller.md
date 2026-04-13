@@ -1,3 +1,9 @@
+---
+name: simulate-single-result-caller
+description: Configure and invoke SimulateSingleResult through the existing Methods pipeline with consistent defaults and safe wiring.
+metadata:
+  short-description: Call SimulateSingleResult
+---
 # SimulateSingleResult Caller
 
 Implement consistent `SimulateSingleResult` invocation using existing method infrastructure in `MethodGraphics`, `MethodGUICreator`, `MethodManager`, and `src/resources/settings.json`.
@@ -85,3 +91,4 @@ Confirm `activate()` in `method-graphics.mjs` includes the SimulateResults folde
 2. Confirm invocation works with configured defaults.
 3. Confirm lint passes.
 4. Summarize exactly what was changed in method discovery/defaults/call behavior.
+

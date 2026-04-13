@@ -1,3 +1,9 @@
+---
+name: endpointgraphics-tab-adder
+description: Add or modify EndpointGraphics tabs using the manager-plus-view architecture and existing IJT support managers.
+metadata:
+  short-description: Add EndpointGraphics tabs
+---
 # EndpointGraphics Tab Adder
 
 Implement tab additions in `src/javascripts/views/tab-setup/endpoint-graphics.mjs` using the project's manager-plus-view architecture.
@@ -127,3 +133,4 @@ Use nearby existing tabs as the source of truth when uncertain.
 5. Confirm `tabGenerator.generateTab(...)` is called with intended level and optional selection flag.
 6. Run `npm run lint` from project root.
 7. Summarize what manager source was used, what view was added, and how tab wiring was updated.
+

@@ -1,3 +1,9 @@
+---
+name: associated-entities-interpreter
+description: Interpret associated entities in result payloads using project source-of-truth model files and entity type mappings.
+metadata:
+  short-description: Interpret associated entities
+---
 # Associated Entities Interpreter
 
 Interpret associated entities in result payloads using project source-of-truth model files.
@@ -86,3 +92,4 @@ If no associated entities exist, state that explicitly.
 2. Confirm `EntityType` mapping used `EntityTypes`.
 3. Confirm unknown type ids are flagged, not silently converted.
 4. Summarize entity links in plain language after the per-entity listing.
+
