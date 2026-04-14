@@ -16,15 +16,16 @@ PrintBanner();
 // ── Configuration & connect ────────────────────────────────────────────────────
 var config = ClientConfig.FromEnvironment();
 
-IjtSession? session;
+JoiningSystem? js;
 try
 {
     _log.LogInformation("Connecting to {Url} …", config.ServerUrl);
-    session = await IjtSession.ConnectAsync(config, cts.Token);
+    js = await JoiningSystem.ConnectAsync(config, cts.Token);
 }
 catch (Opc.Ua.ServiceResultException srex)
 {
-    _log.LogError("Connection failed [{Status}]: {Msg}", srex.StatusCode, srex.Message);
+    _log.LogError("Connection failed [{Status}]: {Msg}",
+        IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
     IjtLog.Shutdown(); return 1;
 }
 catch (Exception ex)
@@ -33,22 +34,15 @@ catch (Exception ex)
     IjtLog.Shutdown(); return 1;
 }
 
-await using (session)
+await using (js)
 {
-    using var resultMgmt = new ResultManagement(session);
-    using var assetMgmt = new AssetManagement(session);
-    using var jpm = new JoiningProcessManagement(session);
-    using var eventSub = new EventSubscriber(session);
-
     // ── Wire up event handlers ─────────────────────────────────────────────────
-    eventSub.OnResultReady += (_, e) =>
+    js.EventSubscriber.OnResultReady += (_, e) =>
     {
-        // One-liner to logger
         _log.LogInformation("Result received | {Name} | Seq#{Seq} | {Class} | {Time:HH:mm:ss}",
             e.Name ?? e.ResultId, e.SequenceNumber, e.Classification, e.EventTime);
         _log.LogInformation("Result logged to: {Path}", IjtFileLogger.ResultLogPath);
 
-        // Full detail to log file (use full ResultDataType when available, fall back to event fields)
         var text = e.Result is not null
             ? IjtResultFormatter.FormatResult(e.Result, e.EventTime)
             : IjtResultFormatter.FormatResultEventFields(
@@ -56,14 +50,12 @@ await using (session)
         IjtFileLogger.WriteResult(text);
     };
 
-    eventSub.OnJoiningSystemEvent += (_, e) =>
+    js.EventSubscriber.OnJoiningSystemEvent += (_, e) =>
     {
-        // One-liner to logger
         _log.LogInformation("System event | Code:{Code} | {Text} | {Time:HH:mm:ss}",
             e.EventCode, e.EventText, e.EventTime);
         _log.LogInformation("Event logged to: {Path}", IjtFileLogger.EventLogPath);
 
-        // Full detail to log file
         var text = IjtEventFormatter.FormatJoiningSystemEvent(
             e.EventCode, e.EventText, e.JoiningTechnology, e.EventTime,
             e.AssociatedEntities, e.ReportedValues);
@@ -80,34 +72,35 @@ await using (session)
         catch (InvalidOperationException) { break; }
 
         var cmd = raw.Trim();
+        PrintCommandUsage(cmd);
 
         switch (cmd)
         {
             // Events
             case "1":
-                eventSub.Subscribe();
+                js.EventSubscriber.Subscribe();
                 _subscribed = true;
                 _log.LogInformation("Subscribed to result and system events.");
                 _log.LogInformation("Result log: {P}", IjtFileLogger.ResultLogPath);
                 _log.LogInformation("Event  log: {P}", IjtFileLogger.EventLogPath);
                 break;
             case "2":
-                eventSub.Unsubscribe();
+                js.EventSubscriber.Unsubscribe();
                 _subscribed = false;
                 break;
 
             // Results
             case "3":
-                resultMgmt.GetLatestResult();
+                js.ResultManagement.GetLatestResult();
                 break;
             case "4":
                 {
                     var rid = Prompt("Result ID");
-                    if (rid != null) resultMgmt.GetResultById(rid);
+                    if (rid != null) js.ResultManagement.GetResultById(rid);
                     break;
                 }
             case "5":
-                resultMgmt.SubscribeResultVariable();
+                js.ResultManagement.SubscribeResultVariable();
                 break;
 
             // Asset Management
@@ -117,57 +110,92 @@ await using (session)
                     if (uri is null) break;
                     Console.Write("  Enable? [Y/n]: ");
                     var ynRaw = (Console.ReadLine() ?? "y").Trim();
-                    // Reject pathologically long input; default to enable
                     var yn = ynRaw.Length > 10 ? "y" : ynRaw;
-                    assetMgmt.EnableAsset(uri, !yn.Equals("n", StringComparison.OrdinalIgnoreCase));
+                    js.AssetManagement.EnableAsset(uri, !yn.Equals("n", StringComparison.OrdinalIgnoreCase));
                     break;
                 }
             case "7":
                 {
                     var uri = Prompt("ProductInstance URI");
-                    if (uri != null) assetMgmt.SendTextIdentifiers(uri, ["ID-001", "Batch-2024"]);
+                    if (uri != null) js.AssetManagement.SendTextIdentifiers(uri, ["ID-001", "Batch-2024"]);
                     break;
                 }
             case "8":
                 {
                     var uri = Prompt("ProductInstance URI");
-                    if (uri != null) assetMgmt.GetIdentifiers(uri);
+                    if (uri != null) js.AssetManagement.GetIdentifiers(uri);
                     break;
                 }
             case "9":
                 {
                     var uri = Prompt("ProductInstance URI");
-                    if (uri != null) assetMgmt.ResetIdentifiers(uri);
+                    if (uri != null) js.AssetManagement.ResetIdentifiers(uri);
                     break;
                 }
             case "10":
-                assetMgmt.SubscribeAssetVariables();
+                js.AssetManagement.SubscribeAssetVariables();
                 break;
 
             // Joining Process
             case "11":
-                jpm.GetJoiningProcessList();
+                js.JoiningProcessManagement.GetJoiningProcessList();
                 break;
             case "12":
                 {
                     var id = Prompt("Joining Process ID");
                     if (id is null) break;
                     var name = Prompt("Selection name (optional, press Enter to skip)") ?? "";
-                    jpm.SelectJoiningProcess(id, selectionName: name);
+                    js.JoiningProcessManagement.SelectJoiningProcess(id, selectionName: name);
                     break;
                 }
             case "13":
-                jpm.GetSelectedJoiningProgram();
+                js.JoiningProcessManagement.GetSelectedJoiningProgram();
                 break;
 
             // Identifiers demo
             case "14":
                 {
                     var entities = new List<UAModel.IJTBase.EntityDataType>
+                    {
+                        new() { Name = "Batch-A", EntityId = "ENT-001", IsExternal = false, EntityType = 0 }
+                    };
+                    js.AssetManagement.SendIdentifiers(entities);
+                    break;
+                }
+
+            // Joint Management
+            case "15":
+                js.JointManagement.GetJointList();
+                break;
+            case "16":
                 {
-                    new() { Name = "Batch-A", EntityId = "ENT-001", IsExternal = false, EntityType = 0 }
-                };
-                    assetMgmt.SendIdentifiers(entities);
+                    var uri = Prompt("ProductInstance URI");
+                    var id = Prompt("Joint ID");
+                    if (uri != null && id != null) js.JointManagement.GetJoint(uri, id);
+                    break;
+                }
+            case "17":
+                {
+                    var uri = Prompt("ProductInstance URI") ?? "";
+                    var id = Prompt("Joint ID");
+                    var oid = Prompt("Joint Origin ID") ?? "";
+                    if (id != null) js.JointManagement.SelectJoint(uri, id, oid);
+                    break;
+                }
+            case "18":
+                {
+                    var uri = Prompt("ProductInstance URI") ?? "";
+                    var id = Prompt("Joint ID");
+                    var oid = Prompt("Joint Origin ID") ?? "";
+                    if (id != null) js.JointManagement.DeleteJoint(uri, id, oid);
+                    break;
+                }
+            case "19":
+                {
+                    var uri = Prompt("ProductInstance URI") ?? "";
+                    var id = Prompt("Joint ID");
+                    var did = Prompt("Joint Design ID") ?? "";
+                    if (id != null) js.JointManagement.SendJoint(uri, id, did);
                     break;
                 }
 
@@ -236,8 +264,155 @@ static void PrintMenu(bool subscribed, string serverUrl)
   │  13  Get selected joining program                 │
   │  14  Send identifiers (EntityDataType demo)       │
   │                                                   │
+  │  JOINT MANAGEMENT                                 │
+  │  15  Get joint list                               │
+  │  16  Get joint                                    │
+  │  17  Select joint                                 │
+  │  18  Delete joint                                 │
+  │  19  Send joint                                   │
+  │                                                   │
   │   0  Quit                                         │
   └──────────────────────────────────────────────────┘
   """);
     Console.Write("  Command: ");
+}
+
+static void PrintCommandUsage(string cmd)
+{
+    switch (cmd)
+    {
+        case "1":
+            IjtMenuHelper.PrintUsage(
+                "Subscribe",
+                "Subscribe to Result + JoiningSystem events on the server node.",
+                [],
+                ["Event notifications (ResultReady/JoiningSystemEvent)"]);
+            break;
+        case "2":
+            IjtMenuHelper.PrintUsage(
+                "Unsubscribe",
+                "Stop active event subscriptions.",
+                [],
+                ["Subscription stopped"]);
+            break;
+        case "3":
+            IjtMenuHelper.PrintUsage(
+                "GetLatestResult",
+                "Fetch latest result from ResultManagement.",
+                ["TimeoutMs: Int32 (default 5000)"],
+                ["ResultHandle", "Result", "Error"]);
+            break;
+        case "4":
+            IjtMenuHelper.PrintUsage(
+                "GetResultById",
+                "Fetch result by ResultId.",
+                ["ResultId: String", "TimeoutMs: Int32 (default 5000)"],
+                ["ResultHandle", "Result", "Error"]);
+            break;
+        case "5":
+            IjtMenuHelper.PrintUsage(
+                "SubscribeResultVariable",
+                "Subscribe to live Result variable data changes.",
+                [],
+                ["Data-change notifications"]);
+            break;
+        case "6":
+            IjtMenuHelper.PrintUsage(
+                "EnableAsset",
+                "Enable or disable a product instance.",
+                ["ProductInstanceUri: String", "Enable: Boolean"],
+                ["Status", "StatusMessage"]);
+            break;
+        case "7":
+            IjtMenuHelper.PrintUsage(
+                "SendTextIdentifiers",
+                "Send textual identifiers for a product instance.",
+                ["ProductInstanceUri: String", "Identifiers: String[]"],
+                ["Status", "StatusMessage"]);
+            break;
+        case "8":
+            IjtMenuHelper.PrintUsage(
+                "GetIdentifiers",
+                "Read identifiers for a product instance.",
+                ["ProductInstanceUri: String"],
+                ["EntityList", "Status", "StatusMessage"]);
+            break;
+        case "9":
+            IjtMenuHelper.PrintUsage(
+                "ResetIdentifiers",
+                "Reset identifiers for a product instance.",
+                ["ProductInstanceUri: String"],
+                ["Status", "StatusMessage"]);
+            break;
+        case "10":
+            IjtMenuHelper.PrintUsage(
+                "SubscribeAssetVariables",
+                "Subscribe to identification variables under assets.",
+                [],
+                ["Data-change notifications"]);
+            break;
+        case "11":
+            IjtMenuHelper.PrintUsage(
+                "GetJoiningProcessList",
+                "Read available joining processes.",
+                ["ProductInstanceUri: String (optional)"],
+                ["JoiningProcessList", "Status", "StatusMessage"]);
+            break;
+        case "12":
+            IjtMenuHelper.PrintUsage(
+                "SelectJoiningProcess",
+                "Select joining process to use.",
+                ["JoiningProcessId: String", "SelectionName: String (optional)"],
+                ["Status", "StatusMessage"]);
+            break;
+        case "13":
+            IjtMenuHelper.PrintUsage(
+                "GetSelectedJoiningProgram",
+                "Read currently selected joining program.",
+                ["ProductInstanceUri: String (optional)"],
+                ["SelectedJoiningProgram", "Status", "StatusMessage"]);
+            break;
+        case "14":
+            IjtMenuHelper.PrintUsage(
+                "SendIdentifiers",
+                "Send EntityDataType identifiers (demo path).",
+                ["EntityList: EntityDataType[]", "ProductInstanceUri: String (optional)"],
+                ["Status", "StatusMessage"]);
+            break;
+        case "15":
+            IjtMenuHelper.PrintUsage(
+                "GetJointList",
+                "Read joint list.",
+                ["ProductInstanceUri: String (optional)"],
+                ["JointList", "Status", "StatusMessage"]);
+            break;
+        case "16":
+            IjtMenuHelper.PrintUsage(
+                "GetJoint",
+                "Read one joint by JointId.",
+                ["ProductInstanceUri: String", "JointId: NormalizedString"],
+                ["Joint", "Status", "StatusMessage"]);
+            break;
+        case "17":
+            IjtMenuHelper.PrintUsage(
+                "SelectJoint",
+                "Select joint for product instance.",
+                ["ProductInstanceUri: String", "JointId: NormalizedString", "JointOriginId: NormalizedString"],
+                ["Status", "StatusMessage"]);
+            break;
+        case "18":
+            IjtMenuHelper.PrintUsage(
+                "DeleteJoint",
+                "Delete joint association.",
+                ["ProductInstanceUri: String", "JointId: NormalizedString", "JointOriginId: NormalizedString"],
+                ["Status", "StatusMessage"]);
+            break;
+        case "19":
+            IjtMenuHelper.PrintUsage(
+                "SendJoint",
+                "Send joint definition to server.",
+                ["ProductInstanceUri: String", "Joint: JointDataType"],
+                ["Status", "StatusMessage"]);
+            break;
+    }
 }

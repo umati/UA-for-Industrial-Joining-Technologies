@@ -1,63 +1,58 @@
 # IJT C# Client
 
-A C# OPC UA client example for the [IJT Companion Specification](https://github.com/umati/UA-for-Industrial-Joining-Technologies), built with the [OPC Foundation .NET Standard SDK](https://github.com/OPCFoundation/UA-.NETStandard).
+A C# OPC UA reference client for the [OPC UA for Industrial Joining Technologies (IJT) companion specification](https://github.com/umati/UA-for-Industrial-Joining-Technologies), built with the [OPC Foundation .NET Standard SDK](https://github.com/OPCFoundation/UA-.NETStandard).
 
-## Contact
-- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+## Quick Start
 
-## OPC UA Server
+```bash
+dotnet run
+```
 
-Use the [OPC UA IJT Server Simulator](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2) to test this client.
+Connects to `opc.tcp://localhost:40451` by default. Override with the `OPCUA_SERVER_URL` environment variable.
 
-## Run
+Use the [OPC UA IJT Server Simulator](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2) as a test server.
 
-- `dotnet run` — connects to `opc.tcp://localhost:40451` by default. Set `IJT_SERVER_URL` to change the endpoint.
+## Features
+
+The client launches an interactive menu covering the full IJT address space:
+
+- **Event Subscription** — subscribe to live result and system events
+- **Result Management** — retrieve latest result, fetch by ID, subscribe to the result variable
+- **Asset Management** — enable/disable assets, send and retrieve identifiers, subscribe to asset variables
+- **Joining Process Management** — list joining processes, select a process, inspect the selected program
+- **Joint Management** — list, get, select, delete, and upload joints
+
+All operations print inputs, outputs, and OPC UA status codes (hex + human-readable text) to the console.
 
 ## Testing
 
-Run the full test suite — the OPC UA server is launched automatically if needed:
+Run the full suite (builds, unit tests, coverage, static analysis):
 
 ```bash
 python run_all_tests.py
 ```
 
-Requires .NET 10 SDK. The runner wraps `dotnet test` and `dotnet format`.
-
-The .NET test suite can also be run directly:
+Or run the .NET tests directly (requires .NET 10 SDK):
 
 ```bash
 dotnet test IJT_CSharp_Client.sln
 ```
 
-## Examples
+## Reusing the Type Libraries
 
-- Subscribe to result ready events and system events
-- Call `GetLatestResult` / `GetResultById`
-- Subscribe to result variables and asset variables (Controller, Tool identification)
-- `EnableAsset`, `SendIdentifiers`, `ResetIdentifiers`, `GetIdentifiers`
-- `GetJoiningProcessList`, `SelectJoiningProcess`, `GetSelectedJoiningProgram`
-
-## Layout
-
-```
-Client/          Session, Events, Results, Assets, Joining Process
-Configuration/   Server URL and app name (env var overrides)
-Helpers/         Browse utilities, ExtensionObject helpers
-Types/           C# type libraries from IJT NodeSet files
-```
-
-## Types — Reuse in Other Projects
-
-The `Types/` directory contains auto-generated C# libraries for all IJT OPC UA
-data types. They can be used independently of this client in any .NET project.
+`Types/` contains auto-generated C# bindings for all IJT OPC UA data types. They can be used independently of this client in any .NET project.
 
 **Standard build** (net8.0, net9.0, net10.0 — OPC Foundation 1.5.378.134):
-```
+```bash
 dotnet build Types\UAModel.IJTTightening
 ```
 
 **Softing SDK compatible build** (net48, net6.0, net8.0, net9.0, netstandard2.1 — OPC Foundation 1.5.376.235):
-```
+```bash
 dotnet restore Types\UAModel.IJTTightening -p:OpcUaClientOnly=true --configfile Types\nuget.config
 dotnet build   Types\UAModel.IJTTightening -p:OpcUaClientOnly=true --no-restore
 ```
+
+## Contact
+
+**Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com

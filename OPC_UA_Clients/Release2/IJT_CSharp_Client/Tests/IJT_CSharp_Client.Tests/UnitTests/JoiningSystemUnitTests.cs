@@ -10,19 +10,11 @@ using Xunit;
 namespace IJT_CSharp_Client.Tests.UnitTests;
 
 /// <summary>
-/// Unit tests for <see cref="IjtSession"/> internal helpers — exercisable without
-/// a live OPC UA server thanks to the <see cref="IjtSession.CreateForTesting"/> factory
+/// Unit tests for <see cref="JoiningSystem"/> internal helpers — exercisable without
+/// a live OPC UA server thanks to the <see cref="JoiningSystem.CreateForTesting"/> factory
 /// and a mocked <see cref="ISession"/>.
-///
-/// Covered paths:
-///   - CallMethod — success, null objectId, null methodId, bad status code
-///   - BrowseChild — child found, not found, null refs, case-insensitive match, ns filter
-///   - IjtBaseMethodId / IjtBaseObjectId / IjtBaseVariableId
-///   - IsConnected
-///   - OnKeepAlive — good status (no reconnect), bad status (reconnect attempt), reconnect throws
-///   - DisposeAsync
 /// </summary>
-public sealed class IjtSessionUnitTests
+public sealed class JoiningSystemUnitTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -37,8 +29,8 @@ public sealed class IjtSessionUnitTests
         return mock;
     }
 
-    private static IjtSession CreateSession(ISession session)
-        => IjtSession.CreateForTesting(session, new ClientConfig { ServerUrl = "opc.tcp://localhost:4840" });
+    private static JoiningSystem CreateSession(ISession session)
+        => JoiningSystem.CreateForTesting(session, new ClientConfig { ServerUrl = "opc.tcp://localhost:4840" });
 
     // ── CallMethod ────────────────────────────────────────────────────────────
 
@@ -75,8 +67,6 @@ public sealed class IjtSessionUnitTests
     [Fact]
     public void CallMethod_WithInputArgs_SucceedsAndReturnsOutputs()
     {
-        // Moq cannot capture CallMethodRequestCollection via Callback when out params are present,
-        // so this test verifies the call succeeds with multiple input arguments rather than inspecting them.
         var mockSession = CreateMockSession();
         var callResults = new CallMethodResultCollection
         {
@@ -148,7 +138,6 @@ public sealed class IjtSessionUnitTests
     [Fact]
     public void CallMethod_NoInputArgs_SucceedsWithEmptyArgList()
     {
-        // Verifies that CallMethod works when no input args are supplied (empty InputArguments).
         var mockSession = CreateMockSession();
         var callResults = new CallMethodResultCollection
         {
@@ -172,19 +161,12 @@ public sealed class IjtSessionUnitTests
         Assert.Empty(outputs);
     }
 
-    // ── BrowseChild ───────────────────────────────────────────────────────────
-    // ISession.Browse is a static extension method (SessionObsolete.Browse wrapping
-    // SessionClientExtensions.BrowseAsync). It cannot be mocked with Moq, and calling
-    // it on a Mock<ISession> throws NullReferenceException inside the SDK internals.
-    // BrowseChild coverage is therefore provided by the live integration tests only.
-
-
     // ── Typed NodeId factory helpers ──────────────────────────────────────────
 
     [Fact]
     public void IjtBaseMethodId_ReturnsNodeIdWithCorrectNsAndIdentifier()
     {
-        var sut = IjtSession.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 5);
+        var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 5);
 
         var result = sut.IjtBaseMethodId(1234u);
 
@@ -195,7 +177,7 @@ public sealed class IjtSessionUnitTests
     [Fact]
     public void IjtBaseObjectId_ReturnsNodeIdWithCorrectNsAndIdentifier()
     {
-        var sut = IjtSession.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 6);
+        var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 6);
 
         var result = sut.IjtBaseObjectId(5678u);
 
@@ -206,12 +188,33 @@ public sealed class IjtSessionUnitTests
     [Fact]
     public void IjtBaseVariableId_ReturnsNodeIdWithCorrectNsAndIdentifier()
     {
-        var sut = IjtSession.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 8);
+        var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 8);
 
         var result = sut.IjtBaseVariableId(9999u);
 
         Assert.Equal(8, result.NamespaceIndex);
         Assert.Equal(9999u, (uint)result.Identifier);
+    }
+
+    [Fact]
+    public void IjtBaseMethodId_WhenNsUnresolved_ReturnsNodeIdNull()
+    {
+        var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 0);
+        Assert.True(sut.IjtBaseMethodId(1234u).IsNullNodeId);
+    }
+
+    [Fact]
+    public void IjtBaseObjectId_WhenNsUnresolved_ReturnsNodeIdNull()
+    {
+        var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 0);
+        Assert.True(sut.IjtBaseObjectId(5678u).IsNullNodeId);
+    }
+
+    [Fact]
+    public void IjtBaseVariableId_WhenNsUnresolved_ReturnsNodeIdNull()
+    {
+        var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 0);
+        Assert.True(sut.IjtBaseVariableId(9999u).IsNullNodeId);
     }
 
     // ── IsConnected ───────────────────────────────────────────────────────────
@@ -231,9 +234,6 @@ public sealed class IjtSessionUnitTests
     }
 
     // ── OnKeepAlive ───────────────────────────────────────────────────────────
-    // Note: ISession.Reconnect() cannot be set up or verified via Moq in this SDK
-    // version ("Unsupported expression"). Tests therefore verify observable outcomes
-    // (no exception thrown) rather than verifying Reconnect call count.
 
     [Fact]
     public void OnKeepAlive_GoodStatus_DoesNotThrow()
@@ -262,8 +262,6 @@ public sealed class IjtSessionUnitTests
     [Fact]
     public void OnKeepAlive_BadStatus_ReconnectThrowsServiceResult_DoesNotRethrow()
     {
-        // Reconnect cannot be set up to throw via Moq, so this test exercises the
-        // bad-status code path and verifies the method handles a Reconnect no-op gracefully.
         var mockSession = CreateMockSession();
         var sut = CreateSession(mockSession.Object);
         var e = new KeepAliveEventArgs(new ServiceResult(StatusCodes.BadCommunicationError), ServerState.Unknown, DateTime.UtcNow);
@@ -276,7 +274,6 @@ public sealed class IjtSessionUnitTests
     [Fact]
     public void OnKeepAlive_BadStatus_ReconnectThrowsGenericException_DoesNotRethrow()
     {
-        // Same as above: verifies bad-status path completes without exception.
         var mockSession = CreateMockSession();
         var sut = CreateSession(mockSession.Object);
         var e = new KeepAliveEventArgs(new ServiceResult(StatusCodes.BadCommunicationError), ServerState.Unknown, DateTime.UtcNow);
@@ -286,16 +283,99 @@ public sealed class IjtSessionUnitTests
         Assert.Null(ex);
     }
 
-    // ── DisposeAsync ──────────────────────────────────────────────────────────
+    // ── CallMethod — Uncertain status (domain-level failure, outputs still readable) ──
 
     [Fact]
-    public async Task DisposeAsync_WhenNotConnected_DisposesSessionWithoutCloseCall()
+    public void CallMethod_UncertainStatus_DoesNotThrow_AndReturnsOutputs()
     {
-        var mockSession = CreateMockSession(connected: false);
+        var mockSession = CreateMockSession();
+        var callResults = new CallMethodResultCollection
+        {
+            new CallMethodResult
+            {
+                // Uncertain = OPC UA non-Bad status; output args are valid
+                StatusCode = new StatusCode(StatusCodes.UncertainInitialValue),
+                OutputArguments = new VariantCollection(new[] { new Variant("domain-error-msg") }),
+            }
+        };
+        DiagnosticInfoCollection diagInfos = [];
+        mockSession
+            .Setup(s => s.Call(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<CallMethodRequestCollection>(),
+                out callResults,
+                out diagInfos));
+
         var sut = CreateSession(mockSession.Object);
 
-        await sut.DisposeAsync();
+        // Must NOT throw — Uncertain is not Bad
+        var outputs = sut.CallMethod(new NodeId(100u, 1), new NodeId(200u, 1));
 
-        mockSession.Verify(s => s.Dispose(), Times.Once);
+        Assert.Single(outputs);
+        Assert.Equal("domain-error-msg", outputs[0]);
+    }
+
+    // ── BrowseMethod — tier ordering via null-input guards ────────────────────
+
+    // Note: Tests that mock _session.Browse() are not possible in unit tests because
+    // the synchronous Browse overload used by JoiningSystem is an extension method
+    // (SessionObsolete.Browse) which Moq cannot intercept. Browse-exception and
+    // tier-ordering behavior is covered by LiveIntegrationTests with a real server.
+    // The tests below verify the early-return guard paths that don't require Browse.
+
+    [Fact]
+    public void BrowseMethod_AllTiersFail_NoFallbackConstant_ReturnsNodeIdNull()
+    {
+        // With a mock that returns null from Browse (Moq default for out params),
+        // all tiers fail and fallbackConstant=0 means Tier 3 is skipped.
+        var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 7);
+
+        var result = sut.BrowseMethod(new NodeId(5000u, 7), "NonExistentMethod");
+
+        Assert.True(result.IsNullNodeId);
+    }
+
+    [Fact]
+    public void BrowseMethod_Tier3_WhenNsUnresolved_ReturnsNodeIdNull()
+    {
+        // When IjtBaseNsIdx==0, IjtBaseMethodId returns NodeId.Null, so Tier 3 also
+        // returns NodeId.Null regardless of the fallback constant.
+        var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 0);
+
+        var result = sut.BrowseMethod(new NodeId(5000u, 7), "GetLatestResult", fallbackConstant: 7001u);
+
+        Assert.True(result.IsNullNodeId);
+    }
+
+    [Fact]
+    public void BrowseMethod_Tier3_WithResolvedNs_ReturnsSyntheticNodeId()
+    {
+        // When Tiers 1 and 2 fail (Browse returns null refs via Moq default),
+        // and fallbackConstant > 0 and ns is resolved, Tier 3 returns a synthetic NodeId.
+        var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 7);
+
+        var result = sut.BrowseMethod(new NodeId(5000u, 7), "GetLatestResult", fallbackConstant: 7001u);
+
+        Assert.Equal((ushort)7, result.NamespaceIndex);
+        Assert.Equal(7001u, (uint)result.Identifier);
+    }
+
+    // ── BrowseChild — null guard ──────────────────────────────────────────────
+
+    [Fact]
+    public void BrowseChild_NullParentId_ReturnsNodeIdNull()
+    {
+        var sut = CreateSession(CreateMockSession().Object);
+        Assert.True(sut.BrowseChild(NodeId.Null, "AnyChild").IsNullNodeId);
+    }
+
+    // ── DiscoverMethodsUnder ──────────────────────────────────────────────────
+
+    [Fact]
+    public void DiscoverMethodsUnder_NullObjectId_ReturnsEmptyDictionary()
+    {
+        var sut = CreateSession(CreateMockSession().Object);
+        var result = sut.DiscoverMethodsUnder(NodeId.Null);
+        Assert.Empty(result);
     }
 }

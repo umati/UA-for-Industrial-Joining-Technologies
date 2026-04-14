@@ -19,7 +19,7 @@ namespace IJT_CSharp_Client.Client;
 public sealed class EventSubscriber : IDisposable
 {
     private readonly ILogger<EventSubscriber> _log = IjtLog.For<EventSubscriber>();
-    private readonly IIjtSession _s;
+    private readonly IJoiningSystem _s;
     private Subscription? _eventSubscription;
 
     // ── Public .NET events ────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ public sealed class EventSubscriber : IDisposable
     /// Creates an EventSubscriber backed by <paramref name="session"/>.
     /// Call <see cref="Subscribe"/> to start receiving events.
     /// </summary>
-    public EventSubscriber(IIjtSession session) => _s = session;
+    public EventSubscriber(IJoiningSystem session) => _s = session;
 
     // ── Subscription management ───────────────────────────────────────────────
 
@@ -283,7 +283,8 @@ public sealed class EventSubscriber : IDisposable
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error processing event: {Status}", srex.StatusCode);
+            _log.LogError("✗ OPC UA error processing event: {Status}",
+                IjtStatusHelper.FormatCode(srex.StatusCode));
         }
         catch (Exception ex)
         {
@@ -318,7 +319,8 @@ public sealed class EventSubscriber : IDisposable
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error processing event: {Status}", srex.StatusCode);
+            _log.LogError("✗ OPC UA error processing event: {Status}",
+                IjtStatusHelper.FormatCode(srex.StatusCode));
         }
         catch (Exception ex)
         {

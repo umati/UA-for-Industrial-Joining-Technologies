@@ -15,12 +15,15 @@ namespace IJT_CSharp_Client.Client;
 public sealed class AssetManagement : IDisposable
 {
     private readonly ILogger<AssetManagement> _log = IjtLog.For<AssetManagement>();
-    private readonly IIjtSession _s;
+    private readonly IJoiningSystem _js;
     private Subscription? _assetVarSubscription;
     private NodeId? _methodSetNodeId;
 
-    /// <summary>Creates an AssetManagement facade backed by <paramref name="ijtSession"/>.</summary>
-    public AssetManagement(IIjtSession ijtSession) => _s = ijtSession;
+    /// <summary>Creates an AssetManagement facade backed by <paramref name="js"/>.</summary>
+    public AssetManagement(IJoiningSystem js) => _js = js;
+
+    /// <summary>Clears cached node references so the next operation re-browses the address space.</summary>
+    public void InvalidateNodeCache() => _methodSetNodeId = null;
 
     // ── Node lookup ───────────────────────────────────────────────────────────
 
@@ -33,10 +36,10 @@ public sealed class AssetManagement : IDisposable
         if (_methodSetNodeId is not null && !_methodSetNodeId.IsNullNodeId)
             return _methodSetNodeId;
 
-        var assetMgmt = _s.BrowseChild(_s.JoiningSystemNodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
+        var assetMgmt = _js.BrowseChild(_js.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
         if (!assetMgmt.IsNullNodeId)
         {
-            var methodSet = _s.BrowseChild(assetMgmt, UAModel.IJTBase.BrowseNames.MethodSet);
+            var methodSet = _js.BrowseChild(assetMgmt, UAModel.IJTBase.BrowseNames.MethodSet);
             if (!methodSet.IsNullNodeId)
             {
                 _methodSetNodeId = methodSet;
@@ -45,7 +48,7 @@ public sealed class AssetManagement : IDisposable
         }
 
         // Fallback: type-definition NodeId
-        _methodSetNodeId = _s.IjtBaseObjectId(
+        _methodSetNodeId = _js.IjtBaseObjectId(
             UAModel.IJTBase.Objects.JoiningSystemType_AssetManagement_MethodSet);
         _log.LogWarning("⚠ AssetManagement/MethodSet fallback to type NodeId.");
         return _methodSetNodeId;
@@ -63,7 +66,7 @@ public sealed class AssetManagement : IDisposable
             productInstanceUri, enable);
 
         var objectId = GetMethodSetNode();
-        var methodId = _s.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.EnableAsset,
+        var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.EnableAsset,
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -74,13 +77,14 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, enable);
+            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, enable);
             _log.LogInformation("✓ EnableAsset called.");
-            IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
+            IjtJsonSerializer.PrintNamedOutputs("EnableAsset", outputs, "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
@@ -108,7 +112,7 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var methodId = _s.BrowseMethod(objectId, "SendIdentifiers",
+            var methodId = _js.BrowseMethod(objectId, "SendIdentifiers",
                 UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers);
             if (objectId.IsNullNodeId || methodId.IsNullNodeId)
             {
@@ -116,13 +120,14 @@ public sealed class AssetManagement : IDisposable
                 return;
             }
             var extObjects = entities.Select(e => new ExtensionObject(e)).ToArray();
-            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, (object)extObjects);
+            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, (object)extObjects);
             _log.LogInformation("✓ SendIdentifiers called ({Count} entities).", extObjects.Length);
-            IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
+            IjtJsonSerializer.PrintNamedOutputs("SendIdentifiers", outputs, "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
@@ -141,7 +146,7 @@ public sealed class AssetManagement : IDisposable
         _log.LogInformation("\n── SendTextIdentifiers ({Uri}) ────────────────────", productInstanceUri);
 
         var objectId = GetMethodSetNode();
-        var methodId = _s.BrowseMethod(objectId, "SendTextIdentifiers",
+        var methodId = _js.BrowseMethod(objectId, "SendTextIdentifiers",
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -152,13 +157,14 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, identifiers);
+            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, identifiers);
             _log.LogInformation("✓ SendTextIdentifiers called.");
-            IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
+            IjtJsonSerializer.PrintNamedOutputs("SendTextIdentifiers", outputs, "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
@@ -177,7 +183,7 @@ public sealed class AssetManagement : IDisposable
         _log.LogInformation("\n── ResetIdentifiers ({Uri}) ──────────────────────", productInstanceUri);
 
         var objectId = GetMethodSetNode();
-        var methodId = _s.BrowseMethod(objectId, "ResetIdentifiers",
+        var methodId = _js.BrowseMethod(objectId, "ResetIdentifiers",
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -188,13 +194,14 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, Array.Empty<string>(), true, false);
+            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, Array.Empty<string>(), true, false);
             _log.LogInformation("✓ ResetIdentifiers called.");
-            IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
+            IjtJsonSerializer.PrintNamedOutputs("ResetIdentifiers", outputs, "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
@@ -213,7 +220,7 @@ public sealed class AssetManagement : IDisposable
         _log.LogInformation("\n── GetIdentifiers ({Uri}) ────────────────────────", productInstanceUri);
 
         var objectId = GetMethodSetNode();
-        var methodId = _s.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.GetIdentifiers,
+        var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.GetIdentifiers,
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -224,13 +231,14 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, Array.Empty<string>());
+            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, Array.Empty<string>());
             _log.LogInformation("✓ GetIdentifiers result:");
-            IjtJsonSerializer.PrintMethodOutputs("AssetManagement", outputs);
+            IjtJsonSerializer.PrintNamedOutputs("GetIdentifiers", outputs, "EntityList", "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
@@ -257,25 +265,25 @@ public sealed class AssetManagement : IDisposable
 
         _log.LogInformation("\n── Subscribing to Asset Identification variables ────");
 
-        var assetMgmtNode = _s.BrowseChild(
-            _s.JoiningSystemNodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
+        var assetMgmtNode = _js.BrowseChild(
+            _js.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
         if (assetMgmtNode.IsNullNodeId)
         {
             _log.LogError("✗ AssetManagement node not found.");
             return;
         }
 
-        var assetsNode = _s.BrowseChild(assetMgmtNode, UAModel.IJTBase.BrowseNames.Assets);
+        var assetsNode = _js.BrowseChild(assetMgmtNode, UAModel.IJTBase.BrowseNames.Assets);
         if (assetsNode.IsNullNodeId)
         {
             _log.LogError("✗ Assets node not found.");
             return;
         }
 
-        _assetVarSubscription = new Subscription(_s.Session.DefaultSubscription)
+        _assetVarSubscription = new Subscription(_js.Session.DefaultSubscription)
         {
             DisplayName = "IJT Asset Variables",
-            PublishingInterval = _s.Config.PublishingIntervalMs,
+            PublishingInterval = _js.Config.PublishingIntervalMs,
         };
 
         int count = 0;
@@ -283,10 +291,10 @@ public sealed class AssetManagement : IDisposable
 
         foreach (var category in categories)
         {
-            var catNode = _s.BrowseChild(assetsNode, category);
+            var catNode = _js.BrowseChild(assetsNode, category);
             if (catNode.IsNullNodeId) continue;
 
-            _s.Session.Browse(null, null, catNode, 0, BrowseDirection.Forward,
+            _js.Session.Browse(null, null, catNode, 0, BrowseDirection.Forward,
                 ReferenceTypeIds.HierarchicalReferences, true, (uint)NodeClass.Object,
                 out _, out var instances);
 
@@ -294,13 +302,14 @@ public sealed class AssetManagement : IDisposable
 
             foreach (var inst in instances)
             {
-                if (inst.BrowseName.Name.StartsWith('<')) continue; // skip placeholders
+                var browseName = inst.BrowseName?.Name;
+                if (browseName == null || browseName.StartsWith('<')) continue; // skip placeholders
                 var instNodeId = (NodeId)inst.NodeId;
-                var idNode = _s.BrowseChild(instNodeId, UAModel.IJTBase.BrowseNames.Identification);
+                var idNode = _js.BrowseChild(instNodeId, UAModel.IJTBase.BrowseNames.Identification);
                 if (idNode.IsNullNodeId) continue;
 
                 count += AddIdentificationItems(_assetVarSubscription, idNode,
-                    $"{category}/{inst.BrowseName.Name}");
+                    $"{category}/{browseName}");
             }
         }
 
@@ -312,7 +321,7 @@ public sealed class AssetManagement : IDisposable
             return;
         }
 
-        _s.Session.AddSubscription(_assetVarSubscription);
+        _js.Session.AddSubscription(_assetVarSubscription);
         _assetVarSubscription.Create();
         _log.LogInformation("✓ Subscribed to {Count} asset identification variable(s).", count);
     }
@@ -325,7 +334,7 @@ public sealed class AssetManagement : IDisposable
 
         foreach (var varName in varNames)
         {
-            var varNode = _s.BrowseChild(idNodeId, varName);
+            var varNode = _js.BrowseChild(idNodeId, varName);
             if (varNode.IsNullNodeId) continue;
 
             var item = new MonitoredItem(sub.DefaultItem)
@@ -357,11 +366,12 @@ public sealed class AssetManagement : IDisposable
         try
         {
             _assetVarSubscription.Delete(silent: true);
-            _s.Session.RemoveSubscription(_assetVarSubscription);
+            _js.Session.RemoveSubscription(_assetVarSubscription);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {

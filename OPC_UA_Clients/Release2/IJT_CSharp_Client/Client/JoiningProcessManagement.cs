@@ -14,11 +14,14 @@ namespace IJT_CSharp_Client.Client;
 public sealed class JoiningProcessManagement : IDisposable
 {
     private readonly ILogger<JoiningProcessManagement> _log = IjtLog.For<JoiningProcessManagement>();
-    private readonly IIjtSession _s;
+    private readonly IJoiningSystem _js;
     private NodeId? _jpmNodeId;
 
-    /// <summary>Creates a JoiningProcessManagement facade backed by <paramref name="ijtSession"/>.</summary>
-    public JoiningProcessManagement(IIjtSession ijtSession) => _s = ijtSession;
+    /// <summary>Creates a JoiningProcessManagement facade backed by <paramref name="js"/>.</summary>
+    public JoiningProcessManagement(IJoiningSystem js) => _js = js;
+
+    /// <summary>Clears cached node references so the next operation re-browses the address space.</summary>
+    public void InvalidateNodeCache() => _jpmNodeId = null;
 
     // ── Node lookup ───────────────────────────────────────────────────────────
 
@@ -31,13 +34,13 @@ public sealed class JoiningProcessManagement : IDisposable
         if (_jpmNodeId is not null && !_jpmNodeId.IsNullNodeId)
             return _jpmNodeId;
 
-        var node = _s.BrowseChild(
-            _s.JoiningSystemNodeId,
+        var node = _js.BrowseChild(
+            _js.NodeId,
             UAModel.IJTBase.BrowseNames.JoiningProcessManagement);
 
         if (node.IsNullNodeId)
         {
-            node = _s.IjtBaseObjectId(
+            node = _js.IjtBaseObjectId(
                 UAModel.IJTBase.Objects.JoiningSystemType_JoiningProcessManagement);
             _log.LogWarning("⚠ JoiningProcessManagement fallback to type NodeId.");
         }
@@ -58,7 +61,7 @@ public sealed class JoiningProcessManagement : IDisposable
         _log.LogInformation("\n── GetJoiningProcessList (uri={Uri}) ────────────────", productInstanceUri);
 
         var objectId = GetJpmNode();
-        var methodId = _s.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
+        var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -69,17 +72,19 @@ public sealed class JoiningProcessManagement : IDisposable
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri);
+            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri);
             if (outputs.Count == 0)
             {
                 _log.LogInformation("[DATA] No output (empty list or not supported).");
                 return;
             }
-            IjtJsonSerializer.PrintMethodOutputs("GetJoiningProcessList", outputs);
+            IjtJsonSerializer.PrintNamedOutputs("GetJoiningProcessList", outputs,
+                "JoiningProcessList", "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
@@ -106,7 +111,7 @@ public sealed class JoiningProcessManagement : IDisposable
         _log.LogInformation("\n── SelectJoiningProcess (id={Id}) ──────────────────", joiningProcessId);
 
         var objectId = GetJpmNode();
-        var methodId = _s.BrowseMethod(objectId, "SelectJoiningProcess",
+        var methodId = _js.BrowseMethod(objectId, "SelectJoiningProcess",
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -125,13 +130,14 @@ public sealed class JoiningProcessManagement : IDisposable
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, productInstanceUri, ext);
+            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, ext);
             _log.LogInformation("✓ SelectJoiningProcess called.");
-            IjtJsonSerializer.PrintMethodOutputs("SelectJoiningProcess", outputs);
+            IjtJsonSerializer.PrintNamedOutputs("SelectJoiningProcess", outputs, "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
@@ -152,7 +158,7 @@ public sealed class JoiningProcessManagement : IDisposable
         _log.LogInformation("\n── GetSelectedJoiningProgram ────────────────────────");
 
         var jpmNode = GetJpmNode();
-        var methodId = _s.BrowseMethod(jpmNode,
+        var methodId = _js.BrowseMethod(jpmNode,
             UAModel.IJTBase.BrowseNames.GetSelectedJoiningProgram,
             UAModel.IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram);
 
@@ -164,13 +170,15 @@ public sealed class JoiningProcessManagement : IDisposable
 
         try
         {
-            var outputs = _s.CallMethod(jpmNode, methodId, productInstanceUri);
+            var outputs = _js.CallMethod(jpmNode, methodId, productInstanceUri);
             _log.LogInformation("✓ GetSelectedJoiningProgram result:");
-            IjtJsonSerializer.PrintMethodOutputs("GetSelectedJoiningProgram", outputs);
+            IjtJsonSerializer.PrintNamedOutputs("GetSelectedJoiningProgram", outputs,
+                "SelectedJoiningProgram", "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {

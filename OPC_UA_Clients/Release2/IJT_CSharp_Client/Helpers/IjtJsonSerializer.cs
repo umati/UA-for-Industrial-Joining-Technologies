@@ -121,6 +121,32 @@ public static class IjtJsonSerializer
     }
 
     /// <summary>
+    /// Prints OPC UA method outputs using explicit output argument labels.
+    /// If labels are fewer than outputs, remaining items fall back to output[i].
+    /// </summary>
+    public static void PrintNamedOutputs(string methodName, IList<object> outputs, params string[] labels)
+    {
+        if (outputs.Count == 0)
+        {
+            _log.LogInformation("[{Method}] No output arguments.", methodName);
+            return;
+        }
+
+        _log.LogInformation("── {Method} ──", methodName);
+        for (int i = 0; i < outputs.Count; i++)
+        {
+            var label = i < labels.Length && !string.IsNullOrWhiteSpace(labels[i])
+                ? labels[i]
+                : $"output[{i}]";
+            var val = outputs[i] is Variant vt ? vt.Value : outputs[i];
+            if (val is ResultDataType || (val is ExtensionObject eo && eo.Body is ResultDataType))
+                PrintResult(val);
+            else
+                Print(label, outputs[i]);
+        }
+    }
+
+    /// <summary>
     /// Prints a ResultDataType with full structured formatting.
     /// ResultMetaData shows all 33 properties; ResultContent is printed as JSON.
     /// </summary>

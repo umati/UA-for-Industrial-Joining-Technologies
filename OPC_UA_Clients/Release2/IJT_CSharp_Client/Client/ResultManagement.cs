@@ -18,25 +18,41 @@ namespace IJT_CSharp_Client.Client;
 public sealed class ResultManagement : IDisposable
 {
     private readonly ILogger<ResultManagement> _log = IjtLog.For<ResultManagement>();
-    private readonly IIjtSession _s;
+    private readonly IJoiningSystem _js;
     private Subscription? _resultVarSubscription;
+    private NodeId? _rmNodeId;
 
-    /// <summary>Creates a new ResultManagement facade backed by <paramref name="ijtSession"/>.</summary>
-    public ResultManagement(IIjtSession ijtSession) => _s = ijtSession;
+    /// <summary>Creates a new ResultManagement facade backed by <paramref name="js"/>.</summary>
+    public ResultManagement(IJoiningSystem js) => _js = js;
+
+    /// <summary>Clears the cached ResultManagement node reference so the next operation re-browses the address space.</summary>
+    public void InvalidateNodeCache() => _rmNodeId = null;
 
     // ── Node lookup ───────────────────────────────────────────────────────────
 
     /// <summary>
     /// Finds the ResultManagement object node: browses the JoiningSystem instance
     /// for a "ResultManagement" child; falls back to the type-level object NodeId.
+    /// Result is cached until <see cref="InvalidateNodeCache"/> is called.
     /// </summary>
     private NodeId GetResultManagementNode()
     {
-        var child = _s.BrowseChild(_s.JoiningSystemNodeId, "ResultManagement");
-        if (!child.IsNullNodeId) return child;
+        if (_rmNodeId is not null && !_rmNodeId.IsNullNodeId)
+            return _rmNodeId;
+
+        var child = _js.BrowseChild(_js.NodeId, UAModel.MachineryResult.BrowseNames.ResultManagement);
+        if (!child.IsNullNodeId)
+        {
+            _rmNodeId = child;
+            return _rmNodeId;
+        }
 
         // Fallback: type-definition node (most servers honour this for method calls)
-        return _s.IjtBaseObjectId(UAModel.IJTBase.Objects.JoiningSystemType_ResultManagement);
+        var fallback = _js.IjtBaseObjectId(UAModel.IJTBase.Objects.JoiningSystemType_ResultManagement);
+        if (!fallback.IsNullNodeId)
+            _log.LogWarning("⚠ ResultManagement fallback to type NodeId.");
+        _rmNodeId = fallback;
+        return _rmNodeId;
     }
 
     // ── GetLatestResult ───────────────────────────────────────────────────────
@@ -51,7 +67,7 @@ public sealed class ResultManagement : IDisposable
         _log.LogInformation("\n── GetLatestResult ──────────────────────────────────");
 
         var objectId = GetResultManagementNode();
-        var methodId = _s.BrowseMethod(objectId, "GetLatestResult",
+        var methodId = _js.BrowseMethod(objectId, "GetLatestResult",
             UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -62,12 +78,13 @@ public sealed class ResultManagement : IDisposable
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, (int)timeoutMs);
+            var outputs = _js.CallMethod(objectId, methodId, (int)timeoutMs);
             PrintResultOutputs(outputs);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
@@ -88,7 +105,7 @@ public sealed class ResultManagement : IDisposable
         _log.LogInformation("\n── GetResultById (id={ResultId}) ──────────────────────", resultId);
 
         var objectId = GetResultManagementNode();
-        var methodId = _s.BrowseMethod(objectId, "GetResultById",
+        var methodId = _js.BrowseMethod(objectId, "GetResultById",
             UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetResultById);
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
@@ -99,12 +116,13 @@ public sealed class ResultManagement : IDisposable
 
         try
         {
-            var outputs = _s.CallMethod(objectId, methodId, resultId, (int)timeoutMs);
+            var outputs = _js.CallMethod(objectId, methodId, resultId, (int)timeoutMs);
             PrintResultOutputs(outputs);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
@@ -132,13 +150,13 @@ public sealed class ResultManagement : IDisposable
         var rmNode = GetResultManagementNode();
 
         // Try to find the Results folder child, then the first variable inside
-        var resultsFolder = _s.BrowseChild(rmNode, "Results");
+        var resultsFolder = _js.BrowseChild(rmNode, "Results");
         NodeId resultVarNode = NodeId.Null;
 
         if (!resultsFolder.IsNullNodeId)
         {
             // Find first variable child of Results
-            _s.Session.Browse(null, null, resultsFolder, 0,
+            _js.Session.Browse(null, null, resultsFolder, 0,
                 BrowseDirection.Forward, ReferenceTypeIds.HierarchicalReferences,
                 true, (uint)NodeClass.Variable, out _, out var varRefs);
             if (varRefs?.Count > 0)
@@ -151,10 +169,10 @@ public sealed class ResultManagement : IDisposable
             return;
         }
 
-        _resultVarSubscription = new Subscription(_s.Session.DefaultSubscription)
+        _resultVarSubscription = new Subscription(_js.Session.DefaultSubscription)
         {
             DisplayName = "IJT ResultVariable",
-            PublishingInterval = _s.Config.PublishingIntervalMs,
+            PublishingInterval = _js.Config.PublishingIntervalMs,
         };
 
         var item = new MonitoredItem(_resultVarSubscription.DefaultItem)
@@ -167,7 +185,7 @@ public sealed class ResultManagement : IDisposable
         item.Notification += OnResultVariableChanged;
 
         _resultVarSubscription.AddItem(item);
-        _s.Session.AddSubscription(_resultVarSubscription);
+        _js.Session.AddSubscription(_resultVarSubscription);
         _resultVarSubscription.Create();
 
         _log.LogInformation("✓ Subscribed to Result variable ({NodeId}).", resultVarNode);
@@ -209,11 +227,12 @@ public sealed class ResultManagement : IDisposable
         try
         {
             _resultVarSubscription.Delete(silent: true);
-            _s.Session.RemoveSubscription(_resultVarSubscription);
+            _js.Session.RemoveSubscription(_resultVarSubscription);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}", srex.StatusCode, srex.Message);
+            _log.LogError("✗ OPC UA error {Status}: {Message}",
+                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
@@ -237,5 +256,5 @@ public sealed class ResultManagement : IDisposable
     // ── Output formatting ─────────────────────────────────────────────────────
 
     private static void PrintResultOutputs(IList<object> outputs)
-        => IjtJsonSerializer.PrintMethodOutputs("Result", outputs);
+        => IjtJsonSerializer.PrintNamedOutputs("Result", outputs, "ResultHandle", "Result", "Error");
 }

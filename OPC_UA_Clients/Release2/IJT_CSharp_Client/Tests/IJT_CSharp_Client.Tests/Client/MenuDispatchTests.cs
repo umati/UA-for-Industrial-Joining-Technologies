@@ -12,9 +12,9 @@ namespace IJT_CSharp_Client.Tests.Client;
 /// <summary>
 /// Verifies the exact manager-method dispatch performed by each Program.cs menu item (0–14).
 ///
-/// Program.cs creates four managers from a single <see cref="IIjtSession"/> and routes
+/// Program.cs creates four managers from a single <see cref="IJoiningSystem"/> and routes
 /// console commands to them.  These tests exercise the same call site with a
-/// <see cref="Mock{T}"/> of <see cref="IIjtSession"/> so no live OPC UA server is required.
+/// <see cref="Mock{T}"/> of <see cref="IJoiningSystem"/> so no live OPC UA server is required.
 ///
 /// Each menu item has at minimum:
 /// • a "happy-path" test confirming the OPC UA call is made when nodes exist, and
@@ -34,10 +34,10 @@ public sealed class MenuDispatchTests
     /// Session mock where every browse and method call succeeds.
     /// Mirrors the "server has all expected nodes" scenario.
     /// </summary>
-    private static Mock<IIjtSession> HappyPathMock()
+    private static Mock<IJoiningSystem> HappyPathMock()
     {
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(SystemId);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(SystemId);
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
@@ -57,10 +57,10 @@ public sealed class MenuDispatchTests
     /// Session mock where every browse returns <see cref="NodeId.Null"/>.
     /// Mirrors the "server does not expose these nodes" scenario.
     /// </summary>
-    private static Mock<IIjtSession> NullNodeMock()
+    private static Mock<IJoiningSystem> NullNodeMock()
     {
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(NodeId.Null);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(NodeId.Null);
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
@@ -74,9 +74,9 @@ public sealed class MenuDispatchTests
     /// Session mock with the minimum setup required by <see cref="EventSubscriber"/>
     /// (namespace indices + Config) without a live ISession.
     /// </summary>
-    private static Mock<IIjtSession> EventMock()
+    private static Mock<IJoiningSystem> EventMock()
     {
-        var mock = new Mock<IIjtSession>();
+        var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.IjtBaseNsIdx).Returns((ushort)2);
         mock.Setup(s => s.MachineryResultNsIdx).Returns((ushort)3);
         mock.Setup(s => s.Config)
@@ -640,8 +640,8 @@ public sealed class MenuDispatchTests
     {
         // BrowseChild for the JPM object node returns ObjectId;
         // BrowseMethod encapsulates method lookup and returns MethodId directly.
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(SystemId);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(SystemId);
         var callCount = 0;
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),

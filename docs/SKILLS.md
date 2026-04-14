@@ -126,8 +126,9 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT CSharp Client (`OPC_UA_Clients/Release2/IJT_CSharp_Client/`)
 - **Stack**: C# .NET 10+, OPC Foundation UA SDK, xUnit, Moq, coverlet
-- **Purpose**: C# reference OPC UA IJT client — asset mgmt, result mgmt, event subscriptions
-- **Test baseline**: 413 unit tests pass · **93% line coverage / 81% branch coverage**
+- **Purpose**: C# reference OPC UA IJT client — events, results, assets, joining process, and joint management
+- **Architecture**: `JoiningSystem` holds `ISession` (OPC UA SDK) directly; no wrapper. `IJoiningSystem` is the interface for management classes and Moq mocks. `IjtSession`/`IIjtSession` do not exist.
+- **Test baseline**: **420 unit tests** pass · 0 failed · 0 skipped
 - **One test command**: `python run_all_tests.py` (dotnet build + test + NuGet CVE scan)
 - **Live tests**: skipped unless `OPCUA_SERVER_URL` is set or `OPCUA_SIMULATOR_EXE` points to server binary
 - **Details**: read `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md`
@@ -228,7 +229,7 @@ Runtime: ~10 minutes (int-testclient + int-live-others run in parallel). NOT tri
 | `SimulateBulkResults` retry loop | Server `BULK_RESULTS_IN_PROGRESS` flag → `BadTooManyOperations` on concurrent calls |
 | No custom EventFilter | Full `ResultDataType` payload arrives in event without custom filter |
 | C# live-test sync OPC UA calls wrapped in hard timeouts | `BrowseChild`, `Subscribe`, `CallMethod`, and `Unsubscribe` are synchronous and can stall under server load; guarded `Task.WhenAny` timeouts prevent test-host hangs |
-| `IjtSession.DisposeAsync` cleanup guard timeout | Management-object dispose calls can perform synchronous network operations; timeout-bounded cleanup avoids indefinite teardown stalls |
+| `JoiningSystem.DisposeAsync` cleanup guard timeout | Management-object dispose calls can perform synchronous network operations; timeout-bounded cleanup (8s management + 10s session close) avoids indefinite teardown stalls |
 | Console live tests override coverage gate (`--cov-fail-under=0`) | Live tests intentionally exercise a narrow surface against a live server; global unit-test coverage threshold should not fail live stage |
 
 ---

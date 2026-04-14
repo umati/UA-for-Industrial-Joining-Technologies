@@ -16,9 +16,9 @@ namespace IJT_CSharp_Client.Tests.Client;
 /// </summary>
 public sealed class EventSubscriberTests
 {
-    private static Mock<IIjtSession> CreateMock()
+    private static Mock<IJoiningSystem> CreateMock()
     {
-        var mock = new Mock<IIjtSession>();
+        var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.IjtBaseNsIdx).Returns((ushort)2);
         mock.Setup(s => s.MachineryResultNsIdx).Returns((ushort)3);
         mock.Setup(s => s.Config).Returns(new global::IJT_CSharp_Client.Configuration.ClientConfig());
