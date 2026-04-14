@@ -54,6 +54,7 @@ export default class StandardDemo extends BasicScreen {
     // Handling of button 1 (calling select process)
     const button1 = document.createElement('button')
     button1.innerText = 'Select program 1'
+    button1.title = "Set the controller Id and the two joining process Id's by using the upper right corner dropdown, selecting 'Settings'"
     button1.classList.add('demoButton')
     buttonArea.appendChild(button1)
     button1.addEventListener('click', () => this.selectJoiningProcess(this.settings.JoiningProcess1))
@@ -61,6 +62,7 @@ export default class StandardDemo extends BasicScreen {
     // Handling of button 2 (calling select process)
     const button2 = document.createElement('button')
     button2.innerText = 'Select program 2'
+    button2.title = "Set the controller Id and the two joining process Id's by using the upper right corner dropdown, selecting 'Settings'"
     button2.classList.add('demoButton')
     buttonArea.appendChild(button2)
     button2.addEventListener('click', () => this.selectJoiningProcess(this.settings.JoiningProcess2))
