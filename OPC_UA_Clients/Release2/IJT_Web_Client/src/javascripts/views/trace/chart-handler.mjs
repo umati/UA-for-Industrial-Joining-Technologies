@@ -6,7 +6,7 @@ import { createOptionalTraceExtensionLoader } from './optional-trace-extension-l
 const LIMIT_ENDPOINT_ARROW_LENGTH = 14
 const LIMIT_ENDPOINT_BOX_RADIUS = 8
 const ZOOM_DEBOUNCE_MS = 100
-const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/limit-geometry.mjs')
+const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/core/limit-curve-geometry.mjs')
 
 /**
  * Chartmanager should encapsulate all access to chart.js in order to

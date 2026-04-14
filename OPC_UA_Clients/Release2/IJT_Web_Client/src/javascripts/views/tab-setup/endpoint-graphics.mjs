@@ -50,7 +50,7 @@ export default class EndpointGraphics extends BasicScreen {
   }
 
   async loadOptionalEnvelopeTab (tabGenerator, resultManager, methodManager, addressSpace) {
-    const modulePath = '/src/javascripts/views/envelope/envelope-graphics.mjs'
+    const modulePath = '/src/javascripts/views/envelope/ui/envelope-graphics.mjs'
     try {
       const { default: EnvelopeScreen } = await import(modulePath)
       if (EnvelopeScreen) {

@@ -2,7 +2,7 @@ import SingleTraceData from './single-trace-data.mjs'
 import ChartManager from './chart-handler.mjs'
 import { createOptionalTraceExtensionLoader } from './optional-trace-extension-loader.mjs'
 
-const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/limit-geometry.mjs')
+const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/core/limit-curve-geometry.mjs')
 
 /**
  * TraceGraphics displays result events in order to display the traces (graphs)
