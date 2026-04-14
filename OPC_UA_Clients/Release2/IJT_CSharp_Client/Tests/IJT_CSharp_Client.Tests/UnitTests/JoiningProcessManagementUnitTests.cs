@@ -9,7 +9,7 @@ namespace IJT_CSharp_Client.Tests.UnitTests;
 
 /// <summary>
 /// Unit tests for <see cref="JoiningProcessManagement"/> — menu items 11, 12, 13.
-/// All tests use a mocked <see cref="IIjtSession"/>; no live OPC UA server is required.
+/// All tests use a mocked <see cref="IJoiningSystem"/>; no live OPC UA server is required.
 ///
 /// Covered operations:
 ///   11  GetJoiningProcessList

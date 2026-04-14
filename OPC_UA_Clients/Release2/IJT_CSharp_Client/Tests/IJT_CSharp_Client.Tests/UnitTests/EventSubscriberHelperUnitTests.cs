@@ -18,15 +18,15 @@ namespace IJT_CSharp_Client.Tests.UnitTests;
 ///   - <c>BuildResultEventFilter</c>
 ///   - <c>BuildJoiningSystemEventFilter</c>
 ///
-/// All tests use a mock <see cref="IIjtSession"/>; no live OPC UA server is required.
+/// All tests use a mock <see cref="IJoiningSystem"/>; no live OPC UA server is required.
 /// </summary>
 public sealed class EventSubscriberHelperUnitTests
 {
     // ── Session mock ──────────────────────────────────────────────────────────
 
-    private static Mock<IIjtSession> CreateSessionMock()
+    private static Mock<IJoiningSystem> CreateSessionMock()
     {
-        var mock = new Mock<IIjtSession>();
+        var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.IjtBaseNsIdx).Returns((ushort)7);
         mock.Setup(s => s.MachineryResultNsIdx).Returns((ushort)6);
         mock.Setup(s => s.Config).Returns(new IJT_CSharp_Client.Configuration.ClientConfig());

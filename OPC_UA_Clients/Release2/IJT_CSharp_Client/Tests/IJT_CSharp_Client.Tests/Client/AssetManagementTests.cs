@@ -11,7 +11,7 @@ namespace IJT_CSharp_Client.Tests.Client;
 
 /// <summary>
 /// Unit tests for <see cref="AssetManagement"/>.
-/// All tests use a <see cref="Mock{T}"/> of <see cref="IIjtSession"/>
+/// All tests use a <see cref="Mock{T}"/> of <see cref="IJoiningSystem"/>
 /// so no live OPC UA server is required.
 /// </summary>
 public sealed class AssetManagementTests
@@ -28,10 +28,10 @@ public sealed class AssetManagementTests
     /// <summary>
     /// Returns a session mock where all browse/method lookups succeed.
     /// </summary>
-    private static Mock<IIjtSession> HappyPathMock()
+    private static Mock<IJoiningSystem> HappyPathMock()
     {
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(JoiningSystemId);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
@@ -51,10 +51,10 @@ public sealed class AssetManagementTests
     /// Returns a session mock where node browsing returns <see cref="NodeId.Null"/>
     /// (simulating a server without the relevant nodes).
     /// </summary>
-    private static Mock<IIjtSession> NullNodeMock()
+    private static Mock<IJoiningSystem> NullNodeMock()
     {
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(NodeId.Null);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(NodeId.Null);
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
@@ -199,8 +199,8 @@ public sealed class AssetManagementTests
     [Fact]
     public void EnableAsset_WhenBrowseFails_FallsBackToTypeNodeId_AndCallsCallMethod()
     {
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(JoiningSystemId);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
         // First BrowseChild for AssetManagement node returns null → triggers fallback to IjtBaseObjectId
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
@@ -375,8 +375,8 @@ public sealed class AssetManagementTests
     [Fact]
     public void SubscribeAssetVariables_WhenAssetMgmtNotFound_ReturnsEarly()
     {
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(JoiningSystemId);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
@@ -394,8 +394,8 @@ public sealed class AssetManagementTests
     public void SubscribeAssetVariables_WhenAssetsNotFound_ReturnsEarly()
     {
         var amNodeId = new NodeId(5001u, (ushort)2);
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(JoiningSystemId);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
@@ -414,8 +414,8 @@ public sealed class AssetManagementTests
         var amNodeId = new NodeId(5002u, (ushort)2);
         var assetsNodeId = new NodeId(5003u, (ushort)2);
 
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(JoiningSystemId);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))

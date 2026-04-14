@@ -236,7 +236,7 @@ On Windows, certain tools (notably **pyfakefs**) can leave directories with rest
 survive test teardown and cannot be deleted by standard Python or shell commands:
 
 - pytest-cache-files-* at project root — pyfakefs basetemp bookkeeping
-- 	mp/pytest — if pyfakefs is active when pytest creates basetemp
+- tmp/pytest — if pyfakefs is active when pytest creates basetemp
 - .state/tmp/test-fixtures/ijt-web-* — Web local_temp_dir fixture leftovers
 
 **Built-in protections already in place:**
@@ -246,10 +246,9 @@ survive test teardown and cannot be deleted by standard Python or shell commands
 | _force_rmtree(path) | All 7 runners + 2 setup scripts — shutil.rmtree(onexc=...) with os.chmod retry |
 | [tool.mypy] exclude | Skips pytest-cache-files-.* before mypy walks into them |
 | [tool.pylint.main] ignore-paths | Same exclusion for pylint |
-|
-orecursedirs | pytest never collects from pytest-cache-files-* or 	mp |
+| `norecursedirs` | pytest never collects from pytest-cache-files-* or tmp |
 | -p no:cacheprovider (Web) | Prevents pytest-cache-files-* creation entirely |
-| .dockerignore | 	ests/fixtures/tmp/ excluded from Docker build context |
+| .dockerignore | tests/fixtures/tmp/ excluded from Docker build context |
 
 **If a locked dir survives a run** it sits inert — tools skip it, Docker ignores it. It clears
 automatically on the next machine restart (Windows releases file handles on reboot).

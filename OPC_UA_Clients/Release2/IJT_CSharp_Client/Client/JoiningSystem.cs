@@ -10,19 +10,18 @@ using Opc.Ua.Configuration;
 namespace IJT_CSharp_Client.Client;
 
 /// <summary>
-/// Wraps an OPC UA <see cref="ISession"/> with IJT-specific helpers:
-/// namespace-index discovery, safe method calls, node browsing, keep-alive reconnect,
-/// and encodeable-type registration.
+/// The IJT companion spec root domain object, aligned with <c>JoiningSystemType</c>
+/// (NodeId 1005, IJTBase namespace).
 /// <para>
 /// Obtain via <see cref="ConnectAsync"/>; dispose with <c>await using</c>.
 /// </para>
 /// </summary>
-public sealed class IjtSession : IAsyncDisposable, IIjtSession
+public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 {
     // ── Public surface ────────────────────────────────────────────────────────
 
     /// <summary>The underlying OPC UA session.</summary>
-    public ISession Session { get; }
+    public ISession Session => _session;
 
     /// <summary>Connection configuration used to create this session.</summary>
     public ClientConfig Config { get; }
@@ -41,53 +40,67 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
 
     /// <summary>
     /// NodeId of the JoiningSystem instance discovered in Objects folder.
-    /// Used as the default context node for management-type method calls.
     /// </summary>
-    public NodeId JoiningSystemNodeId { get; private set; } = NodeId.Null;
+    public NodeId NodeId => _joiningSystemNodeId;
 
     /// <summary>Returns <c>true</c> when the underlying session is connected.</summary>
-    public bool IsConnected => Session?.Connected ?? false;
+    public bool IsConnected => _session?.Connected ?? false;
 
-    // ── Management surface (created lazily after Connect) ─────────────────────
+    // ── Management surface ────────────────────────────────────────────────────
     public ResultManagement ResultManagement { get; private set; } = null!;
     public AssetManagement AssetManagement { get; private set; } = null!;
     public JoiningProcessManagement JoiningProcessManagement { get; private set; } = null!;
+    public JointManagement JointManagement { get; private set; } = null!;
     public EventSubscriber EventSubscriber { get; private set; } = null!;
 
-    // ── Construction / connection ─────────────────────────────────────────────
+    // ── Private fields ────────────────────────────────────────────────────────
 
     private const int KeepAliveIntervalMs = 5_000;
     private const int EndpointDiscoveryTimeoutMs = 15_000;
 
-    private readonly ILogger<IjtSession> _log = IjtLog.For<IjtSession>();
+    private readonly ISession _session;
+    private readonly ILogger<JoiningSystem> _log = IjtLog.For<JoiningSystem>();
+    private NodeId _joiningSystemNodeId = NodeId.Null;
 
-    internal IjtSession(ISession session, ClientConfig config)
+    // ── Construction / connection ─────────────────────────────────────────────
+
+    private JoiningSystem(ISession session, ClientConfig config)
     {
-        Session = session;
+        _session = session;
         Config = config;
     }
 
+    private JoiningSystem(ISession session, ClientConfig config, bool skipDiscovery)
+    {
+        _session = session;
+        Config = config;
+        _ = skipDiscovery; // used only to select this overload
+    }
+
     /// <summary>
-    /// Creates a pre-configured <see cref="IjtSession"/> for unit testing,
+    /// Creates a pre-configured <see cref="JoiningSystem"/> for unit testing,
     /// bypassing the live OPC UA server connection path.
     /// </summary>
-    internal static IjtSession CreateForTesting(
+    internal static JoiningSystem CreateForTesting(
         ISession session,
         ClientConfig? config = null,
         ushort ijtBaseNsIdx = 7,
         ushort ijtTighteningNsIdx = 8,
         ushort machineryResultNsIdx = 6,
-        ushort diNsIdx = 5)
+        ushort diNsIdx = 5,
+        NodeId? joiningSystemNodeId = null)
     {
-        var wrapper = new IjtSession(
+        var js = new JoiningSystem(
             session,
-            config ?? new ClientConfig { ServerUrl = "opc.tcp://localhost:4840" });
-        wrapper.IjtBaseNsIdx = ijtBaseNsIdx;
-        wrapper.IjtTighteningNsIdx = ijtTighteningNsIdx;
-        wrapper.MachineryResultNsIdx = machineryResultNsIdx;
-        wrapper.DiNsIdx = diNsIdx;
-        wrapper.InitManagement();
-        return wrapper;
+            config ?? new ClientConfig { ServerUrl = "opc.tcp://localhost:4840" },
+            skipDiscovery: true);
+        js.IjtBaseNsIdx = ijtBaseNsIdx;
+        js.IjtTighteningNsIdx = ijtTighteningNsIdx;
+        js.MachineryResultNsIdx = machineryResultNsIdx;
+        js.DiNsIdx = diNsIdx;
+        js._joiningSystemNodeId = joiningSystemNodeId ?? NodeId.Null;
+        js.InitManagement();
+        return js;
     }
 
     /// <summary>
@@ -95,11 +108,11 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
     /// resolves namespace indices, registers IJT encodeable types, and discovers the
     /// JoiningSystem node. Throws on connection failure.
     /// </summary>
-    public static async Task<IjtSession> ConnectAsync(
+    public static async Task<JoiningSystem> ConnectAsync(
         ClientConfig config,
         CancellationToken ct = default)
     {
-        var log = IjtLog.For<IjtSession>();
+        var log = IjtLog.For<JoiningSystem>();
 
         var appConfig = BuildApplicationConfig(config);
         await appConfig.Validate(ApplicationType.Client).ConfigureAwait(false);
@@ -115,35 +128,32 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
         var session = await DiscoverAndConnectAsync(appConfig, config, log, ct).ConfigureAwait(false);
 
         // Register all IJT encodeable types so the SDK can encode/decode ExtensionObjects.
-        // Must cover every assembly that contributes encoded types so ExtensionObject bodies
-        // arrive as typed objects, not raw byte[].
         session.MessageContext.Factory.AddEncodeableTypes(
             typeof(UAModel.IJTBase.EntityDataType).Assembly);
         session.MessageContext.Factory.AddEncodeableTypes(
             typeof(UAModel.MachineryResult.ResultDataType).Assembly);
 
-        var wrapper = new IjtSession(session, config);
+        var js = new JoiningSystem(session, config);
         session.KeepAliveInterval = KeepAliveIntervalMs;
-        session.KeepAlive += wrapper.OnKeepAlive;
+        session.KeepAlive += js.OnKeepAlive;
 
-        wrapper.ResolveNamespaceIndices();
-        wrapper.DiscoverJoiningSystem();
-        wrapper.InitManagement();
+        js.ResolveNamespaceIndices();
+        js.DiscoverJoiningSystem();
+        js.InitManagement();
 
         log.LogInformation(
             "Connected — IJTBase ns={IjtBase}, IJTTightening ns={IjtTightening}, MachineryResult ns={MachineryResult}",
-            wrapper.IjtBaseNsIdx, wrapper.IjtTighteningNsIdx, wrapper.MachineryResultNsIdx);
-        if (!wrapper.JoiningSystemNodeId.IsNullNodeId)
-            log.LogInformation("JoiningSystem node: {NodeId}", wrapper.JoiningSystemNodeId);
+            js.IjtBaseNsIdx, js.IjtTighteningNsIdx, js.MachineryResultNsIdx);
+        if (!js._joiningSystemNodeId.IsNullNodeId)
+            log.LogInformation("JoiningSystem node: {NodeId}", js._joiningSystemNodeId);
 
-        return wrapper;
+        return js;
     }
 
     // ── Private: session setup ────────────────────────────────────────────────
 
     private static ApplicationConfiguration BuildApplicationConfig(ClientConfig config)
     {
-        // PKI stores sit next to the executable — keeps the client fully self-contained.
         var pkiRoot = Path.Combine(AppContext.BaseDirectory, "PKI");
 
         return new ApplicationConfiguration
@@ -213,7 +223,7 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
 
     private void ResolveNamespaceIndices()
     {
-        var ns = Session.NamespaceUris;
+        var ns = _session.NamespaceUris;
 
         int ijtBase = ns.GetIndex(UAModel.IJTBase.Namespaces.IJTBase);
         IjtBaseNsIdx = ijtBase >= 0 ? (ushort)ijtBase : (ushort)0;
@@ -230,15 +240,11 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
 
     // ── JoiningSystem discovery ───────────────────────────────────────────────
 
-    /// <summary>
-    /// Browses /Root/Objects for the first node whose TypeDefinition is
-    /// JoiningSystemType (NodeId 1005, IJTBase namespace).
-    /// </summary>
     private void DiscoverJoiningSystem()
     {
         try
         {
-            Session.Browse(
+            _session.Browse(
                 null, null,
                 ObjectIds.ObjectsFolder, 0,
                 BrowseDirection.Forward,
@@ -258,7 +264,7 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
                      typeDef.Identifier is uint id &&
                      id == UAModel.IJTBase.ObjectTypes.JoiningSystemType))
                 {
-                    JoiningSystemNodeId = (NodeId)r.NodeId;
+                    _joiningSystemNodeId = (NodeId)r.NodeId;
                     return;
                 }
             }
@@ -267,17 +273,19 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
             foreach (var r in refs)
             {
                 var nid = (NodeId)r.NodeId;
-                if (nid != ObjectIds.Server && r.BrowseName.Name != "Server")
+                var browseName = r.BrowseName?.Name;
+                if (nid != ObjectIds.Server && browseName != "Server")
                 {
-                    JoiningSystemNodeId = nid;
-                    _log.LogWarning("JoiningSystem fallback: {BrowseName} ({NodeId})", r.BrowseName.Name, nid);
+                    _joiningSystemNodeId = nid;
+                    _log.LogWarning("JoiningSystem fallback: {BrowseName} ({NodeId})", browseName ?? "<null>", nid);
                     return;
                 }
             }
         }
         catch (ServiceResultException ex)
         {
-            _log.LogError(ex, "Could not discover JoiningSystem node (OPC UA error {StatusCode})", ex.StatusCode);
+            _log.LogError(ex, "Could not discover JoiningSystem node (OPC UA error {StatusCode})",
+                IjtStatusHelper.FormatCode(ex.StatusCode));
         }
         catch (Exception ex)
         {
@@ -292,6 +300,7 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
         ResultManagement = new ResultManagement(this);
         AssetManagement = new AssetManagement(this);
         JoiningProcessManagement = new JoiningProcessManagement(this);
+        JointManagement = new JointManagement(this);
         EventSubscriber = new EventSubscriber(this);
     }
 
@@ -305,11 +314,18 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
         try
         {
             session.Reconnect();
+            ResolveNamespaceIndices();
+            DiscoverJoiningSystem();
+            ResultManagement?.InvalidateNodeCache();
+            AssetManagement?.InvalidateNodeCache();
+            JoiningProcessManagement?.InvalidateNodeCache();
+            JointManagement?.InvalidateNodeCache();
             _log.LogInformation("Reconnected.");
         }
         catch (ServiceResultException ex)
         {
-            _log.LogError(ex, "Reconnect failed (OPC UA error {StatusCode})", ex.StatusCode);
+            _log.LogError(ex, "Reconnect failed (OPC UA error {StatusCode})",
+                IjtStatusHelper.FormatCode(ex.StatusCode));
         }
         catch (Exception ex)
         {
@@ -319,13 +335,6 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
 
     // ── Method-call helper ────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Calls an OPC UA method and returns the output arguments.
-    /// Throws <see cref="ServiceResultException"/> on bad status code.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// When <paramref name="objectId"/> or <paramref name="methodId"/> is null.
-    /// </exception>
     public IList<object> CallMethod(
         NodeId objectId,
         NodeId methodId,
@@ -348,7 +357,7 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
             }
         };
 
-        Session.Call(
+        _session.Call(
             requestHeader: null,
             methodsToCall: request,
             results: out var results,
@@ -364,89 +373,151 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
 
     // ── Browse helper ─────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Resolves a child node under <paramref name="parentId"/> by browse name.
-    /// Returns <see cref="NodeId.Null"/> if not found.
-    /// </summary>
     public NodeId BrowseChild(
         NodeId parentId,
         string childBrowseName,
         ushort nsIndex = 0,
         NodeClass nodeClassMask = NodeClass.Unspecified)
     {
+        if (parentId == null || parentId.IsNullNodeId)
+            return NodeId.Null;
+
         var mask = nodeClassMask == NodeClass.Unspecified
             ? (uint)(NodeClass.Object | NodeClass.Variable | NodeClass.Method)
             : (uint)nodeClassMask;
 
-        Session.Browse(
-            null, null, parentId, 0,
-            BrowseDirection.Forward,
-            ReferenceTypeIds.HierarchicalReferences,
-            true, mask,
-            out _, out var refs);
+        try
+        {
+            _session.Browse(
+                null, null, parentId, 0,
+                BrowseDirection.Forward,
+                ReferenceTypeIds.HierarchicalReferences,
+                true, mask,
+                out _, out var refs);
 
-        if (refs == null) return NodeId.Null;
+            if (refs == null) return NodeId.Null;
 
-        var match = refs.FirstOrDefault(r =>
-            r.BrowseName.Name.Equals(childBrowseName, StringComparison.OrdinalIgnoreCase) &&
-            (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
+            var match = refs.FirstOrDefault(r =>
+                r.BrowseName?.Name?.Equals(childBrowseName, StringComparison.OrdinalIgnoreCase) == true &&
+                (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
 
-        return match != null ? (NodeId)match.NodeId : NodeId.Null;
+            return match != null ? (NodeId)match.NodeId : NodeId.Null;
+        }
+        catch (ServiceResultException ex)
+        {
+            _log.LogWarning("BrowseChild({Parent}, {Name}) failed [{Status}] — returning NodeId.Null",
+                parentId, childBrowseName, IjtStatusHelper.FormatCode(ex.StatusCode));
+            return NodeId.Null;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "BrowseChild({Parent}, {Name}) unexpected error — returning NodeId.Null",
+                parentId, childBrowseName);
+            return NodeId.Null;
+        }
+    }
+
+    // ── DiscoverMethodsUnder helper ───────────────────────────────────────────
+
+    public Dictionary<string, NodeId> DiscoverMethodsUnder(NodeId objectId)
+    {
+        if (objectId == null || objectId.IsNullNodeId)
+            return new Dictionary<string, NodeId>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            _session.Browse(
+                null, null, objectId, 0,
+                BrowseDirection.Forward,
+                ReferenceTypeIds.HierarchicalReferences,
+                true, (uint)NodeClass.Method,
+                out _, out var refs);
+
+            if (refs == null)
+                return new Dictionary<string, NodeId>(StringComparer.OrdinalIgnoreCase);
+
+            return refs.ToDictionary(
+                r => r.BrowseName.Name,
+                r => (NodeId)r.NodeId,
+                StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "DiscoverMethodsUnder({NodeId}) failed", objectId);
+            return new Dictionary<string, NodeId>(StringComparer.OrdinalIgnoreCase);
+        }
     }
 
     // ── BrowseMethod helper ───────────────────────────────────────────────────
 
-    /// <summary>
-    /// Resolves a method node under <paramref name="objectId"/> by browse name.
-    /// Falls back to <see cref="IjtBaseMethodId"/> if the browse yields nothing.
-    /// </summary>
     public NodeId BrowseMethod(NodeId objectId, string methodBrowseName, uint fallbackConstant = 0)
     {
+        // Tier 1: exact browse by name
         var m = BrowseChild(objectId, methodBrowseName, nodeClassMask: NodeClass.Method);
         if (!m.IsNullNodeId) return m;
-        return fallbackConstant > 0 ? IjtBaseMethodId(fallbackConstant) : NodeId.Null;
+
+        // Tier 2: enumerate all Method children, case-insensitive match
+        var methods = DiscoverMethodsUnder(objectId);
+        if (methods.TryGetValue(methodBrowseName, out var found)) return found;
+
+        // Tier 3: spec constant fallback (not server-verified)
+        if (fallbackConstant <= 0)
+            return NodeId.Null;
+
+        var availableMethods = methods.Count > 0
+            ? string.Join(", ", methods.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+            : "<none>";
+        _log.LogWarning(
+            "BrowseMethod({ObjectId}, {MethodName}) used Tier-3 numeric fallback ({Constant}). NodeId is synthetic/unverified. Available methods under object: {AvailableMethods}",
+            objectId, methodBrowseName, fallbackConstant, availableMethods);
+        return IjtBaseMethodId(fallbackConstant);
     }
 
     // ── Typed NodeId factory helpers ──────────────────────────────────────────
 
-    /// <summary>Creates a NodeId from an IJTBase Methods constant and the runtime namespace index.</summary>
-    public NodeId IjtBaseMethodId(uint methodConstant) =>
-        new NodeId(methodConstant, IjtBaseNsIdx);
+    public NodeId IjtBaseMethodId(uint methodConstant)
+    {
+        if (IjtBaseNsIdx == 0) { _log.LogWarning("IjtBaseMethodId: IJT namespace unresolved — returning NodeId.Null"); return NodeId.Null; }
+        return new NodeId(methodConstant, IjtBaseNsIdx);
+    }
 
-    /// <summary>Creates a NodeId from an IJTBase Objects constant and the runtime namespace index.</summary>
-    public NodeId IjtBaseObjectId(uint objectConstant) =>
-        new NodeId(objectConstant, IjtBaseNsIdx);
+    public NodeId IjtBaseObjectId(uint objectConstant)
+    {
+        if (IjtBaseNsIdx == 0) { _log.LogWarning("IjtBaseObjectId: IJT namespace unresolved — returning NodeId.Null"); return NodeId.Null; }
+        return new NodeId(objectConstant, IjtBaseNsIdx);
+    }
 
-    /// <summary>Creates a NodeId from an IJTBase Variables constant and the runtime namespace index.</summary>
-    public NodeId IjtBaseVariableId(uint varConstant) =>
-        new NodeId(varConstant, IjtBaseNsIdx);
+    public NodeId IjtBaseVariableId(uint varConstant)
+    {
+        if (IjtBaseNsIdx == 0) { _log.LogWarning("IjtBaseVariableId: IJT namespace unresolved — returning NodeId.Null"); return NodeId.Null; }
+        return new NodeId(varConstant, IjtBaseNsIdx);
+    }
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
 
-    /// <summary>Closes the OPC UA session and disposes the underlying connection.</summary>
     public async ValueTask DisposeAsync()
     {
-        // Dispose management objects before closing the session. Each Dispose may issue
-        // synchronous OPC UA network calls (e.g. DeleteSubscription). Guard with a total
-        // timeout so a stalled server cannot block teardown beyond 8 s.
+        _session.KeepAlive -= OnKeepAlive;
+
         using var cleanupCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8));
         await Task.WhenAny(
             Task.Run(() =>
             {
-                EventSubscriber.Dispose();
-                ResultManagement.Dispose();
-                AssetManagement.Dispose();
-                JoiningProcessManagement.Dispose();
+                EventSubscriber?.Dispose();
+                ResultManagement?.Dispose();
+                AssetManagement?.Dispose();
+                JoiningProcessManagement?.Dispose();
+                JointManagement?.Dispose();
             }),
             Task.Delay(Timeout.Infinite, cleanupCts.Token)
         ).ConfigureAwait(false);
 
         try
         {
-            if (Session.Connected)
+            if (_session.Connected)
             {
                 using var disposeCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
-                await Session.CloseSessionAsync(null, deleteSubscriptions: true, disposeCts.Token)
+                await _session.CloseSessionAsync(null, deleteSubscriptions: true, disposeCts.Token)
                              .ConfigureAwait(false);
             }
         }
@@ -456,7 +527,7 @@ public sealed class IjtSession : IAsyncDisposable, IIjtSession
         }
         finally
         {
-            Session.Dispose();
+            _session.Dispose();
         }
     }
 }

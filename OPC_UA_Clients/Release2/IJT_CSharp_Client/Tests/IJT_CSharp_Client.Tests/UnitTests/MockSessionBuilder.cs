@@ -9,15 +9,7 @@ using Opc.Ua.Client;
 namespace IJT_CSharp_Client.Tests.UnitTests;
 
 /// <summary>
-/// Shared Moq-based factory for building a mock <see cref="IIjtSession"/> in unit tests.
-/// The mock is pre-configured so that:
-///   - BrowseChild returns a valid NodeId by default (simulating a live server address space).
-///   - IjtBaseMethodId / BrowseMethod / IjtBaseObjectId / IjtBaseVariableId return valid NodeIds.
-///   - CallMethod returns an empty output list (success, no result data).
-///   - Config returns a default <see cref="ClientConfig"/>.
-///   - Session returns a Mock ISession with DefaultSubscription set up.
-///
-/// Individual tests override only the specific setup that exercises the code path under test.
+/// Shared Moq-based factory for building a mock <see cref="IJoiningSystem"/> in unit tests.
 /// </summary>
 internal static class MockSessionBuilder
 {
@@ -28,25 +20,14 @@ internal static class MockSessionBuilder
     public static readonly NodeId ValidMethodId = new NodeId(8888u, 1);
 
     /// <summary>
-    /// Creates a fully configured mock <see cref="IIjtSession"/>.
+    /// Creates a fully configured mock <see cref="IJoiningSystem"/>.
     /// </summary>
-    /// <param name="browseChildResult">
-    ///   Return value for all <c>BrowseChild</c> calls.
-    ///   Default is <see cref="ValidNodeId"/> (found).
-    /// </param>
-    /// <param name="methodResult">
-    ///   Return value for all <c>IjtBaseMethodId</c> calls.
-    ///   Default is <see cref="ValidMethodId"/> (found).
-    /// </param>
-    /// <param name="callMethodResult">
-    ///   Return value for <c>CallMethod</c>.  Default is an empty list (success).
-    /// </param>
-    public static Mock<IIjtSession> Create(
+    public static Mock<IJoiningSystem> Create(
         NodeId? browseChildResult = null,
         NodeId? methodResult = null,
         IList<object>? callMethodResult = null)
     {
-        var session = new Mock<IIjtSession>();
+        var session = new Mock<IJoiningSystem>();
 
         session.Setup(s => s.Config).Returns(new ClientConfig
         {
@@ -54,7 +35,7 @@ internal static class MockSessionBuilder
             PublishingIntervalMs = 500,
         });
 
-        session.Setup(s => s.JoiningSystemNodeId).Returns(ValidNodeId);
+        session.Setup(s => s.NodeId).Returns(ValidNodeId);
         session.Setup(s => s.IjtBaseNsIdx).Returns(7);
         session.Setup(s => s.IjtTighteningNsIdx).Returns(8);
         session.Setup(s => s.MachineryResultNsIdx).Returns(6);
@@ -63,6 +44,9 @@ internal static class MockSessionBuilder
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
             .Returns(browseChildResult ?? ValidNodeId);
+
+        session.Setup(s => s.DiscoverMethodsUnder(It.IsAny<NodeId>()))
+            .Returns(new Dictionary<string, NodeId>(StringComparer.OrdinalIgnoreCase));
 
         session.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>()))
             .Returns(methodResult ?? ValidMethodId);
@@ -83,12 +67,10 @@ internal static class MockSessionBuilder
 
         // Mock ISession with enough surface for subscription-heavy code paths
         var mockSession = new Mock<ISession>();
-#pragma warning disable CS0618 // Subscription() without TelemetryContext is acceptable in test setup
+#pragma warning disable CS0618
         mockSession.Setup(s => s.DefaultSubscription).Returns(new Subscription());
         mockSession.Setup(s => s.AddSubscription(It.IsAny<Subscription>())).Returns(true);
 #pragma warning restore CS0618
-        // Browse is intentionally not set up — Moq returns default(null) for out params,
-        // and the code handles null collections gracefully with `?? []` guards.
         session.Setup(s => s.Session).Returns(mockSession.Object);
 
         return session;
@@ -96,8 +78,7 @@ internal static class MockSessionBuilder
 
     /// <summary>
     /// Creates a session mock where ALL node lookups return <see cref="NodeId.Null"/> (not found).
-    /// Use this to verify the "node not found" guard in manager classes.
     /// </summary>
-    public static Mock<IIjtSession> CreateWithNullNodes()
+    public static Mock<IJoiningSystem> CreateWithNullNodes()
         => Create(browseChildResult: NodeId.Null, methodResult: NodeId.Null);
 }

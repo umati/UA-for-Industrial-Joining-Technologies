@@ -53,11 +53,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     /// if not found — callers should <c>Skip</c> in that case.
     /// </summary>
     private static async Task<(NodeId simResultsNode, NodeId simMethodId)> BrowseSimulateSingleResultMethod(
-        IjtSession session)
+        JoiningSystem session)
     {
         return await WithTimeout(() =>
         {
-            var sims = session.BrowseChild(session.JoiningSystemNodeId, "Simulations");
+            var sims = session.BrowseChild(session.NodeId, "Simulations");
             if (sims.IsNullNodeId) return (NodeId.Null, NodeId.Null);
             var simRes = session.BrowseChild(sims, "SimulateResults");
             if (simRes.IsNullNodeId) return (NodeId.Null, NodeId.Null);
@@ -71,11 +71,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     /// Returns (<see cref="NodeId.Null"/>, <see cref="NodeId.Null"/>) if not found.
     /// </summary>
     private static async Task<(NodeId simsNode, NodeId simEventsMethod)> BrowseSimulateEventsMethod(
-        IjtSession session)
+        JoiningSystem session)
     {
         return await WithTimeout(() =>
         {
-            var sims = session.BrowseChild(session.JoiningSystemNodeId, "Simulations");
+            var sims = session.BrowseChild(session.NodeId, "Simulations");
             if (sims.IsNullNodeId) return (NodeId.Null, NodeId.Null);
             // Try the actual browse name used on this server first, then fallback
             var meth = session.BrowseChild(sims, "SimulateEventsAndConditions", nodeClassMask: NodeClass.Method);
@@ -90,11 +90,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     /// JoiningSystem → AssetManagement → MethodSet, falling back to AssetManagement
     /// directly when MethodSet is absent (simulator deviation).
     /// </summary>
-    private static async Task<NodeId> BrowseAssetMethodSetNode(IjtSession session)
+    private static async Task<NodeId> BrowseAssetMethodSetNode(JoiningSystem session)
     {
         return await WithTimeout(() =>
         {
-            var am = session.BrowseChild(session.JoiningSystemNodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
+            var am = session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
             if (am.IsNullNodeId) return NodeId.Null;
             var ms = session.BrowseChild(am, UAModel.IJTBase.BrowseNames.MethodSet);
             return ms.IsNullNodeId ? am : ms;
@@ -106,7 +106,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     /// Returns <c>false</c> when simulation nodes are absent so the caller can Skip.
     /// </summary>
     private static async Task<bool> TriggerSingleResult(
-        IjtSession session, uint resultType = 0, bool includeTraces = false)
+        JoiningSystem session, uint resultType = 0, bool includeTraces = false)
     {
         var (simResultsNode, simMethodId) = await BrowseSimulateSingleResultMethod(session)
             .ConfigureAwait(false);
@@ -140,10 +140,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
 
     /// <summary>
     /// Browses for a method node by name under <paramref name="objectNode"/>.
-    /// Falls back to <see cref="IjtSession.IjtBaseMethodId"/> with <paramref name="fallbackConstant"/>.
+    /// Falls back to <see cref="JoiningSystem.IjtBaseMethodId"/> with <paramref name="fallbackConstant"/>.
     /// </summary>
     private static async Task<NodeId> BrowseMethodNode(
-        IjtSession session, NodeId objectNode, string methodBrowseName, uint fallbackConstant = 0)
+        JoiningSystem session, NodeId objectNode, string methodBrowseName, uint fallbackConstant = 0)
     {
         return await WithTimeout(() =>
         {
@@ -162,7 +162,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         Assert.True(session.IsConnected);
     }
@@ -172,7 +172,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         Assert.True(session.IjtBaseNsIdx > 0,
             $"IJT Base namespace index must be > 0 (resolved at runtime), got {session.IjtBaseNsIdx}");
@@ -183,7 +183,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         Assert.True(session.MachineryResultNsIdx > 0,
             $"Machinery/Result namespace index must be > 0, got {session.MachineryResultNsIdx}");
@@ -194,9 +194,9 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
-        Assert.False(session.JoiningSystemNodeId.IsNullNodeId,
+        Assert.False(session.NodeId.IsNullNodeId,
             "JoiningSystem instance must be found in Objects folder via HasTypeDefinition=JoiningSystemType");
     }
 
@@ -205,10 +205,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var node = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "ResultManagement"),
+            () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
 
         Assert.False(node.IsNullNodeId, "ResultManagement child node must be browseable under JoiningSystem");
@@ -219,10 +219,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var node = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, UAModel.IJTBase.BrowseNames.AssetManagement),
+            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement),
             10, "browse AssetManagement").ConfigureAwait(false);
 
         Assert.False(node.IsNullNodeId, "AssetManagement child node must be browseable under JoiningSystem");
@@ -233,10 +233,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var node = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
+            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
             10, "browse JoiningProcessManagement").ConfigureAwait(false);
 
         Assert.False(node.IsNullNodeId, "JoiningProcessManagement child node must be browseable under JoiningSystem");
@@ -247,10 +247,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var node = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "Simulations"),
+            () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
 
         Skip.If(node.IsNullNodeId, "Simulations node absent — server does not expose simulation nodes; skipping");
@@ -266,7 +266,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
         Skip.IfNot(subOk, "Subscribe timed out — server overloaded; skipping");
@@ -292,7 +292,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
         Skip.IfNot(subOk, "Subscribe timed out; skipping");
@@ -318,7 +318,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
         Skip.IfNot(subOk, "Subscribe timed out; skipping");
@@ -345,7 +345,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
         Skip.IfNot(subOk, "Subscribe timed out; skipping");
@@ -370,7 +370,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
         Skip.IfNot(subOk, "Subscribe timed out; skipping");
@@ -395,7 +395,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
         Skip.IfNot(subOk, "Subscribe timed out; skipping");
@@ -430,14 +430,14 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var triggered = await TriggerSingleResult(session).ConfigureAwait(false);
         Skip.IfNot(triggered, "SimulateSingleResult not available; skipping");
         await Task.Delay(1000, cts.Token).ConfigureAwait(false);
 
         var rmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "ResultManagement"),
+            () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
         Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
 
@@ -458,14 +458,14 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var triggered = await TriggerSingleResult(session).ConfigureAwait(false);
         Skip.IfNot(triggered, "SimulateSingleResult not available; skipping");
         await Task.Delay(1000, cts.Token).ConfigureAwait(false);
 
         var rmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "ResultManagement"),
+            () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
         Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
 
@@ -488,14 +488,14 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var triggered = await TriggerSingleResult(session).ConfigureAwait(false);
         Skip.IfNot(triggered, "SimulateSingleResult not available; skipping");
         await Task.Delay(1000, cts.Token).ConfigureAwait(false);
 
         var rmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "ResultManagement"),
+            () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
         Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
 
@@ -517,14 +517,14 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var triggered = await TriggerSingleResult(session).ConfigureAwait(false);
         Skip.IfNot(triggered, "SimulateSingleResult not available; skipping");
         await Task.Delay(1000, cts.Token).ConfigureAwait(false);
 
         var rmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "ResultManagement"),
+            () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
         Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
 
@@ -549,10 +549,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var rmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "ResultManagement"),
+            () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
         Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
 
@@ -574,14 +574,14 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var triggered = await TriggerSingleResult(session).ConfigureAwait(false);
         Skip.IfNot(triggered, "SimulateSingleResult not available; skipping");
         await Task.Delay(1000, cts.Token).ConfigureAwait(false);
 
         var rmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "ResultManagement"),
+            () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
         Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
 
@@ -621,10 +621,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var rmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "ResultManagement"),
+            () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
         Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement not found; skipping");
 
@@ -687,7 +687,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
         Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
@@ -708,7 +708,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
         Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
@@ -733,7 +733,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
         Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
@@ -764,7 +764,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
         Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
@@ -805,7 +805,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
         Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
@@ -832,7 +832,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         // SubscribeAssetVariables is synchronous — wrap with timeout guard
         var ex = await Record.ExceptionAsync(() =>
@@ -850,10 +850,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var jpmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
+            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
             10, "browse JoiningProcessManagement").ConfigureAwait(false);
         Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
 
@@ -874,10 +874,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var jpmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
+            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
             10, "browse JoiningProcessManagement").ConfigureAwait(false);
         Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
 
@@ -905,10 +905,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var jpmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
+            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
             10, "browse JoiningProcessManagement").ConfigureAwait(false);
         Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
 
@@ -938,10 +938,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var jpmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
+            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
             10, "browse JoiningProcessManagement").ConfigureAwait(false);
         Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
 
@@ -978,7 +978,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var triggered = await TriggerSingleResult(session, resultType: 0, includeTraces: false)
             .ConfigureAwait(false);
@@ -990,7 +990,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var triggered = await TriggerSingleResult(session, resultType: 0, includeTraces: true)
             .ConfigureAwait(false);
@@ -1002,10 +1002,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var simsNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "Simulations"),
+            () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
         Skip.IfNot(!simsNode.IsNullNodeId, "Simulations node not found; skipping");
 
@@ -1033,10 +1033,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var simsNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "Simulations"),
+            () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
         Skip.IfNot(!simsNode.IsNullNodeId, "Simulations node not found; skipping");
 
@@ -1066,7 +1066,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         // Step 1 — subscribe to events
         var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
@@ -1093,7 +1093,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
 
         // Step 4 — call GetLatestResult and verify the ResultId matches
         var rmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "ResultManagement"),
+            () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
         Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement not found; skipping cross-check");
 
@@ -1119,7 +1119,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
         Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
@@ -1158,7 +1158,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(35));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var triggered = await TriggerSingleResult(session).ConfigureAwait(false);
         Skip.IfNot(triggered, "SimulateSingleResult not available; skipping");
@@ -1172,7 +1172,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
 
         // Direct call to verify the raw output has data
         var rmNode = await WithTimeout(
-            () => session.BrowseChild(session.JoiningSystemNodeId, "ResultManagement"),
+            () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
         Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement not found; skipping direct-call check");
 

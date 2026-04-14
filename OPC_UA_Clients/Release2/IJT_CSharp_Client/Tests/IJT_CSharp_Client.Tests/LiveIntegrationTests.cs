@@ -28,7 +28,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         Assert.NotNull(session);
     }
@@ -39,7 +39,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         // Browse for SimulateSingleResult BEFORE subscribing so browse calls don't
         // race with an active subscription. All three BrowseChild calls are sync OPC UA;
@@ -48,7 +48,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         using var browseTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var browseTask = Task.Run(() =>
         {
-            var sims = session.BrowseChild(session.JoiningSystemNodeId, "Simulations");
+            var sims = session.BrowseChild(session.NodeId, "Simulations");
             var simRes = sims.IsNullNodeId ? NodeId.Null : session.BrowseChild(sims, "SimulateResults");
             var simMeth = simRes.IsNullNodeId ? NodeId.Null : session.BrowseChild(simRes, "SimulateSingleResult");
             return (sims, simRes, simMeth);
@@ -94,7 +94,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         // Should not throw — result may be null if no result has been produced yet
         var ex = await Record.ExceptionAsync(() =>
@@ -108,7 +108,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var ex = await Record.ExceptionAsync(() =>
             Task.Run(() => session.JoiningProcessManagement.GetJoiningProcessList(), cts.Token)).ConfigureAwait(false);
@@ -121,7 +121,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var ex = await Record.ExceptionAsync(() =>
             Task.Run(() => session.AssetManagement.EnableAsset(string.Empty, true), cts.Token)).ConfigureAwait(false);
@@ -136,7 +136,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var ex = await Record.ExceptionAsync(() =>
             Task.Run(() => session.ResultManagement.GetResultById(string.Empty), cts.Token)).ConfigureAwait(false);
@@ -149,7 +149,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var ex = await Record.ExceptionAsync(() =>
             Task.Run(() => session.ResultManagement.SubscribeResultVariable(), cts.Token)).ConfigureAwait(false);
@@ -164,7 +164,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var ex = await Record.ExceptionAsync(() =>
             Task.Run(() => session.AssetManagement.SendTextIdentifiers(string.Empty, ["ID-001", "Batch-A"]), cts.Token)).ConfigureAwait(false);
@@ -177,7 +177,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var ex = await Record.ExceptionAsync(() =>
             Task.Run(() => session.AssetManagement.GetIdentifiers(string.Empty), cts.Token)).ConfigureAwait(false);
@@ -190,7 +190,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var ex = await Record.ExceptionAsync(() =>
             Task.Run(() => session.AssetManagement.ResetIdentifiers(string.Empty), cts.Token)).ConfigureAwait(false);
@@ -203,7 +203,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var ex = await Record.ExceptionAsync(() =>
             Task.Run(() => session.AssetManagement.SubscribeAssetVariables(), cts.Token)).ConfigureAwait(false);
@@ -216,7 +216,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var entities = new List<UAModel.IJTBase.EntityDataType>
         {
@@ -235,7 +235,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var ex = await Record.ExceptionAsync(() =>
             Task.Run(() => session.JoiningProcessManagement.SelectJoiningProcess(string.Empty), cts.Token)).ConfigureAwait(false);
@@ -248,7 +248,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         var ex = await Record.ExceptionAsync(() =>
             Task.Run(() => session.JoiningProcessManagement.GetSelectedJoiningProgram(), cts.Token)).ConfigureAwait(false);
@@ -263,7 +263,7 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var session = await IjtSession.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
 
         // Subscribe: wrap in Task.Run with independent timeout so synchronous Create() cannot block.
         using var subCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));

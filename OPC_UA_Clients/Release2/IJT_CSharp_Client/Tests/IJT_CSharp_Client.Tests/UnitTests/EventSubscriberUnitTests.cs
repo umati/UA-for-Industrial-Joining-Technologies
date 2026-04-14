@@ -14,7 +14,7 @@ namespace IJT_CSharp_Client.Tests.UnitTests;
 /// Subscription.Create() which communicate with the OPC UA server stack.
 /// Tests covering the subscription lifecycle end-to-end are in
 /// <see cref="LiveIntegrationTests"/> (server-required tests).
-/// Here we test the guards and event contract exposed through IIjtSession.
+/// Here we test the guards and event contract exposed through IJoiningSystem.
 ///
 /// Covered operations:
 ///   1  Subscribe to Result + System events

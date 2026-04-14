@@ -9,7 +9,7 @@ namespace IJT_CSharp_Client.Tests.Client;
 
 /// <summary>
 /// Unit tests for <see cref="ResultManagement"/>.
-/// All tests use a <see cref="Mock{T}"/> of <see cref="IIjtSession"/>
+/// All tests use a <see cref="Mock{T}"/> of <see cref="IJoiningSystem"/>
 /// so no live OPC UA server is required.
 /// </summary>
 public sealed class ResultManagementTests
@@ -18,10 +18,10 @@ public sealed class ResultManagementTests
     private static readonly NodeId RmNodeId = new(8002u, (ushort)2);
     private static readonly NodeId MethodId = new(8003u, (ushort)2);
 
-    private static Mock<IIjtSession> HappyPathMock()
+    private static Mock<IJoiningSystem> HappyPathMock()
     {
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(JoiningSystemId);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
@@ -37,10 +37,10 @@ public sealed class ResultManagementTests
         return mock;
     }
 
-    private static Mock<IIjtSession> NullNodeMock()
+    private static Mock<IJoiningSystem> NullNodeMock()
     {
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(NodeId.Null);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(NodeId.Null);
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
@@ -205,8 +205,8 @@ public sealed class ResultManagementTests
     [Fact]
     public void SubscribeResultVariable_WhenAlreadySubscribed_SecondCallIsNoOp()
     {
-        var mock = new Mock<IIjtSession>();
-        mock.Setup(s => s.JoiningSystemNodeId).Returns(JoiningSystemId);
+        var mock = new Mock<IJoiningSystem>();
+        mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
         mock.Setup(s => s.BrowseChild(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
