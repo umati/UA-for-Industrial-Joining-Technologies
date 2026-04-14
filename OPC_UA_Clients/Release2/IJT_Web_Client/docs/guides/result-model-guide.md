@@ -7,7 +7,7 @@ This file explains how result models in this folder are built and used.
 The result model turns OPC UA result payloads into a predictable object graph used by:
 - result rendering UI,
 - trace visualization,
-- envelope/limit checks,
+- envelope limit checks (`src/javascripts/views/envelope`),
 - result hierarchy (job -> batch -> tightening).
 
 ## Main Classes

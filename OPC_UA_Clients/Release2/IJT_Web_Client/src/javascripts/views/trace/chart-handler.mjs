@@ -1,10 +1,12 @@
 /* global Chart */
 import '../../../../node_modules/chart.js/dist/chart.umd.js'
 import Graphic from './graphic.mjs'
+import { createOptionalTraceExtensionLoader } from './optional-trace-extension-loader.mjs'
 
-const ARROW_LENGTH_END = 20
-const ARROW_LENGTH_START = 10
+const LIMIT_ENDPOINT_ARROW_LENGTH = 14
+const LIMIT_ENDPOINT_BOX_RADIUS = 8
 const ZOOM_DEBOUNCE_MS = 100
+const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/limit-geometry.mjs')
 
 /**
  * Chartmanager should encapsulate all access to chart.js in order to
@@ -47,39 +49,21 @@ export default class ChartManager {
         }
         const direction = dataset.envelopeMetaData.direction
         const data = dataset.data
+        const extension = limitGeometryExtension.get()
+        const resolveLimitEndpoints = extension.resolveLimitEndpoints ||
+          (() => ({ start: null, end: null }))
+        const hasCompleteEndpointPair = extension.hasCompleteEndpointPair ||
+          (() => false)
+        const { start, end } = resolveLimitEndpoints(data, direction)
 
-        const left = {
-          edge: data[0],
-          edgeClose: data[1],
-        }
-
-        const right = {
-          edge: data[data.length - 1],
-          edgeClose: data[data.length - 2],
-        }
-
-        let start = left
-        let end = right
-
-        if (direction !== 1) {
-          start = right
-          end = left
-        }
-
-        const lastPoint = data[data.length - 1]
-        const secondLastPoint = data[data.length - 2]
-
-        const firstPoint = data[0]
-        const secondFirstPoint = data[1]
-
-        if (lastPoint && secondLastPoint) {
+        if (hasCompleteEndpointPair(end)) {
           const x1 = chart.scales.x.getPixelForValue(end.edgeClose.x)
           const y1 = chart.scales.y.getPixelForValue(end.edgeClose.y)
           const x2 = chart.scales.x.getPixelForValue(end.edge.x)
           const y2 = chart.scales.y.getPixelForValue(end.edge.y)
 
           // Draw the arrow
-          const arrowLength = ARROW_LENGTH_END
+          const arrowLength = LIMIT_ENDPOINT_ARROW_LENGTH
           const angle = Math.atan2(y2 - y1, x2 - x1)
 
           ctx.save()
@@ -94,14 +78,14 @@ export default class ChartManager {
           ctx.restore()
         }
 
-        if (firstPoint && secondFirstPoint) {
+        if (hasCompleteEndpointPair(start)) {
           const x1 = chart.scales.x.getPixelForValue(start.edgeClose.x)
           const y1 = chart.scales.y.getPixelForValue(start.edgeClose.y)
           const x2 = chart.scales.x.getPixelForValue(start.edge.x)
           const y2 = chart.scales.y.getPixelForValue(start.edge.y)
 
           // Draw the arrow
-          const arrowLength = ARROW_LENGTH_START
+          const arrowLength = LIMIT_ENDPOINT_ARROW_LENGTH
           const angle = Math.atan2(y2 - y1, x2 - x1)
 
           ctx.save()
@@ -386,14 +370,23 @@ export default class ChartManager {
   }
 
   newLimit (borderColour, areaColour, startOrEnd) {
+    const extension = limitGeometryExtension.get()
+    const createEndpointRadiusResolver = extension.createEndpointRadiusResolver ||
+      (() => () => 0)
+    const endpointRadius = createEndpointRadiusResolver(LIMIT_ENDPOINT_BOX_RADIUS)
+
     const limitDataSet = {
       borderColor: borderColour,
       borderWidth: 1,
       fill: startOrEnd,
       label: 'limit',
       backgroundColor: areaColour,
-      pointBorderColor: 'transparent',
-      pointBackgroundColor: 'transparent',
+      pointStyle: 'rect',
+      pointRadius: endpointRadius,
+      pointHoverRadius: endpointRadius,
+      pointHitRadius: 0,
+      pointBorderColor: borderColour,
+      pointBackgroundColor: borderColour,
       data: [],
       envelopeMetaData: {
         type: 'envelope',

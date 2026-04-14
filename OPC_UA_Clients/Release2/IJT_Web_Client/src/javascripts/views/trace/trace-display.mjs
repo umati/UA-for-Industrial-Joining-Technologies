@@ -1,5 +1,8 @@
 import SingleTraceData from './single-trace-data.mjs'
 import ChartManager from './chart-handler.mjs'
+import { createOptionalTraceExtensionLoader } from './optional-trace-extension-loader.mjs'
+
+const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/limit-geometry.mjs')
 
 /**
  * TraceGraphics displays result events in order to display the traces (graphs)
@@ -406,23 +409,14 @@ class GraphicalLimit {
   }
 
   update (limit) {
-    const dataList = []
-    if (limit.range.start > limit.range.end) {
-      this.glimit.envelopeMetaData.direction = -1
-      this.glimit.borderColor = 'red'
-    } else {
-      this.glimit.envelopeMetaData.direction = 1
-      this.glimit.borderColor = 'red'
-    }
-    const start = Math.min(limit.range.start, limit.range.end)
-    const end = Math.max(limit.range.start, limit.range.end)
-    for (let x = start; x <= end; x += (end - start) / 100) {
-      dataList.push({
-        x,
-        y: limit.polynomial.value(x - limit.range.offset) + (limit.range.yOffset || 0),
-      })
-    }
-    this.glimit.data = dataList
+    const extension = limitGeometryExtension.get()
+    const determineLimitDirection = extension.determineLimitDirection ||
+      (() => 1)
+    const buildLimitCurvePoints = extension.buildLimitCurvePoints ||
+      (() => [])
+    this.glimit.envelopeMetaData.direction = determineLimitDirection(limit.range.start, limit.range.end)
+    this.glimit.borderColor = 'red'
+    this.glimit.data = buildLimitCurvePoints(limit)
 
     if (limit.check.constructor.name === 'OverLimit') {
       this.glimit.fill = 'end'
