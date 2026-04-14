@@ -44,7 +44,7 @@ export default class Step {
       }
     }
     if (!this.time) {
-      this.time = Array.from(Array(this.torque.length), (_, x) => parseFloat(step.SamplingInterval * x / 1000))
+      this.time = Array.from(Array(this.torque.length), (_, x) => parseFloat(step.SamplingInterval) * x)
     }
 
     this.graphic = chartManager.createGraphic(this.name, this.resultId, this.stepId, this.color)
@@ -89,8 +89,8 @@ export default class Step {
    * @param {*} displayOffset the angle you want all x values to decrease
    */
   calculateData (displayOffset) {
-    let xValues = this[this.xDimensionName]
-    const yValues = this[this.yDimensionName].map(this.absoluteFunction)
+    let xValues = this[this.xDimensionName].map((x) => { return parseFloat(x) })
+    const yValues = this[this.yDimensionName].map((y) => { return this.absoluteFunction(parseFloat(y)) })
 
     if (this.xDimensionName === 'time') {
       const startTimeOffset = parseFloat(this.startTimeOffset)

@@ -85,7 +85,7 @@ export default class ResultValueHandler {
         xHigh = value.HighLimit
         xLow = value.LowLimit
         xTarget = value.TargetValue
-        xOffset = this.startTimeOffset
+        xOffset = parseFloat(this.step.startTimeOffset || 0)
         break
       case 2: // Torque
         y = value.MeasuredValue

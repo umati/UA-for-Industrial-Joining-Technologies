@@ -1,18 +1,24 @@
 import BasicScreen from '../graphic-support/basic-screen.mjs'
+import SimulateJobResultInvoker from '../graphic-support/simulate-job-result.mjs'
 /**
  * This illustrates how a nested result can be displayed
  */
 export default class ResultGraphics extends BasicScreen {
-  constructor (resultManager) {
+  constructor (resultManager, methodManager = null, addressSpace = null, eventManager = null) {
     super('Consolidated Result')
     this.tabHelpText = 'Inspect aggregated results (tightening, batch, job) in hierarchical or enveloped view.'
     this.resultManager = resultManager
+    this.simulateJobInvoker = (methodManager && addressSpace) ? new SimulateJobResultInvoker(methodManager, addressSpace) : null
+    this.eventManager = eventManager
     this.backGround.classList.add('consolidatedResultScreen')
 
     this.displayedIdentity = 0
     this.selectType = '-1'
     this.selectResult = '-2'
     this.envelope = 'false'
+    this.toggleQueueingState = false
+    this.hoverDiv = null
+    this.queueInfo = null
     // Subscribe to new results
     resultManager.subscribe((result) => {
       this.refreshDrawing(result.id)
@@ -21,6 +27,40 @@ export default class ResultGraphics extends BasicScreen {
     this.header = document.createElement('div')
     this.header.classList.add('resultHeader', 'resultheader')
     this.backGround.appendChild(this.header)
+
+    this.headerLeft = document.createElement('div')
+    this.headerLeft.classList.add('resultHeaderLeft')
+    this.header.appendChild(this.headerLeft)
+
+    this.headerSpacer = document.createElement('div')
+    this.headerSpacer.classList.add('resultHeaderSpacer')
+    this.header.appendChild(this.headerSpacer)
+
+    this.headerRight = document.createElement('div')
+    this.headerRight.classList.add('resultHeaderRight')
+    this.header.appendChild(this.headerRight)
+
+    this.simulateJobButton = this.createButton('Simulate job result', this.headerRight, async () => {
+      await this.simulateJobResult()
+    })
+    this.simulateJobButton.classList.remove('resultHeaderItem')
+    this.simulateJobButton.classList.add('demoButton', 'resultHeaderRightAction')
+    if (!this.simulateJobInvoker) {
+      this.simulateJobButton.disabled = true
+      this.simulateJobButton.title = 'Job simulation method setup unavailable in this context.'
+    }
+
+    this.toggleQueueingButton = this.createButton('Toggle queueing', this.headerRight, () => {
+      this.toggleQueueingState = !this.toggleQueueingState
+      this.eventManager.queueState(this.toggleQueueingState)
+      this.hoveringStepButton(this.toggleQueueingState)
+    })
+    this.toggleQueueingButton.classList.remove('resultHeaderItem')
+    this.toggleQueueingButton.classList.add('demoButton', 'resultHeaderRightAction')
+    if (!this.eventManager || typeof this.eventManager.queueState !== 'function') {
+      this.toggleQueueingButton.disabled = true
+      this.toggleQueueingButton.title = 'Event manager unavailable in this context.'
+    }
 
     // Type selection dropdown
     this.selectResultType = this.createDropdown('Select result type', (selection) => {
@@ -34,7 +74,7 @@ export default class ResultGraphics extends BasicScreen {
     this.selectResultType.addOption('Single tightenings', 1)
     this.selectResultType.addOption('Other', 0)
     this.selectResultType.classList.add('resultHeaderItem')
-    this.header.appendChild(this.selectResultType)
+    this.headerLeft.appendChild(this.selectResultType)
 
     // Result selection dropdown
     this.selectResultDropdown = this.createDropdown('Select result', (selection) => {
@@ -44,7 +84,7 @@ export default class ResultGraphics extends BasicScreen {
     this.selectResultDropdown.addOption('Unresolved', -2)
     this.selectResultDropdown.addOption('Latest', -1)
     this.selectResultDropdown.classList.add('resultHeaderItem')
-    this.header.appendChild(this.selectResultDropdown)
+    this.headerLeft.appendChild(this.selectResultDropdown)
 
     // display type dummy selection dropdown
     this.dummyDropdown = this.createDropdown('Display type', (selection) => {
@@ -55,11 +95,88 @@ export default class ResultGraphics extends BasicScreen {
     this.dummyDropdown.addOption('Hierarchical', false)
     this.dummyDropdown.addOption('Enveloped', true)
     this.dummyDropdown.classList.add('resultHeaderItem')
-    this.header.appendChild(this.dummyDropdown)
+    this.headerLeft.appendChild(this.dummyDropdown)
 
     this.display = document.createElement('div')
     this.display.classList.add('drawResultBox')
     this.backGround.appendChild(this.display)
+  }
+
+  activate () {
+    if (!this.simulateJobInvoker) {
+      return
+    }
+    this.simulateJobInvoker.prepare().catch(() => {})
+  }
+
+  async simulateJobResult () {
+    if (!this.simulateJobInvoker) {
+      return
+    }
+    try {
+      await this.simulateJobInvoker.invoke()
+    } catch (error) {
+      this.messageDisplay(`Job simulation failed: ${error?.message || error}`)
+    }
+  }
+
+  hoveringStepButton (_toggleQueueingState) {
+    if (!this.eventManager?.queue) {
+      return
+    }
+
+    const nameValueElement = (name, value) => {
+      const resultDiv = document.createElement('div')
+      resultDiv.classList.add('eventQueuePeeks')
+      const nameDiv = document.createElement('div')
+      resultDiv.appendChild(nameDiv)
+      const valDiv = document.createElement('div')
+      resultDiv.appendChild(valDiv)
+      nameDiv.innerText = name
+      if (value) {
+        if (value.Message) {
+          valDiv.innerText = value.Message.Text
+        } else {
+          valDiv.innerText = value
+        }
+      }
+      return resultDiv
+    }
+
+    const queue = this.eventManager.queue
+    if (!this.hoverDiv) {
+      this.hoverDiv = document.createElement('div')
+      this.hoverDiv.classList.add('eventqueuehoverdiv')
+      document.body.appendChild(this.hoverDiv)
+
+      this.hoverDiv.innerText = 'Event queue'
+
+      this.createButton('Next event', this.hoverDiv, () => {
+        this.queueInfo.innerHTML = ''
+        this.queueInfo.appendChild(nameValueElement('Last', this.eventManager.dequeue()))
+        this.queueInfo.appendChild(nameValueElement('Next', queue.peek()))
+        this.queueInfo.appendChild(nameValueElement('Size', this.eventManager.queue.size()))
+      })
+
+      this.createButton('Scramble', this.hoverDiv, () => {
+        const array = this.eventManager.queue
+        let currentIndex = array.length
+
+        while (currentIndex !== 0) {
+          const randomIndex = Math.floor(Math.random() * currentIndex)
+          currentIndex--
+          ;[array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]]
+        }
+      })
+
+      this.queueInfo = document.createElement('div')
+      this.queueInfo.classList.add('eventInfo')
+      this.hoverDiv.appendChild(this.queueInfo)
+    } else {
+      document.body.removeChild(this.hoverDiv)
+      this.hoverDiv = null
+      this.queueInfo = null
+    }
   }
 
   /**
@@ -180,6 +297,7 @@ export default class ResultGraphics extends BasicScreen {
    */
   refreshDrawing (id) {
     this.display.innerHTML = ''
+    this.display.classList.toggle('drawResultBoxEnveloped', this.envelope === 'true')
     let selection = []
     if (this.selectResult === '-2') {
       selection = this.resultManager.getUnfinished()

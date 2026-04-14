@@ -15,6 +15,7 @@ import {
 } from 'ijt-support/ijt-support.mjs'
 
 import TraceGraphics from 'views/trace/trace-graphics.mjs'
+import ResultGraphics from 'views/complex-result/result-graphics.mjs'
 import AddressSpaceGraphics from 'views/address-space/address-space-graphics.mjs'
 import EventGraphics from 'views/events/event-graphics.mjs'
 import MethodGraphics from 'views/methods/method-graphics.mjs'
@@ -24,6 +25,7 @@ import ConnectionGraphics from 'views/connection/connection-graphics.mjs'
 import TabGenerator from 'views/graphic-support/tab-generator.mjs'
 import BasicScreen from 'views/graphic-support/basic-screen.mjs'
 import { createDemoTabs } from 'views/tab-setup/demo-tabs.mjs'
+import { createDetailsTabs } from 'views/tab-setup/details-tabs.mjs'
 
 /** Default view level shown when a new endpoint tab is opened (Detailed = 3). */
 const DEFAULT_VIEW_LEVEL = 3
@@ -120,6 +122,14 @@ export default class EndpointGraphics extends BasicScreen {
       ijtLog.error(error)
     }
 
+    // Consolidated result view is not critical
+    let resultGraphics = null
+    try {
+      resultGraphics = new ResultGraphics(resultManager, methodManager, addressSpace, eventManager)
+    } catch (error) {
+      ijtLog.error(error)
+    }
+
     // Entity view is not critical
     let entityCacheView = null
     try {
@@ -138,6 +148,11 @@ export default class EndpointGraphics extends BasicScreen {
       settings: this.settings,
       currentViewLevel: DEFAULT_VIEW_LEVEL
     })
+    const detailsTabGraphics = createDetailsTabs({
+      entityCacheView,
+      assetGraphics,
+      currentViewLevel: DEFAULT_VIEW_LEVEL
+    })
 
     tabGenerator.generateTab(connectionGraphics, 2)
     if (demosTabGraphics) {
@@ -150,14 +165,13 @@ export default class EndpointGraphics extends BasicScreen {
     if (traceGraphics) {
       tabGenerator.generateTab(traceGraphics, 2)
     }
-
-    if (entityCacheView) {
-      tabGenerator.generateTab(entityCacheView, 3)
+    if (resultGraphics) {
+      tabGenerator.generateTab(resultGraphics, 2)
     }
 
     tabGenerator.generateTab(addressSpaceGraphics, 3, false)
-    if (assetGraphics) {
-      tabGenerator.generateTab(assetGraphics, 4)
+    if (detailsTabGraphics) {
+      tabGenerator.generateTab(detailsTabGraphics, 3)
     }
 
     // Joints tab intentionally hidden.

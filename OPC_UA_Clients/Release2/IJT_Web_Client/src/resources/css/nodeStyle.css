@@ -1587,7 +1587,34 @@ html {
   display:flex;
   flex-direction: row;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+}
+
+.resultHeaderLeft {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.resultHeaderSpacer {
+  flex: 1 1 auto;
+  min-width: 8px;
+}
+
+.resultHeaderRight {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.resultHeaderRightAction {
+  margin-left: 0;
+  margin-right: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
 .resultHeaderItem {
@@ -2023,6 +2050,31 @@ html {
   overflow-wrap: anywhere;
 }
 
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .rootTop,
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .rootCenterHier,
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .rootChildHier,
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .horStack {
+  width: 100%;
+  max-width: none;
+}
+
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .rootCenterHier,
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .rootChildHier {
+  align-items: stretch;
+}
+
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .resTightening,
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .resBatch,
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .resJob,
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .resOther,
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .resReference,
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .resPartial,
+.consolidatedResultScreen .drawResultBox.drawResultBoxEnveloped .resFull {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
 /* =========================================================
    Demo + Envelope Views
    ========================================================= */
@@ -2351,6 +2403,7 @@ html {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow-x: hidden;
 }
 
 .entitiesScreen .identifierType {
@@ -2373,6 +2426,13 @@ html {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.entitiesScreen .doublecolumnleft > .myButton {
+  width: fit-content;
+  min-width: 8rem;
+  max-width: 14rem;
+  align-self: flex-start;
 }
 
 .entitiesScreen .identifier:hover {
