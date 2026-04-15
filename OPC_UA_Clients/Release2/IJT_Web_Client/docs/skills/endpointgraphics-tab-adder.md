@@ -133,4 +133,3 @@ Use nearby existing tabs as the source of truth when uncertain.
 5. Confirm `tabGenerator.generateTab(...)` is called with intended level and optional selection flag.
 6. Run `npm run lint` from project root.
 7. Summarize what manager source was used, what view was added, and how tab wiring was updated.
-

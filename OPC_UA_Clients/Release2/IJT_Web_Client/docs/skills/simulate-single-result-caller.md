@@ -91,4 +91,3 @@ Confirm `activate()` in `method-graphics.mjs` includes the SimulateResults folde
 2. Confirm invocation works with configured defaults.
 3. Confirm lint passes.
 4. Summarize exactly what was changed in method discovery/defaults/call behavior.
-

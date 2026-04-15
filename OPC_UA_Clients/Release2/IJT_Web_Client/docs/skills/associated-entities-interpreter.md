@@ -92,4 +92,3 @@ If no associated entities exist, state that explicitly.
 2. Confirm `EntityType` mapping used `EntityTypes`.
 3. Confirm unknown type ids are flagged, not silently converted.
 4. Summarize entity links in plain language after the per-entity listing.
-
