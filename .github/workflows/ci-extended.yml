@@ -617,41 +617,56 @@ jobs:
           TC_RESULT:   ${{ needs.int-testclient.result }}
           LO_RESULT:   ${{ needs.int-live-others.result }}
           AL_RESULT:   ${{ needs.zizmor.result }}
+          GH_SHA:         ${{ github.sha }}
+          GH_BRANCH:      ${{ github.ref_name }}
+          GH_RUN_NUMBER:  ${{ github.run_number }}
+          GH_RUN_URL:     ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           python3 - << 'PYEOF'
           import xml.etree.ElementTree as ET, os, glob
 
+          # ── Parsers ──────────────────────────────────────────────────────
+
           def parse_junit(pattern):
-              matches = glob.glob(pattern, recursive=True)
-              if not matches:
-                  return None, None, None, None
-              for path in matches:
+              for path in glob.glob(pattern, recursive=True):
                   try:
                       root   = ET.parse(path).getroot()
                       suites = root.findall("testsuite") if root.tag == "testsuites" else [root]
-                      t = sum(int(s.get("tests",    0)) for s in suites)
-                      f = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
+                      t  = sum(int(s.get("tests",    0)) for s in suites)
+                      f  = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
                       sk = sum(int(s.get("skipped",  0)) for s in suites)
                       return t, t - f - sk, f, sk
                   except Exception as exc:
-                      print(f"[WARN] parse_junit: failed to read {path}: {exc}")
+                      print(f"[WARN] parse_junit({path}): {exc}")
               return None, None, None, None
+
+          # ── Formatters ───────────────────────────────────────────────────
 
           def job_icon(r):
               return {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
 
           def fmt_tests(total, passed, failed, skipped=0):
-              if total is None: return "—"
+              if total is None:
+                  return "—"
               icon = "✅" if failed == 0 else "❌"
-              fail_str = f"**{failed} fail**" if failed else "0 fail"
-              skip_str = f" · {skipped} skip" if skipped else ""
-              return f"{icon} **{passed} pass** · {fail_str}{skip_str}"
+              return f"{icon} {passed}p · {failed}f"
 
-          sd_r  = os.environ.get("SD_RESULT",  "unknown")
-          wd_r  = os.environ.get("WD_RESULT",  "unknown")
-          tc_r  = os.environ.get("TC_RESULT",  "unknown")
-          lo_r  = os.environ.get("LO_RESULT",  "unknown")
-          al_r  = os.environ.get("AL_RESULT",  "unknown")
+          # ── Load ENV ─────────────────────────────────────────────────────
+
+          E = os.environ.get
+
+          sd_r  = E("SD_RESULT",  "unknown")
+          wd_r  = E("WD_RESULT",  "unknown")
+          tc_r  = E("TC_RESULT",  "unknown")
+          lo_r  = E("LO_RESULT",  "unknown")
+          al_r  = E("AL_RESULT",  "unknown")
+
+          sha     = (E("GH_SHA",        "") or "")[:8]
+          branch  = E("GH_BRANCH",      "main")
+          run_num = E("GH_RUN_NUMBER",  "")
+          run_url = E("GH_RUN_URL",     "")
+
+          # ── Parse artifacts ──────────────────────────────────────────────
 
           sd_smoke  = parse_junit("all-results/results-server-smoke-docker/smoke.xml")
           wd_py     = parse_junit("all-results/results-webclient-docker/pytest-unit.xml")
@@ -661,60 +676,77 @@ jobs:
           lo_web    = parse_junit("all-results/results-live-others/**/pytest-integration.xml")
           lo_con    = parse_junit("all-results/results-live-others/**/pytest-live.xml")
 
-          # ── Artifact sanity gate ─────────────────────────────────────────────
-          # Flag jobs that reported "success" but produced no test artifacts —
-          # this can hide silent failures where pytest/smoke exited 0 without running.
+          # ── Artifact sanity gate ─────────────────────────────────────────
+
           artifact_warnings = []
-          def _artifact_warn(job_result, artifact_val, job_name, artifact_desc):
-              if job_result == "success" and artifact_val is None:
+          def _warn(job_result, val, job_name, artifact):
+              if job_result == "success" and val is None:
                   artifact_warnings.append(
-                      f"⚠️ **{job_name}**: reported success but `{artifact_desc}` is missing"
+                      f"⚠️ **{job_name}**: job succeeded but `{artifact}` not found — possible silent failure"
                   )
-          _artifact_warn(sd_r, sd_smoke[0],  "server-smoke-docker", "smoke.xml")
-          _artifact_warn(wd_r, wd_py[0],     "webclient-docker",    "pytest-unit.xml")
-          _artifact_warn(wd_r, wd_js[0],     "webclient-docker",    "vitest.xml")
-          _artifact_warn(tc_r, tc_smoke[0],  "int-testclient",      "smoke-sanity.xml")
-          _artifact_warn(tc_r, tc_tests[0],  "int-testclient",      "pytest.xml")
-          _artifact_warn(lo_r, lo_web[0],    "int-live-others",     "pytest-integration.xml")
-          _artifact_warn(lo_r, lo_con[0],    "int-live-others",     "pytest-live.xml")
+          _warn(sd_r, sd_smoke[0], "server-smoke-docker", "smoke.xml")
+          _warn(wd_r, wd_py[0],    "webclient-docker",    "pytest-unit.xml")
+          _warn(wd_r, wd_js[0],    "webclient-docker",    "vitest.xml")
+          _warn(tc_r, tc_smoke[0], "int-testclient",      "smoke-sanity.xml")
+          _warn(tc_r, tc_tests[0], "int-testclient",      "pytest.xml")
+          _warn(lo_r, lo_web[0],   "int-live-others",     "pytest-integration.xml")
+          _warn(lo_r, lo_con[0],   "int-live-others",     "pytest-live.xml")
 
-          # ── Overall status ───────────────────────────────────────────────────
-          # Core jobs determine pass/fail; zizmor is non-blocking (security findings
-          # go to Code Scanning) but its job status is still surfaced separately.
-          core_ok    = all(r == "success" for r in [sd_r, wd_r, tc_r, lo_r])
-          zizmor_ok  = al_r in ("success", "skipped")
-          if core_ok and zizmor_ok:
-              overall = "✅ All Passed"
-          elif core_ok and not zizmor_ok:
-              overall = "✅ Core Passed · ⚠️ Security Audit Findings"
+          # ── Overall status ────────────────────────────────────────────────
+
+          core_jobs = [sd_r, wd_r, tc_r, lo_r]
+          n_pass = sum(1 for r in core_jobs if r == "success")
+          n_fail = sum(1 for r in core_jobs if r == "failure")
+          n_total = len(core_jobs)
+
+          zizmor_ok = al_r in ("success", "skipped")
+
+          if n_fail == 0 and zizmor_ok:
+              overall = f"✅ All {n_pass}/{n_total} Core Passed"
+          elif n_fail == 0 and not zizmor_ok:
+              overall = f"✅ All {n_pass}/{n_total} Core Passed · ⚠️ Security Audit Findings"
           else:
-              overall = "❌ Some Failed"
+              overall = f"❌ {n_fail}/{n_total} Core Failed · {n_pass} passed"
 
-          rows = [
-              f"| **Server Smoke (Docker — Linux)**       | {job_icon(sd_r)} `{sd_r}` | {fmt_tests(*sd_smoke)} | — |",
-              f"| **Web Client Docker Tests**             | {job_icon(wd_r)} `{wd_r}` | {fmt_tests(*wd_py)} | {fmt_tests(*wd_js)} |",
-              f"| **Test Client (Windows Live)**          | {job_icon(tc_r)} `{tc_r}` | {fmt_tests(*tc_tests)} *(sanity: {fmt_tests(*tc_smoke)})* | — |",
-              f"| **Web + Console Live (Windows)**        | {job_icon(lo_r)} `{lo_r}` | {fmt_tests(*lo_web)} web · {fmt_tests(*lo_con)} console | — |",
-              f"| **GHA Security Audit (zizmor)**         | {job_icon(al_r)} `{al_r}` | — | — |",
-          ]
+          run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
+          sha_str  = f"`{sha}`" if sha else "—"
 
-          lines = [
-              f"## 🏭 IJT OPC UA — CI Extended Report &nbsp;&nbsp; {overall}",
+          # ── Build report ──────────────────────────────────────────────────
+
+          out = [
+              f"## 🏭 IJT OPC UA — CI Extended &nbsp;&nbsp; {overall}",
               "",
-              "| Job | Result | Python Tests | JS Tests |",
-              "|-----|:------:|:---:|:---:|",
-              *rows,
+              f"> **Branch:** `{branch}` &nbsp;·&nbsp; **Commit:** {sha_str} &nbsp;·&nbsp; **Run:** {run_link}",
+              "> Live / integration tests — requires OPC UA server + full client stack (Windows runner)",
+              "",
+              "### 🔬 Live Test Results",
+              "",
+              "| Component | Job | Tests | Skips |",
+              "|:----------|:---:|:-----:|:-----:|",
+              f"| **OPC UA Server — Smoke (Docker Linux)** | {job_icon(sd_r)} | {fmt_tests(*sd_smoke)} | — |",
+              f"| **Web Client Docker — Python** | {job_icon(wd_r)} | {fmt_tests(*wd_py)} | {wd_py[3] or '—'} |",
+              f"| **Web Client Docker — JS (Vitest)** | {job_icon(wd_r)} | {fmt_tests(*wd_js)} | {wd_js[3] or '—'} |",
+              f"| **Test Client — Smoke Sanity** | {job_icon(tc_r)} | {fmt_tests(*tc_smoke)} | — |",
+              f"| **Test Client — Conformance (Live)** | {job_icon(tc_r)} | {fmt_tests(*tc_tests)} | {tc_tests[3] or '—'} |",
+              f"| **Web Client — Integration (Live)** | {job_icon(lo_r)} | {fmt_tests(*lo_web)} | {lo_web[3] or '—'} |",
+              f"| **Console Client — Live** | {job_icon(lo_r)} | {fmt_tests(*lo_con)} | {lo_con[3] or '—'} |",
+              "",
+              "### 🔒 Security Audit",
+              "",
+              "| Check | Result | Notes |",
+              "|:------|:------:|:------|",
+              f"| **GHA Security Audit** (zizmor) | {job_icon(al_r)} | Findings reported to → **Code Scanning** tab |",
               "",
               "---",
-              "**Legend:** ✅ Pass &nbsp;·&nbsp; ❌ Fail &nbsp;·&nbsp; — Not applicable &nbsp;·&nbsp; skipped = known expected skips",
+              "**Legend:** ✅ Pass &nbsp;·&nbsp; ❌ Fail &nbsp;·&nbsp; ⚠️ Warning &nbsp;·&nbsp; — Not applicable &nbsp;·&nbsp; p = passed &nbsp;·&nbsp; f = failed",
               "",
-              "> 🔍 **Checks tab** — per-test pass/fail drill-down (dorny/test-reporter)",
-              "> 📦 **Artifacts** — JUnit XML available for download in the Artifacts section above",
+              "> 🔍 **Checks tab** — per-test drill-down &nbsp;·&nbsp; 📦 **Artifacts** — JUnit XML (downloadable above)",
           ]
-          if artifact_warnings:
-              lines += ["", "### ⚠️ Artifact Sanity Warnings", ""] + artifact_warnings
 
-          with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a") as fh:
-              fh.write("\n".join(lines) + "\n")
+          if artifact_warnings:
+              out += ["", "---", "### ⚠️ Artifact Sanity Warnings", "", *artifact_warnings]
+
+          with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8") as fh:
+              fh.write("\n".join(out) + "\n")
           print("Summary written.")
           PYEOF

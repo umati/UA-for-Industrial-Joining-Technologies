@@ -62,7 +62,9 @@ jobs:
       contents: read
       checks: write
     outputs:
-      mypy_result: ${{ steps.mypy.outcome }} # zizmor: ignore[template-injection]
+      mypy_result:   ${{ steps.mypy.outcome }}      # zizmor: ignore[template-injection]
+      ruff_result:   ${{ steps.pylint.outcome }}    # zizmor: ignore[template-injection]
+      eslint_result: ${{ steps.eslint.outcome }}    # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
@@ -196,7 +198,8 @@ jobs:
       contents: read
       checks: write
     outputs:
-      mypy_result: ${{ steps.mypy.outcome }} # zizmor: ignore[template-injection]
+      mypy_result: ${{ steps.mypy.outcome }}   # zizmor: ignore[template-injection]
+      ruff_result: ${{ steps.pylint.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
@@ -293,6 +296,8 @@ jobs:
     permissions:
       contents: read
       checks: write
+    outputs:
+      eslint_result: ${{ steps.eslint.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release1/IJT_Node_Client
@@ -440,6 +445,10 @@ jobs:
     permissions:
       contents: read
       checks: write
+    outputs:
+      build_result:  ${{ steps.build.outcome }}     # zizmor: ignore[template-injection]
+      format_result: ${{ steps.format.outcome }}    # zizmor: ignore[template-injection]
+      vuln_result:   ${{ steps.vuln_scan.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
@@ -625,7 +634,8 @@ jobs:
     permissions:
       contents: read
     outputs:
-      mypy_result: ${{ steps.mypy.outcome }} # zizmor: ignore[template-injection]
+      mypy_result: ${{ steps.mypy.outcome }}   # zizmor: ignore[template-injection]
+      ruff_result: ${{ steps.pylint.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
@@ -876,6 +886,7 @@ jobs:
 
       - name: Generate Summary Table
         env:
+          # ── Job-level results ──────────────────────────────────
           WEB_RESULT:     ${{ needs.web-client.result }}
           CONSOLE_RESULT: ${{ needs.console-client.result }}
           NODE_RESULT:    ${{ needs.node-client.result }}
@@ -884,40 +895,59 @@ jobs:
           TC_RESULT:      ${{ needs.test-client.result }}
           SS_WIN_RESULT:  ${{ needs.server-smoke-windows.result }}
           AL_RESULT:      ${{ needs.actionlint.result }}
+          # ── Per-tool step outcomes ─────────────────────────────
+          WEB_RUFF:       ${{ needs.web-client.outputs.ruff_result }}
+          WEB_ESLINT:     ${{ needs.web-client.outputs.eslint_result }}
           WEB_MYPY:       ${{ needs.web-client.outputs.mypy_result }}
+          CONSOLE_RUFF:   ${{ needs.console-client.outputs.ruff_result }}
           CONSOLE_MYPY:   ${{ needs.console-client.outputs.mypy_result }}
+          NODE_ESLINT:    ${{ needs.node-client.outputs.eslint_result }}
+          CS_BUILD:       ${{ needs.csharp-client.outputs.build_result }}
+          CS_FORMAT:      ${{ needs.csharp-client.outputs.format_result }}
+          CS_VULN:        ${{ needs.csharp-client.outputs.vuln_result }}
+          TC_RUFF:        ${{ needs.test-client.outputs.ruff_result }}
           TC_MYPY:        ${{ needs.test-client.outputs.mypy_result }}
+          # ── Commit context ─────────────────────────────────────
+          GH_SHA:         ${{ github.sha }}
+          GH_BRANCH:      ${{ github.ref_name }}
+          GH_RUN_NUMBER:  ${{ github.run_number }}
+          GH_RUN_URL:     ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           python3 - << 'PYEOF'
           import xml.etree.ElementTree as ET, json, os, glob
 
-          # ── Parsers ──────────────────────────────────────────────────────
+          # ── Parsers ──────────────────────────────────────────────────────────
 
           def parse_junit(pattern):
-              matches = glob.glob(pattern, recursive=True)
-              if not matches:
-                  return None, None, None, None
-              for path in matches:
+              for path in glob.glob(pattern, recursive=True):
                   try:
                       root   = ET.parse(path).getroot()
                       suites = root.findall("testsuite") if root.tag == "testsuites" else [root]
-                      t = sum(int(s.get("tests",    0)) for s in suites)
-                      f = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
+                      t  = sum(int(s.get("tests",    0)) for s in suites)
+                      f  = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
                       sk = sum(int(s.get("skipped",  0)) for s in suites)
                       return t, t - f - sk, f, sk
                   except Exception as exc:
-                      print(f"[WARN] parse_junit: failed to read {path}: {exc}")
+                      print(f"[WARN] parse_junit({path}): {exc}")
               return None, None, None, None
+
+          def parse_coverage(pattern):
+              for path in glob.glob(pattern, recursive=True):
+                  try:
+                      rate = ET.parse(path).getroot().get("line-rate")
+                      if rate is not None:
+                          return round(float(rate) * 100, 1)
+                  except Exception:
+                      pass
+              return None
 
           def parse_bandit(pattern):
               for path in glob.glob(pattern, recursive=True):
                   try:
                       with open(path) as _f:
                           r = json.load(_f).get("results", [])
-                      return (
-                          sum(1 for i in r if i["issue_severity"] == "HIGH"),
-                          sum(1 for i in r if i["issue_severity"] == "MEDIUM"),
-                      )
+                      return (sum(1 for i in r if i["issue_severity"] == "HIGH"),
+                              sum(1 for i in r if i["issue_severity"] == "MEDIUM"))
                   except Exception:
                       pass
               return None, None
@@ -932,128 +962,210 @@ jobs:
                       pass
               return None, None
 
-          def parse_eslint_json(pattern):
+          def parse_eslint(pattern):
               for path in glob.glob(pattern, recursive=True):
                   try:
                       with open(path) as _f:
                           data = json.load(_f)
-                      return sum(r.get("errorCount", 0) for r in data)
+                      return (sum(r.get("errorCount",   0) for r in data),
+                              sum(r.get("warningCount", 0) for r in data))
                   except Exception:
                       pass
-              return None
+              return None, None
 
-          # ── Formatters ───────────────────────────────────────────────────
+          # ── Formatters ───────────────────────────────────────────────────────
 
           def job_icon(r):
               return {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
 
           def fmt_tests(total, passed, failed, skipped=0):
-              if total is None: return "—"
+              if total is None:
+                  return "—"
               icon = "✅" if failed == 0 else "❌"
-              fail_str = f"**{failed} fail**" if failed else "0 fail"
-              skip_str = f" · {skipped} skip" if skipped else ""
-              return f"{icon} **{passed} pass** · {fail_str}{skip_str}"
+              return f"{icon} {passed}p · {failed}f"
+
+          def fmt_cov(pct):
+              if pct is None:
+                  return "—"
+              icon = "✅" if pct >= 65 else ("⚠️" if pct >= 50 else "❌")
+              return f"{icon} {pct:.0f}%"
 
           def fmt_bandit(high, medium):
-              if high is None: return "—"
-              return ("✅" if high == 0 and medium == 0 else "❌") + f" H:{high} M:{medium}"
+              if high is None:
+                  return "—"
+              return "✅ clean" if high == 0 and medium == 0 else f"❌ H:{high} M:{medium}"
 
-          def fmt_npm(critical, high):
-              if critical is None: return "—"
-              return ("✅" if critical == 0 and high == 0 else "❌") + f" C:{critical} H:{high}"
+          def fmt_npm(crit, high):
+              if crit is None:
+                  return "—"
+              return "✅ clean" if crit == 0 and high == 0 else f"❌ C:{crit} H:{high}"
 
-          def fmt_eslint(errors):
-              if errors is None: return "—"
-              return ("✅" if errors == 0 else "❌") + f" {errors} err"
+          def fmt_eslint(errors, warnings):
+              if errors is None:
+                  return "—"
+              if errors == 0 and not warnings:
+                  return "✅ eslint"
+              parts = ([f"{errors}e"] if errors else []) + ([f"{warnings}w"] if warnings else [])
+              prefix = "❌" if errors else "⚠️"
+              return f"{prefix} eslint · {' · '.join(parts)}"
 
-          def fmt_docker(r):
-              if r is None: return "—"
-              return ("✅" if r == "success" else "❌") + f" `{r}`"
+          def fmt_step(r, label=""):
+              if not r or r in ("", "unknown"):
+                  return "—"
+              icon = {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
+              return f"{icon} {label}".strip() if label else icon
 
-          def fmt_mypy(r):
-              if not r or r in ("unknown", "skipped", ""): return "—"
-              return "✅" if r == "success" else "❌"
+          def lint_cell(*items):
+              """Join lint items, dropping any — entries."""
+              parts = [x for x in items if x != "—"]
+              return " · ".join(parts) if parts else "—"
 
-          # ── Load results ─────────────────────────────────────────────────
+          # ── Load ENV ─────────────────────────────────────────────────────────
 
-          web_py   = parse_junit      ("all-results/results-web-client/pytest.xml")
-          web_js   = parse_junit      ("all-results/results-web-client/vitest.xml")
-          web_esl  = parse_eslint_json("all-results/results-web-client/eslint.json")
-          web_ban  = parse_bandit     ("all-results/results-web-client/bandit.json")
-          web_npm  = parse_npm_audit  ("all-results/results-web-client/npm-audit.json")
+          E = os.environ.get
 
-          con_py  = parse_junit      ("all-results/results-console-client/pytest.xml")
-          con_ban = parse_bandit     ("all-results/results-console-client/bandit.json")
+          web_r  = E("WEB_RESULT",    "unknown")
+          con_r  = E("CONSOLE_RESULT","unknown")
+          nod_r  = E("NODE_RESULT",   "unknown")
+          dck_r  = E("DOCKER_RESULT", "unknown")
+          cs_r   = E("CS_RESULT",     "unknown")
+          tc_r   = E("TC_RESULT",     "unknown")
+          ss_r   = E("SS_WIN_RESULT", "unknown")
+          al_r   = E("AL_RESULT",     "unknown")
 
-          nod_js  = parse_junit      ("all-results/results-node-client/vitest.xml")
-          nod_esl = parse_eslint_json("all-results/results-node-client/eslint.json")
-          nod_npm = parse_npm_audit  ("all-results/results-node-client/npm-audit.json")
+          web_ruff   = E("WEB_RUFF",    "")
+          web_eslint = E("WEB_ESLINT",  "")
+          web_mypy   = E("WEB_MYPY",    "")
+          con_ruff   = E("CONSOLE_RUFF","")
+          con_mypy   = E("CONSOLE_MYPY","")
+          nod_eslint = E("NODE_ESLINT", "")
+          cs_build   = E("CS_BUILD",    "")
+          cs_format  = E("CS_FORMAT",   "")
+          cs_vuln    = E("CS_VULN",     "")
+          tc_ruff    = E("TC_RUFF",     "")
+          tc_mypy    = E("TC_MYPY",     "")
 
-          tc_ban  = parse_bandit     ("all-results/results-test-client/bandit.json")
+          sha      = (E("GH_SHA",        "") or "")[:8]
+          branch   = E("GH_BRANCH",      "main")
+          run_num  = E("GH_RUN_NUMBER",  "")
+          run_url  = E("GH_RUN_URL",     "")
 
-          web_r      = os.environ.get("WEB_RESULT",      "unknown")
-          con_r      = os.environ.get("CONSOLE_RESULT",  "unknown")
-          nod_r      = os.environ.get("NODE_RESULT",    "unknown")
-          docker_r   = os.environ.get("DOCKER_RESULT",  "unknown")
-          cs_r       = os.environ.get("CS_RESULT",      "unknown")
-          tc_r       = os.environ.get("TC_RESULT",      "unknown")
-          ss_win_r   = os.environ.get("SS_WIN_RESULT",  "unknown")
-          al_r       = os.environ.get("AL_RESULT",      "unknown")
+          # ── Parse artifacts ──────────────────────────────────────────────────
 
-          web_mypy = os.environ.get("WEB_MYPY",     "")
-          con_mypy = os.environ.get("CONSOLE_MYPY", "")
-          tc_mypy  = os.environ.get("TC_MYPY",      "")
+          web_py_t = parse_junit("all-results/results-web-client/pytest.xml")
+          web_js_t = parse_junit("all-results/results-web-client/vitest.xml")
+          web_esl  = parse_eslint("all-results/results-web-client/eslint.json")
+          web_ban  = parse_bandit("all-results/results-web-client/bandit.json")
+          web_npm  = parse_npm_audit("all-results/results-web-client/npm-audit.json")
+          web_cov  = parse_coverage("all-results/results-web-client/coverage.xml")
 
-          cs_tests  = parse_junit("all-results/results-csharp-client/tests.xml")
-          ss_smoke  = parse_junit("all-results/results-server-smoke/smoke.xml")
+          con_py_t = parse_junit("all-results/results-console-client/pytest.xml")
+          con_ban  = parse_bandit("all-results/results-console-client/bandit.json")
+          con_cov  = parse_coverage("all-results/results-console-client/coverage.xml")
 
-          # ── Sanity gate ─────────────────────────────────────────────────────
-          # Flag jobs that reported "success" but produced no test artifacts —
-          # this can hide silent failures where pytest/vitest exited 0 without running.
+          nod_js_t = parse_junit("all-results/results-node-client/vitest.xml")
+          nod_esl  = parse_eslint("all-results/results-node-client/eslint.json")
+          nod_npm  = parse_npm_audit("all-results/results-node-client/npm-audit.json")
+
+          cs_t     = parse_junit("all-results/results-csharp-client/tests.xml")
+
+          tc_ban   = parse_bandit("all-results/results-test-client/bandit.json")
+
+          ss_smoke = parse_junit("all-results/results-server-smoke/smoke.xml")
+
+          # ── Artifact sanity gate ─────────────────────────────────────────────
+
           artifact_warnings = []
-          def _artifact_warn(job_result, artifact_val, job_name, artifact_desc):
-              if job_result == "success" and artifact_val is None:
+          def _warn(job_result, val, job_name, artifact):
+              if job_result == "success" and val is None:
                   artifact_warnings.append(
-                      f"⚠️ **{job_name}**: reported success but `{artifact_desc}` is missing"
+                      f"⚠️ **{job_name}**: job succeeded but `{artifact}` not found — possible silent failure"
                   )
-          _artifact_warn(web_r,    web_py[0],    "web-client",           "pytest.xml")
-          _artifact_warn(web_r,    web_js[0],    "web-client",           "vitest.xml")
-          _artifact_warn(con_r,    con_py[0],    "console-client",       "pytest.xml")
-          _artifact_warn(nod_r,    nod_js[0],    "node-client",          "vitest.xml")
-          _artifact_warn(cs_r,     cs_tests[0],  "csharp-client",        "tests.xml")
-          _artifact_warn(tc_r,     tc_ban[0],    "test-client",          "bandit.json")
-          _artifact_warn(ss_win_r, ss_smoke[0],  "server-smoke-windows", "smoke.xml")
+          _warn(web_r, web_py_t[0], "web-client",           "pytest.xml")
+          _warn(web_r, web_js_t[0], "web-client",           "vitest.xml")
+          _warn(con_r, con_py_t[0], "console-client",       "pytest.xml")
+          _warn(nod_r, nod_js_t[0], "node-client",          "vitest.xml")
+          _warn(cs_r,  cs_t[0],     "csharp-client",        "tests.xml")
+          _warn(tc_r,  tc_ban[0],   "test-client",          "bandit.json")
+          _warn(ss_r,  ss_smoke[0], "server-smoke-windows", "smoke.xml")
 
-          overall = "✅ All Passed" if all(r == "success" for r in [web_r, con_r, nod_r, docker_r, cs_r, tc_r, ss_win_r, al_r]) else "❌ Some Failed"
+          # ── Overall status ────────────────────────────────────────────────────
 
-          rows = [
-              f"| **Release2 / IJT Web Client**           | {job_icon(web_r)} `{web_r}` | {fmt_tests(*web_py)} | {fmt_tests(*web_js)} | {fmt_eslint(web_esl)} | {fmt_bandit(*web_ban)} | {fmt_npm(*web_npm)} | {fmt_mypy(web_mypy)} | {fmt_docker(docker_r)} |",
-              f"| **Release2 / IJT Console Client**       | {job_icon(con_r)} `{con_r}` | {fmt_tests(*con_py)} | — | — | {fmt_bandit(*con_ban)} | — | {fmt_mypy(con_mypy)} | — |",
-              f"| **Release1 / IJT Node Client**          | {job_icon(nod_r)} `{nod_r}` | — | {fmt_tests(*nod_js)} | {fmt_eslint(nod_esl)} | — | {fmt_npm(*nod_npm)} | — | — |",
-              f"| **Release2 / IJT C# Client**            | {job_icon(cs_r)} `{cs_r}` | {fmt_tests(*cs_tests)} | — | — | — | — | — | — |",
-              f"| **Release2 / IJT Test Client**          | {job_icon(tc_r)} `{tc_r}` | — (collect-only) | — | — | {fmt_bandit(*tc_ban)} | — | {fmt_mypy(tc_mypy)} | — |",
-              f"| **Release2 / OPC UA Server (Win)**      | {job_icon(ss_win_r)} `{ss_win_r}` | {fmt_tests(*ss_smoke)} | — | — | — | — | — | — |",
-              f"| **GHA Workflow Lint (actionlint)**       | {job_icon(al_r)} `{al_r}` | — | — | — | — | — | — | — |",
-          ]
+          all_jobs = [web_r, con_r, nod_r, dck_r, cs_r, tc_r, ss_r, al_r]
+          n_pass = sum(1 for r in all_jobs if r == "success")
+          n_fail = sum(1 for r in all_jobs if r == "failure")
+          n_total = len(all_jobs)
+          if n_fail == 0:
+              overall = f"✅ All {n_pass}/{n_total} Passed"
+          else:
+              overall = f"❌ {n_fail}/{n_total} Failed · {n_pass} passed"
 
-          lines = [
-              f"## 🏭 IJT OPC UA — CI Report &nbsp;&nbsp; {overall}",
+          run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
+          sha_str  = f"`{sha}`" if sha else "—"
+
+          # ── Quality columns ───────────────────────────────────────────────────
+
+          def lint_web():
+              ruff = fmt_step(web_ruff, "ruff")
+              esl  = (fmt_eslint(*web_esl) if web_esl[0] is not None
+                      else fmt_step(web_eslint, "eslint"))
+              return lint_cell(ruff, esl)
+
+          def lint_nod():
+              esl = (fmt_eslint(*nod_esl) if nod_esl[0] is not None
+                     else fmt_step(nod_eslint, "eslint"))
+              return lint_cell(esl)
+
+          def lint_cs():
+              return lint_cell(fmt_step(cs_build, "build"), fmt_step(cs_format, "format"))
+
+          # ── Build report ──────────────────────────────────────────────────────
+
+          out = [
+              f"## 🏭 IJT OPC UA — CI Required &nbsp;&nbsp; {overall}",
               "",
-              "| Client | Job | Python Tests | JS Tests | ESLint | Bandit | npm audit | mypy | Docker |",
-              "|--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|",
-              *rows,
+              f"> **Branch:** `{branch}` &nbsp;·&nbsp; **Commit:** {sha_str} &nbsp;·&nbsp; **Run:** {run_link}",
+              "",
+              "### 🔬 Test Results",
+              "",
+              "| Component | Tests | Coverage | Skips |",
+              "|:----------|:-----:|:--------:|:-----:|",
+              f"| **Web Client — Python** | {fmt_tests(*web_py_t)} | {fmt_cov(web_cov)} | {web_py_t[3] or '—'} |",
+              f"| **Web Client — JS (Vitest)** | {fmt_tests(*web_js_t)} | — | {web_js_t[3] or '—'} |",
+              f"| **Console Client — Python** | {fmt_tests(*con_py_t)} | {fmt_cov(con_cov)} | {con_py_t[3] or '—'} |",
+              f"| **Node Client — JS (Vitest)** | {fmt_tests(*nod_js_t)} | — | {nod_js_t[3] or '—'} |",
+              f"| **C# Client — xUnit** | {fmt_tests(*cs_t)} | — | {cs_t[3] or '—'} |",
+              f"| **OPC UA Server — Smoke (Windows)** | {fmt_tests(*ss_smoke)} | — | — |",
+              "",
+              "### 🔒 Code Quality & Security",
+              "",
+              "| Component | Lint | Type Check | Security | Dependencies |",
+              "|:----------|:-----|:----------:|:--------:|:------------:|",
+              f"| **Web Client** | {lint_web()} | {fmt_step(web_mypy, 'mypy')} | {fmt_bandit(*web_ban)} | {fmt_npm(*web_npm)} |",
+              f"| **Console Client** | {fmt_step(con_ruff, 'ruff')} | {fmt_step(con_mypy, 'mypy')} | {fmt_bandit(*con_ban)} | — |",
+              f"| **Node Client** | {lint_nod()} | — | — | {fmt_npm(*nod_npm)} |",
+              f"| **C# Client** | {lint_cs()} | — | {fmt_step(cs_vuln, 'vuln scan')} | — |",
+              f"| **Test Client** | {fmt_step(tc_ruff, 'ruff')} | {fmt_step(tc_mypy, 'mypy')} | {fmt_bandit(*tc_ban)} | — |",
+              "",
+              "### 🏗️ Infrastructure",
+              "",
+              "| Check | Result |",
+              "|:------|:------:|",
+              f"| **Web Client — Docker Smoke** (HTTP + WebSocket) | {job_icon(dck_r)} |",
+              f"| **GHA Workflow Lint** (actionlint) | {job_icon(al_r)} |",
               "",
               "---",
-              "**Legend:** ✅ Pass/Clean &nbsp;·&nbsp; ❌ Fail/Issues &nbsp;·&nbsp; — Not applicable",
+              "**Legend:** ✅ Pass/Clean &nbsp;·&nbsp; ❌ Fail/Issues &nbsp;·&nbsp; ⚠️ Warning &nbsp;·&nbsp; — Not applicable",
+              "**Coverage:** ≥ 65% ✅ &nbsp;·&nbsp; ≥ 50% ⚠️ &nbsp;·&nbsp; < 50% ❌ &nbsp;·&nbsp; p = passed &nbsp;·&nbsp; f = failed",
               "",
-              "> 🔍 **Checks tab** — per-test pass/fail drill-down (dorny/test-reporter)",
-              "> 📦 **Artifacts** — JUnit XML · ESLint JSON · Bandit JSON · npm audit JSON",
+              "> 🔍 **Checks tab** — per-test drill-down &nbsp;·&nbsp; 📦 **Artifacts** — JUnit XML · ESLint JSON · Bandit JSON · Coverage XML",
           ]
-          if artifact_warnings:
-              lines += ["", "### ⚠️ Artifact Sanity Warnings", ""] + artifact_warnings
 
-          with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a") as fh:
-              fh.write("\n".join(lines) + "\n")
+          if artifact_warnings:
+              out += ["", "---", "### ⚠️ Artifact Sanity Warnings", "", *artifact_warnings]
+
+          with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8") as fh:
+              fh.write("\n".join(out) + "\n")
           print("Summary written.")
           PYEOF
 

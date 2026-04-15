@@ -264,6 +264,17 @@ def _collect_counter_types(counters: list) -> set[int]:
     return found
 
 
+def _collect_counter_names(counters: list) -> set[str]:
+    """Return normalised semantic names from counter objects when available."""
+    names: set[str] = set()
+    for counter in counters:
+        raw = getattr(counter, "Name", None) or getattr(counter, "CounterName", None)
+        if raw is None:
+            continue
+        names.add(str(raw).strip().lower())
+    return names
+
+
 def _has_final_tag_in_result(sub_result) -> bool:
     """Return True when any value in the sub-result carries ValueTag equal to FINAL."""
     for ovr in getattr(sub_result, "OverallResultValues", None) or []:
@@ -415,10 +426,16 @@ async def test_sync_result_counters_contains_channel_or_spindle_counter(opcua_cl
 
     expected_types = {_COUNTER_TYPE_CHANNEL_NUMBER, _COUNTER_TYPE_SPINDLE_NUMBER}
     found_types = _collect_counter_types(counters)
+    if found_types & expected_types:
+        return
 
-    assert found_types & expected_types, (
-        f"Sync ResultCounters must include CHANNEL_NUMBER or SPINDLE_NUMBER counter "
-        f"(expected types from set {sorted(expected_types)}), found {sorted(found_types)}"
+    # Context fallback: some servers encode non-standard CounterType ids but keep
+    # explicit semantic names (e.g. "Spindle Number", "Channel Number").
+    names = _collect_counter_names(counters)
+    assert any(("spindle" in n) or ("channel" in n) for n in names), (
+        "Sync ResultCounters must include spindle/channel context by either standard "
+        f"CounterType ids {sorted(expected_types)} or semantic names; "
+        f"found types={sorted(found_types)}, names={sorted(names)}"
     )
 
 

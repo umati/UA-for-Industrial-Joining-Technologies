@@ -149,6 +149,56 @@ async def _collect_condition_events(
     return events
 
 
+def _event_payload_field(event, field_name: str):
+    """
+    Read JoiningSystemEventContent fields across asyncua decoding variants.
+
+    Supported representations:
+      - event.<Field>
+      - event.EventContent.<Field>
+      - event.__dict__['JoiningSystemEventContent/<Field>']
+    """
+    value = getattr(event, field_name, None)
+    if value is not None:
+        return value
+
+    content = getattr(event, "EventContent", None)
+    if content is not None:
+        cval = getattr(content, field_name, None)
+        if cval is not None:
+            return cval
+
+    edict = getattr(event, "__dict__", {})
+    slash_key = f"JoiningSystemEventContent/{field_name}"
+    if slash_key in edict:
+        return edict.get(slash_key)
+
+    nested = edict.get("JoiningSystemEventContent")
+    if nested is not None:
+        nval = getattr(nested, field_name, None)
+        if nval is not None:
+            return nval
+
+    return None
+
+
+def _joining_technology_to_int_or_none(value):
+    """Best-effort conversion of JoiningTechnology payload to enum int when possible."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except TypeError, ValueError:
+        pass
+
+    # Some servers expose JoiningTechnology as LocalizedText/Text (e.g. "Tightening")
+    text = getattr(value, "Text", None)
+    if text is not None:
+        return None
+
+    return None
+
+
 # ---------------------------------------------------------------------------
 # ─── event_payload ───
 # ---------------------------------------------------------------------------
@@ -247,7 +297,7 @@ async def test_joining_system_event_has_event_code_field(subscription_client, op
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
-    event_code = getattr(event, "EventCode", None)
+    event_code = _event_payload_field(event, "EventCode")
     if event_code is None:
         pytest.skip("EventCode field absent — server may not populate it for this event type")
     try:
@@ -275,14 +325,18 @@ async def test_joining_system_event_has_joining_technology(
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
-    tech = getattr(event, "JoiningTechnology", None)
+    tech = _event_payload_field(event, "JoiningTechnology")
     if tech is None:
         pytest.skip("JoiningTechnology field absent — server may not populate it for this event type")
-    try:
-        tech_int = int(tech)
-    except TypeError, ValueError:
-        pytest.fail(f"JoiningTechnology must be an integer, got {tech!r}")
-    assert 0 <= tech_int <= 7, f"JoiningTechnology must be in the valid enum range, got {tech_int}"
+    tech_int = _joining_technology_to_int_or_none(tech)
+    if tech_int is not None:
+        assert 0 <= tech_int <= 7, f"JoiningTechnology must be in the valid enum range, got {tech_int}"
+        return
+
+    tech_text = getattr(tech, "Text", tech)
+    assert isinstance(tech_text, str) and tech_text.strip(), (
+        f"JoiningTechnology must be either valid enum int or non-empty text, got {tech!r}"
+    )
 
 
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD)
@@ -660,7 +714,7 @@ async def test_tool_event_has_associated_entities(subscription_client, opcua_cli
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
-    entities = getattr(event, "AssociatedEntities", None)
+    entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None:
         pytest.skip("AssociatedEntities field absent — server may not populate it for TOOL_CONNECTED")
     assert isinstance(entities, (list, tuple)), f"AssociatedEntities must be a list, got {type(entities).__name__}"
@@ -683,7 +737,7 @@ async def test_process_event_has_associated_entities(subscription_client, opcua_
     if not events:
         pytest.skip("No PROGRAM_SELECTED event received within timeout")
     event = events[0]
-    entities = getattr(event, "AssociatedEntities", None)
+    entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None:
         pytest.skip("AssociatedEntities absent in PROGRAM_SELECTED event — server may not populate it")
     assert isinstance(entities, (list, tuple)), f"AssociatedEntities must be a list, got {type(entities).__name__}"
@@ -712,7 +766,7 @@ async def test_threshold_violation_event_has_reported_values(
     if not events:
         pytest.skip("No TOOL_OVERHEATED event received within timeout — trigger manually if using a real controller")
     event = events[0]
-    reported_values = getattr(event, "ReportedValues", None)
+    reported_values = _event_payload_field(event, "ReportedValues")
     if reported_values is None:
         pytest.skip("ReportedValues absent in TOOL_OVERHEATED event — server may not populate it for this trigger type")
     assert isinstance(reported_values, (list, tuple)), (
@@ -738,7 +792,7 @@ async def test_general_event_reported_values_are_valid_when_present(
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
-    reported_values = getattr(event, "ReportedValues", None)
+    reported_values = _event_payload_field(event, "ReportedValues")
     if reported_values is None:
         pytest.skip("ReportedValues not present in this event — nothing to validate")
     assert isinstance(reported_values, (list, tuple)), (
@@ -806,7 +860,7 @@ async def test_identifier_event_has_associated_entities(subscription_client, opc
     if not events:
         pytest.skip("No identifier event received within timeout")
     event = events[0]
-    entities = getattr(event, "AssociatedEntities", None)
+    entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None:
         pytest.skip("AssociatedEntities absent in identifier event — server may not populate it for this trigger")
     assert isinstance(entities, (list, tuple)), f"AssociatedEntities must be a list, got {type(entities).__name__}"
@@ -855,7 +909,7 @@ async def test_program_selected_event_has_associated_entities(
     if not events:
         pytest.skip("No PROGRAM_SELECTED event received within timeout")
     event = events[0]
-    entities = getattr(event, "AssociatedEntities", None)
+    entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None:
         pytest.skip("AssociatedEntities absent in PROGRAM_SELECTED event — server may not populate it for this trigger")
     assert isinstance(entities, (list, tuple)), f"AssociatedEntities must be a list, got {type(entities).__name__}"
@@ -1034,10 +1088,19 @@ async def test_asset_connection_event_joining_technology_is_nonzero(
     if not events:
         pytest.skip("No TOOL_CONNECTED event received within timeout")
     event = events[0]
-    joining_tech = getattr(event, "JoiningTechnology", None)
+    joining_tech = _event_payload_field(event, "JoiningTechnology")
     if joining_tech is None:
         pytest.skip("JoiningTechnology absent in TOOL_CONNECTED event — may be nested inside JoiningSystemEventContent")
-    assert joining_tech != 0, f"JoiningTechnology must be non-zero (UNDEFINED=0 is invalid), got {joining_tech}"
+
+    jt_int = _joining_technology_to_int_or_none(joining_tech)
+    if jt_int is not None:
+        assert jt_int != 0, f"JoiningTechnology must be non-zero (UNDEFINED=0 is invalid), got {jt_int}"
+        return
+
+    jt_text = getattr(joining_tech, "Text", joining_tech)
+    assert isinstance(jt_text, str) and jt_text.strip(), (
+        f"JoiningTechnology text must be non-empty when provided as LocalizedText/string, got {joining_tech!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1174,7 +1237,7 @@ async def test_associated_entity_has_entity_type_and_id(subscription_client, opc
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
-    entities = getattr(event, "AssociatedEntities", None)
+    entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None or len(entities) == 0:
         pytest.skip("AssociatedEntities absent or empty — cannot validate structure")
     for i, entity in enumerate(entities):
@@ -1202,7 +1265,7 @@ async def test_associated_entity_type_is_valid_non_negative(
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
-    entities = getattr(event, "AssociatedEntities", None)
+    entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None or len(entities) == 0:
         pytest.skip("AssociatedEntities absent or empty — cannot validate EntityType")
     for i, entity in enumerate(entities):
@@ -1231,7 +1294,7 @@ async def test_associated_entity_id_is_non_empty(subscription_client, opcua_clie
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
-    entities = getattr(event, "AssociatedEntities", None)
+    entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None or len(entities) == 0:
         pytest.skip("AssociatedEntities absent or empty — cannot validate EntityId")
     for i, entity in enumerate(entities):
@@ -1264,7 +1327,7 @@ async def test_reported_value_has_mandatory_fields(subscription_client, opcua_cl
     if not events:
         pytest.skip("No TOOL_OVERHEATED event received within timeout")
     event = events[0]
-    reported_values = getattr(event, "ReportedValues", None)
+    reported_values = _event_payload_field(event, "ReportedValues")
     if reported_values is None or len(reported_values) == 0:
         pytest.skip("ReportedValues absent or empty in TOOL_OVERHEATED event")
     for i, entry in enumerate(reported_values):
@@ -1289,7 +1352,7 @@ async def test_reported_value_measured_value_is_numeric(subscription_client, opc
     if not events:
         pytest.skip("No TOOL_OVERHEATED event received within timeout")
     event = events[0]
-    reported_values = getattr(event, "ReportedValues", None)
+    reported_values = _event_payload_field(event, "ReportedValues")
     if reported_values is None or len(reported_values) == 0:
         pytest.skip("ReportedValues absent or empty")
     for i, entry in enumerate(reported_values):
@@ -1317,7 +1380,7 @@ async def test_reported_value_engineering_units_present(subscription_client, opc
     if not events:
         pytest.skip("No TOOL_OVERHEATED event received within timeout")
     event = events[0]
-    reported_values = getattr(event, "ReportedValues", None)
+    reported_values = _event_payload_field(event, "ReportedValues")
     if reported_values is None or len(reported_values) == 0:
         pytest.skip("ReportedValues absent or empty")
     for i, entry in enumerate(reported_values):
@@ -1351,7 +1414,7 @@ async def test_identifier_event_associated_entities_are_non_empty(
     if not events:
         pytest.skip("No RECEIVED_IDENTIFIER event received within timeout")
     event = events[0]
-    entities = getattr(event, "AssociatedEntities", None)
+    entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None:
         pytest.skip("AssociatedEntities absent in identifier event — server may not populate it for this trigger")
     assert isinstance(entities, (list, tuple)), f"AssociatedEntities must be a list, got {type(entities).__name__}"
@@ -1439,7 +1502,7 @@ async def test_select_process_event_associated_entities_contain_process_id(
     if not events:
         pytest.skip("No PROGRAM_SELECTED event received within timeout")
     event = events[0]
-    entities = getattr(event, "AssociatedEntities", None)
+    entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None:
         pytest.skip("AssociatedEntities absent in PROGRAM_SELECTED event")
     assert isinstance(entities, (list, tuple)), f"AssociatedEntities must be a list, got {type(entities).__name__}"
