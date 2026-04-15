@@ -232,8 +232,18 @@ public sealed class AssetManagement : IDisposable
         try
         {
             var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, Array.Empty<string>());
-            _log.LogInformation("✓ GetIdentifiers result:");
-            IjtJsonSerializer.PrintNamedOutputs("GetIdentifiers", outputs, "EntityList", "Status", "StatusMessage");
+
+            // Write full identifier list to file; show count + status on console
+            IjtFileLogger.WriteIdentifiers(
+                IjtJsonSerializer.FormatOutput("EntityList", outputs.Count > 0 ? outputs[0] : null));
+
+            var count = IjtJsonSerializer.CountItems(outputs.Count > 0 ? outputs[0] : null);
+            var countText = count >= 0 ? $"{count} entity/entities" : "data received";
+            var status = outputs.Count > 1 ? IjtJsonSerializer.Serialize(outputs[1]) : "?";
+            var msg = outputs.Count > 2 ? IjtJsonSerializer.Serialize(outputs[2]) : "?";
+            _log.LogInformation("✓ GetIdentifiers: {Count}  Status={Status}  StatusMessage={Msg}",
+                countText, status, msg);
+            _log.LogInformation("  ► Full list → {Path}", IjtFileLogger.IdentifiersLogPath);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {

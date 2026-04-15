@@ -99,6 +99,26 @@ E2E tests live in `tests/e2e/` and use Playwright (requires running server).
 `eslint` (lint), `prettier` (format), `npm audit` (CVE scan), `depcheck` (unused deps),
 `semgrep` (AI security rules), `detect-secrets` (hardcoded secrets).
 
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | OPC UA server endpoint override (Release 1 server cannot change its own port) |
+
 ## OPC UA Endpoint
 
-Default: `opc.tcp://localhost:40451` (Release 1 server)
+Default: `opc.tcp://localhost:40451` (Release 1 server — fixed, not configurable)
+
+### Server Port — Legacy Fixed Port (Release 1)
+
+The Release 1 Node client and its companion Release 1 OPC UA server simulator use a
+**fixed port (40451)**. The Release 1 server does **not** read `server_configuration.json`
+for the TCP port; the port is hardcoded into the binary.
+
+> **Port isolation does not apply here.** Dynamic per-client port assignment via
+> `server_configuration.json` copy-and-patch is a Release 2 feature only.
+
+To run the live tests, start the Release 1 server manually (or let `run_all_tests.py`
+auto-launch it) on port **40451**, then run the tests. Setting `OPCUA_SERVER_URL` to a
+different server is supported as an override, but the Release 1 server itself cannot be
+started on an arbitrary port.

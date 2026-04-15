@@ -117,8 +117,7 @@ IJT_Web_Client/
 │   │   ├── associated-entities-interpreter.md
 │   │   ├── endpointgraphics-tab-adder.md
 │   │   └── simulate-single-result-caller.md
-│   ├── HEALTH_CHECK.md
-│   └── AGENT_GUIDE.md
+│   ├── AGENT_GUIDE.md
 │
 └── .github/workflows/             # CI workflows (at repo root .github/, not here)
 ```
@@ -374,9 +373,8 @@ These files work with **any AI tool** (GitHub Copilot, Cursor, Claude, ChatGPT, 
 
 | File | Covers |
 |------|--------|
-| `docs/SKILLS.md` ← **this file** | Full project map, rules, common mistakes |
+| `docs/SKILLS.md` ← **this file** | Full project map, rules, common mistakes, health check |
 | `docs/AGENT_GUIDE.md` | Agent workflow, guardrails, all prompt templates |
-| `docs/HEALTH_CHECK.md` | Quick sanity check commands |
 | `docs/skills/associated-entities-interpreter.md` | Interpreting `ResultMetaData.AssociatedEntities` |
 | `docs/skills/endpointgraphics-tab-adder.md` | Adding new UI tabs (manager + view pattern) |
 | `docs/skills/simulate-single-result-caller.md` | Wiring `SimulateSingleResult` method invocation |
@@ -384,6 +382,31 @@ These files work with **any AI tool** (GitHub Copilot, Cursor, Claude, ChatGPT, 
 | `docs/guides/models-guide.md` | Model layer: parsing, casting, side effects |
 | `docs/guides/result-model-guide.md` | Result model hierarchy and helpers |
 | `docs/guides/views-guide.md` | UI layer: screens, tabs, styling |
+
+---
+
+## Health Check
+
+Run these before and after code changes:
+
+```bash
+npx eslint src/javascripts config.js --config eslint.config.mjs --max-warnings 0
+python -m pip check
+python index.py
+```
+
+Expected results:
+- ESLint exits with code 0, 0 warnings.
+- `pip check` reports no broken requirements.
+- Backend starts and logs WebSocket startup on port `8001`.
+- Frontend responds on `http://localhost:3000`.
+
+### Quick Full Test Run
+```bash
+python run_all_tests.py
+```
+Expected: ~310 Python unit pass + 13 integration pass, 162 JS pass, 0 lint errors.
+(Live OPC UA tests in `tests/python/live/test_opcua_methods.py` require a running server on `opc.tcp://localhost:40451`.)
 
 ---
 
@@ -396,3 +419,42 @@ These files work with **any AI tool** (GitHub Copilot, Cursor, Claude, ChatGPT, 
 5. **Never** use raw string connection states in JS — use `CONNECTION_STATES` enum.
 6. **Never** change linked-value object shape `{ type, value, link }`.
 7. **Never** run `create_structure.py` again — it's a one-time script already executed.
+
+
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPCUA_TEST_ENDPOINT` | `opc.tcp://localhost:40451` | OPC UA server endpoint for live tests |
+| `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | Runtime OPC UA server override; when set, auto-launch is skipped |
+| `WS_PORT` | `8001` | WebSocket backend port |
+| `IS_DOCKER` | (unset) | Set to `true` inside Docker containers; skips venv creation |
+| `OPCUA_SIMULATOR_EXE` | (unset) | Path to simulator binary for auto-launch |
+
+### Server Auto-Launch & Port Isolation
+
+Each client reserves its own server port so multiple clients can run tests in parallel without conflicts.
+
+| Client             | Test Port | venv         |
+|--------------------|-----------|--------------|
+| IJT_CSharp_Client  | 40451     | N/A (.NET)   |
+| IJT_Console_Client | 40461     | .venv_test   |
+| IJT_Test_Client    | 40462     | .venv_test   |
+| IJT_Web_Client     | 40463     | .venv_test   |
+| IJT_Node_Client    | **40451** (fixed) | N/A (Node) | Release 1 legacy — no dynamic port support |
+
+**How auto-launch works (per-port isolation):**
+1. If `OPCUA_SERVER_URL` env var is set → use it, skip auto-launch (root runner path)
+2. If client's port (e.g. 40461) is already reachable → reuse that server
+3. If native port 40451 is reachable → use it (single-instance convenience mode)
+4. Otherwise → copy server binary dir to `tmp/server_instance_{port}/`, patch
+   `server_configuration.json` with the client's port, launch from that temp dir,
+   wait up to 30s for the port to open, set `OPCUA_SERVER_URL` env var
+5. After tests → terminate process, delete temp dir
+
+**Why two venvs (Python clients):**
+- `.venv` — runtime-only, created by `setup_client.py` / `setup_project.py`
+- `.venv_test` — test runner + dev tools, created by `run_all_tests.py`
+- Kept separate so installing test tools never alters the production environment
+
+**Override:** Set `OPCUA_SERVER_URL=opc.tcp://myserver:40451` to point at any server; auto-launch is skipped entirely.

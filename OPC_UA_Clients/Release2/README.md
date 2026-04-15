@@ -4,19 +4,19 @@
 - **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
 
 ## Overview
-OPC UA Reference Clients with complete source code demonstrating how to consume data from an OPC UA server based on the **IJT Companion Specifications**.
+Reference clients for the **OPC UA Industrial Joining Technologies (IJT) Companion Specification**.
 
 ## IJT Web Client
-- A GUI-based client for understanding and demonstrating IJT concepts — Trace Graphs, Combined Result visualization, and more. Python (`asyncua`) backend, Node.js frontend.
+- GUI client for visualization of IJT data and traces. Python (`asyncua`) backend and Node.js frontend.
 
 ## IJT Console Client
-- This is a simple console client useful for integration of automated testing and evaluation of Result performance. It demonstrates a simple way to consume the Results and parse them in JSON.
+- Command-line client for core IJT operations, including subscriptions, method calls, and result parsing.
 
 ## IJT Test Client
-- A Python pytest suite that validates an OPC UA server against the IJT Companion Specification. Covers address space structure, asset management, result retrieval, event subscriptions, joining process management, joint management, and §11.1 Conformance Units.
+- Conformance test suite for the IJT Companion Specification, built with Python `pytest`.
 
 ## IJT C# Client
-- A C# OPC UA client example built with the OPC Foundation .NET Standard SDK. Demonstrates subscribing to result events, calling result methods (`GetLatestResult`, `GetResultById`), subscribing to variables, and managing assets and joining processes.
+- C#/.NET reference client based on the OPC Foundation .NET Standard SDK.
 
 ## Running Tests
 

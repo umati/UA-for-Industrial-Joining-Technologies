@@ -5,7 +5,7 @@
 - **Coordinator:** Mohit Agarwal — mohit.agarwal@atlascopco.com
 
 ## Overview
-- A **reference** OPC UA client that retrieves and visualizes IJT data from an OPC UA server. Python backend (`opcua-asyncio` + WebSockets) and Node.js frontend.
+- GUI reference client for visualization of IJT data and traces from an OPC UA server. Python backend (`opcua-asyncio` + WebSockets) and Node.js frontend.
 
 ## Prerequisites
 - **Internet Connection**

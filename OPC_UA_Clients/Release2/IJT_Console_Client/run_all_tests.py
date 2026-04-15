@@ -91,10 +91,19 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 def _prepare_tmp_dir() -> None:
-    """Ensure project-local tmp/pytest/ exists for pytest basetemp (clean slate each run)."""
+    """Reset runner-managed tmp workspace and recreate tmp/pytest/."""
+    _TMP_DIR.mkdir(parents=True, exist_ok=True)
+    for child in _TMP_DIR.iterdir():
+        name = child.name
+        managed = name in {"pytest", "pylint", "pip-audit-cache"} or name.startswith("server_instance_")
+        if not managed:
+            continue
+        with contextlib.suppress(OSError):
+            if child.is_dir():
+                _force_rmtree(child)
+            else:
+                child.unlink(missing_ok=True)
     pytest_tmp = _TMP_DIR / "pytest"
-    if pytest_tmp.exists():
-        _force_rmtree(pytest_tmp)
     pytest_tmp.mkdir(parents=True, exist_ok=True)
 
 
@@ -262,7 +271,8 @@ def _relaunch_under_venv() -> None:
     # Popen(stdout=PIPE).communicate() then blocks forever because the grandchild
     # keeps those handles open. subprocess.run() keeps the current process alive until
     # the child finishes, so pipe handles close in the correct order on all platforms.
-    result = subprocess.run([venv_py] + sys.argv, check=False)
+    script_path = str(Path(__file__).resolve())
+    result = subprocess.run([venv_py, script_path, *sys.argv[1:]], check=False, cwd=str(_HERE))
     sys.exit(result.returncode)
 
 
@@ -312,6 +322,72 @@ def _binary_available(name: str) -> bool:
 
 
 _SERVER_NATIVE_PORT = 40451  # port the binary always uses (from server_configuration.json)
+_server_tmp_dir: Path | None = None  # set by _launch_simulator_on_port; cleared in finally
+
+
+def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
+    """Copy the binary dir to a temp location, patch the port config, and launch.
+
+    Stores the temp dir in the module-global ``_server_tmp_dir`` so the caller's
+    finally block can remove it via ``shutil.rmtree(_server_tmp_dir, ignore_errors=True)``.
+    Returns the Popen handle on success, None on failure (temp dir cleaned on failure).
+    """
+    global _server_tmp_dir
+
+    exe_path = Path(exe)
+    if not exe_path.exists():
+        _log(f"  [server] Binary not found: {exe}")
+        return None
+
+    src_dir = exe_path.parent
+    tmp_dir = _TMP_DIR / f"server_instance_{port}"
+    _log(f"  [server] Launching simulator on port {port} (copied to {tmp_dir})")
+    try:
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        shutil.copytree(src_dir, tmp_dir)
+    except OSError as exc:
+        _log(f"  [server] Failed to copy binary dir: {exc}")
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return None
+
+    cfg_path = tmp_dir / "server_configuration.json"
+    if cfg_path.exists():
+        try:
+            with cfg_path.open(encoding="utf-8") as fh:
+                cfg = json.load(fh)
+            cfg.setdefault("serverConfigurationData", {})["serverEndpointTCPPort"] = port
+            with cfg_path.open("w", encoding="utf-8") as fh:
+                json.dump(cfg, fh, indent=2)
+        except (OSError, ValueError) as exc:
+            _log(f"  [server] Failed to patch server_configuration.json: {exc}")
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return None
+
+    try:
+        proc = subprocess.Popen(
+            [str(tmp_dir / exe_path.name)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=str(tmp_dir),
+        )
+    except OSError as exc:
+        _log(f"  [server] Failed to launch binary: {exc}")
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return None
+
+    for _ in range(30):
+        if _is_port_reachable("localhost", port):
+            _log(f"  [server] Ready on port {port}")
+            os.environ["OPCUA_SERVER_URL"] = f"opc.tcp://localhost:{port}"
+            _server_tmp_dir = tmp_dir
+            return proc
+        time.sleep(1)
+
+    _log("  [server] Timed out waiting for simulator — terminating")
+    proc.terminate()
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    return None
 
 
 def _ensure_server(port: int = 40461) -> subprocess.Popen | None:
@@ -319,7 +395,7 @@ def _ensure_server(port: int = 40461) -> subprocess.Popen | None:
 
     If OPCUA_SERVER_URL is already set the caller manages the server — skip auto-launch.
     If the binary is found and started, os.environ["OPCUA_SERVER_URL"] is updated to
-    the server's native port so that live tests can locate it.
+    the client's port so that live tests can locate it.
     """
     if os.environ.get("OPCUA_SERVER_URL"):
         _log("  [server] OPCUA_SERVER_URL already set — skipping auto-launch")
@@ -341,17 +417,7 @@ def _ensure_server(port: int = 40461) -> subprocess.Popen | None:
         _log("  [server] No simulator binary found — Phase 2 will be skipped")
         _log("  [server] Set OPCUA_SIMULATOR_EXE=<path> to enable auto-launch")
         return None
-    _log(f"  [server] Starting: {exe}")
-    proc = subprocess.Popen([exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(30):
-        if _is_port_reachable("localhost", _SERVER_NATIVE_PORT):
-            _log(f"  [server] Ready on native port {_SERVER_NATIVE_PORT}")
-            os.environ["OPCUA_SERVER_URL"] = f"opc.tcp://localhost:{_SERVER_NATIVE_PORT}"
-            return proc
-        time.sleep(1)
-    _log("  [server] Timed out waiting for simulator — terminating")
-    proc.terminate()
-    return None
+    return _launch_simulator_on_port(port, exe)
 
 
 # ---------------------------------------------------------------------------
@@ -1015,8 +1081,11 @@ def main() -> int:
                 server_proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 server_proc.kill()
-            # Clean up env var we set
+            # Clean up env var and temp dir we set
             os.environ.pop("OPCUA_SERVER_URL", None)
+            global _server_tmp_dir
+            shutil.rmtree(_server_tmp_dir, ignore_errors=True) if _server_tmp_dir else None
+            _server_tmp_dir = None
 
     elapsed = time.monotonic() - t_start
 
@@ -1056,7 +1125,7 @@ def _force_rmtree(path: Path) -> None:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}  # "tmp" intentionally removed — now cleaned
+    _SKIP = {"node_modules", ".git", "test-results"}  # tmp workspace is handled by _prepare_tmp_dir()
     _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")]

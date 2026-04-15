@@ -1442,7 +1442,7 @@ def _force_rmtree(path: Path) -> None:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}  # "tmp" intentionally removed — now cleaned
+    _SKIP = {"node_modules", ".git", "test-results"}
     _CACHE_DIRS = {
         "__pycache__",
         ".pytest_cache",

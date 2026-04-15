@@ -43,8 +43,7 @@ IJT_Console_Client/
 ├── requirements.txt         # asyncua>=1.2b2, pytz, aiofiles, orjson, cryptography, pyOpenSSL
 ├── pyproject.toml           # asyncio_mode=auto (+ ruff, coverage, bandit, mypy)
 ├── docs/
-│   ├── SKILLS.md             # ← this file — AI context for all tools
-│   └── methods-usage.md      # IJT method invocation quick reference
+│   └── SKILLS.md             # ← this file — AI context for all tools (includes method quick reference)
 └── tests/
     ├── conftest.py                       # shared fixtures (top-level)
     ├── unit/
@@ -126,7 +125,7 @@ python3 setup_client.py --url="opc.tcp://<ip>:<port>"
 - `SimulateBulkResults` sends results **one by one** in a detached thread.
 - Retry logic needed for `BadTooManyOperations` (bulk results flag on server).
 - **Joint IDs**: always use `Joint_1`, `Joint_2` (capital J, underscore). Never use `joint1`.
-  - Pass `--joint-id Joint_1` on command line (see `docs/methods-usage.md`)
+  - Pass `--joint-id Joint_1` on command line (see **Method Call Quick Reference** section below)
   - Dynamically call `GetJointList` to discover real IDs before calling `GetJoint`/`SelectJoint`.
 
 ### Serialization (`serialize_data.py`)
@@ -190,3 +189,55 @@ Both clients share the same OPC UA IJT method NodeId patterns and event subscrip
 3. **Never** assume `SimulateBulkResults` sends all results at once — it sends one by one.
 4. **Never** ignore `BadTooManyOperations` — add retry logic.
 5. **Always** call `await ws.close()` in cleanup paths of `result_event_handler.py`.
+
+
+## Method Call Quick Reference
+
+Activate the venv first:
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+### Select Joint
+```powershell
+python main.py --origin-id= --joint-id Joint_1 --call select_joint --url "opc.tcp://localhost:40451"
+```
+
+### Enable Asset
+```powershell
+python main.py --url "opc.tcp://localhost:40451" --call enable_asset --enable true
+```
+
+### Start Selected Joining
+```powershell
+python main.py --url "opc.tcp://localhost:40451" --call start_selected_joining --deselect false
+```
+
+
+### Server Auto-Launch & Port Isolation
+
+Each client reserves its own server port so multiple clients can run tests in parallel without conflicts.
+
+| Client             | Test Port | venv         |
+|--------------------|-----------|--------------|
+| IJT_CSharp_Client  | 40451     | N/A (.NET)   |
+| IJT_Console_Client | 40461     | .venv_test   |
+| IJT_Test_Client    | 40462     | .venv_test   |
+| IJT_Web_Client     | 40463     | .venv_test   |
+| IJT_Node_Client    | **40451** (fixed) | N/A (Node) | Release 1 legacy — no dynamic port support |
+
+**How auto-launch works (per-port isolation):**
+1. If `OPCUA_SERVER_URL` env var is set → use it, skip auto-launch (root runner path)
+2. If client's port (e.g. 40461) is already reachable → reuse that server
+3. If native port 40451 is reachable → use it (single-instance convenience mode)
+4. Otherwise → copy server binary dir to `tmp/server_instance_{port}/`, patch
+   `server_configuration.json` with the client's port, launch from that temp dir,
+   wait up to 30s for the port to open, set `OPCUA_SERVER_URL` env var
+5. After tests → terminate process, delete temp dir
+
+**Why two venvs (Python clients):**
+- `.venv` — runtime-only, created by `setup_client.py` / `setup_project.py`
+- `.venv_test` — test runner + dev tools, created by `run_all_tests.py`
+- Kept separate so installing test tools never alters the production environment
+
+**Override:** Set `OPCUA_SERVER_URL=opc.tcp://myserver:40451` to point at any server; auto-launch is skipped entirely.

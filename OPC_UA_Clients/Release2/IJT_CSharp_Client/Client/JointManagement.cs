@@ -68,7 +68,18 @@ public sealed class JointManagement : IDisposable
         try
         {
             var outputs = _js.CallMethod(objectId, methodId, productInstanceUri);
-            IjtJsonSerializer.PrintNamedOutputs("GetJointList", outputs, "JointList", "Status", "StatusMessage");
+
+            // Write full list to file; show count + status on console
+            IjtFileLogger.WriteJointList(
+                IjtJsonSerializer.FormatOutput("JointList", outputs.Count > 0 ? outputs[0] : null));
+
+            var count = IjtJsonSerializer.CountItems(outputs.Count > 0 ? outputs[0] : null);
+            var countText = count >= 0 ? $"{count} joint(s)" : "data received";
+            var status = outputs.Count > 1 ? IjtJsonSerializer.Serialize(outputs[1]) : "?";
+            var msg = outputs.Count > 2 ? IjtJsonSerializer.Serialize(outputs[2]) : "?";
+            _log.LogInformation("✓ GetJointList: {Count}  Status={Status}  StatusMessage={Msg}",
+                countText, status, msg);
+            _log.LogInformation("  ► Full list → {Path}", IjtFileLogger.JointListLogPath);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
@@ -106,7 +117,16 @@ public sealed class JointManagement : IDisposable
         try
         {
             var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, jointId);
-            IjtJsonSerializer.PrintNamedOutputs("GetJoint", outputs, "Joint", "Status", "StatusMessage");
+
+            // Write full joint data to file; show summary on console
+            IjtFileLogger.WriteJoint(
+                IjtJsonSerializer.FormatOutput("Joint", outputs.Count > 0 ? outputs[0] : null));
+
+            var status = outputs.Count > 1 ? IjtJsonSerializer.Serialize(outputs[1]) : "?";
+            var msg = outputs.Count > 2 ? IjtJsonSerializer.Serialize(outputs[2]) : "?";
+            _log.LogInformation("✓ GetJoint: JointId={Id}  Status={Status}  StatusMessage={Msg}",
+                jointId, status, msg);
+            _log.LogInformation("  ► Full joint → {Path}", IjtFileLogger.JointLogPath);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {

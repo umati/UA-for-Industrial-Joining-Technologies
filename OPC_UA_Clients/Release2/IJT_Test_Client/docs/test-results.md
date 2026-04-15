@@ -4,16 +4,18 @@ This document explains how to read test reports and what each test status means.
 
 ## Report Locations
 
-After a test run the following files are produced:
+After a `run_all_tests.py` run the following files are produced:
 
 | File | Format | Contents |
 |---|---|---|
-| `test-results/pytest.xml` | JUnit XML | Machine-readable results (used by CI and the Excel generator) |
+| `test-results/pytest-live.xml` | JUnit XML | Live test results from `run_all_tests.py` Phase 2 (default XML input for Excel) |
+| `test-results/pytest-unit.xml` | JUnit XML | Unit test results from `run_all_tests.py` Phase 1 |
 | `test-results/report.xlsx` | Excel | Human-readable coloured summary by test area, full detail, filtered views |
-| `test-results/report.html` | HTML | In-browser report (open in any browser, no server needed) |
 | `test-results/smoke-sanity.xml` | JUnit XML | Quick server reachability smoke test (CI only) |
 
-In CI, all four files are uploaded as the `results-testclient` artifact at the end of each run.
+> `report.html` is **not** produced by `run_all_tests.py`. Use the manual `pytest --html=...` command below if you need an HTML report.
+
+In CI, report files are uploaded as run artifacts.
 
 ---
 
@@ -23,15 +25,27 @@ In CI, all four files are uploaded as the `results-testclient` artifact at the e
 ```bash
 python -m pytest conformance/ assets/ joining_process/ results/ joint/ events/ common/ \
   -v --tb=short -rs --timeout=120 \
-  --junitxml=test-results/pytest.xml \
+  --junitxml=test-results/pytest-live.xml \
   --html=test-results/report.html --self-contained-html
 ```
 
 **Generate Excel from XML:**
 ```bash
-python scripts/make_excel_report.py
+python scripts/make_excel_report.py --xml test-results/pytest-live.xml --out test-results/report.xlsx
 # or with custom paths:
-python scripts/make_excel_report.py --xml test-results/pytest.xml --out test-results/report.xlsx
+python scripts/make_excel_report.py --xml test-results/pytest-live.xml --out test-results/custom-report.xlsx
+```
+
+**Generate Excel automatically from `run_all_tests.py` (non-fatal post-step):**
+```bash
+# default local behavior: generate only when tests pass
+python run_all_tests.py
+
+# always generate (recommended when end users consume Excel)
+python run_all_tests.py --excel=always
+
+# custom Excel output path
+python run_all_tests.py --excel=always --excel-out test-results/my-report.xlsx
 ```
 
 ---
@@ -96,6 +110,6 @@ To view results after a CI run:
 1. Go to the **Actions** tab on GitHub
 2. Click **CI Extended** → most recent nightly run
 3. Click **results-testclient** in the Artifacts section
-4. Download and open `report.xlsx` or `report.html`
+4. Download and open `report.xlsx`
 
 If the job is red: check the `Failures (N)` sheet in the Excel report for full failure messages.

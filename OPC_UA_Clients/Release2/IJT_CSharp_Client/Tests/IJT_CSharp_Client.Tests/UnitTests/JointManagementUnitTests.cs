@@ -55,6 +55,20 @@ public sealed class JointManagementUnitTests
         Assert.Null(ex);
     }
 
+    [Fact]
+    public void GetJointList_UnexpectedException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("simulated failure"));
+        using var jm = new JointManagement(session.Object);
+
+        var ex = Record.Exception(() => jm.GetJointList());
+
+        Assert.Null(ex);
+    }
+
     // ── GetJoint ──────────────────────────────────────────────────────────────
 
     [Fact]
@@ -81,6 +95,34 @@ public sealed class JointManagementUnitTests
         Assert.Null(ex);
         session.Verify(s => s.CallMethod(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
+    }
+
+    [Fact]
+    public void GetJoint_OpcUaServiceException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadNotFound));
+        using var jm = new JointManagement(session.Object);
+
+        var ex = Record.Exception(() => jm.GetJoint("urn:product-1", "JNT-001"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void GetJoint_UnexpectedException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new TimeoutException("simulated timeout"));
+        using var jm = new JointManagement(session.Object);
+
+        var ex = Record.Exception(() => jm.GetJoint("urn:product-1", "JNT-001"));
+
+        Assert.Null(ex);
     }
 
     // ── SelectJoint ───────────────────────────────────────────────────────────

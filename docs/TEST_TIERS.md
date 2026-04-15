@@ -56,7 +56,7 @@ Live, integration, Docker, and optional security checks.
 |-----|----------------|
 | `server-smoke-docker` | Linux Release2 server: Docker image build · Dockerfile lint (hadolint) · smoke tests (10 checks, JUnit XML) |
 | `webclient-docker` | Web Client Docker: test-target (Python + Vitest inside container) · prod-target (HTTP health on port 3000) |
-| `int-testclient` | Windows: OPC UA server + Test Client full suite (runs in parallel with `int-live-others`) — pytest.xml + smoke-sanity.xml collected flat before artifact upload |
+| `int-testclient` | Windows: OPC UA server + Test Client full suite (runs in parallel with `int-live-others`) — pytest-live.xml (+ pytest-unit.xml when phase1 runs) + smoke-sanity.xml collected flat before artifact upload |
 | `int-live-others` | Windows: Web Client integration + Console live tests (runs in parallel with `int-testclient`) |
 | `zizmor` *(optional)* | GitHub Actions workflow security audit — findings uploaded as SARIF to GitHub Code Scanning (Security tab); job never fails CI; skipped on fork PRs (no `security-events: write` in fork context) |
 | `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to job summary with full pass · fail · skip counts · artifact sanity gate warns on missing XMLs · zizmor-aware overall status |
@@ -124,6 +124,57 @@ Skip.IfNot(!simMethodId.IsNullNodeId,
 // Condition guard with clear reason:
 it.skipIf(!gitAvailable, 'git not available — skip source-coverage checks (zip export or no git)')
 ```
+
+---
+
+## Per-Client Server Isolation
+
+Each Python client runner reserves a dedicated server port so that multiple clients can
+run their live/integration tests in parallel without port conflicts.
+
+### Port Assignment
+
+| Client             | Test Port | venv         | Notes                                   |
+|--------------------|-----------|--------------|------------------------------------------|
+| IJT_CSharp_Client  | 40451     | N/A (.NET)   | Uses server's native port — no copy needed |
+| IJT_Console_Client | 40461     | `.venv_test` | Per-port isolated launch                |
+| IJT_Test_Client    | 40462     | `.venv_test` | Per-port isolated launch                |
+| IJT_Web_Client     | 40463     | `.venv_test` | Per-port isolated launch                |
+| IJT_Node_Client    | **40451** (fixed) | N/A (Node) | **Release 1 legacy** — server port is hardcoded, dynamic isolation not supported |
+| Server native port | 40451     | —            | Built-in default (from `server_configuration.json`) |
+
+### How `server_configuration.json` Copy Mechanism Works
+
+The OPC UA server binary always starts on port 40451 (its built-in `server_configuration.json`).
+To run a second instance on a different port, `run_all_tests.py` in each client:
+
+1. Copies the **entire binary directory** (`shutil.copytree`) to `tmp/server_instance_{port}/`
+2. Patches `serverConfigurationData.serverEndpointTCPPort` in the **copy's** `server_configuration.json`
+3. Launches the binary **with `cwd=tmp/server_instance_{port}/`** so it reads the patched config
+4. Waits up to 30 s for `localhost:{port}` to become reachable
+5. Sets `OPCUA_SERVER_URL=opc.tcp://localhost:{port}` for the test session
+6. On teardown: terminates the process, then removes the temp dir (`shutil.rmtree`)
+
+The temp dir lives inside the client's own `tmp/` folder (e.g.
+`IJT_Console_Client/tmp/server_instance_40461/`) for easy manual cleanup.
+
+### `.venv_test` Isolation Pattern
+
+Python clients use **two separate virtual environments**:
+
+| venv | Purpose | Created by |
+|------|---------|-----------|
+| `.venv` | Runtime-only — production dependencies | `setup_client.py` / `setup_project.py` |
+| `.venv_test` | Test runner + dev tools (`pytest`, `ruff`, `mypy`, …) | `run_all_tests.py` (first run) |
+
+Keeping them separate ensures that installing test tooling never alters the production
+environment, and vice versa.
+
+### `OPCUA_SERVER_URL` Override
+
+Set `OPCUA_SERVER_URL=opc.tcp://myserver:40451` (or the Web Client's `OPCUA_TEST_ENDPOINT`)
+to point all clients at a shared server. Auto-launch is skipped entirely when this variable
+is present — this is the path used by the root-level `run_all_tests.py` and CI workflows.
 
 ---
 

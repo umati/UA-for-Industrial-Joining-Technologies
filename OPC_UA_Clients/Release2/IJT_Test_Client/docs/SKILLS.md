@@ -11,9 +11,23 @@ Full technical reference: [`opc-ua-server-context.md`](opc-ua-server-context.md)
 ```bash
 # Full suite — OPC UA server auto-launched if needed
 python run_all_tests.py
+
+# Always generate Excel report (non-fatal post-step)
+python run_all_tests.py --excel=always
 ```
 
 Note: `run_tests.py` was merged into `run_all_tests.py` and deleted. Use `run_all_tests.py` only.
+
+See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail explanations, and Excel output details.
+
+### Report Output Behavior
+
+- `run_all_tests.py` writes JUnit XML to `test-results/pytest-live.xml` by default (or `--junit-xml FILE`).
+- Excel generation mode is controlled by `--excel {never,on-success,always}`.
+- Local default is `on-success`; CI default is `always`.
+- Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
+- Missing phase1 tools are auto-installed locally by default; CI keeps auto-install off by default for reproducibility.
+- Use `--no-auto-install-tools` to disable local auto-install, or `--auto-install-tools` to force-enable it.
 
 ### Environment Variables
 
@@ -270,3 +284,32 @@ All tests call `result_trigger.trigger_single(...)` and skip gracefully if no tr
 | `OPCUA_SIMULATOR_EXE` | (none) | Path to simulator binary for auto-launch |
 | `OPCUA_STARTUP_TIMEOUT_SEC` | `30` | Seconds to wait for server OPC UA readiness |
 | `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install on run_all_tests.py |
+
+
+### Server Auto-Launch & Port Isolation
+
+Each client reserves its own server port so multiple clients can run tests in parallel without conflicts.
+
+| Client             | Test Port | venv         |
+|--------------------|-----------|--------------|
+| IJT_CSharp_Client  | 40451     | N/A (.NET)   |
+| IJT_Console_Client | 40461     | .venv_test   |
+| IJT_Test_Client    | 40462     | .venv_test   |
+| IJT_Web_Client     | 40463     | .venv_test   |
+| IJT_Node_Client    | **40451** (fixed) | N/A (Node) | Release 1 legacy — no dynamic port support |
+
+**How auto-launch works (per-port isolation):**
+1. If `OPCUA_SERVER_URL` env var is set → use it, skip auto-launch (root runner path)
+2. If client's port (e.g. 40461) is already reachable → reuse that server
+3. If native port 40451 is reachable → use it (single-instance convenience mode)
+4. Otherwise → copy server binary dir to `tmp/server_instance_{port}/`, patch
+   `server_configuration.json` with the client's port, launch from that temp dir,
+   wait up to 30s for the port to open, set `OPCUA_SERVER_URL` env var
+5. After tests → terminate process, delete temp dir
+
+**Why two venvs (Python clients):**
+- `.venv` — runtime-only, created by `setup_client.py` / `setup_project.py`
+- `.venv_test` — test runner + dev tools, created by `run_all_tests.py`
+- Kept separate so installing test tools never alters the production environment
+
+**Override:** Set `OPCUA_SERVER_URL=opc.tcp://myserver:40451` to point at any server; auto-launch is skipped entirely.

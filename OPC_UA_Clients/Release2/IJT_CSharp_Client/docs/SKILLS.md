@@ -83,7 +83,7 @@ IJT_CSharp_Client/
 │   ├── IjtJsonSerializer.cs     # Method output pretty-printer
 │   ├── IjtResultFormatter.cs    # Result payload formatter
 │   ├── IjtEventFormatter.cs     # Event payload formatter
-│   ├── IjtFileLogger.cs         # Result/event log file writer
+│   ├── IjtFileLogger.cs         # Log file writer (results, events, joints, joining process, identifiers)
 │   ├── AddressSpaceHelper.cs    # Browse utilities
 │   └── ExtensionObjectHelper.cs # ExtensionObject decode helpers
 ├── Types/                       # Auto-generated OPC UA type bindings (UAModel.*)
@@ -171,6 +171,48 @@ dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 
 ---
 
+## File Logging Architecture
+
+Large method outputs are written to domain-specific log files instead of flooding the console. The console shows a one-line summary and the file path. This pattern is implemented consistently across all management classes.
+
+### Log file layout (relative to executable)
+
+```
+logs/
+  results/result.log                    — GetLatestResult, GetResultById, ResultReady events
+  events/event.log                      — JoiningSystemEvent notifications
+  joining_process/process_list.log      — GetJoiningProcessList
+  joining_process/selected_program.log  — GetSelectedJoiningProgram
+  joints/joint_list.log                 — GetJointList
+  joints/joint.log                      — GetJoint
+  identifiers/identifiers.log           — GetIdentifiers
+```
+
+Each call **overwrites** the file (last payload only). Use `IjtFileLogger.BaseLogDir` to get the base path at runtime.
+
+### Pattern (copy for new operations)
+
+```csharp
+// 1. Serialize output to file-friendly string
+var content = IjtJsonSerializer.FormatOutput("JointList", outputs[0]);
+
+// 2. Write to domain log file (overwrites; silently swallows IO errors)
+IjtFileLogger.WriteJointList(content);
+
+// 3. Log count + status on console
+var count = IjtJsonSerializer.CountItems(outputs[0]);
+_log.LogInformation("✓ GetJointList: {Count} joint(s)  Status={S}", count, ...);
+_log.LogInformation("  ► Full list → {Path}", IjtFileLogger.JointListLogPath);
+```
+
+For `ResultDataType` outputs use `IjtResultFormatter.FormatResult(rd, DateTime.UtcNow)` instead of `FormatOutput` to get the rich structured text format.
+
+### Menu `→ log` indicator
+
+Menu items that write large outputs to file show `→ log` in the menu (right-justified). The `PrintCommandUsage` description for those items also states the target file path.
+
+
+
 ## OPC UA Method Resolution (3-tier)
 
 Always call `JoiningSystem.BrowseMethod(objectId, name, fallbackConstant)` — never call `IjtBaseMethodId` directly from management code:
@@ -224,3 +266,57 @@ Always call `JoiningSystem.BrowseMethod(objectId, name, fallbackConstant)` — n
 | `Moq` | 4.20.72+ | Mocking `IJoiningSystem` in unit tests |
 | `coverlet.collector` | latest | Code coverage collection |
 | `Microsoft.NET.Test.Sdk` | latest | dotnet test runner |
+
+
+### Server Auto-Launch & Port Isolation
+
+Each client reserves its own server port so multiple clients can run tests in parallel without conflicts.
+
+| Client             | Test Port | venv         |
+|--------------------|-----------|--------------|
+| IJT_CSharp_Client  | 40451     | N/A (.NET)   |
+| IJT_Console_Client | 40461     | .venv_test   |
+| IJT_Test_Client    | 40462     | .venv_test   |
+| IJT_Web_Client     | 40463     | .venv_test   |
+| IJT_Node_Client    | **40451** (fixed) | N/A (Node) | Release 1 legacy — no dynamic port support |
+
+**How auto-launch works (per-port isolation):**
+1. If `OPCUA_SERVER_URL` env var is set → use it, skip auto-launch (root runner path)
+2. If client's port (e.g. 40461) is already reachable → reuse that server
+3. If native port 40451 is reachable → use it (single-instance convenience mode)
+4. Otherwise → copy server binary dir to `tmp/server_instance_{port}/`, patch
+   `server_configuration.json` with the client's port, launch from that temp dir,
+   wait up to 30s for the port to open, set `OPCUA_SERVER_URL` env var
+5. After tests → terminate process, delete temp dir
+
+**Why two venvs (Python clients):**
+- `.venv` — runtime-only, created by `setup_client.py` / `setup_project.py`
+- `.venv_test` — test runner + dev tools, created by `run_all_tests.py`
+- Kept separate so installing test tools never alters the production environment
+
+**Override:** Set `OPCUA_SERVER_URL=opc.tcp://myserver:40451` to point at any server; auto-launch is skipped entirely.
+
+---
+
+## Softing SDK Integration (Type Libraries)
+
+For projects using the Softing SDK, all 7 IJT type library DLLs must be referenced. Copy them to `libs\IJT\` inside the Softing solution to avoid hard-coded paths, then add to `.csproj`:
+
+```xml
+<ItemGroup>
+  <Reference Include="UAModel.DI">             <HintPath>..\libs\IJT\UAModel.DI.dll</HintPath>             </Reference>
+  <Reference Include="UAModel.IA">             <HintPath>..\libs\IJT\UAModel.IA.dll</HintPath>             </Reference>
+  <Reference Include="UAModel.Machinery">      <HintPath>..\libs\IJT\UAModel.Machinery.dll</HintPath>      </Reference>
+  <Reference Include="UAModel.MachineryResult"><HintPath>..\libs\IJT\UAModel.MachineryResult.dll</HintPath></Reference>
+  <Reference Include="UAModel.AMB">            <HintPath>..\libs\IJT\UAModel.AMB.dll</HintPath>            </Reference>
+  <Reference Include="UAModel.IJTBase">        <HintPath>..\libs\IJT\UAModel.IJTBase.dll</HintPath>        </Reference>
+  <Reference Include="UAModel.IJTTightening">  <HintPath>..\libs\IJT\UAModel.IJTTightening.dll</HintPath>  </Reference>
+</ItemGroup>
+```
+
+Build the DLLs with Softing-compatible SDK version (OPC Foundation 1.5.376.235):
+```bash
+dotnet restore Types\UAModel.IJTTightening -p:OpcUaClientOnly=true --configfile Types\nuget.config
+dotnet build   Types\UAModel.IJTTightening -p:OpcUaClientOnly=true --no-restore
+```
+Output is in `UAModel.IJTTightening\bin\Debug\` — pick subfolder: `net48\` `net6.0\` `net8.0\` `net9.0\` `netstandard2.1\`

@@ -98,6 +98,44 @@ public static class IjtJsonSerializer
     }
 
     /// <summary>
+    /// Formats a single labeled output value as a text block suitable for writing to a log file.
+    /// Includes a UTC timestamp header. Does not log to console.
+    ///
+    /// Copy this pattern to log any OPC UA method output to a file:
+    /// <code>
+    ///   var content = IjtJsonSerializer.FormatOutput("JointList", outputs[0]);
+    ///   IjtFileLogger.WriteJointList(content);
+    /// </code>
+    /// </summary>
+    public static string FormatOutput(string label, object? value)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff} UTC");
+        sb.AppendLine();
+        sb.AppendLine($"{label}:");
+        sb.AppendLine(Serialize(value));
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Returns the item count when the value is an array or collection (unwrapping Variants and
+    /// ExtensionObjects automatically). Returns -1 for non-collection values or null inputs.
+    /// Useful for building concise console summary lines after writing large outputs to file.
+    /// </summary>
+    public static int CountItems(object? raw)
+    {
+        if (raw is null) return -1;
+        var val = raw is Variant v ? v.Value : raw;
+        return val switch
+        {
+            ExtensionObject[] arr => arr.Length,
+            object[] arr => arr.Length,
+            System.Collections.ICollection col => col.Count,
+            _ => -1,
+        };
+    }
+
+    /// <summary>
     /// Prints all output arguments from an OPC UA method call as labeled JSON blocks.
     /// Uses structured formatting for ResultDataType values.
     /// </summary>

@@ -92,7 +92,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     {
         var js = new JoiningSystem(
             session,
-            config ?? new ClientConfig { ServerUrl = "opc.tcp://localhost:4840" },
+            config ?? new ClientConfig { ServerUrl = "opc.tcp://localhost:40451" },
             skipDiscovery: true);
         js.IjtBaseNsIdx = ijtBaseNsIdx;
         js.IjtTighteningNsIdx = ijtTighteningNsIdx;

@@ -4,8 +4,8 @@
 - **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
 
 ## Overview
-- A minimal **reference client** based on the **OPC UA Industrial Joining Technologies (IJT) Companion Specification** using the open source `opcua-asyncio` stack.
-- Demonstrates connecting to a live OPC UA IJT server, subscribing to events (tightening results), calling simulation methods, and reading result data.
+- Command-line reference client for the **OPC UA Industrial Joining Technologies (IJT) Companion Specification**.
+- Supports core operations such as connecting to a live server, event subscriptions, method calls, and result reading.
 
 ## Prerequisites
 - **Internet Connection**

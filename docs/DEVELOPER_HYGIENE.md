@@ -217,7 +217,7 @@ Thresholds are calibrated to what **unit tests alone** can achieve after omittin
 `interrogate` measures what percentage of public functions/classes/methods have docstrings.
 Thresholds are calibrated against the **real codebase** (source + tests, venvs excluded):
 
-| Project | ail-under | Notes |
+| Project | fail-under | Notes |
 |---------|-------------|-------|
 | Console Client | 25% | Honest floor; tests included in scan |
 | Web Client | 42% | Honest floor; tests included in scan |

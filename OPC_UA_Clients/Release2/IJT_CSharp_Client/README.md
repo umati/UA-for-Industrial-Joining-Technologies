@@ -1,6 +1,6 @@
 # IJT C# Client
 
-A C# OPC UA reference client for the [OPC UA for Industrial Joining Technologies (IJT) companion specification](https://github.com/umati/UA-for-Industrial-Joining-Technologies), built with the [OPC Foundation .NET Standard SDK](https://github.com/OPCFoundation/UA-.NETStandard).
+C#/.NET reference client for the [OPC UA Industrial Joining Technologies (IJT) Companion Specification](https://github.com/umati/UA-for-Industrial-Joining-Technologies), built with the [OPC Foundation .NET Standard SDK](https://github.com/OPCFoundation/UA-.NETStandard).
 
 ## Quick Start
 
@@ -22,7 +22,7 @@ The client launches an interactive menu covering the full IJT address space:
 - **Joining Process Management** — list joining processes, select a process, inspect the selected program
 - **Joint Management** — list, get, select, delete, and upload joints
 
-All operations print inputs, outputs, and OPC UA status codes (hex + human-readable text) to the console.
+Large responses are saved to log files. The console shows a concise summary and the file location.
 
 ## Testing
 

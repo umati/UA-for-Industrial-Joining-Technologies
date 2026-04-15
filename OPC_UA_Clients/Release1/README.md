@@ -1,6 +1,6 @@
 # Release1 Node OPC UA Client
 
-This application uses the open source NodeOPCUA SDK. The purpose of this application is to demonstrate the usage of OPC UA server based on the OPC 40451-1 UA CS for Tightening Systems 1.00.
+Release 1 Node.js reference client based on the open source NodeOPCUA SDK for OPC 40451-1 Tightening Systems 1.00.
 
 ## Contact
 - **Author:** Joakim Gustafsson: joakim.h.gustafsson@atlascopco.com

@@ -459,4 +459,86 @@ public class IjtJsonSerializerTests
             System.Text.Json.JsonSerializer.Deserialize<EUInformation>("{}", opts));
         Assert.NotNull(ex);
     }
+
+    // ── FormatOutput ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void FormatOutput_ReturnsTimestampHeader()
+    {
+        var result = IjtJsonSerializer.FormatOutput("TestLabel", "some-value");
+        Assert.Contains("Generated:", result);
+        Assert.Contains("UTC", result);
+    }
+
+    [Fact]
+    public void FormatOutput_ReturnsLabelAndValue()
+    {
+        var result = IjtJsonSerializer.FormatOutput("JointList", "my-content");
+        Assert.Contains("JointList:", result);
+        Assert.Contains("my-content", result);
+    }
+
+    [Fact]
+    public void FormatOutput_NullValue_ReturnsNullInContent()
+    {
+        var result = IjtJsonSerializer.FormatOutput("EmptyOutput", null);
+        Assert.Contains("EmptyOutput:", result);
+        Assert.Contains("null", result);
+    }
+
+    [Fact]
+    public void FormatOutput_ExtensionObjectArray_SerializesItems()
+    {
+        var meta = new ResultMetaDataType { ResultId = "FO-TEST" };
+        var arr = new ExtensionObject[] { new ExtensionObject(meta) };
+        var result = IjtJsonSerializer.FormatOutput("Items", arr);
+        Assert.Contains("FO-TEST", result);
+    }
+
+    // ── CountItems ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void CountItems_Null_ReturnsMinusOne()
+    {
+        Assert.Equal(-1, IjtJsonSerializer.CountItems(null));
+    }
+
+    [Fact]
+    public void CountItems_NonCollection_ReturnsMinusOne()
+    {
+        Assert.Equal(-1, IjtJsonSerializer.CountItems("not-a-list"));
+        Assert.Equal(-1, IjtJsonSerializer.CountItems(42));
+    }
+
+    [Fact]
+    public void CountItems_ExtensionObjectArray_ReturnsLength()
+    {
+        var arr = new ExtensionObject[]
+        {
+            new(new ResultMetaDataType()),
+            new(new ResultMetaDataType()),
+        };
+        Assert.Equal(2, IjtJsonSerializer.CountItems(arr));
+    }
+
+    [Fact]
+    public void CountItems_EmptyExtensionObjectArray_ReturnsZero()
+    {
+        Assert.Equal(0, IjtJsonSerializer.CountItems(Array.Empty<ExtensionObject>()));
+    }
+
+    [Fact]
+    public void CountItems_ObjectArray_ReturnsLength()
+    {
+        var arr = new object[] { "a", "b", "c" };
+        Assert.Equal(3, IjtJsonSerializer.CountItems(arr));
+    }
+
+    [Fact]
+    public void CountItems_VariantWrappingArray_UnwrapsAndCounts()
+    {
+        var inner = new object[] { "x", "y" };
+        var variant = new Variant(inner);
+        Assert.Equal(2, IjtJsonSerializer.CountItems(variant));
+    }
 }

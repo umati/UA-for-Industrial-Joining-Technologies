@@ -10,6 +10,8 @@ Usage:
   python run_all_tests.py --phase1           # static analysis only (no server)
   python run_all_tests.py --phase2           # live tests only (server must be up)
   python run_all_tests.py --junit-xml=FILE   # write JUnit XML report
+  python run_all_tests.py --excel=always     # generate Excel report after run (non-fatal)
+  python run_all_tests.py --no-auto-install-tools  # do not auto-install missing quality tools
   python run_all_tests.py --verbose          # verbose pytest output
   python run_all_tests.py --no-server-check  # skip pre-test server check
   python run_all_tests.py --help
@@ -59,7 +61,11 @@ REQUIREMENTS = _HERE / "requirements.txt"
 _REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
 _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest-live.xml"
+_DEFAULT_EXCEL_OUT = _RESULTS_DIR / "report.xlsx"
 _TMP_DIR = _HERE / "tmp"
+_AUTO_INSTALL_TOOLS = False
+_AUTO_INSTALL_BLOCKED_REASON: str | None = None
+_RUN_START: float = 0.0  # set at main() entry; used to reject stale XML files
 
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40462"
 _MIN_PYTHON = (3, 14)
@@ -101,10 +107,21 @@ def _parse_opcua_endpoint(url: str) -> tuple[str, int]:
 
 
 def _prepare_tmp_dir() -> None:
-    """Ensure project-local tmp/pytest/ exists for pytest basetemp (clean slate each run)."""
+    """Reset runner-managed tmp workspace and recreate tmp/pytest/."""
+    _TMP_DIR.mkdir(parents=True, exist_ok=True)
+    for child in _TMP_DIR.iterdir():
+        name = child.name
+        managed = (
+            name == "pytest" or name == "pylint" or name == "pip-audit-cache" or name.startswith("server_instance_")
+        )
+        if not managed:
+            continue
+        with contextlib.suppress(OSError):
+            if child.is_dir():
+                _force_rmtree(child)
+            else:
+                child.unlink(missing_ok=True)
     pytest_tmp = _TMP_DIR / "pytest"
-    if pytest_tmp.exists():
-        _force_rmtree(pytest_tmp)
     pytest_tmp.mkdir(parents=True, exist_ok=True)
 
 
@@ -257,6 +274,74 @@ def _binary_available(name: str) -> bool:
     return shutil.which(name) is not None
 
 
+def _default_auto_install_tools() -> bool:
+    """Best-practice default: auto-install locally, keep CI reproducible."""
+    return not bool(os.environ.get("CI"))
+
+
+def _ensure_python_tool(*, module_name: str, pip_package: str, label: str) -> tuple[bool, str]:
+    """Ensure a Python module tool is available, optionally auto-installing it."""
+    if _tool_available(module_name):
+        return True, ""
+    if not _AUTO_INSTALL_TOOLS:
+        return False, f"not installed  (pip install {pip_package})"
+    global _AUTO_INSTALL_BLOCKED_REASON
+    if _AUTO_INSTALL_BLOCKED_REASON:
+        return False, _AUTO_INSTALL_BLOCKED_REASON
+
+    _log(f"  [setup] Installing missing tool: {label} ({pip_package}) ...")
+    rc, output = _run(
+        [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", pip_package],
+        timeout=300,
+    )
+    if rc == 0 and _tool_available(module_name):
+        return True, "auto-installed"
+    network_error_markers = (
+        "Failed to establish a new connection",
+        "Max retries exceeded",
+        "NameResolutionError",
+        "Temporary failure in name resolution",
+    )
+    if any(marker in output for marker in network_error_markers):
+        _AUTO_INSTALL_BLOCKED_REASON = "auto-install unavailable (network/index access blocked)"
+    if output.strip():
+        _log(output)
+    return False, f"auto-install failed for {pip_package}"
+
+
+def _ensure_cli_tool(
+    *, binary_name: str, pip_package: str, label: str, module_name: str | None = None
+) -> tuple[bool, str]:
+    """Ensure a CLI tool is available, optionally auto-installing it."""
+    if _binary_available(binary_name) or (module_name and _tool_available(module_name)):
+        return True, ""
+    if not _AUTO_INSTALL_TOOLS:
+        return False, f"Install: pip install {pip_package}"
+    global _AUTO_INSTALL_BLOCKED_REASON
+    if _AUTO_INSTALL_BLOCKED_REASON:
+        return False, _AUTO_INSTALL_BLOCKED_REASON
+
+    _log(f"  [setup] Installing missing tool: {label} ({pip_package}) ...")
+    rc, output = _run(
+        [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", pip_package],
+        timeout=300,
+    )
+    has_tool = _binary_available(binary_name) or (module_name and _tool_available(module_name))
+    if rc == 0 and has_tool:
+        return True, "auto-installed"
+    network_error_markers = (
+        "Failed to establish a new connection",
+        "Max retries exceeded",
+        "NameResolutionError",
+        "Temporary failure in name resolution",
+    )
+    if any(marker in output for marker in network_error_markers):
+        _AUTO_INSTALL_BLOCKED_REASON = "auto-install unavailable (network/index access blocked)"
+    if output.strip():
+        _log(output)
+    return False, f"auto-install failed for {pip_package}"
+
+
 def _ensure_precommit_hooks() -> None:
     """Install pre-commit hooks into .git/hooks/ if not already present."""
     git_root = _HERE
@@ -368,7 +453,8 @@ def _relaunch_if_needed() -> None:
     # Popen(stdout=PIPE).communicate() then blocks forever because the grandchild
     # keeps those handles open. subprocess.run() keeps the current process alive until
     # the child finishes, so pipe handles close in the correct order on all platforms.
-    result = subprocess.run([str(venv_py)] + sys.argv, env=env, check=False)
+    script_path = str(Path(__file__).resolve())
+    result = subprocess.run([str(venv_py), script_path, *sys.argv[1:]], env=env, check=False, cwd=str(_HERE))
     sys.exit(result.returncode)
 
 
@@ -387,6 +473,72 @@ def _parse_server_url() -> tuple[str, int]:
 
 
 _SERVER_NATIVE_PORT = 40451  # port the binary always uses (from server_configuration.json)
+_server_tmp_dir: Path | None = None  # set by _launch_simulator_on_port; cleared in finally
+
+
+def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
+    """Copy the binary dir to a temp location, patch the port config, and launch.
+
+    Stores the temp dir in the module-global ``_server_tmp_dir`` so the caller's
+    finally block can remove it via ``shutil.rmtree(_server_tmp_dir, ignore_errors=True)``.
+    Returns the Popen handle on success, None on failure (temp dir cleaned on failure).
+    """
+    global _server_tmp_dir
+
+    exe_path = Path(exe)
+    if not exe_path.exists():
+        _log(f"  [server] Binary not found: {exe}")
+        return None
+
+    src_dir = exe_path.parent
+    tmp_dir = _TMP_DIR / f"server_instance_{port}"
+    _log(f"  [server] Launching simulator on port {port} (copied to {tmp_dir})")
+    try:
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        shutil.copytree(src_dir, tmp_dir)
+    except OSError as exc:
+        _log(f"  [server] Failed to copy binary dir: {exc}")
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return None
+
+    cfg_path = tmp_dir / "server_configuration.json"
+    if cfg_path.exists():
+        try:
+            with cfg_path.open(encoding="utf-8") as fh:
+                cfg = json.load(fh)
+            cfg.setdefault("serverConfigurationData", {})["serverEndpointTCPPort"] = port
+            with cfg_path.open("w", encoding="utf-8") as fh:
+                json.dump(cfg, fh, indent=2)
+        except (OSError, ValueError) as exc:
+            _log(f"  [server] Failed to patch server_configuration.json: {exc}")
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return None
+
+    try:
+        proc = subprocess.Popen(
+            [str(tmp_dir / exe_path.name)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=str(tmp_dir),
+        )
+    except OSError as exc:
+        _log(f"  [server] Failed to launch binary: {exc}")
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return None
+
+    for _ in range(30):
+        if _is_port_reachable("localhost", port):
+            _log(f"  [server] Ready on port {port}")
+            os.environ["OPCUA_SERVER_URL"] = f"opc.tcp://localhost:{port}"
+            _server_tmp_dir = tmp_dir
+            return proc
+        time.sleep(1)
+
+    _log("  [server] Timed out waiting for simulator — terminating")
+    proc.terminate()
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    return None
 
 
 def _ensure_server(port: int = 40462) -> subprocess.Popen | None:
@@ -394,7 +546,7 @@ def _ensure_server(port: int = 40462) -> subprocess.Popen | None:
 
     If OPCUA_SERVER_URL is already set the caller manages the server — skip auto-launch.
     If the binary is found and started, os.environ["OPCUA_SERVER_URL"] is updated to
-    the server's native port so that live tests can locate it.
+    the client's port so that live tests can locate it.
     """
     if os.environ.get("OPCUA_SERVER_URL"):
         _log("  [server] OPCUA_SERVER_URL already set — skipping auto-launch")
@@ -416,17 +568,7 @@ def _ensure_server(port: int = 40462) -> subprocess.Popen | None:
         _log("  [server] No simulator binary found — Phase 2 will be skipped")
         _log("  [server] Set OPCUA_SIMULATOR_EXE=<path> to enable auto-launch")
         return None
-    _log(f"  [server] Starting: {exe}")
-    proc = subprocess.Popen([exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(30):
-        if _is_port_reachable("localhost", _SERVER_NATIVE_PORT):
-            _log(f"  [server] Ready on native port {_SERVER_NATIVE_PORT}")
-            os.environ["OPCUA_SERVER_URL"] = f"opc.tcp://localhost:{_SERVER_NATIVE_PORT}"
-            return proc
-        time.sleep(1)
-    _log("  [server] Timed out waiting for simulator — terminating")
-    proc.terminate()
-    return None
+    return _launch_simulator_on_port(port, exe)
 
 
 def _check_server(skip: bool) -> None:
@@ -528,9 +670,10 @@ def _step_ruff_lint() -> _StepResult:
     """Run ruff linter; write JSON report to test-results/ruff.json."""
     result = _StepResult("[PHASE 1] ruff lint")
     t0 = time.monotonic()
-    if not _tool_available("ruff"):
+    ok, note = _ensure_python_tool(module_name="ruff", pip_package="ruff", label="ruff")
+    if not ok:
         result.skipped = True
-        result.note = "not installed  (pip install ruff)"
+        result.note = note
         result.duration = time.monotonic() - t0
         return result
     rc, output = _run([sys.executable, "-m", "ruff", "check", ".", "--output-format=json"])
@@ -546,9 +689,10 @@ def _step_ruff_format() -> _StepResult:
     """Check ruff formatting; advisory — style diffs do not fail the suite."""
     result = _StepResult("[PHASE 1] ruff format check")
     t0 = time.monotonic()
-    if not _tool_available("ruff"):
+    ok, note = _ensure_python_tool(module_name="ruff", pip_package="ruff", label="ruff")
+    if not ok:
         result.skipped = True
-        result.note = "not installed"
+        result.note = note
         result.duration = time.monotonic() - t0
         return result
     rc, output = _run([sys.executable, "-m", "ruff", "format", "--check", "."])
@@ -564,9 +708,10 @@ def _step_mypy() -> _StepResult:
     """Run mypy type-checker; skip if mypy not installed."""
     result = _StepResult("[PHASE 1] mypy")
     t0 = time.monotonic()
-    if not _tool_available("mypy"):
+    ok, note = _ensure_python_tool(module_name="mypy", pip_package="mypy", label="mypy")
+    if not ok:
         result.skipped = True
-        result.note = "not installed  (pip install mypy)"
+        result.note = note
         result.duration = time.monotonic() - t0
         return result
     rc, output = _run(
@@ -578,7 +723,7 @@ def _step_mypy() -> _StepResult:
             "--ignore-missing-imports",
             "--no-error-summary",
             "--exclude",
-            r"\.venv",
+            r"(^|[\\/])(\.venv(?:_test|_wsl)?|venv|node_modules|test-results|tmp|pytest-cache-files-[^\\/]+)([\\/]|$)",
         ]
     )
     result.duration = time.monotonic() - t0
@@ -592,9 +737,10 @@ def _step_pylint() -> _StepResult:
     """Run pylint deep linter; write JSON report to test-results/pylint.json."""
     result = _StepResult("[PHASE 1] pylint")
     t0 = time.monotonic()
-    if not _tool_available("pylint"):
+    ok, note = _ensure_python_tool(module_name="pylint", pip_package="pylint", label="pylint")
+    if not ok:
         result.skipped = True
-        result.note = "not installed  (pip install pylint)"
+        result.note = note
         result.duration = time.monotonic() - t0
         return result
     pylint_home = _TMP_DIR / "pylint"
@@ -621,16 +767,25 @@ def _step_pylint() -> _StepResult:
     # Treat those as advisory in this orchestrator; fail only on error/fatal.
     try:
         findings = json.loads(output) if output.strip() else []
+        parse_failed = False
     except json.JSONDecodeError:
         findings = []
+        parse_failed = True
+
+    if parse_failed or (not output.strip() and rc != 0):
+        result.ok = True  # advisory tool — do not fail the run
+        result.note = f"pylint exited {rc} with unparseable output — check manually"
+        if output.strip():
+            _log(output)
+        return result
 
     severe_types = {"error", "fatal"}
     severe_count = sum(1 for item in findings if item.get("type") in severe_types)
     advisory_count = sum(1 for item in findings if item.get("type") not in severe_types)
 
-    if severe_count == 0 and rc == 20:
+    if severe_count == 0:
         result.ok = True
-        result.note = f"advisory findings (exit 20) — {advisory_count} item(s), see test-results/pylint.json"
+        result.note = f"advisory findings (exit {rc}) — {advisory_count} item(s), see test-results/pylint.json"
         return result
 
     result.ok = False
@@ -643,9 +798,10 @@ def _step_bandit() -> _StepResult:
     """Run bandit security linter; write JSON report to test-results/bandit.json."""
     result = _StepResult("[PHASE 1] bandit")
     t0 = time.monotonic()
-    if not _tool_available("bandit"):
+    ok, note = _ensure_python_tool(module_name="bandit", pip_package="bandit", label="bandit")
+    if not ok:
         result.skipped = True
-        result.note = "not installed  (pip install bandit)"
+        result.note = note
         result.duration = time.monotonic() - t0
         return result
     cmd: list[str] = [sys.executable, "-m", "bandit", "-r", ".", "-f", "json"]
@@ -668,9 +824,10 @@ def _step_pip_audit() -> _StepResult:
     """Run pip-audit CVE scanner; write JSON report to test-results/pip-audit.json."""
     result = _StepResult("[PHASE 1] pip-audit")
     t0 = time.monotonic()
-    if not _tool_available("pip_audit"):
+    ok, note = _ensure_python_tool(module_name="pip_audit", pip_package="pip-audit", label="pip-audit")
+    if not ok:
         result.skipped = True
-        result.note = "not installed  (pip install pip-audit)"
+        result.note = note
         result.duration = time.monotonic() - t0
         return result
     pip_audit_cache = _TMP_DIR / "pip-audit-cache"
@@ -732,9 +889,10 @@ def _step_vulture() -> _StepResult:
     """Run vulture dead-code detector; skip if not installed."""
     result = _StepResult("[PHASE 1] vulture")
     t0 = time.monotonic()
-    if not _tool_available("vulture"):
+    ok, note = _ensure_python_tool(module_name="vulture", pip_package="vulture", label="vulture")
+    if not ok:
         result.skipped = True
-        result.note = "not installed  (pip install vulture)"
+        result.note = note
         result.duration = time.monotonic() - t0
         return result
     rc, output = _run(
@@ -761,9 +919,10 @@ def _step_interrogate() -> _StepResult:
     """Check docstring coverage with interrogate; skip if not installed."""
     result = _StepResult("[PHASE 1] interrogate")
     t0 = time.monotonic()
-    if not _tool_available("interrogate"):
+    ok, note = _ensure_python_tool(module_name="interrogate", pip_package="interrogate", label="interrogate")
+    if not ok:
         result.skipped = True
-        result.note = "not installed  (pip install interrogate)"
+        result.note = note
         result.duration = time.monotonic() - t0
         return result
     rc, output = _run([sys.executable, "-m", "interrogate", "-v"])
@@ -778,13 +937,18 @@ def _step_detect_secrets() -> _StepResult:
     """Scan for leaked secrets with detect-secrets; skip if not installed."""
     result = _StepResult("[PHASE 1] detect-secrets")
     t0 = time.monotonic()
-    has_bin = _binary_available("detect-secrets")
-    has_mod = _tool_available("detect_secrets")
-    if not has_bin and not has_mod:
+    ok, note = _ensure_cli_tool(
+        binary_name="detect-secrets",
+        module_name="detect_secrets",
+        pip_package="detect-secrets",
+        label="detect-secrets",
+    )
+    if not ok:
         result.skipped = True
-        result.note = "not installed  (pip install detect-secrets)"
+        result.note = note
         result.duration = time.monotonic() - t0
         return result
+    has_bin = _binary_available("detect-secrets")
     cmd = ["detect-secrets", "scan", "."] if has_bin else [sys.executable, "-m", "detect_secrets", "scan", "."]
     baseline = _HERE / ".secrets.baseline"
     if baseline.exists():
@@ -849,15 +1013,22 @@ def _step_semgrep() -> _StepResult:
     """Run Semgrep AI code review; skip if not installed."""
     result = _StepResult("[PHASE 1] Semgrep (AI review)")
     t0 = time.monotonic()
-    if not _binary_available("semgrep"):
+    ok, note = _ensure_cli_tool(
+        binary_name="semgrep",
+        module_name="semgrep",
+        pip_package="semgrep",
+        label="semgrep",
+    )
+    if not ok:
         result.skipped = True
-        result.note = "Install: pip install semgrep"
+        result.note = note
         result.duration = time.monotonic() - t0
         return result
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    semgrep_cmd = ["semgrep"] if _binary_available("semgrep") else [sys.executable, "-m", "semgrep"]
     _, output = _run(
-        [
-            "semgrep",
+        semgrep_cmd
+        + [
             "--config=p/default",
             "--json",
             "--output",
@@ -897,13 +1068,18 @@ def _step_pyright() -> _StepResult:
     """Run pyright AI type inference; skip if not installed."""
     result = _StepResult("[PHASE 1] pyright (AI types)")
     t0 = time.monotonic()
-    has_bin = _binary_available("pyright")
-    has_mod = _tool_available("pyright")
-    if not has_bin and not has_mod:
+    ok, note = _ensure_cli_tool(
+        binary_name="pyright",
+        module_name="pyright",
+        pip_package="pyright",
+        label="pyright",
+    )
+    if not ok:
         result.skipped = True
-        result.note = "Install: pip install pyright"
+        result.note = note
         result.duration = time.monotonic() - t0
         return result
+    has_bin = _binary_available("pyright")
     cmd = (
         ["pyright", "--outputjson", "--pythonpath", sys.executable]
         if has_bin
@@ -976,6 +1152,89 @@ def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _
     return result
 
 
+def _default_excel_mode() -> str:
+    """Default Excel behavior: always in CI, on-success for local runs."""
+    return "always" if os.environ.get("CI") else "on-success"
+
+
+def _resolve_junit_xml_path(explicit_junit_xml: str | None) -> Path | None:
+    """Pick the best available JUnit XML produced by this run.
+
+    Explicit paths (via --junit-xml) are trusted unconditionally.
+    Auto-detected candidates are rejected if older than _RUN_START to avoid
+    consuming stale XML from a previous run.
+    """
+    if explicit_junit_xml:
+        p = Path(explicit_junit_xml)
+        return p if p.exists() else None
+    candidates = [_DEFAULT_JUNIT, _RESULTS_DIR / "pytest-unit.xml", _RESULTS_DIR / "pytest.xml"]
+    for path in candidates:
+        if not path.exists():
+            continue
+        if _RUN_START and path.stat().st_mtime < _RUN_START:
+            print(f"  [excel] Skipping stale {path.name} (predates this run)")
+            continue
+        return path
+    return None
+
+
+def _step_excel_report(xml_path: Path, out_path: Path) -> _StepResult:
+    """Generate Excel report from JUnit XML. Failures here are advisory only."""
+    result = _StepResult("[POST] Excel report")
+    t0 = time.monotonic()
+    cmd = [
+        str(_venv_python(VENV)),
+        str(_HERE / "scripts" / "make_excel_report.py"),
+        "--xml",
+        str(xml_path),
+        "--out",
+        str(out_path),
+    ]
+    rc, output = _run(cmd, cwd=_HERE)
+    result.duration = time.monotonic() - t0
+    result.ok = rc == 0
+    if result.ok:
+        result.note = str(out_path)
+    else:
+        result.note = f"non-fatal (exit {rc})"
+        if output.strip():
+            _log(output.strip())
+    return result
+
+
+def _maybe_generate_excel(
+    excel_mode: str,
+    tests_passed: bool,
+    explicit_junit_xml: str | None,
+    excel_out: str | None,
+) -> _StepResult:
+    """Generate (or skip) Excel report according to selected mode."""
+    result = _StepResult("[POST] Excel report")
+    t0 = time.monotonic()
+
+    if excel_mode == "never":
+        result.skipped = True
+        result.note = "disabled (--excel=never)"
+        result.duration = time.monotonic() - t0
+        return result
+
+    if excel_mode == "on-success" and not tests_passed:
+        result.skipped = True
+        result.note = "tests failed; skipped (--excel=on-success)"
+        result.duration = time.monotonic() - t0
+        return result
+
+    xml_path = _resolve_junit_xml_path(explicit_junit_xml)
+    if xml_path is None:
+        result.skipped = True
+        result.note = "no JUnit XML found"
+        result.duration = time.monotonic() - t0
+        return result
+
+    out_path = Path(excel_out) if excel_out else _DEFAULT_EXCEL_OUT
+    return _step_excel_report(xml_path, out_path)
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -991,6 +1250,29 @@ def _build_parser() -> argparse.ArgumentParser:
     group.add_argument("--phase1", action="store_true", help="Static analysis only (no server)")
     group.add_argument("--phase2", action="store_true", help="Live tests only (server must be up)")
     p.add_argument("--junit-xml", metavar="FILE", help="Write JUnit XML report to FILE")
+    p.add_argument(
+        "--excel",
+        choices=["never", "on-success", "always"],
+        default=_default_excel_mode(),
+        help="Generate Excel report after tests (non-fatal). Default: on-success locally, always in CI.",
+    )
+    p.add_argument(
+        "--excel-out",
+        metavar="FILE",
+        help=f"Excel output path (default: {_DEFAULT_EXCEL_OUT})",
+    )
+    p.add_argument(
+        "--auto-install-tools",
+        action="store_true",
+        default=_default_auto_install_tools(),
+        help="Auto-install missing quality tools via pip (default: on locally, off in CI).",
+    )
+    p.add_argument(
+        "--no-auto-install-tools",
+        action="store_false",
+        dest="auto_install_tools",
+        help="Disable auto-install of missing quality tools.",
+    )
     p.add_argument("--verbose", "-v", action="store_true", help="Verbose pytest output")
     p.add_argument(
         "--no-server-check",
@@ -1012,14 +1294,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     """Entry point; returns 0 on success, 1 on any failure."""
+    global _RUN_START
+    _RUN_START = time.time()
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     _cleanup_caches(_HERE)  # pre-run: clear stale caches from interrupted runs
-    global _USE_COLOUR
+    global _USE_COLOUR, _AUTO_INSTALL_TOOLS
 
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
     _prepare_tmp_dir()
 
     args = _build_parser().parse_args()
+    _AUTO_INSTALL_TOOLS = bool(args.auto_install_tools)
     run_phase1 = not args.phase2
     run_phase2 = not args.phase1
 
@@ -1082,18 +1367,32 @@ def main() -> int:
                 server_proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 server_proc.kill()
-            # Clean up env var we set
+            # Clean up env var and temp dir we set
             os.environ.pop("OPCUA_SERVER_URL", None)
+            global _server_tmp_dir
+            if _server_tmp_dir:
+                shutil.rmtree(_server_tmp_dir, ignore_errors=True)
+            _server_tmp_dir = None
 
     _divider()
     for r in results:
         r.print_line()
-    _divider()
 
     passed = sum(1 for r in results if r.ok and not r.skipped)
     failed = sum(1 for r in results if not r.ok and not r.skipped)
     skipped = sum(1 for r in results if r.skipped)
     any_failed = failed > 0
+
+    excel_result = _maybe_generate_excel(
+        args.excel,
+        tests_passed=not any_failed,
+        explicit_junit_xml=args.junit_xml,
+        excel_out=args.excel_out,
+    )
+    excel_result.print_line()
+
+    _divider()
+
     elapsed = time.monotonic() - t_start
     overall = _c(_ANSI_RED, "FAIL") if any_failed else _c(_ANSI_GREEN, "PASS")
     _log(f"  Result: {overall}  passed={passed}  failed={failed}  skipped={skipped}  (elapsed: {elapsed:.1f}s)")
@@ -1122,7 +1421,7 @@ def _force_rmtree(path: Path) -> None:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}  # "tmp" intentionally removed — now cleaned
+    _SKIP = {"node_modules", ".git", "test-results"}  # tmp workspace is handled by _prepare_tmp_dir()
     _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")]

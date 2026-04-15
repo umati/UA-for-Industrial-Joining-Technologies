@@ -30,7 +30,7 @@ public sealed class JoiningSystemUnitTests
     }
 
     private static JoiningSystem CreateSession(ISession session)
-        => JoiningSystem.CreateForTesting(session, new ClientConfig { ServerUrl = "opc.tcp://localhost:4840" });
+        => JoiningSystem.CreateForTesting(session, new ClientConfig { ServerUrl = "opc.tcp://localhost:40451" });
 
     // ── CallMethod ────────────────────────────────────────────────────────────
 

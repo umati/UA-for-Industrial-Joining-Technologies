@@ -240,15 +240,20 @@ Runtime: ~10 minutes (int-testclient + int-live-others run in parallel). NOT tri
 |------|--------|
 | `docs/SKILLS.md` (this file) | Repo-level context, access rules, sub-project summary, CI/CD |
 | `docs/DEVELOPER_HYGIENE.md` | Automatic pytest cleanup config + manual `git clean` approach |
+| `docs/TEST_TIERS.md` | Test tier policy, per-client port table, server isolation design |
 | `OPC_UA_Servers/Release2/docs/SKILLS.md` | Server start/stop, simulation methods, smoke tests, env vars |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md` | Full Web Client context, file map, bugs, Docker, CI |
-| `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md` | Console Client context, patterns, test commands |
-| `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md` | Test Client conformance suite, test structure, markers |
-| `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md` | C# client architecture, test commands, known issues |
-| `OPC_UA_Clients/Release1/IJT_Node_Client/docs/SKILLS.md` | Node Client architecture, socket protocol, test commands |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md` | Full Web Client context, file map, bugs, Docker, CI, health check |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/AGENT_GUIDE.md` | Agent workflow and prompt template |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/HEALTH_CHECK.md` | Quick sanity check commands |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/ijt-support-guide.md` | JS core library contracts |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/models-guide.md` | JS model layer |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/result-model-guide.md` | Result model hierarchy |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/views-guide.md` | UI views and screens |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/skills/simulate-single-result-caller.md` | Simulate single result workflow |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/skills/endpointgraphics-tab-adder.md` | Adding endpoint graphics tabs |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/skills/associated-entities-interpreter.md` | Associated entities interpretation |
+| `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md` | Console Client context, patterns, test commands, method call examples |
+| `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md` | Test Client conformance suite, test structure, markers |
+| `OPC_UA_Clients/Release2/IJT_Test_Client/docs/test-results.md` | Report locations, Excel sheets, status meanings, skip categories |
+| `OPC_UA_Clients/Release2/IJT_Test_Client/docs/opc-ua-server-context.md` | Address space map, namespaces, event hierarchy, server limitations |
+| `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md` | C# client architecture, test commands, Softing SDK DLL integration |
+| `OPC_UA_Clients/Release1/IJT_Node_Client/docs/SKILLS.md` | Node Client architecture, socket protocol, test commands |

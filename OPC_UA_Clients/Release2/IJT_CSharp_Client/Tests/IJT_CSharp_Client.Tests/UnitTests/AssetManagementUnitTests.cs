@@ -188,6 +188,21 @@ public sealed class AssetManagementUnitTests
         Assert.Null(ex);
     }
 
+    [Fact]
+    public void SendTextIdentifiers_UnexpectedException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("serialisation error"));
+        using var am = new AssetManagement(session.Object);
+
+        var ex = Record.Exception(() =>
+            am.SendTextIdentifiers("urn:tool:001", new[] { "ID-001" }));
+
+        Assert.Null(ex);
+    }
+
     // ── 8. GetIdentifiers ─────────────────────────────────────────────────────
 
     [Fact]

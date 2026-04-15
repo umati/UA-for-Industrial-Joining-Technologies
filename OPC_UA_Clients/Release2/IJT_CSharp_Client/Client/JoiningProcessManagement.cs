@@ -78,8 +78,18 @@ public sealed class JoiningProcessManagement : IDisposable
                 _log.LogInformation("[DATA] No output (empty list or not supported).");
                 return;
             }
-            IjtJsonSerializer.PrintNamedOutputs("GetJoiningProcessList", outputs,
-                "JoiningProcessList", "Status", "StatusMessage");
+
+            // Write full list to file; show count + status on console
+            IjtFileLogger.WriteJoiningProcessList(
+                IjtJsonSerializer.FormatOutput("JoiningProcessList", outputs[0]));
+
+            var count = IjtJsonSerializer.CountItems(outputs[0]);
+            var countText = count >= 0 ? $"{count} process(es)" : "data received";
+            var status = outputs.Count > 1 ? IjtJsonSerializer.Serialize(outputs[1]) : "?";
+            var msg = outputs.Count > 2 ? IjtJsonSerializer.Serialize(outputs[2]) : "?";
+            _log.LogInformation("✓ GetJoiningProcessList: {Count}  Status={Status}  StatusMessage={Msg}",
+                countText, status, msg);
+            _log.LogInformation("  ► Full list → {Path}", IjtFileLogger.JoiningProcessListLogPath);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
@@ -171,9 +181,16 @@ public sealed class JoiningProcessManagement : IDisposable
         try
         {
             var outputs = _js.CallMethod(jpmNode, methodId, productInstanceUri);
-            _log.LogInformation("✓ GetSelectedJoiningProgram result:");
-            IjtJsonSerializer.PrintNamedOutputs("GetSelectedJoiningProgram", outputs,
-                "SelectedJoiningProgram", "Status", "StatusMessage");
+
+            // Write full program data to file; show status on console
+            IjtFileLogger.WriteSelectedProgram(
+                IjtJsonSerializer.FormatOutput("SelectedJoiningProgram", outputs.Count > 0 ? outputs[0] : null));
+
+            var status = outputs.Count > 1 ? IjtJsonSerializer.Serialize(outputs[1]) : "?";
+            var msg = outputs.Count > 2 ? IjtJsonSerializer.Serialize(outputs[2]) : "?";
+            _log.LogInformation("✓ GetSelectedJoiningProgram: Status={Status}  StatusMessage={Msg}",
+                status, msg);
+            _log.LogInformation("  ► Full program → {Path}", IjtFileLogger.SelectedProgramLogPath);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {

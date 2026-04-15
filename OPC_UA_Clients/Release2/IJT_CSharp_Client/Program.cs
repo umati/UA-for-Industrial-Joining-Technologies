@@ -36,6 +36,8 @@ catch (Exception ex)
 
 await using (js)
 {
+    _log.LogInformation("✓ Connected. Log files: {Dir}", IjtFileLogger.BaseLogDir);
+
     // ── Wire up event handlers ─────────────────────────────────────────────────
     js.EventSubscriber.OnResultReady += (_, e) =>
     {
@@ -138,8 +140,12 @@ await using (js)
 
             // Joining Process
             case "11":
-                js.JoiningProcessManagement.GetJoiningProcessList();
-                break;
+                {
+                    var uri = PromptOptional("ProductInstance URI");
+                    if (uri is null) break;
+                    js.JoiningProcessManagement.GetJoiningProcessList(uri);
+                    break;
+                }
             case "12":
                 {
                     var id = Prompt("Joining Process ID");
@@ -149,8 +155,12 @@ await using (js)
                     break;
                 }
             case "13":
-                js.JoiningProcessManagement.GetSelectedJoiningProgram();
-                break;
+                {
+                    var uri = PromptOptional("ProductInstance URI");
+                    if (uri is null) break;
+                    js.JoiningProcessManagement.GetSelectedJoiningProgram(uri);
+                    break;
+                }
 
             // Identifiers demo
             case "14":
@@ -165,8 +175,12 @@ await using (js)
 
             // Joint Management
             case "15":
-                js.JointManagement.GetJointList();
-                break;
+                {
+                    var uri = PromptOptional("ProductInstance URI");
+                    if (uri is null) break;
+                    js.JointManagement.GetJointList(uri);
+                    break;
+                }
             case "16":
                 {
                     var uri = Prompt("ProductInstance URI");
@@ -225,6 +239,20 @@ static string? Prompt(string label, int maxLen = 256)
     return v;
 }
 
+/// <summary>
+/// Prompts for an optional input value.
+/// Returns empty string <c>""</c> when the user presses Enter (skip → use default).
+/// Returns <c>null</c> when input exceeds <paramref name="maxLen"/> — callers should abort the command.
+/// </summary>
+static string? PromptOptional(string label, int maxLen = 256)
+{
+    Console.Write($"  {label} (optional, Enter to skip): ");
+    var v = Console.ReadLine()?.Trim();
+    if (string.IsNullOrWhiteSpace(v)) return "";
+    if (v.Length > maxLen) { Console.WriteLine($"  Input too long (max {maxLen} chars) — command cancelled."); return null; }
+    return v;
+}
+
 static void PrintBanner()
 {
     Console.WriteLine();
@@ -247,26 +275,26 @@ static void PrintMenu(bool subscribed, string serverUrl)
   │   2  Unsubscribe                                  │
   │                                                   │
   │  RESULT MANAGEMENT                                │
-  │   3  Get latest result                            │
-  │   4  Get result by ID                             │
+  │   3  Get latest result               → log       │
+  │   4  Get result by ID                → log       │
   │   5  Subscribe result variable                    │
   │                                                   │
   │  ASSET MANAGEMENT                                 │
   │   6  Enable / disable asset                       │
   │   7  Send text identifiers (demo)                 │
-  │   8  Get identifiers                              │
+  │   8  Get identifiers                 → log       │
   │   9  Reset identifiers                            │
   │  10  Subscribe asset variables                    │
   │                                                   │
   │  JOINING PROCESS                                  │
-  │  11  Get joining process list                     │
+  │  11  Get joining process list        → log       │
   │  12  Select joining process                       │
-  │  13  Get selected joining program                 │
+  │  13  Get selected joining program    → log       │
   │  14  Send identifiers (EntityDataType demo)       │
   │                                                   │
   │  JOINT MANAGEMENT                                 │
-  │  15  Get joint list                               │
-  │  16  Get joint                                    │
+  │  15  Get joint list                  → log       │
+  │  16  Get joint                       → log       │
   │  17  Select joint                                 │
   │  18  Delete joint                                 │
   │  19  Send joint                                   │
@@ -298,16 +326,16 @@ static void PrintCommandUsage(string cmd)
         case "3":
             IjtMenuHelper.PrintUsage(
                 "GetLatestResult",
-                "Fetch latest result from ResultManagement.",
+                "Fetch latest result from ResultManagement. Full result logged to: logs/results/result.log",
                 ["TimeoutMs: Int32 (default 5000)"],
-                ["ResultHandle", "Result", "Error"]);
+                ["ResultHandle", "Result → logs/results/result.log", "Error"]);
             break;
         case "4":
             IjtMenuHelper.PrintUsage(
                 "GetResultById",
-                "Fetch result by ResultId.",
+                "Fetch result by ResultId. Full result logged to: logs/results/result.log",
                 ["ResultId: String", "TimeoutMs: Int32 (default 5000)"],
-                ["ResultHandle", "Result", "Error"]);
+                ["ResultHandle", "Result → logs/results/result.log", "Error"]);
             break;
         case "5":
             IjtMenuHelper.PrintUsage(
@@ -333,9 +361,9 @@ static void PrintCommandUsage(string cmd)
         case "8":
             IjtMenuHelper.PrintUsage(
                 "GetIdentifiers",
-                "Read identifiers for a product instance.",
+                "Read identifiers for a product instance. Full list logged to: logs/identifiers/identifiers.log",
                 ["ProductInstanceUri: String"],
-                ["EntityList", "Status", "StatusMessage"]);
+                ["EntityList → logs/identifiers/identifiers.log", "Status", "StatusMessage"]);
             break;
         case "9":
             IjtMenuHelper.PrintUsage(
@@ -354,9 +382,9 @@ static void PrintCommandUsage(string cmd)
         case "11":
             IjtMenuHelper.PrintUsage(
                 "GetJoiningProcessList",
-                "Read available joining processes.",
+                "Read available joining processes. Full list logged to: logs/joining_process/process_list.log",
                 ["ProductInstanceUri: String (optional)"],
-                ["JoiningProcessList", "Status", "StatusMessage"]);
+                ["JoiningProcessList → logs/joining_process/process_list.log", "Status", "StatusMessage"]);
             break;
         case "12":
             IjtMenuHelper.PrintUsage(
@@ -368,9 +396,9 @@ static void PrintCommandUsage(string cmd)
         case "13":
             IjtMenuHelper.PrintUsage(
                 "GetSelectedJoiningProgram",
-                "Read currently selected joining program.",
+                "Read currently selected joining program. Full data logged to: logs/joining_process/selected_program.log",
                 ["ProductInstanceUri: String (optional)"],
-                ["SelectedJoiningProgram", "Status", "StatusMessage"]);
+                ["SelectedJoiningProgram → logs/joining_process/selected_program.log", "Status", "StatusMessage"]);
             break;
         case "14":
             IjtMenuHelper.PrintUsage(
@@ -382,16 +410,16 @@ static void PrintCommandUsage(string cmd)
         case "15":
             IjtMenuHelper.PrintUsage(
                 "GetJointList",
-                "Read joint list.",
+                "Read joint list. Full list logged to: logs/joints/joint_list.log",
                 ["ProductInstanceUri: String (optional)"],
-                ["JointList", "Status", "StatusMessage"]);
+                ["JointList → logs/joints/joint_list.log", "Status", "StatusMessage"]);
             break;
         case "16":
             IjtMenuHelper.PrintUsage(
                 "GetJoint",
-                "Read one joint by JointId.",
+                "Read one joint by JointId. Full joint data logged to: logs/joints/joint.log",
                 ["ProductInstanceUri: String", "JointId: NormalizedString"],
-                ["Joint", "Status", "StatusMessage"]);
+                ["Joint → logs/joints/joint.log", "Status", "StatusMessage"]);
             break;
         case "17":
             IjtMenuHelper.PrintUsage(

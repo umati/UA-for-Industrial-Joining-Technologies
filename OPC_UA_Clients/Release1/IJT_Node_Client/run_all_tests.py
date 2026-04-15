@@ -535,14 +535,11 @@ def _is_port_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
 def _ensure_server() -> subprocess.Popen | None:
     """Start OPC UA server if not already running; returns Popen handle or None.
 
-    Skips auto-launch if OPCUA_SERVER_URL is already set (user manages server).
-    When launched, waits for the server's native port 40451 and updates
-    OPCUA_SERVER_URL so downstream tools can locate the server.
+    Release 1 server is hardcoded to port 40451 and does NOT read
+    server_configuration.json for the TCP port.  No copy+patch mechanism
+    is used — the binary is launched directly from its own directory.
     """
     if os.environ.get("OPCUA_SERVER_URL"):
-        return None
-    preferred_port = 40464
-    if _is_port_reachable("localhost", preferred_port):
         return None
     if _is_port_reachable("localhost", _SERVER_NATIVE_PORT):
         os.environ["OPCUA_SERVER_URL"] = f"opc.tcp://localhost:{_SERVER_NATIVE_PORT}"
@@ -556,13 +553,17 @@ def _ensure_server() -> subprocess.Popen | None:
     if not exe:
         print("  [server] No simulator binary found — Phase 2 will be skipped")
         return None
-    print(f"  [server] Starting: {exe}")
-    proc = subprocess.Popen(
-        [exe],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        cwd=str(Path(exe).parent),
-    )
+    exe_path = Path(exe)
+    try:
+        proc = subprocess.Popen(
+            [str(exe_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=str(exe_path.parent),
+        )
+    except OSError as exc:
+        print(f"  [server] Failed to launch binary: {exc}")
+        return None
     for _ in range(30):
         if _is_port_reachable("localhost", _SERVER_NATIVE_PORT):
             print(f"  [server] Ready on port {_SERVER_NATIVE_PORT}")
@@ -738,7 +739,7 @@ def _force_rmtree(path: Path) -> None:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}  # "tmp" intentionally removed — now cleaned
+    _SKIP = {"node_modules", ".git", "test-results"}
     _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [

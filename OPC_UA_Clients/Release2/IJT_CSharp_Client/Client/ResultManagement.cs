@@ -255,6 +255,44 @@ public sealed class ResultManagement : IDisposable
 
     // ── Output formatting ─────────────────────────────────────────────────────
 
-    private static void PrintResultOutputs(IList<object> outputs)
-        => IjtJsonSerializer.PrintNamedOutputs("Result", outputs, "ResultHandle", "Result", "Error");
+    /// <summary>
+    /// Writes the full result payload to file and logs a brief summary to console.
+    /// Full content: logs/results/result.log.
+    /// Pattern end users can copy:
+    /// <code>
+    ///   var rd = UnwrapResult(outputs[1]);
+    ///   IjtFileLogger.WriteResult(rd != null
+    ///       ? IjtResultFormatter.FormatResult(rd, DateTime.UtcNow)
+    ///       : IjtJsonSerializer.FormatOutput("Result", outputs[1]));
+    /// </code>
+    /// </summary>
+    private void PrintResultOutputs(IList<object> outputs)
+    {
+        if (outputs.Count == 0)
+        {
+            _log.LogInformation("(no output arguments)");
+            return;
+        }
+
+        // Unwrap Result (outputs[1]: ExtensionObject → ResultDataType)
+        var raw = outputs.Count > 1
+            ? (outputs[1] is Variant vt ? vt.Value : outputs[1])
+            : null;
+        var rd = raw is ExtensionObject eo
+            ? eo.Body as UAModel.MachineryResult.ResultDataType
+            : raw as UAModel.MachineryResult.ResultDataType;
+
+        // Write full payload to file
+        var content = rd != null
+            ? IjtResultFormatter.FormatResult(rd, DateTime.UtcNow)
+            : IjtJsonSerializer.FormatOutput("Result", outputs.Count > 1 ? outputs[1] : null);
+        IjtFileLogger.WriteResult(content);
+
+        // Console: brief summary only
+        var handle = IjtJsonSerializer.Serialize(outputs[0]);
+        var error = outputs.Count > 2 ? IjtJsonSerializer.Serialize(outputs[2]) : "?";
+        _log.LogInformation("✓ Result received.  ResultHandle={Handle}  Error={Error}",
+            handle, error);
+        _log.LogInformation("  ► Full result → {Path}", IjtFileLogger.ResultLogPath);
+    }
 }
