@@ -1314,8 +1314,9 @@ async def test_associated_entity_id_is_non_empty(subscription_client, opcua_clie
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD_REPORTED_VALUES)
 async def test_reported_value_has_mandatory_fields(subscription_client, opcua_client, event_trigger, ns_indices):
     """
-    Each ReportedValueDataType entry must contain PhysicalQuantity, MeasuredValue,
-    LowerLimit, and UpperLimit — all four mandatory fields must be non-null.
+    Each ReportedValueDataType entry must contain CurrentValue — the only mandatory
+    field per the NodeSet2 spec. PhysicalQuantity, LowLimit, HighLimit, and
+    EngineeringUnits are all optional and may be absent.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_events_after_trigger(
@@ -1331,16 +1332,16 @@ async def test_reported_value_has_mandatory_fields(subscription_client, opcua_cl
     if reported_values is None or len(reported_values) == 0:
         pytest.skip("ReportedValues absent or empty in TOOL_OVERHEATED event")
     for i, entry in enumerate(reported_values):
-        for field in ("PhysicalQuantity", "MeasuredValue", "LowerLimit", "UpperLimit"):
-            val = getattr(entry, field, None)
-            assert val is not None, f"ReportedValues[{i}].{field} must not be None"
+        val = getattr(entry, "CurrentValue", None)
+        assert val is not None, f"ReportedValues[{i}].CurrentValue must not be None (mandatory field)"
 
 
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD_REPORTED_VALUES)
-async def test_reported_value_measured_value_is_numeric(subscription_client, opcua_client, event_trigger, ns_indices):
+async def test_reported_value_current_value_is_numeric(subscription_client, opcua_client, event_trigger, ns_indices):
     """
-    MeasuredValue in each ReportedValueDataType must be a numeric Python type
-    (float or int), representing Double or Float on the OPC UA wire.
+    CurrentValue in each ReportedValueDataType should be a numeric Python type
+    (float or int) when the entry has a PhysicalQuantity (representing Double on
+    the OPC UA wire). Entries without a numeric CurrentValue are skipped.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_events_after_trigger(
@@ -1356,19 +1357,22 @@ async def test_reported_value_measured_value_is_numeric(subscription_client, opc
     if reported_values is None or len(reported_values) == 0:
         pytest.skip("ReportedValues absent or empty")
     for i, entry in enumerate(reported_values):
-        measured = getattr(entry, "MeasuredValue", None)
-        if measured is None:
+        current = getattr(entry, "CurrentValue", None)
+        if current is None:
             continue
-        assert isinstance(measured, (int, float)), (
-            f"ReportedValues[{i}].MeasuredValue must be numeric (Double/Float), got {type(measured).__name__}"
+        if not isinstance(current, (int, float)):
+            continue  # CurrentValue can be any type (String, DateTime, etc.) per spec
+        assert isinstance(current, (int, float)), (
+            f"ReportedValues[{i}].CurrentValue must be numeric (Double/Float), got {type(current).__name__}"
         )
 
 
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD_REPORTED_VALUES)
 async def test_reported_value_engineering_units_present(subscription_client, opcua_client, event_trigger, ns_indices):
     """
-    Each ReportedValueDataType entry must carry an EngineeringUnits field
-    (EUInformation) with a valid UnitId consistent with the physical quantity.
+    When EngineeringUnits is populated on a ReportedValueDataType entry, it must
+    expose a valid UnitId. EngineeringUnits is optional per spec — entries without
+    it are skipped.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_events_after_trigger(

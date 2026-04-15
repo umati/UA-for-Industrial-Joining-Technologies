@@ -19,7 +19,6 @@ from typing import Optional
 
 from helpers.result_validator import (
     ResultMetaDataValidator,
-    ResultValueValidator,
     ValidationContext,
     ValidationResult,
 )
@@ -58,6 +57,10 @@ _VALID_EVENT_ENTITY_TYPES: set[int] = set(range(9))
 # OPC UA Severity: 1–1000 (OPC UA Part 4 §7.19)
 _SEVERITY_MIN = 1
 _SEVERITY_MAX = 1000
+
+# PhysicalQuantityEnumeration: 0=OTHER … 28=TORQUE_PER_ANGLE_GRADIENT2
+# Shared by ResultValueDataType and ReportedValueDataType.
+_VALID_PHYSICAL_QUANTITIES: set[int] = set(range(29))
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +182,71 @@ class AssociatedEntitiesValidator:
 
 
 # ---------------------------------------------------------------------------
+# ReportedValueValidator
+# ---------------------------------------------------------------------------
+
+
+class ReportedValueValidator:
+    """Validates a single ``ReportedValueDataType`` object (OPC 40450-1 §8).
+
+    ``ReportedValueDataType`` fields per NodeSet2 spec:
+      - ``CurrentValue``       — **mandatory** (Double)
+      - ``PhysicalQuantity``   — optional (IJTPhysicalQuantityEnumeration 0..28)
+      - ``Name``               — optional (String)
+      - ``PreviousValue``      — optional (Double)
+      - ``LowLimit``           — optional (Double)
+      - ``HighLimit``          — optional (Double)
+      - ``EngineeringUnits``   — optional (EUInformation)
+
+    Note: this type is distinct from ``ResultValueDataType`` (which has
+    ``MeasuredValue`` as its mandatory field and is used in result payloads).
+    """
+
+    def validate(
+        self,
+        value: object,
+        ctx: ValidationContext,
+        vr: ValidationResult,
+    ) -> None:
+        """
+        Check:
+        - ``CurrentValue`` is numeric (required per spec).
+        - ``PhysicalQuantity`` is in {0..28} if present.
+        - ``EngineeringUnits`` has an ``.Identifier`` attribute if present.
+        """
+        # CurrentValue — required, must be numeric (Double per spec)
+        current = getattr(value, "CurrentValue", _MISSING)
+        if current is _MISSING:
+            vr.add(ctx.child("CurrentValue"), "required field is absent")
+        elif not isinstance(current, (int, float)):
+            vr.add(
+                ctx.child("CurrentValue"),
+                f"expected numeric type, got {type(current).__name__!r} (value={current!r})",
+            )
+
+        # PhysicalQuantity — optional, must be in valid range if present
+        phys_qty = getattr(value, "PhysicalQuantity", None)
+        if phys_qty is not None:
+            try:
+                qty_int = int(phys_qty)
+            except TypeError, ValueError:
+                qty_int = None
+            if qty_int is None or qty_int not in _VALID_PHYSICAL_QUANTITIES:
+                vr.add(
+                    ctx.child("PhysicalQuantity"),
+                    f"expected int in {{0..28}}, got {phys_qty!r}",
+                )
+
+        # EngineeringUnits — optional, but must expose .Identifier if present
+        eu = getattr(value, "EngineeringUnits", None)
+        if eu is not None and not hasattr(eu, "Identifier"):
+            vr.add(
+                ctx.child("EngineeringUnits"),
+                "present but has no .Identifier attribute (expected EUInformation)",
+            )
+
+
+# ---------------------------------------------------------------------------
 # ReportedValuesValidator
 # ---------------------------------------------------------------------------
 
@@ -187,7 +255,7 @@ class ReportedValuesValidator:
     """Validates a ReportedValues list from an IJT event."""
 
     def __init__(self) -> None:
-        self._value_validator = ResultValueValidator()
+        self._value_validator = ReportedValueValidator()
 
     def validate(
         self,
@@ -197,7 +265,7 @@ class ReportedValuesValidator:
         require_non_empty: bool = False,
     ) -> None:
         """
-        Validate each entry via ``ResultValueValidator`` (checks MeasuredValue
+        Validate each entry via ``ReportedValueValidator`` (checks CurrentValue
         and PhysicalQuantity among others).
 
         :param values_list:      The ReportedValues list (or None).
