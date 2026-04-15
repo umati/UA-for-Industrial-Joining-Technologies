@@ -1,6 +1,6 @@
-# IJT Support Agent Guide
+# IJT Support Library Guide
 
-This guide gives agents a quick map of the `ijt-support` library and how to change it safely.
+This guide is a quick map of the `ijt-support` library and how to change it safely.
 
 ## What `ijt-support` Does
 

@@ -1,8 +1,6 @@
-# IJT_Test_Client — AI Agent Context
+# IJT Test Client — Developer Reference
 
-This file is the primary entry point for any AI assistant (GitHub Copilot, Claude,
-ChatGPT/GPT-4o, etc.) working on this project. Read it before making any changes.
-Full technical reference: [`opc-ua-server-context.md`](opc-ua-server-context.md)
+Full technical reference: [`opc-ua-server-context.md`](../../../../OPC_UA_Servers/Release2/docs/opc-ua-server-context.md)
 
 ---
 
@@ -41,7 +39,7 @@ See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail exp
 ### Zero-Escape Testing Tools (Phase 1, auto-detected)
 
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
-`vulture` (dead code), `semgrep` (AI rules), `pyright` (AI types — **advisory, non-blocking**), `detect-secrets` (secrets).
+`vulture` (dead code), `semgrep` (static analysis), `pyright` (strict type checking — **advisory, non-blocking**), `detect-secrets` (secrets).
 
 A **Python pytest suite** that validates an OPC UA server implementing the
 [OPC UA Industrial Joining Technologies (IJT)](https://reference.opcfoundation.org/IJT/Base/v100/)
@@ -138,8 +136,8 @@ Objects/
 
 ```
 IJT_Test_Client/
-├── .cursorrules                  ← AI tools start here; points to docs/SKILLS.md
-├── docs/opc-ua-server-context.md ← full technical OPC UA reference
+├── .cursorrules                  ← Copilot/Cursor config; points to docs/SKILLS.md
+├── docs/SKILLS.md                ← developer reference for this sub-project
 ├── conftest.py                   ← all pytest fixtures (session + function scoped)
 ├── pyproject.toml                ← asyncio_mode=auto, timeout=120 (+ ruff, coverage, bandit, vulture)
 ├── helpers/

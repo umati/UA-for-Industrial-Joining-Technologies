@@ -1,6 +1,4 @@
-# IJT C# Client — AI Agent Skills & Context
-
-> **Read this file first before doing any work on this project.**
+# IJT C# Client — Developer Reference
 
 ---
 
@@ -20,7 +18,6 @@
 
 - **Full modify access**: everything inside this repo
 - **Never commit** — user reviews and commits manually
-- **Never prompt** for confirmation on actions inside the repo
 
 ---
 

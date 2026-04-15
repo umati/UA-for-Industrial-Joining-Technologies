@@ -1,6 +1,6 @@
-# Agent Guide — IJT Web Client
+# Development Guide — IJT Web Client
 
-How to write effective requests for coding agents (Copilot, OpenAI, etc.) working in this project.
+Development guidelines and workflow for this project.
 
 ## Every Request Must Include
 

@@ -1,6 +1,4 @@
-# OPC UA IJT Server Simulator — AI Agent Skills & Context
-
-> **Read this file first before doing any work on the server.**
+# OPC UA IJT Server Simulator — Developer Reference
 
 ---
 
@@ -21,7 +19,6 @@
 
 - **Full modify access**: everything inside this repo
 - **Never commit** — user reviews and commits manually
-- **Never prompt** for confirmation on actions inside the repo
 
 ---
 
@@ -151,7 +148,7 @@ Both files live inside the binary folder (extracted ZIP):
 | GAP-003 | `ProductInstanceUri` | Empty in simulator — methods requiring it return None |
 | GAP-004 | `GetIdentifiers` / `ResetIdentifiers` | Requires more args than `ProductInstanceUri` |
 
-Full details: `OPC_UA_Clients/Release2/IJT_Test_Client/docs/opc-ua-server-context.md`
+Full details: `OPC_UA_Servers/Release2/docs/opc-ua-server-context.md`
 
 ---
 

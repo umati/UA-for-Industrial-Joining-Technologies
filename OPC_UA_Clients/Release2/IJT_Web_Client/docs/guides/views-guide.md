@@ -1,6 +1,6 @@
-# Views Agent Guide
+# Views Guide
 
-This guide helps agents understand how the `Javascripts/Views` layer is organized and how to edit it safely.
+This guide explains how the `Javascripts/Views` layer is organized and how to edit it safely.
 
 ## Purpose
 

@@ -1,6 +1,6 @@
-# Models Agent Guide
+# Models Guide
 
-This guide explains how the model layer in `Javascripts/ijt-support/Models` works, so agents can change it safely.
+This guide explains how the model layer in `Javascripts/ijt-support/Models` works and how to change it safely.
 
 ## Purpose
 

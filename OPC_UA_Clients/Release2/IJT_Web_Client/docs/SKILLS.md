@@ -1,8 +1,4 @@
-# IJT Web Client — Project Context & AI Skills
-
-> **Works with any AI tool — GitHub Copilot, Claude, Cursor, ChatGPT, Gemini, or anything else.**
-> Read this file before doing any work on this project. It is the single source of truth.
-> Tool-specific entry point: `.cursorrules` (auto-discovered by Cursor and Copilot CLI) references this file.
+# IJT Web Client — Developer Reference
 
 ---
 
@@ -24,7 +20,6 @@
 - **Full modify access**: everything inside this repo (`C:\DDrive\SourceControl\GIT_HUB\UA-for-Industrial-Joining-Technologies\`)
 - **Read-only**: everything outside (OS, user home, other drives)
 - **Never commit** — user reviews and commits manually
-- **Never prompt** for confirmation on actions inside the repo
 
 ---
 
@@ -113,7 +108,7 @@ IJT_Web_Client/
 │   └── css/nodeStyle.css   # Main stylesheet (referenced by index.html directly)
 │
 ├── docs/
-│   ├── skills/                    # AI context rules — tool-agnostic, works with Copilot/Cursor/Claude/etc.
+│   ├── skills/                    # task-specific reference guides
 │   │   ├── associated-entities-interpreter.md
 │   │   ├── endpointgraphics-tab-adder.md
 │   │   └── simulate-single-result-caller.md
@@ -164,8 +159,8 @@ All auto-detected — present=run, absent=skip with install hint.
 | `bandit` | Python security (SAST) |
 | `pip-audit` | CVE scan of Python dependencies |
 | `vulture` | Dead code detection |
-| `semgrep` | AI-powered pattern + security rules |
-| `pyright` | AI type inference (stricter than mypy) |
+| `semgrep` | Static analysis + security rules |
+| `pyright` | Strict type checking (stricter than mypy) |
 | `detect-secrets` | Hardcoded secrets/tokens |
 | `eslint` | JS lint |
 | `prettier` | JS formatting |
@@ -357,24 +352,12 @@ Only standard files at root: `index.html`, `index.py`, `config.js`, `run_all_tes
 
 ---
 
-## AI Tool Entry Points
-
-Any AI tool can be pointed at these files. They all reference `docs/SKILLS.md` as the source of truth.
-
-| File | Tool | Auto-discovered? |
-|------|------|-----------------|
-| `docs/SKILLS.md` | **All tools — start here** | Point any tool at this |
-| `docs/skills/*.md` | All tools — focused task guides | Point tool at specific skill |
-| `.cursorrules` | Cursor, Copilot CLI | ✅ Yes |
-
-## Agent Guides Index
-
-These files work with **any AI tool** (GitHub Copilot, Cursor, Claude, ChatGPT, etc.) — point your tool at the relevant file for focused context.
+## Reference Files
 
 | File | Covers |
 |------|--------|
 | `docs/SKILLS.md` ← **this file** | Full project map, rules, common mistakes, health check |
-| `docs/AGENT_GUIDE.md` | Agent workflow, guardrails, all prompt templates |
+| `docs/AGENT_GUIDE.md` | Development workflow, guardrails, prompt templates |
 | `docs/skills/associated-entities-interpreter.md` | Interpreting `ResultMetaData.AssociatedEntities` |
 | `docs/skills/endpointgraphics-tab-adder.md` | Adding new UI tabs (manager + view pattern) |
 | `docs/skills/simulate-single-result-caller.md` | Wiring `SimulateSingleResult` method invocation |

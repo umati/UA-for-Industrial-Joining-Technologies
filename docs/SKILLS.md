@@ -1,6 +1,5 @@
-# UA-for-Industrial-Joining-Technologies — AI Agent Skills & Context
+# UA-for-Industrial-Joining-Technologies — Developer Reference
 
-> **Read this file when working anywhere in this repo.**
 > For project-specific detail, read the SKILLS.md in each sub-project.
 
 ---
@@ -23,7 +22,6 @@
 | Everything inside `C:\DDrive\SourceControl\GIT_HUB\UA-for-Industrial-Joining-Technologies\` | **Full: read, create, edit, delete** |
 | Everything outside (OS, user home, other drives, internet) | **Read-only** |
 | Git commits | **Never** — user reviews and commits manually |
-| User prompts for actions inside repo | **Never prompt** — act directly |
 
 ---
 
@@ -196,7 +194,7 @@ UA-for-Industrial-Joining-Technologies/
 ├── README.md                        # Project overview and links
 ├── SECURITY.md                      # GitHub security policy (must stay at root)
 ├── docs/
-│   └── SKILLS.md                    # ← THIS FILE: root-level agent context
+│   └── SKILLS.md                    # ← THIS FILE: root-level developer reference
 ├── run_all_tests.py                 # Root orchestrator — runs all project suites
 ├── renovate.json                    # Dependency update config
 │
@@ -206,7 +204,7 @@ UA-for-Industrial-Joining-Technologies/
 │   └── Release2/                    # IJT Server Simulator (Windows + Linux binary + Docker)
 │       ├── README.md                # End-user setup guide
 │       ├── run_all_tests.py         # Server test runner (hadolint, trivy, smoke)
-│       └── docs/SKILLS.md          # Server agent context
+│       └── docs/SKILLS.md          # Server developer reference
 │
 └── OPC_UA_Clients/
     ├── Release1/
@@ -216,7 +214,7 @@ UA-for-Industrial-Joining-Technologies/
     └── Release2/
         ├── README.md
         ├── IJT_Web_Client/          # ★ PRIMARY — Python + Node.js browser client
-        │   ├── docs/SKILLS.md       # Comprehensive agent context for Web Client
+        │   ├── docs/SKILLS.md       # Web Client developer reference
         │   └── run_all_tests.py
         ├── IJT_Console_Client/      # Python console client
         │   ├── docs/SKILLS.md
@@ -235,7 +233,7 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vitest, ESLint, Docker
-- **Test baseline**: 310 Python pass / 0 skip / 0 warnings, 229 JS pass (162 unit + 67 source-coverage), ESLint clean
+- **Test baseline**: **323 Python** pass / 0 skip / 0 warnings, 229 JS pass (162 unit + 67 source-coverage), ESLint clean
 - **Live tests**: `tests/python/live/` — excluded from default run (`norecursedirs = live`); requires running OPC UA server
 - **One test command**: `python run_all_tests.py`
 - **Docker**: healthy on HTTP:3000 + WS:8001
@@ -303,7 +301,7 @@ UA-for-Industrial-Joining-Technologies/
 ### CI Required (`ci-required.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
 |-----|--------------|
-| `web-client` | Python unit (310), JS unit (229), ESLint, Bandit, npm audit |
+| `web-client` | Python unit (323), JS unit (229), ESLint, Bandit, npm audit |
 | `console-client` | Python unit tests (tests/unit/), Bandit, Ruff, mypy |
 | `node-client` | JS unit (~152), ESLint, npm audit |
 | `test-client` | pytest collect-only (import check), Bandit, Ruff, mypy |
@@ -340,7 +338,7 @@ Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJ
 | Job | What it tests |
 |-----|--------------|
 | `docker-smoke` | Full Docker build + server smoke (10/10) |
-| `webclient-docker` | Web Client Docker test image (Python 310 unit, JS 229) + HTTP:3000 production health |
+| `webclient-docker` | Web Client Docker test image (Python 323 unit, JS 229) + HTTP:3000 production health |
 | `int-testclient` | Windows live: Test Client full suite against running server (counts vary by server profile/features) |
 | `int-live-others` | Windows live: Web Client integration (13 tests) + Console Client live tests |
 
@@ -367,7 +365,7 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 
 ---
 
-## Agent Guides Index (All Files)
+## Documentation Index (All Files)
 
 | Path | Covers |
 |------|--------|
@@ -375,7 +373,7 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 | `docs/TEST_TIERS.md` | Test tier policy, skip/fail standards, per-client port table, server isolation design |
 | `OPC_UA_Servers/Release2/docs/SKILLS.md` | Server start/stop, simulation methods, smoke tests, env vars |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md` | Full Web Client context, file map, bugs, Docker, CI, health check |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/AGENT_GUIDE.md` | Agent workflow and prompt template |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/AGENT_GUIDE.md` | Development workflow and guidelines |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/ijt-support-guide.md` | JS core library contracts |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/models-guide.md` | JS model layer |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/result-model-guide.md` | Result model hierarchy |
@@ -386,6 +384,6 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 | `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md` | Console Client context, patterns, test commands, method call examples |
 | `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md` | Test Client conformance suite, test structure, markers |
 | `OPC_UA_Clients/Release2/IJT_Test_Client/docs/test-results.md` | Report locations, Excel sheets, status meanings, skip categories |
-| `OPC_UA_Clients/Release2/IJT_Test_Client/docs/opc-ua-server-context.md` | Address space map, namespaces, event hierarchy, server limitations |
+| `OPC_UA_Servers/Release2/docs/opc-ua-server-context.md` | Address space map, namespaces, event hierarchy, server limitations |
 | `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md` | C# client architecture, test commands, Softing SDK DLL integration |
 | `OPC_UA_Clients/Release1/IJT_Node_Client/docs/SKILLS.md` | Node Client architecture, socket protocol, test commands |
