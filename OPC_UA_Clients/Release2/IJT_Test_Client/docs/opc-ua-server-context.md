@@ -79,8 +79,10 @@ Objects/
     │   ├── Results/
     │   ├── GetLatestResult(Timeout: Int32) → Result     ← Timeout REQUIRED
     │   ├── GetResultById(ResultId: String) → Result
-    │   ├── GetResultIdListFiltered(...)    ← STUB (not implemented)
-    │   ├── ReleaseResultHandle(...)        ← STUB (not implemented)
+    │   ├── GetResultIdListFiltered(...)    ← NOT IMPLEMENTED (expected reject/absent)
+    │   ├── ReleaseResultHandle(...)        ← NOT IMPLEMENTED (expected reject/absent)
+    │   ├── AcknowledgeResults(...)         ← NOT IMPLEMENTED (expected reject/absent)
+    │   ├── RequestUnacknowledgedResults(...) ← NOT IMPLEMENTED (expected reject/absent)
     │   └── RequestResults(...)
     │
     ├── JoiningProcessManagement        [IJT Base ns]
@@ -217,11 +219,9 @@ Full list (1–60): see `helpers/namespaces.py` `SimulateEventType` class.
 
 | ID | Area | Behaviour |
 |----|------|-----------|
-| STUB-001 | GetResultIdListFiltered | Returns BadNotImplemented — not implemented by server |
-| STUB-002 | ReleaseResultHandle | Returns BadNotImplemented — not implemented by server |
-| GAP-001 | HasInterface references | Asset instance nodes do not carry HasInterface references to IControllerType, IToolType, etc. (spec-mandated, not yet emitted by server binary). Tests are marked `xfail` accordingly. |
-| GAP-002 | AssociatedWith references | Controller/tool nodes do not carry symmetric AssociatedWith references (spec requirement on associated assets). Tests are marked `xfail` accordingly. |
+| STUB-001 | GetResultIdListFiltered | Not implemented; compliant behavior is method absence or Bad status (BadNotImplemented/BadNotSupported) |
+| STUB-002 | ReleaseResultHandle | Not implemented; compliant behavior is method absence or Bad status (BadNotImplemented/BadNotSupported) |
+| STUB-003 | AcknowledgeResults | Not implemented near-term; compliant behavior is method absence or Bad status |
+| STUB-004 | RequestUnacknowledgedResults | Not implemented near-term; compliant behavior is method absence or Bad status |
 | GAP-003 | ProductInstanceUri | The `TighteningTool/Identification/ProductInstanceUri` variable is empty in the simulator. Methods that require a valid ProductInstanceUri (EnableAsset, SelectJoint, StartSelectedJoining) return None from the client; live tests skip gracefully. |
 | GAP-004 | GetIdentifiers / ResetIdentifiers | Server requires additional input arguments beyond ProductInstanceUri. Calling with only ProductInstanceUri returns BadArgumentsMissing. Client tests catch this as an acceptable server-side response. |
-
-Tests that call STUB methods are marked xfail accordingly.

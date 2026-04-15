@@ -93,12 +93,9 @@ Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠
 
 ## Expected Failure (Xfail) Reasons
 
-All current xfail tests are in `assets/test_asset_interfaces.py` and `assets/test_asset_associations.py`.
-
-| Xfail area | Reason |
-|---|---|
-| `HasInterface` references | The server does not emit `HasInterface` references on asset instance nodes for interface types (IControllerType, IToolType, etc.). This is a server-side gap, not a spec violation. Tests will auto-promote to passing once the server adds these references. |
-| `AssociatedWith` references | The server does not expose symmetric `AssociatedWith` references between asset nodes. Same root cause as above. |
+Do not keep permanent `xfail` markers for behavior that is now implemented.
+If a previously xfailed test starts passing, remove the marker immediately and
+convert it back to a normal pass/fail test.
 
 ---
 

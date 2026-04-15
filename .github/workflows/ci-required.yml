@@ -57,6 +57,7 @@ jobs:
   web-client:
     name: "Release2 / IJT Web Client"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       checks: write
@@ -190,6 +191,7 @@ jobs:
   console-client:
     name: "Release2 / IJT Console Client"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       checks: write
@@ -287,6 +289,7 @@ jobs:
   node-client:
     name: "Release1 / IJT Node Client"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       checks: write
@@ -365,6 +368,9 @@ jobs:
   docker-smoke:
     name: "Release2 / IJT Web Client — Docker Smoke"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
@@ -430,6 +436,7 @@ jobs:
   csharp-client:
     name: "Release2 / IJT C# Client"
     runs-on: windows-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       checks: write
@@ -614,6 +621,9 @@ jobs:
   test-client:
     name: "Release2 / IJT Test Client"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     outputs:
       mypy_result: ${{ steps.mypy.outcome }} # zizmor: ignore[template-injection]
     defaults:
@@ -702,6 +712,9 @@ jobs:
   server-smoke-windows:
     name: "Release2 / OPC UA Server — Windows Smoke"
     runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -778,6 +791,7 @@ jobs:
   report:
     name: "📋 Test Report"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [web-client, console-client, node-client, docker-smoke, csharp-client, test-client, server-smoke-windows, actionlint]
     if: always()
     permissions:
@@ -1049,6 +1063,9 @@ jobs:
   actionlint:
     name: "GHA Workflow Lint (actionlint)"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:

@@ -207,10 +207,7 @@ async def test_controller_implements_icontroller_type_interface(controllers_inst
         pytest.skip("IJT Base namespace not registered on server")
     _name, controller_node = controllers_instances[0]
     has_iface = await has_interface(controller_node, ns_ijt, IJTTypes.ICONTROLLER_TYPE)
-    if not has_iface:
-        pytest.skip(
-            f"Controller '{_name}' has no HasInterface → IControllerType — interface not declared on this server"
-        )
+    assert has_iface, f"Controller '{_name}' is missing HasInterface → IControllerType — required per IJT spec"
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_CONTROLLER)
@@ -236,7 +233,7 @@ async def test_controller_identification_has_manufacturer(controllers_instances,
     _name, controller_node = controllers_instances[0]
     ident = await find_child_by_browse_name(controller_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Controller '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"Controller '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     assert manufacturer is not None, f"Controller '{_name}' Identification is missing Manufacturer (ns_di={ns_di})"
 
@@ -250,7 +247,7 @@ async def test_controller_identification_has_manufacturer_uri(controllers_instan
     _name, controller_node = controllers_instances[0]
     ident = await find_child_by_browse_name(controller_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Controller '{_name}' has no Identification node — skipping ManufacturerUri check")
+        pytest.fail(f"Controller '{_name}' has no Identification node — Identification is mandatory per DI spec")
     mfr_uri = await find_child_by_browse_name(ident, BN.MANUFACTURER_URI, ns_di)
     if mfr_uri is None:
         pytest.skip(f"Controller '{_name}' Identification does not expose ManufacturerUri — optional per spec")
@@ -265,7 +262,7 @@ async def test_controller_identification_has_model(controllers_instances, ns_ind
     _name, controller_node = controllers_instances[0]
     ident = await find_child_by_browse_name(controller_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Controller '{_name}' has no Identification node — skipping Model check")
+        pytest.fail(f"Controller '{_name}' has no Identification node — Identification is mandatory per DI spec")
     model = await find_child_by_browse_name(ident, BN.MODEL, ns_di)
     if model is None:
         pytest.skip(f"Controller '{_name}' Identification does not expose Model — optional per spec")
@@ -280,7 +277,7 @@ async def test_controller_identification_has_device_class(controllers_instances,
     _name, controller_node = controllers_instances[0]
     ident = await find_child_by_browse_name(controller_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Controller '{_name}' has no Identification node — skipping DeviceClass check")
+        pytest.fail(f"Controller '{_name}' has no Identification node — Identification is mandatory per DI spec")
     device_class = await find_child_by_browse_name(ident, BN.DEVICE_CLASS, ns_di)
     if device_class is None:
         pytest.skip(f"Controller '{_name}' Identification does not expose DeviceClass — optional per spec")
@@ -295,7 +292,7 @@ async def test_controller_identification_has_serial_number(controllers_instances
     _name, controller_node = controllers_instances[0]
     ident = await find_child_by_browse_name(controller_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Controller '{_name}' has no Identification node — skipping SerialNumber check")
+        pytest.fail(f"Controller '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     assert serial is not None, f"Controller '{_name}' Identification is missing SerialNumber (ns_di={ns_di})"
 
@@ -309,7 +306,7 @@ async def test_controller_identification_has_product_code(controllers_instances,
     _name, controller_node = controllers_instances[0]
     ident = await find_child_by_browse_name(controller_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Controller '{_name}' has no Identification node — skipping ProductCode check")
+        pytest.fail(f"Controller '{_name}' has no Identification node — Identification is mandatory per DI spec")
     product_code = await find_child_by_browse_name(ident, BN.PRODUCT_CODE, ns_di)
     if product_code is None:
         pytest.skip(f"Controller '{_name}' Identification does not expose ProductCode — optional per spec")
@@ -324,7 +321,7 @@ async def test_controller_identification_has_product_instance_uri(controllers_in
     _name, controller_node = controllers_instances[0]
     ident = await find_child_by_browse_name(controller_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Controller '{_name}' has no Identification node — skipping ProductInstanceUri check")
+        pytest.fail(f"Controller '{_name}' has no Identification node — Identification is mandatory per DI spec")
     piu = await find_child_by_browse_name(ident, BN.PRODUCT_INSTANCE_URI, ns_di)
     if piu is None:
         pytest.skip(
@@ -342,7 +339,7 @@ async def test_controller_identification_has_hardware_or_software_revision(contr
     _name, controller_node = controllers_instances[0]
     ident = await find_child_by_browse_name(controller_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Controller '{_name}' has no Identification node — skipping revision check")
+        pytest.fail(f"Controller '{_name}' has no Identification node — Identification is mandatory per DI spec")
     hw_rev = await find_child_by_browse_name(ident, BN.HARDWARE_REVISION, ns_di)
     if hw_rev is None:
         sw_rev = await find_child_by_browse_name(ident, BN.SOFTWARE_REVISION, ns_di)
@@ -399,7 +396,7 @@ async def test_tool_implements_itool_type_interface(tools_instances, ns_indices)
     _name, tool_node = tools_instances[0]
     has_iface = await has_interface(tool_node, ns_ijt, IJTTypes.ITOOL_TYPE)
     if not has_iface:
-        pytest.skip(f"Tool '{_name}' has no HasInterface → IToolType — interface not declared on this server")
+        pytest.fail(f"Tool '{_name}' is missing HasInterface → IToolType — required per IJT spec")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_TOOL)
@@ -425,7 +422,7 @@ async def test_tool_identification_has_serial_number(tools_instances, ns_indices
     _name, tool_node = tools_instances[0]
     ident = await find_child_by_browse_name(tool_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Tool '{_name}' has no Identification node — skipping SerialNumber check")
+        pytest.fail(f"Tool '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     assert serial is not None, f"Tool '{_name}' Identification is missing SerialNumber (ns_di={ns_di})"
 
@@ -439,7 +436,7 @@ async def test_tool_identification_has_manufacturer(tools_instances, ns_indices)
     _name, tool_node = tools_instances[0]
     ident = await find_child_by_browse_name(tool_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Tool '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"Tool '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     if manufacturer is None:
         pytest.skip(f"Tool '{_name}' Identification does not expose Manufacturer — optional per spec")
@@ -454,7 +451,7 @@ async def test_tool_identification_has_product_instance_uri(tools_instances, ns_
     _name, tool_node = tools_instances[0]
     ident = await find_child_by_browse_name(tool_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Tool '{_name}' has no Identification node — skipping ProductInstanceUri check")
+        pytest.fail(f"Tool '{_name}' has no Identification node — Identification is mandatory per DI spec")
     piu = await find_child_by_browse_name(ident, BN.PRODUCT_INSTANCE_URI, ns_di)
     if piu is None:
         pytest.skip(f"Tool '{_name}' Identification does not expose ProductInstanceUri — optional per spec")
@@ -495,10 +492,10 @@ async def test_tool_parameters_has_type_property(tools_instances, ns_indices):
 async def test_servos_folder_has_at_least_one_instance(servos_folder, ns_indices):
     """Servos folder must contain at least one Servo instance."""
     if servos_folder is None:
-        pytest.skip("Servos folder not found — server may not expose Servos")
+        pytest.fail("Servos folder not found — all asset category folders are required")
     instances = await browse_folder_instances(servos_folder)
     if not instances:
-        pytest.skip("No Servo instances found in Servos folder — may not be implemented")
+        pytest.fail("No Servo instances found in Servos folder — at least one instance is required")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_SERVO)
@@ -509,11 +506,11 @@ async def test_servo_implements_iservo_type_interface(servos_folder, ns_indices)
         pytest.skip("Servos folder or IJT Base namespace not available")
     instances = await browse_folder_instances(servos_folder)
     if not instances:
-        pytest.skip("No Servo instances found — skipping interface check")
+        pytest.fail("No Servo instances found — at least one instance expected in this asset category")
     _name, servo_node = instances[0]
     has_iface = await has_interface(servo_node, ns_ijt, IJTTypes.ISERVO_TYPE)
     if not has_iface:
-        pytest.skip(f"Servo '{_name}' has no HasInterface → IServoType — interface not declared on this server")
+        pytest.fail(f"Servo '{_name}' is missing HasInterface → IServoType — required per IJT spec")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_SERVO)
@@ -524,7 +521,7 @@ async def test_servo_parameters_has_node_number(servos_folder, ns_indices):
         pytest.skip("Servos folder or IJT Base namespace not available")
     instances = await browse_folder_instances(servos_folder)
     if not instances:
-        pytest.skip("No Servo instances found — skipping NodeNumber check")
+        pytest.fail("No Servo instances found — at least one instance expected in this asset category")
     _name, servo_node = instances[0]
     params = await find_child_by_browse_name(servo_node, BN.PARAMETERS, ns_ijt)
     if params is None:
@@ -540,10 +537,10 @@ async def test_servo_parameters_has_node_number(servos_folder, ns_indices):
 async def test_memory_devices_folder_has_at_least_one_instance(memory_devices_folder, ns_indices):
     """MemoryDevices folder must contain at least one MemoryDevice instance."""
     if memory_devices_folder is None:
-        pytest.skip("MemoryDevices folder not found — server may not expose MemoryDevices")
+        pytest.fail("MemoryDevices folder not found — all asset category folders are required")
     instances = await browse_folder_instances(memory_devices_folder)
     if not instances:
-        pytest.skip("No MemoryDevice instances found in MemoryDevices folder")
+        pytest.fail("No MemoryDevice instances found in MemoryDevices folder — at least one instance is required")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_MEMORY_DEVICE)
@@ -554,13 +551,10 @@ async def test_memory_device_implements_imemory_device_type_interface(memory_dev
         pytest.skip("MemoryDevices folder or IJT Base namespace not available")
     instances = await browse_folder_instances(memory_devices_folder)
     if not instances:
-        pytest.skip("No MemoryDevice instances found — skipping interface check")
+        pytest.fail("No MemoryDevice instances found — at least one instance expected in this asset category")
     _name, md_node = instances[0]
     has_iface = await has_interface(md_node, ns_ijt, IJTTypes.IMEMORY_DEVICE_TYPE)
-    if not has_iface:
-        pytest.skip(
-            f"MemoryDevice '{_name}' has no HasInterface → IMemoryDeviceType — interface not declared on this server"
-        )
+    assert has_iface, f"MemoryDevice '{_name}' is missing HasInterface → IMemoryDeviceType — required per IJT spec"
 
 
 # ─── asset_management_cable ──────────────────────────────────────────────────
@@ -570,10 +564,10 @@ async def test_memory_device_implements_imemory_device_type_interface(memory_dev
 async def test_cables_folder_has_at_least_one_instance(cables_folder, ns_indices):
     """Cables folder must contain at least one Cable instance."""
     if cables_folder is None:
-        pytest.skip("Cables folder not found — server may not expose Cables")
+        pytest.fail("Cables folder not found — all asset category folders are required")
     instances = await browse_folder_instances(cables_folder)
     if not instances:
-        pytest.skip("No Cable instances found in Cables folder")
+        pytest.fail("No Cable instances found in Cables folder — at least one instance is required")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_CABLE)
@@ -584,11 +578,11 @@ async def test_cable_implements_icable_type_interface(cables_folder, ns_indices)
         pytest.skip("Cables folder or IJT Base namespace not available")
     instances = await browse_folder_instances(cables_folder)
     if not instances:
-        pytest.skip("No Cable instances found — skipping interface check")
+        pytest.fail("No Cable instances found — at least one instance expected in this asset category")
     _name, cable_node = instances[0]
     has_iface = await has_interface(cable_node, ns_ijt, IJTTypes.ICABLE_TYPE)
     if not has_iface:
-        pytest.skip(f"Cable '{_name}' has no HasInterface → ICableType — interface not declared on this server")
+        pytest.fail(f"Cable '{_name}' is missing HasInterface → ICableType — required per IJT spec")
 
 
 # ─── asset_management_power_supply ───────────────────────────────────────────
@@ -598,10 +592,10 @@ async def test_cable_implements_icable_type_interface(cables_folder, ns_indices)
 async def test_power_supplies_folder_has_at_least_one_instance(power_supplies_folder, ns_indices):
     """PowerSupplies folder must contain at least one PowerSupply instance."""
     if power_supplies_folder is None:
-        pytest.skip("PowerSupplies folder not found — server may not expose PowerSupplies")
+        pytest.fail("PowerSupplies folder not found — all asset category folders are required")
     instances = await browse_folder_instances(power_supplies_folder)
     if not instances:
-        pytest.skip("No PowerSupply instances found in PowerSupplies folder")
+        pytest.fail("No PowerSupply instances found in PowerSupplies folder — at least one instance is required")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_POWER_SUPPLY)
@@ -612,13 +606,10 @@ async def test_power_supply_implements_ipower_supply_type_interface(power_suppli
         pytest.skip("PowerSupplies folder or IJT Base namespace not available")
     instances = await browse_folder_instances(power_supplies_folder)
     if not instances:
-        pytest.skip("No PowerSupply instances found — skipping interface check")
+        pytest.fail("No PowerSupply instances found — at least one instance expected in this asset category")
     _name, ps_node = instances[0]
     has_iface = await has_interface(ps_node, ns_ijt, IJTTypes.IPOWER_SUPPLY_TYPE)
-    if not has_iface:
-        pytest.skip(
-            f"PowerSupply '{_name}' has no HasInterface → IPowerSupplyType — interface not declared on this server"
-        )
+    assert has_iface, f"PowerSupply '{_name}' is missing HasInterface → IPowerSupplyType — required per IJT spec"
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_POWER_SUPPLY)
@@ -629,7 +620,7 @@ async def test_power_supply_parameters_has_input_specification(power_supplies_fo
         pytest.skip("PowerSupplies folder or IJT Base namespace not available")
     instances = await browse_folder_instances(power_supplies_folder)
     if not instances:
-        pytest.skip("No PowerSupply instances found — skipping InputSpecification check")
+        pytest.fail("No PowerSupply instances found — at least one instance expected in this asset category")
     _name, ps_node = instances[0]
     params = await find_child_by_browse_name(ps_node, BN.PARAMETERS, ns_ijt)
     if params is None:
@@ -645,10 +636,10 @@ async def test_power_supply_parameters_has_input_specification(power_supplies_fo
 async def test_feeders_folder_has_at_least_one_instance(feeders_folder, ns_indices):
     """Feeders folder must contain at least one Feeder instance."""
     if feeders_folder is None:
-        pytest.skip("Feeders folder not found — server may not expose Feeders")
+        pytest.fail("Feeders folder not found — all asset category folders are required")
     instances = await browse_folder_instances(feeders_folder)
     if not instances:
-        pytest.skip("No Feeder instances found in Feeders folder")
+        pytest.fail("No Feeder instances found in Feeders folder — at least one instance is required")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_FEEDER)
@@ -659,11 +650,11 @@ async def test_feeder_implements_ifeeder_type_interface(feeders_folder, ns_indic
         pytest.skip("Feeders folder or IJT Base namespace not available")
     instances = await browse_folder_instances(feeders_folder)
     if not instances:
-        pytest.skip("No Feeder instances found — skipping interface check")
+        pytest.fail("No Feeder instances found — at least one instance expected in this asset category")
     _name, feeder_node = instances[0]
     has_iface = await has_interface(feeder_node, ns_ijt, IJTTypes.IFEEDER_TYPE)
     if not has_iface:
-        pytest.skip(f"Feeder '{_name}' has no HasInterface → IFeederType — interface not declared on this server")
+        pytest.fail(f"Feeder '{_name}' is missing HasInterface → IFeederType — required per IJT spec")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_FEEDER)
@@ -674,7 +665,7 @@ async def test_feeder_parameters_has_material(feeders_folder, ns_indices):
         pytest.skip("Feeders folder or IJT Base namespace not available")
     instances = await browse_folder_instances(feeders_folder)
     if not instances:
-        pytest.skip("No Feeder instances found — skipping Material check")
+        pytest.fail("No Feeder instances found — at least one instance expected in this asset category")
     _name, feeder_node = instances[0]
     params = await find_child_by_browse_name(feeder_node, BN.PARAMETERS, ns_ijt)
     if params is None:
@@ -690,10 +681,10 @@ async def test_feeder_parameters_has_material(feeders_folder, ns_indices):
 async def test_batteries_folder_has_at_least_one_instance(batteries_folder, ns_indices):
     """Batteries folder must contain at least one Battery instance."""
     if batteries_folder is None:
-        pytest.skip("Batteries folder not found — server may not expose Batteries")
+        pytest.fail("Batteries folder not found — all asset category folders are required")
     instances = await browse_folder_instances(batteries_folder)
     if not instances:
-        pytest.skip("No Battery instances found in Batteries folder")
+        pytest.fail("No Battery instances found in Batteries folder — at least one instance is required")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY)
@@ -704,7 +695,7 @@ async def test_battery_parameters_has_nominal_voltage_and_capacity(batteries_fol
         pytest.skip("Batteries folder or IJT Base namespace not available")
     instances = await browse_folder_instances(batteries_folder)
     if not instances:
-        pytest.skip("No Battery instances found — skipping parameter check")
+        pytest.fail("No Battery instances found — at least one instance expected in this asset category")
     _name, battery_node = instances[0]
     params = await find_child_by_browse_name(battery_node, BN.PARAMETERS, ns_ijt)
     if params is None:
@@ -726,10 +717,10 @@ async def test_battery_parameters_has_nominal_voltage_and_capacity(batteries_fol
 async def test_sensors_folder_has_at_least_one_instance(sensors_folder, ns_indices):
     """Sensors folder must contain at least one Sensor instance."""
     if sensors_folder is None:
-        pytest.skip("Sensors folder not found — server may not expose Sensors")
+        pytest.fail("Sensors folder not found — all asset category folders are required")
     instances = await browse_folder_instances(sensors_folder)
     if not instances:
-        pytest.skip("No Sensor instances found in Sensors folder")
+        pytest.fail("No Sensor instances found in Sensors folder — at least one instance is required")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_SENSOR)
@@ -740,11 +731,11 @@ async def test_sensor_implements_isensor_type_interface(sensors_folder, ns_indic
         pytest.skip("Sensors folder or IJT Base namespace not available")
     instances = await browse_folder_instances(sensors_folder)
     if not instances:
-        pytest.skip("No Sensor instances found — skipping interface check")
+        pytest.fail("No Sensor instances found — at least one instance expected in this asset category")
     _name, sensor_node = instances[0]
     has_iface = await has_interface(sensor_node, ns_ijt, IJTTypes.ISENSOR_TYPE)
     if not has_iface:
-        pytest.skip(f"Sensor '{_name}' has no HasInterface → ISensorType — interface not declared on this server")
+        pytest.fail(f"Sensor '{_name}' is missing HasInterface → ISensorType — required per IJT spec")
 
 
 # ─── asset_management_accessory ──────────────────────────────────────────────
@@ -754,10 +745,10 @@ async def test_sensor_implements_isensor_type_interface(sensors_folder, ns_indic
 async def test_accessories_folder_has_at_least_one_instance(accessories_folder, ns_indices):
     """Accessories folder must contain at least one Accessory instance."""
     if accessories_folder is None:
-        pytest.skip("Accessories folder not found — server may not expose Accessories")
+        pytest.fail("Accessories folder not found — all asset category folders are required")
     instances = await browse_folder_instances(accessories_folder)
     if not instances:
-        pytest.skip("No Accessory instances found in Accessories folder")
+        pytest.fail("No Accessory instances found in Accessories folder — at least one instance is required")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_ACCESSORY)
@@ -768,11 +759,11 @@ async def test_accessory_implements_iaccessory_type_interface(accessories_folder
         pytest.skip("Accessories folder or IJT Base namespace not available")
     instances = await browse_folder_instances(accessories_folder)
     if not instances:
-        pytest.skip("No Accessory instances found — skipping interface check")
+        pytest.fail("No Accessory instances found — at least one instance expected in this asset category")
     _name, acc_node = instances[0]
     has_iface = await has_interface(acc_node, ns_ijt, IJTTypes.IACCESSORY_TYPE)
     if not has_iface:
-        pytest.skip(f"Accessory '{_name}' has no HasInterface → IAccessoryType — interface not declared on this server")
+        pytest.fail(f"Accessory '{_name}' is missing HasInterface → IAccessoryType — required per IJT spec")
 
 
 # ─── asset_management_software ───────────────────────────────────────────────
@@ -782,10 +773,10 @@ async def test_accessory_implements_iaccessory_type_interface(accessories_folder
 async def test_software_components_folder_has_at_least_one_instance(software_components_folder, ns_indices):
     """SoftwareComponents folder must contain at least one Software instance."""
     if software_components_folder is None:
-        pytest.skip("SoftwareComponents folder not found — server may not expose Software")
+        pytest.fail("SoftwareComponents folder not found — all asset category folders are required")
     instances = await browse_folder_instances(software_components_folder)
     if not instances:
-        pytest.skip("No Software instances found in SoftwareComponents folder")
+        pytest.fail("No Software instances found in SoftwareComponents folder — at least one instance is required")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_SOFTWARE)
@@ -796,11 +787,11 @@ async def test_software_implements_isoftware_type_interface(software_components_
         pytest.skip("SoftwareComponents folder or IJT Base namespace not available")
     instances = await browse_folder_instances(software_components_folder)
     if not instances:
-        pytest.skip("No Software instances found — skipping interface check")
+        pytest.fail("No Software instances found — at least one instance expected in this asset category")
     _name, sw_node = instances[0]
     has_iface = await has_interface(sw_node, ns_ijt, IJTTypes.ISOFTWARE_TYPE)
     if not has_iface:
-        pytest.skip(f"Software '{_name}' has no HasInterface → ISoftwareType — interface not declared on this server")
+        pytest.fail(f"Software '{_name}' is missing HasInterface → ISoftwareType — required per IJT spec")
 
 
 # ─── asset_management_sub_component ──────────────────────────────────────────
@@ -810,10 +801,10 @@ async def test_software_implements_isoftware_type_interface(software_components_
 async def test_sub_components_folder_has_at_least_one_instance(sub_components_folder, ns_indices):
     """SubComponents folder must contain at least one SubComponent instance."""
     if sub_components_folder is None:
-        pytest.skip("SubComponents folder not found — server may not expose SubComponents")
+        pytest.fail("SubComponents folder not found — all asset category folders are required")
     instances = await browse_folder_instances(sub_components_folder)
     if not instances:
-        pytest.skip("No SubComponent instances found in SubComponents folder")
+        pytest.fail("No SubComponent instances found in SubComponents folder — at least one instance is required")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_SUB_COMPONENT)
@@ -824,13 +815,10 @@ async def test_sub_component_implements_isub_component_type_interface(sub_compon
         pytest.skip("SubComponents folder or IJT Base namespace not available")
     instances = await browse_folder_instances(sub_components_folder)
     if not instances:
-        pytest.skip("No SubComponent instances found — skipping interface check")
+        pytest.fail("No SubComponent instances found — at least one instance expected in this asset category")
     _name, sc_node = instances[0]
     has_iface = await has_interface(sc_node, ns_ijt, IJTTypes.ISUB_COMPONENT_TYPE)
-    if not has_iface:
-        pytest.skip(
-            f"SubComponent '{_name}' has no HasInterface → ISubComponentType — interface not declared on this server"
-        )
+    assert has_iface, f"SubComponent '{_name}' is missing HasInterface → ISubComponentType — required per IJT spec"
 
 
 # ─── asset_management_virtual_station ────────────────────────────────────────
@@ -840,10 +828,10 @@ async def test_sub_component_implements_isub_component_type_interface(sub_compon
 async def test_virtual_stations_folder_has_at_least_one_instance(virtual_stations_folder, ns_indices):
     """VirtualStations folder must contain at least one VirtualStation instance."""
     if virtual_stations_folder is None:
-        pytest.skip("VirtualStations folder not found — server may not expose VirtualStations")
+        pytest.fail("VirtualStations folder not found — all asset category folders are required")
     instances = await browse_folder_instances(virtual_stations_folder)
     if not instances:
-        pytest.skip("No VirtualStation instances found in VirtualStations folder")
+        pytest.fail("No VirtualStation instances found in VirtualStations folder — at least one instance is required")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_VIRTUAL_STATION)
@@ -854,7 +842,7 @@ async def test_virtual_station_implements_ivirtual_station_type_interface(virtua
         pytest.skip("VirtualStations folder or IJT Base namespace not available")
     instances = await browse_folder_instances(virtual_stations_folder)
     if not instances:
-        pytest.skip("No VirtualStation instances found — skipping interface check")
+        pytest.fail("No VirtualStation instances found — at least one instance expected in this asset category")
     _name, vs_node = instances[0]
     has_iface = await has_interface(vs_node, ns_ijt, IJTTypes.IVIRTUAL_STATION_TYPE)
     if not has_iface:
@@ -920,7 +908,7 @@ async def test_battery_operation_counters_has_operation_cycle_counter(batteries_
         pytest.skip("Batteries folder or DI namespace not available")
     instances = await browse_folder_instances(batteries_folder)
     if not instances:
-        pytest.skip("No Battery instances found — skipping OperationCycleCounter check")
+        pytest.fail("No Battery instances found — at least one instance expected in this asset category")
     found = False
     for _name, battery_node in instances:
         op_counters = await find_child_by_browse_name(battery_node, BN.OPERATION_COUNTERS, ns_di)
@@ -1138,9 +1126,9 @@ async def test_controller_asset_associated_with_references(controllers_instances
             found = True
             break
     if not found:
-        pytest.skip(
+        pytest.fail(
             "No controller carries AssociatedWith references — "
-            "optional per spec, server may not be configured with associations"
+            "server must expose at least one association; check simulator configuration"
         )
 
 
@@ -1182,7 +1170,7 @@ async def test_controller_serial_number_write_rejected(controllers_instances, ns
     _name, controller_node = controllers_instances[0]
     ident = await find_child_by_browse_name(controller_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Controller '{_name}' has no Identification node — skipping write rejection test")
+        pytest.fail(f"Controller '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial_node = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     if serial_node is None:
         pytest.skip(f"Controller '{_name}' Identification has no SerialNumber — skipping write rejection test")
@@ -1214,7 +1202,7 @@ async def test_tool_identification_has_device_class(tools_instances, ns_indices)
     _name, tool_node = tools_instances[0]
     ident = await find_child_by_browse_name(tool_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Tool '{_name}' has no Identification node — skipping DeviceClass check")
+        pytest.fail(f"Tool '{_name}' has no Identification node — Identification is mandatory per DI spec")
     device_class = await find_child_by_browse_name(ident, BN.DEVICE_CLASS, ns_di)
     if device_class is None:
         pytest.skip(f"Tool '{_name}' Identification does not expose DeviceClass — optional per spec")
@@ -1259,11 +1247,11 @@ async def test_servo_identification_has_manufacturer(servos_folder, ns_indices):
         pytest.skip("Servos folder or DI namespace not available")
     instances = await browse_folder_instances(servos_folder)
     if not instances:
-        pytest.skip("No Servo instances found — skipping Manufacturer check")
+        pytest.fail("No Servo instances found — at least one instance expected in this asset category")
     _name, servo_node = instances[0]
     ident = await find_child_by_browse_name(servo_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Servo '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"Servo '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     assert manufacturer is not None, f"Servo '{_name}' Identification is missing Manufacturer (ns_di={ns_di})"
 
@@ -1276,11 +1264,11 @@ async def test_servo_identification_has_serial_number(servos_folder, ns_indices)
         pytest.skip("Servos folder or DI namespace not available")
     instances = await browse_folder_instances(servos_folder)
     if not instances:
-        pytest.skip("No Servo instances found — skipping SerialNumber check")
+        pytest.fail("No Servo instances found — at least one instance expected in this asset category")
     _name, servo_node = instances[0]
     ident = await find_child_by_browse_name(servo_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Servo '{_name}' has no Identification node — skipping SerialNumber check")
+        pytest.fail(f"Servo '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial_node = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     assert serial_node is not None, f"Servo '{_name}' Identification is missing SerialNumber (ns_di={ns_di})"
     val = await serial_node.read_value()
@@ -1298,11 +1286,11 @@ async def test_memory_device_identification_has_manufacturer(memory_devices_fold
         pytest.skip("MemoryDevices folder or DI namespace not available")
     instances = await browse_folder_instances(memory_devices_folder)
     if not instances:
-        pytest.skip("No MemoryDevice instances found — skipping Manufacturer check")
+        pytest.fail("No MemoryDevice instances found — at least one instance expected in this asset category")
     _name, md_node = instances[0]
     ident = await find_child_by_browse_name(md_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"MemoryDevice '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"MemoryDevice '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     assert manufacturer is not None, f"MemoryDevice '{_name}' Identification is missing Manufacturer (ns_di={ns_di})"
 
@@ -1315,11 +1303,11 @@ async def test_memory_device_identification_has_serial_number(memory_devices_fol
         pytest.skip("MemoryDevices folder or DI namespace not available")
     instances = await browse_folder_instances(memory_devices_folder)
     if not instances:
-        pytest.skip("No MemoryDevice instances found — skipping SerialNumber check")
+        pytest.fail("No MemoryDevice instances found — at least one instance expected in this asset category")
     _name, md_node = instances[0]
     ident = await find_child_by_browse_name(md_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"MemoryDevice '{_name}' has no Identification node — skipping SerialNumber check")
+        pytest.fail(f"MemoryDevice '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial_node = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     assert serial_node is not None, f"MemoryDevice '{_name}' Identification is missing SerialNumber (ns_di={ns_di})"
 
@@ -1335,11 +1323,11 @@ async def test_cable_identification_has_manufacturer(cables_folder, ns_indices):
         pytest.skip("Cables folder or DI namespace not available")
     instances = await browse_folder_instances(cables_folder)
     if not instances:
-        pytest.skip("No Cable instances found — skipping Manufacturer check")
+        pytest.fail("No Cable instances found — at least one instance expected in this asset category")
     _name, cable_node = instances[0]
     ident = await find_child_by_browse_name(cable_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Cable '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"Cable '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     assert manufacturer is not None, f"Cable '{_name}' Identification is missing Manufacturer (ns_di={ns_di})"
 
@@ -1352,11 +1340,11 @@ async def test_cable_identification_serial_number_is_non_empty(cables_folder, ns
         pytest.skip("Cables folder or DI namespace not available")
     instances = await browse_folder_instances(cables_folder)
     if not instances:
-        pytest.skip("No Cable instances found — skipping SerialNumber check")
+        pytest.fail("No Cable instances found — at least one instance expected in this asset category")
     _name, cable_node = instances[0]
     ident = await find_child_by_browse_name(cable_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Cable '{_name}' has no Identification node — skipping SerialNumber check")
+        pytest.fail(f"Cable '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial_node = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     assert serial_node is not None, f"Cable '{_name}' Identification is missing SerialNumber (ns_di={ns_di})"
     val = await serial_node.read_value()
@@ -1374,11 +1362,11 @@ async def test_power_supply_identification_has_manufacturer(power_supplies_folde
         pytest.skip("PowerSupplies folder or DI namespace not available")
     instances = await browse_folder_instances(power_supplies_folder)
     if not instances:
-        pytest.skip("No PowerSupply instances found — skipping Manufacturer check")
+        pytest.fail("No PowerSupply instances found — at least one instance expected in this asset category")
     _name, ps_node = instances[0]
     ident = await find_child_by_browse_name(ps_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"PowerSupply '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"PowerSupply '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     assert manufacturer is not None, f"PowerSupply '{_name}' Identification is missing Manufacturer (ns_di={ns_di})"
 
@@ -1391,11 +1379,11 @@ async def test_power_supply_identification_has_serial_number(power_supplies_fold
         pytest.skip("PowerSupplies folder or DI namespace not available")
     instances = await browse_folder_instances(power_supplies_folder)
     if not instances:
-        pytest.skip("No PowerSupply instances found — skipping SerialNumber check")
+        pytest.fail("No PowerSupply instances found — at least one instance expected in this asset category")
     _name, ps_node = instances[0]
     ident = await find_child_by_browse_name(ps_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"PowerSupply '{_name}' has no Identification node — skipping SerialNumber check")
+        pytest.fail(f"PowerSupply '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial_node = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     assert serial_node is not None, f"PowerSupply '{_name}' Identification is missing SerialNumber (ns_di={ns_di})"
 
@@ -1411,11 +1399,11 @@ async def test_feeder_identification_has_manufacturer(feeders_folder, ns_indices
         pytest.skip("Feeders folder or DI namespace not available")
     instances = await browse_folder_instances(feeders_folder)
     if not instances:
-        pytest.skip("No Feeder instances found — skipping Manufacturer check")
+        pytest.fail("No Feeder instances found — at least one instance expected in this asset category")
     _name, feeder_node = instances[0]
     ident = await find_child_by_browse_name(feeder_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Feeder '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"Feeder '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     assert manufacturer is not None, f"Feeder '{_name}' Identification is missing Manufacturer (ns_di={ns_di})"
 
@@ -1428,11 +1416,11 @@ async def test_feeder_identification_has_serial_number(feeders_folder, ns_indice
         pytest.skip("Feeders folder or DI namespace not available")
     instances = await browse_folder_instances(feeders_folder)
     if not instances:
-        pytest.skip("No Feeder instances found — skipping SerialNumber check")
+        pytest.fail("No Feeder instances found — at least one instance expected in this asset category")
     _name, feeder_node = instances[0]
     ident = await find_child_by_browse_name(feeder_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Feeder '{_name}' has no Identification node — skipping SerialNumber check")
+        pytest.fail(f"Feeder '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial_node = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     assert serial_node is not None, f"Feeder '{_name}' Identification is missing SerialNumber (ns_di={ns_di})"
 
@@ -1445,7 +1433,7 @@ async def test_feeder_parameters_has_type_property(feeders_folder, ns_indices):
         pytest.skip("Feeders folder or IJT Base namespace not available")
     instances = await browse_folder_instances(feeders_folder)
     if not instances:
-        pytest.skip("No Feeder instances found — skipping Type check")
+        pytest.fail("No Feeder instances found — at least one instance expected in this asset category")
     _name, feeder_node = instances[0]
     params = await find_child_by_browse_name(feeder_node, BN.PARAMETERS, ns_ijt)
     if params is None:
@@ -1466,11 +1454,11 @@ async def test_battery_implements_ibattery_type_interface(batteries_folder, ns_i
         pytest.skip("Batteries folder or IJT Base namespace not available")
     instances = await browse_folder_instances(batteries_folder)
     if not instances:
-        pytest.skip("No Battery instances found — skipping interface check")
+        pytest.fail("No Battery instances found — at least one instance expected in this asset category")
     _name, battery_node = instances[0]
     has_iface = await has_interface(battery_node, ns_ijt, IJTTypes.IBATTERY_TYPE)
     if not has_iface:
-        pytest.skip(f"Battery '{_name}' has no HasInterface → IBatteryType — interface not declared on this server")
+        pytest.fail(f"Battery '{_name}' is missing HasInterface → IBatteryType — required per IJT spec")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY)
@@ -1481,11 +1469,11 @@ async def test_battery_identification_has_manufacturer(batteries_folder, ns_indi
         pytest.skip("Batteries folder or DI namespace not available")
     instances = await browse_folder_instances(batteries_folder)
     if not instances:
-        pytest.skip("No Battery instances found — skipping Manufacturer check")
+        pytest.fail("No Battery instances found — at least one instance expected in this asset category")
     _name, battery_node = instances[0]
     ident = await find_child_by_browse_name(battery_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Battery '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"Battery '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     assert manufacturer is not None, f"Battery '{_name}' Identification is missing Manufacturer (ns_di={ns_di})"
 
@@ -1498,11 +1486,11 @@ async def test_battery_identification_has_serial_number(batteries_folder, ns_ind
         pytest.skip("Batteries folder or DI namespace not available")
     instances = await browse_folder_instances(batteries_folder)
     if not instances:
-        pytest.skip("No Battery instances found — skipping SerialNumber check")
+        pytest.fail("No Battery instances found — at least one instance expected in this asset category")
     _name, battery_node = instances[0]
     ident = await find_child_by_browse_name(battery_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Battery '{_name}' has no Identification node — skipping SerialNumber check")
+        pytest.fail(f"Battery '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial_node = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     assert serial_node is not None, f"Battery '{_name}' Identification is missing SerialNumber (ns_di={ns_di})"
 
@@ -1518,11 +1506,11 @@ async def test_sensor_identification_has_manufacturer(sensors_folder, ns_indices
         pytest.skip("Sensors folder or DI namespace not available")
     instances = await browse_folder_instances(sensors_folder)
     if not instances:
-        pytest.skip("No Sensor instances found — skipping Manufacturer check")
+        pytest.fail("No Sensor instances found — at least one instance expected in this asset category")
     _name, sensor_node = instances[0]
     ident = await find_child_by_browse_name(sensor_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Sensor '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"Sensor '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     assert manufacturer is not None, f"Sensor '{_name}' Identification is missing Manufacturer (ns_di={ns_di})"
 
@@ -1535,11 +1523,11 @@ async def test_sensor_identification_has_serial_number(sensors_folder, ns_indice
         pytest.skip("Sensors folder or DI namespace not available")
     instances = await browse_folder_instances(sensors_folder)
     if not instances:
-        pytest.skip("No Sensor instances found — skipping SerialNumber check")
+        pytest.fail("No Sensor instances found — at least one instance expected in this asset category")
     _name, sensor_node = instances[0]
     ident = await find_child_by_browse_name(sensor_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Sensor '{_name}' has no Identification node — skipping SerialNumber check")
+        pytest.fail(f"Sensor '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial_node = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     assert serial_node is not None, f"Sensor '{_name}' Identification is missing SerialNumber (ns_di={ns_di})"
 
@@ -1552,7 +1540,7 @@ async def test_sensor_parameters_has_type_property(sensors_folder, ns_indices):
         pytest.skip("Sensors folder or IJT Base namespace not available")
     instances = await browse_folder_instances(sensors_folder)
     if not instances:
-        pytest.skip("No Sensor instances found — skipping Type check")
+        pytest.fail("No Sensor instances found — at least one instance expected in this asset category")
     _name, sensor_node = instances[0]
     params = await find_child_by_browse_name(sensor_node, BN.PARAMETERS, ns_ijt)
     if params is None:
@@ -1572,11 +1560,11 @@ async def test_accessory_identification_has_manufacturer(accessories_folder, ns_
         pytest.skip("Accessories folder or DI namespace not available")
     instances = await browse_folder_instances(accessories_folder)
     if not instances:
-        pytest.skip("No Accessory instances found — skipping Manufacturer check")
+        pytest.fail("No Accessory instances found — at least one instance expected in this asset category")
     _name, acc_node = instances[0]
     ident = await find_child_by_browse_name(acc_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Accessory '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"Accessory '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     assert manufacturer is not None, f"Accessory '{_name}' Identification is missing Manufacturer (ns_di={ns_di})"
 
@@ -1589,11 +1577,11 @@ async def test_accessory_identification_has_serial_number(accessories_folder, ns
         pytest.skip("Accessories folder or DI namespace not available")
     instances = await browse_folder_instances(accessories_folder)
     if not instances:
-        pytest.skip("No Accessory instances found — skipping SerialNumber check")
+        pytest.fail("No Accessory instances found — at least one instance expected in this asset category")
     _name, acc_node = instances[0]
     ident = await find_child_by_browse_name(acc_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Accessory '{_name}' has no Identification node — skipping SerialNumber check")
+        pytest.fail(f"Accessory '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial_node = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     assert serial_node is not None, f"Accessory '{_name}' Identification is missing SerialNumber (ns_di={ns_di})"
 
@@ -1606,7 +1594,7 @@ async def test_accessory_parameters_has_type_property(accessories_folder, ns_ind
         pytest.skip("Accessories folder or IJT Base namespace not available")
     instances = await browse_folder_instances(accessories_folder)
     if not instances:
-        pytest.skip("No Accessory instances found — skipping Type check")
+        pytest.fail("No Accessory instances found — at least one instance expected in this asset category")
     _name, acc_node = instances[0]
     params = await find_child_by_browse_name(acc_node, BN.PARAMETERS, ns_ijt)
     if params is None:
@@ -1626,11 +1614,11 @@ async def test_software_identification_has_manufacturer(software_components_fold
         pytest.skip("SoftwareComponents folder or DI namespace not available")
     instances = await browse_folder_instances(software_components_folder)
     if not instances:
-        pytest.skip("No Software instances found — skipping Manufacturer check")
+        pytest.fail("No Software instances found — at least one instance expected in this asset category")
     _name, sw_node = instances[0]
     ident = await find_child_by_browse_name(sw_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Software '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"Software '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     assert manufacturer is not None, f"Software '{_name}' Identification is missing Manufacturer (ns_di={ns_di})"
 
@@ -1643,11 +1631,11 @@ async def test_software_identification_has_software_revision(software_components
         pytest.skip("SoftwareComponents folder or DI namespace not available")
     instances = await browse_folder_instances(software_components_folder)
     if not instances:
-        pytest.skip("No Software instances found — skipping SoftwareRevision check")
+        pytest.fail("No Software instances found — at least one instance expected in this asset category")
     _name, sw_node = instances[0]
     ident = await find_child_by_browse_name(sw_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"Software '{_name}' has no Identification node — skipping SoftwareRevision check")
+        pytest.fail(f"Software '{_name}' has no Identification node — Identification is mandatory per DI spec")
     sw_rev = await find_child_by_browse_name(ident, BN.SOFTWARE_REVISION, ns_di)
     assert sw_rev is not None, f"Software '{_name}' Identification is missing SoftwareRevision (ns_di={ns_di})"
     val = await sw_rev.read_value()
@@ -1665,11 +1653,11 @@ async def test_sub_component_identification_has_manufacturer(sub_components_fold
         pytest.skip("SubComponents folder or DI namespace not available")
     instances = await browse_folder_instances(sub_components_folder)
     if not instances:
-        pytest.skip("No SubComponent instances found — skipping Manufacturer check")
+        pytest.fail("No SubComponent instances found — at least one instance expected in this asset category")
     _name, sc_node = instances[0]
     ident = await find_child_by_browse_name(sc_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"SubComponent '{_name}' has no Identification node — skipping Manufacturer check")
+        pytest.fail(f"SubComponent '{_name}' has no Identification node — Identification is mandatory per DI spec")
     manufacturer = await find_child_by_browse_name(ident, BN.MANUFACTURER, ns_di)
     assert manufacturer is not None, f"SubComponent '{_name}' Identification is missing Manufacturer (ns_di={ns_di})"
 
@@ -1682,11 +1670,11 @@ async def test_sub_component_identification_has_serial_number(sub_components_fol
         pytest.skip("SubComponents folder or DI namespace not available")
     instances = await browse_folder_instances(sub_components_folder)
     if not instances:
-        pytest.skip("No SubComponent instances found — skipping SerialNumber check")
+        pytest.fail("No SubComponent instances found — at least one instance expected in this asset category")
     _name, sc_node = instances[0]
     ident = await find_child_by_browse_name(sc_node, BN.IDENTIFICATION, ns_di)
     if ident is None:
-        pytest.skip(f"SubComponent '{_name}' has no Identification node — skipping SerialNumber check")
+        pytest.fail(f"SubComponent '{_name}' has no Identification node — Identification is mandatory per DI spec")
     serial_node = await find_child_by_browse_name(ident, BN.SERIAL_NUMBER, ns_di)
     assert serial_node is not None, f"SubComponent '{_name}' Identification is missing SerialNumber (ns_di={ns_di})"
 
@@ -1699,7 +1687,7 @@ async def test_sub_component_parameters_has_type_property(sub_components_folder,
         pytest.skip("SubComponents folder or IJT Base namespace not available")
     instances = await browse_folder_instances(sub_components_folder)
     if not instances:
-        pytest.skip("No SubComponent instances found — skipping Type check")
+        pytest.fail("No SubComponent instances found — at least one instance expected in this asset category")
     _name, sc_node = instances[0]
     params = await find_child_by_browse_name(sc_node, BN.PARAMETERS, ns_ijt)
     if params is None:
@@ -1719,7 +1707,7 @@ async def test_virtual_station_has_assigned_tools_property(virtual_stations_fold
         pytest.skip("VirtualStations folder or IJT Base namespace not available")
     instances = await browse_folder_instances(virtual_stations_folder)
     if not instances:
-        pytest.skip("No VirtualStation instances found — skipping AssignedTools check")
+        pytest.fail("No VirtualStation instances found — at least one instance expected in this asset category")
     _name, vs_node = instances[0]
     assigned_tools = await find_child_by_browse_name(vs_node, "AssignedTools", ns_ijt)
     if assigned_tools is None:
@@ -1738,7 +1726,7 @@ async def test_virtual_station_assigned_tools_entries_are_strings(virtual_statio
         pytest.skip("VirtualStations folder or IJT Base namespace not available")
     instances = await browse_folder_instances(virtual_stations_folder)
     if not instances:
-        pytest.skip("No VirtualStation instances found — skipping AssignedTools value check")
+        pytest.fail("No VirtualStation instances found — at least one instance expected in this asset category")
     _name, vs_node = instances[0]
     assigned_tools_node = await find_child_by_browse_name(vs_node, "AssignedTools", ns_ijt)
     if assigned_tools_node is None:
@@ -1882,7 +1870,7 @@ async def test_battery_operation_cycle_counter_value_is_non_negative(batteries_f
         pytest.skip("Batteries folder or DI namespace not available")
     instances = await browse_folder_instances(batteries_folder)
     if not instances:
-        pytest.skip("No Battery instances found — skipping OperationCycleCounter value check")
+        pytest.fail("No Battery instances found — at least one instance expected in this asset category")
     found = False
     for _name, battery_node in instances:
         op_counters = await find_child_by_browse_name(battery_node, BN.OPERATION_COUNTERS, ns_di)

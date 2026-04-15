@@ -97,6 +97,9 @@ jobs:
   server-smoke-docker:
     name: "Release2 / OPC UA Server — Docker Smoke"
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -188,6 +191,9 @@ jobs:
   webclient-docker:
     name: "Release2 / IJT Web Client — Docker Tests"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -273,6 +279,9 @@ jobs:
   int-testclient:
     name: "Release2 / Test Client (Windows Live)"
     runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -392,6 +401,9 @@ jobs:
   int-live-others:
     name: "Release2 / Web Client + Console (Windows Live)"
     runs-on: windows-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -490,6 +502,7 @@ jobs:
   zizmor:
     name: "GHA Security Audit (zizmor) [optional]"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     # Skip fork PRs: they cannot write to Code Scanning (no security-events: write).
     # Non-PR events (push, schedule, workflow_dispatch) always run.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -514,6 +527,7 @@ jobs:
   report:
     name: "📋 Extended Test Report"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [server-smoke-docker, webclient-docker, int-testclient, int-live-others, zizmor]
     if: always()
     permissions:

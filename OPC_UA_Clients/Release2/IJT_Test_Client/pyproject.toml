@@ -9,7 +9,7 @@ pythonpath = ["."]
 # Test Client has no tests/ dir — suites live at project root in named subdirs.
 testpaths = ["conformance", "assets", "joining_process", "results", "joint", "events", "common"]
 python_files = ["test_*.py"]
-addopts = "-v --basetemp=tmp/pytest"
+addopts = "-v --basetemp=tmp/pytest -p no:cacheprovider"
 tmp_path_retention_policy = "failed"
 timeout = 120
 markers = [
@@ -121,6 +121,28 @@ max-module-lines = 1200
 [tool.mypy]
 explicit_package_bases = true
 ignore_missing_imports = true
+
+[tool.pyright]
+# asyncua 1.2b2 uses class-based OPC UA primitive types (Int32, UInt32, etc.)
+# that inherit from int/str/bytes. Plain int literals are not directly assignable
+# to these types in pyright's type system, but are equivalent at runtime. Remove
+# reportArgumentType suppression when asyncua ships stable 1.2.0 with corrected stubs.
+reportArgumentType = "none"
+# asyncua does not declare __all__ for its re-exported OPC UA constants
+# (AttributeIds, StatusCodes, ObjectIds, etc.) — they are importable at runtime.
+reportPrivateImportUsage = "none"
+# asyncua DataValue.Value and Variant.Value are typed Optional but are always
+# populated when an OPC UA read call returns successfully. Tests guard on read
+# success before accessing .Value, so None-access is not possible at runtime.
+reportOptionalMemberAccess = "none"
+reportOptionalIterable = "none"
+# IJT custom OPC UA data types (JoiningProcessIdentificationDataType, etc.) are
+# generated from the spec and registered at runtime via asyncua type dictionary;
+# they are not visible in asyncua's static type stubs.
+reportAttributeAccessIssue = "none"
+# asyncua DataValue bitwise ops (e.g. AccessLevel & 0x02) are valid at runtime;
+# pyright cannot infer the int-compatible return type from asyncua's Optional stubs.
+reportOperatorIssue = "none"
 
 [[tool.mypy.overrides]]
 # helpers/ contains generated OPC UA type stubs — too many unresolvable imports to check.

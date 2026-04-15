@@ -47,16 +47,24 @@ async def test_get_result_by_id_method_exists(result_management, ns_indices):
     assert node is not None, f"Method '{BN.GET_RESULT_BY_ID}' must exist in ResultManagement (ns_mr={ns_mr})"
 
 
-async def test_get_result_id_list_filtered_method_exists(result_management, ns_indices):
+async def test_get_result_id_list_filtered_method_absent(result_management, ns_indices):
+    """GetResultIdListFiltered is not supported in the current server profile — assert it is absent."""
     ns_mr = ns_indices[NS_MACH_RESULT]
     node = await find_child_by_browse_name(result_management, BN.GET_RESULT_ID_LIST_FILTERED, ns_mr)
-    assert node is not None, f"Method '{BN.GET_RESULT_ID_LIST_FILTERED}' must exist in ResultManagement (ns_mr={ns_mr})"
+    assert node is None, (
+        f"Method '{BN.GET_RESULT_ID_LIST_FILTERED}' must NOT exist: "
+        "not supported in the current server profile (outside base IJT spec)"
+    )
 
 
-async def test_release_result_handle_method_exists(result_management, ns_indices):
+async def test_release_result_handle_method_absent(result_management, ns_indices):
+    """ReleaseResultHandle is not supported in the current server profile — assert it is absent."""
     ns_mr = ns_indices[NS_MACH_RESULT]
     node = await find_child_by_browse_name(result_management, BN.RELEASE_RESULT_HANDLE, ns_mr)
-    assert node is not None, f"Method '{BN.RELEASE_RESULT_HANDLE}' must exist in ResultManagement (ns_mr={ns_mr})"
+    assert node is None, (
+        f"Method '{BN.RELEASE_RESULT_HANDLE}' must NOT exist: "
+        "not supported in the current server profile (outside base IJT spec)"
+    )
 
 
 # ---------------------------------------------------------------------------

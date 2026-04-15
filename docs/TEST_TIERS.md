@@ -18,17 +18,7 @@ Most jobs are fully environment-independent; `csharp-client` is the exception �
 
 ### Jobs
 
-| Job | What it checks |
-|-----|----------------|
-| `web-client` | Python unit tests · Vitest · ESLint · Bandit · Ruff · mypy · npm audit |
-| `console-client` | Python unit tests · Bandit · Ruff · mypy |
-| `node-client` | Vitest · ESLint · npm audit |
-| `csharp-client` | dotnet build (zero warnings) · phase1: unit/static only (`IJT_PHASE1_ONLY=true`, live tests skip) · phase2: xUnit live tests against auto-launched Windows server (`--blame-hang 60s` catches hangs) · format check |
-| `test-client` | pytest collect-only · Bandit · Ruff · mypy |
-| `server-smoke-windows` | OPC UA binary smoke — 10 checks, Windows native, JUnit XML |
-| `docker-smoke` | Web Client Docker build · HTTP readiness · WebSocket port |
-| `actionlint` | GHA workflow lint (local runner also checks `*.yml` action-pin versions) |
-| `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to job summary with full pass · fail · skip counts · artifact sanity gate · `continue-on-error` on all dorny steps (fork PR safe) |
+For full job descriptions, test baselines, and toolchain versions, see the **CI/CD** section in [`docs/SKILLS.md`](../docs/SKILLS.md).
 
 ### Skip budget: **0 unexpected skips**
 
@@ -52,14 +42,7 @@ Live, integration, Docker, and optional security checks.
 
 ### Jobs
 
-| Job | What it checks |
-|-----|----------------|
-| `server-smoke-docker` | Linux Release2 server: Docker image build · Dockerfile lint (hadolint) · smoke tests (10 checks, JUnit XML) |
-| `webclient-docker` | Web Client Docker: test-target (Python + Vitest inside container) · prod-target (HTTP health on port 3000) |
-| `int-testclient` | Windows: OPC UA server + Test Client full suite (runs in parallel with `int-live-others`) — pytest-live.xml (+ pytest-unit.xml when phase1 runs) + smoke-sanity.xml collected flat before artifact upload |
-| `int-live-others` | Windows: Web Client integration + Console live tests (runs in parallel with `int-testclient`) |
-| `zizmor` *(optional)* | GitHub Actions workflow security audit — findings uploaded as SARIF to GitHub Code Scanning (Security tab); job never fails CI; skipped on fork PRs (no `security-events: write` in fork context) |
-| `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to job summary with full pass · fail · skip counts · artifact sanity gate warns on missing XMLs · zizmor-aware overall status |
+For full job descriptions, test baselines, and toolchain versions, see the **CI/CD** section in [`docs/SKILLS.md`](../docs/SKILLS.md).
 
 ### Triggers
 
@@ -82,9 +65,8 @@ fails with `pytest.fail()` (loud, never silent). This applies to:
 | Test | Status | Reason |
 |------|--------|--------|
 | Console `TestMethods` × 7 | `xfail` | `ProductInstanceUri` is NULL on demo server — tool identity not configured. Uses `pytest.xfail()` so the test runs and is reported as expected-failure, not silently skipped. |
-| Test Client conformance × 6 | skip | Demo server does not implement optional interfaces (`IControllerType`, `IToolType`, `AssociatedWith` references) — reference server is minimal by design |
-| Test Client × 20 | `xfail` | Known unimplemented optional features in demo server — correctly decorated `@pytest.mark.xfail` |
-| Test Client asset sub-type folders (controllers, tools, etc.) | skip | Individual asset category folders are optional per IJT spec — a conformant server may implement a subset |
+| Test Client conformance (unsupported-result APIs) | skip/fail-by-design checks | Server profile intentionally does not implement `GetResultIdListFiltered`, `ReleaseResultHandle`, `AcknowledgeResults`, `RequestUnacknowledgedResults`; tests assert absence or Bad-status rejection |
+| Test Client asset sub-type folders (controllers, tools, etc.) | pass | All asset category folders are required in the current server configuration; tests assert presence and fail on missing nodes |
 | `zizmor` job | pass | SARIF upload to Code Scanning — see Security → Code scanning alerts. No action needed; job always passes (skipped on fork PRs). |
 
 ---
@@ -94,7 +76,7 @@ fails with `pytest.fail()` (loud, never silent). This applies to:
 Every skip must be explicit and auditable. Prefer `pytest.fail()` over `pytest.skip()`
 for infrastructure checks — missing servers, wrong paths, missing packages. Reserve
 `pytest.skip()` only for genuine "this feature is not available on this server/platform"
-conditions. Use `pytest.xfail()` for known server limitations that are expected to change.
+conditions. Use `pytest.xfail()` only for short-lived regressions; remove markers as soon as behavior is implemented.
 
 ### Python (pytest)
 
@@ -102,11 +84,17 @@ conditions. Use `pytest.xfail()` for known server limitations that are expected 
 # Infrastructure missing → fail loudly, never skip silently:
 pytest.fail("OPC UA server did not start within 60 s — check EXE output")
 
-# Server capability genuinely unavailable → xfail (runs but expected to fail):
-pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+# Method is optional per spec and absent on this server → skip with reason:
+pytest.skip("SetCalibration method not present — optional per spec")
+
+# Method is present but unsupported by server profile → run the test, assert rejection:
+# (do NOT skip — the test runs and asserts a Bad status response)
+assert response_status.name.startswith("Bad"), (
+    "AcknowledgeResults should return Bad status on this server profile"
+)
 
 # Test depends on optional feature known to be absent → skip with reason:
-pytest.skip("Server does not implement IControllerType (optional interface)")
+pytest.skip("GetIdentifiers requires additional arguments on this server (see GAP-004)")
 ```
 
 ### C# (xUnit + `SkippableFact`)

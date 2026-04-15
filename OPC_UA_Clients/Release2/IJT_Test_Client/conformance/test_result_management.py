@@ -50,10 +50,10 @@ async def _rediscover_result_management(client, ns_mr):
     """Re-discover ResultManagement on a function-scoped connection."""
     js = await find_joining_system(client)
     if js is None:
-        pytest.skip("JoiningSystem not found — server may not be running")
+        pytest.fail("JoiningSystem not found — server must be running and reachable")
     rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
     if rm is None:
-        pytest.skip("ResultManagement node not found on JoiningSystem")
+        pytest.fail("ResultManagement node not found on JoiningSystem — required address space node is missing")
     return rm
 
 
@@ -346,13 +346,18 @@ async def test_result_management_result_ready_event_fired_on_simulate(
 
 
 # ---------------------------------------------------------------------------
-# ReleaseResultHandle — optional method
+# ReleaseResultHandle — not supported on this server profile
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
 async def test_result_management_release_result_handle_if_present(opcua_client, result_trigger, ns_indices):
-    """ReleaseResultHandle (optional): must be callable with a valid result handle."""
+    """ReleaseResultHandle is not implemented in this server profile.
+
+    Acceptable behavior:
+      - method is absent, or
+      - method is present but call is rejected with OPC UA Bad status.
+    """
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -361,7 +366,7 @@ async def test_result_management_release_result_handle_if_present(opcua_client, 
 
     rrh = await find_child_by_browse_name(rm, BN.RELEASE_RESULT_HANDLE, ns_mr)
     if rrh is None:
-        pytest.skip(f"'{BN.RELEASE_RESULT_HANDLE}' not present in ResultManagement — optional method")
+        return
 
     result_data, meta = await _trigger_and_get_latest(result_trigger, rm, ns_mr)
     if result_data is None:
@@ -382,19 +387,23 @@ async def test_result_management_release_result_handle_if_present(opcua_client, 
         method_name="ReleaseResultHandle",
     )
     assert release is not None, "ReleaseResultHandle returned None — expected MethodCallResult"
+    assert not release.success, (
+        "ReleaseResultHandle succeeded, but this server profile defines this method as unsupported/not implemented"
+    )
 
 
 # ---------------------------------------------------------------------------
-# acknowledge_results — optional method
+# acknowledge_results — not supported on this server profile
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
 async def test_result_management_acknowledge_results_if_present(opcua_client, ns_indices):
-    """The Server supports the AcknowledgeResults method to acknowledge the result set
-    using the input list of result identifiers.
+    """AcknowledgeResults is not implemented in this server profile.
 
-    Optional method: skipped when not present. When present, must be callable.
+    Acceptable behavior:
+      - method is absent, or
+      - method is present but call is rejected with OPC UA Bad status.
     """
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -403,7 +412,7 @@ async def test_result_management_acknowledge_results_if_present(opcua_client, ns
     rm = await _rediscover_result_management(opcua_client, ns_mr)
     ack = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
     if ack is None:
-        pytest.skip(f"'{BN.ACKNOWLEDGE_RESULTS}' not present in ResultManagement — optional method")
+        return
 
     result = await call_method(
         rm,
@@ -413,6 +422,9 @@ async def test_result_management_acknowledge_results_if_present(opcua_client, ns
         method_name="AcknowledgeResults",
     )
     assert result is not None, "AcknowledgeResults returned None — expected MethodCallResult"
+    assert not result.success, (
+        "AcknowledgeResults succeeded, but this server profile defines this method as unsupported/not implemented"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -440,7 +452,7 @@ async def test_result_management_request_results_method_present_if_supported(res
 
 
 # ---------------------------------------------------------------------------
-# request_unacknowledged_results — optional method
+# request_unacknowledged_results — not supported on this server profile
 # ---------------------------------------------------------------------------
 
 
@@ -448,10 +460,11 @@ async def test_result_management_request_results_method_present_if_supported(res
 async def test_result_management_request_unacknowledged_results_method_present_if_supported(
     result_management, ns_indices
 ):
-    """The Server supports RequestUnacknowledgedResults method which sends stored results
-    using an instance of RequestedResultEventType or RequestedResultVariable value.
+    """RequestUnacknowledgedResults is not implemented in this server profile.
 
-    Optional method: skipped when not present. When present, the method node must be browsable.
+    Acceptable behavior:
+      - method is absent, or
+      - method is present but call is rejected with OPC UA Bad status.
     """
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -459,10 +472,18 @@ async def test_result_management_request_unacknowledged_results_method_present_i
 
     rur_node = await find_child_by_browse_name(result_management, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
     if rur_node is None:
-        pytest.skip(f"'{BN.REQUEST_UNACKNOWLEDGED_RESULTS}' not present in ResultManagement — optional method per spec")
+        return
 
-    assert rur_node is not None
-    logger.info("RequestUnacknowledgedResults method found: %s", rur_node.nodeid)
+    result = await call_method(
+        result_management,
+        rur_node.nodeid,
+        timeout=_CALL_TIMEOUT_S,
+        method_name="RequestUnacknowledgedResults",
+    )
+    assert result is not None, "RequestUnacknowledgedResults returned None — expected MethodCallResult"
+    assert not result.success, (
+        "RequestUnacknowledgedResults succeeded, but this server profile defines this method as unsupported/not implemented"
+    )
 
 
 # ---------------------------------------------------------------------------

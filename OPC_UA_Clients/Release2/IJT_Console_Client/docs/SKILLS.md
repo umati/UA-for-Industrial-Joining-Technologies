@@ -83,8 +83,9 @@ pip install -r requirements-dev.txt
 ## Zero-Escape Testing Tools (run_all_tests.py Phase 1)
 
 All auto-detected — present=run, absent=skip with install hint.
+`pyright` is installed by default (listed in `requirements-dev.txt`) and runs as **advisory** (non-blocking; findings written to `pyright.stderr.txt`).
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
-`vulture` (dead code), `semgrep` (AI rules), `pyright` (AI types), `detect-secrets` (secrets).
+`vulture` (dead code), `semgrep` (AI rules), `pyright` (AI types — **standard install, advisory**), `detect-secrets` (secrets).
 
 ---
 

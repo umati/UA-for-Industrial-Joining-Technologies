@@ -220,7 +220,10 @@ class SimulatorResultTrigger(ResultTrigger):
         ns_app:                        Namespace index for the application namespace.
     """
 
-    is_simulator = True
+    @property
+    def is_simulator(self) -> bool:
+        """True — this trigger drives the OPC UA simulator."""
+        return True
 
     def __init__(self, client, simulate_results_folder_node, ns_app: int) -> None:
         self._client = client
@@ -320,7 +323,10 @@ class SimulatorEventTrigger(EventTrigger):
         ns_app:                       Namespace index for the application namespace.
     """
 
-    is_simulator = True
+    @property
+    def is_simulator(self) -> bool:
+        """True — this trigger drives the OPC UA simulator."""
+        return True
 
     def __init__(self, client, simulate_events_folder_node, ns_app: int) -> None:
         self._client = client
@@ -413,7 +419,10 @@ class ExternalResultTrigger(ResultTrigger):
                         adapter).  Not used by this base implementation.
     """
 
-    is_simulator = False
+    @property
+    def is_simulator(self) -> bool:
+        """False — external trigger required for real controllers."""
+        return False
 
     def __init__(self, wait_timeout_s: float = 0.0) -> None:
         self._wait_timeout_s = wait_timeout_s
@@ -464,7 +473,10 @@ class ExternalEventTrigger(EventTrigger):
                         adapter).  Not used by this base implementation.
     """
 
-    is_simulator = False
+    @property
+    def is_simulator(self) -> bool:
+        """False — external trigger required for real controllers."""
+        return False
 
     def __init__(self, wait_timeout_s: float = 0.0) -> None:
         self._wait_timeout_s = wait_timeout_s

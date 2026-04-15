@@ -11,21 +11,7 @@ from helpers.node_discovery import get_associated_assets
 
 pytestmark = [pytest.mark.live, pytest.mark.structure]
 
-# Applied per-test so unrelated regressions in this module remain visible.
-# strict=True: an unexpected pass (xpass) fails CI, forcing the marker to be removed
-# once the server implements AssociatedWith references.
-_XFAIL_ASSOC = pytest.mark.xfail(
-    reason=(
-        "The current server binary does not yet expose AssociatedWith references between "
-        "asset nodes. These tests document spec-required behaviour (IJT Base §7.3 / CU-AM-008) "
-        "and will become xpass once the server implements them. "
-        "This is a server-implementation gap, not a client defect."
-    ),
-    strict=True,
-)
 
-
-@_XFAIL_ASSOC
 async def test_assets_have_associated_with_reference(controllers_instances):
     """First controller must have at least one AssociatedWith reference target."""
     controller_node = controllers_instances[0][1]
@@ -35,7 +21,6 @@ async def test_assets_have_associated_with_reference(controllers_instances):
     )
 
 
-@_XFAIL_ASSOC
 async def test_associated_with_is_symmetric(controllers_instances, tools_instances):
     """
     AssociatedWith must be symmetric: if controller C references tool T,
@@ -44,7 +29,9 @@ async def test_associated_with_is_symmetric(controllers_instances, tools_instanc
     controller_node = controllers_instances[0][1]
     associated_from_controller = await get_associated_assets(controller_node)
     if not associated_from_controller:
-        pytest.skip("First controller has no AssociatedWith targets; skipping symmetry check")
+        pytest.fail(
+            "First controller has no AssociatedWith references — AssociatedWith is required per IJT spec CU-AM-008"
+        )
     controller_node_id = controller_node.nodeid
     for target_node in associated_from_controller:
         back_refs = await get_associated_assets(target_node)
@@ -60,13 +47,12 @@ async def test_associated_with_is_symmetric(controllers_instances, tools_instanc
         )
 
 
-@_XFAIL_ASSOC
 async def test_controller_associated_with_tools(controllers_instances, tools_instances):
     """At least one AssociatedWith target of the first controller must be a known tool instance."""
     controller_node = controllers_instances[0][1]
     associated = await get_associated_assets(controller_node)
     if not associated:
-        pytest.skip("First controller has no AssociatedWith references")
+        pytest.fail("First controller has no AssociatedWith references — required per IJT spec CU-AM-008")
     tool_node_ids = {(node.nodeid.Identifier, node.nodeid.NamespaceIndex) for _, node in tools_instances}
     matched = any((n.nodeid.Identifier, n.nodeid.NamespaceIndex) in tool_node_ids for n in associated)
     assert matched, (
@@ -75,7 +61,6 @@ async def test_controller_associated_with_tools(controllers_instances, tools_ins
     )
 
 
-@_XFAIL_ASSOC
 async def test_associated_nodes_are_in_same_system(controllers_instances):
     """
     All nodes reachable via AssociatedWith from the first controller must be valid:
@@ -84,8 +69,9 @@ async def test_associated_nodes_are_in_same_system(controllers_instances):
     controller_node = controllers_instances[0][1]
     associated = await get_associated_assets(controller_node)
     if not associated:
-        pytest.skip("First controller has no AssociatedWith references")
+        pytest.fail("First controller has no AssociatedWith references — required per IJT spec CU-AM-008")
     for target_node in associated:
+        bn = None
         try:
             bn = await target_node.read_browse_name()
         except Exception as exc:

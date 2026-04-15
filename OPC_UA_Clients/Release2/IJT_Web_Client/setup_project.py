@@ -24,8 +24,9 @@ from typing import IO, Any
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 from python.network_utils import endpoint_reachable, parse_endpoint_host_port
 
-STATE_DIR = Path(".state")
-LOGS_DIR = Path("logs")
+PROJECT_DIR = Path(__file__).resolve().parent
+STATE_DIR = PROJECT_DIR / ".state"
+LOGS_DIR = PROJECT_DIR / "logs"
 RESULTS_LOG_DIR = LOGS_DIR / "results"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -74,7 +75,6 @@ IS_WSL = bool(os.getenv("WSL_DISTRO_NAME")) or (
 VENV_DIR = Path("/opt/ijt_venv") if IS_DOCKER else Path(".venv")
 SETUP_TIMESTAMP_FILE = STATE_DIR / "setup_timestamp"
 IS_WINDOWS = os.name == "nt"
-PROJECT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = _detect_repo_root(PROJECT_DIR)
 SIMULATOR_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
 SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"

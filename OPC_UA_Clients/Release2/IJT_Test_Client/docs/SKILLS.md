@@ -41,7 +41,7 @@ See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail exp
 ### Zero-Escape Testing Tools (Phase 1, auto-detected)
 
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
-`vulture` (dead code), `semgrep` (AI rules), `pyright` (AI types), `detect-secrets` (secrets).
+`vulture` (dead code), `semgrep` (AI rules), `pyright` (AI types — **advisory, non-blocking**), `detect-secrets` (secrets).
 
 A **Python pytest suite** that validates an OPC UA server implementing the
 [OPC UA Industrial Joining Technologies (IJT)](https://reference.opcfoundation.org/IJT/Base/v100/)
@@ -111,8 +111,10 @@ Objects/
     │   ├── Results/
     │   ├── GetLatestResult(Timeout: Int32)        ← Timeout is REQUIRED
     │   ├── GetResultById(ResultId: String)
-    │   ├── GetResultIdListFiltered(...)
-    │   ├── ReleaseResultHandle(...)
+    │   ├── GetResultIdListFiltered(...)            ← unsupported in this profile
+    │   ├── ReleaseResultHandle(...)                ← unsupported in this profile
+    │   ├── AcknowledgeResults(...)                 ← unsupported in this profile
+    │   ├── RequestUnacknowledgedResults(...)       ← unsupported in this profile
     │   └── RequestResults(...)
     ├── JoiningProcessManagement (IJT Base ns)
     ├── JointManagement          (IJT Base ns)

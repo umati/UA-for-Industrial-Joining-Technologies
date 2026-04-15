@@ -27,34 +27,165 @@
 
 ---
 
-## Workspace Hygiene (Developers)
+## Developer Setup & Hygiene
 
-### Automatic — post-run cache cleanup (every `run_all_tests.py`)
-Each runner removes `__pycache__`, `.ruff_cache`, `.mypy_cache`, `.coverage*` after writing reports.
-Cleanup is **self-contained** — each runner only affects its own directory.
-Running the root orchestrator triggers sub-project runners as subprocesses; each cleans itself.
-`.pytest_cache` is cleaned post-run by each runner. `test-results/` is always preserved.
+### Pre-Commit Hooks — Auto-Fix on Every Commit
 
-### Automatic — pytest temp dirs
-Console and Test clients are configured with:
-- `addopts = "-v --basetemp=tmp/pytest"` — temp dirs stay inside each project under `tmp/pytest/`, avoiding OS temp ACL issues on restricted Windows machines
-- `tmp_path_retention_policy = "failed"` — only failing test artifacts are retained; passing test temps are cleaned automatically by pytest
+This repo uses [pre-commit](https://pre-commit.com/) to automatically fix formatting and line-ending issues **before any commit is recorded**. Most hooks are auto-fixers — they silently reformat files so the commit succeeds on the second attempt.
 
-Web client is configured with:
-- `addopts = "-v -p no:cacheprovider"` — disables pytest cacheprovider to avoid `pytest-cache-files-*` ACL churn on hardened Windows machines
-- `tmp_path_retention_policy = "failed"`
-- `local_temp_dir` fixture writes to `.state/tmp/test-fixtures/{uuid}` with explicit `yield`/`finally` cleanup
+> **Detector hooks that block by design**: `check-json`, `check-yaml`, `check-toml` (config syntax errors), `check-merge-conflict` (stray `<<<<<<<`), `debug-statements` (stray `breakpoint()`). These require manual fixes before committing.
 
-**Console Client and Web Client additionally use `pyfakefs`** for all filesystem-touching unit tests (`test_setup_client.py` and `test_setup_project.py` respectively). The `fs` fixture virtualizes `pathlib`, `os`, `shutil`, and `zipfile` calls in-process, so those tests write no real files to disk. This eliminates the root cause of Windows ACL locks from tests that simulate virtual environment layouts (`.venv/Scripts/python.exe`). Works identically on Windows, Linux, and macOS.
+**First-time setup** (once per machine, per clone):
+```sh
+pip install pre-commit          # or: pip install -r requirements-dev.txt
+pre-commit install              # installs hooks into .git/hooks/
+```
+The three Python runners (Console, Web, Test) call `pre-commit install` automatically on first run. For CSharp, Node, and Server runners — or direct git use — run it manually once after cloning.
+
+**What happens on `git commit`:**
+1. `ruff-format` rewrites Python files with wrong indentation/quotes/blank-lines
+2. `ruff --fix` applies safe lint fixes
+3. `end-of-file-fixer` and `mixed-line-ending` normalise LF/CRLF
+4. `trailing-whitespace` strips trailing spaces
+
+If any hook modifies files, the commit is aborted. **Run `git add -u && git commit` again** — fixed files are already staged.
+
+**Auto-generated files excluded**: `OPC_UA_Clients/Release2/IJT_CSharp_Client/Types/` is excluded from all hooks (set in `.pre-commit-config.yaml` and root `pyproject.toml`). Never edit those files manually.
+
+---
+
+### Virtual Environment Naming Convention
+
+Each Python project creates two independent environments:
+
+| Directory | Created by | Contents | Typical use |
+|-----------|-----------|----------|-------------|
+| `.venv` | `setup_client.py` / `setup_project.py` | `requirements.txt` only | `python main.py` / standalone launch (Windows, Linux, macOS, WSL) |
+| `.venv_test` | `run_all_tests.py` | `requirements.txt` + `requirements-dev.txt` | Test runs, CI |
+| `/opt/ijt_venv` | Docker `ENTRYPOINT` | `requirements.txt` | Docker container runtime |
+
+> **WSL**: `bootstrap_wsl.sh` calls `setup_project.py` after OS provisioning — uses `.venv` like every other host.
+
+**Rule**: never activate `.venv_test` to run the application, and never run tests inside `.venv`.
+
+Both `setup_*.py` and `run_all_tests.py` remove stale legacy directories (`venv/`, `venv_test/`, `env/`, `ENV/`, `.venv_backup/`) on startup. A fresh clone always starts clean automatically.
+
+---
+
+### Running Tests — Project Isolation Rule
+
+**Always run tests from each project's own directory — never from repo root.**
+
+```sh
+# ✅ Correct — run from project directory
+cd OPC_UA_Clients/Release2/IJT_Web_Client && pytest tests/python/unit
+cd OPC_UA_Clients/Release2/IJT_Console_Client && pytest tests/unit
+
+# ❌ Wrong — from repo root, both conftest.py files collide
+pytest OPC_UA_Clients/Release2/IJT_Web_Client/tests OPC_UA_Clients/Release2/IJT_Console_Client/tests
+```
+
+Running multiple Python clients together in a single root `pytest` invocation causes `ImportPathMismatchError` because both trees have `tests/conftest.py`. The CI workflows and `run_all_tests.py` both enforce per-project `working-directory`.
+
+**For local full-suite runs**: Use each project's `run_all_tests.py` from its own directory, or the repo root orchestrator which delegates each runner with the correct `cwd`.
+
+---
+
+### Pytest Temp Root Policy
+
+| Project | `addopts` | Notes |
+|---------|-----------|-------|
+| `IJT_Console_Client` | `-v --basetemp=tmp/pytest` | Project-local pytest session dirs |
+| `IJT_Test_Client` | `-v --basetemp=tmp/pytest -p no:cacheprovider` | Project-local + cache provider disabled to prevent `pytest-cache-files-*` accumulation |
+| `IJT_Web_Client` | `-v -p no:cacheprovider` | System temp; `cacheprovider` disabled to prevent ACL churn |
+
+`tmp/` is gitignored in each project. `tmp_path_retention_policy = "failed"` retains artifacts only for failing tests.
+
+The Web client's `local_temp_dir` fixture (used in `test_ijt_interface.py`) writes to `.state/tmp/test-fixtures/{uuid}` with explicit `yield`/`finally` cleanup — excluded from Docker build context via `.dockerignore`.
+
+---
+
+### Automatic Cleanup — post-run
+
+Every `run_all_tests.py` calls `_cleanup_caches()` after writing reports. Cleanup is **self-contained** — each runner only cleans its own directory tree.
+
+| Runner | Scope | Removes |
+|--------|-------|---------|
+| Sub-project runners | Own project dir (recursive) | `__pycache__`, `.ruff_cache`, `.mypy_cache`, `.coverage*`, `*.pyc` |
+| Root orchestrator | Repo root only (non-recursive) | Same + `pki/`, `PKI/` |
+
+`.pytest_cache` is cleaned post-run (regenerates on next run; `--lf`/`--ff` only work within the same session). Always preserved: `test-results/` (reports).
+
+---
+
+### pyfakefs — Filesystem-Touching Unit Tests
+
+`IJT_Console_Client` and `IJT_Web_Client` use **`pyfakefs`** for all unit tests that simulate virtual environment layouts. The `fs` fixture intercepts `pathlib`, `os`, `shutil`, and `zipfile` calls in-process — no real files are written for those tests, eliminating OS ACL issues on Windows (writing `.venv/Scripts/python.exe` can trigger security policies that lock containing directories).
+
+```python
+# After — all filesystem ops are in-memory, no real disk writes
+def test_finds_direct_exe(self, fs, monkeypatch):
+    exe = Path("/fake/sim") / sc.SIMULATOR_EXE_NAME
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"fake exe")
+```
+
+`pyfakefs~=6.1` is in `requirements-dev.txt` for both Console and Web clients. Works identically on Windows, Linux, and macOS.
 
 The `tests/fixtures/` directory is created at runtime by `conftest.py` (`pytest_configure`) — no `.gitkeep` needed.
 
-### Manual — git-native cleanup (when needed)
+---
+
+### Coverage Configuration
+
+Coverage is configured in each project's `pyproject.toml`. **Never hardcode thresholds in runner scripts** — config files are the version-controlled source of truth.
+
+| Project | `fail_under` | Notes |
+|---------|-------------|-------|
+| Web Client | 70% | Unit run achieves ~74% |
+| Console Client | 80% | Unit run achieves ~85% |
+| Test Client | 70% | No `tests/unit/`; threshold applies to live conformance stage |
+
+Docstring coverage (`interrogate`) thresholds — calibrated against real codebase with venvs excluded:
+
+| Project | `fail-under` | Notes |
+|---------|-------------|-------|
+| Console Client | 25% | Honest floor; tests included in scan |
+| Web Client | 42% | Honest floor; tests included in scan |
+| Test Client | 65% | Higher bar; source is well-documented |
+
+---
+
+### Windows-Locked Temp Directories
+
+On Windows, pyfakefs and pytest can leave directories with restricted ACLs that survive test teardown. Built-in protections already in place:
+
+| Protection | Mechanism |
+|-----------|-----------|
+| `_force_rmtree(path)` | All 7 runners + 2 setup scripts — `shutil.rmtree(onexc=...)` with `os.chmod` retry |
+| `[tool.mypy] exclude` | Skips `pytest-cache-files-*` before mypy walks into them |
+| `norecursedirs` | pytest never collects from `pytest-cache-files-*` or `tmp` |
+| `-p no:cacheprovider` (Web + Test Client) | Prevents `pytest-cache-files-*` creation entirely |
+| `.dockerignore` | `tests/fixtures/tmp/` excluded from Docker build context |
+
+If a locked dir survives a run it sits inert — tools skip it, Docker ignores it. It clears automatically on the next machine restart (Windows releases file handles on reboot).
+
+---
+
+### Manual Deep Clean
+
 ```bash
-git clean -fdXn                                              # dry-run: preview first
+git clean -fdXn                                                              # preview first
 git clean -fdX -e 'venv' -e '.venv*' -e 'node_modules' -e 'OPC_UA_IJT_Server_Simulator*'
 ```
-Removes all gitignored artifacts while preserving venv/node_modules. See `docs/DEVELOPER_HYGIENE.md` for full detail.
+
+`-X` removes only gitignored files — never touches committed or untracked files.
+
+| Item | Why preserved |
+|------|--------------|
+| `venv/`, `.venv*` | Python environments — slow to recreate |
+| `node_modules/` | npm cache — slow to recreate |
+| `OPC_UA_IJT_Server_Simulator*` | Large extracted binary |
 
 ---
 
@@ -120,7 +251,7 @@ UA-for-Industrial-Joining-Technologies/
 ### IJT Test Client (`OPC_UA_Clients/Release2/IJT_Test_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2, pytest
 - **Purpose**: OPC UA IJT spec conformance test suite — validates server against OPC 40450-1 / 40451-1
-- **Test baseline**: 564 passed, 343 skipped, 19 xfailed, 0 failed (926 total) — requires running OPC UA server on port 40451
+- **Test baseline**: dynamic (depends on server profile and enabled optional features); requires running OPC UA server on port 40451
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md`
 
@@ -182,6 +313,7 @@ UA-for-Industrial-Joining-Technologies/
 
 Runtime: ~5–7 minutes. Python 3.14, Node.js 24, .NET 10 everywhere.
 Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `setup-dotnet@v5`, `upload-artifact@v7`, `download-artifact@v8`
+All jobs have explicit `timeout-minutes` (5–30 min) and `permissions: contents: read` (plus `checks: write` where dorny/test-reporter runs inline).
 
 ### CodeQL (`codeql.yml`) — triggers on every push/PR to `main` + weekly
 Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries.
@@ -209,10 +341,11 @@ Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJ
 |-----|--------------|
 | `docker-smoke` | Full Docker build + server smoke (10/10) |
 | `webclient-docker` | Web Client Docker test image (Python 310 unit, JS 229) + HTTP:3000 production health |
-| `int-testclient` | Windows live: Test Client full suite (564 passed, 343 skipped, 19 xfailed, 0 failed — 926 total) against running server |
+| `int-testclient` | Windows live: Test Client full suite against running server (counts vary by server profile/features) |
 | `int-live-others` | Windows live: Web Client integration (13 tests) + Console Client live tests |
 
 Runtime: ~10 minutes (int-testclient + int-live-others run in parallel). NOT triggered on GUI/JS-only changes (deliberate — keep fast CI fast).
+All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents: read`.
 
 ---
 
@@ -239,8 +372,7 @@ Runtime: ~10 minutes (int-testclient + int-live-others run in parallel). NOT tri
 | Path | Covers |
 |------|--------|
 | `docs/SKILLS.md` (this file) | Repo-level context, access rules, sub-project summary, CI/CD |
-| `docs/DEVELOPER_HYGIENE.md` | Automatic pytest cleanup config + manual `git clean` approach |
-| `docs/TEST_TIERS.md` | Test tier policy, per-client port table, server isolation design |
+| `docs/TEST_TIERS.md` | Test tier policy, skip/fail standards, per-client port table, server isolation design |
 | `OPC_UA_Servers/Release2/docs/SKILLS.md` | Server start/stop, simulation methods, smoke tests, env vars |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md` | Full Web Client context, file map, bugs, Docker, CI, health check |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/AGENT_GUIDE.md` | Agent workflow and prompt template |

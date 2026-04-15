@@ -18,10 +18,12 @@ export function createOptionalTraceExtensionLoader (modulePath, fallbackModule =
     })
   }
 
-  tryLoad()
-
   return {
     get () {
+      // Lazy: attempt load on first access rather than at module-init time.
+      // This prevents a 404 network request during initial page load when the
+      // extension file does not yet exist, while still loading it once available.
+      tryLoad()
       return activeModule
     }
   }

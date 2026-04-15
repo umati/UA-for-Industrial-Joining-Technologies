@@ -59,7 +59,7 @@ _WELL_KNOWN_SIMULATOR_PATHS = [
     / "OPC_UA_IJT_Server_Simulator_Linux"
     / "opcua_ijt_demo_application",
 ]
-_DEFAULT_SERVER_URL = "opc.tcp://localhost:40464"
+_DEFAULT_SERVER_URL = "opc.tcp://localhost:40451"
 
 
 def _cmd_available(cmd: str) -> bool:

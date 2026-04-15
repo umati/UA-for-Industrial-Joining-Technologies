@@ -26,6 +26,11 @@ logger = logging.getLogger(__name__)
 _BROWSE_TIMEOUT = 15.0  # seconds — applies to all browse/reference calls
 
 
+def _ref_type_nodeid(ref_type_id: int) -> ua.NodeId:
+    """Return a namespace-0 NodeId for a reference type id."""
+    return ua.NodeId(ref_type_id, 0)
+
+
 def _node_from_ref(source_node: UANode, expanded_nodeid) -> UANode:
     """Create a Node bound to the same session as source_node from a ref NodeId."""
     return UANode(source_node.session, expanded_nodeid)
@@ -133,7 +138,7 @@ async def get_type_definition(node: UANode, ns_opc_ua: int = 0):
     """
     try:
         refs = await node.get_references(
-            refs=RefTypes.HAS_TYPE_DEFINITION,  # ns=0; all OPC UA standard refs are in namespace 0
+            refs=_ref_type_nodeid(RefTypes.HAS_TYPE_DEFINITION),  # ns=0; all OPC UA standard refs are in namespace 0
             direction=ua.BrowseDirection.Forward,
             includesubtypes=False,
             nodeclassmask=ua.NodeClass.Unspecified,
@@ -152,7 +157,7 @@ async def get_interface_types(node: UANode, ns_opc_ua: int = 0) -> list:
     """
     try:
         refs = await node.get_references(
-            refs=RefTypes.HAS_INTERFACE,  # ns=0; all OPC UA standard refs are in namespace 0
+            refs=_ref_type_nodeid(RefTypes.HAS_INTERFACE),  # ns=0; all OPC UA standard refs are in namespace 0
             direction=ua.BrowseDirection.Forward,
             includesubtypes=True,
             nodeclassmask=ua.NodeClass.Unspecified,
@@ -182,7 +187,7 @@ async def get_associated_assets(node: UANode, ns_opc_ua: int = 0) -> list:
     """
     try:
         refs = await node.get_references(
-            refs=RefTypes.ASSOCIATED_WITH,  # ns=0; all OPC UA standard refs are in namespace 0
+            refs=_ref_type_nodeid(RefTypes.ASSOCIATED_WITH),  # ns=0; all OPC UA standard refs are in namespace 0
             direction=ua.BrowseDirection.Forward,
             includesubtypes=True,
             nodeclassmask=ua.NodeClass.Unspecified,
@@ -199,7 +204,7 @@ async def get_children_by_reference(node: UANode, ref_type_id: int, ns_opc_ua: i
     """
     try:
         refs = await node.get_references(
-            refs=ref_type_id,  # integer reference type id; ns=0 for all standard OPC UA refs
+            refs=_ref_type_nodeid(ref_type_id),  # ns=0 for all standard OPC UA refs
             direction=ua.BrowseDirection.Forward,
             includesubtypes=True,
             nodeclassmask=ua.NodeClass.Unspecified,

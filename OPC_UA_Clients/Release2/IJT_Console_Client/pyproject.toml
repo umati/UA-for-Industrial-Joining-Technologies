@@ -71,6 +71,20 @@ explicit_package_bases = true
 # Exclude pyfakefs/pytest bookkeeping dirs that may be locked on Windows.
 exclude = ["pytest-cache-files-.*"]
 
+[tool.pyright]
+# asyncua 1.2b2 uses class-based OPC UA primitive types (Int32, UInt32, etc.)
+# that inherit from int/str/bytes. Plain int literals are not directly assignable
+# to these types in pyright's type system, but are equivalent at runtime.
+reportArgumentType = "none"
+# asyncua does not declare __all__ for its re-exported OPC UA constants.
+reportPrivateImportUsage = "none"
+# asyncua DataValue.Value and Variant.Value are typed Optional but are always
+# populated when an OPC UA read call returns successfully.
+reportOptionalMemberAccess = "none"
+reportOptionalIterable = "none"
+# asyncua DataValue bitwise ops are valid at runtime.
+reportOperatorIssue = "none"
+
 [tool.pylint.main]
 # asyncua members are generated at runtime from OPC UA NodeSet XML;
 # orjson is a C-extension whose .dumps member is not visible to pylint.
