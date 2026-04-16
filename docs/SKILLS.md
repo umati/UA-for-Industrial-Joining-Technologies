@@ -305,7 +305,7 @@ UA-for-Industrial-Joining-Technologies/
 | `console-client` | Python unit tests (tests/unit/), Bandit, Ruff, mypy |
 | `node-client` | JS unit (~152), ESLint, npm audit |
 | `test-client` | pytest collect-only (import check), Bandit, Ruff, mypy |
-| `csharp-client` | dotnet build + test (`--blame-hang 60s`) + NuGet CVE scan; phase1 unit/static (`IJT_PHASE1_ONLY=true`) + phase2 live tests against server (port 40451) |
+| `csharp-client` | dotnet restore (locked mode) + build (`-warnaserror`) + NuGet CVE scan + xUnit test (`--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
 | `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |
 

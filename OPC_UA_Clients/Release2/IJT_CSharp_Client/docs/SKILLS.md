@@ -306,6 +306,7 @@ Each client reserves its own server port so multiple clients can run tests in pa
 - `packages.lock.json` files are committed in git for deterministic restore.
 - `run_all_tests.py` uses locked-mode restore automatically when `packages.lock.json` files are present.
 - CI restore uses locked mode against committed lock files.
+- `ci-required.yml` runs the full C# gate: locked restore → build → NuGet CVE scan → xUnit tests → format check.
 
 ---
 

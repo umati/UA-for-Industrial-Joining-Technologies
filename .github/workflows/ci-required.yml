@@ -436,7 +436,7 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Release2 / IJT C# Client
-  #   dotnet build (warnaserror) + dotnet test (xUnit) + format check
+  #   dotnet build (warnaserror) + dotnet test (xUnit) + format check + vuln scan
   # ───────────────────────────────────────────────────────────────────────────
   csharp-client:
     name: "Release2 / IJT C# Client"
@@ -1154,7 +1154,7 @@ jobs:
               f"| **Web Client** | {lint_web()} | {fmt_step(web_mypy, 'mypy')} | {fmt_bandit(*web_ban)} | {fmt_npm(*web_npm)} |",
               f"| **Console Client** | {fmt_step(con_ruff, 'ruff')} | {fmt_step(con_mypy, 'mypy')} | {fmt_bandit(*con_ban)} | — |",
               f"| **Node Client** | {lint_nod()} | — | — | {fmt_npm(*nod_npm)} |",
-              f"| **C# Client** | {lint_cs()} | — | {fmt_step(cs_vuln, 'vuln scan')} | — |",
+              f"| **C# Client** | {lint_cs()} | — | {fmt_step(cs_vuln, 'nuget audit')} | — |",
               f"| **Test Client** | {fmt_step(tc_ruff, 'ruff')} | {fmt_step(tc_mypy, 'mypy')} | {fmt_bandit(*tc_ban)} | — |",
               "",
               "### 🏗️ Infrastructure",
