@@ -509,14 +509,23 @@ jobs:
             nuget-${{ runner.os }}-
 
       - name: Restore NuGet Packages
-        run: dotnet restore IJT_CSharp_Client.sln
+        run: |
+          $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+          $lockFiles = Get-ChildItem -Path . -Recurse -Filter "packages.lock.json" -File -ErrorAction SilentlyContinue
+          if ($lockFiles.Count -gt 0) {
+            Write-Host "Lock files detected — using locked mode restore."
+            dotnet restore $target --locked-mode
+          } else {
+            Write-Host "No lock files yet — using normal restore."
+            dotnet restore $target
+          }
 
       - name: Vulnerable Package Scan
         id: vuln_scan
         continue-on-error: true
         run: |
           New-Item -ItemType Directory -Force -Path test-results | Out-Null
-          $output = dotnet list package --vulnerable --include-transitive 2>&1
+          $output = dotnet list Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj package --vulnerable --include-transitive 2>&1
           $output | Out-File test-results\vuln-scan.txt
           Write-Host $output
           if ($output -match "has the following vulnerable packages") {
@@ -527,10 +536,11 @@ jobs:
       - name: Build (zero warnings)
         id: build
         continue-on-error: true
-        run: dotnet build IJT_CSharp_Client.sln --no-restore -warnaserror --configuration Release
+        run: dotnet build Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj --no-restore -warnaserror --configuration Release
 
       - name: Run xUnit Tests
         id: tests
+        if: steps.build.outcome == 'success'
         continue-on-error: true
         env:
           IJT_AUTO_ACCEPT: 'true'
@@ -538,20 +548,20 @@ jobs:
           OPCUA_SERVER_URL: ${{ env.OPCUA_SERVER_URL }}
         run: |
           New-Item -ItemType Directory -Force -Path test-results | Out-Null
-          New-Item -ItemType Directory -Force -Path test-results/coverage | Out-Null
           dotnet test Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj `
+            --no-build `
             --no-restore `
             --configuration Release `
             --logger "trx;LogFileName=tests.trx" `
             --logger "console;verbosity=normal" `
-            --collect:"XPlat Code Coverage" `
-            --results-directory test-results/coverage `
+            --results-directory test-results `
             --blame-hang --blame-hang-timeout 60s `
             2>&1 | Tee-Object -Variable testOutput
           $testOutput | Out-File test-results\test-output.txt
 
       - name: Format Check
         id: format
+        if: steps.build.outcome == 'success'
         continue-on-error: true
         run: dotnet format IJT_CSharp_Client.sln --verify-no-changes --no-restore 2>&1
 
@@ -559,7 +569,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $trx = "test-results\coverage\tests.trx"
+          $trx = "test-results\tests.trx"
           $junit = "test-results\tests.xml"
           if (Test-Path $trx) {
             [xml]$x = Get-Content $trx

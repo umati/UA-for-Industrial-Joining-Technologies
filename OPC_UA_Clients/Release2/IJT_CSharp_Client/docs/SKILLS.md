@@ -125,6 +125,9 @@ python run_all_tests.py --phase1
 # Phase 2 live tests only
 python run_all_tests.py --phase2
 
+# Optional: also clean bin/obj before+after run
+python run_all_tests.py --clean
+
 # Build only
 dotnet build IJT_CSharp_Client.sln
 
@@ -242,12 +245,14 @@ Always call `JoiningSystem.BrowseMethod(objectId, name, fallbackConstant)` — n
 | `OPCUA_SERVER_PORT` | `40451` | Alternative port-based server endpoint selection |
 | `OPCUA_SIMULATOR_EXE` | *(auto-discover)* | Explicit simulator binary path for fixture launch |
 | `IJT_PHASE1_ONLY` | `false` | Forces fixture to skip server auto-launch (unit test CI phase) |
+| `IJT_CSHARP_CLEAN` | `false` | If `true/1/yes`, `run_all_tests.py` removes `bin/` and `obj/` before and after run |
 
 ---
 
 ## Live Test Stability Guards
 
 - `run_all_tests.py` uses `--blame-hang --blame-hang-timeout 60s` in both unit and live dotnet test runs.
+- `run_all_tests.py` avoids duplicate execution in full runs: phase1 uses `FullyQualifiedName!~LiveIntegration`; phase2 runs `FullyQualifiedName~LiveIntegration`.
 - `LiveIntegrationTests` wraps synchronous OPC UA calls in `Task.Run` + hard timeout guards.
 - On timeout in environment-sensitive live paths, tests use explicit `Skip` messages instead of hanging.
 - `JoiningSystem.DisposeAsync` cleanup is timeout-bounded (8s management dispose, 10s session close).
@@ -292,6 +297,15 @@ Each client reserves its own server port so multiple clients can run tests in pa
 - Kept separate so installing test tools never alters the production environment
 
 **Override:** Set `OPCUA_SERVER_URL=opc.tcp://myserver:40451` to point at any server; auto-launch is skipped entirely.
+
+---
+
+## Restore Determinism
+
+- `Directory.Build.props` enables `RestorePackagesWithLockFile=true` for this project tree.
+- `packages.lock.json` files are committed in git for deterministic restore.
+- `run_all_tests.py` uses locked-mode restore automatically when `packages.lock.json` files are present.
+- CI restore uses locked mode against committed lock files.
 
 ---
 

@@ -13,6 +13,7 @@ Environment variables:
     OPCUA_SERVER_PORT        Alt: port only — constructs opc.tcp://localhost:PORT
     OPCUA_SIMULATOR_EXE      Path to OPC UA simulator EXE (auto-launched if server unreachable)
     SKIP_DOTNET_RESTORE=1    Skip `dotnet restore` (deps already restored in CI)
+    IJT_CSHARP_CLEAN=1       Remove build artifacts (`bin/`, `obj/`) before and after run
 
 Flags:
     --junit-xml=PATH         Write combined JUnit XML (default: test-results/run_all_tests.xml)
@@ -46,6 +47,8 @@ _RESULTS_DIR = _PROJECT_DIR / "test-results"
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40451"
 _MIN_DOTNET_MAJOR = 10
 _COVERAGE_THRESHOLD = 80.0
+_PHASE1_TEST_FILTER = "FullyQualifiedName!~LiveIntegration"
+_PHASE2_TEST_FILTER = "FullyQualifiedName~LiveIntegration"
 
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
@@ -335,7 +338,11 @@ def _check_prerequisites() -> bool:
 def _step_restore() -> StepResult:
     label = "dotnet restore"
     t0 = time.monotonic()
-    rc, _ = _run(["dotnet", "restore", str(_SLN)])
+    lock_files = list(_PROJECT_DIR.rglob("packages.lock.json"))
+    cmd = ["dotnet", "restore", str(_TEST_PROJ)]
+    if lock_files:
+        cmd.append("--locked-mode")
+    rc, _ = _run(cmd)
     dur = time.monotonic() - t0
     if rc != 0:
         return StepResult(label, "PHASE 1", "FAIL", f"exit {rc}", dur)
@@ -447,10 +454,13 @@ def _step_test_unit(verbose: bool = False) -> StepResult:
             "dotnet",
             "test",
             str(_TEST_PROJ),
+            "--no-build",
             "--no-restore",
             "--configuration",
             "Release",
             *verbosity,
+            "--filter",
+            _PHASE1_TEST_FILTER,
             "--logger",
             "trx;LogFileName=tests.trx",
             "--results-directory",
@@ -588,10 +598,13 @@ def _step_live_tests(server_url: str, verbose: bool = False) -> StepResult:
             "dotnet",
             "test",
             str(_TEST_PROJ),
+            "--no-build",
             "--no-restore",
             "--configuration",
             "Release",
             *verbosity,
+            "--filter",
+            _PHASE2_TEST_FILTER,
             "--logger",
             "trx;LogFileName=live-tests.trx",
             "--results-directory",
@@ -641,13 +654,23 @@ def _parse_args() -> argparse.Namespace:
         metavar="PATH",
         help="Combined JUnit XML output path (default: test-results/run_all_tests.xml)",
     )
+    p.add_argument(
+        "--clean",
+        action="store_true",
+        help="Clean build artifacts (`bin/`, `obj/`) before and after run",
+    )
     return p.parse_args()
 
 
 def main() -> int:
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
-    _cleanup_caches(_PROJECT_DIR)  # pre-run: clear stale caches from interrupted runs
     args = _parse_args()
+    clean_build_artifacts = args.clean or (
+        os.environ.get("IJT_CSHARP_CLEAN", "0").strip().lower() in {"1", "true", "yes"}
+    )
+    _cleanup_caches(
+        _PROJECT_DIR, include_build_artifacts=clean_build_artifacts
+    )  # pre-run: clear stale caches from interrupted runs
 
     run_phase1 = not args.phase2
     run_phase2 = not args.phase1
@@ -765,7 +788,7 @@ def main() -> int:
 
     _write_junit_xml(_PROJECT_DIR / args.junit_xml, results)
 
-    _cleanup_caches(_PROJECT_DIR)
+    _cleanup_caches(_PROJECT_DIR, include_build_artifacts=clean_build_artifacts)
     return 1 if any_fail else 0
 
 
@@ -785,7 +808,7 @@ def _force_rmtree(path: Path) -> None:
     shutil.rmtree(path, onexc=_on_exc)
 
 
-def _cleanup_caches(root: Path) -> None:
+def _cleanup_caches(root: Path, include_build_artifacts: bool = False) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
     _SKIP = {
         "node_modules",
@@ -798,9 +821,9 @@ def _cleanup_caches(root: Path) -> None:
         ".pytest_cache",
         ".ruff_cache",
         ".mypy_cache",
-        "bin",
-        "obj",
     }
+    if include_build_artifacts:
+        _CACHE_DIRS.update({"bin", "obj"})
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [
             d

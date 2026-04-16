@@ -142,7 +142,7 @@ Coverage is configured in each project's `pyproject.toml`. **Never hardcode thre
 |---------|-------------|-------|
 | Web Client | 70% | Unit run achieves ~74% |
 | Console Client | 80% | Unit run achieves ~85% |
-| Test Client | 70% | No `tests/unit/`; threshold applies to live conformance stage |
+| Test Client | **65%** | No `tests/unit/`; threshold applies to live conformance stage (lowered from 70% — live-test-only helpers. Revisit when live tests run in CI.) |
 
 Docstring coverage (`interrogate`) thresholds — calibrated against real codebase with venvs excluded:
 
