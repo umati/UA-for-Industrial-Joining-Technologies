@@ -45,19 +45,29 @@ IJT_Console_Client/
     ├── conftest.py                       # shared fixtures (top-level)
     ├── unit/
     │   ├── conftest.py
-    │   ├── test_setup_client.py          # setup_client.py launcher unit tests (86 tests)
+    │   ├── test_setup_client.py              # setup_client.py launcher — pyfakefs for all FS ops
     │   ├── test_client_config_and_main.py
     │   ├── test_method_caller.py
     │   ├── test_result_event_handler.py
     │   ├── test_serialize_data.py
     │   ├── test_utils.py
-    │   ├── test_event_handler_extended.py  # bytes/str EventId, handle_queue, ws teardown paths
-    │   ├── test_event_types_unit.py         # get_event_types happy + exception re-raise
-    │   ├── test_main_extended.py            # run_method_call branches, run_client, main() errors
-    │   ├── test_opcua_client_extended.py    # connect retry, subscribe, run_forever, cleanup variants
-    │   ├── test_serialize_data_extended.py  # _json_dumps stdlib fallback, __slots__, serialize_tuple
-    │   ├── test_utils_extended.py           # _to_json_str/bytes, log_* helpers, nodeid_to_str
-    │   └── ... (24 total unit test files)
+    │   ├── test_event_handler.py
+    │   ├── test_opcua_client.py
+    │   ├── test_ijt_logger.py
+    │   ├── test_call_structure.py
+    │   ├── test_import_paths.py
+    │   ├── test_independence.py
+    │   ├── test_repo_hygiene.py
+    │   ├── test_resource_management.py
+    │   ├── test_security.py
+    │   ├── test_static_analysis.py
+    │   ├── test_wire_format_contracts.py
+    │   ├── test_event_handler_extended.py    # bytes/str EventId, handle_queue, ws teardown paths
+    │   ├── test_event_types_unit.py           # get_event_types happy + exception re-raise
+    │   ├── test_main_extended.py              # run_method_call branches, run_client, main() errors
+    │   ├── test_opcua_client_extended.py      # connect retry, subscribe, run_forever, cleanup variants
+    │   ├── test_serialize_data_extended.py    # _json_dumps stdlib fallback, __slots__, serialize_tuple
+    │   └── test_utils_extended.py             # _to_json_str/bytes, log_* helpers, nodeid_to_str
     └── live/
         ├── conftest.py                   # auto-starts OPC UA server; pytest.fail() if unreachable
         └── test_opcua_live_console.py    # live OPC UA tests (xfail for ProductInstanceUri)

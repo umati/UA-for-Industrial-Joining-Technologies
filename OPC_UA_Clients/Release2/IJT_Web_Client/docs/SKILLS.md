@@ -10,7 +10,6 @@
 | **Purpose** | Reference OPC UA IJT client: Python WebSocket backend + Node.js browser frontend |
 | **Stack** | Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vite/Vitest, ESLint |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
-| **Test baseline** | 310 Python / 0 skip, 229 JS, ESLint clean |
 | **Docker** | Container healthy on HTTP:3000 + WS:8001 (non-root `appuser`) |
 
 ---
@@ -388,7 +387,7 @@ Expected results:
 ```bash
 python run_all_tests.py
 ```
-Expected: ~310 Python unit pass + 13 integration pass, 162 JS pass, 0 lint errors.
+Runs Python unit + integration tests, JS unit tests, ESLint, Bandit, mypy, pip-audit.
 (Live OPC UA tests in `tests/python/live/test_opcua_methods.py` require a running server on `opc.tcp://localhost:40451`.)
 
 ---

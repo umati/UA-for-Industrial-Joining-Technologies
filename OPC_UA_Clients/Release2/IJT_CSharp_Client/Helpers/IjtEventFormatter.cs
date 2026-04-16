@@ -40,14 +40,22 @@ public static class IjtEventFormatter
         {
             sb.AppendLine($"  {"AssociatedEntities",-28} ({associatedEntities.Length} entities)");
             foreach (var entity in associatedEntities)
-                sb.AppendLine($"    EntityId={entity.EntityId}  Name={entity.Name}  Type={entity.EntityType}  External={entity.IsExternal}");
+                sb.AppendLine($"    [{IjtEntityTypes.Resolve(entity.EntityType),-20}] Id={entity.EntityId}  Name={entity.Name}  External={entity.IsExternal}");
         }
 
         if (reportedValues?.Length > 0)
         {
             sb.AppendLine($"  {"ReportedValues",-28} ({reportedValues.Length} values)");
             foreach (var r in reportedValues)
-                sb.AppendLine($"    {r.Name,-24} Value={r.CurrentValue}  Unit={r.EngineeringUnits?.DisplayName?.Text}  Low={r.LowLimit}  High={r.HighLimit}");
+            {
+                var val = r.CurrentValue.Value is double d ? d
+                        : r.CurrentValue.Value is float f ? (double)f
+                        : r.CurrentValue.Value is int i ? (double)i
+                        : r.CurrentValue.Value is long l ? (double)l
+                        : (double?)null;
+                var valStr = val.HasValue ? $"{val.Value,10:F3}" : $"{r.CurrentValue.Value,10}";
+                sb.AppendLine($"    {r.Name,-24} {valStr}  {r.EngineeringUnits?.DisplayName?.Text,-10}  Low={r.LowLimit}  High={r.HighLimit}");
+            }
         }
 
         return sb.ToString();

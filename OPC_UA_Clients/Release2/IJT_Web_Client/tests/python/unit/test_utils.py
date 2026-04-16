@@ -14,7 +14,7 @@ from datetime import datetime
 import pytest
 
 try:
-    import pytz  # noqa: E402
+    import pytz  # type: ignore[import-untyped]  # noqa: E402
     from asyncua import ua  # noqa: E402
 
     HAS_ASYNCUA = True

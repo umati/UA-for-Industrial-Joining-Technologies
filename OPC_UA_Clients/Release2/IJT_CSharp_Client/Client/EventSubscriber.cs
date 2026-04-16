@@ -77,6 +77,9 @@ public sealed class EventSubscriber : IDisposable
         public IReadOnlyList<KeyValuePair<string, object?>> AllFields { get; init; } = [];
     }
 
+    /// <summary>True when the event subscription is active.</summary>
+    public bool IsSubscribed => _eventSubscription != null;
+
     // ── Construction ──────────────────────────────────────────────────────────
 
     /// <summary>

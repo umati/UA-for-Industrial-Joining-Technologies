@@ -2,6 +2,7 @@
 
 using System.Text;
 using Opc.Ua;
+using UAModel.IJTBase;
 using UAModel.MachineryResult;
 
 namespace IJT_CSharp_Client.Helpers;
@@ -121,8 +122,62 @@ public static class IjtResultFormatter
             sb.AppendLine("    (no content)");
             return;
         }
-        for (int i = 0; i < content.Count; i++)
-            sb.AppendLine($"    [{i}] {content[i]}");
+        bool decoded = false;
+        foreach (var variant in content)
+        {
+            var raw = variant.Value is ExtensionObject eo ? eo.Body : variant.Value;
+            if (raw is JoiningResultDataType jr)
+            {
+                FormatJoiningResult(sb, jr);
+                decoded = true;
+            }
+        }
+        if (!decoded)
+        {
+            for (int i = 0; i < content.Count; i++)
+                sb.AppendLine($"    [{i}] {content[i]}");
+        }
+    }
+
+    private static void FormatJoiningResult(StringBuilder sb, JoiningResultDataType jr)
+    {
+        var mask = (JoiningResultDataTypeFields)jr.EncodingMask;
+
+        var ovs = jr.OverallResultValues;
+        sb.AppendLine($"    OverallResultValues ({ovs?.Count ?? 0}):");
+        if (ovs?.Count > 0)
+            foreach (var rv in ovs)
+                FormatResultValue(sb, rv, indent: 6);
+
+        if ((mask & JoiningResultDataTypeFields.StepResults) != 0 && jr.StepResults?.Count > 0)
+        {
+            sb.AppendLine($"    StepResults ({jr.StepResults.Count}):");
+            foreach (var step in jr.StepResults)
+            {
+                sb.AppendLine($"      Step {step.StepResultId ?? "?",-12} [{step.ResultEvaluation}]  {step.Name}");
+                if (step.StepResultValues?.Count > 0)
+                    foreach (var rv in step.StepResultValues)
+                        FormatResultValue(sb, rv, indent: 8);
+            }
+        }
+
+        if ((mask & JoiningResultDataTypeFields.Errors) != 0 && jr.Errors?.Count > 0)
+        {
+            sb.AppendLine($"    Errors ({jr.Errors.Count}):");
+            foreach (var err in jr.Errors)
+                sb.AppendLine($"      ErrorId={err.ErrorId}  Type={err.ErrorType}  {err.ErrorMessage?.Text}");
+        }
+
+        if ((mask & JoiningResultDataTypeFields.FailureReason) != 0 && jr.FailureReason != 0)
+            sb.AppendLine($"    FailureReason            {jr.FailureReason}");
+    }
+
+    private static void FormatResultValue(StringBuilder sb, ResultValueDataType rv, int indent)
+    {
+        var pad = new string(' ', indent);
+        var units = rv.EngineeringUnits?.DisplayName?.Text ?? "";
+        sb.AppendLine(
+            $"{pad}{rv.Name ?? rv.ValueId ?? "?",-24} {rv.MeasuredValue,10:F3}  {units,-10} [{rv.ResultEvaluation}]");
     }
 
     private static void AppendField(StringBuilder sb, string name, string? value, int indent = 2)

@@ -24,8 +24,9 @@ dotnet test --filter "FullyQualifiedName!~LiveIntegration"
 
 | File | What it tests |
 |---|---|
-| `Helpers/IjtResultFormatterTests.cs` | Result payload formatting (all 33 ResultMetaData fields) |
+| `Helpers/IjtResultFormatterTests.cs` | Result payload formatting (all 33 ResultMetaData fields, JoiningResultDataType decode, OverallResultValues/StepResults/Errors) |
 | `Helpers/IjtEventFormatterTests.cs`  | JoiningSystemEvent formatting (tool events, alarms) |
+| `Helpers/IjtEntityTypesTests.cs`     | EntityType 42-value lookup table (all spec values, Resolve(), PrintTable()) |
 | `Helpers/IjtFileLoggerTests.cs`      | Log file creation and overwrite behaviour |
 | `Helpers/IjtJsonSerializerTests.cs`  | JSON serialization of OPC UA types |
 | `Configuration/ClientConfigTests.cs` | ClientConfig env-var parsing |
@@ -47,4 +48,3 @@ dotnet test --filter "FullyQualifiedName!~LiveIntegration"
 - Unit tests (`!~LiveIntegration`) need **no live OPC UA server**
 - Live integration tests (`LiveIntegrationTests`, `LiveIntegrationDetailedTests`) skip automatically without a server
 - Mock layer uses `Mock<IJoiningSystem>` — the `IJoiningSystem` interface, NOT `ISession` (OPC UA Core, not IJT)
-- **420 unit tests** · 0 failed · 0 skipped

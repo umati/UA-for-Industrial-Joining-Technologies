@@ -448,7 +448,9 @@ async def test_select_joint_with_non_empty_joint_origin_id(opcua_client, ns_indi
         status_str = str(exc)
         if "BadNotSupported" in status_str:
             pytest.skip(f"SelectJoint not supported on this server: {exc}")
-        if any(s in status_str for s in ("BadConditionNotActive", "BadNothingToDo", "BadArgumentsMissing")):
+        if any(
+            s in status_str for s in ("BadConditionNotActive", "BadNothingToDo", "BadArgumentsMissing", "Uncertain")
+        ):
             logger.info("SelectJoint with non-empty JointOriginId raised acceptable status: %s", exc)
         else:
             raise

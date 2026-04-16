@@ -153,7 +153,15 @@ IJT_Test_Client/
 │   └── data_types/
 ├── joining_process/              ← JoiningProcessManagement structure + methods
 ├── joint/                        ← JointManagement structure + methods
-└── conformance/                  ← Conformance Unit tests (asset, result, event, joining process, joint)
+├── conformance/                  ← Conformance Unit tests (asset, result, event, joining process, joint)
+└── tests/
+    └── unit/                     ← Pure-logic helper tests (no OPC UA server needed)
+        ├── conftest.py           ← SimpleNamespace fixtures for validator inputs
+        ├── test_result_validator.py
+        ├── test_event_validator.py
+        ├── test_cu_registry.py
+        ├── test_namespaces.py
+        └── test_profile_loader.py
 ```
 
 ### Key Fixtures (conftest.py)
@@ -168,6 +176,8 @@ IJT_Test_Client/
 | `simulate_events_folder` | session | `Simulations/SimulateEventsAndConditions/` node |
 | `opcua_client` | **module** | One connection shared across all tests in a file — avoids per-test OPC UA handshake overhead |
 | `subscription_client` | **function** | Separate client for event subscriptions (function-scoped for event isolation) |
+
+> **Note**: `tests/unit/` fixtures use `SimpleNamespace` — no OPC UA connection required. All unit tests run offline and collect instantly.
 
 ---
 

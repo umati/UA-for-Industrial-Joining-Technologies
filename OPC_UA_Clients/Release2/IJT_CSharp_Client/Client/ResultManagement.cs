@@ -25,6 +25,9 @@ public sealed class ResultManagement : IDisposable
     /// <summary>Creates a new ResultManagement facade backed by <paramref name="js"/>.</summary>
     public ResultManagement(IJoiningSystem js) => _js = js;
 
+    /// <summary>True when the Result variable data-change subscription is active.</summary>
+    public bool IsResultVarSubscribed => _resultVarSubscription != null;
+
     /// <summary>Clears the cached ResultManagement node reference so the next operation re-browses the address space.</summary>
     public void InvalidateNodeCache() => _rmNodeId = null;
 

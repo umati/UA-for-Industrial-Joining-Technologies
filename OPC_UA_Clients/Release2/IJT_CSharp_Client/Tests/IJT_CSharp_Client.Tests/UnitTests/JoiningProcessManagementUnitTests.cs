@@ -164,6 +164,10 @@ public sealed class JoiningProcessManagementUnitTests
         var ext = Assert.IsType<ExtensionObject>(capturedArgs[1]);
         var jpId = Assert.IsType<UAModel.IJTBase.JoiningProcessIdentificationDataType>(ext.Body);
         Assert.Equal("JP-007", jpId.JoiningProcessId);
+        Assert.True(
+            (jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessId) != 0,
+            "EncodingMask must include JoiningProcessId bit so it is written to the OPC UA binary stream — " +
+            "missing this bit causes BadArgumentsMissing on real hardware");
     }
 
     [Fact]
@@ -341,5 +345,107 @@ public sealed class JoiningProcessManagementUnitTests
         });
 
         Assert.Null(ex);
+    }
+}
+
+// ── EncodingMask correctness ───────────────────────────────────────────────
+
+public sealed class JoiningProcessIdentificationEncodingMaskTests
+{
+    [Fact]
+    public void SelectJoiningProcess_WithId_EncodingMaskIncludesJoiningProcessIdBit()
+    {
+        var session = MockSessionBuilder.Create();
+        object[]? capturedArgs = null;
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
+            .Returns(new List<object>());
+        using var jpm = new JoiningProcessManagement(session.Object);
+
+        jpm.SelectJoiningProcess("JP-007");
+
+        var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
+        var jpId = Assert.IsType<UAModel.IJTBase.JoiningProcessIdentificationDataType>(ext.Body);
+        Assert.True(
+            (jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessId) != 0,
+            "JoiningProcessId bit must be in EncodingMask or the server receives an empty struct");
+    }
+
+    [Fact]
+    public void SelectJoiningProcess_WithAllOptionalParams_AllBitsSet()
+    {
+        var session = MockSessionBuilder.Create();
+        object[]? capturedArgs = null;
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
+            .Returns(new List<object>());
+        using var jpm = new JoiningProcessManagement(session.Object);
+
+        jpm.SelectJoiningProcess("JP-001",
+            joiningProcessOriginId: "ORIGIN-SYS",
+            selectionName: "TorqueProgram_A");
+
+        var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
+        var jpId = Assert.IsType<UAModel.IJTBase.JoiningProcessIdentificationDataType>(ext.Body);
+        Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessId) != 0);
+        Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessOriginId) != 0);
+        Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.SelectionName) != 0);
+    }
+
+    [Fact]
+    public void SelectJoiningProcess_WithEmptyOptionals_EmptyFieldsNotInMask()
+    {
+        var session = MockSessionBuilder.Create();
+        object[]? capturedArgs = null;
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
+            .Returns(new List<object>());
+        using var jpm = new JoiningProcessManagement(session.Object);
+
+        jpm.SelectJoiningProcess("JP-001");
+
+        var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
+        var jpId = Assert.IsType<UAModel.IJTBase.JoiningProcessIdentificationDataType>(ext.Body);
+        Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessId) != 0);
+        Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessOriginId) == 0u,
+            "Empty JoiningProcessOriginId must not be encoded");
+        Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.SelectionName) == 0u,
+            "Empty SelectionName must not be encoded");
+    }
+
+    [Fact]
+    public void JoiningProcessIdentificationDataType_Create_WithId_MaskIncludesIdBit()
+    {
+        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(joiningProcessId: "JP-100");
+
+        Assert.Equal("JP-100", jpId.JoiningProcessId);
+        Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessId) != 0);
+        Assert.Equal(0u, jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessOriginId);
+        Assert.Equal(0u, jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.SelectionName);
+    }
+
+    [Fact]
+    public void JoiningProcessIdentificationDataType_Create_AllEmpty_MaskIsZero()
+    {
+        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create();
+
+        Assert.True(jpId.EncodingMask == 0u,
+            "Empty Create() must produce EncodingMask=0 — all fields absent");
+    }
+
+    [Fact]
+    public void JoiningProcessIdentificationDataType_Create_AllFields_AllBitsSet()
+    {
+        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+            joiningProcessId: "JP-200",
+            joiningProcessOriginId: "ORIGIN-001",
+            selectionName: "TorqueProgram_B");
+
+        Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessId) != 0);
+        Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessOriginId) != 0);
+        Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.SelectionName) != 0);
     }
 }

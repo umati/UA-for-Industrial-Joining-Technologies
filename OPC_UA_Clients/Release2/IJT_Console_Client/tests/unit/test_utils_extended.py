@@ -13,9 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 _ = pytest.importorskip("asyncua", reason="asyncua not installed")
-_ = pytest.importorskip("pytz", reason="pytz not installed")
 
-import pytz
 from asyncua import ua
 
 from utils import (
@@ -203,12 +201,12 @@ def _make_result_event():
     """Build a minimal mock event suitable for log_result_event_details."""
     event = MagicMock()
     event.EventId = b"evt-bytes-001"
-    event.Time = datetime(2025, 6, 1, 12, 0, 5, tzinfo=pytz.utc)
+    event.Time = datetime(2025, 6, 1, 12, 0, 5, tzinfo=timezone.utc)
     event.Message.Text = "Tightening OK"
 
-    start = datetime(2025, 6, 1, 12, 0, 0, tzinfo=pytz.utc)
+    start = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
     end = datetime(2025, 6, 1, 12, 0, 4)  # naive — triggers tzinfo branch
-    creation = datetime(2025, 6, 1, 12, 0, 4, 500000, tzinfo=pytz.utc)
+    creation = datetime(2025, 6, 1, 12, 0, 4, 500000, tzinfo=timezone.utc)
 
     times_mock = MagicMock()
     times_mock.StartTime = start
@@ -229,7 +227,7 @@ def _make_result_event():
 async def test_log_result_event_details_happy_path():
     """log_result_event_details returns the decoded EventId string."""
     event = _make_result_event()
-    client_time = datetime(2025, 6, 1, 12, 0, 6, tzinfo=pytz.utc)
+    client_time = datetime(2025, 6, 1, 12, 0, 6, tzinfo=timezone.utc)
 
     result = await log_result_event_details(event, "opc.tcp://localhost:4840", client_time)
     assert result == "evt-bytes-001"
@@ -240,7 +238,7 @@ async def test_log_result_event_details_no_end_time():
     """log_result_event_details handles missing EndTime gracefully."""
     event = _make_result_event()
     event.Result.ResultMetaData.ProcessingTimes.EndTime = None
-    client_time = datetime(2025, 6, 1, 12, 0, 0, tzinfo=pytz.utc)
+    client_time = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
 
     result = await log_result_event_details(event, "opc.tcp://localhost:4840", client_time)
     assert result == "evt-bytes-001"
@@ -251,10 +249,10 @@ async def test_log_result_event_details_no_meta():
     """log_result_event_details handles missing ResultMetaData gracefully."""
     event = MagicMock()
     event.EventId = b"no-meta"
-    event.Time = datetime(2025, 1, 1, tzinfo=pytz.utc)
+    event.Time = datetime(2025, 1, 1, tzinfo=timezone.utc)
     event.Message.Text = "msg"
     event.Result = MagicMock(spec=[])  # no ResultMetaData attr
-    client_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=pytz.utc)
+    client_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
     result = await log_result_event_details(event, "opc.tcp://localhost:4840", client_time)
     assert result == "no-meta"
@@ -267,7 +265,7 @@ async def test_log_result_event_details_exception_returns_unknown():
     # Make event.EventId raise when .decode() is called on a non-bytes value
     event.EventId = MagicMock()
     event.EventId.decode = MagicMock(side_effect=RuntimeError("boom"))
-    client_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=pytz.utc)
+    client_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
     result = await log_result_event_details(event, "opc.tcp://localhost:4840", client_time)
     assert result == "unknown"
@@ -285,8 +283,8 @@ def _make_mock_joining_event(*, with_local_time=True, entities=None, reported_va
     event.SourceName = "Source"
     event.SourceNode = MagicMock()
     event.Severity = 500
-    event.Time = datetime(2025, 6, 1, 12, 0, 0, tzinfo=pytz.utc)
-    event.ReceiveTime = datetime(2025, 6, 1, 12, 0, 1, tzinfo=pytz.utc)
+    event.Time = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    event.ReceiveTime = datetime(2025, 6, 1, 12, 0, 1, tzinfo=timezone.utc)
 
     if with_local_time:
         event.LocalTime.Offset = 60

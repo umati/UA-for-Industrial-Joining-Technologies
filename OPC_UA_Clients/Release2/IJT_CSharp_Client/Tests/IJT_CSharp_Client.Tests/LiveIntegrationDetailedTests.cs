@@ -778,12 +778,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
 
         var entities = new[]
         {
-            new ExtensionObject(new UAModel.IJTBase.EntityDataType
-            {
-                EntityId = "urn:live-test:nut-001",
-                EntityType = 1,
-                IsExternal = false,
-            })
+            // EntityDataType.Create sets EncodingMask correctly so all supplied optional
+            // fields (including IsExternal=false) are present in the binary stream.
+            new ExtensionObject(UAModel.IJTBase.EntityDataType.Create(
+                "urn:live-test:nut-001", entityType: 1, isExternal: false)),
         };
 
         var sendEx = await Record.ExceptionAsync(() =>
@@ -885,12 +883,9 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
         Skip.IfNot(!methodId.IsNullNodeId, "SelectJoiningProcess method not found; skipping");
 
-        var jpId = new UAModel.IJTBase.JoiningProcessIdentificationDataType
-        {
-            JoiningProcessId = "TEST-JP-LIVE-001",
-            JoiningProcessOriginId = "",
-            SelectionName = "live-integration-test",
-        };
+        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+            joiningProcessId: "TEST-JP-LIVE-001",
+            selectionName: "live-integration-test");
         var outputs = await WithTimeout(
             () => session.CallMethod(jpmNode, methodId, string.Empty, new ExtensionObject(jpId)),
             15, "SelectJoiningProcess").ConfigureAwait(false);
@@ -956,13 +951,8 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             15, "GetJoiningProcessList").ConfigureAwait(false);
         Skip.IfNot(listOutputs.Count >= 1, "No outputs from GetJoiningProcessList; skipping round-trip");
 
-        // SelectJoiningProcess with empty ID is accepted by the simulator — not an error
-        var jpId = new UAModel.IJTBase.JoiningProcessIdentificationDataType
-        {
-            JoiningProcessId = string.Empty,
-            JoiningProcessOriginId = string.Empty,
-            SelectionName = string.Empty,
-        };
+        // All fields empty: Create() produces EncodingMask=0 which is correct for "no criteria provided".
+        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create();
         var selectEx = await Record.ExceptionAsync(() =>
             WithTimeout(() => session.CallMethod(jpmNode, selectMethodId, string.Empty, new ExtensionObject(jpId)),
                 15, "SelectJoiningProcess")).ConfigureAwait(false);

@@ -10,7 +10,14 @@ using Xunit;
 namespace IJT_CSharp_Client.Tests.Client;
 
 /// <summary>
-/// Verifies the exact manager-method dispatch performed by each Program.cs menu item (0–14).
+/// Verifies the exact manager-method dispatch performed by each Program.cs menu item (0–18).
+///
+/// Menu layout (current):
+///   SUBSCRIPTIONS (toggle): 1=IJT events, 2=Result variable, 3=Asset variables
+///   RESULT MANAGEMENT: 4=GetLatestResult, 5=GetResultById
+///   ASSET MANAGEMENT: 6=EnableAsset, 7=SendTextIdentifiers, 8=SendIdentifiers, 9=GetIdentifiers, 10=ResetIdentifiers
+///   JOINING PROCESS: 11=GetJoiningProcessList, 12=SelectJoiningProcess, 13=GetSelectedJoiningProgram
+///   JOINT MANAGEMENT: 14=GetJointList, 15=GetJoint, 16=SelectJoint, 17=DeleteJoint, 18=SendJoint
 ///
 /// Program.cs creates four managers from a single <see cref="IJoiningSystem"/> and routes
 /// console commands to them.  These tests exercise the same call site with a
@@ -149,11 +156,11 @@ public sealed class MenuDispatchTests
         sut.Dispose();
     }
 
-    // ── Menu item 2 — EventSubscriber.Unsubscribe() ──────────────────────────
-    // Program.cs: eventSub.Unsubscribe(); _subscribed = false;
+    // ── Menu item 1 (unsubscribe path) — EventSubscriber.Unsubscribe() ─────────
+    // Program.cs case "1" (when already subscribed): eventSub.Unsubscribe();
 
     [Fact]
-    public void MenuItem2_Unsubscribe_WhenNotSubscribed_IsNoOp_DoesNotThrow()
+    public void MenuItem1_Unsubscribe_WhenNotSubscribed_IsNoOp_DoesNotThrow()
     {
         var sut = new EventSubscriber(EventMock().Object);
         var ex = Record.Exception(() => sut.Unsubscribe());
@@ -161,7 +168,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem2_Unsubscribe_CalledTwice_DoesNotThrow()
+    public void MenuItem1_Unsubscribe_CalledTwice_DoesNotThrow()
     {
         var sut = new EventSubscriber(EventMock().Object);
         sut.Unsubscribe();
@@ -169,11 +176,11 @@ public sealed class MenuDispatchTests
         Assert.Null(ex);
     }
 
-    // ── Menu item 3 — resultMgmt.GetLatestResult() ────────────────────────────
-    // Program.cs: resultMgmt.GetLatestResult();
+    // ── Menu item 4 — resultMgmt.GetLatestResult() ────────────────────────────
+    // Program.cs case "4": resultMgmt.GetLatestResult();
 
     [Fact]
-    public void MenuItem3_GetLatestResult_WhenNodesFound_CallsCallMethodOnce()
+    public void MenuItem4_GetLatestResult_WhenNodesFound_CallsCallMethodOnce()
     {
         var mock = HappyPathMock();
         new ResultManagement(mock.Object).GetLatestResult();
@@ -183,7 +190,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem3_GetLatestResult_WhenNodesNull_DoesNotThrow_AndSkipsCallMethod()
+    public void MenuItem4_GetLatestResult_WhenNodesNull_DoesNotThrow_AndSkipsCallMethod()
     {
         var mock = NullNodeMock();
         var ex = Record.Exception(() => new ResultManagement(mock.Object).GetLatestResult());
@@ -194,7 +201,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem3_GetLatestResult_WhenCallMethodThrows_DoesNotPropagate()
+    public void MenuItem4_GetLatestResult_WhenCallMethodThrows_DoesNotPropagate()
     {
         var mock = HappyPathMock();
         mock.Setup(s => s.CallMethod(
@@ -205,11 +212,11 @@ public sealed class MenuDispatchTests
         Assert.Null(ex);
     }
 
-    // ── Menu item 4 — resultMgmt.GetResultById(rid) ───────────────────────────
-    // Program.cs: var rid = Prompt("Result ID"); if (rid != null) resultMgmt.GetResultById(rid);
+    // ── Menu item 5 — resultMgmt.GetResultById(rid) ───────────────────────────
+    // Program.cs case "5": var rid = Prompt("Result ID"); if (rid != null) resultMgmt.GetResultById(rid);
 
     [Fact]
-    public void MenuItem4_GetResultById_WithNonNullId_WhenNodesFound_CallsCallMethod()
+    public void MenuItem5_GetResultById_WithNonNullId_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
         const string rid = "RES-2024-001";
@@ -221,7 +228,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem4_GetResultById_WithNullId_SkipsDispatch()
+    public void MenuItem5_GetResultById_WithNullId_SkipsDispatch()
     {
         // Prompt returning null causes Program.cs to break without calling the manager
         var mock = HappyPathMock();
@@ -233,7 +240,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem4_GetResultById_WhenNodesNull_DoesNotThrow()
+    public void MenuItem5_GetResultById_WhenNodesNull_DoesNotThrow()
     {
         var ex = Record.Exception(() =>
             new ResultManagement(NullNodeMock().Object).GetResultById("RES-001"));
@@ -241,7 +248,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem4_GetResultById_WhenCallMethodThrows_DoesNotPropagate()
+    public void MenuItem5_GetResultById_WhenCallMethodThrows_DoesNotPropagate()
     {
         var mock = HappyPathMock();
         mock.Setup(s => s.CallMethod(
@@ -253,11 +260,11 @@ public sealed class MenuDispatchTests
         Assert.Null(ex);
     }
 
-    // ── Menu item 5 — resultMgmt.SubscribeResultVariable() ───────────────────
-    // Program.cs: resultMgmt.SubscribeResultVariable();
+    // ── Menu item 2 (subscribe path) — resultMgmt.SubscribeResultVariable() ────
+    // Program.cs case "2" (when not yet subscribed): resultMgmt.SubscribeResultVariable();
 
     [Fact]
-    public void MenuItem5_SubscribeResultVariable_WhenResultsChildNotFound_ReturnsEarly_DoesNotThrow()
+    public void MenuItem2_SubscribeResultVariable_WhenResultsChildNotFound_ReturnsEarly_DoesNotThrow()
     {
         // BrowseChild always returns Null → "Results" folder not found → early return
         var mock = HappyPathMock();
@@ -274,7 +281,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem5_SubscribeResultVariable_WhenNodesNull_DoesNotThrow()
+    public void MenuItem2_SubscribeResultVariable_WhenNodesNull_DoesNotThrow()
     {
         var ex = Record.Exception(() =>
             new ResultManagement(NullNodeMock().Object).SubscribeResultVariable());
@@ -282,7 +289,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem5_SubscribeResultVariable_CalledTwice_SecondIsNoOp()
+    public void MenuItem2_SubscribeResultVariable_CalledTwice_SecondIsNoOp()
     {
         // First call hits early return (nodes null); _resultVarSubscription stays null
         // Second call must also be harmless
@@ -388,11 +395,11 @@ public sealed class MenuDispatchTests
         Assert.Null(ex);
     }
 
-    // ── Menu item 8 — assetMgmt.GetIdentifiers(uri) ──────────────────────────
-    // Program.cs: assetMgmt.GetIdentifiers(uri);
+    // ── Menu item 9 — assetMgmt.GetIdentifiers(uri) ──────────────────────────
+    // Program.cs case "9": assetMgmt.GetIdentifiers(uri);
 
     [Fact]
-    public void MenuItem8_GetIdentifiers_WhenNodesFound_CallsCallMethod()
+    public void MenuItem9_GetIdentifiers_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
         new AssetManagement(mock.Object).GetIdentifiers("urn:product:001");
@@ -402,7 +409,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem8_GetIdentifiers_WhenUriNullFromPrompt_SkipsDispatch()
+    public void MenuItem9_GetIdentifiers_WhenUriNullFromPrompt_SkipsDispatch()
     {
         // Program.cs: if (uri != null) assetMgmt.GetIdentifiers(uri);
         var mock = HappyPathMock();
@@ -415,7 +422,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem8_GetIdentifiers_WhenNodesNull_DoesNotThrow()
+    public void MenuItem9_GetIdentifiers_WhenNodesNull_DoesNotThrow()
     {
         var ex = Record.Exception(() =>
             new AssetManagement(NullNodeMock().Object).GetIdentifiers("urn:x"));
@@ -423,7 +430,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem8_GetIdentifiers_WhenCallMethodThrows_DoesNotPropagate()
+    public void MenuItem9_GetIdentifiers_WhenCallMethodThrows_DoesNotPropagate()
     {
         var mock = HappyPathMock();
         mock.Setup(s => s.CallMethod(
@@ -435,11 +442,11 @@ public sealed class MenuDispatchTests
         Assert.Null(ex);
     }
 
-    // ── Menu item 9 — assetMgmt.ResetIdentifiers(uri) ────────────────────────
-    // Program.cs: assetMgmt.ResetIdentifiers(uri);
+    // ── Menu item 10 — assetMgmt.ResetIdentifiers(uri) ────────────────────────
+    // Program.cs case "10": assetMgmt.ResetIdentifiers(uri);
 
     [Fact]
-    public void MenuItem9_ResetIdentifiers_WhenNodesFound_CallsCallMethod()
+    public void MenuItem10_ResetIdentifiers_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
         new AssetManagement(mock.Object).ResetIdentifiers("urn:product:001");
@@ -449,7 +456,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem9_ResetIdentifiers_WhenUriNullFromPrompt_SkipsDispatch()
+    public void MenuItem10_ResetIdentifiers_WhenUriNullFromPrompt_SkipsDispatch()
     {
         // Program.cs: if (uri != null) assetMgmt.ResetIdentifiers(uri);
         var mock = HappyPathMock();
@@ -462,7 +469,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem9_ResetIdentifiers_WhenNodesNull_DoesNotThrow()
+    public void MenuItem10_ResetIdentifiers_WhenNodesNull_DoesNotThrow()
     {
         var ex = Record.Exception(() =>
             new AssetManagement(NullNodeMock().Object).ResetIdentifiers("urn:x"));
@@ -470,7 +477,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem9_ResetIdentifiers_WhenCallMethodThrows_DoesNotPropagate()
+    public void MenuItem10_ResetIdentifiers_WhenCallMethodThrows_DoesNotPropagate()
     {
         var mock = HappyPathMock();
         mock.Setup(s => s.CallMethod(
@@ -482,11 +489,11 @@ public sealed class MenuDispatchTests
         Assert.Null(ex);
     }
 
-    // ── Menu item 10 — assetMgmt.SubscribeAssetVariables() ───────────────────
-    // Program.cs: assetMgmt.SubscribeAssetVariables();
+    // ── Menu item 3 (subscribe path) — assetMgmt.SubscribeAssetVariables() ─────
+    // Program.cs case "3" (when not yet subscribed): assetMgmt.SubscribeAssetVariables();
 
     [Fact]
-    public void MenuItem10_SubscribeAssetVariables_WhenAssetMgmtNodeNotFound_DoesNotThrow()
+    public void MenuItem3_SubscribeAssetVariables_WhenAssetMgmtNodeNotFound_DoesNotThrow()
     {
         // All BrowseChild calls return Null → AssetManagement object node not found → early return
         var ex = Record.Exception(() =>
@@ -495,7 +502,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem10_SubscribeAssetVariables_WhenNodesNull_DoesNotCallMethod()
+    public void MenuItem3_SubscribeAssetVariables_WhenNodesNull_DoesNotCallMethod()
     {
         var mock = NullNodeMock();
         new AssetManagement(mock.Object).SubscribeAssetVariables();
@@ -505,7 +512,7 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem10_SubscribeAssetVariables_CalledTwice_SecondCallIsHarmless()
+    public void MenuItem3_SubscribeAssetVariables_CalledTwice_SecondCallIsHarmless()
     {
         // With null nodes, first call returns early; second call must also be safe
         var sut = new AssetManagement(NullNodeMock().Object);
@@ -675,19 +682,19 @@ public sealed class MenuDispatchTests
         Assert.Null(ex);
     }
 
-    // ── Menu item 14 — assetMgmt.SendIdentifiers(entities) ───────────────────
-    // Program.cs builds:
+    // ── Menu item 8 — assetMgmt.SendIdentifiers(entities) ─────────────────────
+    // Program.cs case "8" builds:
     //   new() { Name = "Batch-A", EntityId = "ENT-001", IsExternal = false, EntityType = 0 }
     // and calls assetMgmt.SendIdentifiers(entities);
 
     [Fact]
-    public void MenuItem14_SendIdentifiers_WithDemoEntity_WhenNodesFound_CallsCallMethod()
+    public void MenuItem8_SendIdentifiers_WithDemoEntity_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
         var entities = new List<UAModel.IJTBase.EntityDataType>
         {
             // Exact values from Program.cs
-            new() { Name = "Batch-A", EntityId = "ENT-001", IsExternal = false, EntityType = 0 },
+            UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false),
         };
         new AssetManagement(mock.Object).SendIdentifiers(entities);
 
@@ -696,11 +703,11 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem14_SendIdentifiers_WhenNodesNull_DoesNotThrow()
+    public void MenuItem8_SendIdentifiers_WhenNodesNull_DoesNotThrow()
     {
         var entities = new List<UAModel.IJTBase.EntityDataType>
         {
-            new() { Name = "Batch-A", EntityId = "ENT-001", IsExternal = false, EntityType = 0 },
+            UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false),
         };
         var ex = Record.Exception(() =>
             new AssetManagement(NullNodeMock().Object).SendIdentifiers(entities));
@@ -708,25 +715,25 @@ public sealed class MenuDispatchTests
     }
 
     [Fact]
-    public void MenuItem14_SendIdentifiers_DemoEntityDataType_HasExpectedPropertyValues()
+    public void MenuItem8_SendIdentifiers_DemoEntityDataType_HasExpectedPropertyValues()
     {
-        // Asserts that the EntityDataType initialiser in Program.cs produces the correct values
-        var entity = new UAModel.IJTBase.EntityDataType
-        {
-            Name = "Batch-A",
-            EntityId = "ENT-001",
-            IsExternal = false,
-            EntityType = 0,  // EntityType is `short`
-        };
+        // Program.cs case "14" now uses EntityDataType.Create() to ensure EncodingMask is set.
+        // Verify the factory produces correctly masked data for a typical EntityType=1 entity.
+        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false);
 
-        Assert.Equal("Batch-A", entity.Name);
         Assert.Equal("ENT-001", entity.EntityId);
+        Assert.Equal("Batch-A", entity.Name);
         Assert.False(entity.IsExternal);
-        Assert.Equal((short)0, entity.EntityType);
+        Assert.Equal((short)1, entity.EntityType);
+        // Mask must include Name and IsExternal bits so they reach the server
+        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) != 0,
+            "Name bit must be set in EncodingMask");
+        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.IsExternal) != 0,
+            "IsExternal bit must be set in EncodingMask when IsExternal is explicitly supplied");
     }
 
     [Fact]
-    public void MenuItem14_SendIdentifiers_WhenCallMethodThrows_DoesNotPropagate()
+    public void MenuItem8_SendIdentifiers_WhenCallMethodThrows_DoesNotPropagate()
     {
         var mock = HappyPathMock();
         mock.Setup(s => s.CallMethod(
@@ -735,7 +742,7 @@ public sealed class MenuDispatchTests
 
         var entities = new List<UAModel.IJTBase.EntityDataType>
         {
-            new() { Name = "Batch-A", EntityId = "ENT-001" },
+            UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A"),
         };
         var ex = Record.Exception(() =>
             new AssetManagement(mock.Object).SendIdentifiers(entities));
@@ -772,6 +779,309 @@ public sealed class MenuDispatchTests
             new JoiningProcessManagement(session).Dispose();
             new EventSubscriber(evtMock).Dispose();
         });
+        Assert.Null(ex);
+    }
+
+    // ── Subscription toggle state — menu items 1/2/3 ─────────────────────────
+    // Program.cs toggles: if IsSubscribed → stop; else → start; then showMenu = true.
+
+    [Fact]
+    public void MenuItem1_Toggle_IsSubscribed_StartsAsFalse()
+    {
+        var sut = new EventSubscriber(EventMock().Object);
+        Assert.False(sut.IsSubscribed);
+        sut.Dispose();
+    }
+
+    [Fact]
+    public void MenuItem1_Toggle_AfterUnsubscribeWithoutSubscribe_IsSubscribedRemainsFlase()
+    {
+        var sut = new EventSubscriber(EventMock().Object);
+        sut.Unsubscribe(); // guard: Unsubscribe when not subscribed must be no-op
+        Assert.False(sut.IsSubscribed);
+        sut.Dispose();
+    }
+
+    [Fact]
+    public void MenuItem2_Toggle_IsResultVarSubscribed_StartsAsFalse()
+    {
+        var sut = new ResultManagement(HappyPathMock().Object);
+        Assert.False(sut.IsResultVarSubscribed);
+        sut.Dispose();
+    }
+
+    [Fact]
+    public void MenuItem2_Toggle_StopResultVariableSubscription_WhenNotSubscribed_IsNoOp()
+    {
+        var sut = new ResultManagement(HappyPathMock().Object);
+        var ex = Record.Exception(() => sut.StopResultVariableSubscription());
+        Assert.Null(ex);
+        Assert.False(sut.IsResultVarSubscribed);
+        sut.Dispose();
+    }
+
+    [Fact]
+    public void MenuItem2_Toggle_SubscribeResultVariable_WhenNodesNull_LeavesIsResultVarSubscribedFalse()
+    {
+        var sut = new ResultManagement(NullNodeMock().Object);
+        sut.SubscribeResultVariable(); // no-op — nodes not found
+        Assert.False(sut.IsResultVarSubscribed);
+        sut.Dispose();
+    }
+
+    [Fact]
+    public void MenuItem3_Toggle_IsAssetVarSubscribed_StartsAsFalse()
+    {
+        var sut = new AssetManagement(HappyPathMock().Object);
+        Assert.False(sut.IsAssetVarSubscribed);
+        sut.Dispose();
+    }
+
+    [Fact]
+    public void MenuItem3_Toggle_StopAssetVariableSubscription_WhenNotSubscribed_IsNoOp()
+    {
+        var sut = new AssetManagement(HappyPathMock().Object);
+        var ex = Record.Exception(() => sut.StopAssetVariableSubscription());
+        Assert.Null(ex);
+        Assert.False(sut.IsAssetVarSubscribed);
+        sut.Dispose();
+    }
+
+    [Fact]
+    public void MenuItem3_Toggle_SubscribeAssetVariables_WhenNodesNull_LeavesIsAssetVarSubscribedFalse()
+    {
+        var sut = new AssetManagement(NullNodeMock().Object);
+        sut.SubscribeAssetVariables(); // no-op — nodes not found
+        Assert.False(sut.IsAssetVarSubscribed);
+        sut.Dispose();
+    }
+
+    // ── Menu item 14 — jm.GetJointList(productInstanceUri) ───────────────────
+    // Program.cs: uri = PromptOptional(...) ?? ""; jm.GetJointList(uri);
+
+    [Fact]
+    public void MenuItem14_GetJointList_WhenNodesFound_CallsCallMethod()
+    {
+        var mock = HappyPathMock();
+        new JointManagement(mock.Object).GetJointList("urn:product:001");
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+    }
+
+    [Fact]
+    public void MenuItem14_GetJointList_WhenNodesNull_DoesNotThrow()
+    {
+        var ex = Record.Exception(() =>
+            new JointManagement(NullNodeMock().Object).GetJointList());
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void MenuItem14_GetJointList_WhenCallMethodThrows_DoesNotPropagate()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
+
+        var ex = Record.Exception(() =>
+            new JointManagement(mock.Object).GetJointList());
+        Assert.Null(ex);
+    }
+
+    // ── Menu item 15 — jm.GetJoint(uri, jointId) ─────────────────────────────
+    // Program.cs: uri = Prompt; id = Prompt; if (uri != null && id != null) jm.GetJoint(uri, id);
+
+    [Fact]
+    public void MenuItem15_GetJoint_WhenNodesFound_CallsCallMethod()
+    {
+        var mock = HappyPathMock();
+        new JointManagement(mock.Object).GetJoint("urn:product:001", "JOINT-A");
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+    }
+
+    [Fact]
+    public void MenuItem15_GetJoint_WhenEitherPromptNull_SkipsDispatch()
+    {
+        // Program.cs: if (uri != null && id != null) — null from either prompt skips the call
+        var mock = HappyPathMock();
+        string? uri = null;
+        string? id = "JOINT-A";
+        if (uri != null && id != null) new JointManagement(mock.Object).GetJoint(uri, id);
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
+    }
+
+    [Fact]
+    public void MenuItem15_GetJoint_WhenNodesNull_DoesNotThrow()
+    {
+        var ex = Record.Exception(() =>
+            new JointManagement(NullNodeMock().Object).GetJoint("urn:x", "J1"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void MenuItem15_GetJoint_WhenCallMethodThrows_DoesNotPropagate()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("server error"));
+
+        var ex = Record.Exception(() =>
+            new JointManagement(mock.Object).GetJoint("urn:x", "J1"));
+        Assert.Null(ex);
+    }
+
+    // ── Menu item 16 — jm.SelectJoint(uri, jointId, originId) ────────────────
+    // Program.cs: uri=Prompt??""  id=Prompt  oid=Prompt??""  if (id!=null) jm.SelectJoint(uri,id,oid)
+
+    [Fact]
+    public void MenuItem16_SelectJoint_WhenNodesFound_CallsCallMethod()
+    {
+        var mock = HappyPathMock();
+        new JointManagement(mock.Object).SelectJoint("urn:product:001", "JOINT-A", "ORIGIN-1");
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+    }
+
+    [Fact]
+    public void MenuItem16_SelectJoint_WhenJointIdNullFromPrompt_SkipsDispatch()
+    {
+        var mock = HappyPathMock();
+        string? id = null;
+        if (id != null) new JointManagement(mock.Object).SelectJoint("urn:x", id, "");
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
+    }
+
+    [Fact]
+    public void MenuItem16_SelectJoint_WhenNodesNull_DoesNotThrow()
+    {
+        var ex = Record.Exception(() =>
+            new JointManagement(NullNodeMock().Object).SelectJoint("urn:x", "J1", "O1"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void MenuItem16_SelectJoint_WhenCallMethodThrows_DoesNotPropagate()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.BadNotFound));
+
+        var ex = Record.Exception(() =>
+            new JointManagement(mock.Object).SelectJoint("urn:x", "J1", "O1"));
+        Assert.Null(ex);
+    }
+
+    // ── Menu item 17 — jm.DeleteJoint(uri, jointId, originId) ────────────────
+
+    [Fact]
+    public void MenuItem17_DeleteJoint_WhenNodesFound_CallsCallMethod()
+    {
+        var mock = HappyPathMock();
+        new JointManagement(mock.Object).DeleteJoint("urn:product:001", "JOINT-A", "ORIGIN-1");
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+    }
+
+    [Fact]
+    public void MenuItem17_DeleteJoint_WhenJointIdNullFromPrompt_SkipsDispatch()
+    {
+        var mock = HappyPathMock();
+        string? id = null;
+        if (id != null) new JointManagement(mock.Object).DeleteJoint("urn:x", id, "");
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
+    }
+
+    [Fact]
+    public void MenuItem17_DeleteJoint_WhenNodesNull_DoesNotThrow()
+    {
+        var ex = Record.Exception(() =>
+            new JointManagement(NullNodeMock().Object).DeleteJoint("urn:x", "J1", "O1"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void MenuItem17_DeleteJoint_WhenCallMethodThrows_DoesNotPropagate()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("fault"));
+
+        var ex = Record.Exception(() =>
+            new JointManagement(mock.Object).DeleteJoint("urn:x", "J1", "O1"));
+        Assert.Null(ex);
+    }
+
+    // ── Menu item 18 — jm.SendJoint(uri, jointId, jointDesignId) ─────────────
+    // Program.cs: uri=Prompt??""  id=Prompt  did=Prompt??""  if (id!=null) jm.SendJoint(uri,id,did)
+
+    [Fact]
+    public void MenuItem18_SendJoint_WhenNodesFound_CallsCallMethod()
+    {
+        var mock = HappyPathMock();
+        new JointManagement(mock.Object).SendJoint("urn:product:001", "JOINT-A", "DESIGN-1");
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+    }
+
+    [Fact]
+    public void MenuItem18_SendJoint_WhenJointIdNullFromPrompt_SkipsDispatch()
+    {
+        // Program.cs: if (id != null) jm.SendJoint(uri, id, did)
+        var mock = HappyPathMock();
+        string? id = null;
+        if (id != null) new JointManagement(mock.Object).SendJoint("urn:x", id, "");
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
+    }
+
+    [Fact]
+    public void MenuItem18_SendJoint_WhenJointIdEmpty_ReturnsEarlyWithoutCallingMethod()
+    {
+        // SendJoint has explicit empty-id guard: if (string.IsNullOrEmpty(jointId)) return;
+        var mock = HappyPathMock();
+        var ex = Record.Exception(() =>
+            new JointManagement(mock.Object).SendJoint("urn:x", "", ""));
+
+        Assert.Null(ex);
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
+    }
+
+    [Fact]
+    public void MenuItem18_SendJoint_WhenNodesNull_DoesNotThrow()
+    {
+        var ex = Record.Exception(() =>
+            new JointManagement(NullNodeMock().Object).SendJoint("urn:x", "J1", "D1"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void MenuItem18_SendJoint_WhenCallMethodThrows_DoesNotPropagate()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.BadTimeout));
+
+        var ex = Record.Exception(() =>
+            new JointManagement(mock.Object).SendJoint("urn:x", "J1", "D1"));
         Assert.Null(ex);
     }
 }

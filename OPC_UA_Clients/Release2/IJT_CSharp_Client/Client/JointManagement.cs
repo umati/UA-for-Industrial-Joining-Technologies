@@ -246,12 +246,11 @@ public sealed class JointManagement : IDisposable
             return;
         }
 
-        var joint = new UAModel.IJTBase.JointDataType
-        {
-            JointId = jointId,
-            JointDesignId = jointDesignId,
-            Name = name,
-        };
+        // JointDataType uses EncodingMask: optional fields only reach the server when their bit is set.
+        var joint = UAModel.IJTBase.JointDataType.Create(
+            jointId: jointId,
+            jointDesignId: string.IsNullOrEmpty(jointDesignId) ? null : jointDesignId,
+            name: string.IsNullOrEmpty(name) ? null : name);
         var ext = new ExtensionObject(joint);
 
         try

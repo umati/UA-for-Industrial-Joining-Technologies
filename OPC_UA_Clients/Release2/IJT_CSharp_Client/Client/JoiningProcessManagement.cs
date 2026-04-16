@@ -130,12 +130,13 @@ public sealed class JoiningProcessManagement : IDisposable
             return;
         }
 
-        var jpId = new UAModel.IJTBase.JoiningProcessIdentificationDataType
-        {
-            JoiningProcessId = joiningProcessId,
-            JoiningProcessOriginId = joiningProcessOriginId,
-            SelectionName = selectionName,
-        };
+        // JoiningProcessIdentificationDataType uses an EncodingMask pattern: optional
+        // fields are only written to the binary stream when their mask bit is set.
+        // Without the mask the server receives an empty struct and returns BadArgumentsMissing.
+        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+            joiningProcessId: joiningProcessId,
+            joiningProcessOriginId: joiningProcessOriginId,
+            selectionName: selectionName);
         var ext = new ExtensionObject(jpId);
 
         try

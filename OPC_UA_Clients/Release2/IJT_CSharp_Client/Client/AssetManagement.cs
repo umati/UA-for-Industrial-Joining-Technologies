@@ -22,6 +22,9 @@ public sealed class AssetManagement : IDisposable
     /// <summary>Creates an AssetManagement facade backed by <paramref name="js"/>.</summary>
     public AssetManagement(IJoiningSystem js) => _js = js;
 
+    /// <summary>True when the Asset identification variable data-change subscription is active.</summary>
+    public bool IsAssetVarSubscribed => _assetVarSubscription != null;
+
     /// <summary>Clears cached node references so the next operation re-browses the address space.</summary>
     public void InvalidateNodeCache() => _methodSetNodeId = null;
 

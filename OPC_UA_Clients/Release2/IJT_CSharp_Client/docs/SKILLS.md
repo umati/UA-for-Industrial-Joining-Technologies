@@ -78,8 +78,9 @@ IJT_CSharp_Client/
 │   ├── IjtMenuHelper.cs         # Prompt helpers, max-length enforcement
 │   ├── IjtStatusHelper.cs       # OPC UA status code → hex + human-readable text
 │   ├── IjtJsonSerializer.cs     # Method output pretty-printer
-│   ├── IjtResultFormatter.cs    # Result payload formatter
-│   ├── IjtEventFormatter.cs     # Event payload formatter
+│   ├── IjtEntityTypes.cs        # EntityType 42-value lookup (0=UNDEFINED..41=VIRTUAL_STATION) + PrintTable()
+│   ├── IjtResultFormatter.cs    # Result payload formatter (decodes JoiningResultDataType from ResultContent)
+│   ├── IjtEventFormatter.cs     # Event payload formatter (uses CurrentValue for ReportedValues)
 │   ├── IjtFileLogger.cs         # Log file writer (results, events, joints, joining process, identifiers)
 │   ├── AddressSpaceHelper.cs    # Browse utilities
 │   └── ExtensionObjectHelper.cs # ExtensionObject decode helpers
@@ -87,13 +88,15 @@ IJT_CSharp_Client/
 │   ├── Directory.Build.props    # Dual-mode build config
 │   ├── Directory.Build.targets  # Client-compat: excludes *.Classes.cs when OpcUaClientOnly=true
 │   ├── nuget.config             # Scoped NuGet config for client-compat restore
+│   ├── UAModel.IJTBase/
+│   │   └── UAModel.IJTBase.DataTypes.Helpers.cs  # Partial-class factories: EntityDataType.Create(), JoiningProcessIdentificationDataType.Create(), JointDataType.Create() — auto-set EncodingMask
 │   └── ...                      # Do NOT edit generated files — regenerate with UA Model Compiler
 └── Tests/
     └── IJT_CSharp_Client.Tests/
         ├── UnitTests/
         │   ├── MockSessionBuilder.cs               # Shared Mock<IJoiningSystem> factory
         │   ├── JoiningSystemUnitTests.cs            # JoiningSystem: CallMethod, BrowseMethod tiers, NodeId factories, Uncertain/Bad status, keep-alive, dispose
-        │   ├── JointManagementUnitTests.cs          # JointManagement: all 5 operations, null-node guards
+        │   ├── JointManagementUnitTests.cs          # JointManagement: all 5 operations, null-node guards, EncodingMask tests
         │   ├── AssetManagementUnitTests.cs
         │   ├── ResultManagementUnitTests.cs
         │   ├── JoiningProcessManagementUnitTests.cs
@@ -142,10 +145,11 @@ dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 
 ## Test Baseline
 
-| Scope | Count | Notes |
-|-------|-------|-------|
-| Unit tests (`!~LiveIntegration`) | **420** | 0 failed, 0 skipped |
-| Full suite | **473** | 469 passed + 4 skipped (live integration, no server) |
+| Scope | Notes |
+|-------|-------|
+| Unit tests (`!~LiveIntegration`) | Run: `dotnet test --filter "FullyQualifiedName!~LiveIntegration"` |
+
+> Current counts and history (session-by-session) are in `MyWork/context_ijt_csharp_client.md`.
 
 ---
 
@@ -160,6 +164,33 @@ dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 **Coverage:**
 - Target: 80% (WARN if below, not FAIL)
 - `coverlet.runsettings` excludes `UAModel.*` (auto-generated) and `Program` (entry point)
+
+---
+
+## EncodingMask Pattern (CRITICAL — read before constructing IJT types)
+
+All auto-generated IJT data types (`EntityDataType`, `JoiningProcessIdentificationDataType`, `JointDataType`, …) use **UA OptionalFields encoding** (OPC UA Part 6 §5.2.2.16). An `EncodingMask` bitfield is written first; each optional field is only serialised if its bit is set. Setting a property via object-initializer syntax does **not** touch the mask — the server silently receives null for every optional field.
+
+**Always use the factory helpers in `DataTypes.Helpers.cs`:**
+
+```csharp
+// CORRECT — factory sets EncodingMask automatically
+var entity = EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false);
+
+var jpId = JoiningProcessIdentificationDataType.Create(joiningProcessId: "JP-007");
+
+var joint = JointDataType.Create(jointId: "JNT-001", jointDesignId: "DESIGN-42", name: "Flange bolt");
+
+// WRONG — Name and IsExternal silently omitted; server gets null/default
+var bad = new EntityDataType { EntityId = "ENT-001", Name = "Batch-A", EntityType = 1 };
+```
+
+**Factories**: `EntityDataType.Create(entityId, entityType, name?, description?, entityOriginId?, isExternal?)` — null/absent parameters excluded from mask.
+
+**Root cause of all three reported hardware failures (EncodingMask missing):**
+1. `SendIdentifiers`: `EntityType=0` (UNDEFINED) + no mask → server rejected
+2. `GetIdentifiers` mismatch after `SendTextIdentifiers`: no regression in library, operator confusion
+3. `SelectJoiningProcess` → `BadArgumentsMissing`: `JoiningProcessIdentificationDataType` constructed without mask → empty struct sent to server
 
 ---
 

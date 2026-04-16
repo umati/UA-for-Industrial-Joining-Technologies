@@ -7,7 +7,7 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 pythonpath = ["."]
 # Test Client has no tests/ dir — suites live at project root in named subdirs.
-testpaths = ["conformance", "assets", "joining_process", "results", "joint", "events", "common"]
+testpaths = ["tests/unit", "conformance", "assets", "joining_process", "results", "joint", "events", "common"]
 python_files = ["test_*.py"]
 addopts = "-v --basetemp=tmp/pytest -p no:cacheprovider"
 tmp_path_retention_policy = "failed"
@@ -121,6 +121,8 @@ max-module-lines = 1200
 [tool.mypy]
 explicit_package_bases = true
 ignore_missing_imports = true
+# Exclude pytest bookkeeping dirs that may be locked on Windows.
+exclude = ["pytest-cache-files-.*"]
 
 [tool.pyright]
 # asyncua 1.2b2 uses class-based OPC UA primitive types (Int32, UInt32, etc.)

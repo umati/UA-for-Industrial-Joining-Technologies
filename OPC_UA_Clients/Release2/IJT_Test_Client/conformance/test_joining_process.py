@@ -535,6 +535,12 @@ async def test_get_joining_process_list_elements_have_valid_structure(opcua_clie
     items = result.output_list
     if not items:
         return  # empty list is valid — nothing to validate
+    # asyncua wraps method output arguments in an outer list; unwrap if the first
+    # (and only) element is itself a list (i.e., the server returned an array output)
+    if len(items) == 1 and isinstance(items[0], list):
+        items = items[0]
+    if not items:
+        return
     for i, entry in enumerate(items):
         if entry is None:
             continue

@@ -140,9 +140,9 @@ Coverage is configured in each project's `pyproject.toml`. **Never hardcode thre
 
 | Project | `fail_under` | Notes |
 |---------|-------------|-------|
-| Web Client | 70% | Unit run achieves ~74% |
-| Console Client | 80% | Unit run achieves ~85% |
-| Test Client | **65%** | No `tests/unit/`; threshold applies to live conformance stage (lowered from 70% — live-test-only helpers. Revisit when live tests run in CI.) |
+| Web Client | 70% | Configured in `pyproject.toml` — applies to Python unit run |
+| Console Client | 80% | Configured in `pyproject.toml` — applies to unit run |
+| Test Client | **65%** | Configured in `pyproject.toml` — live-test-only helpers reduce coverage on conformance-only runs; `tests/unit/` supplements with pure-logic coverage |
 
 Docstring coverage (`interrogate`) thresholds — calibrated against real codebase with venvs excluded:
 
@@ -233,15 +233,14 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vitest, ESLint, Docker
-- **Test baseline**: **323 Python** pass / 0 skip / 0 warnings, 229 JS pass (162 unit + 67 source-coverage), ESLint clean
-- **Live tests**: `tests/python/live/` — excluded from default run (`norecursedirs = live`); requires running OPC UA server
+- **Tests**: Python unit (`tests/python/unit/`), JS unit (`src/javascripts/`), live (`tests/python/live/` — excluded from default run, requires OPC UA server)
 - **One test command**: `python run_all_tests.py`
 - **Docker**: healthy on HTTP:3000 + WS:8001
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md`
 
 ### IJT Console Client (`OPC_UA_Clients/Release2/IJT_Console_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2
-- **Test baseline**: 374 Python pass, 0 skip (unit); live tests call `pytest.fail()` if server unreachable — no silent skips
+- **Tests**: unit (`tests/unit/` — no server needed); live (`tests/live/` — calls `pytest.fail()` if server unreachable, no silent skips)
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Entry point**: `python setup_client.py --url="opc.tcp://..."`
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md`
@@ -249,7 +248,7 @@ UA-for-Industrial-Joining-Technologies/
 ### IJT Test Client (`OPC_UA_Clients/Release2/IJT_Test_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2, pytest
 - **Purpose**: OPC UA IJT spec conformance test suite — validates server against OPC 40450-1 / 40451-1
-- **Test baseline**: dynamic (depends on server profile and enabled optional features); requires running OPC UA server on port 40451
+- **Tests**: conformance (`conformance/` — requires running OPC UA server); unit (`tests/unit/` — pure-logic helper coverage, no server needed)
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md`
 
@@ -257,9 +256,8 @@ UA-for-Industrial-Joining-Technologies/
 - **Stack**: C# .NET 10+, OPC Foundation UA SDK, xUnit, Moq, coverlet
 - **Purpose**: C# reference OPC UA IJT client — events, results, assets, joining process, and joint management
 - **Architecture**: `JoiningSystem` holds `ISession` (OPC UA SDK) directly; no wrapper. `IJoiningSystem` is the interface for management classes and Moq mocks. `IjtSession`/`IIjtSession` do not exist.
-- **Test baseline**: **420 unit tests** pass · 0 failed · 0 skipped
+- **Tests**: xUnit unit tests + live integration tests (skipped unless `OPCUA_SERVER_URL` or `OPCUA_SIMULATOR_EXE` is set)
 - **One test command**: `python run_all_tests.py` (dotnet build + test + NuGet CVE scan)
-- **Live tests**: skipped unless `OPCUA_SERVER_URL` is set or `OPCUA_SIMULATOR_EXE` points to server binary
 - **Details**: read `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md`
 
 ### IJT Node Client (`OPC_UA_Clients/Release1/IJT_Node_Client/`)
@@ -301,10 +299,10 @@ UA-for-Industrial-Joining-Technologies/
 ### CI Required (`ci-required.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
 |-----|--------------|
-| `web-client` | Python unit (323), JS unit (229), ESLint, Bandit, npm audit |
-| `console-client` | Python unit tests (tests/unit/), Bandit, Ruff, mypy |
-| `node-client` | JS unit (~152), ESLint, npm audit |
-| `test-client` | pytest collect-only (import check), Bandit, Ruff, mypy |
+| `web-client` | Python unit tests, JS unit tests, ESLint, Bandit, npm audit |
+| `console-client` | Python unit tests (`tests/unit/`), Bandit, Ruff, mypy |
+| `node-client` | JS unit tests, ESLint, npm audit |
+| `test-client` | pytest unit tests (`tests/unit/`) + collect-only import check, Bandit, Ruff, mypy |
 | `csharp-client` | dotnet restore (locked mode) + build (`-warnaserror`) + NuGet CVE scan + xUnit test (`--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
 | `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |
@@ -338,7 +336,7 @@ Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJ
 | Job | What it tests |
 |-----|--------------|
 | `docker-smoke` | Full Docker build + server smoke (10/10) |
-| `webclient-docker` | Web Client Docker test image (Python 323 unit, JS 229) + HTTP:3000 production health |
+| `webclient-docker` | Web Client Docker test image (Python unit + JS unit) + HTTP:3000 production health |
 | `int-testclient` | Windows live: Test Client full suite against running server (counts vary by server profile/features) |
 | `int-live-others` | Windows live: Web Client integration (13 tests) + Console Client live tests |
 
@@ -347,7 +345,7 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 
 ---
 
-## Key Technical Decisions (History)
+## Key Technical Decisions
 
 | Decision | Reason |
 |----------|--------|
