@@ -186,7 +186,6 @@ public sealed class EventSubscriber : IDisposable
         var ijtNs = _s.IjtBaseNsIdx;
         var mrNs = _s.MachineryResultNsIdx;
 
-        var resultReadyTypeId = new NodeId(UAModel.MachineryResult.ObjectTypes.ResultReadyEventType, mrNs);
         var jsResultReadyTypeId = new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemResultReadyEventType, ijtNs);
 
         var filter = new EventFilter();
@@ -198,12 +197,15 @@ public sealed class EventSubscriber : IDisposable
         AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "Message");
         AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "SourceName");
 
-        // Full Result object — ResultDataType with ResultMetaData (all 31+ properties) + ResultContent
-        AddSelectClause(filter, jsResultReadyTypeId, ijtNs, "Result");
+        // Full Result object — BrowseName is "6:Result" in the NodeSet (ns=6 = MachineryResult namespace).
+        // Must use mrNs here; using ijtNs causes the server to return null for this field.
+        AddSelectClause(filter, jsResultReadyTypeId, mrNs, "Result");
 
-        // WhereClause: OfType ResultReadyEventType (base type catches both variants)
+        // WhereClause: OfType JoiningSystemResultReadyEventType — the IJT abstract type fired for
+        // all joining results (SimulateSingleResult, real controller results).
+        // Also catches concrete subtypes (e.g. RequestedResultEventType).
         filter.WhereClause = new ContentFilter();
-        filter.WhereClause.Push(FilterOperator.OfType, new LiteralOperand(resultReadyTypeId));
+        filter.WhereClause.Push(FilterOperator.OfType, new LiteralOperand(jsResultReadyTypeId));
 
         return filter;
     }

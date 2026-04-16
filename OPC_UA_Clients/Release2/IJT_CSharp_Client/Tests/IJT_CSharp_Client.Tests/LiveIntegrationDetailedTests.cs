@@ -454,7 +454,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     }
 
     [SkippableFact]
-    public async Task GetLatestResult_AfterTrigger_ResultHandle_IsNonZero()
+    public async Task GetLatestResult_AfterTrigger_Returns_ExpectedOutputCount()
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -475,12 +475,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var outputs = await WithTimeout(
             () => session.CallMethod(rmNode, methodId, 5000),
             15, "GetLatestResult").ConfigureAwait(false);
-        Skip.IfNot(outputs.Count >= 1, "No outputs from GetLatestResult; skipping handle check");
 
-        var handle = outputs[0] is uint h ? h : (outputs[0] is int i ? (uint)i : 0u);
-        // Per OPC UA IJT spec, ResultHandle may be 0 on servers that don't track handles
-        // (the IJT simulator always returns 0 as "not applicable"). Skip rather than fail.
-        Skip.IfNot(handle > 0, "ResultHandle=0 — server does not use result handles (IJT spec permits this); skipping");
+        // IJT spec: GetLatestResult outputs are [ResultHandle (UInt32), ResultDataType, ErrorCode].
+        // ResultHandle=0 is valid — MachineryResult spec allows servers that do not track handles to return 0.
+        Assert.True(outputs.Count >= 3,
+            $"GetLatestResult must return 3 outputs [ResultHandle, ResultDataType, ErrorCode] — got {outputs.Count}");
     }
 
     [SkippableFact]
@@ -1174,8 +1173,5 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             15, "direct GetLatestResult").ConfigureAwait(false);
 
         Assert.NotEmpty(outputs);
-        var handle = outputs[0] is uint h ? h : (outputs[0] is int i ? (uint)i : 0u);
-        // Per OPC UA IJT spec, ResultHandle=0 is valid when the server does not track handles.
-        Skip.IfNot(handle > 0, "ResultHandle=0 — server does not use result handles (IJT spec permits this); skipping consistency check");
     }
 }

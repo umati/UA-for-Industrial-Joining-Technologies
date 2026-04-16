@@ -194,6 +194,44 @@ var bad = new EntityDataType { EntityId = "ENT-001", Name = "Batch-A", EntityTyp
 
 ---
 
+## EventSubscriber — Event Filter Namespace Rules (CRITICAL)
+
+`EventSubscriber.cs` manually constructs `SimpleAttributeOperand` browse paths. Namespace indices must be correct.
+
+### `Result` browse path — use MachineryResult namespace (`mrNs`)
+
+`JoiningSystemResultReadyEventType.Result` has `BrowseName="6:Result"` in the IJT NodeSet2 file, where ns=6 maps to the MachineryResult namespace URI (`http://opcfoundation.org/UA/Machinery/Result/`).
+
+```csharp
+// CORRECT — mrNs is the runtime MachineryResult namespace index:
+AddSelectClause(filter, jsResultReadyTypeId, mrNs, "Result");
+
+// WRONG — ijtNs is namespace-incorrect for this field:
+AddSelectClause(filter, jsResultReadyTypeId, ijtNs, "Result");
+```
+
+### WhereClause — use `JoiningSystemResultReadyEventType`
+
+All IJT result events fire as `JoiningSystemResultReadyEventType` (IJT Base, `ns=1;i=1007`) or its concrete subtypes (e.g. `RequestedResultEventType`). `ResultReadyEventType` (MachineryResult base) is for Quality/Vision domain only.
+
+```csharp
+// CORRECT:
+filter.WhereClause = BuildOfTypeClause(jsResultReadyTypeId);   // JoiningSystemResultReadyEventType
+
+// WRONG — too broad, wrong hierarchy target:
+filter.WhereClause = BuildOfTypeClause(resultReadyTypeId);     // ResultReadyEventType (MachineryResult base)
+```
+
+### GetLatestResult does NOT fire events
+
+`GetLatestResult` is a query method — it returns the current result value but never triggers an event subscription. Events are only fired when the simulator is called (`SimulateSingleResult`, `SimulateEventsAndConditions`) or when a real controller generates a result.
+
+### ResultHandle = 0 is valid — never skip or fail on it
+
+`ResultHandle=0` means the server does not track result handles (compliant per MachineryResult spec). The IJT simulator always returns 0. Tests must assert the actual meaningful outputs (e.g. `outputs.Count >= 3`), not test handle value.
+
+---
+
 ## Known Issues / Deferred Work
 
 | Issue | Status | Notes |
