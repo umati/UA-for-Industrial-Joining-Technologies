@@ -596,6 +596,8 @@ jobs:
               $outcome = $r.outcome
               if ($outcome -eq "Passed") {
                 $xml += "    <testcase name=`"$name`" classname=`"IJT`" />`n"
+              } elseif ($outcome -eq "NotExecuted") {
+                $xml += "    <testcase name=`"$name`" classname=`"IJT`"><skipped/></testcase>`n"
               } else {
                 $msg = [System.Security.SecurityElement]::Escape($r.Output.ErrorInfo.Message)
                 $xml += "    <testcase name=`"$name`" classname=`"IJT`"><failure>$msg</failure></testcase>`n"
