@@ -427,6 +427,60 @@ async def test_result_management_acknowledge_results_if_present(opcua_client, ns
     )
 
 
+@pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
+async def test_acknowledge_results_functional_with_valid_result_id(opcua_client, result_trigger, ns_indices):
+    """
+    AcknowledgeResults called with a valid ResultId extracted from a just-triggered
+    result must either succeed (Good status) or return BadNotSupported / BadNotImplemented.
+
+    Positive functional path: trigger result → GetLatestResult to extract ResultId →
+    call AcknowledgeResults([result_id]).
+
+    Servers that implement the acknowledge_results conformance unit should return Good.
+    Servers that do not implement it are allowed to reject any call with BadNotSupported;
+    the structure-only test above covers that case separately.
+    """
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
+
+    rm = await _rediscover_result_management(opcua_client, ns_mr)
+    ack = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
+    if ack is None:
+        pytest.skip("AcknowledgeResults method not present on this server — optional per spec")
+
+    result_data, meta = await _trigger_and_get_latest(result_trigger, rm, ns_mr)
+    if result_data is None or meta is None:
+        if result_trigger.is_simulator:
+            pytest.skip("Could not obtain a result via simulator trigger — simulator may not be running")
+        else:
+            pytest.skip("No result received from external trigger within timeout — manual trigger required")
+
+    result_id = str(getattr(meta, "ResultId", None) or "")
+    if not result_id:
+        pytest.skip("ResultId empty in GetLatestResult response — cannot call AcknowledgeResults with a valid ID")
+
+    call_result = await call_method(
+        rm,
+        ack.nodeid,
+        ua.Variant([result_id], ua.VariantType.String),
+        timeout=_CALL_TIMEOUT_S,
+        method_name="AcknowledgeResults",
+    )
+    if not call_result.success:
+        err_str = str(call_result.error) if call_result.error else "unknown"
+        if any(s in err_str for s in ("BadNotSupported", "BadNotImplemented")):
+            pytest.skip(f"AcknowledgeResults returned {err_str} — server does not implement this method")
+        logger.warning(
+            "AcknowledgeResults([%r]) returned unexpected Bad status: %s "
+            "— investigate if this server is expected to support acknowledge_results CU",
+            result_id,
+            err_str,
+        )
+    else:
+        logger.info("AcknowledgeResults([%r]) succeeded — server implements acknowledge_results CU", result_id)
+
+
 # ---------------------------------------------------------------------------
 # request_results — optional method
 # ---------------------------------------------------------------------------

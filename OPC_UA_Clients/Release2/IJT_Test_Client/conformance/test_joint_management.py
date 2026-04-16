@@ -391,6 +391,69 @@ async def test_select_joint_with_invalid_id_returns_error(opcua_client, ns_indic
         )
 
 
+@pytest.mark.requires_cu(CU.SELECT_JOINT)
+async def test_select_joint_with_non_empty_joint_origin_id(opcua_client, ns_indices):
+    """
+    SelectJoint called with a non-empty JointOriginId must succeed when the joint
+    was created with that origin ID, or return an accepted status code.
+
+    JointOriginId is an optional string that disambiguates joints originating from
+    external systems.  This test verifies the third argument is passed through
+    correctly: create a joint with a known JointOriginId via SendJoint, then
+    call SelectJoint supplying that JointOriginId.
+    """
+    ns_ijt = _require_ns_ijt(ns_indices)
+    jm = await _get_joint_management(opcua_client, ns_ijt)
+
+    joint_type = getattr(ua, "JointDataType", None)
+    if joint_type is None:
+        pytest.skip("JointDataType not available in this asyncua version — cannot set JointOriginId")
+
+    send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
+    if send_node is None:
+        pytest.skip("SendJoint not present — cannot create a joint with JointOriginId for this test")
+
+    test_origin_id = "conformance-test-origin-id"
+    test_joint_id = "conformance-test-joint-with-origin"
+    joint_data = joint_type()
+    if hasattr(joint_data, "JointId"):
+        joint_data.JointId = test_joint_id
+    if hasattr(joint_data, "JointOriginId"):
+        joint_data.JointOriginId = test_origin_id
+    if hasattr(joint_data, "Name"):
+        joint_data.Name = "ConformanceTestJointWithOriginId"
+
+    try:
+        await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
+    except ua.UaError as exc:
+        if any(
+            s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "BadArgumentsMissing")
+        ):
+            pytest.skip(f"SendJoint not callable on this server: {exc}")
+        raise
+    except (AttributeError, TypeError) as exc:
+        pytest.skip(f"Could not construct JointDataType with JointOriginId: {exc}")
+
+    sel_node = await find_child_by_browse_name(jm, BN.SELECT_JOINT, ns_ijt)
+    assert sel_node is not None, f"'{BN.SELECT_JOINT}' not found in JointManagement"
+    try:
+        await jm.call_method(
+            sel_node.nodeid,
+            ua.Variant(test_origin_id, ua.VariantType.String),
+            ua.Variant(test_joint_id, ua.VariantType.String),
+            ua.Variant(test_origin_id, ua.VariantType.String),
+        )
+        logger.info("SelectJoint with JointOriginId='%s' succeeded", test_origin_id)
+    except ua.UaError as exc:
+        status_str = str(exc)
+        if "BadNotSupported" in status_str:
+            pytest.skip(f"SelectJoint not supported on this server: {exc}")
+        if any(s in status_str for s in ("BadConditionNotActive", "BadNothingToDo", "BadArgumentsMissing")):
+            logger.info("SelectJoint with non-empty JointOriginId raised acceptable status: %s", exc)
+        else:
+            raise
+
+
 # ---------------------------------------------------------------------------
 # ─── send_joint ───
 # ---------------------------------------------------------------------------
@@ -594,6 +657,67 @@ async def test_delete_joint_with_invalid_id_returns_error(opcua_client, ns_indic
             _INVALID_JOINT_ID,
             exc,
         )
+
+
+@pytest.mark.requires_cu(CU.DELETE_JOINT)
+async def test_delete_joint_with_non_empty_joint_origin_id(opcua_client, ns_indices):
+    """
+    DeleteJoint called with a non-empty JointOriginId must succeed when the joint
+    was created with that origin ID, or return an accepted status code.
+
+    JointOriginId is an optional disambiguating string.  This test verifies the
+    third argument is threaded through correctly: create a joint with a known
+    JointOriginId via SendJoint, then delete it supplying that same JointOriginId.
+    """
+    ns_ijt = _require_ns_ijt(ns_indices)
+    jm = await _get_joint_management(opcua_client, ns_ijt)
+
+    joint_type = getattr(ua, "JointDataType", None)
+    if joint_type is None:
+        pytest.skip("JointDataType not available in this asyncua version — cannot set JointOriginId")
+
+    send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
+    del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
+    if send_node is None or del_node is None:
+        pytest.skip("SendJoint and DeleteJoint both required for JointOriginId delete test")
+
+    test_origin_id = "conformance-test-origin-for-delete"
+    test_joint_id = "conformance-test-joint-for-delete-origin"
+    joint_data = joint_type()
+    if hasattr(joint_data, "JointId"):
+        joint_data.JointId = test_joint_id
+    if hasattr(joint_data, "JointOriginId"):
+        joint_data.JointOriginId = test_origin_id
+    if hasattr(joint_data, "Name"):
+        joint_data.Name = "ConformanceTestJointForDeleteOriginId"
+
+    try:
+        await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
+    except ua.UaError as exc:
+        if any(
+            s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "BadArgumentsMissing")
+        ):
+            pytest.skip(f"SendJoint not callable on this server: {exc}")
+        raise
+    except (AttributeError, TypeError) as exc:
+        pytest.skip(f"Could not construct JointDataType with JointOriginId: {exc}")
+
+    try:
+        await jm.call_method(
+            del_node.nodeid,
+            ua.Variant(test_origin_id, ua.VariantType.String),
+            ua.Variant(test_joint_id, ua.VariantType.String),
+            ua.Variant(test_origin_id, ua.VariantType.String),
+        )
+        logger.info("DeleteJoint with JointOriginId='%s' succeeded", test_origin_id)
+    except ua.UaError as exc:
+        status_str = str(exc)
+        if "BadNotSupported" in status_str:
+            pytest.skip(f"DeleteJoint not supported on this server: {exc}")
+        if any(s in status_str for s in ("BadNotFound", "BadArgumentsMissing", "BadInvalidArgument")):
+            logger.info("DeleteJoint with non-empty JointOriginId raised acceptable status: %s", exc)
+        else:
+            raise
 
 
 # ---------------------------------------------------------------------------

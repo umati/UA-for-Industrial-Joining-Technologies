@@ -313,3 +313,23 @@ Each client reserves its own server port so multiple clients can run tests in pa
 - Kept separate so installing test tools never alters the production environment
 
 **Override:** Set `OPCUA_SERVER_URL=opc.tcp://myserver:40451` to point at any server; auto-launch is skipped entirely.
+
+---
+
+## Writing New Conformance Tests
+
+### Passing ProductInstanceUri to counter/method calls
+
+Several IJT methods require a `ProductInstanceUri` (String) argument. Read it from the address space — do not hardcode it:
+
+```python
+from helpers.node_discovery import read_tool_product_instance_uri
+
+ns_di = ns_indices.get(NS_DI)
+ns_app = ns_indices.get(NS_APP)
+pi_uri = await read_tool_product_instance_uri(opcua_client, ns_ijt, ns_di or 0, ns_app)
+# pi_uri = "" when no tools configured — still a valid argument to pass
+result = await call_method(jpm, method_node, ua.Variant(pi_uri, ua.VariantType.String), ...)
+```
+
+Methods that require this: `IncrementJoiningProcessCounter`, `DecrementJoiningProcessCounter`, `SetJoiningProcessCounter`.

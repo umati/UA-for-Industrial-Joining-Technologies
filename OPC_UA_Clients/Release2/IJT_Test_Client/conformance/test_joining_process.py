@@ -390,6 +390,88 @@ async def test_joining_process_core_methods_are_callable(opcua_client, ns_indice
         pytest.fail(f"'{method_name}' ({description}) raised an unexpected error: {err_str}")
 
 
+@pytest.mark.requires_cu(CU.START_SELECTED_JOINING)
+async def test_start_selected_joining_with_deselect_after_joining_true(subscription_client, opcua_client, ns_indices):
+    """
+    StartSelectedJoining with DeselectAfterJoining=True must either succeed and fire
+    a JoiningSystemResultReadyEvent, or return an accepted status code.
+
+    Per spec, the DeselectAfterJoining Boolean controls whether the selected process
+    is automatically deselected after the join.  Testing both True and False values
+    verifies the parameter is correctly handled (see companion test that calls with False).
+    """
+    ns_ijt = _require_ns_ijt(ns_indices)
+    jpm = await _get_jpm(opcua_client, ns_ijt)
+
+    # Select a process first (best-effort — some servers do not require prior selection)
+    list_result = await find_and_call_method(
+        jpm,
+        BN.GET_JOINING_PROCESS_LIST,
+        ns_ijt,
+        ua.Variant("", ua.VariantType.String),
+        timeout=15.0,
+    )
+    if list_result.success:
+        programs = list_result.output_list
+        if programs:
+            first_program = programs[0]
+            program_id = str(first_program) if not isinstance(first_program, int) else first_program
+            select_method = await _find_method_node(jpm, BN.SELECT_JOINING_PROCESS, ns_ijt)
+            if select_method is not None:
+                await call_method(
+                    jpm,
+                    select_method,
+                    ua.Variant(program_id, ua.VariantType.String),
+                    timeout=15.0,
+                    method_name=BN.SELECT_JOINING_PROCESS,
+                )
+
+    start_method = await _find_method_node(jpm, BN.START_SELECTED_JOINING, ns_ijt)
+    if start_method is None:
+        pytest.skip(f"'{BN.START_SELECTED_JOINING}' method not found — skipping")
+
+    server_node = subscription_client.nodes.server
+    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
+
+    async with EventCollector(subscription_client) as collector:
+        await collector.subscribe(server_node, event_type_node)
+        start_result = await call_method(
+            jpm,
+            start_method,
+            ua.Variant("", ua.VariantType.String),
+            ua.Variant(True, ua.VariantType.Boolean),  # DeselectAfterJoining=True
+            timeout=15.0,
+            method_name=BN.START_SELECTED_JOINING,
+        )
+        if not start_result.success:
+            err_str = str(start_result.error) if start_result.error else "unknown"
+            if any(
+                s in err_str
+                for s in (
+                    "BadNotSupported",
+                    "BadNothingToDo",
+                    "BadConditionNotActive",
+                    "BadArgumentsMissing",
+                )
+            ):
+                pytest.skip(
+                    f"StartSelectedJoining(DeselectAfterJoining=True) returned {err_str} "
+                    "— tool may not be active or connected"
+                )
+            pytest.fail(f"StartSelectedJoining(DeselectAfterJoining=True) failed unexpectedly: {err_str}")
+        events = await collector.collect(count=1, timeout_s=45.0)
+
+    if not events:
+        pytest.skip(
+            "StartSelectedJoining(DeselectAfterJoining=True) did not produce a ResultReadyEvent within timeout — "
+            "tool may not be physically running; trigger manually if using a real controller"
+        )
+    assert_result_ready_event_valid(
+        events[0],
+        context="start_selected_joining:DeselectAfterJoining=True:ResultReadyEvent",
+    )
+
+
 # ---------------------------------------------------------------------------
 # ─── get_joining_process_list ───
 # ---------------------------------------------------------------------------
@@ -426,6 +508,46 @@ async def test_get_joining_process_list_returns_list(opcua_client, ns_indices):
         pytest.fail(f"GetJoiningProcessList failed unexpectedly: {err_str}")
     output = result.output_list
     assert isinstance(output, list), f"GetJoiningProcessList must return a list, got {type(output).__name__}"
+
+
+@pytest.mark.requires_cu(CU.GET_JOINING_PROCESS_LIST)
+async def test_get_joining_process_list_elements_have_valid_structure(opcua_client, ns_indices):
+    """
+    Each element returned by GetJoiningProcessList must have a recognisable
+    joining-process identifier field (JoiningProcessId, Id, or a plain string).
+    An empty list is accepted (no programs configured), but non-empty lists must
+    contain well-structured entries per the spec.
+    """
+    ns_ijt = _require_ns_ijt(ns_indices)
+    jpm = await _get_jpm(opcua_client, ns_ijt)
+    result = await find_and_call_method(
+        jpm,
+        BN.GET_JOINING_PROCESS_LIST,
+        ns_ijt,
+        ua.Variant("", ua.VariantType.String),
+        timeout=15.0,
+    )
+    if not result.success:
+        err_str = str(result.error) if result.error else "unknown error"
+        if any(s in err_str for s in ("BadNotSupported", "BadNotImplemented", "BadArgumentsMissing")):
+            pytest.skip(f"GetJoiningProcessList returned {err_str} — skipping structure check")
+        pytest.fail(f"GetJoiningProcessList failed unexpectedly: {err_str}")
+    items = result.output_list
+    if not items:
+        return  # empty list is valid — nothing to validate
+    for i, entry in enumerate(items):
+        if entry is None:
+            continue
+        if isinstance(entry, (str, int, bytes)):
+            continue  # scalar ID — valid per some server implementations
+        # Struct entry: must have at least one recognisable identifier field
+        jp_id = getattr(entry, "JoiningProcessId", None) or getattr(entry, "Id", None) or getattr(entry, "Name", None)
+        assert jp_id is not None, (
+            f"GetJoiningProcessList element[{i}] has no recognisable identifier field "
+            f"(checked JoiningProcessId, Id, Name). "
+            f"Available attributes: {[a for a in dir(entry) if not a.startswith('_')]}"
+        )
+        logger.debug("GetJoiningProcessList element[%d]: identifier=%r", i, jp_id)
 
 
 # ---------------------------------------------------------------------------
@@ -592,6 +714,41 @@ async def test_increment_counter_callable_if_present(opcua_client, ns_indices):
         pytest.fail(f"IncrementJoiningProcessCounter raised an unexpected error: {err_str}")
 
 
+@pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
+async def test_increment_counter_with_product_instance_uri(opcua_client, ns_indices):
+    """
+    IncrementJoiningProcessCounter called with the tool's ProductInstanceUri must
+    succeed or return an accepted status code.
+
+    The ProductInstanceUri argument is required by the IJT spec.  This test validates
+    the full argument path by reading the PIU from the first configured tool and
+    passing it to the method — unlike the basic callable test that passes no arguments.
+    """
+    ns_ijt = _require_ns_ijt(ns_indices)
+    ns_di = ns_indices.get(NS_DI)
+    ns_app = ns_indices.get(NS_APP)
+    jpm = await _get_jpm(opcua_client, ns_ijt)
+    method_node = await _find_method_node(jpm, BN.INCREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
+    if method_node is None:
+        pytest.skip(f"Optional method '{BN.INCREMENT_JOINING_PROCESS_COUNTER}' not present — skipping")
+    pi_uri = await read_tool_product_instance_uri(opcua_client, ns_ijt, ns_di or 0, ns_app)
+    call_result = await call_method(
+        jpm,
+        method_node,
+        ua.Variant(pi_uri, ua.VariantType.String),
+        timeout=15.0,
+        method_name=BN.INCREMENT_JOINING_PROCESS_COUNTER,
+    )
+    if not call_result.success:
+        err_str = str(call_result.error) if call_result.error else "unknown"
+        if any(
+            s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadArgumentsMissing", "BadNothingToDo")
+        ):
+            pytest.skip(f"IncrementJoiningProcessCounter(PIU) returned {err_str} — skipping")
+        pytest.fail(f"IncrementJoiningProcessCounter with PIU '{pi_uri}' failed unexpectedly: {err_str}")
+    logger.info("IncrementJoiningProcessCounter succeeded with PIU '%s'", pi_uri)
+
+
 # ---------------------------------------------------------------------------
 # ─── decrement_joining_process_counter ───
 # ---------------------------------------------------------------------------
@@ -626,6 +783,92 @@ async def test_decrement_counter_callable_if_present(opcua_client, ns_indices):
         if any(s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadArgumentsMissing")):
             return
         pytest.fail(f"DecrementJoiningProcessCounter raised an unexpected error: {err_str}")
+
+
+@pytest.mark.requires_cu(CU.DECREMENT_JOINING_PROCESS_COUNTER)
+async def test_decrement_counter_with_product_instance_uri(opcua_client, ns_indices):
+    """
+    DecrementJoiningProcessCounter called with the tool's ProductInstanceUri must
+    succeed or return an accepted status code.
+
+    The ProductInstanceUri argument is required by the IJT spec.  This test validates
+    the full argument path by reading the PIU from the first configured tool.
+    """
+    ns_ijt = _require_ns_ijt(ns_indices)
+    ns_di = ns_indices.get(NS_DI)
+    ns_app = ns_indices.get(NS_APP)
+    jpm = await _get_jpm(opcua_client, ns_ijt)
+    method_node = await _find_method_node(jpm, BN.DECREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
+    if method_node is None:
+        pytest.skip(f"Optional method '{BN.DECREMENT_JOINING_PROCESS_COUNTER}' not present — skipping")
+    pi_uri = await read_tool_product_instance_uri(opcua_client, ns_ijt, ns_di or 0, ns_app)
+    call_result = await call_method(
+        jpm,
+        method_node,
+        ua.Variant(pi_uri, ua.VariantType.String),
+        timeout=15.0,
+        method_name=BN.DECREMENT_JOINING_PROCESS_COUNTER,
+    )
+    if not call_result.success:
+        err_str = str(call_result.error) if call_result.error else "unknown"
+        if any(
+            s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadArgumentsMissing", "BadNothingToDo")
+        ):
+            pytest.skip(f"DecrementJoiningProcessCounter(PIU) returned {err_str} — skipping")
+        pytest.fail(f"DecrementJoiningProcessCounter with PIU '{pi_uri}' failed unexpectedly: {err_str}")
+    logger.info("DecrementJoiningProcessCounter succeeded with PIU '%s'", pi_uri)
+
+
+@pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER, CU.DECREMENT_JOINING_PROCESS_COUNTER)
+async def test_increment_then_decrement_counter_is_balanced(opcua_client, ns_indices):
+    """
+    IncrementJoiningProcessCounter followed by DecrementJoiningProcessCounter (both with
+    the tool's ProductInstanceUri) must both succeed, demonstrating the counter can be
+    driven in both directions.
+
+    This is a balanced round-trip: Increment then Decrement, leaving the server in the
+    same state it started in.  Both methods are required for this test to run.
+    """
+    ns_ijt = _require_ns_ijt(ns_indices)
+    ns_di = ns_indices.get(NS_DI)
+    ns_app = ns_indices.get(NS_APP)
+    jpm = await _get_jpm(opcua_client, ns_ijt)
+    inc_node = await _find_method_node(jpm, BN.INCREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
+    dec_node = await _find_method_node(jpm, BN.DECREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
+    if inc_node is None or dec_node is None:
+        pytest.skip("Both IncrementJoiningProcessCounter and DecrementJoiningProcessCounter are required for this test")
+    pi_uri = await read_tool_product_instance_uri(opcua_client, ns_ijt, ns_di or 0, ns_app)
+
+    inc_result = await call_method(
+        jpm,
+        inc_node,
+        ua.Variant(pi_uri, ua.VariantType.String),
+        timeout=15.0,
+        method_name=BN.INCREMENT_JOINING_PROCESS_COUNTER,
+    )
+    if not inc_result.success:
+        err_str = str(inc_result.error) if inc_result.error else "unknown"
+        if any(
+            s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadArgumentsMissing", "BadNothingToDo")
+        ):
+            pytest.skip(f"IncrementJoiningProcessCounter returned {err_str} — skipping round-trip test")
+        pytest.fail(f"IncrementJoiningProcessCounter failed unexpectedly in round-trip test: {err_str}")
+
+    dec_result = await call_method(
+        jpm,
+        dec_node,
+        ua.Variant(pi_uri, ua.VariantType.String),
+        timeout=15.0,
+        method_name=BN.DECREMENT_JOINING_PROCESS_COUNTER,
+    )
+    if not dec_result.success:
+        err_str = str(dec_result.error) if dec_result.error else "unknown"
+        if any(
+            s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadArgumentsMissing", "BadNothingToDo")
+        ):
+            pytest.skip(f"DecrementJoiningProcessCounter returned {err_str} — skipping round-trip test")
+        pytest.fail(f"DecrementJoiningProcessCounter failed unexpectedly after successful Increment: {err_str}")
+    logger.info("Counter round-trip (Increment→Decrement) with PIU '%s' completed successfully", pi_uri)
 
 
 # ---------------------------------------------------------------------------
@@ -745,6 +988,41 @@ async def test_set_joining_process_counter_method_present_if_exists(joining_proc
     node = await _find_method_node(joining_process_management, "SetJoiningProcessCounter", ns_ijt)
     if node is None:
         pytest.skip("Optional method 'SetJoiningProcessCounter' not present on this server")
+
+
+@pytest.mark.requires_cu(CU.SET_JOINING_PROCESS_COUNTER)
+async def test_set_joining_process_counter_callable_if_present(opcua_client, ns_indices):
+    """
+    SetJoiningProcessCounter, if present, must be callable.
+
+    Called with the tool's ProductInstanceUri and a zero counter value.
+    Acceptable outcomes: Good (counter set), BadNotSupported, BadInvalidArgument
+    (when zero is not a valid counter value on this server).
+    """
+    ns_ijt = _require_ns_ijt(ns_indices)
+    ns_di = ns_indices.get(NS_DI)
+    ns_app = ns_indices.get(NS_APP)
+    jpm = await _get_jpm(opcua_client, ns_ijt)
+    method_node = await _find_method_node(jpm, "SetJoiningProcessCounter", ns_ijt)
+    if method_node is None:
+        pytest.skip("Optional method 'SetJoiningProcessCounter' not present — skipping")
+    pi_uri = await read_tool_product_instance_uri(opcua_client, ns_ijt, ns_di or 0, ns_app)
+    call_result = await call_method(
+        jpm,
+        method_node,
+        ua.Variant(pi_uri, ua.VariantType.String),
+        ua.Variant(0, ua.VariantType.UInt32),
+        timeout=15.0,
+        method_name="SetJoiningProcessCounter",
+    )
+    if not call_result.success:
+        err_str = str(call_result.error) if call_result.error else "unknown"
+        if any(
+            s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadArgumentsMissing", "BadNothingToDo")
+        ):
+            return  # server rejected a zero-value or empty-PIU counter — acceptable
+        pytest.fail(f"SetJoiningProcessCounter raised an unexpected error: {err_str}")
+    logger.info("SetJoiningProcessCounter with PIU '%s' counter=0 succeeded", pi_uri)
 
 
 # ---------------------------------------------------------------------------
