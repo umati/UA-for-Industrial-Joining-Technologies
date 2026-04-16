@@ -14,7 +14,7 @@ public static class ExtensionObjectHelper
 {
     private static readonly ILogger _log = IjtLog.ForCategory(nameof(ExtensionObjectHelper));
 
-    // ── JoiningProcessIdentificationDataType ──────────────────────────────────
+    // -- JoiningProcessIdentificationDataType ----------------------------------
 
     /// <summary>
     /// Builds a <see cref="JoiningProcessIdentificationDataType"/> wrapped in an
@@ -57,7 +57,7 @@ public static class ExtensionObjectHelper
         return new ExtensionObject(jpid);
     }
 
-    // ── EntityDataType ────────────────────────────────────────────────────────
+    // -- EntityDataType --------------------------------------------------------
 
     /// <summary>
     /// Builds a single <see cref="EntityDataType"/> wrapped in an
@@ -72,7 +72,7 @@ public static class ExtensionObjectHelper
     /// </param>
     /// <param name="entityType">
     ///   Entity type code per the IJT specification
-    ///   (0 = Unspecified, 1 = ProductSerialNumber, 2 = ProductBatchId, …).
+    ///   (0 = Unspecified, 1 = ProductSerialNumber, 2 = ProductBatchId, ...).
     /// </param>
     public static ExtensionObject MakeEntity(
         string entityId,
@@ -124,7 +124,7 @@ public static class ExtensionObjectHelper
         return items.Select(x => MakeEntity(x.EntityId, x.Name)).ToArray();
     }
 
-    // ── Decoding ──────────────────────────────────────────────────────────────
+    // -- Decoding --------------------------------------------------------------
 
     /// <summary>
     /// Attempts to decode an <see cref="ExtensionObject"/> as <typeparamref name="T"/>.

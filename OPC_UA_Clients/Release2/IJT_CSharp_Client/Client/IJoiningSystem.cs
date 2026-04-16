@@ -12,7 +12,7 @@ namespace IJT_CSharp_Client.Client;
 /// </summary>
 public interface IJoiningSystem
 {
-    // ── OPC UA session access ─────────────────────────────────────────────────
+    // -- OPC UA session access -------------------------------------------------
 
     /// <summary>The underlying OPC UA SDK session.</summary>
     ISession Session { get; }
@@ -23,7 +23,7 @@ public interface IJoiningSystem
     /// <summary>Returns <c>true</c> when the session is connected.</summary>
     bool IsConnected { get; }
 
-    // ── OPC UA helpers ────────────────────────────────────────────────────────
+    // -- OPC UA helpers --------------------------------------------------------
 
     /// <summary>
     /// Resolves a child node under <paramref name="parentId"/> by browse name.
@@ -34,6 +34,15 @@ public interface IJoiningSystem
         string childBrowseName,
         ushort nsIndex = 0,
         NodeClass nodeClassMask = NodeClass.Unspecified);
+
+    /// <summary>
+    /// Returns all direct hierarchical children of <paramref name="parentId"/>
+    /// whose <see cref="NodeClass"/> matches <paramref name="nodeClassMask"/>.
+    /// Returns an empty collection on failure or when the parent is null.
+    /// </summary>
+    ReferenceDescriptionCollection BrowseChildren(
+        NodeId parentId,
+        uint nodeClassMask = (uint)NodeClass.Unspecified);
 
     /// <summary>
     /// Resolves a method NodeId under <paramref name="objectId"/> by browse name.
@@ -54,7 +63,7 @@ public interface IJoiningSystem
     /// </summary>
     IList<object> CallMethod(NodeId objectId, NodeId methodId, params object[] inputArgs);
 
-    // ── IJT companion spec domain ─────────────────────────────────────────────
+    // -- IJT companion spec domain ---------------------------------------------
 
     /// <summary>
     /// NodeId of the <c>JoiningSystem</c> instance node discovered in the server's

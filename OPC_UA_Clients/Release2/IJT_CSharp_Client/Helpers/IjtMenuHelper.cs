@@ -24,11 +24,11 @@ public static class IjtMenuHelper
             lines.Add($"Tip: {tip}");
 
         int width = Math.Max(64, lines.Max(l => l.Length) + 4);
-        var bar = new string('─', width - 2);
+        var bar = new string('-', width - 2);
         Console.WriteLine();
-        Console.WriteLine($"┌{bar}┐");
+        Console.WriteLine($"+{bar}+");
         foreach (var line in lines)
-            Console.WriteLine($"│ {line.PadRight(width - 4)} │");
-        Console.WriteLine($"└{bar}┘");
+            Console.WriteLine($"| {line.PadRight(width - 4)} |");
+        Console.WriteLine($"+{bar}+");
     }
 }

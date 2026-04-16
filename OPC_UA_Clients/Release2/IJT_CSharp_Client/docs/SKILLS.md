@@ -40,6 +40,7 @@ JoiningSystem : IJoiningSystem, IAsyncDisposable   ← IJT domain root object
   ├── AssetManagement       — Asset Management menu items
   ├── JoiningProcessManagement — Joining Process menu items
   ├── JointManagement       — Joint Management menu items
+  ├── SimulationManagement   ← NEW: SimulateSingleResult, SimulateBatchOrSyncResult, SimulateJobResult, SimulateBulkResults, SimulateEvent, SimulateBulkEvents
   └── EventSubscriber       — Event Subscription menu items
 
 IJoiningSystem  ← interface used by management classes and Moq mocks
@@ -73,6 +74,7 @@ IJT_CSharp_Client/
 │   ├── ResultManagement.cs      # GetLatestResult, GetResultById, SubscribeResultVariable
 │   ├── JoiningProcessManagement.cs  # GetJoiningProcessList, SelectJoiningProcess, GetSelectedJoiningProgram
 │   ├── JointManagement.cs       # GetJointList, GetJoint, SelectJoint, DeleteJoint, SendJoint
+│   ├── SimulationManagement.cs  # SimulateSingleResult, SimulateBatchOrSyncResult, SimulateJobResult, SimulateBulkResults, SimulateEvent, SimulateBulkEvents
 │   └── EventSubscriber.cs       # Subscribe/Unsubscribe result + system events
 ├── Helpers/
 │   ├── IjtMenuHelper.cs         # Prompt helpers, max-length enforcement
@@ -81,7 +83,7 @@ IJT_CSharp_Client/
 │   ├── IjtEntityTypes.cs        # EntityType 42-value lookup (0=UNDEFINED..41=VIRTUAL_STATION) + PrintTable()
 │   ├── IjtResultFormatter.cs    # Result payload formatter (decodes JoiningResultDataType from ResultContent)
 │   ├── IjtEventFormatter.cs     # Event payload formatter (uses CurrentValue for ReportedValues)
-│   ├── IjtFileLogger.cs         # Log file writer (results, events, joints, joining process, identifiers)
+│   ├── IjtFileLogger.cs         # Log file writer (results, events, joining process, joints, entity list, io signals, assets)
 │   ├── AddressSpaceHelper.cs    # Browse utilities
 │   └── ExtensionObjectHelper.cs # ExtensionObject decode helpers
 ├── Types/                       # Auto-generated OPC UA type bindings (UAModel.*)
@@ -89,7 +91,7 @@ IJT_CSharp_Client/
 │   ├── Directory.Build.targets  # Client-compat: excludes *.Classes.cs when OpcUaClientOnly=true
 │   ├── nuget.config             # Scoped NuGet config for client-compat restore
 │   ├── UAModel.IJTBase/
-│   │   └── UAModel.IJTBase.DataTypes.Helpers.cs  # Partial-class factories: EntityDataType.Create(), JoiningProcessIdentificationDataType.Create(), JointDataType.Create() — auto-set EncodingMask
+│   │   └── UAModel.IJTBase.DataTypes.Helpers.cs  # Partial-class factories: EntityDataType.Create(), JoiningProcessIdentificationDataType.Create(), JointDataType.Create() — auto-set EncodingMask; JointDataType.Create() now accepts optional associatedEntities: EntityDataType[]
 │   └── ...                      # Do NOT edit generated files — regenerate with UA Model Compiler
 └── Tests/
     └── IJT_CSharp_Client.Tests/
@@ -236,7 +238,8 @@ filter.WhereClause = BuildOfTypeClause(resultReadyTypeId);     // ResultReadyEve
 
 | Issue | Status | Notes |
 |-------|--------|-------|
-| Browse exception tests in unit tier | Accepted | `ISession.Browse` synchronous overload is an extension method (`SessionObsolete.Browse`) — Moq cannot intercept. Browse-exception guards are production-correct; coverage is via live integration tests only. |
+| Browse exception tests in unit tier | Accepted | `ISession.Browse` synchronous overload is an extension method — Moq cannot intercept. Browse-exception guards are production-correct; coverage is via live integration tests only. |
+| `FullFlow_SendJoint_GetJoint_SelectJoint_DeleteJoint` | Fixed | Joint now created with PROGRAM entity (entityType=27) in `associatedEntities`. `JointDataType.Create()` factory updated to accept `EntityDataType[]?`. |
 
 ---
 
@@ -248,16 +251,21 @@ Large method outputs are written to domain-specific log files instead of floodin
 
 ```
 logs/
-  results/result.log                    — GetLatestResult, GetResultById, ResultReady events
-  events/event.log                      — JoiningSystemEvent notifications
-  joining_process/process_list.log      — GetJoiningProcessList
-  joining_process/selected_program.log  — GetSelectedJoiningProgram
-  joints/joint_list.log                 — GetJointList
-  joints/joint.log                      — GetJoint
-  identifiers/identifiers.log           — GetIdentifiers
+  result/result.json                          — GetLatestResult, GetResultById, ResultReady events
+  events/joining_system_event.json            — JoiningSystemEvent, JoiningSystemCondition notifications
+  joining_process/joining_process_list.json   — GetJoiningProcessList
+  joining_process/selected_joining_program.json — GetSelectedJoiningProgram
+  joint/joint_list.json                       — GetJointList
+  joint/joint.json                            — GetJoint
+  entity_list/entity_list.json                — GetIdentifiers
+  io_signals/io_signals.json                  — GetIOSignals (500 signals), SetIOSignals per-signal statuses
+  assets/<Category>_<Name>.json              — SubscribeAssetVariables (one file per OPC UA asset object,
+                                                 e.g. Tools_TighteningTool.json, Controllers_TighteningController.json;
+                                                 key = {catName}_{displayName} for collision safety;
+                                                 mirrors the OPC UA address space hierarchy as nested JSON)
 ```
 
-Each call **overwrites** the file (last payload only). Use `IjtFileLogger.BaseLogDir` to get the base path at runtime.
+All files **overwrite** on every call — always reflects the latest payload. Use `IjtFileLogger.BaseLogDir` to get the base path at runtime. Asset files are written via `IjtFileLogger.WriteAsset(assetKey, content)` (key = `{catName}_{displayName}`, auto-sanitized); the folder is `IjtFileLogger.AssetLogDir`.
 
 ### Pattern (copy for new operations)
 
@@ -280,7 +288,56 @@ For `ResultDataType` outputs use `IjtResultFormatter.FormatResult(rd, DateTime.U
 
 Menu items that write large outputs to file show `→ log` in the menu (right-justified). The `PrintCommandUsage` description for those items also states the target file path.
 
+**Interactive menu:** 36 options across 6 groups: Event Subscription (3 toggles), Result Management (3), Asset Management (8), Joining Process Management (9), Joint Management (5), JPM Extended (new: 9), Asset Extended (new: 3), Simulation (new: 6). Menu item numbers are implementation details of `Program.cs` and will change.
 
+
+
+## Simulation Methods (SimulationManagement)
+
+`SimulationManagement` (in `Client/SimulationManagement.cs`) wraps the `Simulations` subtree of the JoiningSystem address space:
+
+```
+JoiningSystem
+  └── Simulations (ns=1)
+        ├── SimulateResults
+        │     ├── SimulateSingleResult(resultType, includeTraces)
+        │     ├── SimulateBatchOrSyncResult(classification, childCount, includeTraces, sendAsReferences)
+        │     ├── SimulateJobResult(sendAsReferences)
+        │     └── SimulateBulkResults(resultType, includeTraces, fromSeq, toSeq, minDurationMs, updateResultVariables)
+        └── SimulateEventsAndConditions
+              ├── SimulateEvents(eventType, count)     ← aliased as SimulateEvent in client
+              └── SimulateBulkEvents(eventType, count)
+```
+
+**Key notes:**
+- All simulation result method booleans (`includeTraces`, `sendAsReferences`, `updateResultVariables`) should be `true` in tests — they enable the richest data path through the server.
+- `SimulateBulkResults`: requires `toSeq >= fromSeq + 5` and `minDurationMs >= 100` (validated client-side before call).
+- `SimulateBulkEvents`: count capped at 1000 (validated client-side).
+- Node paths are cached after first browse. Cache is invalidated on `OnKeepAlive` reconnect.
+- Simulation methods trigger real events on the server; live tests guard with browse-check + `Skip.If` if the `Simulations` node is absent.
+
+**Simulator constants (used in tests):**
+| Constant | Value |
+|----------|-------|
+| `SimToolUri` | `"www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D"` |
+| `SimControllerUri` | `"www.atlascopco.com/32CBC18F-DE66-4341-A258-142A515502E0"` |
+| `SimProgram4StepsId` | `"0952E9B4-05F6-4B43-B66C-B8027FBE966A"` |
+| `SimProgramOneStepId` | `"7C73882A-006D-4E0D-B2FB-8BDFC0C9EEF0"` |
+
+---
+
+## Console UX Fixes Applied
+
+| Issue | Fix |
+|-------|-----|
+| `°` rendered as `?` | `Console.OutputEncoding = UTF8` at startup; `IjtResultFormatter.NormalizeUnits()` maps U+00B0/U+FFFD → `"deg"` |
+| Log racing with prompt | Replaced `AddSimpleConsole` with synchronous `SynchronousConsoleProvider` in `IjtLog.cs` — all console writes share a static lock |
+| result.json / event log data missing | All log files use `File.WriteAllText` (overwrite) — always reflects latest payload; no append accumulation |
+| result.json missing trace data | `IjtResultFormatter.FormatTrace()` fully implemented; all trace steps written to `result/result.json` |
+| Unicode box drawing garbled | `IjtMenuHelper.cs` uses ASCII-only box drawing characters |
+| Prompt clutter | 2-line compact prompt; `h`/`help` shows full usage on demand only |
+
+---
 
 ## OPC UA Method Resolution (3-tier)
 

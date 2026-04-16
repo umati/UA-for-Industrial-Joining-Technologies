@@ -466,15 +466,17 @@ public class IjtJsonSerializerTests
     public void FormatOutput_ReturnsTimestampHeader()
     {
         var result = IjtJsonSerializer.FormatOutput("TestLabel", "some-value");
-        Assert.Contains("Generated:", result);
-        Assert.Contains("UTC", result);
+        // New format: valid JSON envelope with "generated" ISO-8601 field
+        Assert.Contains("\"generated\"", result);
+        Assert.Contains("TestLabel", result);
     }
 
     [Fact]
     public void FormatOutput_ReturnsLabelAndValue()
     {
         var result = IjtJsonSerializer.FormatOutput("JointList", "my-content");
-        Assert.Contains("JointList:", result);
+        // Label is a JSON property key; value is embedded as JSON
+        Assert.Contains("\"JointList\"", result);
         Assert.Contains("my-content", result);
     }
 
@@ -482,7 +484,7 @@ public class IjtJsonSerializerTests
     public void FormatOutput_NullValue_ReturnsNullInContent()
     {
         var result = IjtJsonSerializer.FormatOutput("EmptyOutput", null);
-        Assert.Contains("EmptyOutput:", result);
+        Assert.Contains("\"EmptyOutput\"", result);
         Assert.Contains("null", result);
     }
 

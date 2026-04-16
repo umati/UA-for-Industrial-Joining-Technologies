@@ -220,7 +220,12 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
 
         var entities = new List<UAModel.IJTBase.EntityDataType>
         {
-            new() { EntityId = "urn:demo:nut-1", EntityType = 1 },
+            UAModel.IJTBase.EntityDataType.Create(
+                "4Y1SL65848Z411439",
+                entityType: (short)20,
+                name: "VIN",
+                description: "Vehicle Identification Number",
+                isExternal: true),
         };
         var ex = await Record.ExceptionAsync(() =>
             Task.Run(() => session.AssetManagement.SendIdentifiers(entities), cts.Token)).ConfigureAwait(false);

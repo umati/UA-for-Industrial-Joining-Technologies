@@ -127,7 +127,11 @@ public sealed class JoiningProcessManagementUnitTests
         var session = MockSessionBuilder.Create();
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.SelectJoiningProcess("JP-001"));
+        var ex = Record.Exception(() => jpm.SelectJoiningProcess(
+            "0952E9B4-05F6-4B43-B66C-B8027FBE966A",
+            joiningProcessOriginId: "ORIGIN-SYS-1",
+            selectionName: "TorqueProgram_4Steps",
+            productInstanceUri: "www.atlascopco.com/32CBC18F-DE66-4341-A258-142A515502E0"));
 
         Assert.Null(ex);
         session.Verify(s => s.CallMethod(
@@ -209,7 +213,11 @@ public sealed class JoiningProcessManagementUnitTests
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadNodeIdUnknown));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.SelectJoiningProcess("JP-UNKNOWN"));
+        var ex = Record.Exception(() => jpm.SelectJoiningProcess(
+            "JP-UNKNOWN",
+            joiningProcessOriginId: "ORIGIN-SYS-UNKNOWN",
+            selectionName: "UnknownProgram",
+            productInstanceUri: "www.atlascopco.com/32CBC18F-DE66-4341-A258-142A515502E0"));
 
         Assert.Null(ex);
     }
@@ -223,7 +231,11 @@ public sealed class JoiningProcessManagementUnitTests
             .Throws(new TimeoutException("RPC timed out"));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.SelectJoiningProcess("JP-001"));
+        var ex = Record.Exception(() => jpm.SelectJoiningProcess(
+            "0952E9B4-05F6-4B43-B66C-B8027FBE966A",
+            joiningProcessOriginId: "ORIGIN-SYS-1",
+            selectionName: "TorqueProgram_4Steps",
+            productInstanceUri: "www.atlascopco.com/32CBC18F-DE66-4341-A258-142A515502E0"));
 
         Assert.Null(ex);
     }

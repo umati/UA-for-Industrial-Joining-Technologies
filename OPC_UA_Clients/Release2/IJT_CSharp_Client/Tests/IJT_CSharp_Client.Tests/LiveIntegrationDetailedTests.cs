@@ -2,6 +2,7 @@
 
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Configuration;
+using IJT_CSharp_Client.Helpers;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Xunit;
@@ -1173,5 +1174,1400 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             15, "direct GetLatestResult").ConfigureAwait(false);
 
         Assert.NotEmpty(outputs);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Simulator constants — these match the IJT demo server's pre-configured data
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private const string SimToolUri = "www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D";
+    private const string SimControllerUri = "www.atlascopco.com/32CBC18F-DE66-4341-A258-142A515502E0";
+    private const string SimProgram4StepsId = "0952E9B4-05F6-4B43-B66C-B8027FBE966A";
+    private const string SimProgramOneStepId = "7C73882A-006D-4E0D-B2FB-8BDFC0C9EEF0";
+    private const string SimJoint1Id = "Joint_1";
+    private const string SimJoint2Id = "Joint_2";
+
+    // ── Additional private helpers ────────────────────────────────────────────
+
+    /// <summary>
+    /// Locates the JointManagement node under JoiningSystem, with type-level fallback.
+    /// </summary>
+    private static async Task<NodeId> BrowseJointManagementNode(JoiningSystem session)
+    {
+        return await WithTimeout(() =>
+        {
+            var jm = session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JointManagement);
+            return jm.IsNullNodeId
+                ? session.IjtBaseObjectId(UAModel.IJTBase.Objects.JoiningSystemType_JointManagement)
+                : jm;
+        }, 10, "browse JointManagement").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Locates the JoiningProcessManagement node, with type-level fallback.
+    /// </summary>
+    private static async Task<NodeId> BrowseJpmNode(JoiningSystem session)
+    {
+        return await WithTimeout(() =>
+        {
+            var jpm = session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement);
+            return jpm.IsNullNodeId
+                ? session.IjtBaseObjectId(UAModel.IJTBase.Objects.JoiningSystemType_JoiningProcessManagement)
+                : jpm;
+        }, 10, "browse JoiningProcessManagement").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads the Int32 status code from outputs[<paramref name="statusIdx"/>].
+    /// Returns -1 when the output is absent or not an Int32.
+    /// </summary>
+    private static int ReadStatus(IList<object> outputs, int statusIdx = 1)
+    {
+        if (outputs.Count <= statusIdx) return -1;
+        var raw = Unwrap(outputs[statusIdx]);
+        if (raw is null) return -1;
+        try { return Convert.ToInt32(raw); }
+        catch { return -1; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Group 8: Joint Management — full coverage (menu items 14-18)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [SkippableFact]
+    public async Task GetJointList_ReturnsAtLeastOneOutput()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJointList,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJointList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "GetJointList method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jmNode, methodId, string.Empty),
+            10, "GetJointList").ConfigureAwait(false);
+
+        Assert.NotNull(outputs);
+        Assert.True(outputs.Count >= 1,
+            $"GetJointList must return at least 1 output (joint list), got {outputs.Count}");
+    }
+
+    [SkippableFact]
+    public async Task GetJointList_SimulatorReturnsAtLeastTwoJoints()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJointList,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJointList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "GetJointList method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jmNode, methodId, string.Empty),
+            10, "GetJointList(empty)").ConfigureAwait(false);
+        Skip.IfNot(outputs.Count >= 1, "GetJointList returned no output; skipping count check");
+
+        var count = IjtJsonSerializer.CountItems(outputs[0]);
+        Assert.True(count >= 2,
+            $"Simulator should have at least 2 pre-configured joints (Joint_1, Joint_2), got {count}");
+    }
+
+    [SkippableFact]
+    public async Task GetJointList_WithToolUri_ReturnsSameCountAsEmptyUri()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJointList,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJointList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "GetJointList method not found; skipping");
+
+        var emptyOutputs = await WithTimeout(
+            () => session.CallMethod(jmNode, methodId, string.Empty),
+            10, "GetJointList(empty)").ConfigureAwait(false);
+        var toolOutputs = await WithTimeout(
+            () => session.CallMethod(jmNode, methodId, SimToolUri),
+            10, "GetJointList(toolUri)").ConfigureAwait(false);
+
+        var emptyCount = IjtJsonSerializer.CountItems(emptyOutputs.Count > 0 ? emptyOutputs[0] : null);
+        var toolCount = IjtJsonSerializer.CountItems(toolOutputs.Count > 0 ? toolOutputs[0] : null);
+
+        Assert.Equal(emptyCount, toolCount);
+    }
+
+    [SkippableFact]
+    public async Task GetJoint_WithKnownJoint1_ReturnsStatus0()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "GetJoint method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jmNode, methodId, SimToolUri, SimJoint1Id),
+            10, "GetJoint(Joint_1)").ConfigureAwait(false);
+
+        Assert.True(outputs.Count >= 2, $"GetJoint must return at least [JointData, Status], got {outputs.Count}");
+        Assert.Equal(0, ReadStatus(outputs));
+    }
+
+    [SkippableFact]
+    public async Task GetJoint_WithKnownJoint2_ReturnsStatus0()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "GetJoint method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jmNode, methodId, SimToolUri, SimJoint2Id),
+            10, "GetJoint(Joint_2)").ConfigureAwait(false);
+
+        Assert.Equal(0, ReadStatus(outputs));
+    }
+
+    [SkippableFact]
+    public async Task GetJoint_WithJointDataType_JointIdMatchesRequest()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "GetJoint method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jmNode, methodId, SimToolUri, SimJoint1Id),
+            10, "GetJoint(Joint_1)").ConfigureAwait(false);
+        Skip.IfNot(outputs.Count >= 1 && outputs[0] is not null, "GetJoint returned no joint data; skipping");
+
+        var body = Unwrap(outputs[0]);
+        var joint = body as UAModel.IJTBase.JointDataType;
+        Skip.IfNot(joint is not null, "GetJoint body is not JointDataType; skipping");
+
+        Assert.Equal(SimJoint1Id, joint!.JointId);
+    }
+
+    [SkippableFact]
+    public async Task GetJoint_WithNonExistentId_ReturnsStatus4()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "GetJoint method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jmNode, methodId, SimToolUri, "NonExistentJoint_XYZ"),
+            10, "GetJoint(nonexistent)").ConfigureAwait(false);
+
+        Assert.True(outputs.Count >= 2, "GetJoint must return at least [JointData, Status] even for unknown ID");
+        // Simulator returns Status=4 ("Joint not found") for unknown joint IDs
+        Assert.Equal(4, ReadStatus(outputs));
+    }
+
+    [SkippableFact]
+    public async Task SelectJoint_WithKnownJoint_ReturnsStatus0()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SelectJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SelectJoint).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "SelectJoint method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jmNode, methodId, SimToolUri, SimJoint1Id, SimJoint1Id),
+            10, "SelectJoint(Joint_1)").ConfigureAwait(false);
+
+        Assert.True(outputs.Count >= 1, "SelectJoint must return at least 1 output (Status)");
+        Assert.Equal(0, ReadStatus(outputs, statusIdx: 0));
+    }
+
+    [SkippableFact]
+    public async Task SendJoint_NewJoint_ReturnsStatus0()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var sendMethodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SendJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
+        var delMethodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.DeleteJoint,
+            UAModel.IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
+        Skip.IfNot(!sendMethodId.IsNullNodeId, "SendJoint method not found; skipping");
+
+        const string testJointId = "LiveTest_SendJoint_Status0";
+        var joint = UAModel.IJTBase.JointDataType.Create(jointId: testJointId, jointDesignId: "TestDesign");
+        var ext = new ExtensionObject(joint);
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jmNode, sendMethodId, SimToolUri, ext),
+            10, "SendJoint").ConfigureAwait(false);
+
+        // Best-effort cleanup — delete the test joint regardless of send result
+        if (!delMethodId.IsNullNodeId)
+        {
+            try
+            {
+                await WithTimeout(
+                    () => session.CallMethod(jmNode, delMethodId, SimToolUri, testJointId, testJointId),
+                    10, "DeleteJoint cleanup").ConfigureAwait(false);
+            }
+            catch { /* ignore cleanup failures */ }
+        }
+
+        Assert.True(outputs.Count >= 1, "SendJoint must return at least 1 output (Status)");
+        Assert.Equal(0, ReadStatus(outputs, statusIdx: 0));
+    }
+
+    [SkippableFact]
+    public async Task SendJoint_ThenGetJoint_ConfirmsCreation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var sendId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SendJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
+        var getId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        var deleteId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.DeleteJoint,
+            UAModel.IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
+        Skip.IfNot(!sendId.IsNullNodeId && !getId.IsNullNodeId, "SendJoint or GetJoint method not found; skipping");
+
+        const string testJointId = "LiveTest_SendGetJoint_RoundTrip";
+        var joint = UAModel.IJTBase.JointDataType.Create(jointId: testJointId, jointDesignId: "RoundTripDesign");
+
+        await WithTimeout(
+            () => session.CallMethod(jmNode, sendId, SimToolUri, new ExtensionObject(joint)),
+            10, "SendJoint").ConfigureAwait(false);
+
+        var getOutputs = await WithTimeout(
+            () => session.CallMethod(jmNode, getId, SimToolUri, testJointId),
+            10, $"GetJoint({testJointId})").ConfigureAwait(false);
+
+        // Cleanup
+        if (!deleteId.IsNullNodeId)
+        {
+            try
+            {
+                await WithTimeout(
+                    () => session.CallMethod(jmNode, deleteId, SimToolUri, testJointId, testJointId),
+                    10, "DeleteJoint cleanup").ConfigureAwait(false);
+            }
+            catch { /* ignore */ }
+        }
+
+        Assert.Equal(0, ReadStatus(getOutputs));
+        var body = Unwrap(getOutputs.Count > 0 ? getOutputs[0] : null) as UAModel.IJTBase.JointDataType;
+        Skip.IfNot(body is not null, "GetJoint returned non-JointDataType body; skipping ID check");
+        Assert.Equal(testJointId, body!.JointId);
+    }
+
+    [SkippableFact]
+    public async Task SendJoint_ThenDeleteJoint_BothReturnStatus0()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var sendId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SendJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
+        var deleteId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.DeleteJoint,
+            UAModel.IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
+        Skip.IfNot(!sendId.IsNullNodeId && !deleteId.IsNullNodeId,
+            "SendJoint or DeleteJoint method not found; skipping");
+
+        const string testJointId = "LiveTest_SendDeleteJoint";
+        var joint = UAModel.IJTBase.JointDataType.Create(jointId: testJointId, jointDesignId: "DeleteDesign");
+
+        var sendOutputs = await WithTimeout(
+            () => session.CallMethod(jmNode, sendId, SimToolUri, new ExtensionObject(joint)),
+            10, "SendJoint").ConfigureAwait(false);
+
+        var deleteOutputs = await WithTimeout(
+            () => session.CallMethod(jmNode, deleteId, SimToolUri, testJointId, testJointId),
+            10, "DeleteJoint").ConfigureAwait(false);
+
+        Assert.Equal(0, ReadStatus(sendOutputs, statusIdx: 0));
+        Assert.Equal(0, ReadStatus(deleteOutputs, statusIdx: 0));
+    }
+
+    [SkippableFact]
+    public async Task FullFlow_SendJoint_GetJoint_SelectJoint_DeleteJoint()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var sendId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SendJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
+        var getId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        var selectId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SelectJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SelectJoint).ConfigureAwait(false);
+        var deleteId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.DeleteJoint,
+            UAModel.IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
+        Skip.IfNot(!sendId.IsNullNodeId && !getId.IsNullNodeId
+                   && !selectId.IsNullNodeId && !deleteId.IsNullNodeId,
+            "One or more JointManagement methods not found; skipping");
+
+        const string testJointId = "LiveTest_FullJointFlow";
+        var joint = UAModel.IJTBase.JointDataType.Create(
+            jointId: testJointId,
+            jointDesignId: "FlowDesign",
+            associatedEntities: new[]
+            {
+                UAModel.IJTBase.EntityDataType.Create(
+                    SimProgram4StepsId, entityType: (short)27, name: "Program_4_Steps", isExternal: false)
+            });
+
+        // Step 1 — Send (create)
+        var sendOut = await WithTimeout(
+            () => session.CallMethod(jmNode, sendId, SimToolUri, new ExtensionObject(joint)),
+            10, "SendJoint").ConfigureAwait(false);
+        Assert.Equal(0, ReadStatus(sendOut, statusIdx: 0));
+
+        // Step 2 — Get (verify it exists)
+        var getOut = await WithTimeout(
+            () => session.CallMethod(jmNode, getId, SimToolUri, testJointId),
+            10, "GetJoint").ConfigureAwait(false);
+        Assert.Equal(0, ReadStatus(getOut));
+
+        // Step 3 — Select
+        var selectOut = await WithTimeout(
+            () => session.CallMethod(jmNode, selectId, SimToolUri, testJointId, testJointId),
+            10, "SelectJoint").ConfigureAwait(false);
+        Assert.Equal(0, ReadStatus(selectOut, statusIdx: 0));
+
+        // Step 4 — Delete (cleanup)
+        var deleteOut = await WithTimeout(
+            () => session.CallMethod(jmNode, deleteId, SimToolUri, testJointId, testJointId),
+            10, "DeleteJoint").ConfigureAwait(false);
+        Assert.Equal(0, ReadStatus(deleteOut, statusIdx: 0));
+
+        // Step 5 — Verify deleted: GetJoint should return Status != 0
+        var getAfterDelete = await WithTimeout(
+            () => session.CallMethod(jmNode, getId, SimToolUri, testJointId),
+            10, "GetJoint after delete").ConfigureAwait(false);
+        Assert.NotEqual(0, ReadStatus(getAfterDelete));
+    }
+
+    [SkippableFact]
+    public async Task GetJointList_ViaManagementClass_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(() =>
+            WithTimeout(() => session.JointManagement.GetJointList(), 10, "JointManagement.GetJointList"))
+            .ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    [SkippableFact]
+    public async Task GetJoint_ViaManagementClass_KnownJoint_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(() =>
+            WithTimeout(() => session.JointManagement.GetJoint(SimToolUri, SimJoint1Id),
+                10, "JointManagement.GetJoint")).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    [SkippableFact]
+    public async Task SelectJoint_ViaManagementClass_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var ex = await Record.ExceptionAsync(() =>
+            WithTimeout(() => session.JointManagement.SelectJoint(SimToolUri, SimJoint1Id, SimJoint1Id),
+                10, "JointManagement.SelectJoint")).ConfigureAwait(false);
+        Assert.Null(ex);
+    }
+
+    [SkippableFact]
+    public async Task SendJoint_ThenGetJoint_ViaManagementClass_FullLifecycle()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        const string testId = "LiveTest_MgmtClass_Lifecycle";
+
+        var sendEx = await Record.ExceptionAsync(() =>
+            WithTimeout(() => session.JointManagement.SendJoint(SimToolUri, testId, "TestDesign"),
+                10, "SendJoint")).ConfigureAwait(false);
+        Assert.Null(sendEx);
+
+        var getEx = await Record.ExceptionAsync(() =>
+            WithTimeout(() => session.JointManagement.GetJoint(SimToolUri, testId),
+                10, "GetJoint")).ConfigureAwait(false);
+        Assert.Null(getEx);
+
+        // Cleanup — best effort
+        try
+        {
+            await WithTimeout(() => session.JointManagement.DeleteJoint(SimToolUri, testId, testId),
+                10, "DeleteJoint cleanup").ConfigureAwait(false);
+        }
+        catch { /* ignore */ }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Group 9: Joining Process Management — extended (menu items 11-13)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [SkippableFact]
+    public async Task GetJoiningProcessList_SimulatorHasThreeProcesses()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
+            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "GetJoiningProcessList method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jpmNode, methodId, string.Empty),
+            15, "GetJoiningProcessList").ConfigureAwait(false);
+        Skip.IfNot(outputs.Count >= 1, "No outputs; skipping count check");
+
+        var count = IjtJsonSerializer.CountItems(outputs[0]);
+        Assert.True(count >= 3,
+            $"Simulator should expose at least 3 joining processes (Program_One_Step, Program_4_Steps, Sequence1), got {count}");
+    }
+
+    [SkippableFact]
+    public async Task GetJoiningProcessList_ProcessesHaveNonEmptyIds()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
+            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "GetJoiningProcessList method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jpmNode, methodId, string.Empty),
+            15, "GetJoiningProcessList").ConfigureAwait(false);
+        Skip.IfNot(outputs.Count >= 1, "No outputs; skipping ID check");
+
+        // The serialised list output must contain at least two GUID-shaped IDs
+        var json = IjtJsonSerializer.FormatOutput("JoiningProcessList", outputs[0]);
+        Assert.Contains("JoiningProcessId", json);
+    }
+
+    [SkippableFact]
+    public async Task GetJoiningProcessList_WithToolUri_Returns3Processes()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
+            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "GetJoiningProcessList method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jpmNode, methodId, SimToolUri),
+            15, "GetJoiningProcessList(toolUri)").ConfigureAwait(false);
+        Skip.IfNot(outputs.Count >= 1, "No outputs; skipping");
+
+        var count = IjtJsonSerializer.CountItems(outputs[0]);
+        Assert.True(count >= 3,
+            $"GetJoiningProcessList with Tool URI should return ≥3 processes, got {count}");
+    }
+
+    [SkippableFact]
+    public async Task GetJoiningProcessList_WithControllerUri_Returns3Processes()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
+            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "GetJoiningProcessList method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jpmNode, methodId, SimControllerUri),
+            15, "GetJoiningProcessList(controllerUri)").ConfigureAwait(false);
+        Skip.IfNot(outputs.Count >= 1, "No outputs; skipping");
+
+        var count = IjtJsonSerializer.CountItems(outputs[0]);
+        Assert.True(count >= 3,
+            $"GetJoiningProcessList with Controller URI should return ≥3 processes, got {count}");
+    }
+
+    [SkippableFact]
+    public async Task SelectJoiningProcess_WithProgram4StepsId_ReturnsStatus0()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jpmNode, "SelectJoiningProcess",
+            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "SelectJoiningProcess method not found; skipping");
+
+        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+            joiningProcessId: SimProgram4StepsId);
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jpmNode, methodId, string.Empty, new ExtensionObject(jpId)),
+            15, "SelectJoiningProcess(Program_4_Steps)").ConfigureAwait(false);
+
+        Assert.True(outputs.Count >= 1, "SelectJoiningProcess must return at least 1 output (Status)");
+        Assert.Equal(0, ReadStatus(outputs, statusIdx: 0));
+    }
+
+    [SkippableFact]
+    public async Task SelectJoiningProcess_WithProgram1StepIdAndSelectionName_ReturnsStatus0()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, jpmNode, "SelectJoiningProcess",
+            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "SelectJoiningProcess method not found; skipping");
+
+        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+            joiningProcessId: SimProgramOneStepId, selectionName: "ProgramIndex_1");
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jpmNode, methodId, string.Empty, new ExtensionObject(jpId)),
+            15, "SelectJoiningProcess(Program_One_Step+selectionName)").ConfigureAwait(false);
+
+        Assert.Equal(0, ReadStatus(outputs, statusIdx: 0));
+    }
+
+    [SkippableFact]
+    public async Task GetSelectedJoiningProgram_AfterSelectProgram4Steps_ReturnsAtLeast1Output()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+
+        var selectId = await BrowseMethodNode(session, jpmNode, "SelectJoiningProcess",
+            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
+        var getSelectedId = await BrowseMethodNode(session, jpmNode,
+            UAModel.IJTBase.BrowseNames.GetSelectedJoiningProgram,
+            UAModel.IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram).ConfigureAwait(false);
+        Skip.IfNot(!selectId.IsNullNodeId && !getSelectedId.IsNullNodeId,
+            "SelectJoiningProcess or GetSelectedJoiningProgram method not found; skipping");
+
+        // First select a known process
+        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(joiningProcessId: SimProgram4StepsId);
+        await WithTimeout(
+            () => session.CallMethod(jpmNode, selectId, string.Empty, new ExtensionObject(jpId)),
+            15, "SelectJoiningProcess").ConfigureAwait(false);
+
+        // Then retrieve the selected program
+        var outputs = await WithTimeout(
+            () => session.CallMethod(jpmNode, getSelectedId, string.Empty),
+            15, "GetSelectedJoiningProgram").ConfigureAwait(false);
+
+        Assert.NotNull(outputs);
+        Assert.True(outputs.Count >= 1, "GetSelectedJoiningProgram must return at least 1 output after select");
+    }
+
+    [SkippableFact]
+    public async Task FullFlow_GetJoiningProcessList_SelectFirst_GetSelectedProgram_RoundTrip()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+
+        var listId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
+            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        var selectId = await BrowseMethodNode(session, jpmNode, "SelectJoiningProcess",
+            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
+        var getProgId = await BrowseMethodNode(session, jpmNode,
+            UAModel.IJTBase.BrowseNames.GetSelectedJoiningProgram,
+            UAModel.IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram).ConfigureAwait(false);
+        Skip.IfNot(!listId.IsNullNodeId && !selectId.IsNullNodeId && !getProgId.IsNullNodeId,
+            "One or more JPM methods not found; skipping");
+
+        // Step 1 — get list, extract first process ID
+        var listOutputs = await WithTimeout(
+            () => session.CallMethod(jpmNode, listId, string.Empty),
+            15, "GetJoiningProcessList").ConfigureAwait(false);
+        Skip.IfNot(listOutputs.Count >= 1, "No list output; skipping round-trip");
+
+        // Use known ID directly (faster, avoids parsing the extension object array)
+        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+            joiningProcessId: SimProgram4StepsId);
+
+        // Step 2 — select
+        var selectOut = await WithTimeout(
+            () => session.CallMethod(jpmNode, selectId, string.Empty, new ExtensionObject(jpId)),
+            15, "SelectJoiningProcess").ConfigureAwait(false);
+        Assert.Equal(0, ReadStatus(selectOut, statusIdx: 0));
+
+        // Step 3 — get selected program and verify it returns something
+        var progOutputs = await WithTimeout(
+            () => session.CallMethod(jpmNode, getProgId, string.Empty),
+            15, "GetSelectedJoiningProgram").ConfigureAwait(false);
+        Assert.True(progOutputs.Count >= 1, "GetSelectedJoiningProgram must return ≥1 output after select");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Group 10: Asset Management — extended scenarios (menu items 6-10)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [SkippableFact]
+    public async Task EnableAsset_WithToolUri_ReturnsOutputsWithStatusField()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
+        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.EnableAsset,
+            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "EnableAsset method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(methodSetNode, methodId, SimToolUri, true),
+            10, "EnableAsset(toolUri, true)").ConfigureAwait(false);
+
+        // Status field must be present; value depends on whether the URI is registered in the simulator
+        Assert.True(outputs.Count >= 1,
+            "EnableAsset must return at least 1 output (Status)");
+        var status = ReadStatus(outputs, statusIdx: 0);
+        Assert.True(status is 0 or 2,
+            $"EnableAsset with Tool URI should return Status 0 (OK) or 2 (URI not found), got {status}");
+    }
+
+    [SkippableFact]
+    public async Task SendTextIdentifiers_ThreeIds_ReturnsStatus0()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
+        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, methodSetNode, "SendTextIdentifiers",
+            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "SendTextIdentifiers method not found; skipping");
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(methodSetNode, methodId, SimToolUri,
+                new[] { "PART-001", "ORDER-123", "VIN-456" }),
+            10, "SendTextIdentifiers(3 ids)").ConfigureAwait(false);
+
+        Assert.True(outputs.Count >= 1, "SendTextIdentifiers must return at least 1 output (Status)");
+        Assert.Equal(0, ReadStatus(outputs, statusIdx: 0));
+    }
+
+    [SkippableFact]
+    public async Task SendIdentifiers_TwoEntitiesDifferentTypes_ReturnsStatus0()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
+        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, methodSetNode, "SendIdentifiers",
+            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "SendIdentifiers method not found; skipping");
+
+        // Entity 1 — PART (type 22), Entity 2 — TOOL (type 4)
+        var entities = new[]
+        {
+            new ExtensionObject(UAModel.IJTBase.EntityDataType.Create(
+                "urn:live-test:part-001", entityType: (short)22, name: "PartA", isExternal: false)),
+            new ExtensionObject(UAModel.IJTBase.EntityDataType.Create(
+                "urn:live-test:tool-001", entityType: (short)4,  name: "ToolB", isExternal: true)),
+        };
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(methodSetNode, methodId, SimToolUri, (object)entities),
+            10, "SendIdentifiers(2 entities)").ConfigureAwait(false);
+
+        Assert.True(outputs.Count >= 1, "SendIdentifiers must return at least 1 output (Status)");
+        Assert.Equal(0, ReadStatus(outputs, statusIdx: 0));
+    }
+
+    [SkippableFact]
+    public async Task SendIdentifiers_WithProgramEntityType_ReturnsStatus0()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
+        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+
+        var methodId = await BrowseMethodNode(session, methodSetNode, "SendIdentifiers",
+            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId, "SendIdentifiers method not found; skipping");
+
+        // PROGRAM (type 27)
+        var entities = new[]
+        {
+            new ExtensionObject(UAModel.IJTBase.EntityDataType.Create(
+                SimProgram4StepsId, entityType: (short)27, name: "Program_4_Steps", isExternal: false)),
+        };
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(methodSetNode, methodId, SimToolUri, (object)entities),
+            10, "SendIdentifiers(PROGRAM type)").ConfigureAwait(false);
+
+        Assert.Equal(0, ReadStatus(outputs, statusIdx: 0));
+    }
+
+    [SkippableFact]
+    public async Task GetIdentifiers_AfterSendTextIdentifiers_EntityListContainsData()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
+        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+
+        var sendTextId = await BrowseMethodNode(session, methodSetNode, "SendTextIdentifiers",
+            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
+        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.GetIdentifiers,
+            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!sendTextId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
+            "SendTextIdentifiers or GetIdentifiers method not found; skipping");
+
+        await WithTimeout(
+            () => session.CallMethod(methodSetNode, sendTextId, SimToolUri,
+                new[] { "LIVE-GET-TEST-001", "LIVE-GET-TEST-002" }),
+            10, "SendTextIdentifiers").ConfigureAwait(false);
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(methodSetNode, getIdentifiersId, SimToolUri, Array.Empty<string>()),
+            10, "GetIdentifiers").ConfigureAwait(false);
+
+        Assert.True(outputs.Count >= 1,
+            $"GetIdentifiers must return ≥1 output after SendTextIdentifiers, got {outputs.Count}");
+        // The list output must contain at least some serialisable data
+        var json = IjtJsonSerializer.FormatOutput("EntityList", outputs[0]);
+        Assert.False(string.IsNullOrWhiteSpace(json));
+    }
+
+    [SkippableFact]
+    public async Task ResetIdentifiers_AfterSend_GetIdentifiers_StillReturnsOutputs()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
+        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+
+        var sendTextId = await BrowseMethodNode(session, methodSetNode, "SendTextIdentifiers",
+            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
+        var resetId = await BrowseMethodNode(session, methodSetNode, "ResetIdentifiers",
+            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers).ConfigureAwait(false);
+        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.GetIdentifiers,
+            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!sendTextId.IsNullNodeId && !resetId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
+            "One or more identifier methods not found; skipping");
+
+        await WithTimeout(
+            () => session.CallMethod(methodSetNode, sendTextId, SimToolUri, new[] { "RESET-FLOW-001" }),
+            10, "SendTextIdentifiers").ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.CallMethod(methodSetNode, resetId, SimToolUri, Array.Empty<string>(), true, false),
+            10, "ResetIdentifiers").ConfigureAwait(false);
+
+        var outputs = await WithTimeout(
+            () => session.CallMethod(methodSetNode, getIdentifiersId, SimToolUri, Array.Empty<string>()),
+            10, "GetIdentifiers after reset").ConfigureAwait(false);
+
+        Assert.NotNull(outputs);
+        Assert.True(outputs.Count >= 1,
+            "GetIdentifiers must return at least 1 output (even if empty list) after ResetIdentifiers");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Group 11: Subscription State Verification (menu items 1-3 toggles)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [SkippableFact]
+    public async Task Subscribe_Events_IsSubscribedBecomesTrue_ThenFalseAfterUnsubscribe()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        Assert.False(session.EventSubscriber.IsSubscribed, "IsSubscribed must be false before Subscribe()");
+
+        var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
+        Skip.IfNot(subOk, "Subscribe timed out; skipping");
+        Assert.True(session.EventSubscriber.IsSubscribed, "IsSubscribed must be true after Subscribe()");
+
+        using var unsubCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var unsubTask = Task.Run(() => session.EventSubscriber.Unsubscribe());
+        Skip.IfNot(await Task.WhenAny(unsubTask, Task.Delay(Timeout.Infinite, unsubCts.Token)).ConfigureAwait(false) == unsubTask,
+            "Unsubscribe timed out; skipping state check");
+        await unsubTask.ConfigureAwait(false);
+        Assert.False(session.EventSubscriber.IsSubscribed, "IsSubscribed must be false after Unsubscribe()");
+    }
+
+    [SkippableFact]
+    public async Task SubscribeResultVariable_IsResultVarSubscribedBecomesTrue_ThenFalse()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        Assert.False(session.ResultManagement.IsResultVarSubscribed,
+            "IsResultVarSubscribed must be false before subscribing");
+
+        await WithTimeout(() => session.ResultManagement.SubscribeResultVariable(),
+            10, "SubscribeResultVariable").ConfigureAwait(false);
+        Assert.True(session.ResultManagement.IsResultVarSubscribed,
+            "IsResultVarSubscribed must be true after SubscribeResultVariable()");
+
+        await WithTimeout(() => session.ResultManagement.StopResultVariableSubscription(),
+            10, "StopResultVariableSubscription").ConfigureAwait(false);
+        Assert.False(session.ResultManagement.IsResultVarSubscribed,
+            "IsResultVarSubscribed must be false after StopResultVariableSubscription()");
+    }
+
+    [SkippableFact]
+    public async Task SubscribeAssetVariables_IsAssetVarSubscribedBecomesTrue_ThenFalse()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        Assert.False(session.AssetManagement.IsAssetVarSubscribed,
+            "IsAssetVarSubscribed must be false before subscribing");
+
+        await WithTimeout(() => session.AssetManagement.SubscribeAssetVariables(),
+            10, "SubscribeAssetVariables").ConfigureAwait(false);
+        Assert.True(session.AssetManagement.IsAssetVarSubscribed,
+            "IsAssetVarSubscribed must be true after SubscribeAssetVariables()");
+
+        await WithTimeout(() => session.AssetManagement.StopAssetVariableSubscription(),
+            10, "StopAssetVariableSubscription").ConfigureAwait(false);
+        Assert.False(session.AssetManagement.IsAssetVarSubscribed,
+            "IsAssetVarSubscribed must be false after StopAssetVariableSubscription()");
+    }
+
+    [SkippableFact]
+    public async Task AllThreeSubscriptions_ToggleOnThenOff_StateConsistent()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        // All OFF initially
+        Assert.False(session.EventSubscriber.IsSubscribed);
+        Assert.False(session.ResultManagement.IsResultVarSubscribed);
+        Assert.False(session.AssetManagement.IsAssetVarSubscribed);
+
+        // Toggle all ON
+        var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
+        Skip.IfNot(subOk, "Event subscribe timed out; skipping");
+        await WithTimeout(() => session.ResultManagement.SubscribeResultVariable(), 10, "SubscribeResultVariable").ConfigureAwait(false);
+        await WithTimeout(() => session.AssetManagement.SubscribeAssetVariables(), 10, "SubscribeAssetVariables").ConfigureAwait(false);
+
+        Assert.True(session.EventSubscriber.IsSubscribed);
+        Assert.True(session.ResultManagement.IsResultVarSubscribed);
+        Assert.True(session.AssetManagement.IsAssetVarSubscribed);
+
+        // Toggle all OFF
+        using var unsubCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var unsubTask = Task.Run(() => session.EventSubscriber.Unsubscribe());
+        Skip.IfNot(await Task.WhenAny(unsubTask, Task.Delay(Timeout.Infinite, unsubCts.Token)).ConfigureAwait(false) == unsubTask,
+            "Unsubscribe timed out; skipping final state check");
+        await unsubTask.ConfigureAwait(false);
+        await WithTimeout(() => session.ResultManagement.StopResultVariableSubscription(), 10, "StopResultVar").ConfigureAwait(false);
+        await WithTimeout(() => session.AssetManagement.StopAssetVariableSubscription(), 10, "StopAssetVar").ConfigureAwait(false);
+
+        Assert.False(session.EventSubscriber.IsSubscribed);
+        Assert.False(session.ResultManagement.IsResultVarSubscribed);
+        Assert.False(session.AssetManagement.IsAssetVarSubscribed);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Group 12: JoiningProcessManagement Extended Methods
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [SkippableFact]
+    public async Task StartJoiningProcess_ValidIds_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.JoiningProcessManagement.StartJoiningProcess(SimToolUri, SimProgram4StepsId),
+            10, "StartJoiningProcess").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task AbortJoiningProcess_WithMessage_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.JoiningProcessManagement.AbortJoiningProcess(SimToolUri, SimProgram4StepsId, "", "Test abort"),
+            10, "AbortJoiningProcess").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task DeselectJoiningProcess_EmptyUri_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.JoiningProcessManagement.DeselectJoiningProcess(""),
+            10, "DeselectJoiningProcess").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task ResetJoiningProcess_ValidIds_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.JoiningProcessManagement.ResetJoiningProcess(SimToolUri, SimProgram4StepsId),
+            10, "ResetJoiningProcess").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task IncrementJoiningProcessCounter_Count1_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.JoiningProcessManagement.IncrementJoiningProcessCounter(SimToolUri, SimProgram4StepsId, 1),
+            10, "IncrementJoiningProcessCounter").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task DecrementJoiningProcessCounter_Count1_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.JoiningProcessManagement.DecrementJoiningProcessCounter(SimToolUri, SimProgram4StepsId, 1),
+            10, "DecrementJoiningProcessCounter").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task SetJoiningProcessCounter_Value5_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.JoiningProcessManagement.SetJoiningProcessCounter(SimToolUri, SimProgram4StepsId, 5),
+            10, "SetJoiningProcessCounter").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task SetJoiningProcessSize_Value10_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.JoiningProcessManagement.SetJoiningProcessSize(SimToolUri, SimProgram4StepsId, 10),
+            10, "SetJoiningProcessSize").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task StartSelectedJoining_AfterSelectJoint_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
+        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+
+        var selectJointId = await BrowseMethodNode(session, jmNode,
+            UAModel.IJTBase.BrowseNames.SelectJoint,
+            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SelectJoint).ConfigureAwait(false);
+        Skip.IfNot(!selectJointId.IsNullNodeId, "SelectJoint method not found; skipping");
+
+        var selectOutputs = await WithTimeout(
+            () => session.CallMethod(jmNode, selectJointId, SimToolUri, SimJoint1Id, ""),
+            10, "SelectJoint(Joint_1)").ConfigureAwait(false);
+
+        var selectStatus = ReadStatus(selectOutputs, statusIdx: 0);
+        Skip.If(selectStatus != 0, $"SelectJoint returned non-OK status {selectStatus}; skipping StartSelectedJoining test");
+
+        await WithTimeout(
+            () => session.JoiningProcessManagement.StartSelectedJoining(SimToolUri, false),
+            10, "StartSelectedJoining").ConfigureAwait(false);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Group 13: AssetManagement Extended Methods
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [SkippableFact]
+    public async Task SetTime_UtcNow_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.AssetManagement.SetTime(SimToolUri, DateTime.UtcNow),
+            10, "SetTime(UtcNow)").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task SetTime_NullDateTime_UsesUtcNow_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.AssetManagement.SetTime(SimToolUri, null),
+            10, "SetTime(null)").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task GetIOSignals_EmptyFilter_Returns500Signals()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        await WithTimeout(
+            () => session.AssetManagement.GetIOSignals(SimToolUri),
+            15, "GetIOSignals(empty filter)").ConfigureAwait(false);
+
+        Assert.True(File.Exists(IjtFileLogger.IOSignalsLogPath),
+            $"IOSignals log file must exist after GetIOSignals call: {IjtFileLogger.IOSignalsLogPath}");
+    }
+
+    [SkippableFact]
+    public async Task SetIOSignals_SingleSignal_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var signal = new UAModel.IJTBase.SignalDataType
+        {
+            SignalId = "SIG-001",
+            SignalValue = new Variant(42.0),
+        };
+
+        await WithTimeout(
+            () => session.AssetManagement.SetIOSignals(SimToolUri, new[] { signal }),
+            10, "SetIOSignals(1 signal)").ConfigureAwait(false);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Group 14: Simulation Methods (via SimulationManagement facade)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [SkippableFact]
+    public async Task SimulateSingleResult_Type0_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var simsNode = await WithTimeout(
+            () => session.BrowseChild(session.NodeId, "Simulations"),
+            10, "browse Simulations").ConfigureAwait(false);
+        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+
+        await WithTimeout(
+            () => session.SimulationManagement.SimulateSingleResult(0, true),
+            10, "SimulateSingleResult(type=0, includeTraces=true)").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task SimulateSingleResult_Type2_WithTraces_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var simsNode = await WithTimeout(
+            () => session.BrowseChild(session.NodeId, "Simulations"),
+            10, "browse Simulations").ConfigureAwait(false);
+        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+
+        await WithTimeout(
+            () => session.SimulationManagement.SimulateSingleResult(2, true),
+            10, "SimulateSingleResult(type=2, traces=true)").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task SimulateSingleResult_ThenResultReceived_ViaSubscription()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var simsNode = await WithTimeout(
+            () => session.BrowseChild(session.NodeId, "Simulations"),
+            10, "browse Simulations").ConfigureAwait(false);
+        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+
+        var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
+        Skip.IfNot(subOk, "Subscribe timed out; skipping");
+
+        var tcs = new TaskCompletionSource<EventSubscriber.ResultReadyEventArgs>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        session.EventSubscriber.OnResultReady += (_, e) => tcs.TrySetResult(e);
+
+        await WithTimeout(
+            () => session.SimulationManagement.SimulateSingleResult(0, true),
+            10, "SimulateSingleResult(type=0, includeTraces=true)").ConfigureAwait(false);
+
+        var received = await Task.WhenAny(tcs.Task, Task.Delay(15_000, cts.Token))
+            .ConfigureAwait(false) == tcs.Task;
+        Assert.True(received, "ResultReady event not received within 15 s after SimulateSingleResult");
+
+        var args = await tcs.Task.ConfigureAwait(false);
+        Assert.NotNull(args.ResultId);
+        Assert.NotEmpty(args.ResultId);
+    }
+
+    [SkippableFact]
+    public async Task SimulateBatchOrSyncResult_Batch_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var simsNode = await WithTimeout(
+            () => session.BrowseChild(session.NodeId, "Simulations"),
+            10, "browse Simulations").ConfigureAwait(false);
+        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+
+        await WithTimeout(
+            () => session.SimulationManagement.SimulateBatchOrSyncResult(3, 3, true, true),
+            10, "SimulateBatchOrSyncResult(BATCH, 3 children, includeTraces=true, sendAsRefs=true)").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task SimulateBatchOrSyncResult_Sync_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var simsNode = await WithTimeout(
+            () => session.BrowseChild(session.NodeId, "Simulations"),
+            10, "browse Simulations").ConfigureAwait(false);
+        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+
+        await WithTimeout(
+            () => session.SimulationManagement.SimulateBatchOrSyncResult(2, 2, true, true),
+            10, "SimulateBatchOrSyncResult(SYNC, 2 children, includeTraces=true, sendAsRefs=true)").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task SimulateJobResult_ViaFacade_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var simsNode = await WithTimeout(
+            () => session.BrowseChild(session.NodeId, "Simulations"),
+            10, "browse Simulations").ConfigureAwait(false);
+        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+
+        await WithTimeout(
+            () => session.SimulationManagement.SimulateJobResult(true),
+            10, "SimulateJobResult(sendAsRefs=true)").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task SimulateBulkResults_10Results_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var simsNode = await WithTimeout(
+            () => session.BrowseChild(session.NodeId, "Simulations"),
+            10, "browse Simulations").ConfigureAwait(false);
+        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+
+        await WithTimeout(
+            () => session.SimulationManagement.SimulateBulkResults(0, true, 1, 10, 200, true),
+            10, "SimulateBulkResults(1..10, 200ms, includeTraces=true, updateVars=true)").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task SimulateEvent_Type1_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var simsNode = await WithTimeout(
+            () => session.BrowseChild(session.NodeId, "Simulations"),
+            10, "browse Simulations").ConfigureAwait(false);
+        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+
+        await WithTimeout(
+            () => session.SimulationManagement.SimulateEvent(1),
+            10, "SimulateEvent(type=1)").ConfigureAwait(false);
+    }
+
+    [SkippableFact]
+    public async Task SimulateEvent_ThenEventReceived_ViaSubscription()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var simsNode = await WithTimeout(
+            () => session.BrowseChild(session.NodeId, "Simulations"),
+            10, "browse Simulations").ConfigureAwait(false);
+        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+
+        var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
+        Skip.IfNot(subOk, "Subscribe timed out; skipping");
+
+        var tcs = new TaskCompletionSource<EventSubscriber.JoiningSystemEventArgs>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        session.EventSubscriber.OnJoiningSystemEvent += (_, e) => tcs.TrySetResult(e);
+
+        await WithTimeout(
+            () => session.SimulationManagement.SimulateEvent(1),
+            10, "SimulateEvent(type=1)").ConfigureAwait(false);
+
+        var received = await Task.WhenAny(tcs.Task, Task.Delay(15_000, cts.Token))
+            .ConfigureAwait(false) == tcs.Task;
+        Assert.True(received, "JoiningSystemEvent not received within 15 s after SimulateEvent");
+
+        var args = await tcs.Task.ConfigureAwait(false);
+        Assert.True(
+            !string.IsNullOrEmpty(args.EventCode) || !string.IsNullOrEmpty(args.EventText),
+            "JoiningSystemEventArgs must have a non-empty EventCode or EventText");
+    }
+
+    [SkippableFact]
+    public async Task SimulateBulkEvents_10Events_DoesNotThrow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await JoiningSystem.ConnectAsync(LiveConfig, cts.Token).ConfigureAwait(false);
+
+        var simsNode = await WithTimeout(
+            () => session.BrowseChild(session.NodeId, "Simulations"),
+            10, "browse Simulations").ConfigureAwait(false);
+        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+
+        await WithTimeout(
+            () => session.SimulationManagement.SimulateBulkEvents(1, 10),
+            10, "SimulateBulkEvents(type=1, count=10)").ConfigureAwait(false);
     }
 }

@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Globalization;
 using System.Text;
 using Opc.Ua;
 using UAModel.IJTBase;
@@ -9,7 +10,7 @@ namespace IJT_CSharp_Client.Helpers;
 
 /// <summary>
 /// Formats IJT <b>result</b> payloads (ResultDataType) as human-readable text.
-/// Covers both <c>JoiningSystemResultReadyEvent</c> and <c>ResultReadyEvent</c> — both
+/// Covers both <c>JoiningSystemResultReadyEvent</c> and <c>ResultReadyEvent</c> - both
 /// carry a <c>ResultDataType</c> (ResultMetaData + ResultContent) as their payload.
 /// Returns strings so callers can print to console, write to file, or both.
 /// </summary>
@@ -56,7 +57,7 @@ public static class IjtResultFormatter
         return sb.ToString();
     }
 
-    // ── private helpers ───────────────────────────────────────────────────────
+    // -- private helpers -------------------------------------------------------
 
     private static void FormatMetaData(StringBuilder sb, ResultMetaDataType? meta)
     {
@@ -170,14 +171,71 @@ public static class IjtResultFormatter
 
         if ((mask & JoiningResultDataTypeFields.FailureReason) != 0 && jr.FailureReason != 0)
             sb.AppendLine($"    FailureReason            {jr.FailureReason}");
+
+        if ((mask & JoiningResultDataTypeFields.Trace) != 0 && jr.Trace is not null)
+            FormatTrace(sb, jr.Trace);
     }
 
     private static void FormatResultValue(StringBuilder sb, ResultValueDataType rv, int indent)
     {
         var pad = new string(' ', indent);
-        var units = rv.EngineeringUnits?.DisplayName?.Text ?? "";
+        var units = NormalizeUnits(rv.EngineeringUnits?.DisplayName?.Text, rv.PhysicalQuantity);
         sb.AppendLine(
             $"{pad}{rv.Name ?? rv.ValueId ?? "?",-24} {rv.MeasuredValue,10:F3}  {units,-10} [{rv.ResultEvaluation}]");
+    }
+
+    private static void FormatTrace(StringBuilder sb, JoiningTraceDataType trace)
+    {
+        sb.AppendLine("    Trace");
+        AppendField(sb, "TraceId", trace.TraceId, 6);
+        AppendField(sb, "ResultId", trace.ResultId, 6);
+
+        if (trace.StepTraces is null || trace.StepTraces.Count == 0)
+        {
+            sb.AppendLine("      StepTraces               (none)");
+            return;
+        }
+
+        sb.AppendLine($"      StepTraces               ({trace.StepTraces.Count})");
+        foreach (var stepTrace in trace.StepTraces)
+        {
+            sb.AppendLine($"        StepTraceId            {stepTrace.StepTraceId}");
+            AppendField(sb, "StepResultId", stepTrace.StepResultId, 10);
+            AppendField(sb, "NumberOfTracePoints", stepTrace.NumberOfTracePoints.ToString(CultureInfo.InvariantCulture), 10);
+            AppendField(sb, "SamplingInterval", stepTrace.SamplingInterval.ToString(CultureInfo.InvariantCulture), 10);
+            AppendField(sb, "StartTimeOffset", stepTrace.StartTimeOffset.ToString(CultureInfo.InvariantCulture), 10);
+
+            var channels = stepTrace.StepTraceContent;
+            if (channels is null || channels.Count == 0)
+            {
+                sb.AppendLine("          Channels              (none)");
+                continue;
+            }
+
+            sb.AppendLine($"          Channels              ({channels.Count})");
+            for (int i = 0; i < channels.Count; i++)
+            {
+                var channel = channels[i];
+                var units = NormalizeUnits(channel.EngineeringUnits?.DisplayName?.Text, channel.PhysicalQuantity);
+                sb.AppendLine($"            [{i}] {channel.Name ?? "Channel"}  SensorId={channel.SensorId ?? "-"}  PQ={channel.PhysicalQuantity}  Unit={units}");
+                if (channel.Values is null || channel.Values.Count == 0)
+                {
+                    sb.AppendLine("              Values: (none)");
+                    continue;
+                }
+
+                var values = string.Join(", ", channel.Values.Select(v => v.ToString("G6", CultureInfo.InvariantCulture)));
+                sb.AppendLine($"              Values[{channel.Values.Count}]: {values}");
+            }
+        }
+    }
+
+    private static string NormalizeUnits(string? unitText, byte physicalQuantity)
+    {
+        if (string.IsNullOrWhiteSpace(unitText) || unitText == "?" || unitText == "�")
+            return physicalQuantity == 3 ? "deg" : "";
+
+        return unitText.Replace("°", "deg");
     }
 
     private static void AppendField(StringBuilder sb, string name, string? value, int indent = 2)

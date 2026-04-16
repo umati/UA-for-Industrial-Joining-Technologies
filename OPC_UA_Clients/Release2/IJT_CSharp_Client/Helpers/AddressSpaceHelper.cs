@@ -17,7 +17,7 @@ public sealed class AddressSpaceHelper
     private NodeId? _cachedJoiningSystemId;
     private readonly Dictionary<string, NodeId> _mgmtNodeCache = new(StringComparer.OrdinalIgnoreCase);
 
-    // ── Instance (caching) methods ────────────────────────────────────────────
+    // -- Instance (caching) methods --------------------------------------------
 
     /// <summary>
     /// Browses Objects folder (and one level deeper) for the first node whose
@@ -62,12 +62,12 @@ public sealed class AddressSpaceHelper
             if (nid != ObjectIds.Server && r.BrowseName?.Name != "Server")
             {
                 _cachedJoiningSystemId = nid;
-                _log.LogWarning("⚠ JoiningSystem fallback node: {Name} ({NodeId})", r.BrowseName?.Name, nid);
+                _log.LogWarning("WARN JoiningSystem fallback node: {Name} ({NodeId})", r.BrowseName?.Name, nid);
                 return _cachedJoiningSystemId;
             }
         }
 
-        _log.LogError("✗ JoiningSystem node not found in address space.");
+        _log.LogError("ERROR JoiningSystem node not found in address space.");
         return NodeId.Null;
     }
 
@@ -170,9 +170,9 @@ public sealed class AddressSpaceHelper
         _mgmtNodeCache.Clear();
     }
 
-    // ── Static (utility) methods ──────────────────────────────────────────────
+    // -- Static (utility) methods ----------------------------------------------
 
-    // ── Browse ─────────────────────────────────────────────────────────────────
+    // -- Browse -----------------------------------------------------------------
 
     /// <summary>
     /// Returns all forward hierarchical references from <paramref name="startNodeId"/>.
@@ -235,7 +235,7 @@ public sealed class AddressSpaceHelper
         return current;
     }
 
-    // ── Type-definition lookup ─────────────────────────────────────────────────
+    // -- Type-definition lookup -------------------------------------------------
 
     /// <summary>
     /// Searches direct children of <paramref name="parentId"/> for the first node
@@ -258,7 +258,7 @@ public sealed class AddressSpaceHelper
         return NodeId.Null;
     }
 
-    // ── Variable reading ───────────────────────────────────────────────────────
+    // -- Variable reading -------------------------------------------------------
 
     /// <summary>
     /// Reads the <c>Value</c> attribute of a single variable node via
@@ -281,7 +281,7 @@ public sealed class AddressSpaceHelper
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogWarning("⚠ Service error {Status}: {Node}", srex.StatusCode, nodeId);
+            _log.LogWarning("WARN Service error {Status}: {Node}", srex.StatusCode, nodeId);
             return null;
         }
         catch (InvalidCastException)
@@ -304,7 +304,7 @@ public sealed class AddressSpaceHelper
         catch (OverflowException) { return default; }
     }
 
-    // ── Asset enumeration ──────────────────────────────────────────────────────
+    // -- Asset enumeration ------------------------------------------------------
 
     /// <summary>
     /// Enumerates all asset instances under <c>AssetManagement/Assets/{category}</c>
@@ -347,7 +347,7 @@ public sealed class AddressSpaceHelper
         return $"Manufacturer={manufacturer ?? "?"}, SN={serial ?? "?"}, Desc={description ?? "?"}";
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
+    // -- Private helpers -------------------------------------------------------
 
     private static bool IsJoiningSystemType(NodeId typeDefId, NodeId expectedTypeId)
     {

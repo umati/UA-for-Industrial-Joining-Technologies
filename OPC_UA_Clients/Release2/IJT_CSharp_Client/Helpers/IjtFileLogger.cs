@@ -7,17 +7,20 @@ namespace IJT_CSharp_Client.Helpers;
 
 /// <summary>
 /// Writes method output payloads to domain-specific log files for offline inspection.
-/// Each call OVERWRITES the file — only the most recent payload per domain is kept.
+/// All files are valid JSON — always overwritten with the latest snapshot.
+/// File names match the OPC UA output argument label for easy identification.
 ///
 /// File layout (relative to executable):
 ///   logs/
-///     results/result.log                    — last ResultDataType (method call or event)
-///     events/event.log                      — last JoiningSystemEvent received
-///     joining_process/process_list.log      — last GetJoiningProcessList output
-///     joining_process/selected_program.log  — last GetSelectedJoiningProgram output
-///     joints/joint_list.log                 — last GetJointList output
-///     joints/joint.log                      — last GetJoint output
-///     identifiers/identifiers.log           — last GetIdentifiers output
+///     result/result.json                                  - latest Result (GetLatestResult / GetResultById / event)
+///     events/joining_system_event.json                    - latest JoiningSystemEvent received
+///     joining_process/joining_process_list.json           - latest JoiningProcessList (GetJoiningProcessList)
+///     joining_process/selected_joining_program.json       - latest SelectedJoiningProgram (GetSelectedJoiningProgram)
+///     joint/joint_list.json                               - latest JointList (GetJointList)
+///     joint/joint.json                                    - latest Joint (GetJoint)
+///     entity_list/entity_list.json                        - latest EntityList (GetIdentifiers)
+///     io_signals/io_signals.json                          - latest IOSignals (GetIOSignals / SetIOSignals)
+///     assets/<Category>_<Name>.json                       - one file per subscribed asset object (full variable tree)
 /// </summary>
 public static class IjtFileLogger
 {
@@ -27,46 +30,68 @@ public static class IjtFileLogger
         Path.Combine(AppContext.BaseDirectory, "logs");
 
     private static readonly string _resultLogPath =
-        Path.Combine(_baseDir, "results", "result.log");
+        Path.Combine(_baseDir, "result", "result.json");
 
     private static readonly string _eventLogPath =
-        Path.Combine(_baseDir, "events", "event.log");
+        Path.Combine(_baseDir, "events", "joining_system_event.json");
 
     private static readonly string _joiningProcessListLogPath =
-        Path.Combine(_baseDir, "joining_process", "process_list.log");
+        Path.Combine(_baseDir, "joining_process", "joining_process_list.json");
 
     private static readonly string _selectedProgramLogPath =
-        Path.Combine(_baseDir, "joining_process", "selected_program.log");
+        Path.Combine(_baseDir, "joining_process", "selected_joining_program.json");
 
     private static readonly string _jointListLogPath =
-        Path.Combine(_baseDir, "joints", "joint_list.log");
+        Path.Combine(_baseDir, "joint", "joint_list.json");
 
     private static readonly string _jointLogPath =
-        Path.Combine(_baseDir, "joints", "joint.log");
+        Path.Combine(_baseDir, "joint", "joint.json");
 
     private static readonly string _identifiersLogPath =
-        Path.Combine(_baseDir, "identifiers", "identifiers.log");
+        Path.Combine(_baseDir, "entity_list", "entity_list.json");
 
-    /// <summary>Overwrites result.log with the given text content.</summary>
+    private static readonly string _ioSignalsLogPath =
+        Path.Combine(_baseDir, "io_signals", "io_signals.json");
+
+    private static readonly string _assetLogDir =
+        Path.Combine(_baseDir, "assets");
+
+    /// <summary>Overwrites result.json with the latest result payload.</summary>
     public static void WriteResult(string content) => WriteFile(_resultLogPath, content);
 
-    /// <summary>Overwrites event.log with the given text content.</summary>
+    /// <summary>Overwrites events/joining_system_event.json with the latest JoiningSystemEvent payload.</summary>
     public static void WriteEvent(string content) => WriteFile(_eventLogPath, content);
 
-    /// <summary>Overwrites joining_process/process_list.log with the given text content.</summary>
+    /// <summary>Overwrites joining_process_list.json with the given content.</summary>
     public static void WriteJoiningProcessList(string content) => WriteFile(_joiningProcessListLogPath, content);
 
-    /// <summary>Overwrites joining_process/selected_program.log with the given text content.</summary>
+    /// <summary>Overwrites selected_joining_program.json with the given content.</summary>
     public static void WriteSelectedProgram(string content) => WriteFile(_selectedProgramLogPath, content);
 
-    /// <summary>Overwrites joints/joint_list.log with the given text content.</summary>
+    /// <summary>Overwrites joint_list.json with the given content.</summary>
     public static void WriteJointList(string content) => WriteFile(_jointListLogPath, content);
 
-    /// <summary>Overwrites joints/joint.log with the given text content.</summary>
+    /// <summary>Overwrites joint.json with the given content.</summary>
     public static void WriteJoint(string content) => WriteFile(_jointLogPath, content);
 
-    /// <summary>Overwrites identifiers/identifiers.log with the given text content.</summary>
+    /// <summary>Overwrites entity_list.json with the given content.</summary>
     public static void WriteIdentifiers(string content) => WriteFile(_identifiersLogPath, content);
+
+    /// <summary>Overwrites io_signals.json with the given content.</summary>
+    public static void WriteIOSignals(string content) => WriteFile(_ioSignalsLogPath, content);
+
+    /// <summary>
+    /// Overwrites logs/assets/<paramref name="assetKey"/>.json with the full asset variable tree.
+    /// One file per asset object instance — file name is sanitized to be filesystem-safe.
+    /// </summary>
+    public static void WriteAsset(string assetKey, string content) =>
+        WriteFile(Path.Combine(_assetLogDir, $"{SanitizeFileName(assetKey)}.json"), content);
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return string.Concat(name.Select(c => invalid.Contains(c) ? '_' : c));
+    }
 
     /// <summary>Base log directory (relative to executable).</summary>
     public static string BaseLogDir => _baseDir;
@@ -78,11 +103,11 @@ public static class IjtFileLogger
     public static string JointListLogPath => _jointListLogPath;
     public static string JointLogPath => _jointLogPath;
     public static string IdentifiersLogPath => _identifiersLogPath;
+    public static string IOSignalsLogPath => _ioSignalsLogPath;
+    public static string AssetLogDir => _assetLogDir;
 
-    // Single lock for all file writes. Event-handler callbacks (subscription thread) and
-    // menu calls (main thread) can race on the same file (e.g. result.log), so all writes
-    // must be serialised.
-    private static readonly Lock _fileLock = new();
+    // Single lock for all file writes — event callbacks and menu calls can race on the same file.
+    private static readonly object _fileLock = new();
 
     private static void WriteFile(string path, string content)
     {
@@ -90,9 +115,7 @@ public static class IjtFileLogger
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             lock (_fileLock)
-            {
                 File.WriteAllText(path, content, Encoding.UTF8);
-            }
         }
         catch (IOException ex) { _log.LogWarning("Write failed: {Message}", ex.Message); }
         catch (UnauthorizedAccessException ex) { _log.LogWarning("Access denied: {Message}", ex.Message); }

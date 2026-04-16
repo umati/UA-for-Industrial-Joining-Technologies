@@ -5,11 +5,11 @@ namespace IJT_CSharp_Client.Helpers;
 /// <summary>
 /// EntityType values defined in the IJT Base specification (OPC 40450-1, Table 211).
 /// Source: common_system_data_t.h (server) and entity-data-type.mjs (web client).
-/// Values are Int16 — 0 to 41 are spec-defined; negative values are vendor-specific.
+/// Values are Int16 - 0 to 41 are spec-defined; negative values are vendor-specific.
 /// </summary>
 public static class IjtEntityTypes
 {
-    /// <summary>Full lookup: numeric value → name string.</summary>
+    /// <summary>Full lookup: numeric value -> name string.</summary>
     public static readonly IReadOnlyDictionary<short, string> Names =
         new Dictionary<short, string>
         {

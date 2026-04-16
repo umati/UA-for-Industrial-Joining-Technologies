@@ -158,7 +158,12 @@ public sealed class AssetManagementTests
         var mock = HappyPathMock();
         var entities = new List<UAModel.IJTBase.EntityDataType>
         {
-            new() { EntityId = "e1" },
+            UAModel.IJTBase.EntityDataType.Create(
+                "4Y1SL65848Z411439",
+                entityType: (short)20,
+                name: "VIN",
+                description: "Vehicle Identification Number",
+                isExternal: true),
         };
         new AssetManagement(mock.Object).SendIdentifiers(entities);
 
@@ -298,7 +303,15 @@ public sealed class AssetManagementTests
 
         var ex = Record.Exception(() =>
             new AssetManagement(mock.Object).SendIdentifiers(
-                new List<UAModel.IJTBase.EntityDataType> { new() }));
+                new List<UAModel.IJTBase.EntityDataType>
+                {
+                    UAModel.IJTBase.EntityDataType.Create(
+                        "4Y1SL65848Z411439",
+                        entityType: (short)20,
+                        name: "VIN",
+                        description: "Vehicle Identification Number",
+                        isExternal: true)
+                }));
         Assert.Null(ex);
     }
 
@@ -368,7 +381,15 @@ public sealed class AssetManagementTests
 
         var ex = Record.Exception(() =>
             new AssetManagement(mock.Object).SendIdentifiers(
-                new List<UAModel.IJTBase.EntityDataType>()));
+                new List<UAModel.IJTBase.EntityDataType>
+                {
+                    UAModel.IJTBase.EntityDataType.Create(
+                        "4Y1SL65848Z411439",
+                        entityType: (short)20,
+                        name: "VIN",
+                        description: "Vehicle Identification Number",
+                        isExternal: true)
+                }));
         Assert.Null(ex);
     }
 

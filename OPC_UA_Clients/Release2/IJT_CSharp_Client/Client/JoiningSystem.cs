@@ -18,7 +18,7 @@ namespace IJT_CSharp_Client.Client;
 /// </summary>
 public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 {
-    // ── Public surface ────────────────────────────────────────────────────────
+    // -- Public surface --------------------------------------------------------
 
     /// <summary>The underlying OPC UA session.</summary>
     public ISession Session => _session;
@@ -46,14 +46,15 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     /// <summary>Returns <c>true</c> when the underlying session is connected.</summary>
     public bool IsConnected => _session?.Connected ?? false;
 
-    // ── Management surface ────────────────────────────────────────────────────
+    // -- Management surface ----------------------------------------------------
     public ResultManagement ResultManagement { get; private set; } = null!;
     public AssetManagement AssetManagement { get; private set; } = null!;
     public JoiningProcessManagement JoiningProcessManagement { get; private set; } = null!;
     public JointManagement JointManagement { get; private set; } = null!;
     public EventSubscriber EventSubscriber { get; private set; } = null!;
+    public SimulationManagement SimulationManagement { get; private set; } = null!;
 
-    // ── Private fields ────────────────────────────────────────────────────────
+    // -- Private fields --------------------------------------------------------
 
     private const int KeepAliveIntervalMs = 5_000;
     private const int EndpointDiscoveryTimeoutMs = 15_000;
@@ -62,7 +63,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     private readonly ILogger<JoiningSystem> _log = IjtLog.For<JoiningSystem>();
     private NodeId _joiningSystemNodeId = NodeId.Null;
 
-    // ── Construction / connection ─────────────────────────────────────────────
+    // -- Construction / connection ---------------------------------------------
 
     private JoiningSystem(ISession session, ClientConfig config)
     {
@@ -120,11 +121,11 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         if (config.AutoAcceptServerCertificate)
             appConfig.CertificateValidator.CertificateValidation += (_, e) =>
             {
-                log.LogWarning("DEV ONLY — accepting untrusted certificate: {Subject}", e.Certificate?.Subject);
+                log.LogWarning("DEV ONLY - accepting untrusted certificate: {Subject}", e.Certificate?.Subject);
                 e.Accept = true;
             };
 
-        log.LogInformation("Discovering endpoints at {Url} …", config.ServerUrl);
+        log.LogInformation("Discovering endpoints at {Url} ...", config.ServerUrl);
         var session = await DiscoverAndConnectAsync(appConfig, config, log, ct).ConfigureAwait(false);
 
         // Register all IJT encodeable types so the SDK can encode/decode ExtensionObjects.
@@ -142,7 +143,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         js.InitManagement();
 
         log.LogInformation(
-            "Connected — IJTBase ns={IjtBase}, IJTTightening ns={IjtTightening}, MachineryResult ns={MachineryResult}",
+            "Connected - IJTBase ns={IjtBase}, IJTTightening ns={IjtTightening}, MachineryResult ns={MachineryResult}",
             js.IjtBaseNsIdx, js.IjtTighteningNsIdx, js.MachineryResultNsIdx);
         if (!js._joiningSystemNodeId.IsNullNodeId)
             log.LogInformation("JoiningSystem node: {NodeId}", js._joiningSystemNodeId);
@@ -150,7 +151,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         return js;
     }
 
-    // ── Private: session setup ────────────────────────────────────────────────
+    // -- Private: session setup ------------------------------------------------
 
     private static ApplicationConfiguration BuildApplicationConfig(ClientConfig config)
     {
@@ -208,7 +209,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         var endpoint = new ConfiguredEndpoint(
             null, endpointDesc, EndpointConfiguration.Create(appConfig));
 
-        log.LogInformation("Opening session …");
+        log.LogInformation("Opening session ...");
         ct.ThrowIfCancellationRequested();
         return await Opc.Ua.Client.Session.Create(
             appConfig, endpoint,
@@ -219,7 +220,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             preferredLocales: null).ConfigureAwait(false);
     }
 
-    // ── Namespace resolution ──────────────────────────────────────────────────
+    // -- Namespace resolution --------------------------------------------------
 
     private void ResolveNamespaceIndices()
     {
@@ -238,7 +239,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         DiNsIdx = di >= 0 ? (ushort)di : (ushort)0;
     }
 
-    // ── JoiningSystem discovery ───────────────────────────────────────────────
+    // -- JoiningSystem discovery -----------------------------------------------
 
     private void DiscoverJoiningSystem()
     {
@@ -293,7 +294,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         }
     }
 
-    // ── Management initialisation ─────────────────────────────────────────────
+    // -- Management initialisation ---------------------------------------------
 
     private void InitManagement()
     {
@@ -302,15 +303,16 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         JoiningProcessManagement = new JoiningProcessManagement(this);
         JointManagement = new JointManagement(this);
         EventSubscriber = new EventSubscriber(this);
+        SimulationManagement = new SimulationManagement(this);
     }
 
-    // ── Keep-alive / reconnect ────────────────────────────────────────────────
+    // -- Keep-alive / reconnect ------------------------------------------------
 
     internal void OnKeepAlive(ISession session, KeepAliveEventArgs e)
     {
         if (!ServiceResult.IsBad(e.Status)) return;
 
-        _log.LogWarning("Keep-alive failed ({Status}). Attempting reconnect …", e.Status);
+        _log.LogWarning("Keep-alive failed ({Status}). Attempting reconnect ...", e.Status);
         try
         {
             session.Reconnect();
@@ -320,6 +322,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             AssetManagement?.InvalidateNodeCache();
             JoiningProcessManagement?.InvalidateNodeCache();
             JointManagement?.InvalidateNodeCache();
+            SimulationManagement?.InvalidateNodeCache();
             _log.LogInformation("Reconnected.");
         }
         catch (ServiceResultException ex)
@@ -333,7 +336,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         }
     }
 
-    // ── Method-call helper ────────────────────────────────────────────────────
+    // -- Method-call helper ----------------------------------------------------
 
     public IList<object> CallMethod(
         NodeId objectId,
@@ -371,7 +374,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         return result.OutputArguments.Select(v => v.Value).ToList();
     }
 
-    // ── Browse helper ─────────────────────────────────────────────────────────
+    // -- Browse helper ---------------------------------------------------------
 
     public NodeId BrowseChild(
         NodeId parentId,
@@ -405,19 +408,56 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         }
         catch (ServiceResultException ex)
         {
-            _log.LogWarning("BrowseChild({Parent}, {Name}) failed [{Status}] — returning NodeId.Null",
+            _log.LogWarning("BrowseChild({Parent}, {Name}) failed [{Status}] - returning NodeId.Null",
                 parentId, childBrowseName, IjtStatusHelper.FormatCode(ex.StatusCode));
             return NodeId.Null;
         }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "BrowseChild({Parent}, {Name}) unexpected error — returning NodeId.Null",
+            _log.LogWarning(ex, "BrowseChild({Parent}, {Name}) unexpected error - returning NodeId.Null",
                 parentId, childBrowseName);
             return NodeId.Null;
         }
     }
 
-    // ── DiscoverMethodsUnder helper ───────────────────────────────────────────
+    // -- BrowseChildren helper ------------------------------------------------
+
+    public ReferenceDescriptionCollection BrowseChildren(
+        NodeId parentId,
+        uint nodeClassMask = (uint)NodeClass.Unspecified)
+    {
+        if (parentId == null || parentId.IsNullNodeId)
+            return [];
+
+        var mask = nodeClassMask == (uint)NodeClass.Unspecified
+            ? (uint)(NodeClass.Object | NodeClass.Variable | NodeClass.Method)
+            : nodeClassMask;
+
+        try
+        {
+            _session.Browse(
+                null, null, parentId, 0,
+                BrowseDirection.Forward,
+                ReferenceTypeIds.HierarchicalReferences,
+                true, mask,
+                out _, out var refs);
+
+            return refs ?? [];
+        }
+        catch (ServiceResultException ex)
+        {
+            _log.LogWarning("BrowseChildren({Parent}) failed [{Status}]",
+                parentId, IjtStatusHelper.FormatCode(ex.StatusCode));
+            return [];
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "BrowseChildren({Parent}) unexpected error", parentId);
+            return [];
+        }
+    }
+
+    // -- DiscoverMethodsUnder helper -------------------------------------------
 
     public Dictionary<string, NodeId> DiscoverMethodsUnder(NodeId objectId)
     {
@@ -448,7 +488,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         }
     }
 
-    // ── BrowseMethod helper ───────────────────────────────────────────────────
+    // -- BrowseMethod helper ---------------------------------------------------
 
     public NodeId BrowseMethod(NodeId objectId, string methodBrowseName, uint fallbackConstant = 0)
     {
@@ -473,27 +513,27 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         return IjtBaseMethodId(fallbackConstant);
     }
 
-    // ── Typed NodeId factory helpers ──────────────────────────────────────────
+    // -- Typed NodeId factory helpers ------------------------------------------
 
     public NodeId IjtBaseMethodId(uint methodConstant)
     {
-        if (IjtBaseNsIdx == 0) { _log.LogWarning("IjtBaseMethodId: IJT namespace unresolved — returning NodeId.Null"); return NodeId.Null; }
+        if (IjtBaseNsIdx == 0) { _log.LogWarning("IjtBaseMethodId: IJT namespace unresolved - returning NodeId.Null"); return NodeId.Null; }
         return new NodeId(methodConstant, IjtBaseNsIdx);
     }
 
     public NodeId IjtBaseObjectId(uint objectConstant)
     {
-        if (IjtBaseNsIdx == 0) { _log.LogWarning("IjtBaseObjectId: IJT namespace unresolved — returning NodeId.Null"); return NodeId.Null; }
+        if (IjtBaseNsIdx == 0) { _log.LogWarning("IjtBaseObjectId: IJT namespace unresolved - returning NodeId.Null"); return NodeId.Null; }
         return new NodeId(objectConstant, IjtBaseNsIdx);
     }
 
     public NodeId IjtBaseVariableId(uint varConstant)
     {
-        if (IjtBaseNsIdx == 0) { _log.LogWarning("IjtBaseVariableId: IJT namespace unresolved — returning NodeId.Null"); return NodeId.Null; }
+        if (IjtBaseNsIdx == 0) { _log.LogWarning("IjtBaseVariableId: IJT namespace unresolved - returning NodeId.Null"); return NodeId.Null; }
         return new NodeId(varConstant, IjtBaseNsIdx);
     }
 
-    // ── Cleanup ───────────────────────────────────────────────────────────────
+    // -- Cleanup ---------------------------------------------------------------
 
     public async ValueTask DisposeAsync()
     {

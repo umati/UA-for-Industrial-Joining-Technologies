@@ -29,7 +29,7 @@ public class IjtMenuHelperTests
                 description: "Returns the most recent result.",
                 inputs: ["TimeoutMs"],
                 outputs: ["Result", "Status"],
-                tip: "Full payload is written to logs/results/result.log"));
+                tip: "Full payload is written to logs/result/result.json"));
 
         Assert.Null(ex);
     }

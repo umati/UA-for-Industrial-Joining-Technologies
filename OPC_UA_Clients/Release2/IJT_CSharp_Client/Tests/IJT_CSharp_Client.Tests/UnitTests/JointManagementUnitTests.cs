@@ -189,7 +189,8 @@ public sealed class JointManagementUnitTests
         var session = MockSessionBuilder.Create();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001"));
+        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001",
+            name: "Front-left flange bolt", description: "M8x30 hex bolt, class 10.9"));
 
         Assert.Null(ex);
         session.Verify(s => s.CallMethod(
@@ -215,14 +216,13 @@ public sealed class JointManagementUnitTests
         var session = MockSessionBuilder.CreateWithNullNodes();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001"));
+        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001",
+            name: "Front-left flange bolt", description: "M8x30 hex bolt, class 10.9"));
 
         Assert.Null(ex);
         session.Verify(s => s.CallMethod(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
-
-    // ── InvalidateNodeCache ───────────────────────────────────────────────────
 
     [Fact]
     public void InvalidateNodeCache_DoesNotThrow()
@@ -376,7 +376,8 @@ public sealed class JointDataTypeEncodingMaskTests
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadArgumentsMissing));
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001"));
+        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001",
+            name: "Front-left flange bolt", description: "M8x30 hex bolt, class 10.9"));
 
         Assert.Null(ex);
     }
@@ -390,7 +391,8 @@ public sealed class JointDataTypeEncodingMaskTests
             .Throws(new InvalidOperationException("simulated failure"));
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001"));
+        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001",
+            name: "Front-left flange bolt", description: "M8x30 hex bolt, class 10.9"));
 
         Assert.Null(ex);
     }
@@ -435,16 +437,22 @@ public sealed class JointDataTypeEncodingMaskTests
     [Fact]
     public void JointDataType_Create_AllFields_AllBitsSet()
     {
+        var associated = new[]
+        {
+            UAModel.IJTBase.EntityDataType.Create("urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A"),
+        };
         var joint = UAModel.IJTBase.JointDataType.Create(
             "JNT-ALL",
             jointOriginId: "ORIG-001",
             jointDesignId: "DESIGN-001",
             name: "Top bolt",
-            description: "M8 torque bolt");
+            description: "M8 torque bolt",
+            associatedEntities: associated);
 
         Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.JointOriginId) != 0);
         Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.JointDesignId) != 0);
         Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.Name) != 0);
         Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.Description) != 0);
+        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.AssociatedEntities) != 0);
     }
 }

@@ -90,18 +90,18 @@ public static class IjtJsonSerializer
 
     private static void AppendJsonBlock(StringBuilder sb, string label, object? value)
     {
-        sb.AppendLine($"  ┌── {label}");
+        sb.AppendLine($"  +-- {label}");
         var json = Serialize(value);
         foreach (var line in json.Split('\n'))
-            sb.AppendLine($"  │  {line.TrimEnd()}");
-        sb.AppendLine("  └──");
+            sb.AppendLine($"  |  {line.TrimEnd()}");
+        sb.AppendLine("  +--");
     }
 
     /// <summary>
-    /// Formats a single labeled output value as a text block suitable for writing to a log file.
-    /// Includes a UTC timestamp header. Does not log to console.
+    /// Serializes a value into a JSON envelope document suitable for writing to a .json file.
+    /// Format: <c>{ "generated": "&lt;ISO-8601&gt;", "&lt;label&gt;": &lt;value-json&gt; }</c>
     ///
-    /// Copy this pattern to log any OPC UA method output to a file:
+    /// All callers writing to log files should use this method so every file is valid JSON:
     /// <code>
     ///   var content = IjtJsonSerializer.FormatOutput("JointList", outputs[0]);
     ///   IjtFileLogger.WriteJointList(content);
@@ -109,12 +109,16 @@ public static class IjtJsonSerializer
     /// </summary>
     public static string FormatOutput(string label, object? value)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff} UTC");
-        sb.AppendLine();
-        sb.AppendLine($"{label}:");
-        sb.AppendLine(Serialize(value));
-        return sb.ToString();
+        var innerJson = Serialize(value);
+        using var ms = new MemoryStream();
+        using var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true });
+        writer.WriteStartObject();
+        writer.WriteString("generated", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+        writer.WritePropertyName(label);
+        writer.WriteRawValue(innerJson);
+        writer.WriteEndObject();
+        writer.Flush();
+        return Encoding.UTF8.GetString(ms.ToArray());
     }
 
     /// <summary>
@@ -146,7 +150,7 @@ public static class IjtJsonSerializer
             _log.LogInformation("[{Method}] No output arguments.", methodName);
             return;
         }
-        _log.LogInformation("── {Method} ──", methodName);
+        _log.LogInformation("-- {Method} --", methodName);
         for (int i = 0; i < outputs.Count; i++)
         {
             var val = outputs[i] is Variant vt ? vt.Value : outputs[i];
@@ -170,7 +174,7 @@ public static class IjtJsonSerializer
             return;
         }
 
-        _log.LogInformation("── {Method} ──", methodName);
+        _log.LogInformation("-- {Method} --", methodName);
         for (int i = 0; i < outputs.Count; i++)
         {
             var label = i < labels.Length && !string.IsNullOrWhiteSpace(labels[i])
@@ -209,9 +213,9 @@ public static class IjtJsonSerializer
         var sb = new StringBuilder();
         sb.AppendLine();
         sb.AppendLine("  RESULT");
-        sb.AppendLine("  ├── ResultMetaData");
+        sb.AppendLine("  +-- ResultMetaData");
         AppendAllMetaDataFields(sb, rd.ResultMetaData);
-        sb.AppendLine("  └── ResultContent");
+        sb.AppendLine("  +-- ResultContent");
         if (rd.ResultContent != null && rd.ResultContent.Count > 0)
             foreach (var item in rd.ResultContent)
                 AppendJsonBlock(sb, "        item", item);
@@ -225,7 +229,7 @@ public static class IjtJsonSerializer
     {
         if (meta is null) { sb.AppendLine("        (no metadata)"); return; }
 
-        // ── Base ResultMetaDataType fields ────────────────────────────────────
+        // -- Base ResultMetaDataType fields ------------------------------------
         AppendMetaField(sb, "ResultId", meta.ResultId);
         AppendMetaField(sb, "HasTransferableDataOnFile", meta.HasTransferableDataOnFile.ToString());
         AppendMetaField(sb, "IsPartial", meta.IsPartial.ToString());
@@ -254,7 +258,7 @@ public static class IjtJsonSerializer
         AppendMetaField(sb, "FileFormat",
             meta.FileFormat?.Count > 0 ? string.Join(", ", meta.FileFormat) : null);
 
-        // ── JoiningResultMetaDataType extra fields ────────────────────────────
+        // -- JoiningResultMetaDataType extra fields ----------------------------
         if (meta is JoiningResultMetaDataType jm)
         {
             AppendMetaField(sb, "JoiningTechnology", jm.JoiningTechnology?.Text);
@@ -287,10 +291,10 @@ public static class IjtJsonSerializer
         var sb = new StringBuilder();
         sb.AppendLine();
         sb.AppendLine("  JOINING SYSTEM EVENT");
-        sb.AppendLine($"  ├── Time:             {e.EventTime:yyyy-MM-dd HH:mm:ss.fff}");
-        sb.AppendLine($"  ├── EventCode:        {e.EventCode}");
-        sb.AppendLine($"  ├── EventText:        {e.EventText}");
-        sb.Append($"  └── JoiningTechnology:{e.JoiningTechnology}");
+        sb.AppendLine($"  +-- Time:             {e.EventTime:yyyy-MM-dd HH:mm:ss.fff}");
+        sb.AppendLine($"  +-- EventCode:        {e.EventCode}");
+        sb.AppendLine($"  +-- EventText:        {e.EventText}");
+        sb.Append($"  +-- JoiningTechnology:{e.JoiningTechnology}");
         if (e.AllFields.Count > 5)
         {
             sb.AppendLine();
@@ -302,7 +306,7 @@ public static class IjtJsonSerializer
     }
 }
 
-// ── Custom JSON Converters ─────────────────────────────────────────────────────
+// -- Custom JSON Converters -----------------------------------------------------
 
 internal sealed class LocalizedTextConverter : JsonConverter<LocalizedText>
 {

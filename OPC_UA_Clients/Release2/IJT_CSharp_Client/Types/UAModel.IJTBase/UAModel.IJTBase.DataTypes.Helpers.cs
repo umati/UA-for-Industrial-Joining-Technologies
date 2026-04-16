@@ -80,15 +80,17 @@ public partial class JointDataType
         string? jointOriginId = null,
         string? jointDesignId = null,
         string? name = null,
-        string? description = null)
+        string? description = null,
+        EntityDataType[]? associatedEntities = null)
     {
         var mask = JointDataTypeFields.None;
         if (!string.IsNullOrEmpty(jointOriginId)) mask |= JointDataTypeFields.JointOriginId;
         if (!string.IsNullOrEmpty(jointDesignId)) mask |= JointDataTypeFields.JointDesignId;
         if (!string.IsNullOrEmpty(name)) mask |= JointDataTypeFields.Name;
         if (!string.IsNullOrEmpty(description)) mask |= JointDataTypeFields.Description;
+        if (associatedEntities?.Length > 0) mask |= JointDataTypeFields.AssociatedEntities;
 
-        return new JointDataType
+        var joint = new JointDataType
         {
             EncodingMask = (uint)mask,
             JointId = jointId,
@@ -97,6 +99,11 @@ public partial class JointDataType
             Name = name,
             Description = description,
         };
+
+        if (associatedEntities?.Length > 0)
+            joint.AssociatedEntities.AddRange(associatedEntities);
+
+        return joint;
     }
 }
 

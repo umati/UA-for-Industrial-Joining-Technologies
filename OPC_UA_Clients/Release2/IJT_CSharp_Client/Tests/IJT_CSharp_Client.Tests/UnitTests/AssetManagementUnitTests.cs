@@ -394,9 +394,15 @@ public sealed class AssetManagementUnitTests
         using var am = new AssetManagement(session.Object);
         var entities = new List<UAModel.IJTBase.EntityDataType>
         {
-            new() { EntityId = "ENT-001", EntityType = 1 },
-            new() { EntityId = "ENT-002", EntityType = 2 },
-            new() { EntityId = "ENT-003", EntityType = 3 },
+            UAModel.IJTBase.EntityDataType.Create(
+                "urn:part:chassis-001", entityType: (short)22,
+                name: "Chassis Component", description: "Engine bay chassis bracket", isExternal: false),
+            UAModel.IJTBase.EntityDataType.Create(
+                "urn:tool:spindle-002", entityType: (short)4,
+                name: "Secondary Spindle", description: "Right-side torque spindle", isExternal: false),
+            UAModel.IJTBase.EntityDataType.Create(
+                "urn:controller:atlas-003", entityType: (short)3,
+                name: "Atlas Controller-3", description: "Line controller unit 3", isExternal: false),
         };
 
         var ex = Record.Exception(() => am.SendIdentifiers(entities));
@@ -425,7 +431,8 @@ public sealed class AssetManagementUnitTests
         using var am = new AssetManagement(session.Object);
         var entities = new List<UAModel.IJTBase.EntityDataType>
         {
-            new() { EntityId = "ENT-001", EntityType = 1 }
+            UAModel.IJTBase.EntityDataType.Create(
+                "urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A", isExternal: false)
         };
 
         var ex = Record.Exception(() => am.SendIdentifiers(entities));
@@ -445,7 +452,8 @@ public sealed class AssetManagementUnitTests
         using var am = new AssetManagement(session.Object);
         var entities = new List<UAModel.IJTBase.EntityDataType>
         {
-            new() { EntityId = "ENT-001", EntityType = 1 }
+            UAModel.IJTBase.EntityDataType.Create(
+                "urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A", isExternal: false)
         };
 
         var ex = Record.Exception(() => am.SendIdentifiers(entities));
@@ -463,7 +471,8 @@ public sealed class AssetManagementUnitTests
         using var am = new AssetManagement(session.Object);
         var entities = new List<UAModel.IJTBase.EntityDataType>
         {
-            new() { EntityId = "ENT-001", EntityType = 1 }
+            UAModel.IJTBase.EntityDataType.Create(
+                "urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A", isExternal: false)
         };
 
         var ex = Record.Exception(() => am.SendIdentifiers(entities));

@@ -1033,7 +1033,8 @@ public sealed class MenuDispatchTests
     public void MenuItem18_SendJoint_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new JointManagement(mock.Object).SendJoint("urn:product:001", "JOINT-A", "DESIGN-1");
+        new JointManagement(mock.Object).SendJoint("urn:product:001", "JOINT-A", "DESIGN-1",
+            name: "Front-left flange bolt", description: "M8x30 hex bolt, class 10.9");
 
         mock.Verify(s => s.CallMethod(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
@@ -1068,7 +1069,8 @@ public sealed class MenuDispatchTests
     public void MenuItem18_SendJoint_WhenNodesNull_DoesNotThrow()
     {
         var ex = Record.Exception(() =>
-            new JointManagement(NullNodeMock().Object).SendJoint("urn:x", "J1", "D1"));
+            new JointManagement(NullNodeMock().Object).SendJoint("urn:x", "J1", "D1",
+                name: "Front-left flange bolt", description: "M8x30 hex bolt, class 10.9"));
         Assert.Null(ex);
     }
 
@@ -1081,7 +1083,8 @@ public sealed class MenuDispatchTests
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.BadTimeout));
 
         var ex = Record.Exception(() =>
-            new JointManagement(mock.Object).SendJoint("urn:x", "J1", "D1"));
+            new JointManagement(mock.Object).SendJoint("urn:x", "J1", "D1",
+                name: "Front-left flange bolt", description: "M8x30 hex bolt, class 10.9"));
         Assert.Null(ex);
     }
 }

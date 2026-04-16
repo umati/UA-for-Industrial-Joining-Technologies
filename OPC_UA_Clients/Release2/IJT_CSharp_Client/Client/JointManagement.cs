@@ -22,7 +22,7 @@ public sealed class JointManagement : IDisposable
     /// <summary>Clears cached node references so the next operation re-browses the address space.</summary>
     public void InvalidateNodeCache() => _jmNodeId = null;
 
-    // ── Node lookup ───────────────────────────────────────────────────────────
+    // -- Node lookup -----------------------------------------------------------
 
     private NodeId GetJmNode()
     {
@@ -37,14 +37,14 @@ public sealed class JointManagement : IDisposable
         {
             node = _js.IjtBaseObjectId(
                 UAModel.IJTBase.Objects.JoiningSystemType_JointManagement);
-            _log.LogWarning("⚠ JointManagement fallback to type NodeId.");
+            _log.LogWarning("WARN JointManagement fallback to type NodeId.");
         }
 
         _jmNodeId = node;
         return _jmNodeId;
     }
 
-    // ── GetJointList ──────────────────────────────────────────────────────────
+    // -- GetJointList ----------------------------------------------------------
 
     /// <summary>
     /// Calls <c>JointManagement/GetJointList</c>.
@@ -52,7 +52,7 @@ public sealed class JointManagement : IDisposable
     /// </summary>
     public void GetJointList(string productInstanceUri = "")
     {
-        _log.LogInformation("\n── GetJointList (uri={Uri}) ────────────────────────", productInstanceUri);
+        _log.LogInformation("\n-- GetJointList (uri={Uri}) ------------------------", productInstanceUri);
 
         var objectId = GetJmNode();
         var methodId = _js.BrowseMethod(objectId,
@@ -61,7 +61,7 @@ public sealed class JointManagement : IDisposable
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            _log.LogError("✗ JointManagement node or GetJointList method not found.");
+            _log.LogError("ERROR JointManagement node or GetJointList method not found.");
             return;
         }
 
@@ -77,22 +77,22 @@ public sealed class JointManagement : IDisposable
             var countText = count >= 0 ? $"{count} joint(s)" : "data received";
             var status = outputs.Count > 1 ? IjtJsonSerializer.Serialize(outputs[1]) : "?";
             var msg = outputs.Count > 2 ? IjtJsonSerializer.Serialize(outputs[2]) : "?";
-            _log.LogInformation("✓ GetJointList: {Count}  Status={Status}  StatusMessage={Msg}",
+            _log.LogInformation("OK GetJointList: {Count}  Status={Status}  StatusMessage={Msg}",
                 countText, status, msg);
-            _log.LogInformation("  ► Full list → {Path}", IjtFileLogger.JointListLogPath);
+            _log.LogInformation("  -> Full list -> {Path}", IjtFileLogger.JointListLogPath);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}",
+            _log.LogError("ERROR OPC UA error {Status}: {Message}",
                 IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(GetJointList));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetJointList));
         }
     }
 
-    // ── GetJoint ──────────────────────────────────────────────────────────────
+    // -- GetJoint --------------------------------------------------------------
 
     /// <summary>
     /// Calls <c>JointManagement/GetJoint</c>.
@@ -100,7 +100,7 @@ public sealed class JointManagement : IDisposable
     /// </summary>
     public void GetJoint(string productInstanceUri, string jointId)
     {
-        _log.LogInformation("\n── GetJoint (uri={Uri}, jointId={Id}) ────────────────",
+        _log.LogInformation("\n-- GetJoint (uri={Uri}, jointId={Id}) ----------------",
             productInstanceUri, jointId);
 
         var objectId = GetJmNode();
@@ -110,7 +110,7 @@ public sealed class JointManagement : IDisposable
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            _log.LogError("✗ JointManagement node or GetJoint method not found.");
+            _log.LogError("ERROR JointManagement node or GetJoint method not found.");
             return;
         }
 
@@ -124,22 +124,22 @@ public sealed class JointManagement : IDisposable
 
             var status = outputs.Count > 1 ? IjtJsonSerializer.Serialize(outputs[1]) : "?";
             var msg = outputs.Count > 2 ? IjtJsonSerializer.Serialize(outputs[2]) : "?";
-            _log.LogInformation("✓ GetJoint: JointId={Id}  Status={Status}  StatusMessage={Msg}",
+            _log.LogInformation("OK GetJoint: JointId={Id}  Status={Status}  StatusMessage={Msg}",
                 jointId, status, msg);
-            _log.LogInformation("  ► Full joint → {Path}", IjtFileLogger.JointLogPath);
+            _log.LogInformation("  -> Full joint -> {Path}", IjtFileLogger.JointLogPath);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}",
+            _log.LogError("ERROR OPC UA error {Status}: {Message}",
                 IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(GetJoint));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetJoint));
         }
     }
 
-    // ── SelectJoint ───────────────────────────────────────────────────────────
+    // -- SelectJoint -----------------------------------------------------------
 
     /// <summary>
     /// Calls <c>JointManagement/SelectJoint</c>.
@@ -147,7 +147,7 @@ public sealed class JointManagement : IDisposable
     /// </summary>
     public void SelectJoint(string productInstanceUri, string jointId, string jointOriginId)
     {
-        _log.LogInformation("\n── SelectJoint (uri={Uri}, jointId={Id}) ──────────────",
+        _log.LogInformation("\n-- SelectJoint (uri={Uri}, jointId={Id}) --------------",
             productInstanceUri, jointId);
 
         var objectId = GetJmNode();
@@ -157,7 +157,7 @@ public sealed class JointManagement : IDisposable
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            _log.LogError("✗ JointManagement node or SelectJoint method not found.");
+            _log.LogError("ERROR JointManagement node or SelectJoint method not found.");
             return;
         }
 
@@ -168,16 +168,16 @@ public sealed class JointManagement : IDisposable
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}",
+            _log.LogError("ERROR OPC UA error {Status}: {Message}",
                 IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(SelectJoint));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SelectJoint));
         }
     }
 
-    // ── DeleteJoint ───────────────────────────────────────────────────────────
+    // -- DeleteJoint -----------------------------------------------------------
 
     /// <summary>
     /// Calls <c>JointManagement/DeleteJoint</c>.
@@ -185,7 +185,7 @@ public sealed class JointManagement : IDisposable
     /// </summary>
     public void DeleteJoint(string productInstanceUri, string jointId, string jointOriginId)
     {
-        _log.LogInformation("\n── DeleteJoint (uri={Uri}, jointId={Id}) ──────────────",
+        _log.LogInformation("\n-- DeleteJoint (uri={Uri}, jointId={Id}) --------------",
             productInstanceUri, jointId);
 
         var objectId = GetJmNode();
@@ -195,7 +195,7 @@ public sealed class JointManagement : IDisposable
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            _log.LogError("✗ JointManagement node or DeleteJoint method not found.");
+            _log.LogError("ERROR JointManagement node or DeleteJoint method not found.");
             return;
         }
 
@@ -206,16 +206,16 @@ public sealed class JointManagement : IDisposable
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}",
+            _log.LogError("ERROR OPC UA error {Status}: {Message}",
                 IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(DeleteJoint));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(DeleteJoint));
         }
     }
 
-    // ── SendJoint ─────────────────────────────────────────────────────────────
+    // -- SendJoint -------------------------------------------------------------
 
     /// <summary>
     /// Calls <c>JointManagement/SendJoint</c>.
@@ -225,15 +225,16 @@ public sealed class JointManagement : IDisposable
         string productInstanceUri,
         string jointId,
         string jointDesignId,
-        string name = "")
+        string name = "",
+        string description = "")
     {
         if (string.IsNullOrEmpty(jointId))
         {
-            _log.LogError("✗ SendJoint requires non-empty JointId.");
+            _log.LogError("ERROR SendJoint requires non-empty JointId.");
             return;
         }
 
-        _log.LogInformation("\n── SendJoint (jointId={Id}) ──────────────────────────", jointId);
+        _log.LogInformation("\n-- SendJoint (jointId={Id}) --------------------------", jointId);
 
         var objectId = GetJmNode();
         var methodId = _js.BrowseMethod(objectId,
@@ -242,7 +243,7 @@ public sealed class JointManagement : IDisposable
 
         if (objectId.IsNullNodeId || methodId.IsNullNodeId)
         {
-            _log.LogError("✗ JointManagement node or SendJoint method not found.");
+            _log.LogError("ERROR JointManagement node or SendJoint method not found.");
             return;
         }
 
@@ -250,23 +251,24 @@ public sealed class JointManagement : IDisposable
         var joint = UAModel.IJTBase.JointDataType.Create(
             jointId: jointId,
             jointDesignId: string.IsNullOrEmpty(jointDesignId) ? null : jointDesignId,
-            name: string.IsNullOrEmpty(name) ? null : name);
+            name: string.IsNullOrEmpty(name) ? null : name,
+            description: string.IsNullOrEmpty(description) ? null : description);
         var ext = new ExtensionObject(joint);
 
         try
         {
             var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, ext);
-            _log.LogInformation("✓ SendJoint called.");
+            _log.LogInformation("OK SendJoint called.");
             IjtJsonSerializer.PrintNamedOutputs("SendJoint", outputs, "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("✗ OPC UA error {Status}: {Message}",
+            _log.LogError("ERROR OPC UA error {Status}: {Message}",
                 IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "✗ Unexpected error in {Method}", nameof(SendJoint));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SendJoint));
         }
     }
 
