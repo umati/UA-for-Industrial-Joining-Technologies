@@ -152,6 +152,13 @@ module = "helpers.*"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
+# PyYAML ships no inline types and types-PyYAML is not in CI deps.
+# [import-untyped] is not suppressed by --ignore-missing-imports in mypy 1.0+.
+# Wildcard covers yaml, yaml.constructor, yaml.loader, etc.
+module = "yaml.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 # run_all_tests.py uses sys/subprocess/platform APIs that vary; not worth strict checking.
 module = "run_all_tests"
 ignore_errors = true

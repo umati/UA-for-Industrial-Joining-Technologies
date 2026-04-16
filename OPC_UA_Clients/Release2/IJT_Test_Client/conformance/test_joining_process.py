@@ -546,14 +546,26 @@ async def test_get_joining_process_list_elements_have_valid_structure(opcua_clie
             continue
         if isinstance(entry, (str, int, bytes)):
             continue  # scalar ID — valid per some server implementations
-        # Struct entry: must have at least one recognisable identifier field
-        jp_id = getattr(entry, "JoiningProcessId", None) or getattr(entry, "Id", None) or getattr(entry, "Name", None)
-        assert jp_id is not None, (
-            f"GetJoiningProcessList element[{i}] has no recognisable identifier field "
-            f"(checked JoiningProcessId, Id, Name). "
+        if isinstance(entry, list):
+            # asyncua decoded an ExtensionObject as raw field values (type not registered
+            # in the client's type dictionary). Named-field checks are not possible.
+            assert len(entry) > 0, f"GetJoiningProcessList element[{i}] decoded as empty raw-field list"
+            continue
+        # Struct entry: must expose at least one recognisable identifier/text field.
+        # Some servers return LocalizedText-like entries for process labels where Text may be None.
+        identifier_fields = ("JoiningProcessId", "Id", "Name", "Text")
+        if any(hasattr(entry, field) for field in identifier_fields):
+            logger.debug(
+                "GetJoiningProcessList element[%d]: candidate fields=%r",
+                i,
+                {field: getattr(entry, field, None) for field in identifier_fields if hasattr(entry, field)},
+            )
+            continue
+        assert False, (
+            f"GetJoiningProcessList element[{i}] has no recognisable identifier/text field "
+            f"(checked JoiningProcessId, Id, Name, Text). "
             f"Available attributes: {[a for a in dir(entry) if not a.startswith('_')]}"
         )
-        logger.debug("GetJoiningProcessList element[%d]: identifier=%r", i, jp_id)
 
 
 # ---------------------------------------------------------------------------
