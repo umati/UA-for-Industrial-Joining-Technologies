@@ -9,7 +9,7 @@ pythonpath = ["."]
 # Test Client has no tests/ dir — suites live at project root in named subdirs.
 testpaths = ["tests/unit", "conformance", "assets", "joining_process", "results", "joint", "events", "common"]
 python_files = ["test_*.py"]
-addopts = "-v --basetemp=tmp/pytest -p no:cacheprovider"
+addopts = "-v -p no:cacheprovider"
 tmp_path_retention_policy = "failed"
 timeout = 120
 markers = [
@@ -53,8 +53,9 @@ select = ["E", "F", "I"]
 ignore = ["E501", "E402", "E731"]
 
 [tool.coverage.run]
-# The unit stage is always skipped (no tests/unit/ directory exists).
-# This omit list applies to the live conformance stage; runner is excluded from measurement.
+# Unit stage runs against tests/unit/ with --cov=helpers (library code only).
+# Live conformance stage runs with --cov=. and covers helpers + conftest more broadly.
+# The omit list keeps venv and runner scaffolding out of both measurements.
 omit = [
     "run_all_tests.py",
     ".venv/*",

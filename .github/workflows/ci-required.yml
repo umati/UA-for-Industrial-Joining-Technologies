@@ -138,14 +138,24 @@ jobs:
         continue-on-error: true
         run: npm audit --audit-level=high --json > test-results/npm-audit.json
 
-      - name: Publish Test Reports
+      - name: "Publish Test Reports — Python"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
         if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
         with:
-          name: "Web Client — Tests"
-          path: |
-            OPC_UA_Clients/Release2/IJT_Web_Client/test-results/pytest.xml
-            OPC_UA_Clients/Release2/IJT_Web_Client/test-results/vitest.xml
+          name: "Web Client — Python Tests"
+          path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/pytest.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: "Publish Test Reports — JS"
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
+        with:
+          name: "Web Client — JS Tests (Vitest)"
+          path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/vitest.xml
           reporter: java-junit
           fail-on-error: false
           fail-on-empty: false
@@ -819,6 +829,10 @@ jobs:
       checks: write
 
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.14"

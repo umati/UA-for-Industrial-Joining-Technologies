@@ -995,7 +995,10 @@ def _step_unit_tests() -> _StepResult:
     ]
     if _tool_available("pytest_cov"):
         cmd += [
-            "--cov=.",
+            # Cover only helpers/ — the library actually tested by unit tests.
+            # Using --cov=. would include live/conformance test files (0% coverage)
+            # and pull the total far below the fail_under threshold.
+            "--cov=helpers",
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage.xml'}",
             f"--cov-report=html:{_RESULTS_DIR / 'htmlcov'}",
             "--cov-report=term-missing",
