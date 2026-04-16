@@ -123,8 +123,8 @@ async def _trigger_and_get_result(opcua_client, result_trigger, ns_indices, resu
         logger.debug("GetLatestResult failed: %s", exc)
         return None
 
-    if isinstance(raw, (list, tuple)) and len(raw) > 1:
-        return raw[1]
+    if isinstance(raw, (list, tuple)):
+        return raw[0] if raw else None
     return raw
 
 

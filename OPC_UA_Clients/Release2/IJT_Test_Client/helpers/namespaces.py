@@ -295,6 +295,7 @@ class BN:
     INTERVENTION_TYPE = "InterventionType"
     EXTENDED_META_DATA = "ExtendedMetaData"
     # ── IJT Base ResultManagement additions ──
+    RESULT = "Result"  # ResultVariable node BrowseName (IJT Base ns), child of Results folder
     REQUEST_RESULTS = "RequestResults"
     REQUEST_UNACKNOWLEDGED_RESULTS = "RequestUnacknowledgedResults"
     REQUESTED_RESULT = "RequestedResult"

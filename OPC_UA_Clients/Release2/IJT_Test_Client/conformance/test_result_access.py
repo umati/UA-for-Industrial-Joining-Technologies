@@ -48,7 +48,7 @@ import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
-from helpers.namespaces import BN, NS_MACH_RESULT, ResultType
+from helpers.namespaces import BN, NS_APP, NS_IJT_BASE, NS_MACH_RESULT, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
 from helpers.result_validator import assert_result_data_valid
 
@@ -361,10 +361,19 @@ async def test_result_management_exposes_last_result_metadata_variable(result_ma
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
-
-    last_meta_node = await find_child_by_browse_name(result_management, "LastResultMetaData", ns_mr)
+    # ResultMetaData lives at: ResultManagement → Results(ns_mr) → Result(ns_ijt) → ResultMetaData(ns_mr)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
+    if results_folder is None:
+        pytest.skip("Results folder not found on ResultManagement")
+    result_var = await find_child_by_browse_name(results_folder, BN.RESULT, ns_ijt)
+    if result_var is None:
+        pytest.skip("Result variable not found under Results folder")
+    last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
-        pytest.skip("LastResultMetaData variable not found on ResultManagement — optional per spec")
+        pytest.skip("ResultMetaData not found under Results/Result — optional per spec")
 
     try:
         value = await last_meta_node.read_value()
@@ -383,7 +392,17 @@ async def test_last_result_metadata_updated_after_trigger(opcua_client, result_t
         pytest.skip("Machinery/Result namespace not registered on server")
 
     rm = await _get_result_management(opcua_client, ns_mr)
-    last_meta_node = await find_child_by_browse_name(rm, "LastResultMetaData", ns_mr)
+    # ResultMetaData lives at: ResultManagement → Results(ns_mr) → Result(ns_ijt) → ResultMetaData(ns_mr)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    results_folder = await find_child_by_browse_name(rm, BN.RESULTS, ns_mr)
+    if results_folder is None:
+        pytest.skip("Results folder not found on ResultManagement")
+    result_var = await find_child_by_browse_name(results_folder, BN.RESULT, ns_ijt)
+    if result_var is None:
+        pytest.skip("Result variable not found under Results folder")
+    last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
         pytest.skip("LastResultMetaData variable not found — optional per spec")
 
@@ -454,7 +473,11 @@ async def test_request_results_method_is_present_and_callable(opcua_client, resu
         pytest.skip(outcome.skip_reason)
 
     rm = await _get_result_management(opcua_client, ns_mr)
-    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
         pytest.skip("RequestResults method not found on ResultManagement — optional per spec")
 
@@ -477,7 +500,11 @@ async def test_requested_result_variable_is_present_in_result_management(result_
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
 
-    requested_var_node = await find_child_by_browse_name(result_management, "RequestedResult", ns_mr)
+    # RequestedResult is registered in NS_APP (application namespace), not NS_MACH_RESULT
+    ns_app = ns_indices.get(NS_APP)
+    if ns_app is None:
+        pytest.skip("Application namespace not registered on server")
+    requested_var_node = await find_child_by_browse_name(result_management, BN.REQUESTED_RESULT, ns_app)
     if requested_var_node is None:
         pytest.skip("RequestedResult variable not found on ResultManagement — server may use event mode instead")
 
@@ -506,11 +533,19 @@ async def test_request_results_populates_requested_result_variable(opcua_client,
 
     rm = await _get_result_management(opcua_client, ns_mr)
 
-    requested_var_node = await find_child_by_browse_name(rm, "RequestedResult", ns_mr)
+    # RequestedResult is registered in NS_APP (application namespace), not NS_MACH_RESULT
+    ns_app = ns_indices.get(NS_APP)
+    if ns_app is None:
+        pytest.skip("Application namespace not registered on server")
+    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_app)
     if requested_var_node is None:
         pytest.skip("RequestedResult variable not found — server may use event mode instead")
 
-    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
         pytest.skip("RequestResults method not found on ResultManagement")
 
@@ -625,7 +660,11 @@ async def test_request_unacknowledged_results_method_is_present(result_managemen
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
 
-    rur_node = await find_child_by_browse_name(result_management, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    # RequestUnacknowledgedResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rur_node = await find_child_by_browse_name(result_management, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
         return
     try:
@@ -653,7 +692,11 @@ async def test_request_unacknowledged_results_is_callable(opcua_client, result_t
         pytest.skip(outcome.skip_reason)
 
     rm = await _get_result_management(opcua_client, ns_mr)
-    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    # RequestUnacknowledgedResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
         return
 
@@ -1136,7 +1179,17 @@ async def test_result_variable_value_rank_is_scalar_or_any(result_management, ns
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
 
-    last_meta_node = await find_child_by_browse_name(result_management, "LastResultMetaData", ns_mr)
+    # ResultMetaData lives at: ResultManagement → Results(ns_mr) → Result(ns_ijt) → ResultMetaData(ns_mr)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
+    if results_folder is None:
+        pytest.skip("Results folder not found on ResultManagement")
+    result_var = await find_child_by_browse_name(results_folder, BN.RESULT, ns_ijt)
+    if result_var is None:
+        pytest.skip("Result variable not found under Results folder")
+    last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
         pytest.skip("LastResultMetaData variable not found — optional per spec")
 
@@ -1170,7 +1223,17 @@ async def test_result_variable_contains_valid_result_meta_data_after_trigger(opc
     await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
 
     rm = await _get_result_management(opcua_client, ns_mr)
-    last_meta_node = await find_child_by_browse_name(rm, "LastResultMetaData", ns_mr)
+    # ResultMetaData lives at: ResultManagement → Results(ns_mr) → Result(ns_ijt) → ResultMetaData(ns_mr)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    results_folder = await find_child_by_browse_name(rm, BN.RESULTS, ns_mr)
+    if results_folder is None:
+        pytest.skip("Results folder not found on ResultManagement")
+    result_var = await find_child_by_browse_name(results_folder, BN.RESULT, ns_ijt)
+    if result_var is None:
+        pytest.skip("Result variable not found under Results folder")
+    last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
         pytest.skip("LastResultMetaData variable not found — optional per spec")
 
@@ -1200,7 +1263,17 @@ async def test_result_variable_access_level_allows_read_but_not_write(result_man
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
 
-    last_meta_node = await find_child_by_browse_name(result_management, "LastResultMetaData", ns_mr)
+    # ResultMetaData lives at: ResultManagement → Results(ns_mr) → Result(ns_ijt) → ResultMetaData(ns_mr)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
+    if results_folder is None:
+        pytest.skip("Results folder not found on ResultManagement")
+    result_var = await find_child_by_browse_name(results_folder, BN.RESULT, ns_ijt)
+    if result_var is None:
+        pytest.skip("Result variable not found under Results folder")
+    last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
         pytest.skip("LastResultMetaData variable not found — optional per spec")
 
@@ -1230,7 +1303,17 @@ async def test_write_to_result_variable_is_rejected(result_management, ns_indice
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
 
-    last_meta_node = await find_child_by_browse_name(result_management, "LastResultMetaData", ns_mr)
+    # ResultMetaData lives at: ResultManagement → Results(ns_mr) → Result(ns_ijt) → ResultMetaData(ns_mr)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
+    if results_folder is None:
+        pytest.skip("Results folder not found on ResultManagement")
+    result_var = await find_child_by_browse_name(results_folder, BN.RESULT, ns_ijt)
+    if result_var is None:
+        pytest.skip("Result variable not found under Results folder")
+    last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
         pytest.skip("LastResultMetaData variable not found — optional per spec")
 
@@ -1293,7 +1376,11 @@ async def test_request_results_with_empty_product_instance_uri_returns_good(opcu
     if rm is None:
         pytest.skip("ResultManagement node not found")
 
-    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
         pytest.skip("RequestResults method not found — optional per spec")
 
@@ -1317,7 +1404,11 @@ async def test_request_results_consecutive_calls_handled_gracefully(opcua_client
 
     rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
 
-    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
         pytest.skip("RequestResults method not found — optional per spec")
 
@@ -1346,7 +1437,11 @@ async def test_request_results_updates_result_variable_or_raises_event(opcua_cli
 
     rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
 
-    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
         pytest.skip("RequestResults method not found — optional per spec")
 
@@ -1362,7 +1457,11 @@ async def test_request_results_updates_result_variable_or_raises_event(opcua_cli
 
     await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
 
-    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_mr)
+    # RequestedResult is registered in NS_APP (application namespace), not NS_MACH_RESULT
+    ns_app = ns_indices.get(NS_APP)
+    if ns_app is None:
+        pytest.skip("Application namespace not registered on server")
+    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_app)
     if requested_var_node is None:
         pytest.skip("RequestedResult variable not found — server may use event mode")
 
@@ -1382,7 +1481,11 @@ async def test_request_results_with_invalid_uri_returns_error(opcua_client, resu
     if rm is None:
         pytest.skip("ResultManagement node not found")
 
-    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
         pytest.skip("RequestResults method not found — optional per spec")
 
@@ -1414,7 +1517,11 @@ async def test_request_results_with_no_pending_results_does_not_crash(opcua_clie
     if rm is None:
         pytest.skip("ResultManagement node not found")
 
-    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
         pytest.skip("RequestResults method not found — optional per spec")
 
@@ -1445,7 +1552,11 @@ async def test_requested_result_variable_access_level_includes_current_read(opcu
     if rm is None:
         pytest.skip("ResultManagement node not found")
 
-    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_mr)
+    # RequestedResult is registered in NS_APP (application namespace), not NS_MACH_RESULT
+    ns_app = ns_indices.get(NS_APP)
+    if ns_app is None:
+        pytest.skip("Application namespace not registered on server")
+    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_app)
     if requested_var_node is None:
         pytest.skip("RequestedResult variable not found — optional per spec")
 
@@ -1471,7 +1582,11 @@ async def test_requested_result_variable_source_timestamp_is_set_after_request(
 
     rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
 
-    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
         pytest.skip("RequestResults method not found — cannot exercise variable")
 
@@ -1487,7 +1602,11 @@ async def test_requested_result_variable_source_timestamp_is_set_after_request(
 
     await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
 
-    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_mr)
+    # RequestedResult is registered in NS_APP (application namespace), not NS_MACH_RESULT
+    ns_app = ns_indices.get(NS_APP)
+    if ns_app is None:
+        pytest.skip("Application namespace not registered on server")
+    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_app)
     if requested_var_node is None:
         pytest.skip("RequestedResult variable not found — server may use event mode")
 
@@ -1515,11 +1634,19 @@ async def test_request_results_event_received_with_required_fields(opcua_client,
 
     rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
 
-    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
         pytest.skip("RequestResults method not found — optional per spec")
 
-    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_mr)
+    # RequestedResult is registered in NS_APP (application namespace), not NS_MACH_RESULT
+    ns_app = ns_indices.get(NS_APP)
+    if ns_app is None:
+        pytest.skip("Application namespace not registered on server")
+    requested_var_node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_app)
     if requested_var_node is None:
         pytest.skip("RequestedResult variable not found — full event subscription test is device-dependent and skipped")
 
@@ -1574,7 +1701,11 @@ async def test_request_results_no_data_does_not_crash_server(opcua_client, ns_in
     if rm is None:
         pytest.skip("ResultManagement node not found")
 
-    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_mr)
+    # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
         pytest.skip("RequestResults method not found — optional per spec")
 
@@ -1636,7 +1767,11 @@ async def test_acknowledged_result_not_in_unacknowledged_list(opcua_client, resu
     if ack_node is None:
         return
 
-    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    # RequestUnacknowledgedResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
         return
 
@@ -1715,7 +1850,11 @@ async def test_request_unacknowledged_results_returns_list_of_result_ids(opcua_c
 
     rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
 
-    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    # RequestUnacknowledgedResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
         return
 
@@ -1740,7 +1879,11 @@ async def test_unacknowledged_result_appears_after_trigger(opcua_client, result_
 
     rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
 
-    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    # RequestUnacknowledgedResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
         return
 
@@ -1771,7 +1914,11 @@ async def test_acknowledged_result_absent_from_subsequent_unacknowledged_list(op
     if ack_node is None:
         return
 
-    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    # RequestUnacknowledgedResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
         return
 
@@ -1816,7 +1963,11 @@ async def test_request_unacknowledged_results_invalid_uri_returns_error(opcua_cl
     if rm is None:
         pytest.skip("ResultManagement node not found")
 
-    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    # RequestUnacknowledgedResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
         return
 

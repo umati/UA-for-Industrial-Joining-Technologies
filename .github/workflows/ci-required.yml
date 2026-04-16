@@ -96,16 +96,16 @@ jobs:
       - name: Install JS Dependencies
         run: npm ci
 
-      - run: mkdir -p test-results
-
       - name: Python Unit Tests
         id: pytest
         continue-on-error: true
         run: |
+          mkdir -p "$(pwd)/test-results"
           python -m pytest tests/python/unit -q \
-            --junitxml=test-results/pytest.xml \
+            --rootdir=. \
+            --junitxml="$(pwd)/test-results/pytest.xml" \
             --cov=. \
-            --cov-report=xml:test-results/coverage.xml \
+            --cov-report=xml:"$(pwd)/test-results/coverage.xml" \
             --cov-report=term-missing
 
       - name: JS Unit Tests

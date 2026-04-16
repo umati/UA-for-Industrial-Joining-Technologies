@@ -84,7 +84,7 @@ Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠
 | Optional method absent | `SetCalibration method not present — optional per spec` | Server does not implement an optional OPC UA method; skip is correct |
 | Optional field absent | `DeviceHealth not present — optional DI field` | Server omits an optional Device Information field |
 | Simulator PIU not validated | `Server returned Good for unknown ProductInstanceUri` | Simulator accepts any PIU; real servers reject unknown ones |
-| Trace data absent | `No trace values in result — simulator does not populate trace data` | Simulator never includes trace data in results |
+| Trace data absent | `No trace values in result` | Server/device did not populate `JoiningResultDataType.Trace` for this run; verify trigger settings (`includeTraces`) and server profile |
 | Missing prerequisite | `SetCalibration absent — cannot test downstream behaviour` | Cascading skip: an earlier optional feature was absent |
 | Namespace absent | `App namespace not registered` | Server does not expose the simulation namespace (expected for non-simulators) |
 | Event not triggered | `No JoiningProcessStartedEvent received within timeout` | Optional event was not fired; real controllers may not fire these |

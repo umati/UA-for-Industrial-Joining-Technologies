@@ -18,6 +18,7 @@ from helpers.event_collector import EventCollector
 from helpers.method_caller import call_method, find_and_call_method
 from helpers.namespaces import (
     BN,
+    NS_APP,
     NS_IJT_BASE,
     NS_MACH_RESULT,
     IJTTypes,
@@ -290,12 +291,21 @@ async def test_result_management_last_result_metadata_variable_if_present(result
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
 
-    last_meta_node = await find_child_by_browse_name(result_management, "LastResultMetaData", ns_mr)
+    # ResultMetaData lives at: ResultManagement → Results(ns_mr) → Result(ns_ijt) → ResultMetaData(ns_mr)
+    # "LastResultMetaData" does not exist as a flat child of ResultManagement in any NodeSet.
+    results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
+    if results_folder is None:
+        pytest.skip("Results folder not found on ResultManagement")
+    result_var = await find_child_by_browse_name(results_folder, BN.RESULT, ns_ijt)
+    if result_var is None:
+        pytest.skip("Result variable not found under Results folder")
+    last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
-        last_meta_node = await find_child_by_browse_name(result_management, BN.RESULT_META_DATA, ns_mr)
-    if last_meta_node is None:
-        pytest.skip("LastResultMetaData variable not found on ResultManagement — optional per spec")
+        pytest.skip("ResultMetaData not found under Results/Result — optional per spec")
 
     try:
         value = await last_meta_node.get_value()
@@ -493,11 +503,13 @@ async def test_result_management_request_results_method_present_if_supported(res
 
     Optional method: skipped when not present. When present, the method node must be browsable.
     """
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered on server")
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
 
-    request_results_node = await find_child_by_browse_name(result_management, BN.REQUEST_RESULTS, ns_mr)
+    # RequestResults BrowseName is "1:RequestResults" in IJT Base namespace (ns=1;i=7074
+    # in Opc.Ua.Ijt.Base.NodeSet2.xml), NOT in Machinery/Result namespace.
+    request_results_node = await find_child_by_browse_name(result_management, BN.REQUEST_RESULTS, ns_ijt)
     if request_results_node is None:
         pytest.skip(f"'{BN.REQUEST_RESULTS}' not present in ResultManagement — optional method per spec")
 
@@ -520,11 +532,13 @@ async def test_result_management_request_unacknowledged_results_method_present_i
       - method is absent, or
       - method is present but call is rejected with OPC UA Bad status.
     """
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered on server")
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
 
-    rur_node = await find_child_by_browse_name(result_management, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_mr)
+    # RequestUnacknowledgedResults BrowseName is "1:RequestUnacknowledgedResults" in IJT Base
+    # namespace (ns=1;i=7092), NOT in Machinery/Result namespace.
+    rur_node = await find_child_by_browse_name(result_management, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
         return
 
@@ -553,14 +567,15 @@ async def test_result_management_requested_result_variable_accessible_if_present
 
     Optional variable: skipped when not present. When present, the node must be browsable.
     """
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered on server")
+    ns_app = ns_indices.get(NS_APP)
+    if ns_app is None:
+        pytest.skip("Application namespace not registered on server")
 
-    # Try common browse names for the requested result variable node.
-    requested_var_node = await find_child_by_browse_name(result_management, "RequestedResult", ns_mr)
+    # "RequestedResult" is registered in the server's application namespace (NS_APP),
+    # confirmed from result_management_t.cpp: NAMESPACE_INDEX_TIGHTENING_SERVER.
+    requested_var_node = await find_child_by_browse_name(result_management, "RequestedResult", ns_app)
     if requested_var_node is None:
-        requested_var_node = await find_child_by_browse_name(result_management, BN.RESULT_TRANSFER, ns_mr)
+        requested_var_node = await find_child_by_browse_name(result_management, BN.RESULT_TRANSFER, ns_app)
     if requested_var_node is None:
         pytest.skip("RequestedResultVariable not found on ResultManagement — optional per spec")
 

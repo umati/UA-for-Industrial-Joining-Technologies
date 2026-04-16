@@ -139,7 +139,7 @@ IJT_Test_Client/
 ├── .cursorrules                  ← Copilot/Cursor config; points to docs/SKILLS.md
 ├── docs/SKILLS.md                ← developer reference for this sub-project
 ├── conftest.py                   ← all pytest fixtures (session + function scoped)
-├── pyproject.toml                ← asyncio_mode=auto, timeout=120 (+ ruff, coverage, bandit, vulture)
+├── pyproject.toml                ← asyncio_mode=auto, timeout=120, mypy check_untyped_defs=true (+ ruff, coverage, bandit, vulture); OPC UA test dirs have [[tool.mypy.overrides]] suppressing asyncua stub false-positives
 ├── helpers/
 │   ├── namespaces.py             ← ALL type IDs and BrowseName constants
 │   ├── node_discovery.py         ← async browse helpers (_browse_refs, find_child_by_browse_name)
@@ -281,7 +281,9 @@ All tests call `result_trigger.trigger_single(...)` and skip gracefully if no tr
 | AssetId, ComponentName, Location | AMB | `NS_AMB` |
 | LifetimeCounters, MachineryBuildingBlocks | Machinery | `NS_MACHINERY` |
 | Health, Parameters, AssetManagement, Assets | IJT Base | `NS_IJT_BASE` |
-| ResultManagement, GetLatestResult, Results | Machinery/Result | `NS_MACH_RESULT` |
+| ResultManagement, GetLatestResult, GetResultById, GetResultIdListFiltered, ReleaseResultHandle, Results | Machinery/Result | `NS_MACH_RESULT` |
+| RequestResults, RequestUnacknowledgedResults | IJT Base | `NS_IJT_BASE` — ⚠️ exception: these two methods are defined in IJT Base NodeSet (ns=1;i=7074, ns=1;i=7092), NOT in Machinery/Result |
+| RequestedResult variable | App | `NS_APP` — registered by server with `NAMESPACE_INDEX_TIGHTENING_SERVER` = `urn:AtlasCopco:IJT:Tightening:Server/` |
 | SimulateSingleResult, Simulations, SimulateResults | App | `NS_APP` |
 
 ---

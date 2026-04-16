@@ -47,7 +47,7 @@ async def test_joining_system_has_type_definition(joining_system, ns_indices):
     assert type_def is not None, "JoiningSystem has no HasTypeDefinition reference"
     expected = ua.NodeId(IJTTypes.JOINING_SYSTEM_TYPE, ns_ijt)
     assert type_def.Identifier == expected.Identifier, (
-        f"JoiningSystem type definition Identifier: expected {expected.Identifier}, got {type_def.Identifier}"
+        f"JoiningSystem type definition Identifier: expected {expected.Identifier!r}, got {type_def.Identifier!r}"
     )
     assert type_def.NamespaceIndex == expected.NamespaceIndex, (
         f"JoiningSystem type definition NamespaceIndex: expected {expected.NamespaceIndex}, "

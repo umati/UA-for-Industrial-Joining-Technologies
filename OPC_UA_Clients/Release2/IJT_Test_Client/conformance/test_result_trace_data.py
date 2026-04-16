@@ -28,6 +28,7 @@ Design: triggers a result WITH traces (include_traces=True) and validates trace 
 """
 
 import logging
+from typing import Any
 
 import pytest
 from asyncua import ua
@@ -107,11 +108,13 @@ def _skip_if_no_result(result_data, result_trigger) -> None:
 def _collect_trace_data(content):
     """Return a list of (joining_result_index, trace_data) pairs from ResultContent.
 
-    Looks for TraceData on each JoiningResultDataType element.
+    Looks for Trace on each JoiningResultDataType element.
+    Note: The IJT Base NodeSet defines the field as "Trace" (JoiningResultDataType.Trace),
+    NOT "TraceData". asyncua decodes it with the NodeSet field name.
     """
     traces = []
     for i, jr in enumerate(content):
-        td = getattr(jr, "TraceData", None)
+        td = getattr(jr, "Trace", None)
         if td is not None:
             traces.append((i, td))
     return traces
@@ -125,7 +128,7 @@ def _collect_trace_data(content):
 @pytest.mark.requires_cu(CU.JOINING_RESULT_TRACE)
 async def test_single_result_with_traces_has_trace_data(opcua_client, result_trigger, ns_indices):
     """When include_traces=True, at least one JoiningResultDataType in ResultContent
-    must carry a non-null TraceData."""
+    must carry a non-null Trace field (JoiningResultDataType.Trace)."""
     result_data, content = await _get_result_with_traces(opcua_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
@@ -135,11 +138,9 @@ async def test_single_result_with_traces_has_trace_data(opcua_client, result_tri
     traces = _collect_trace_data(content)
     if not traces:
         pytest.skip(
-            "No TraceData found on any JoiningResultDataType in ResultContent — "
-            "simulator may not populate TraceData through GetLatestResult even when "
-            "include_traces=True is passed to the trigger method. "
-            "This is a known simulator limitation; verify against a server that "
-            "exposes trace data through the result access methods."
+            "No Trace data found on any JoiningResultDataType in ResultContent — "
+            "check that the server populates JoiningResultDataType.Trace (IJT Base NodeSet field). "
+            "The simulator calls CreateSingleResult(includeTraces=true) so this should pass."
         )
 
 
@@ -154,15 +155,17 @@ async def test_trace_data_has_trace_id(opcua_client, result_trigger, ns_indices)
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — covered by test_single_result_with_traces_has_trace_data")
+        pytest.skip(
+            "No Trace field found (JoiningResultDataType.Trace) — covered by test_single_result_with_traces_has_trace_data"
+        )
 
     failures = []
     for idx, td in traces:
         trace_id = getattr(td, "TraceId", None)
         if not trace_id or not str(trace_id).strip():
-            failures.append(f"ResultContent[{idx}].TraceData.TraceId is absent or empty")
+            failures.append(f"ResultContent[{idx}].Trace.TraceId is absent or empty")
 
-    assert not failures, "TraceData.TraceId must be non-empty:\n  " + "\n  ".join(failures)
+    assert not failures, "Trace.TraceId must be non-empty:\n  " + "\n  ".join(failures)
 
 
 @pytest.mark.requires_cu(CU.JOINING_RESULT_TRACE)
@@ -176,7 +179,7 @@ async def test_trace_data_has_result_id_matching_parent(opcua_client, result_tri
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — covered by trace presence test")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — covered by trace presence test")
 
     top_result_id = None
     meta = getattr(result_data, "ResultMetaData", None)
@@ -187,15 +190,15 @@ async def test_trace_data_has_result_id_matching_parent(opcua_client, result_tri
     for idx, td in traces:
         trace_result_id = getattr(td, "ResultId", None)
         if trace_result_id is None:
-            failures.append(f"ResultContent[{idx}].TraceData.ResultId is absent")
+            failures.append(f"ResultContent[{idx}].Trace.ResultId is absent")
             continue
         if top_result_id is not None and str(trace_result_id) != str(top_result_id):
             failures.append(
-                f"ResultContent[{idx}].TraceData.ResultId={trace_result_id!r} "
+                f"ResultContent[{idx}].Trace.ResultId={trace_result_id!r} "
                 f"does not match parent ResultId={top_result_id!r}"
             )
 
-    assert not failures, "TraceData.ResultId must match parent result:\n  " + "\n  ".join(failures)
+    assert not failures, "Trace.ResultId must match parent result:\n  " + "\n  ".join(failures)
 
 
 @pytest.mark.requires_cu(CU.JOINING_RESULT_TRACE)
@@ -209,21 +212,19 @@ async def test_trace_data_step_traces_is_non_empty_list(opcua_client, result_tri
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — covered by trace presence test")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — covered by trace presence test")
 
     failures = []
     for idx, td in traces:
         step_traces = getattr(td, "StepTraces", None)
         if step_traces is None:
-            failures.append(f"ResultContent[{idx}].TraceData.StepTraces is absent")
+            failures.append(f"ResultContent[{idx}].Trace.StepTraces is absent")
         elif not isinstance(step_traces, (list, tuple)):
-            failures.append(
-                f"ResultContent[{idx}].TraceData.StepTraces must be a list, got {type(step_traces).__name__!r}"
-            )
+            failures.append(f"ResultContent[{idx}].Trace.StepTraces must be a list, got {type(step_traces).__name__!r}")
         elif len(step_traces) == 0:
-            failures.append(f"ResultContent[{idx}].TraceData.StepTraces is empty; at least one step trace is required")
+            failures.append(f"ResultContent[{idx}].Trace.StepTraces is empty; at least one step trace is required")
 
-    assert not failures, "TraceData.StepTraces must be a non-empty list:\n  " + "\n  ".join(failures)
+    assert not failures, "Trace.StepTraces must be a non-empty list:\n  " + "\n  ".join(failures)
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +244,7 @@ async def test_step_trace_has_required_fields(opcua_client, result_trigger, ns_i
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — covered by trace presence test")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — covered by trace presence test")
 
     failures = []
     for result_idx, td in traces:
@@ -254,14 +255,14 @@ async def test_step_trace_has_required_fields(opcua_client, result_trigger, ns_i
         for field_name in ("StepTraceId", "StepResultId", "NumberOfTracePoints"):
             val = getattr(first_step, field_name, None)
             if val is None:
-                failures.append(f"ResultContent[{result_idx}].TraceData.StepTraces[0].{field_name} is absent")
+                failures.append(f"ResultContent[{result_idx}].Trace.StepTraces[0].{field_name} is absent")
 
         step_content = getattr(first_step, "StepTraceContent", None)
         if step_content is None:
-            failures.append(f"ResultContent[{result_idx}].TraceData.StepTraces[0].StepTraceContent is absent")
+            failures.append(f"ResultContent[{result_idx}].Trace.StepTraces[0].StepTraceContent is absent")
         elif not isinstance(step_content, (list, tuple)) or len(step_content) == 0:
             failures.append(
-                f"ResultContent[{result_idx}].TraceData.StepTraces[0].StepTraceContent must be a non-empty list"
+                f"ResultContent[{result_idx}].Trace.StepTraces[0].StepTraceContent must be a non-empty list"
             )
 
     assert not failures, "StepTraceDataType required fields missing:\n  " + "\n  ".join(failures)
@@ -279,7 +280,7 @@ async def test_step_trace_content_has_values_and_physical_quantity(opcua_client,
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — covered by trace presence test")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — covered by trace presence test")
 
     failures = []
     for result_idx, td in traces:
@@ -287,9 +288,7 @@ async def test_step_trace_content_has_values_and_physical_quantity(opcua_client,
         for step_idx, step in enumerate(step_traces):
             step_content = getattr(step, "StepTraceContent", None) or []
             for content_idx, tc_element in enumerate(step_content):
-                location = (
-                    f"ResultContent[{result_idx}].TraceData.StepTraces[{step_idx}].StepTraceContent[{content_idx}]"
-                )
+                location = f"ResultContent[{result_idx}].Trace.StepTraces[{step_idx}].StepTraceContent[{content_idx}]"
 
                 values = getattr(tc_element, "Values", None)
                 if values is None:
@@ -329,7 +328,7 @@ async def test_step_result_values_with_trace_have_start_time_offset(opcua_client
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — trace offset check requires trace data")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — trace offset check requires trace data")
 
     found_start_time_offset = False
     found_trace_point_offset = False
@@ -370,7 +369,7 @@ async def test_step_result_values_trace_point_index_points_to_valid_sample(opcua
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — TracePointIndex check requires trace data")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — TracePointIndex check requires trace data")
 
     found_trace_point_index = False
     failures = []
@@ -448,7 +447,7 @@ async def test_step_trace_content_values_length_matches_number_of_trace_points(
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — covered by trace presence test")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — covered by trace presence test")
 
     failures = []
     for result_idx, td in traces:
@@ -461,7 +460,7 @@ async def test_step_trace_content_values_length_matches_number_of_trace_points(
                 num_points_int = int(num_points)
             except TypeError, ValueError:
                 failures.append(
-                    f"ResultContent[{result_idx}].TraceData.StepTraces[{step_idx}]"
+                    f"ResultContent[{result_idx}].Trace.StepTraces[{step_idx}]"
                     f".NumberOfTracePoints is not numeric: {num_points!r}"
                 )
                 continue
@@ -474,7 +473,7 @@ async def test_step_trace_content_values_length_matches_number_of_trace_points(
                 actual_len = len(values)
                 if actual_len != num_points_int:
                     failures.append(
-                        f"ResultContent[{result_idx}].TraceData"
+                        f"ResultContent[{result_idx}].Trace"
                         f".StepTraces[{step_idx}].StepTraceContent[{content_idx}]"
                         f".Values length={actual_len} != NumberOfTracePoints={num_points_int}"
                     )
@@ -495,7 +494,7 @@ async def test_step_trace_has_timing_information(opcua_client, result_trigger, n
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — covered by trace presence test")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — covered by trace presence test")
 
     failures = []
     for result_idx, td in traces:
@@ -505,7 +504,7 @@ async def test_step_trace_has_timing_information(opcua_client, result_trigger, n
             start_time_offset = getattr(step, "StartTimeOffset", None)
             if sampling_interval is None and start_time_offset is None:
                 failures.append(
-                    f"ResultContent[{result_idx}].TraceData.StepTraces[{step_idx}] "
+                    f"ResultContent[{result_idx}].Trace.StepTraces[{step_idx}] "
                     "has neither SamplingInterval nor StartTimeOffset; "
                     "at least one timing field is required per spec"
                 )
@@ -517,7 +516,7 @@ async def test_step_trace_has_timing_information(opcua_client, result_trigger, n
 @pytest.mark.requires_cu(CU.JOINING_RESULT_TRACE)
 async def test_result_without_trace_data_is_returned_without_error(opcua_client, result_trigger, ns_indices):
     """A result whose Trace field is null or absent must be returned without a
-    service-level error — TraceData is an optional field in JoiningResultDataType."""
+    service-level error — Trace is an optional field in JoiningResultDataType."""
     result_data, content = await _get_result_with_traces(opcua_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
@@ -527,14 +526,14 @@ async def test_result_without_trace_data_is_returned_without_error(opcua_client,
     # Find a JoiningResultDataType element with no trace
     no_trace_found = False
     for jr in content:
-        td = getattr(jr, "TraceData", None)
+        td = getattr(jr, "Trace", None)
         if td is None:
             no_trace_found = True
             break
 
     if not no_trace_found:
         pytest.skip(
-            "All JoiningResultDataType entries have TraceData — "
+            "All JoiningResultDataType entries have Trace data — "
             "this test targets the absent-trace case (mark Inconclusive when "
             "device always provides trace data)"
         )
@@ -542,7 +541,7 @@ async def test_result_without_trace_data_is_returned_without_error(opcua_client,
     # We already received the result without error — the test passes by reaching here
     meta = getattr(result_data, "ResultMetaData", None)
     result_id = str(getattr(meta, "ResultId", None) or "") if meta else ""
-    assert result_id.strip(), "ResultMetaData.ResultId must still be present even when TraceData is absent"
+    assert result_id.strip(), "ResultMetaData.ResultId must still be present even when Trace field is absent"
 
 
 @pytest.mark.negative
@@ -565,7 +564,7 @@ async def test_step_trace_content_array_lengths_are_consistent_across_results(op
 
         results_checked += 1
         for _, jr in enumerate(content):
-            td = getattr(jr, "TraceData", None)
+            td = getattr(jr, "Trace", None)
             if td is None:
                 continue
             step_traces = getattr(td, "StepTraces", None) or []
@@ -618,9 +617,9 @@ async def test_trace_point_time_offset_present_when_trace_point_index_absent(opc
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — trace reference checks require trace data")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — trace reference checks require trace data")
 
-    failures = []
+    failures: list[Any] = []
     for jr in content:
         step_results = getattr(jr, "StepResults", None) or []
         for _, step in enumerate(step_results):
@@ -669,7 +668,7 @@ async def test_trace_point_time_offset_is_non_negative(opcua_client, result_trig
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — TracePointOffset check requires trace data")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — TracePointOffset check requires trace data")
 
     found_offset = False
     failures = []
@@ -714,7 +713,9 @@ async def test_overall_result_values_may_have_trace_point_time_offset(opcua_clie
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — this test is only relevant with trace data present")
+        pytest.skip(
+            "No Trace field found (JoiningResultDataType.Trace) — this test is only relevant with trace data present"
+        )
 
     # Inspect OverallResultValues for any TracePointOffset entries
     overall_offset_found = False
@@ -749,7 +750,7 @@ async def test_overall_result_values_may_have_trace_point_time_offset(opcua_clie
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.RESULT_VALUE_TRACE_POINT_TIME_OFFSET)
 async def test_result_without_trace_has_no_trace_point_time_offset(opcua_client, result_trigger, ns_indices):
-    """When a result has no TraceData, all TracePointOffset values in StepResultValues
+    """When a result has no Trace field, all TracePointOffset values in StepResultValues
     must be absent or null — a non-null offset with no corresponding trace is a
     dangling reference and must not be present."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
@@ -796,7 +797,7 @@ async def test_result_without_trace_has_no_trace_point_time_offset(opcua_client,
     # Only assert if this result genuinely has no trace data
     if traces:
         pytest.skip(
-            "This result has TraceData — test targets the no-trace case; "
+            "This result has a Trace field — test targets the no-trace case; "
             "trigger a result with include_traces=False or disable traces on the device"
         )
 
@@ -810,11 +811,12 @@ async def test_result_without_trace_has_no_trace_point_time_offset(opcua_client,
                 if tpo is not None:
                     dangling_offsets.append(
                         f"StepResults[{step_idx}].StepResultValues[{val_idx}]"
-                        f".TracePointOffset={tpo!r} present but no TraceData in result"
+                        f".TracePointOffset={tpo!r} present but no Trace field in result"
                     )
 
     assert not dangling_offsets, (
-        "Dangling TracePointOffset references found in a result with no TraceData:\n  " + "\n  ".join(dangling_offsets)
+        "Dangling TracePointOffset references found in a result with no Trace field:\n  "
+        + "\n  ".join(dangling_offsets)
     )
 
 
@@ -831,7 +833,7 @@ async def test_trace_point_time_offset_is_never_negative(opcua_client, result_tr
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — trace offset check requires trace data")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — trace offset check requires trace data")
 
     failures = []
     for jr in content:
@@ -871,7 +873,9 @@ async def test_step_result_values_has_at_least_one_trace_point_index(opcua_clien
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — TracePointIndex requires trace data to be present")
+        pytest.skip(
+            "No Trace field found (JoiningResultDataType.Trace) — TracePointIndex requires trace data to be present"
+        )
 
     found = False
     for jr in content:
@@ -906,7 +910,7 @@ async def test_trace_point_index_references_correct_sample_value(opcua_client, r
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — TracePointIndex check requires trace data")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — TracePointIndex check requires trace data")
 
     verified_any = False
     failures = []
@@ -1014,7 +1018,7 @@ async def test_trace_point_index_is_non_negative_integer(opcua_client, result_tr
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — TracePointIndex check requires trace data")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace) — TracePointIndex check requires trace data")
 
     found_index = False
     failures = []
@@ -1060,7 +1064,9 @@ async def test_overall_result_values_may_have_trace_point_index(opcua_client, re
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found — this test is only relevant with trace data present")
+        pytest.skip(
+            "No Trace field found (JoiningResultDataType.Trace) — this test is only relevant with trace data present"
+        )
 
     failures = []
     overall_index_found = False
@@ -1092,7 +1098,7 @@ async def test_overall_result_values_may_have_trace_point_index(opcua_client, re
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.RESULT_VALUE_TRACE_POINT_INDEX)
 async def test_result_without_trace_has_no_trace_point_index(opcua_client, result_trigger, ns_indices):
-    """When a result has no TraceData, all TracePointIndex values in StepResultValues
+    """When a result has no Trace field, all TracePointIndex values in StepResultValues
     and OverallResultValues must be absent or null — a non-null index with no trace
     is a dangling reference."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
@@ -1138,7 +1144,7 @@ async def test_result_without_trace_has_no_trace_point_index(opcua_client, resul
 
     if traces:
         pytest.skip(
-            "This result has TraceData — test targets the no-trace case; "
+            "This result has a Trace field — test targets the no-trace case; "
             "trigger a result with include_traces=False to test this scenario"
         )
 
@@ -1152,18 +1158,18 @@ async def test_result_without_trace_has_no_trace_point_index(opcua_client, resul
                 if tpi is not None:
                     dangling_indices.append(
                         f"StepResults[{step_idx}].StepResultValues[{val_idx}]"
-                        f".TracePointIndex={tpi!r} present but no TraceData in result"
+                        f".TracePointIndex={tpi!r} present but no Trace field in result"
                     )
         overall_values = getattr(jr, "OverallResultValues", None) or []
         for val_idx, val in enumerate(overall_values):
             tpi = getattr(val, "TracePointIndex", None)
             if tpi is not None:
                 dangling_indices.append(
-                    f"OverallResultValues[{val_idx}].TracePointIndex={tpi!r} present but no TraceData in result"
+                    f"OverallResultValues[{val_idx}].TracePointIndex={tpi!r} present but no Trace field in result"
                 )
 
     assert not dangling_indices, (
-        "Dangling TracePointIndex references found in a result with no TraceData:\n  " + "\n  ".join(dangling_indices)
+        "Dangling TracePointIndex references found in a result with no Trace field:\n  " + "\n  ".join(dangling_indices)
     )
 
 
@@ -1180,7 +1186,7 @@ async def test_trace_point_index_is_never_negative(opcua_client, result_trigger,
 
     traces = _collect_trace_data(content)
     if not traces:
-        pytest.skip("No TraceData found")
+        pytest.skip("No Trace field found (JoiningResultDataType.Trace)")
 
     failures = []
     for jr in content:

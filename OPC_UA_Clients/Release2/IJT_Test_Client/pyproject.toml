@@ -121,6 +121,9 @@ max-module-lines = 1200
 [tool.mypy]
 explicit_package_bases = true
 ignore_missing_imports = true
+# Check bodies of untyped functions — this removes [annotation-unchecked] notes
+# from CI annotations and gives mypy full coverage of conformance test logic.
+check_untyped_defs = true
 # Exclude pytest bookkeeping dirs that may be locked on Windows.
 exclude = ["pytest-cache-files-.*"]
 
@@ -162,3 +165,46 @@ ignore_missing_imports = true
 # run_all_tests.py uses sys/subprocess/platform APIs that vary; not worth strict checking.
 module = "run_all_tests"
 ignore_errors = true
+
+# ── asyncua stub gaps: per-file overrides (only files that actually need them) ──
+# asyncua ships no type stubs — mypy resolves asyncua types as Any via ignore_missing_imports.
+# Most test files are clean. The 17 files below fire specific stub defects listed here.
+# All errors below are asyncua stub defects, not bugs in test logic:
+#   arg-type   — ua.NodeId(int, ns): stub expects Int32|String|Guid|ByteString; int is fine at runtime
+#   union-attr — DataValue.Value / Variant.Value typed Optional; always set after a successful read
+#   attr-defined — IJT custom types decoded at runtime via asyncua type dictionary; not in static stubs
+#   operator   — AccessLevel & 0x02 bitwise op on asyncua Int32 subclass; valid at runtime
+# Grouped by which codes each file actually fires.
+
+[[tool.mypy.overrides]]
+module = [
+    "assets.test_asset_management_structure",
+    "conformance.test_asset_management",
+    "conformance.test_events",
+    "conformance.test_single_result_data",
+    "events.data_types.test_event_data_types",
+    "events.test_event_types_structure",
+    "events.test_joining_system_events",
+    "events.test_simulate_events",
+    "joining_process.test_joining_process_structure",
+    "joint.test_joint_management_structure",
+    "results.test_result_events",
+    "results.test_simulate_results",
+]
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
+module = ["conformance.test_joint_management"]
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = ["conformance.test_result_access", "conformance.test_result_management"]
+disable_error_code = ["arg-type", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = ["conformance.test_joining_process"]
+disable_error_code = ["arg-type", "attr-defined"]
+
+[[tool.mypy.overrides]]
+module = ["conformance.test_joining_system_base"]
+disable_error_code = ["arg-type", "attr-defined", "operator", "union-attr"]

@@ -13,6 +13,7 @@ single joining operation.
 # pylint: disable=too-many-lines
 
 import logging
+from typing import Any
 
 import pytest
 from asyncua import ua
@@ -529,7 +530,7 @@ async def test_nok_result_error_information_has_error_code(opcua_client, result_
     _skip_if_no_result(result_data, result_trigger)
 
     content = getattr(result_data, "ResultContent", None) or []
-    all_errors = []
+    all_errors: list[Any] = []
     for jr in content:
         errors = getattr(jr, "Errors", None) or []
         all_errors.extend(errors)
@@ -570,7 +571,7 @@ async def test_nok_result_failure_reason_in_valid_range(opcua_client, result_tri
 
     valid_reasons = {0, 1, 2, 3}
     content = getattr(result_data, "ResultContent", None) or []
-    all_errors = []
+    all_errors: list[Any] = []
     for jr in content:
         all_errors.extend(getattr(jr, "Errors", None) or [])
 
