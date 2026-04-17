@@ -1004,47 +1004,56 @@ jobs:
           def job_icon(r):
               return {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
 
-          def fmt_tests(total, passed, failed, skipped=0):
+          def tests(total, passed, failed, skipped=0):
               if total is None:
                   return "—"
-              icon = "✅" if failed == 0 else "❌"
-              return f"{icon} {passed}p · {failed}f"
+              if failed == 0:
+                  return f"✅ {total:,}"
+              return f"❌ {passed:,} / {total:,}"
 
-          def fmt_cov(pct):
+          def skips(sk):
+              return "—" if sk is None else str(sk)
+
+          def cov(pct):
               if pct is None:
                   return "—"
-              icon = "✅" if pct >= 65 else ("⚠️" if pct >= 50 else "❌")
-              return f"{icon} {pct:.0f}%"
+              icon = "✅" if pct >= 90 else ("⚠️" if pct >= 70 else "❌")
+              return f"{pct:.0f}% {icon}"
 
-          def fmt_bandit(high, medium):
-              if high is None:
-                  return "—"
-              return "✅ clean" if high == 0 and medium == 0 else f"❌ H:{high} M:{medium}"
-
-          def fmt_npm(crit, high):
-              if crit is None:
-                  return "—"
-              return "✅ clean" if crit == 0 and high == 0 else f"❌ C:{crit} H:{high}"
-
-          def fmt_eslint(errors, warnings):
-              if errors is None:
-                  return "—"
-              if errors == 0 and not warnings:
-                  return "✅ eslint"
-              parts = ([f"{errors}e"] if errors else []) + ([f"{warnings}w"] if warnings else [])
-              prefix = "❌" if errors else "⚠️"
-              return f"{prefix} eslint · {' · '.join(parts)}"
-
-          def fmt_step(r, label=""):
+          def tool(r, label):
               if not r or r in ("", "unknown"):
                   return "—"
               icon = {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
-              return f"{icon} {label}".strip() if label else icon
+              return f"{label} {icon}"
 
-          def lint_cell(*items):
-              """Join lint items, dropping any — entries."""
-              parts = [x for x in items if x != "—"]
-              return " · ".join(parts) if parts else "—"
+          def bandit_fmt(high, medium):
+              if high is None:
+                  return "—"
+              if high == 0 and medium == 0:
+                  return "✅ No issues"
+              return f"❌ {high} high, {medium} medium"
+
+          def npm_fmt(crit, high):
+              if crit is None:
+                  return "—"
+              if crit == 0 and high == 0:
+                  return "✅ No issues"
+              return f"❌ {crit} critical, {high} high"
+
+          def eslint_fmt(step_r, esl_tuple):
+              errors, warnings = esl_tuple
+              warn_count = warnings or 0
+              if errors is not None:
+                  if errors == 0 and warn_count == 0:
+                      return "eslint ✅"
+                  if errors == 0:
+                      return f"eslint ⚠️ ({warn_count} warnings)"
+                  return f"eslint ❌ ({errors} errors, {warn_count} warnings)"
+              return tool(step_r, "eslint")
+
+          def lint(*items):
+              parts = [p for p in items if p != "—"]
+              return " · ".join(parts) or "—"
 
           # ── Load ENV ─────────────────────────────────────────────────────────
 
@@ -1118,77 +1127,81 @@ jobs:
           # ── Overall status ────────────────────────────────────────────────────
 
           all_jobs = [web_r, con_r, nod_r, dck_r, cs_r, tc_r, ss_r, al_r]
-          n_pass = sum(1 for r in all_jobs if r == "success")
-          n_fail = sum(1 for r in all_jobs if r == "failure")
+          n_pass  = sum(1 for r in all_jobs if r == "success")
+          n_fail  = sum(1 for r in all_jobs if r == "failure")
           n_total = len(all_jobs)
+
           if n_fail == 0:
-              overall = f"✅ All {n_pass}/{n_total} Passed"
+              status_icon = "✅"
+              status_msg  = f"All {n_pass} / {n_total} jobs passed"
           else:
-              overall = f"❌ {n_fail}/{n_total} Failed · {n_pass} passed"
+              status_icon = "❌"
+              status_msg  = f"{n_fail} / {n_total} jobs failed  ·  {n_pass} passed"
+
+          suites   = [web_py_t, web_js_t, con_py_t, nod_js_t, cs_t, ss_smoke]
+          total_t  = sum(s[0] for s in suites if s[0] is not None)
+          total_f  = sum(s[2] for s in suites if s[2] is not None)
+          total_sk = sum(s[3] for s in suites if s[3] is not None)
+
+          if total_t > 0:
+              totals = f"{total_t:,} tests  ·  {total_f} failed  ·  {total_sk} skipped"
+          else:
+              totals = "no test data"
 
           run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
           sha_str  = f"`{sha}`" if sha else "—"
 
-          # ── Quality columns ───────────────────────────────────────────────────
-
-          def lint_web():
-              ruff = fmt_step(web_ruff, "ruff")
-              esl  = (fmt_eslint(*web_esl) if web_esl[0] is not None
-                      else fmt_step(web_eslint, "eslint"))
-              return lint_cell(ruff, esl)
-
-          def lint_nod():
-              esl = (fmt_eslint(*nod_esl) if nod_esl[0] is not None
-                     else fmt_step(nod_eslint, "eslint"))
-              return lint_cell(esl)
-
-          def lint_cs():
-              return lint_cell(fmt_step(cs_build, "build"), fmt_step(cs_format, "format"))
-
           # ── Build report ──────────────────────────────────────────────────────
 
           out = [
-              f"## 🏭 IJT OPC UA — CI Required &nbsp;&nbsp; {overall}",
+              "## IJT OPC UA — CI Required",
               "",
+              f"> {status_icon} **{status_msg}** &nbsp;·&nbsp; {totals}",
               f"> **Branch:** `{branch}` &nbsp;·&nbsp; **Commit:** {sha_str} &nbsp;·&nbsp; **Run:** {run_link}",
               "",
-              "### 🔬 Test Results",
+              "---",
               "",
-              "| Component | Tests | Coverage | Skips |",
-              "|:----------|:-----:|:--------:|:-----:|",
-              f"| **Web Client — Python** | {fmt_tests(*web_py_t)} | {fmt_cov(web_cov)} | {web_py_t[3] or '—'} |",
-              f"| **Web Client — JS (Vitest)** | {fmt_tests(*web_js_t)} | — | {web_js_t[3] or '—'} |",
-              f"| **Console Client — Python** | {fmt_tests(*con_py_t)} | {fmt_cov(con_cov)} | {con_py_t[3] or '—'} |",
-              f"| **Node Client — JS (Vitest)** | {fmt_tests(*nod_js_t)} | — | {nod_js_t[3] or '—'} |",
-              f"| **C# Client — xUnit** | {fmt_tests(*cs_t)} | — | {cs_t[3] or '—'} |",
-              f"| **OPC UA Server — Smoke (Windows)** | {fmt_tests(*ss_smoke)} | — | — |",
+              "### 🧪 Test Results",
               "",
-              "### 🔒 Code Quality & Security",
+              "| Component | Platform | Tests | Skipped | Coverage |",
+              "|:----------|:--------:|------:|--------:|:--------:|",
+              f"| Web Client — Python      | Ubuntu  | {tests(*web_py_t)} | {skips(web_py_t[3])} | {cov(web_cov)} |",
+              f"| Web Client — JavaScript  | Ubuntu  | {tests(*web_js_t)} | {skips(web_js_t[3])} | — |",
+              f"| Console Client — Python  | Ubuntu  | {tests(*con_py_t)} | {skips(con_py_t[3])} | {cov(con_cov)} |",
+              f"| Node Client — JavaScript | Ubuntu  | {tests(*nod_js_t)} | {skips(nod_js_t[3])} | — |",
+              f"| C# Client — xUnit        | Windows | {tests(*cs_t)} | {skips(cs_t[3])} | — |",
+              f"| OPC UA Server — Smoke    | Windows | {tests(*ss_smoke)} | {skips(ss_smoke[3])} | — |",
+              "",
+              "---",
+              "",
+              "### 🛡️ Code Quality",
               "",
               "| Component | Lint | Type Check | Security | Dependencies |",
               "|:----------|:-----|:----------:|:--------:|:------------:|",
-              f"| **Web Client** | {lint_web()} | {fmt_step(web_mypy, 'mypy')} | {fmt_bandit(*web_ban)} | {fmt_npm(*web_npm)} |",
-              f"| **Console Client** | {fmt_step(con_ruff, 'ruff')} | {fmt_step(con_mypy, 'mypy')} | {fmt_bandit(*con_ban)} | — |",
-              f"| **Node Client** | {lint_nod()} | — | — | {fmt_npm(*nod_npm)} |",
-              f"| **C# Client** | {lint_cs()} | — | {fmt_step(cs_vuln, 'nuget audit')} | — |",
-              f"| **Test Client** | {fmt_step(tc_ruff, 'ruff')} | {fmt_step(tc_mypy, 'mypy')} | {fmt_bandit(*tc_ban)} | — |",
+              f"| Web Client     | {lint(tool(web_ruff, 'ruff'), eslint_fmt(web_eslint, web_esl))} | {tool(web_mypy, 'mypy')} | {bandit_fmt(*web_ban)} | {npm_fmt(*web_npm)} |",
+              f"| Console Client | {tool(con_ruff, 'ruff')} | {tool(con_mypy, 'mypy')} | {bandit_fmt(*con_ban)} | — |",
+              f"| Node Client    | {eslint_fmt(nod_eslint, nod_esl)} | — | — | {npm_fmt(*nod_npm)} |",
+              f"| C# Client      | {lint(tool(cs_build, 'build'), tool(cs_format, 'format'))} | — | {tool(cs_vuln, 'nuget')} | — |",
+              f"| Test Client    | {tool(tc_ruff, 'ruff')} | {tool(tc_mypy, 'mypy')} | {bandit_fmt(*tc_ban)} | — |",
+              "",
+              "---",
               "",
               "### 🏗️ Infrastructure",
               "",
-              "| Check | Result |",
+              "| Check | Status |",
               "|:------|:------:|",
-              f"| **Web Client — Docker Smoke** (HTTP + WebSocket) | {job_icon(dck_r)} |",
-              f"| **GHA Workflow Lint** (actionlint) | {job_icon(al_r)} |",
+              f"| Web Client — Docker Smoke (HTTP + WebSocket) | {job_icon(dck_r)} |",
+              f"| GHA Workflow Lint (actionlint)               | {job_icon(al_r)} |",
               "",
               "---",
-              "**Legend:** ✅ Pass/Clean &nbsp;·&nbsp; ❌ Fail/Issues &nbsp;·&nbsp; ⚠️ Warning &nbsp;·&nbsp; — Not applicable",
-              "**Coverage:** ≥ 65% ✅ &nbsp;·&nbsp; ≥ 50% ⚠️ &nbsp;·&nbsp; < 50% ❌ &nbsp;·&nbsp; p = passed &nbsp;·&nbsp; f = failed",
               "",
-              "> 🔍 **Checks tab** — per-test drill-down &nbsp;·&nbsp; 📦 **Artifacts** — JUnit XML · ESLint JSON · Bandit JSON · Coverage XML",
+              "> 📋 **Checks** tab — per-test drill-down &nbsp;·&nbsp; 📦 **Artifacts** — JUnit XML · Coverage XML · ESLint JSON · Bandit JSON",
+              "> Coverage: ✅ ≥ 90% &nbsp;·&nbsp; ⚠️ ≥ 70% &nbsp;·&nbsp; ❌ < 70%",
           ]
 
           if artifact_warnings:
-              out += ["", "---", "### ⚠️ Artifact Sanity Warnings", "", *artifact_warnings]
+              out += ["", "---", "", "### ⚠️ Artifact Warnings", ""]
+              out += artifact_warnings
 
           with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8") as fh:
               fh.write("\n".join(out) + "\n")

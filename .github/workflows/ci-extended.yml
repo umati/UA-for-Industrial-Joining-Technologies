@@ -649,11 +649,20 @@ jobs:
           def job_icon(r):
               return {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
 
-          def fmt_tests(total, passed, failed, skipped=0):
+          def tests(total, passed, failed, skipped=0):
               if total is None:
                   return "—"
-              icon = "✅" if failed == 0 else "❌"
-              return f"{icon} {passed}p · {failed}f"
+              if failed == 0:
+                  return f"✅ {total:,}"
+              return f"❌ {passed:,} / {total:,}"
+
+          def skips(sk):
+              return "—" if sk is None else str(sk)
+
+          def skip_note(sk, note):
+              if sk is None or sk == 0:
+                  return "—"
+              return note
 
           # ── Load ENV ─────────────────────────────────────────────────────
 
@@ -699,18 +708,21 @@ jobs:
           # ── Overall status ────────────────────────────────────────────────
 
           core_jobs = [sd_r, wd_r, tc_r, lo_r]
-          n_pass = sum(1 for r in core_jobs if r == "success")
-          n_fail = sum(1 for r in core_jobs if r == "failure")
+          n_pass  = sum(1 for r in core_jobs if r == "success")
+          n_fail  = sum(1 for r in core_jobs if r == "failure")
           n_total = len(core_jobs)
 
           zizmor_ok = al_r in ("success", "skipped")
 
           if n_fail == 0 and zizmor_ok:
-              overall = f"✅ All {n_pass}/{n_total} Core Passed"
+              status_icon = "✅"
+              status_msg  = f"All {n_pass} / {n_total} core jobs passed"
           elif n_fail == 0 and not zizmor_ok:
-              overall = f"✅ All {n_pass}/{n_total} Core Passed · ⚠️ Security Audit Findings"
+              status_icon = "⚠️"
+              status_msg  = f"All {n_pass} / {n_total} core jobs passed  ·  security audit findings"
           else:
-              overall = f"❌ {n_fail}/{n_total} Core Failed · {n_pass} passed"
+              status_icon = "❌"
+              status_msg  = f"{n_fail} / {n_total} core jobs failed  ·  {n_pass} passed"
 
           run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
           sha_str  = f"`{sha}`" if sha else "—"
@@ -718,37 +730,53 @@ jobs:
           # ── Build report ──────────────────────────────────────────────────
 
           out = [
-              f"## 🏭 IJT OPC UA — CI Extended &nbsp;&nbsp; {overall}",
+              "## IJT OPC UA — CI Extended",
               "",
+              f"> {status_icon} **{status_msg}**",
               f"> **Branch:** `{branch}` &nbsp;·&nbsp; **Commit:** {sha_str} &nbsp;·&nbsp; **Run:** {run_link}",
-              "> Live / integration tests — requires OPC UA server + full client stack (Windows runner)",
+              "> Nightly integration and live tests — full OPC UA stack on Windows + Docker",
               "",
-              "### 🔬 Live Test Results",
+              "---",
               "",
-              "| Component | Job | Tests | Skips |",
-              "|:----------|:---:|:-----:|:-----:|",
-              f"| **OPC UA Server — Smoke (Docker Linux)** | {job_icon(sd_r)} | {fmt_tests(*sd_smoke)} | — |",
-              f"| **Web Client Docker — Python** | {job_icon(wd_r)} | {fmt_tests(*wd_py)} | {wd_py[3] or '—'} |",
-              f"| **Web Client Docker — JS (Vitest)** | {job_icon(wd_r)} | {fmt_tests(*wd_js)} | {wd_js[3] or '—'} |",
-              f"| **Test Client — Smoke Sanity** | {job_icon(tc_r)} | {fmt_tests(*tc_smoke)} | — |",
-              f"| **Test Client — Conformance (Live)** | {job_icon(tc_r)} | {fmt_tests(*tc_tests)} | {tc_tests[3] or '—'} |",
-              f"| **Web Client — Integration (Live)** | {job_icon(lo_r)} | {fmt_tests(*lo_web)} | {lo_web[3] or '—'} |",
-              f"| **Console Client — Live** | {job_icon(lo_r)} | {fmt_tests(*lo_con)} | {lo_con[3] or '—'} |",
+              "### 🐳 Docker Tests",
+              "",
+              "> Platform: Ubuntu latest — containerized OPC UA server",
+              "",
+              "| Suite | Tests | Skipped |",
+              "|:------|------:|--------:|",
+              f"| OPC UA Server — Smoke    | {tests(*sd_smoke)} | {skips(sd_smoke[3])} |",
+              f"| Web Client — Python unit | {tests(*wd_py)} | {skips(wd_py[3])} |",
+              f"| Web Client — JavaScript  | {tests(*wd_js)} | {skips(wd_js[3])} |",
+              "",
+              "---",
+              "",
+              "### 🖥️ Live Integration Tests",
+              "",
+              "> Platform: Windows Server — native OPC UA server on port 40451",
+              "",
+              "| Suite | Tests | Skipped | Notes |",
+              "|:------|------:|--------:|:------|",
+              f"| Test Client — Smoke sanity       | {tests(*tc_smoke)} | {skips(tc_smoke[3])} | Server and namespace reachability |",
+              f"| Test Client — Conformance (live) | {tests(*tc_tests)} | {skips(tc_tests[3])} | Expected skips — see Checks tab |",
+              f"| Web Client — Integration (live)  | {tests(*lo_web)} | {skips(lo_web[3])} | OPC UA subscriptions + WebSocket |",
+              f"| Console Client — Live            | {tests(*lo_con)} | {skips(lo_con[3])} | {skip_note(lo_con[3], 'See Checks tab')} |",
+              "",
+              "---",
               "",
               "### 🔒 Security Audit",
               "",
-              "| Check | Result | Notes |",
-              "|:------|:------:|:------|",
-              f"| **GHA Security Audit** (zizmor) | {job_icon(al_r)} | Findings reported to → **Code Scanning** tab |",
+              "| Tool | Status | Detail |",
+              "|:-----|:------:|:-------|",
+              f"| GHA Workflows — zizmor | {job_icon(al_r)} | Findings reported to Security → Code Scanning |",
               "",
               "---",
-              "**Legend:** ✅ Pass &nbsp;·&nbsp; ❌ Fail &nbsp;·&nbsp; ⚠️ Warning &nbsp;·&nbsp; — Not applicable &nbsp;·&nbsp; p = passed &nbsp;·&nbsp; f = failed",
               "",
-              "> 🔍 **Checks tab** — per-test drill-down &nbsp;·&nbsp; 📦 **Artifacts** — JUnit XML (downloadable above)",
+              "> 📋 **Checks** tab — per-test drill-down &nbsp;·&nbsp; 📦 **Artifacts** — JUnit XML",
           ]
 
           if artifact_warnings:
-              out += ["", "---", "### ⚠️ Artifact Sanity Warnings", "", *artifact_warnings]
+              out += ["", "---", "", "### ⚠️ Artifact Warnings", ""]
+              out += artifact_warnings
 
           with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8") as fh:
               fh.write("\n".join(out) + "\n")

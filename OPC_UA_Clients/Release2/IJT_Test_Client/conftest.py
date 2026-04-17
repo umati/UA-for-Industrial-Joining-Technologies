@@ -55,6 +55,10 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "conformance: IJT conformance unit test")
     config.addinivalue_line("markers", "negative: negative / error-path test")
     config.addinivalue_line("markers", "simulation: requires the OPC UA IJT Server Simulator")
+    config.addinivalue_line(
+        "markers",
+        "performance: end-to-end latency / throughput benchmark (requires a live OPC UA server)",
+    )
 
     _project_root = Path(__file__).resolve().parent
     # Default to repo-local basetemp (stable in this environment). Set
