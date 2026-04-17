@@ -12,7 +12,7 @@ Architecture: Two-phase execution
                             - ESLint, npm audit (Node/JS projects)
                             - dotnet format, NuGet vulnerability scan (C# project)
                             - hadolint, yamllint (Server / Docker)
-                          Extra root-level checks: git-sanity, GHA workflow validation.
+                          Extra root-level checks: git-sanity, md-hygiene, GHA workflow validation.
   Phase 2 (SEQUENTIAL) -- live integration tests, requires OPC UA server on
                           port 40451 (managed via Docker Compose by default).
                           Delegates to each sub-project's own run_all_tests.py --phase2
@@ -22,7 +22,7 @@ Usage:
   python run_all_tests.py                    # full run (Phase 1 + Docker + Phase 2)
   python run_all_tests.py --phase1           # static + unit tests only (no server)
   python run_all_tests.py --phase2           # live tests only (server must exist)
-  python run_all_tests.py --suite git-sanity # single suite by name
+  python run_all_tests.py --suite md-hygiene # single suite by name
   python run_all_tests.py --skip-docker      # assume server already on :40451
   python run_all_tests.py --no-rebuild       # docker compose up --no-build
   python run_all_tests.py --verbose          # DEBUG-level logging
@@ -1063,6 +1063,73 @@ def _suite_gitignore_sanity() -> SuiteResult:
 
 
 # ---------------------------------------------------------------------------
+# Phase 1 suite -- markdown hygiene (no private paths or internal references)
+# ---------------------------------------------------------------------------
+
+# Patterns that must never appear in committed .md files.
+# Key = string to search for, Value = human-readable reason.
+_MD_PRIVATE_PATTERNS: dict[str, str] = {
+    "C:\\\\": "Windows absolute path",
+    "C:/DDrive": "machine-specific path",
+    "C:/Users": "Windows user absolute path",
+    "MyWork": "private repository reference",
+    "CodexSandboxOffline": "internal sandbox user",
+    "Access Rules (CRITICAL)": "AI assistant permission block",
+    "Never Violate": "AI assistant instruction language",
+    "user reviews and commits manually": "personal workflow rule",
+    "user explicitly requests": "personal workflow rule",
+}
+
+
+def _suite_md_hygiene() -> SuiteResult:
+    """Scan all committed .md files for private paths and internal references.
+
+    Catches content that belongs in private context files (e.g. absolute local
+    paths, internal repo names, personal workflow rules) before it reaches the
+    public repo.
+    """
+    name = "md-hygiene"
+    t0 = time.monotonic()
+
+    md_files = sorted(REPO_ROOT.rglob("*.md"))
+    # Exclude generated output directories
+    md_files = [
+        f
+        for f in md_files
+        if not any(part in f.parts for part in ("node_modules", "test-results", ".git"))
+    ]
+
+    violations: list[str] = []
+    for md_file in md_files:
+        try:
+            content = md_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        rel = md_file.relative_to(REPO_ROOT)
+        for pattern, reason in _MD_PRIVATE_PATTERNS.items():
+            if pattern in content:
+                # Find line numbers
+                for lineno, line in enumerate(content.splitlines(), 1):
+                    if pattern in line:
+                        violations.append(f"  {rel}:{lineno} — {reason}: {line.strip()[:120]}")
+
+    if violations:
+        lines = [
+            f"Scanned {len(md_files)} markdown files.\n",
+            "ERROR: the following .md files contain private or internal content:\n",
+        ]
+        lines.extend(violations)
+        lines.append(
+            "\nFix: move internal content to private context files; public .md files must be"
+            " free of local paths, internal repo names, and personal workflow rules."
+        )
+        return SuiteResult(name, False, time.monotonic() - t0, output="\n".join(lines))
+
+    notes = [f"{len(md_files)} markdown files checked — no private content found"]
+    return SuiteResult(name, True, time.monotonic() - t0, notes=notes)
+
+
+# ---------------------------------------------------------------------------
 # Phase 2 suites -- live / integration (run sequentially, server required)
 # ---------------------------------------------------------------------------
 
@@ -1184,6 +1251,7 @@ PHASE1_SUITES: dict[str, object] = {
     "node": _suite_node_unit,
     "server-static": _suite_server_static,
     "git-sanity": _suite_gitignore_sanity,
+    "md-hygiene": _suite_md_hygiene,
 }
 
 PHASE2_SUITES: dict[str, object] = {
@@ -1448,6 +1516,7 @@ def _cleanup_caches(root: Path) -> None:
         ".pytest_cache",
         ".ruff_cache",
         ".mypy_cache",
+        "htmlcov",
         "pki",
         "PKI",
     }

@@ -60,13 +60,14 @@ omit = [
     "run_all_tests.py",
     ".venv/*",
     ".venv_test/*",
+    "helpers/server_manager.py",
 ]
 
 [tool.coverage.report]
 # Floor set at 65% — new integration-only helpers (result_validator, profile_loader,
 # server_manager) are covered by live tests but not unit tests, pulling total down.
 # Raise this floor as dedicated unit tests are added for those helpers.
-fail_under = 65
+fail_under = 90
 skip_empty = true
 exclude_lines = [
     "pragma: no cover",

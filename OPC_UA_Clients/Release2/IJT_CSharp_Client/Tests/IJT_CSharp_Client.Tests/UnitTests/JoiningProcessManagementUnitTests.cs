@@ -460,4 +460,87 @@ public sealed class JoiningProcessIdentificationEncodingMaskTests
         Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessOriginId) != 0);
         Assert.True((jpId.EncodingMask & (uint)UAModel.IJTBase.JoiningProcessIdentificationDataTypeFields.SelectionName) != 0);
     }
+
+    // -- Cache hit paths -------------------------------------------------------
+
+    [Fact]
+    public void GetJoiningProcessList_CalledTwice_UsesCachedNodeId()
+    {
+        var session = MockSessionBuilder.Create();
+        using var jpm = new JoiningProcessManagement(session.Object);
+
+        jpm.GetJoiningProcessList();  // first call sets node cache
+        jpm.GetJoiningProcessList();  // second call uses cache
+
+        session.Verify(s => s.BrowseChild(
+            It.IsAny<NodeId>(), It.IsAny<string>(),
+            It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
+    }
+
+    // -- Generic exception handlers for methods added since initial tests -------
+
+    [Fact]
+    public void ResetJoiningProcess_GenericException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("reset error"));
+        using var jpm = new JoiningProcessManagement(session.Object);
+
+        var ex = Record.Exception(() => jpm.ResetJoiningProcess("JP-001", "uri:test", "ORIGIN-001"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void IncrementJoiningProcessCounter_GenericException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("increment error"));
+        using var jpm = new JoiningProcessManagement(session.Object);
+
+        var ex = Record.Exception(() => jpm.IncrementJoiningProcessCounter("uri:test", "JP-001"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void DecrementJoiningProcessCounter_GenericException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("decrement error"));
+        using var jpm = new JoiningProcessManagement(session.Object);
+
+        var ex = Record.Exception(() => jpm.DecrementJoiningProcessCounter("uri:test", "JP-001"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void SetJoiningProcessCounter_GenericException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("counter error"));
+        using var jpm = new JoiningProcessManagement(session.Object);
+
+        var ex = Record.Exception(() => jpm.SetJoiningProcessCounter("uri:test", "JP-001", 5u));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void SetJoiningProcessSize_GenericException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("size error"));
+        using var jpm = new JoiningProcessManagement(session.Object);
+
+        var ex = Record.Exception(() => jpm.SetJoiningProcessSize("uri:test", "JP-001", 100u));
+
+        Assert.Null(ex);
+    }
 }

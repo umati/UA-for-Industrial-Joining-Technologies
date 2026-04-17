@@ -14,14 +14,6 @@
 
 ---
 
-## Access Rules (CRITICAL)
-
-- **Full modify access**: everything inside this repo (`C:\DDrive\SourceControl\GIT_HUB\UA-for-Industrial-Joining-Technologies\`)
-- **Read-only**: everything outside (OS, user home, other drives)
-- **Never commit** — user reviews and commits manually
-
----
-
 ## Project Root File Map
 
 ```
@@ -111,7 +103,7 @@ IJT_Web_Client/
 │   │   ├── associated-entities-interpreter.md
 │   │   ├── endpointgraphics-tab-adder.md
 │   │   └── simulate-single-result-caller.md
-│   ├── AGENT_GUIDE.md
+│   ├── DEVELOPMENT_GUIDE.md
 │
 └── .github/workflows/             # CI workflows (at repo root .github/, not here)
 ```
@@ -356,7 +348,7 @@ Only standard files at root: `index.html`, `index.py`, `config.js`, `run_all_tes
 | File | Covers |
 |------|--------|
 | `docs/SKILLS.md` ← **this file** | Full project map, rules, common mistakes, health check |
-| `docs/AGENT_GUIDE.md` | Development workflow, guardrails, prompt templates |
+| `docs/DEVELOPMENT_GUIDE.md` | Development workflow, guardrails, prompt templates |
 | `docs/skills/associated-entities-interpreter.md` | Interpreting `ResultMetaData.AssociatedEntities` |
 | `docs/skills/endpointgraphics-tab-adder.md` | Adding new UI tabs (manager + view pattern) |
 | `docs/skills/simulate-single-result-caller.md` | Wiring `SimulateSingleResult` method invocation |

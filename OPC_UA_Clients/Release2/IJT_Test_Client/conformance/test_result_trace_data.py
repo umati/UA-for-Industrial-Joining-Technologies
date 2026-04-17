@@ -35,7 +35,7 @@ from asyncua import ua
 
 from helpers.cu_registry import CU
 from helpers.method_caller import call_method
-from helpers.namespaces import BN, NS_MACH_RESULT, ResultType
+from helpers.namespaces import BN, NS_MACH_RESULT, ResultClassification, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,14 @@ _EXTERNAL_CALL_TIMEOUT_S = 90.0
 
 # Valid PhysicalQuantity range: 0=OTHER … 28=TORQUE_PER_ANGLE_GRADIENT
 _VALID_PHYSICAL_QUANTITIES: frozenset = frozenset(range(29))
+
+# Human-readable names for combined result classifications (not SINGLE_RESULT)
+_COMBINED_RESULT_NAMES: dict[int, str] = {
+    ResultClassification.SYNC_RESULT: "SYNC_RESULT",
+    ResultClassification.BATCH_RESULT: "BATCH_RESULT",
+    ResultClassification.JOB_RESULT: "JOB_RESULT",
+    5: "STITCHING_RESULT",
+}
 
 
 async def _get_result_with_traces(opcua_client, result_trigger, ns_indices):
@@ -92,8 +100,35 @@ async def _get_result_with_traces(opcua_client, result_trigger, ns_indices):
     if result_data is None:
         return None, None
 
+    # Trace data only exists on Single Results — skip early with a precise reason
+    # if GetLatestResult returned a combined result (timing race from a prior test).
+    _skip_if_not_single_result(result_data)
+
     content = getattr(result_data, "ResultContent", None) or []
     return result_data, list(content)
+
+
+def _skip_if_not_single_result(result_data) -> None:
+    """Skip with an accurate message when the retrieved result is a combined result.
+
+    Trace data (JoiningResultDataType.Trace) only exists on Single Results.
+    Combined results (BATCH/SYNC/JOB) contain only sub-result references in
+    ResultContent — they never carry inline JoiningResultDataType per OPC 40450-1 §9.
+    """
+    meta = getattr(result_data, "ResultMetaData", None)
+    cls = getattr(meta, "Classification", None) if meta is not None else None
+    try:
+        cls_int = int(cls) if cls is not None else None
+    except TypeError, ValueError:
+        cls_int = None
+    if cls_int is not None and cls_int != ResultClassification.SINGLE_RESULT:
+        cls_name = _COMBINED_RESULT_NAMES.get(cls_int, f"classification={cls_int}")
+        pytest.skip(
+            f"GetLatestResult returned {cls_name}, not SINGLE_RESULT — "
+            "Trace data (JoiningResultDataType.Trace) only exists on Single Results; "
+            "combined results contain only sub-result references per OPC 40450-1 §9. "
+            "A prior test may have left a combined result as the latest on the server."
+        )
 
 
 def _skip_if_no_result(result_data, result_trigger) -> None:

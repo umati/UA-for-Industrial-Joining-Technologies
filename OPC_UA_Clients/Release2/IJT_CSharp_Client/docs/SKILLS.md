@@ -14,13 +14,6 @@
 
 ---
 
-## Access Rules (CRITICAL)
-
-- **Full modify access**: everything inside this repo
-- **Never commit** — user reviews and commits manually
-
----
-
 ## Architecture (CRITICAL — read before changing code)
 
 ```
@@ -150,8 +143,6 @@ dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 | Scope | Notes |
 |-------|-------|
 | Unit tests (`!~LiveIntegration`) | Run: `dotnet test --filter "FullyQualifiedName!~LiveIntegration"` |
-
-> Current counts and history (session-by-session) are in `MyWork/context_ijt_csharp_client.md`.
 
 ---
 

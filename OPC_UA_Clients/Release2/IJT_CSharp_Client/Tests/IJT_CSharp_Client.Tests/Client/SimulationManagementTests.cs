@@ -574,4 +574,52 @@ public sealed class SimulationManagementTests
         mock.Verify(s => s.BrowseChild(
             JoiningSystemId, "Simulations", It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
     }
+    [Fact]
+    public void SimulateSingleResult_AfterSimulateSingleEvent_HitsSimulationsNodeCache()
+    {
+        // First call SimulateSingleEvent to populate _simulationsNodeId cache
+        // Then call SimulateSingleResult, which should call GetSimulationsNode
+        // and hit the cache (line 41 in SimulationManagement.cs)
+        var mock = HappyPathMock();
+        var sut = new SimulationManagement(mock.Object);
+
+        sut.SimulateEvent(1);    // populates _simulationsNodeId
+        sut.SimulateSingleResult(1);   // hits _simulationsNodeId cache when calling GetSimulateResultsNode
+
+        // Simulations node browsed only once (cached on second call)
+        mock.Verify(s => s.BrowseChild(
+            JoiningSystemId, "Simulations", It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
+    }
+
+    [Fact]
+    public void SimulateSingleResult_WhenSimulateResultsNodeNotFound_LogsWarning()
+    {
+        // Make SimulateResults lookup return null so line 60 (LogWarning) is hit
+        var mock = HappyPathMock();
+        mock.Setup(s => s.BrowseChild(
+                SimulationsNodeId, "SimulateResults", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
+            .Returns(NodeId.Null);
+        var sut = new SimulationManagement(mock.Object);
+
+        var ex = Record.Exception(() => sut.SimulateSingleResult(1));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void SimulateSingleEvent_WhenSimulateEventsNodeNotFound_LogsWarning()
+    {
+        // Make both event node browse names return null so line 78 (LogWarning) is hit
+        var mock = HappyPathMock();
+        mock.Setup(s => s.BrowseChild(
+                SimulationsNodeId, "SimulateEventsAndConditions", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
+            .Returns(NodeId.Null);
+        mock.Setup(s => s.BrowseChild(
+                SimulationsNodeId, "SimulateEvents", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
+            .Returns(NodeId.Null);
+        var sut = new SimulationManagement(mock.Object);
+
+        var ex = Record.Exception(() => sut.SimulateEvent(1));
+        Assert.Null(ex);
+    }
 }

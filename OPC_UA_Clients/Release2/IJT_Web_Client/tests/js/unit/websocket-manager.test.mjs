@@ -82,4 +82,83 @@ describe('WebSocketManager', () => {
     expect(payload.uniqueid).toBe('id-1')
     expect(payload.value).toBe(42)
   })
+
+  it('unsubscribe removes a specific callback', () => {
+    const manager = new WebSocketManager(() => {}, 'ws://test')
+    const cb1 = vi.fn()
+    const cb2 = vi.fn()
+
+    manager.subscribe('ep', 'cmd', cb1)
+    manager.subscribe('ep', 'cmd', cb2)
+    manager.unsubscribe('ep', 'cmd', cb1)
+
+    const ws = MockWebSocket.instances[0]
+    ws.open()
+    ws.emitMessage({ command: 'cmd', endpoint: 'ep', data: {}, uniqueid: 'u' })
+
+    expect(cb1).not.toHaveBeenCalled()
+    expect(cb2).toHaveBeenCalledOnce()
+  })
+
+  it('unsubscribe is a no-op for unknown endpoint or type', () => {
+    const manager = new WebSocketManager(() => {}, 'ws://test')
+    expect(() => manager.unsubscribe('unknown-ep', 'unknown-cmd', vi.fn())).not.toThrow()
+  })
+
+  it('caps send queue at MAX_SEND_QUEUE and drops oldest', () => {
+    const manager = new WebSocketManager(() => {}, 'ws://test')
+    // Fill queue beyond MAX_SEND_QUEUE (500)
+    for (let i = 0; i < 501; i++) {
+      manager.send(`cmd-${i}`, 'ep', null, {})
+    }
+    expect(manager._sendQueue.length).toBeLessThanOrEqual(500)
+  })
+
+  it('send with open socket sends immediately', () => {
+    // Add static OPEN so WebSocket.OPEN check works
+    MockWebSocket.OPEN = 1
+    const manager = new WebSocketManager(() => {}, 'ws://test')
+    const ws = MockWebSocket.instances[0]
+    ws.open() // sets readyState = OPEN
+
+    manager.send('testcmd', 'common', null, { x: 1 })
+
+    expect(ws.sent).toHaveLength(1)
+    const payload = JSON.parse(ws.sent[0])
+    expect(payload.command).toBe('testcmd')
+  })
+
+  it('send handles error during socket.send and queues the message', () => {
+    MockWebSocket.OPEN = 1
+    const manager = new WebSocketManager(() => {}, 'ws://test')
+    const ws = MockWebSocket.instances[0]
+    ws.open()
+
+    // Override send to throw
+    ws.send = vi.fn(() => { throw new Error('send failed') })
+
+    manager.send('cmd', 'ep', 'uid', {})
+
+    // The message should be queued after the send failure
+    expect(manager._sendQueue.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('emitting message with no command logs a warning (no subscriber crash)', () => {
+    const manager = new WebSocketManager(() => {}, 'ws://test')
+    const ws = MockWebSocket.instances[0]
+    ws.open()
+
+    // Message without a command field
+    expect(() => ws.emitMessage({ data: 'no-command-field' })).not.toThrow()
+  })
+
+  it('emitting invalid JSON does not crash the manager', () => {
+    const manager = new WebSocketManager(() => {}, 'ws://test')  // eslint-disable-line no-unused-vars
+    const ws = MockWebSocket.instances[0]
+
+    // Directly invoke the message handler with bad JSON
+    expect(() => {
+      ws.listeners.message({ data: 'not valid json{{{{' })
+    }).not.toThrow()
+  })
 })

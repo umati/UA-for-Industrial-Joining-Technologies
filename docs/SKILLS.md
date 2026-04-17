@@ -15,16 +15,6 @@
 
 ---
 
-## Access Rules (CRITICAL)
-
-| Area | Access |
-|------|--------|
-| Everything inside `C:\DDrive\SourceControl\GIT_HUB\UA-for-Industrial-Joining-Technologies\` | **Full: read, create, edit, delete** |
-| Everything outside (OS, user home, other drives, internet) | **Read-only** |
-| Git commits | **Never** — user reviews and commits manually |
-
----
-
 ## Developer Setup & Hygiene
 
 ### Pre-Commit Hooks — Auto-Fix on Every Commit
@@ -64,15 +54,15 @@ Each Python project creates two independent environments:
 
 > **WSL**: `bootstrap_wsl.sh` calls `setup_project.py` after OS provisioning — uses `.venv` like every other host.
 
-**Rule**: never activate `.venv_test` to run the application, and never run tests inside `.venv`.
+Use `.venv` for running the application and `.venv_test` for running tests — do not mix them.
 
 Both `setup_*.py` and `run_all_tests.py` remove stale legacy directories (`venv/`, `venv_test/`, `env/`, `ENV/`, `.venv_backup/`) on startup. A fresh clone always starts clean automatically.
 
 ---
 
-### Running Tests — Project Isolation Rule
+### Running Tests — Project Isolation
 
-**Always run tests from each project's own directory — never from repo root.**
+Run tests from each project's own directory, not from the repo root.
 
 ```sh
 # ✅ Correct — run from project directory
@@ -91,15 +81,17 @@ Running multiple Python clients together in a single root `pytest` invocation ca
 
 ### Pytest Temp Root Policy
 
-| Project | `addopts` | Notes |
-|---------|-----------|-------|
-| `IJT_Console_Client` | `-v --basetemp=tmp/pytest` | Project-local pytest session dirs |
-| `IJT_Test_Client` | `-v --basetemp=tmp/pytest -p no:cacheprovider` | Project-local + cache provider disabled to prevent `pytest-cache-files-*` accumulation |
-| `IJT_Web_Client` | `-v -p no:cacheprovider` | System temp; `cacheprovider` disabled to prevent ACL churn |
+All three Python clients use a **project-local** `tmp/pytest/` directory as the pytest basetemp so that temp files
+are always created under the repo tree and gitignored automatically.  Set `IJT_USE_SYSTEM_BASETEMP=1` to override
+and use the OS default temp location instead.
+
+| Project | Basetemp configuration |
+|---------|------------------------|
+| `IJT_Console_Client` | `addopts = "--basetemp=tmp/pytest"` in `pyproject.toml` |
+| `IJT_Test_Client` | `pytest_configure` hook in `conftest.py` |
+| `IJT_Web_Client` | `pytest_configure` hook in `tests/conftest.py` |
 
 `tmp/` is gitignored in each project. `tmp_path_retention_policy = "failed"` retains artifacts only for failing tests.
-
-The Web client's `local_temp_dir` fixture (used in `test_ijt_interface.py`) writes to `.state/tmp/test-fixtures/{uuid}` with explicit `yield`/`finally` cleanup — excluded from Docker build context via `.dockerignore`.
 
 ---
 
@@ -142,7 +134,7 @@ Coverage is configured in each project's `pyproject.toml`. **Never hardcode thre
 |---------|-------------|-------|
 | Web Client | 70% | Configured in `pyproject.toml` — applies to Python unit run |
 | Console Client | 80% | Configured in `pyproject.toml` — applies to unit run |
-| Test Client | **65%** | Configured in `pyproject.toml` — live-test-only helpers reduce coverage on conformance-only runs; `tests/unit/` supplements with pure-logic coverage |
+| Test Client | **90%** | Configured in `pyproject.toml` — live-test-only helpers reduce coverage on conformance-only runs; `tests/unit/` supplements with pure-logic coverage |
 
 Docstring coverage (`interrogate`) thresholds — calibrated against real codebase with venvs excluded:
 
@@ -154,19 +146,23 @@ Docstring coverage (`interrogate`) thresholds — calibrated against real codeba
 
 ---
 
-### Windows-Locked Temp Directories
+### Windows Temp Directory Notes
 
-On Windows, pyfakefs and pytest can leave directories with restricted ACLs that survive test teardown. Built-in protections already in place:
+On Windows, pyfakefs and pytest can leave directories with restricted ACLs that survive test teardown.
+Built-in protections already in place:
 
 | Protection | Mechanism |
 |-----------|-----------|
-| `_force_rmtree(path)` | All 7 runners + 2 setup scripts — `shutil.rmtree(onexc=...)` with `os.chmod` retry |
+| `_force_rmtree(path)` | All 7 runners + 2 setup scripts — `shutil.rmtree(onexc=...)` with `os.chmod` retry for read-only files |
 | `[tool.mypy] exclude` | Skips `pytest-cache-files-*` before mypy walks into them |
 | `norecursedirs` | pytest never collects from `pytest-cache-files-*` or `tmp` |
 | `-p no:cacheprovider` (Web + Test Client) | Prevents `pytest-cache-files-*` creation entirely |
 | `.dockerignore` | `tests/fixtures/tmp/` excluded from Docker build context |
+| Project-local basetemp | All Python clients write to `tmp/pytest/` instead of system temp |
 
-If a locked dir survives a run it sits inert — tools skip it, Docker ignores it. It clears automatically on the next machine restart (Windows releases file handles on reboot).
+If a directory is owned by a different OS user (e.g. a CI service account), `_force_rmtree` cannot remove it —
+Windows requires owner rights or `SeBackupPrivilege` for deletion.  Use `takeown` + `icacls` as Administrator to
+recover such directories.
 
 ---
 
@@ -280,7 +276,7 @@ UA-for-Industrial-Joining-Technologies/
   - `SimulateResults` — single tightening result
   - `SimulateBulkResults` — multiple results, sent one by one in detached thread
   - `SimulateEvents` — system events
-- **UaExpert config**: `IJT_LOCAL_SIMULATOR.uap` on Desktop (read-only reference; do not modify)
+- **UaExpert config**: `IJT_LOCAL_SIMULATOR.uap` (read-only reference; do not modify)
 - **Details**: read `OPC_UA_Servers/Release2/docs/SKILLS.md`
 
 ### Server Environment Variables
@@ -367,11 +363,11 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 
 | Path | Covers |
 |------|--------|
-| `docs/SKILLS.md` (this file) | Repo-level context, access rules, sub-project summary, CI/CD |
+| `docs/SKILLS.md` (this file) | Repo-level developer reference, sub-project summary, CI/CD |
 | `docs/TEST_TIERS.md` | Test tier policy, skip/fail standards, per-client port table, server isolation design |
 | `OPC_UA_Servers/Release2/docs/SKILLS.md` | Server start/stop, simulation methods, smoke tests, env vars |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md` | Full Web Client context, file map, bugs, Docker, CI, health check |
-| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/AGENT_GUIDE.md` | Development workflow and guidelines |
+| `OPC_UA_Clients/Release2/IJT_Web_Client/docs/DEVELOPMENT_GUIDE.md` | Development workflow and guidelines |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/ijt-support-guide.md` | JS core library contracts |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/models-guide.md` | JS model layer |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/guides/result-model-guide.md` | Result model hierarchy |

@@ -543,4 +543,36 @@ public class IjtJsonSerializerTests
         var variant = new Variant(inner);
         Assert.Equal(2, IjtJsonSerializer.CountItems(variant));
     }
+
+    [Fact]
+    public void PrintNamedOutputs_WithResultDataTypeOutput_CallsPrintResult()
+    {
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "RD-001" },
+        };
+        var outputs = new List<object> { rd };
+
+        // PrintNamedOutputs calls PrintResult(val) when output is ResultDataType — line 185
+        var ex = Record.Exception(() =>
+            IjtJsonSerializer.PrintNamedOutputs("Test", outputs, "ResultData"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void PrintNamedOutputs_WithExtensionObjectWrappingResultDataType_CallsPrintResult()
+    {
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "RD-002" },
+        };
+        var eo = new ExtensionObject(rd);
+        var outputs = new List<object> { eo };
+
+        var ex = Record.Exception(() =>
+            IjtJsonSerializer.PrintNamedOutputs("Test", outputs, "ResultData"));
+
+        Assert.Null(ex);
+    }
 }

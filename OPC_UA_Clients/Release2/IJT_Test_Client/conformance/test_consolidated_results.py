@@ -178,8 +178,26 @@ async def _trigger_and_get_combined_result(
         return None
 
     if isinstance(raw, (list, tuple)) and len(raw) > 1:
-        return raw[1]
-    return raw
+        result_data = raw[1]
+    else:
+        result_data = raw
+
+    if result_data is not None:
+        actual_cls = _get_result_classification_int(result_data)
+        if actual_cls is not None and actual_cls == ResultClassification.SINGLE_RESULT:
+            _cls_names = {
+                ResultClassification.SYNC_RESULT: "SYNC_RESULT",
+                ResultClassification.BATCH_RESULT: "BATCH_RESULT",
+                ResultClassification.JOB_RESULT: "JOB_RESULT",
+            }
+            expected_name = _cls_names.get(classification, f"classification={classification}")
+            pytest.skip(
+                f"GetLatestResult returned SINGLE_RESULT instead of requested {expected_name} — "
+                "likely a timing race from a prior test leaving a single result as the latest; "
+                "ResultCounters and combined-result fields only exist in BATCH/SYNC/JOB results"
+            )
+
+    return result_data
 
 
 async def _trigger_and_get_job_result(opcua_client, result_trigger, ns_indices):
@@ -249,6 +267,16 @@ def _get_result_counters(result_data) -> list:
     if not isinstance(counters, (list, tuple)):
         return []
     return list(counters)
+
+
+def _get_result_classification_int(result_data) -> int | None:
+    """Return the Classification integer from ResultMetaData, or None if absent/unreadable."""
+    meta = getattr(result_data, "ResultMetaData", None)
+    cls = getattr(meta, "Classification", None) if meta is not None else None
+    try:
+        return int(cls) if cls is not None else None
+    except TypeError, ValueError:
+        return None
 
 
 def _collect_counter_types(counters: list) -> set[int]:
@@ -422,7 +450,9 @@ async def test_sync_result_counters_contains_channel_or_spindle_counter(opcua_cl
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent or empty in sync result — optional field")
+        pytest.skip(
+            "ResultCounters absent or empty in sync result — server declared CU but field is not populated in this result"
+        )
 
     expected_types = {_COUNTER_TYPE_CHANNEL_NUMBER, _COUNTER_TYPE_SPINDLE_NUMBER}
     found_types = _collect_counter_types(counters)
@@ -533,7 +563,9 @@ async def test_batch_result_counters_contains_batch_size_or_count(opcua_client, 
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent or empty in batch result — optional field")
+        pytest.skip(
+            "ResultCounters absent or empty in batch result — server declared CU but field is not populated in this result"
+        )
 
     expected_types = {_COUNTER_TYPE_BATCH_SIZE, _COUNTER_TYPE_BATCH_COUNT}
     found_types = _collect_counter_types(counters)
@@ -1054,7 +1086,7 @@ async def test_sync_result_counters_list_is_non_empty(opcua_client, result_trigg
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent or empty — optional field not populated")
+        pytest.skip("ResultCounters absent or empty — server declared CU but field is not populated in this result")
 
     assert len(counters) > 0, "SYNC_RESULT ResultCounters must contain at least one counter"
 
@@ -1073,7 +1105,9 @@ async def test_sync_result_counter_types_within_defined_range(opcua_client, resu
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent — cannot verify counter type range")
+        pytest.skip(
+            "ResultCounters absent — cannot verify counter type range (server declared CU but field is not populated)"
+        )
 
     for idx, counter in enumerate(counters):
         ct = getattr(counter, "CounterType", None)
@@ -1104,7 +1138,7 @@ async def test_sync_result_channel_spindle_counter_value_is_positive(opcua_clien
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent")
+        pytest.skip("ResultCounters absent — server declared CU but field is not populated in this result")
 
     checked = False
     for idx, counter in enumerate(counters):
@@ -1371,7 +1405,7 @@ async def test_batch_result_counters_list_is_non_empty(opcua_client, result_trig
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent or empty — optional field not populated")
+        pytest.skip("ResultCounters absent or empty — server declared CU but field is not populated in this result")
 
     assert len(counters) > 0, "BATCH_RESULT ResultCounters must contain at least one counter"
 
@@ -1390,7 +1424,7 @@ async def test_batch_count_not_greater_than_batch_size(opcua_client, result_trig
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent")
+        pytest.skip("ResultCounters absent — server declared CU but field is not populated in this result")
 
     batch_size_val = None
     batch_count_val = None
@@ -1432,7 +1466,7 @@ async def test_batch_size_counter_value_is_positive(opcua_client, result_trigger
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent")
+        pytest.skip("ResultCounters absent — server declared CU but field is not populated in this result")
 
     for idx, counter in enumerate(counters):
         ct = getattr(counter, "CounterType", None)

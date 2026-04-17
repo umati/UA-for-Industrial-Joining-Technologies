@@ -20,6 +20,7 @@ Design rules enforced here:
 
 import logging
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -56,9 +57,28 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "simulation: requires the OPC UA IJT Server Simulator")
 
     _project_root = Path(__file__).resolve().parent
-    _basetemp = _project_root / "tmp" / "pytest"
-    _basetemp.mkdir(parents=True, exist_ok=True)
-    config.option.basetemp = str(_basetemp)
+    # Default to repo-local basetemp (stable in this environment). Set
+    # IJT_USE_SYSTEM_BASETEMP=1 to opt out and let pytest use system temp.
+    _use_system = os.environ.get("IJT_USE_SYSTEM_BASETEMP", "").lower() in {"1", "true", "yes"}
+    if config.option.basetemp is None and not _use_system:
+        _basetemp_chosen = None
+        _pid = os.getpid()
+        for _candidate in ("pytest", "pytest_tmp", f"pytest_session_{_pid}"):
+            _candidate_path = _project_root / "tmp" / _candidate
+            try:
+                if _candidate_path.exists():
+                    shutil.rmtree(_candidate_path)
+                _candidate_path.mkdir(parents=True)
+                _probe = _candidate_path / ".acl_probe"
+                _probe.write_text("ok")
+                _probe.unlink()
+                _ = list(_candidate_path.iterdir())
+                _basetemp_chosen = _candidate_path
+                break
+            except OSError:
+                continue
+        if _basetemp_chosen is not None:
+            config.option.basetemp = str(_basetemp_chosen)
     _project_root.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
 
     try:

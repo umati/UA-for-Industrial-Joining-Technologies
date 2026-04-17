@@ -455,4 +455,89 @@ public sealed class JointDataTypeEncodingMaskTests
         Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.Description) != 0);
         Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.AssociatedEntities) != 0);
     }
+
+    // -- Cache hit paths -------------------------------------------------------
+
+    [Fact]
+    public void GetJointList_CalledTwice_UsesCachedNodeId()
+    {
+        var session = MockSessionBuilder.Create();
+        using var jm = new JointManagement(session.Object);
+
+        jm.GetJointList();   // first call sets _jmNodeId
+        jm.GetJointList();   // second call hits cache line
+
+        // BrowseChild called only once (not twice) because second call uses cache
+        session.Verify(s => s.BrowseChild(
+            It.IsAny<NodeId>(), It.IsAny<string>(),
+            It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
+    }
+
+    [Fact]
+    public void InvalidateNodeCache_ForcesReBrowseOnNextCall()
+    {
+        var session = MockSessionBuilder.Create();
+        using var jm = new JointManagement(session.Object);
+
+        jm.GetJointList();         // populates cache
+        jm.InvalidateNodeCache();  // clears cache
+        jm.GetJointList();         // forces re-browse
+
+        // BrowseChild should be called twice (once before, once after invalidate)
+        session.Verify(s => s.BrowseChild(
+            It.IsAny<NodeId>(), It.IsAny<string>(),
+            It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public void SelectJoint_GenericException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("select error"));
+        using var jm = new JointManagement(session.Object);
+
+        var ex = Record.Exception(() => jm.SelectJoint("uri:test", "JNT-001", "ORIGIN-001"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void DeleteJoint_NodeFound_CallsMethodOnce()
+    {
+        var session = MockSessionBuilder.Create();
+        using var jm = new JointManagement(session.Object);
+
+        var ex = Record.Exception(() => jm.DeleteJoint("uri:test", "JNT-001", "ORIGIN-001"));
+
+        Assert.Null(ex);
+        session.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+    }
+
+    [Fact]
+    public void DeleteJoint_OpcUaServiceException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadTimeout));
+        using var jm = new JointManagement(session.Object);
+
+        var ex = Record.Exception(() => jm.DeleteJoint("uri:test", "JNT-001", "ORIGIN-001"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void DeleteJoint_GenericException_HandledWithoutRethrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("delete error"));
+        using var jm = new JointManagement(session.Object);
+
+        var ex = Record.Exception(() => jm.DeleteJoint("uri:test", "JNT-001", "ORIGIN-001"));
+
+        Assert.Null(ex);
+    }
 }

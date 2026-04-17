@@ -629,4 +629,137 @@ public sealed class EventSubscriberHelperUnitTests
         Assert.Equal("Parent", filter.SelectClauses[0].BrowsePath[0].Name);
         Assert.Equal("Child", filter.SelectClauses[0].BrowsePath[1].Name);
     }
+
+    // ── AsExtensionObjectArray — additional edge-case branches ────────────────
+
+    [Fact]
+    public void AsExtensionObjectArray_SingleExtensionObject_ReturnsSingleItemArray()
+    {
+        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "single-001" };
+        var singleEo = new ExtensionObject(entity);
+        var map = new Dictionary<string, object?> { ["Single"] = singleEo };
+
+        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Single");
+
+        Assert.NotNull(result);
+        Assert.Single(result!);
+        Assert.Equal("single-001", result![0].EntityId);
+    }
+
+    [Fact]
+    public void AsExtensionObjectArray_AlreadyTypedArray_ReturnsIt()
+    {
+        var entities = new UAModel.IJTBase.EntityDataType[]
+        {
+            new UAModel.IJTBase.EntityDataType { EntityId = "tool-001" },
+            new UAModel.IJTBase.EntityDataType { EntityId = "tool-002" },
+        };
+        var map = new Dictionary<string, object?> { ["Entities"] = entities };
+
+        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result!.Length);
+    }
+
+    [Fact]
+    public void AsExtensionObjectArray_VariantWrappedValue_UnwrapsAndDecodes()
+    {
+        var entities = new ExtensionObject[]
+        {
+            new ExtensionObject(new UAModel.IJTBase.EntityDataType { EntityId = "unwrapped" }),
+        };
+        var map = new Dictionary<string, object?> { ["Entities"] = new Variant(entities) };
+
+        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+
+        Assert.NotNull(result);
+        Assert.Single(result!);
+    }
+
+    [Fact]
+    public void AsExtensionObjectArray_WrongArrayType_ReturnsNull()
+    {
+        // string[] cannot be cast to EntityDataType[]
+        var map = new Dictionary<string, object?> { ["Data"] = new string[] { "a", "b" } };
+
+        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Data");
+
+        Assert.Null(result);
+    }
+
+    // ── ProcessResultEvent error handling ─────────────────────────────────────
+
+    [Fact]
+    public void ProcessResultEvent_WithServiceResultException_DoesNotThrow()
+    {
+        var session = CreateSessionMock();
+        var sut = new EventSubscriber(session.Object);
+
+        // Attach a handler that throws a ServiceResultException
+        sut.OnResultReady += (_, _) =>
+            throw new Opc.Ua.ServiceResultException(StatusCodes.BadUnexpectedError);
+
+        var fields = new VariantCollection(new[]
+        {
+            new Variant("event-id"),
+            new Variant(new NodeId(1u, 7)),
+            new Variant(DateTime.UtcNow),
+        });
+
+        var ex = Record.Exception(() => sut.ProcessResultEvent(fields));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void ProcessResultEvent_WithUnexpectedException_DoesNotThrow()
+    {
+        var session = CreateSessionMock();
+        var sut = new EventSubscriber(session.Object);
+
+        sut.OnResultReady += (_, _) =>
+            throw new InvalidOperationException("boom");
+
+        var fields = new VariantCollection(new[]
+        {
+            new Variant("event-id"),
+        });
+
+        var ex = Record.Exception(() => sut.ProcessResultEvent(fields));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void ProcessJoiningSystemEvent_WithServiceResultException_DoesNotThrow()
+    {
+        var session = CreateSessionMock();
+        var sut = new EventSubscriber(session.Object);
+
+        sut.OnJoiningSystemEvent += (_, _) =>
+            throw new Opc.Ua.ServiceResultException(StatusCodes.BadUnexpectedError);
+
+        var fields = new VariantCollection(new[] { new Variant("event-id") });
+
+        var ex = Record.Exception(() => sut.ProcessJoiningSystemEvent(fields));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void ProcessJoiningSystemEvent_WithUnexpectedException_DoesNotThrow()
+    {
+        var session = CreateSessionMock();
+        var sut = new EventSubscriber(session.Object);
+
+        sut.OnJoiningSystemEvent += (_, _) =>
+            throw new InvalidOperationException("sys-boom");
+
+        var fields = new VariantCollection(new[] { new Variant("event-id") });
+
+        var ex = Record.Exception(() => sut.ProcessJoiningSystemEvent(fields));
+
+        Assert.Null(ex);
+    }
 }

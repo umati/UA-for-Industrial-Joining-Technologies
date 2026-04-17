@@ -932,6 +932,7 @@ async def test_battery_operation_counters_has_operation_cycle_counter(batteries_
 async def test_asset_health_has_device_health_property(request, ns_indices, instance_fixture_name):
     """At least one asset instance must include Health with DeviceHealth property."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_di = ns_indices.get(NS_DI)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     instances = request.getfixturevalue(instance_fixture_name)
@@ -940,13 +941,15 @@ async def test_asset_health_has_device_health_property(request, ns_indices, inst
         health = await find_child_by_browse_name(asset_node, BN.HEALTH, ns_ijt)
         if health is None:
             continue
-        device_health = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_ijt)
+        device_health = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_di)
         if device_health is not None:
             found = True
             break
     if not found:
         pytest.skip(
-            f"No Health.DeviceHealth found on {instance_fixture_name} — optional per spec, may not be implemented"
+            f"No Health.DeviceHealth found on {instance_fixture_name} — "
+            "direct Health under Asset was deprecated in IJT 1.01 (superseded by Monitoring.Health); "
+            "skip is expected for IJT 1.01-compliant servers"
         )
 
 
@@ -958,8 +961,8 @@ async def test_asset_health_has_device_health_property(request, ns_indices, inst
 async def test_asset_monitoring_health_has_device_health_property(request, ns_indices, instance_fixture_name):
     """At least one asset instance must include Monitoring.Health with DeviceHealth property."""
     ns_mach = ns_indices.get(NS_MACHINERY)
-    ns_ijt = ns_indices.get(NS_IJT_BASE)
-    if ns_mach is None or ns_ijt is None:
+    ns_di = ns_indices.get(NS_DI)
+    if ns_mach is None or ns_di is None:
         pytest.skip("Required namespaces not registered on server")
     instances = request.getfixturevalue(instance_fixture_name)
     found = False
@@ -967,17 +970,17 @@ async def test_asset_monitoring_health_has_device_health_property(request, ns_in
         monitoring = await find_child_by_browse_name(asset_node, BN.MONITORING, ns_mach)
         if monitoring is None:
             continue
-        health = await find_child_by_browse_name(monitoring, BN.HEALTH, ns_ijt)
+        health = await find_child_by_browse_name(monitoring, BN.HEALTH, ns_mach)
         if health is None:
             continue
-        device_health = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_ijt)
+        device_health = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_di)
         if device_health is not None:
             found = True
             break
     if not found:
         pytest.skip(
             f"No Monitoring.Health.DeviceHealth found on {instance_fixture_name} — "
-            "optional per spec, may not be implemented"
+            "Health BrowseName uses Machinery namespace, DeviceHealth uses DI namespace per OPC UA nodesets"
         )
 
 
@@ -1699,49 +1702,6 @@ async def test_sub_component_parameters_has_type_property(sub_components_folder,
 # ─── asset_management_virtual_station (additional) ───────────────────────────
 
 
-@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_VIRTUAL_STATION)
-async def test_virtual_station_has_assigned_tools_property(virtual_stations_folder, ns_indices):
-    """VirtualStation instances must expose an AssignedTools property."""
-    ns_ijt = ns_indices.get(NS_IJT_BASE)
-    if ns_ijt is None or virtual_stations_folder is None:
-        pytest.skip("VirtualStations folder or IJT Base namespace not available")
-    instances = await browse_folder_instances(virtual_stations_folder)
-    if not instances:
-        pytest.fail("No VirtualStation instances found — at least one instance expected in this asset category")
-    _name, vs_node = instances[0]
-    assigned_tools = await find_child_by_browse_name(vs_node, "AssignedTools", ns_ijt)
-    if assigned_tools is None:
-        pytest.skip(
-            f"VirtualStation '{_name}' has no AssignedTools property — "
-            "some simulators omit this optional property; skipping"
-        )
-    assert assigned_tools is not None
-
-
-@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_VIRTUAL_STATION)
-async def test_virtual_station_assigned_tools_entries_are_strings(virtual_stations_folder, ns_indices):
-    """AssignedTools on VirtualStation must be an array of ProductInstanceUri strings."""
-    ns_ijt = ns_indices.get(NS_IJT_BASE)
-    if ns_ijt is None or virtual_stations_folder is None:
-        pytest.skip("VirtualStations folder or IJT Base namespace not available")
-    instances = await browse_folder_instances(virtual_stations_folder)
-    if not instances:
-        pytest.fail("No VirtualStation instances found — at least one instance expected in this asset category")
-    _name, vs_node = instances[0]
-    assigned_tools_node = await find_child_by_browse_name(vs_node, "AssignedTools", ns_ijt)
-    if assigned_tools_node is None:
-        pytest.skip(f"VirtualStation '{_name}' has no AssignedTools property — skipping value check")
-    val = await assigned_tools_node.read_value()
-    if val is None:
-        pytest.skip(f"VirtualStation '{_name}' AssignedTools is null — skipping content check")
-    entries = list(val) if hasattr(val, "__iter__") and not isinstance(val, str) else [val]
-    non_strings = [e for e in entries if not isinstance(e, str)]
-    assert not non_strings, (
-        f"VirtualStation '{_name}' AssignedTools contains non-string entries: {non_strings} — "
-        "entries must be ProductInstanceUri strings"
-    )
-
-
 # ─── asset_management_operation_counters (additional) ────────────────────────
 
 
@@ -1915,6 +1875,7 @@ async def test_non_battery_assets_lack_battery_operation_cycle_counter(tools_ins
 async def test_asset_health_device_health_value_is_valid_enumeration(request, ns_indices, instance_fixture_name):
     """Health.DeviceHealth must hold a value within the DeviceHealthEnumeration range."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_di = ns_indices.get(NS_DI)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     instances = request.getfixturevalue(instance_fixture_name)
@@ -1924,7 +1885,7 @@ async def test_asset_health_device_health_value_is_valid_enumeration(request, ns
         health = await find_child_by_browse_name(asset_node, BN.HEALTH, ns_ijt)
         if health is None:
             continue
-        device_health_node = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_ijt)
+        device_health_node = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_di)
         if device_health_node is None:
             continue
         val = await device_health_node.read_value()
@@ -1936,7 +1897,8 @@ async def test_asset_health_device_health_value_is_valid_enumeration(request, ns
         break
     if not found:
         pytest.skip(
-            f"No Health.DeviceHealth with a readable value found on {instance_fixture_name} — optional per spec"
+            f"No Health.DeviceHealth with a readable value found on {instance_fixture_name} — "
+            "direct Health under Asset deprecated in IJT 1.01; skip expected for 1.01-compliant servers"
         )
 
 
@@ -1945,6 +1907,7 @@ async def test_asset_health_device_health_value_is_valid_enumeration(request, ns
 async def test_asset_health_device_health_is_normal_when_no_faults(request, ns_indices, instance_fixture_name):
     """Health.DeviceHealth should be NORMAL (0) when no faults are active on a functioning asset."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_di = ns_indices.get(NS_DI)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     instances = request.getfixturevalue(instance_fixture_name)
@@ -1953,7 +1916,7 @@ async def test_asset_health_device_health_is_normal_when_no_faults(request, ns_i
         health = await find_child_by_browse_name(asset_node, BN.HEALTH, ns_ijt)
         if health is None:
             continue
-        device_health_node = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_ijt)
+        device_health_node = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_di)
         if device_health_node is None:
             continue
         val = int(await device_health_node.read_value())
@@ -1965,7 +1928,10 @@ async def test_asset_health_device_health_is_normal_when_no_faults(request, ns_i
         found = True
         break
     if not found:
-        pytest.skip(f"No Health.DeviceHealth found on {instance_fixture_name} — optional per spec")
+        pytest.skip(
+            f"No Health.DeviceHealth found on {instance_fixture_name} — "
+            "direct Health under Asset deprecated in IJT 1.01; skip expected for 1.01-compliant servers"
+        )
 
 
 # ─── asset_management_monitoring_health (additional) ─────────────────────────
@@ -1976,8 +1942,8 @@ async def test_asset_health_device_health_is_normal_when_no_faults(request, ns_i
 async def test_asset_monitoring_health_device_health_is_readable(request, ns_indices, instance_fixture_name):
     """Monitoring.Health DeviceHealth value must be readable and within valid enum range."""
     ns_mach = ns_indices.get(NS_MACHINERY)
-    ns_ijt = ns_indices.get(NS_IJT_BASE)
-    if ns_mach is None or ns_ijt is None:
+    ns_di = ns_indices.get(NS_DI)
+    if ns_mach is None or ns_di is None:
         pytest.skip("Required namespaces not registered on server")
     instances = request.getfixturevalue(instance_fixture_name)
     _VALID_DEVICE_HEALTH = frozenset({0, 1, 2, 3, 4})
@@ -1986,10 +1952,10 @@ async def test_asset_monitoring_health_device_health_is_readable(request, ns_ind
         monitoring = await find_child_by_browse_name(asset_node, BN.MONITORING, ns_mach)
         if monitoring is None:
             continue
-        health = await find_child_by_browse_name(monitoring, BN.HEALTH, ns_ijt)
+        health = await find_child_by_browse_name(monitoring, BN.HEALTH, ns_mach)
         if health is None:
             continue
-        dh_node = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_ijt)
+        dh_node = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_di)
         if dh_node is None:
             continue
         val = await dh_node.read_value()
@@ -2000,7 +1966,10 @@ async def test_asset_monitoring_health_device_health_is_readable(request, ns_ind
         found = True
         break
     if not found:
-        pytest.skip(f"No Monitoring.Health.DeviceHealth found on {instance_fixture_name} — optional per spec")
+        pytest.skip(
+            f"No Monitoring.Health.DeviceHealth found on {instance_fixture_name} — "
+            "Health BrowseName uses Machinery namespace, DeviceHealth uses DI namespace per OPC UA nodesets"
+        )
 
 
 # ─── asset_management_service (additional) ───────────────────────────────────

@@ -3,7 +3,7 @@ Repository hygiene tests.
 
 - No __pycache__ tracked by git in this directory
 - No .pytest_cache tracked
-- No hardcoded absolute paths (like C:\\DDrive\\...) in source code
+- No hardcoded absolute paths (like /home/user/... or C:\\Users\\...) in source code
 - requirements.txt exists and is non-empty
 - All .py files have at most 500 lines (complexity gate)
 """
@@ -45,11 +45,10 @@ def test_source_file_under_500_lines(source_file):
 # ---------------------------------------------------------------------------
 
 _ABSOLUTE_PATH_PATTERNS = [
-    "C:\\\\DDrive",
-    "C:/DDrive",
+    "C:\\\\",
+    "C:/",
     "/home/",
     "/Users/",
-    "C:\\\\Users",
 ]
 
 

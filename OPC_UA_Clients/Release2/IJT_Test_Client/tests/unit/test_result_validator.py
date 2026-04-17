@@ -823,3 +823,20 @@ class TestModuleFunctions:
         val = types.SimpleNamespace()
         with pytest.raises(AssertionError, match="MyValue"):
             assert_result_value_valid(val, context="MyValue")
+
+
+# ---------------------------------------------------------------------------
+# _MISSING sentinel
+# ---------------------------------------------------------------------------
+
+
+class TestMissingSentinel:
+    def test_bool_is_false(self):
+        from helpers.result_validator import _MISSING
+
+        assert not _MISSING
+
+    def test_repr(self):
+        from helpers.result_validator import _MISSING
+
+        assert repr(_MISSING) == "<MISSING>"

@@ -369,13 +369,148 @@ public sealed class JoiningSystemUnitTests
         Assert.True(sut.BrowseChild(NodeId.Null, "AnyChild").IsNullNodeId);
     }
 
-    // ── DiscoverMethodsUnder ──────────────────────────────────────────────────
+    // ── ResolveNamespaceIndices via OnKeepAlive reconnect ────────────────────
 
     [Fact]
-    public void DiscoverMethodsUnder_NullObjectId_ReturnsEmptyDictionary()
+    public void OnKeepAlive_BadStatus_WithNamespaceUris_ResolvesIndices()
     {
-        var sut = CreateSession(CreateMockSession().Object);
-        var result = sut.DiscoverMethodsUnder(NodeId.Null);
-        Assert.Empty(result);
+        // Arrange: mock NamespaceUris so ResolveNamespaceIndices completes
+        var mockSession = CreateMockSession();
+        var ns = new NamespaceTable();
+        // Append the IJT namespaces so GetIndex returns valid indices
+        ns.Append(UAModel.IJTBase.Namespaces.IJTBase);
+        ns.Append(UAModel.IJTTightening.Namespaces.IJTTightening);
+        ns.Append(UAModel.MachineryResult.Namespaces.MachineryResult);
+        ns.Append("http://opcfoundation.org/UA/DI/");
+        mockSession.Setup(s => s.NamespaceUris).Returns(ns);
+
+        var sut = CreateSession(mockSession.Object);
+        var e = new KeepAliveEventArgs(
+            new ServiceResult(StatusCodes.BadCommunicationError),
+            ServerState.Unknown,
+            DateTime.UtcNow);
+
+        // Act: OnKeepAlive triggers reconnect → ResolveNamespaceIndices → DiscoverJoiningSystem
+        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+
+        // Assert: does not throw; namespace indices are resolved
+        Assert.Null(ex);
+        Assert.True(sut.IjtBaseNsIdx > 0);
+    }
+
+    [Fact]
+    public void OnKeepAlive_BadStatus_WithEmptyNamespaceTable_SetsNsIdxToZero()
+    {
+        var mockSession = CreateMockSession();
+        mockSession.Setup(s => s.NamespaceUris).Returns(new NamespaceTable());
+
+        var sut = CreateSession(mockSession.Object);
+        var e = new KeepAliveEventArgs(
+            new ServiceResult(StatusCodes.BadCommunicationError),
+            ServerState.Unknown,
+            DateTime.UtcNow);
+
+        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+
+        Assert.Null(ex);
+        Assert.Equal((ushort)0, sut.IjtBaseNsIdx);
+    }
+
+    // ── BuildApplicationConfig via reflection ─────────────────────────────────
+
+    [Fact]
+    public void BuildApplicationConfig_WithDefaultConfig_ReturnsValidApplicationConfig()
+    {
+        var method = typeof(JoiningSystem).GetMethod(
+            "BuildApplicationConfig",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var config = new ClientConfig { ServerUrl = "opc.tcp://localhost:40451" };
+        var appConfig = (Opc.Ua.ApplicationConfiguration)method!.Invoke(null, new object[] { config })!;
+
+        Assert.NotNull(appConfig);
+        Assert.Equal(config.ApplicationName, appConfig.ApplicationName);
+        Assert.Equal(Opc.Ua.ApplicationType.Client, appConfig.ApplicationType);
+        Assert.NotNull(appConfig.SecurityConfiguration);
+    }
+
+    [Fact]
+    public void BuildApplicationConfig_WithCustomApplicationName_SetsNameInUri()
+    {
+        var method = typeof(JoiningSystem).GetMethod(
+            "BuildApplicationConfig",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40451",
+            ApplicationName = "My Test Application",
+        };
+        var appConfig = (Opc.Ua.ApplicationConfiguration)method!.Invoke(null, new object[] { config })!;
+
+        Assert.Contains("My-Test-Application", appConfig.ApplicationUri);
+    }
+
+    [Fact]
+    public void BuildApplicationConfig_WithAutoAcceptCertificate_SetsFlag()
+    {
+        var method = typeof(JoiningSystem).GetMethod(
+            "BuildApplicationConfig",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40451",
+            AutoAcceptServerCertificate = true,
+        };
+        var appConfig = (Opc.Ua.ApplicationConfiguration)method!.Invoke(null, new object[] { config })!;
+
+        Assert.True(appConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates);
+    }
+
+    // ── DisposeAsync ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DisposeAsync_WhenConnected_CloseSessionAndDispose()
+    {
+        var mockSession = CreateMockSession(connected: true);
+        mockSession.Setup(s => s.CloseSessionAsync(
+            It.IsAny<RequestHeader>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Opc.Ua.CloseSessionResponse());
+
+        var sut = CreateSession(mockSession.Object);
+
+        await sut.DisposeAsync();
+
+        mockSession.Verify(s => s.Dispose(), Times.Once);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenNotConnected_DisposesWithoutCloseSession()
+    {
+        var mockSession = CreateMockSession(connected: false);
+        var sut = CreateSession(mockSession.Object);
+
+        var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync().ConfigureAwait(false));
+
+        Assert.Null(ex);
+        mockSession.Verify(s => s.Dispose(), Times.Once);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenCloseSessionThrows_StillDisposes()
+    {
+        var mockSession = CreateMockSession(connected: true);
+        mockSession.Setup(s => s.CloseSessionAsync(
+            It.IsAny<RequestHeader>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("close failed"));
+
+        var sut = CreateSession(mockSession.Object);
+
+        var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync().ConfigureAwait(false));
+
+        Assert.Null(ex);
+        mockSession.Verify(s => s.Dispose(), Times.Once);
     }
 }

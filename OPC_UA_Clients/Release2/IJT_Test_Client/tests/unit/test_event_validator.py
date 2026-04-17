@@ -798,3 +798,20 @@ class TestEventValidatorModuleFunctions:
 
         with pytest.raises(AssertionError, match="MyCondCtx"):
             assert_condition_valid(types.SimpleNamespace(), context="MyCondCtx")
+
+
+# ---------------------------------------------------------------------------
+# _MISSING sentinel
+# ---------------------------------------------------------------------------
+
+
+class TestMissingSentinel:
+    def test_bool_is_false(self):
+        from helpers.event_validator import _MISSING
+
+        assert not _MISSING
+
+    def test_repr(self):
+        from helpers.event_validator import _MISSING
+
+        assert repr(_MISSING) == "<MISSING>"

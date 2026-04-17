@@ -479,6 +479,93 @@ public sealed class AssetManagementUnitTests
 
         Assert.Null(ex);
     }
+
+    // ── GetMethodSetNode fallback path ────────────────────────────────────────
+
+    [Fact]
+    public void EnableAsset_WithBrowseChildNull_UsesFallbackTypeNodeId()
+    {
+        // BrowseChild returns Null → fallback to IjtBaseObjectId
+        var session = MockSessionBuilder.Create(browseChildResult: NodeId.Null);
+        session.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>()))
+            .Returns(MockSessionBuilder.ValidNodeId);
+        session.Setup(s => s.BrowseMethod(
+                It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
+            .Returns(MockSessionBuilder.ValidMethodId);
+        using var am = new AssetManagement(session.Object);
+
+        var ex = Record.Exception(() => am.EnableAsset("urn:tool:001", enable: true));
+
+        Assert.Null(ex);
+    }
+
+    // ── SubscribeAssetVariables — count=0 path (no variables found) ───────────
+
+    [Fact]
+    public void SubscribeAssetVariables_WhenNoCategoryNodesFound_DisposesAndReturnsWithoutThrow()
+    {
+        var session = MockSessionBuilder.Create();
+        // BrowseChild returns valid nodes for AssetManagement and Assets
+        session.Setup(s => s.BrowseChild(
+                It.IsAny<NodeId>(), It.IsAny<string>(),
+                It.IsAny<ushort>(), It.IsAny<NodeClass>()))
+            .Returns(MockSessionBuilder.ValidNodeId);
+
+        // BrowseChildren returns empty list → count stays 0 → lines 353-359 executed
+        session.Setup(s => s.BrowseChildren(It.IsAny<NodeId>(), It.IsAny<uint>()))
+            .Returns(new ReferenceDescriptionCollection());
+        using var am = new AssetManagement(session.Object);
+
+        var ex = Record.Exception(() => am.SubscribeAssetVariables());
+
+        Assert.Null(ex);
+        Assert.False(am.IsAssetVarSubscribed);
+    }
+
+    // ── GetIdentifiers — multi-output path ────────────────────────────────────
+
+    [Fact]
+    public void GetIdentifiers_WithFullOutputs_DoesNotThrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Returns(new List<object> { null!, "0", "OK" });
+        using var am = new AssetManagement(session.Object);
+
+        var ex = Record.Exception(() => am.GetIdentifiers("urn:tool:001"));
+
+        Assert.Null(ex);
+    }
+
+    // ── IsAssetVarSubscribed property ─────────────────────────────────────────
+
+    [Fact]
+    public void IsAssetVarSubscribed_WhenNotSubscribed_ReturnsFalse()
+    {
+        var session = MockSessionBuilder.Create();
+        using var am = new AssetManagement(session.Object);
+
+        Assert.False(am.IsAssetVarSubscribed);
+    }
+
+    // ── Node cache hit paths ───────────────────────────────────────────────────
+
+    [Fact]
+    public void EnableAsset_CalledTwice_UsesCachedMethodSetNodeId()
+    {
+        var session = MockSessionBuilder.Create();
+        using var am = new AssetManagement(session.Object);
+
+        am.EnableAsset("urn:tool:001", enable: true);   // first call caches _methodSetNodeId
+        am.EnableAsset("urn:tool:001", enable: false);  // second call hits cache
+
+        // BrowseChild called exactly 2 times on first call (AssetManagement + MethodSet),
+        // then 0 times on second call because cache is populated.
+        session.Verify(s => s.BrowseChild(
+            It.IsAny<NodeId>(), It.IsAny<string>(),
+            It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Exactly(2));
+    }
 }
 
 // ── EncodingMask correctness ───────────────────────────────────────────────

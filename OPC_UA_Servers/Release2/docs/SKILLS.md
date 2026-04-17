@@ -15,13 +15,6 @@
 
 ---
 
-## Access Rules (CRITICAL)
-
-- **Full modify access**: everything inside this repo
-- **Never commit** — user reviews and commits manually
-
----
-
 ## Project File Map
 
 ```

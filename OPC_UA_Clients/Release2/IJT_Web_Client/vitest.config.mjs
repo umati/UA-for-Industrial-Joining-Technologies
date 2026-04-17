@@ -14,6 +14,14 @@ export default defineConfig({
   },
   test: {
     include: ['tests/js/unit/**/*.test.mjs'],
-    environment: 'node'
+    environment: 'node',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      reportsDirectory: 'test-results/coverage',
+      include: ['src/javascripts/ijt-support/**/*.mjs'],
+      exclude: ['src/javascripts/views/**/*.mjs'],  // views require DOM
+      thresholds: { lines: 80 }
+    }
   }
 })

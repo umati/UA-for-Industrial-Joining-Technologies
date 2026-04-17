@@ -51,11 +51,10 @@ from the IJT specification.
 
 ---
 
-## Absolute Rules (Never Violate)
+## Critical Technical Requirements
 
 | Rule | Detail |
 |------|--------|
-| **No git commits** | Never run `git commit`, `git push`, or `git add` unless user explicitly requests |
 | **No `get_children()`** | Hangs on complex server nodes — use `_browse_refs()` from `helpers/node_discovery.py` |
 | **Always `asyncio.wait_for`** | Every OPC UA call and browse must have a timeout (15–20 s) |
 | **Namespace indices are runtime** | Never hardcode `ns=7` etc. — always resolve via `ns_indices[NS_IJT_BASE]` |
@@ -136,7 +135,6 @@ Objects/
 
 ```
 IJT_Test_Client/
-├── .cursorrules                  ← Copilot/Cursor config; points to docs/SKILLS.md
 ├── docs/SKILLS.md                ← developer reference for this sub-project
 ├── conftest.py                   ← all pytest fixtures (session + function scoped)
 ├── pyproject.toml                ← asyncio_mode=auto, timeout=120, mypy check_untyped_defs=true (+ ruff, coverage, bandit, vulture); OPC UA test dirs have [[tool.mypy.overrides]] suppressing asyncua stub false-positives

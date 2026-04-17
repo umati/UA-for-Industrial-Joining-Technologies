@@ -30,7 +30,7 @@ dotnet test --filter "FullyQualifiedName!~LiveIntegration"
 | `Helpers/IjtFileLoggerTests.cs`      | Log file creation and overwrite behaviour |
 | `Helpers/IjtJsonSerializerTests.cs`  | JSON serialization of OPC UA types |
 | `Configuration/ClientConfigTests.cs` | ClientConfig env-var parsing |
-| `UnitTests/JoiningSystemUnitTests.cs` | JoiningSystem internals — CallMethod (Good/Uncertain/Bad), BrowseMethod 3-tier ordering, NodeId factories, unresolved-namespace guards, BrowseChild null guard, DiscoverMethodsUnder null guard, IsConnected, OnKeepAlive, DisposeAsync |
+| `UnitTests/JoiningSystemUnitTests.cs` | JoiningSystem internals — CallMethod (Good/Uncertain/Bad/input-args/no-args), BrowseMethod 3-tier ordering, NodeId factories, unresolved-namespace guards, BrowseChild null guard, IsConnected, OnKeepAlive (keep-alive reconnect, namespace resolution), BuildApplicationConfig, DisposeAsync |
 | `UnitTests/JointManagementUnitTests.cs` | JointManagement — all 5 operations (GetJointList, GetJoint, SelectJoint, DeleteJoint, SendJoint), null-node guards, empty-JointId guard |
 | `UnitTests/AssetManagementUnitTests.cs` | AssetManagement — EnableAsset, SendTextIdentifiers, GetIdentifiers, ResetIdentifiers, SubscribeAssetVariables, SendIdentifiers |
 | `UnitTests/ResultManagementUnitTests.cs` | ResultManagement — GetLatestResult, GetResultById, SubscribeResultVariable |

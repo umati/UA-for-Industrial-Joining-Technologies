@@ -458,4 +458,265 @@ public sealed class AssetManagementTests
             new AssetManagement(mock.Object).SubscribeAssetVariables());
         Assert.Null(ex);
     }
+
+    // ── SetTime ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void SetTime_WhenNodesFound_CallsCallMethod()
+    {
+        var mock = HappyPathMock();
+        new AssetManagement(mock.Object).SetTime("urn:test", DateTime.UtcNow);
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+    }
+
+    [Fact]
+    public void SetTime_WhenNodesNotFound_DoesNotThrow()
+    {
+        var mock = NullNodeMock();
+        var ex = Record.Exception(() =>
+            new AssetManagement(mock.Object).SetTime("urn:x"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void SetTime_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
+
+        var ex = Record.Exception(() =>
+            new AssetManagement(mock.Object).SetTime("urn:x", DateTime.UtcNow));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void SetTime_WhenCallMethodThrowsException_DoesNotThrow()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("test"));
+
+        var ex = Record.Exception(() =>
+            new AssetManagement(mock.Object).SetTime("urn:x"));
+        Assert.Null(ex);
+    }
+
+    // ── GetIOSignals ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetIOSignals_WhenNodesFound_CallsCallMethod()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Returns(new List<object> { new object[] { }, 0, "OK" });
+
+        new AssetManagement(mock.Object).GetIOSignals("urn:test", new[] { "signal1" });
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+    }
+
+    [Fact]
+    public void GetIOSignals_WhenNoOutputs_LogsWarning()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Returns(new List<object>());
+
+        var ex = Record.Exception(() =>
+            new AssetManagement(mock.Object).GetIOSignals("urn:test"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void GetIOSignals_WhenNodesNotFound_DoesNotThrow()
+    {
+        var mock = NullNodeMock();
+        var ex = Record.Exception(() =>
+            new AssetManagement(mock.Object).GetIOSignals("urn:x"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void GetIOSignals_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
+
+        var ex = Record.Exception(() =>
+            new AssetManagement(mock.Object).GetIOSignals("urn:x"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void GetIOSignals_WhenCallMethodThrowsException_DoesNotThrow()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("test"));
+
+        var ex = Record.Exception(() =>
+            new AssetManagement(mock.Object).GetIOSignals("urn:x", null));
+        Assert.Null(ex);
+    }
+
+    // ── SetIOSignals ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void SetIOSignals_WhenNodesFound_CallsCallMethod()
+    {
+        var mock = HappyPathMock();
+        var signals = new List<UAModel.IJTBase.SignalDataType>
+        {
+            new UAModel.IJTBase.SignalDataType
+            {
+                SignalId = "sig1",
+                SignalValue = new Variant(42)
+            }
+        };
+
+        new AssetManagement(mock.Object).SetIOSignals("urn:test", signals);
+
+        mock.Verify(s => s.CallMethod(
+            It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
+    }
+
+    [Fact]
+    public void SetIOSignals_WhenNodesNotFound_DoesNotThrow()
+    {
+        var mock = NullNodeMock();
+        var ex = Record.Exception(() =>
+            new AssetManagement(mock.Object).SetIOSignals("urn:x",
+                new List<UAModel.IJTBase.SignalDataType>()));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void SetIOSignals_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
+
+        var ex = Record.Exception(() =>
+            new AssetManagement(mock.Object).SetIOSignals("urn:x",
+                new List<UAModel.IJTBase.SignalDataType>()));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void SetIOSignals_WhenCallMethodThrowsException_DoesNotThrow()
+    {
+        var mock = HappyPathMock();
+        mock.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("test"));
+
+        var ex = Record.Exception(() =>
+            new AssetManagement(mock.Object).SetIOSignals("urn:x",
+                new List<UAModel.IJTBase.SignalDataType>
+                {
+                    new UAModel.IJTBase.SignalDataType
+                    {
+                        SignalId = "sig1",
+                        SignalValue = new Variant(42)
+                    }
+                }));
+        Assert.Null(ex);
+    }
+
+    // ── InvalidateNodeCache and IsAssetVarSubscribed ──────────────────────────
+
+    [Fact]
+    public void InvalidateNodeCache_ClearsCache()
+    {
+        var mock = HappyPathMock();
+        var sut = new AssetManagement(mock.Object);
+
+        sut.EnableAsset("urn:test", true);
+        sut.InvalidateNodeCache();
+        sut.EnableAsset("urn:test2", false);
+
+        // After invalidation, BrowseChild is called again
+        mock.Verify(s => s.BrowseChild(
+            It.IsAny<NodeId>(), It.IsAny<string>(),
+            It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.AtLeast(2));
+    }
+
+    [Fact]
+    public void IsAssetVarSubscribed_InitiallyFalse()
+    {
+        var sut = new AssetManagement(HappyPathMock().Object);
+        Assert.False(sut.IsAssetVarSubscribed);
+    }
+
+    // ── StopAssetVariableSubscription — with active subscription (reflection) ──
+
+    [Fact]
+    public void StopAssetVariableSubscription_WhenSubscriptionActive_CleansUp_DoesNotThrow()
+    {
+        var mock = HappyPathMock();
+        var sut = new AssetManagement(mock.Object);
+
+        var field = typeof(AssetManagement).GetField(
+            "_assetVarSubscription",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+#pragma warning disable CS0618
+        field!.SetValue(sut, new Opc.Ua.Client.Subscription());
+#pragma warning restore CS0618
+
+        // Delete() will throw because subscription has no session; caught by handler
+        var ex = Record.Exception(() => sut.StopAssetVariableSubscription());
+
+        Assert.Null(ex);
+        Assert.False(sut.IsAssetVarSubscribed);
+    }
+
+    [Fact]
+    public void Dispose_WhenSubscriptionActive_CleansUp_DoesNotThrow()
+    {
+        var mock = HappyPathMock();
+        var sut = new AssetManagement(mock.Object);
+
+        var field = typeof(AssetManagement).GetField(
+            "_assetVarSubscription",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+#pragma warning disable CS0618
+        field!.SetValue(sut, new Opc.Ua.Client.Subscription());
+#pragma warning restore CS0618
+
+        var ex = Record.Exception(() => sut.Dispose());
+        Assert.Null(ex);
+    }
+
+    // ── SubscribeAssetVariables — already subscribed flag ─────────────────────
+
+    [Fact]
+    public void SubscribeAssetVariables_WhenAlreadySubscribedViaReflection_LogsWarningAndReturns()
+    {
+        var mock = HappyPathMock();
+        var sut = new AssetManagement(mock.Object);
+
+        var field = typeof(AssetManagement).GetField(
+            "_assetVarSubscription",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+#pragma warning disable CS0618
+        field!.SetValue(sut, new Opc.Ua.Client.Subscription());
+#pragma warning restore CS0618
+
+        var ex = Record.Exception(() => sut.SubscribeAssetVariables());
+        Assert.Null(ex);
+        Assert.True(sut.IsAssetVarSubscribed);
+    }
 }

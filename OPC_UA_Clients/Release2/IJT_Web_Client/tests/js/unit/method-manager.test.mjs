@@ -37,7 +37,10 @@ function makeFakeAddressSpace (methodCallImpl) {
     addressSpacePromise: vi.fn(async () => makeNode('TighteningSystem', 'ns=1;s=TS')),
     findNodeFromPathPromise: vi.fn(async (path) => makeNode('folder', `ns=1;s=${path}`)),
     relationsToNodes: vi.fn(async (relations) => relations),
-    connectionManager: { trigger: vi.fn() },
+    connectionManager: {
+      trigger: vi.fn(),
+      CONNECTION_STATES: { METHODS: 'methods' }
+    },
     methodCall: vi.fn(methodCallImpl ?? (async () => ({ message: { output: [] } }))),
   }
 }
@@ -170,5 +173,239 @@ describe('MethodManager — method registry', () => {
     const manager = new MethodManager(makeFakeAddressSpace())
     manager.methodObject = {}
     expect(manager.getMethod('NonExistentMethod')).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// setupMethodsInFolders / addressFolder / folderPromise / setupMethod
+// ---------------------------------------------------------------------------
+
+describe('MethodManager — setupMethodsInFolders', () => {
+  it('initialises methodObject and triggers METHODS state', async () => {
+    const rootNode = makeNode('TighteningSystem', 'ns=1;s=TS')
+    rootNode.getChildRelations = vi.fn(() => [])
+
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.addressSpacePromise = vi.fn(async () => rootNode)
+    fakeAddressSpace.relationsToNodes = vi.fn(async () => [])
+
+    const manager = new MethodManager(fakeAddressSpace)
+    await manager.setupMethodsInFolders([])
+
+    expect(fakeAddressSpace.addressSpacePromise).toHaveBeenCalledOnce()
+    expect(fakeAddressSpace.connectionManager.trigger).toHaveBeenCalledOnce()
+    expect(manager.methodObject).toEqual({})
+  })
+
+  it('calls addressFolder for each folder path', async () => {
+    const rootNode = makeNode('TS', 'ns=1;s=TS')
+    rootNode.getChildRelations = vi.fn(() => [])
+
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.addressSpacePromise = vi.fn(async () => rootNode)
+    fakeAddressSpace.relationsToNodes = vi.fn(async () => [])
+
+    const manager = new MethodManager(fakeAddressSpace)
+    await manager.setupMethodsInFolders(['SomeFolder'])
+
+    expect(fakeAddressSpace.findNodeFromPathPromise).toHaveBeenCalledOnce()
+  })
+
+  it('catches errors in addressFolder and continues', async () => {
+    const rootNode = makeNode('TS', 'ns=1;s=TS')
+    rootNode.getChildRelations = vi.fn(() => [])
+
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.addressSpacePromise = vi.fn(async () => rootNode)
+    fakeAddressSpace.findNodeFromPathPromise = vi.fn(async () => { throw new Error('path not found') })
+    fakeAddressSpace.relationsToNodes = vi.fn(async () => [])
+
+    const manager = new MethodManager(fakeAddressSpace)
+    await expect(manager.setupMethodsInFolders(['BadFolder'])).resolves.toBeUndefined()
+  })
+})
+
+describe('MethodManager — addressFolder', () => {
+  it('empty path calls folderPromise with tighteningSystemNode', async () => {
+    const rootNode = makeNode('TS', 'ns=1;s=TS')
+    rootNode.getChildRelations = vi.fn(() => [])
+
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.relationsToNodes = vi.fn(async () => [])
+
+    const manager = new MethodManager(fakeAddressSpace)
+    manager.methodObject = {}
+    manager.tighteningSystemNode = rootNode
+
+    await manager.addressFolder('')
+
+    expect(rootNode.getChildRelations).toHaveBeenCalledWith('component')
+  })
+
+  it('non-empty path calls findNodeFromPathPromise then folderPromise', async () => {
+    const folderNode = makeNode('Folder', 'ns=1;s=Folder')
+    folderNode.getChildRelations = vi.fn(() => [])
+
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.findNodeFromPathPromise = vi.fn(async () => folderNode)
+    fakeAddressSpace.relationsToNodes = vi.fn(async () => [])
+
+    const manager = new MethodManager(fakeAddressSpace)
+    manager.methodObject = {}
+    manager.tighteningSystemNode = makeNode('TS', 'ns=1;s=TS')
+
+    await manager.addressFolder('"SomePath"')
+
+    expect(fakeAddressSpace.findNodeFromPathPromise).toHaveBeenCalledWith('"SomePath"')
+    expect(folderNode.getChildRelations).toHaveBeenCalledWith('component')
+  })
+})
+
+describe('MethodManager — folderPromise', () => {
+  it('adds method nodes with nodeClass=4 to methodObject', async () => {
+    const methodNode = makeNode('MyMethod', 'ns=1;s=Method', 4)
+    methodNode.getChildRelations = vi.fn(() => [])  // no InputArguments
+
+    const folderNode = makeNode('Folder', 'ns=1;s=Folder')
+    const relation = { NodeId: 'ns=1;s=Method' }
+    folderNode.getChildRelations = vi.fn(() => [relation])
+
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.relationsToNodes = vi.fn(async (rels) => {
+      if (rels === [relation] || rels.includes(relation)) return [methodNode]
+      return []
+    })
+
+    const manager = new MethodManager(fakeAddressSpace)
+    manager.methodObject = {}
+
+    await manager.folderPromise(folderNode)
+
+    expect(folderNode.getChildRelations).toHaveBeenCalledWith('component')
+  })
+
+  it('skips non-method nodes (nodeClass !== 4)', async () => {
+    const nonMethodNode = makeNode('Variable', 'ns=1;s=Var', 2 /* Variable */)
+    const folderNode = makeNode('Folder', 'ns=1;s=Folder')
+    const relation = { NodeId: 'ns=1;s=Var' }
+    folderNode.getChildRelations = vi.fn(() => [relation])
+
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.relationsToNodes = vi.fn(async () => [nonMethodNode])
+
+    const manager = new MethodManager(fakeAddressSpace)
+    manager.methodObject = {}
+
+    await manager.folderPromise(folderNode)
+
+    expect(Object.keys(manager.methodObject)).toHaveLength(0)
+  })
+})
+
+describe('MethodManager — setupMethod', () => {
+  it('returns methodNode and empty args when no InputArguments', async () => {
+    const methodNode = makeNode('TestMethod', 'ns=1;s=Method', 4)
+    methodNode.getChildRelations = vi.fn(() => [])
+
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.relationsToNodes = vi.fn(async () => [])
+
+    const manager = new MethodManager(fakeAddressSpace)
+    const result = await manager.setupMethod(methodNode)
+
+    expect(result.methodNode).toBe(methodNode)
+    expect(result.arguments).toEqual([])
+  })
+
+  it('returns methodNode and parsed args when InputArguments found', async () => {
+    const inputArgRelation = {
+      BrowseName: { Name: 'InputArguments' },
+      NodeId: 'ns=1;s=InputArgs'
+    }
+    const methodNode = makeNode('TestMethod', 'ns=1;s=Method', 4)
+    methodNode.getChildRelations = vi.fn(() => [inputArgRelation])
+
+    const inputArgNode = {
+      data: { attributes: { Value: ['arg1', 'arg2'] } }
+    }
+
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.relationsToNodes = vi.fn(async () => [inputArgNode])
+
+    const manager = new MethodManager(fakeAddressSpace)
+    const result = await manager.setupMethod(methodNode)
+
+    expect(result.arguments).toEqual(['arg1', 'arg2'])
+  })
+
+  it('warns when an argument value is falsy', async () => {
+    const inputArgRelation = { BrowseName: { Name: 'InputArguments' }, NodeId: 'ns=1;s=IA' }
+    const methodNode = makeNode('TestMethod', 'ns=1;s=Method', 4)
+    methodNode.getChildRelations = vi.fn(() => [inputArgRelation])
+
+    const inputArgNode = {
+      data: { attributes: { Value: [null, 'validArg'] } }  // null triggers warn
+    }
+
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.relationsToNodes = vi.fn(async () => [inputArgNode])
+
+    const manager = new MethodManager(fakeAddressSpace)
+    const result = await manager.setupMethod(methodNode)
+
+    // null is filtered out, 'validArg' is included
+    expect(result.arguments).toEqual(['validArg'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// call() — additional type cases
+// ---------------------------------------------------------------------------
+
+describe('MethodManager.call — additional type cases', () => {
+  async function callWithType (typeNr, value) {
+    const fakeAddressSpace = makeFakeAddressSpace()
+    const manager = new MethodManager(fakeAddressSpace)
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('Method', 'ns=1;s=TS/Method'),
+      arguments: [],
+    }
+    await manager.call(methodData, [{ type: { Identifier: typeNr }, value }])
+    const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
+    return calledArgs[0]
+  }
+
+  it('maps type 3029 as raw value passthrough', async () => {
+    const result = await callWithType(3029, 'raw-value')
+    expect(result.value).toBe('raw-value')
+    expect(result.dataType).toBe(3029)
+  })
+
+  it('maps type 21 (LocalizedText) as raw value passthrough', async () => {
+    const locText = { Text: 'Hello', Locale: 'en-US' }
+    const result = await callWithType(21, locText)
+    expect(result.value).toBe(locText)
+  })
+
+  it('maps type 13 (DateTime) via String coercion', async () => {
+    const result = await callWithType(13, '2024-01-01')
+    expect(result.value).toBe('2024-01-01')
+  })
+
+  it('maps type 8 (Int64) via parseInt', async () => {
+    const result = await callWithType(8, '1234567890')
+    expect(result.value).toBe(1234567890)
+  })
+
+  it('maps unknown type as raw value (default case)', async () => {
+    const result = await callWithType(9999, 'mystery')
+    expect(result.value).toBe('mystery')
+    expect(result.dataType).toBe(9999)
+  })
+
+  it('maps type 1 (Boolean) false from non-true string', async () => {
+    const result = await callWithType(1, 'false')
+    expect(result.value).toBe(false)
   })
 })

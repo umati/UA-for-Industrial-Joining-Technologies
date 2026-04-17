@@ -6,7 +6,7 @@
  * mocking any module imports.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { AddressSpace } from '../../../src/javascripts/ijt-support/address-space/address-space.mjs'
 
 // ---------------------------------------------------------------------------
@@ -347,5 +347,133 @@ describe('AddressSpace — node mapping helpers', () => {
     const nodeIdObj = { NamespaceIndex: 3, Identifier: 'MyString' }
     addressSpace.setNodeMapping(nodeIdObj, node)
     expect(addressSpace.getNodeMapping(nodeIdObj)).toBe(node)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// findNodeFromPathPromise
+// ---------------------------------------------------------------------------
+
+describe('AddressSpace — findNodeFromPathPromise', () => {
+  it('resolves to a node when path lookup succeeds', async () => {
+    // Pre-load tighteningSystem
+    const fakeSystem = { nodeId: { NamespaceIndex: 1, Identifier: 999 } }
+    addressSpace.tighteningSystem = fakeSystem
+    addressSpace.status.push('tighteningsystem')
+
+    // Use object for nodeid so parseMaybeJson passes it through without JSON.parse
+    socketHandler.pathtoidPromise.mockResolvedValue({
+      message: { nodeid: { NamespaceIndex: 1, Identifier: 100 } }
+    })
+    socketHandler.readPromise.mockResolvedValue({ message: makeNodeMessage(1, 100) })
+
+    const node = await addressSpace.findNodeFromPathPromise('"SomePath"')
+    expect(node).toBeDefined()
+    expect(socketHandler.pathtoidPromise).toHaveBeenCalledOnce()
+  })
+
+  it('rejects when pathtoidPromise rejects', async () => {
+    const fakeSystem = { nodeId: { NamespaceIndex: 1, Identifier: 999 } }
+    addressSpace.tighteningSystem = fakeSystem
+    addressSpace.status.push('tighteningsystem')
+
+    socketHandler.pathtoidPromise.mockRejectedValue(new Error('path not found'))
+
+    await expect(addressSpace.findNodeFromPathPromise('"BadPath"')).rejects.toThrow('path not found')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// read
+// ---------------------------------------------------------------------------
+
+describe('AddressSpace — read', () => {
+  it('resolves with response.node from socketHandler.readPromise', async () => {
+    const fakeNode = { nodeId: 'ns=1;i=42' }
+    socketHandler.readPromise.mockResolvedValue({ node: fakeNode })
+
+    const result = await addressSpace.read('ns=1;i=42', 'Value')
+    expect(result).toBe(fakeNode)
+    expect(socketHandler.readPromise).toHaveBeenCalledWith('ns=1;i=42', 'Value')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// initiate (via connection callback)
+// ---------------------------------------------------------------------------
+
+describe('AddressSpace — initiate', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  function makeNodeMessageWithRelations (nsIndex, identifier, relations = []) {
+    return {
+      ...makeNodeMessage(nsIndex, identifier),
+      relations
+    }
+  }
+
+  it('finds tighteningSystem when connection fires with true', async () => {
+    const tsRelation = {
+      TypeDefinition: { Identifier: 1005 },
+      ReferenceTypeId: { Identifier: 61 },
+      NodeId: 'ns=1;i=1005',
+      IsForward: true,
+      BrowseName: { Name: 'TighteningSystem', NamespaceIndex: 1 }
+    }
+
+    socketHandler.readPromise
+      .mockResolvedValueOnce({ message: makeNodeMessage(0, 84) })              // root
+      .mockResolvedValueOnce({ message: makeNodeMessageWithRelations(0, 85, [tsRelation]) }) // objects folder
+      .mockResolvedValueOnce({ message: makeNodeMessage(1, 1005) })            // tightening system
+
+    socketHandler.namespacePromise.mockResolvedValue({
+      message: { namespaces: JSON.stringify(['http://opcfoundation.org/UA/']) }
+    })
+
+    connectionManager._fire('connection', true)
+
+    await vi.runAllTimersAsync()
+
+    expect(addressSpace.tighteningSystem).toBeDefined()
+  })
+
+  it('handles error in initiate gracefully (no throw)', async () => {
+    socketHandler.readPromise.mockRejectedValue(new Error('network error'))
+    socketHandler.namespacePromise.mockResolvedValue({
+      message: { namespaces: JSON.stringify([]) }
+    })
+
+    connectionManager._fire('connection', true)
+
+    await vi.runAllTimersAsync()
+    // No assertion needed — the key is that no unhandled rejection occurs
+  })
+
+  it('handles missing tightening system (no typerelations) gracefully', async () => {
+    socketHandler.readPromise
+      .mockResolvedValueOnce({ message: makeNodeMessage(0, 84) })
+      .mockResolvedValueOnce({ message: makeNodeMessage(0, 85) })  // no relations
+
+    socketHandler.namespacePromise.mockResolvedValue({
+      message: { namespaces: JSON.stringify([]) }
+    })
+
+    connectionManager._fire('connection', true)
+    await vi.runAllTimersAsync()
+    // Should log error, not throw
+  })
+
+  it('fires with false skips initiate but still handles namespaces', async () => {
+    socketHandler.namespacePromise.mockResolvedValue({
+      message: { namespaces: JSON.stringify(['http://opcfoundation.org/UA/']) }
+    })
+
+    connectionManager._fire('connection', false)
+    await vi.runAllTimersAsync()
+
+    // initiate was not called (socketHandler.readPromise not invoked)
+    expect(socketHandler.readPromise).not.toHaveBeenCalled()
+    expect(addressSpace.OPCUA).toBe(0)
   })
 })

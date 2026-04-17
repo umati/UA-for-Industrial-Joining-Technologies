@@ -246,4 +246,162 @@ public sealed class ResultManagementUnitTests
 
         Assert.Null(ex);
     }
+
+    // ── HasMeaningfulResult (private static) via reflection ───────────────────
+
+    private static bool InvokeHasMeaningfulResult(UAModel.MachineryResult.ResultDataType rd)
+    {
+        var method = typeof(ResultManagement).GetMethod(
+            "HasMeaningfulResult",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        return (bool)method!.Invoke(null, new object[] { rd })!;
+    }
+
+    [Fact]
+    public void HasMeaningfulResult_WithNullMetadata_ReturnsFalse()
+    {
+        var rd = new UAModel.MachineryResult.ResultDataType();
+        // ResultMetaData defaults to null in some UAModel versions; ensure it's null
+        rd.ResultMetaData = null;
+
+        Assert.False(InvokeHasMeaningfulResult(rd));
+    }
+
+    [Fact]
+    public void HasMeaningfulResult_WithEmptyResultId_ReturnsFalse()
+    {
+        var rd = new UAModel.MachineryResult.ResultDataType
+        {
+            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "" }
+        };
+
+        Assert.False(InvokeHasMeaningfulResult(rd));
+    }
+
+    [Fact]
+    public void HasMeaningfulResult_WithWhitespaceResultId_ReturnsFalse()
+    {
+        var rd = new UAModel.MachineryResult.ResultDataType
+        {
+            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "   " }
+        };
+
+        Assert.False(InvokeHasMeaningfulResult(rd));
+    }
+
+    [Fact]
+    public void HasMeaningfulResult_WithValidResultId_ReturnsTrue()
+    {
+        var rd = new UAModel.MachineryResult.ResultDataType
+        {
+            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "RESULT-001" }
+        };
+
+        Assert.True(InvokeHasMeaningfulResult(rd));
+    }
+
+    // ── PrintResultOutputs via GetLatestResult (non-empty output) ─────────────
+
+    [Fact]
+    public void GetLatestResult_WithNonEmptyOutputList_PrintsWithoutThrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Returns(new List<object> { 1u, null!, 0 });
+        using var rm = new ResultManagement(session.Object);
+
+        var ex = Record.Exception(() => rm.GetLatestResult());
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void GetLatestResult_WithSingleOutput_HandlesCountEqualOne()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Returns(new List<object> { 1u });   // only handle, no Result field
+        using var rm = new ResultManagement(session.Object);
+
+        var ex = Record.Exception(() => rm.GetLatestResult());
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void GetResultById_WithNonEmptyOutputList_PrintsWithoutThrow()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.CallMethod(
+                It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Returns(new List<object> { 2u, null!, 0 });
+        using var rm = new ResultManagement(session.Object);
+
+        var ex = Record.Exception(() => rm.GetResultById("RESULT-001"));
+
+        Assert.Null(ex);
+    }
+
+    // ── GetResultManagementNode fallback path ────────────────────────────────
+
+    [Fact]
+    public void GetLatestResult_WithBrowseChildNull_UsesTypeFallback()
+    {
+        // BrowseChild returns Null → fallback to IjtBaseObjectId
+        var session = MockSessionBuilder.Create(browseChildResult: NodeId.Null);
+        // But IjtBaseObjectId must return valid so method is still callable
+        session.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>()))
+            .Returns(MockSessionBuilder.ValidNodeId);
+        using var rm = new ResultManagement(session.Object);
+
+        var ex = Record.Exception(() => rm.GetLatestResult());
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void InvalidateNodeCache_ThenGetLatestResult_ReBrowsesNode()
+    {
+        var session = MockSessionBuilder.Create();
+        using var rm = new ResultManagement(session.Object);
+
+        rm.InvalidateNodeCache();
+        var ex = Record.Exception(() => rm.GetLatestResult());
+
+        Assert.Null(ex);
+        // Verify BrowseChild was called (node was re-looked up after cache invalidation)
+        session.Verify(s => s.BrowseChild(
+            It.IsAny<NodeId>(), It.IsAny<string>(),
+            It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.AtLeastOnce);
+    }
+
+    // ── IsResultVarSubscribed property ────────────────────────────────────────
+
+    [Fact]
+    public void IsResultVarSubscribed_WhenNotSubscribed_ReturnsFalse()
+    {
+        var session = MockSessionBuilder.Create();
+        using var rm = new ResultManagement(session.Object);
+
+        Assert.False(rm.IsResultVarSubscribed);
+    }
+
+    // ── Node cache hit paths ───────────────────────────────────────────────────
+
+    [Fact]
+    public void GetLatestResult_CalledTwice_UsesCachedNodeId()
+    {
+        var session = MockSessionBuilder.Create();
+        using var rm = new ResultManagement(session.Object);
+
+        rm.GetLatestResult();  // first call caches _rmNodeId
+        rm.GetLatestResult();  // second call hits cache
+
+        // BrowseChild called only once per method call chain, but first call sets cache
+        session.Verify(s => s.BrowseChild(
+            It.IsAny<NodeId>(), It.IsAny<string>(),
+            It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
+    }
 }

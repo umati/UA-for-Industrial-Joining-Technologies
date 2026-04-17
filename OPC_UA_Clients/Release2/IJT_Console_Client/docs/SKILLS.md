@@ -14,13 +14,6 @@
 
 ---
 
-## Access Rules (CRITICAL)
-
-- **Full modify access**: everything inside this repo
-- **Never commit** — user reviews and commits manually
-
----
-
 ## Project File Map
 
 ```
@@ -192,7 +185,7 @@ Both clients share the same OPC UA IJT method NodeId patterns and event subscrip
   - `TighteningSystem/Simulations/SimulateBulkResults` — multiple results (one by one)
   - `TighteningSystem/Simulations/SimulateEvents` — system events
   - All take one boolean input argument (`IsSimulated`)
-- UaExpert saved config: `IJT_LOCAL_SIMULATOR.uap` on Desktop (read-only reference)
+- UaExpert saved config: `IJT_LOCAL_SIMULATOR.uap` (read-only reference)
 
 ---
 

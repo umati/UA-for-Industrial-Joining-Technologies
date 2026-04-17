@@ -821,6 +821,7 @@ def _cleanup_caches(root: Path, include_build_artifacts: bool = False) -> None:
         ".pytest_cache",
         ".ruff_cache",
         ".mypy_cache",
+        "htmlcov",
     }
     if include_build_artifacts:
         _CACHE_DIRS.update({"bin", "obj"})

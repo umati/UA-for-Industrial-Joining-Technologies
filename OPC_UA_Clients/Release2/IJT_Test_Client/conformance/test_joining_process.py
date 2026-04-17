@@ -1331,8 +1331,10 @@ async def test_start_selected_joining_after_select_returns_good(opcua_client, ns
     jpm = await _get_jpm(opcua_client, ns_ijt)
 
     list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, timeout=15.0)
-    if not list_result.success or not list_result.output_list:
-        pytest.skip("GetJoiningProcessList unavailable or empty — cannot establish SelectJoiningProcess precondition")
+    if not list_result.success:
+        pytest.skip("GetJoiningProcessList call failed — cannot establish SelectJoiningProcess precondition")
+    if not list_result.output_list:
+        pytest.skip("GetJoiningProcessList returned empty list — no programs configured; cannot establish precondition")
     first_program = list_result.output_list[0]
     program_id = str(first_program) if not isinstance(first_program, int) else first_program
     select_node = await _find_method_node(jpm, BN.SELECT_JOINING_PROCESS, ns_ijt)
@@ -1383,8 +1385,12 @@ async def test_select_joining_process_state_reflected_after_select(opcua_client,
     jpm = await _get_jpm(opcua_client, ns_ijt)
 
     list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, timeout=15.0)
-    if not list_result.success or not list_result.output_list:
-        pytest.skip("GetJoiningProcessList unavailable or empty — cannot determine a valid program ID")
+    if not list_result.success:
+        pytest.skip("GetJoiningProcessList call failed — cannot determine a valid program ID")
+    if not list_result.output_list:
+        pytest.skip(
+            "GetJoiningProcessList returned empty list — no programs configured; cannot determine a valid program ID"
+        )
     first_program = list_result.output_list[0]
     program_id = str(first_program) if not isinstance(first_program, int) else first_program
     select_node = await _find_method_node(jpm, BN.SELECT_JOINING_PROCESS, ns_ijt)
@@ -1730,8 +1736,10 @@ async def test_get_selected_joining_program_result_has_valid_fields(opcua_client
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, timeout=15.0)
-    if not list_result.success or not list_result.output_list:
-        pytest.skip("GetJoiningProcessList unavailable or empty — cannot select a program")
+    if not list_result.success:
+        pytest.skip("GetJoiningProcessList call failed — cannot select a program")
+    if not list_result.output_list:
+        pytest.skip("GetJoiningProcessList returned empty list — no programs configured; cannot select a program")
     first_program = list_result.output_list[0]
     program_id = str(first_program) if not isinstance(first_program, int) else first_program
     select_node = await _find_method_node(jpm, BN.SELECT_JOINING_PROCESS, ns_ijt)

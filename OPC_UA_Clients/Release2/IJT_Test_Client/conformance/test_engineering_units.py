@@ -335,7 +335,11 @@ async def test_engineering_units_identifier_is_a_positive_integer(opcua_client, 
         checked += 1
 
     if checked == 0:
-        pytest.skip("No ResultValues with EngineeringUnits found — EU is optional per spec")
+        pytest.skip(
+            "No ResultValues with EngineeringUnits found — "
+            "server declared CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
+            "verify server populates EU on result values"
+        )
 
     assert not failures, "EU Identifier type failures:\n  " + "\n  ".join(failures)
 
@@ -352,7 +356,11 @@ async def test_all_result_value_eu_identifiers_pass_result_value_validator(opcua
     all_values = _collect_all_result_values(result_data)
     values_with_eu = _values_with_eu(all_values)
     if not values_with_eu:
-        pytest.skip("No ResultValues with EngineeringUnits found — EU is optional per spec")
+        pytest.skip(
+            "No ResultValues with EngineeringUnits found — "
+            "server declared CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
+            "verify server populates EU on result values"
+        )
 
     vr = ValidationResult()
     validator = ResultValueValidator()
@@ -693,7 +701,9 @@ async def test_result_values_with_absent_eu_information_are_non_conformant(opcua
 
     if not values_with_eu:
         pytest.skip(
-            "No ResultValues with EngineeringUnits found — EU is optional per spec; negative check not applicable"
+            "No ResultValues with EngineeringUnits found — "
+            "server declared CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
+            "negative check not applicable"
         )
 
     violations: list[str] = []

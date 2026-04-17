@@ -306,4 +306,262 @@ public class IjtResultFormatterTests
 
         Assert.Contains("no content", result);
     }
+
+    // ── FormatTrace — Trace field in JoiningResultDataType ───────────────────
+
+    [Fact]
+    public void FormatResult_WithTrace_NoStepTraces_ContainsTraceSection()
+    {
+        var trace = new UAModel.IJTBase.JoiningTraceDataType
+        {
+            TraceId = "TRACE-001",
+            ResultId = "RES-TRACE-001",
+            // StepTraces is null/empty → "StepTraces (none)" path
+        };
+
+        var jr = new UAModel.IJTBase.JoiningResultDataType
+        {
+            Trace = trace,
+            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.Trace,
+        };
+
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "TR-001" },
+            ResultContent = new Opc.Ua.VariantCollection
+            {
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
+            },
+        };
+
+        var result = IjtResultFormatter.FormatResult(rd, DateTime.UtcNow);
+
+        Assert.Contains("Trace", result);
+        Assert.Contains("TRACE-001", result);
+    }
+
+    [Fact]
+    public void FormatResult_WithTrace_WithStepTraces_NoChannels_ContainsStepTraceId()
+    {
+        var stepTrace = new UAModel.IJTBase.StepTraceDataType
+        {
+            StepTraceId = "STEP-TRACE-1",
+            StepResultId = "STEP-RES-1",
+            NumberOfTracePoints = 10u,
+            SamplingInterval = 100u,
+            StartTimeOffset = 0,
+            // StepTraceContent is null → "Channels (none)" path
+        };
+
+        var trace = new UAModel.IJTBase.JoiningTraceDataType
+        {
+            TraceId = "TRACE-002",
+            StepTraces = new UAModel.IJTBase.StepTraceDataTypeCollection { stepTrace },
+        };
+
+        var jr = new UAModel.IJTBase.JoiningResultDataType
+        {
+            Trace = trace,
+            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.Trace,
+        };
+
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "TR-STEP" },
+            ResultContent = new Opc.Ua.VariantCollection
+            {
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
+            },
+        };
+
+        var result = IjtResultFormatter.FormatResult(rd, DateTime.UtcNow);
+
+        Assert.Contains("STEP-TRACE-1", result);
+        Assert.Contains("Channels", result);
+    }
+
+    [Fact]
+    public void FormatResult_WithTrace_WithStepTraces_WithChannels_ContainsChannelValues()
+    {
+        var channel = new UAModel.IJTBase.TraceContentDataType
+        {
+            Name = "Torque",
+            SensorId = "SENSOR-1",
+            PhysicalQuantity = (byte)0,
+            EngineeringUnits = new Opc.Ua.EUInformation
+            { DisplayName = new Opc.Ua.LocalizedText("Nm") },
+            Values = new Opc.Ua.DoubleCollection { 1.5, 2.0, 3.0 },
+        };
+
+        var stepTrace = new UAModel.IJTBase.StepTraceDataType
+        {
+            StepTraceId = "STEP-TRACE-2",
+            StepTraceContent = new UAModel.IJTBase.TraceContentDataTypeCollection { channel },
+        };
+
+        var trace = new UAModel.IJTBase.JoiningTraceDataType
+        {
+            TraceId = "TRACE-003",
+            StepTraces = new UAModel.IJTBase.StepTraceDataTypeCollection { stepTrace },
+        };
+
+        var jr = new UAModel.IJTBase.JoiningResultDataType
+        {
+            Trace = trace,
+            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.Trace,
+        };
+
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "TR-CHAN" },
+            ResultContent = new Opc.Ua.VariantCollection
+            {
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
+            },
+        };
+
+        var result = IjtResultFormatter.FormatResult(rd, DateTime.UtcNow);
+
+        Assert.Contains("Torque", result);
+        Assert.Contains("SENSOR-1", result);
+        Assert.Contains("1.5", result);
+    }
+
+    [Fact]
+    public void FormatResult_WithFailureReason_ContainsFailureReason()
+    {
+        var jr = new UAModel.IJTBase.JoiningResultDataType
+        {
+            FailureReason = (byte)42,
+            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.FailureReason,
+        };
+
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "FR-001" },
+            ResultContent = new Opc.Ua.VariantCollection
+            {
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
+            },
+        };
+
+        var result = IjtResultFormatter.FormatResult(rd, DateTime.UtcNow);
+
+        Assert.Contains("42", result);
+        Assert.Contains("FailureReason", result);
+    }
+
+    [Fact]
+    public void FormatResult_WithNullMetadata_ContainsNoMetadataMarker()
+    {
+        // Use a result with explicitly null metadata by checking the
+        // formatter handles it — some UAModel versions may provide a default
+        var rd = new ResultDataType();
+        // FormatResult should not throw regardless of metadata state
+        var ex = Record.Exception(() => IjtResultFormatter.FormatResult(rd, DateTime.UtcNow));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void FormatResult_NormalizeUnits_DegreeSymbol_ReplacedWithDeg()
+    {
+        var rv = new UAModel.IJTBase.ResultValueDataType
+        {
+            Name = "Angle",
+            MeasuredValue = 90.0,
+            EngineeringUnits = new Opc.Ua.EUInformation
+            { DisplayName = new Opc.Ua.LocalizedText("°") },
+        };
+
+        var jr = new UAModel.IJTBase.JoiningResultDataType
+        {
+            OverallResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection { rv },
+        };
+
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "UNIT-DEG" },
+            ResultContent = new Opc.Ua.VariantCollection
+            {
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
+            },
+        };
+
+        var result = IjtResultFormatter.FormatResult(rd, DateTime.UtcNow);
+
+        Assert.Contains("deg", result);
+    }
+
+    [Fact]
+    public void FormatResult_NormalizeUnits_PhysicalQuantity3_EmptyUnit_ReturnsDeg()
+    {
+        var rv = new UAModel.IJTBase.ResultValueDataType
+        {
+            Name = "Rotation",
+            MeasuredValue = 45.0,
+            PhysicalQuantity = 3,
+            // No engineering units → empty → physicalQuantity 3 → "deg"
+        };
+
+        var jr = new UAModel.IJTBase.JoiningResultDataType
+        {
+            OverallResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection { rv },
+        };
+
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "PQ3-DEG" },
+            ResultContent = new Opc.Ua.VariantCollection
+            {
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
+            },
+        };
+
+        var result = IjtResultFormatter.FormatResult(rd, DateTime.UtcNow);
+
+        Assert.Contains("deg", result);
+    }
+
+    [Fact]
+    public void FormatResult_TraceChannelWithNoValues_ShowsNoneLabel()
+    {
+        // Covers IjtResultFormatter lines 223-224: channel.Values is null/empty → "(none)" branch
+        var channelNoValues = new UAModel.IJTBase.TraceContentDataType
+        {
+            Name = "EmptyChannel",
+            PhysicalQuantity = 1,
+            Values = new Opc.Ua.DoubleCollection(),  // empty
+        };
+        var stepTrace = new UAModel.IJTBase.StepTraceDataType
+        {
+            StepTraceId = "ST-001",
+            NumberOfTracePoints = 0,
+            SamplingInterval = 10.0,
+            StartTimeOffset = 0.0,
+            StepTraceContent = new UAModel.IJTBase.TraceContentDataTypeCollection { channelNoValues },
+        };
+        var trace = new UAModel.IJTBase.JoiningTraceDataType
+        {
+            TraceId = "TRACE-001",
+            StepTraces = new UAModel.IJTBase.StepTraceDataTypeCollection { stepTrace },
+        };
+        var jr = new UAModel.IJTBase.JoiningResultDataType
+        {
+            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.Trace,
+            OverallResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection(),
+            Trace = trace,
+        };
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "TRACE-001" },
+            ResultContent = new Opc.Ua.VariantCollection
+            {
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
+            },
+        };
+
+        var result = IjtResultFormatter.FormatResult(rd, DateTime.UtcNow);
+
+        Assert.Contains("(none)", result);
+    }
 }
