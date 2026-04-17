@@ -48,6 +48,12 @@ OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](htt
 
 # Change Log
 
+**2026-04-17:**
+1. **Updated** joining process and joint selection to be **scoped per product** so different clients no longer overwrite each other's active selection.
+2. **Updated** asset simulation with **consistent identifiers** across server restarts and included them in result output.
+3. **Fixed** multiple result simulation bugs around concurrency, missing callbacks, and incorrect associated entity data.
+4. **Multiple** bug fixes and optimizations.
+
 **2026-04-02:**
 1. **Moved** `Dockerfile` and added `docker-compose.yml` to the `Release2/` directory (previously was inside the binary subfolder).
 2. **Embedded** the Docker entrypoint script inline in the Dockerfile — single-file Docker configuration, no extra scripts to manage.
