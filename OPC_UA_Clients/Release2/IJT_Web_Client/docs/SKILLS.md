@@ -211,7 +211,7 @@ sim_node = client.get_node('ns=1;s=TighteningSystem/Simulations/SimulateResults'
 
 - **Subscribe on the Server node** (`client.get_node(ua.ObjectIds.Server)`), not individual method nodes.
 - **Enable all filters by default** — no custom EventFilter needed; the event payload contains the full `ResultDataType` structure.
-- `SimulateBulkResults` sends results **one by one** in a detached thread, not all at once.
+- `SimulateBulkResults` and `SimulateJobResult` both run in **detached threads** — the method returns `OpcUa_Good` immediately before any events fire. Use `_wait_events` with a quiescence phase (see `_wait_events` in `test_opcua_methods.py`) to ensure all async events are collected before asserting on `events[-1]`.
 - `IsSimulated=True` only when Simulate* methods are called. When connecting to a real controller, `IsSimulated=False`.
 
 ## Joint Management Rules

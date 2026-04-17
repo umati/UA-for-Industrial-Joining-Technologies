@@ -21,9 +21,10 @@ OperationMode        : MANUAL=2
 AssemblyType         : ASSEMBLED=1
 JoiningTechnology    : "Tightening"
 
-SimulateBulkResults (result_simulation_methods_t.cpp):
-  Runs in a DETACHED thread — OpcUa_Good returned before events fire.
-  MIN=5 (auto-raised if range<5), MAX=1000, SEQUENCE_NUMBER reset to fromSeq-1.
+SimulateJobResult / SimulateBulkResults (result_simulation_methods_t.cpp):
+  Both run in a DETACHED thread — OpcUa_Good returned before events fire.
+  SimulateBulkResults: MIN=5 (auto-raised if range<5), MAX=1000, SEQUENCE_NUMBER reset to fromSeq-1.
+  Use _wait_events with quiescence (stable_ms) to capture all async events reliably.
 
 Run all:
     python -m pytest tests/test_opcua_methods.py -v --timeout=120
@@ -221,13 +222,30 @@ async def _pi_uri(c) -> str:
         return ""
 
 
-async def _wait_events(handler, min_count: int = 1, timeout: float = 8.0) -> list:
-    """Poll until min_count events arrive or timeout expires."""
+async def _wait_events(handler, min_count: int = 1, timeout: float = 8.0, stable_ms: float = 300) -> list:
+    """Poll until min_count events arrive, then wait for quiescence (no new events for
+    stable_ms milliseconds), or until timeout expires.
+
+    The quiescence wait is needed because SimulateJobResult and SimulateBulkResults both
+    run in detached threads — the OPC UA CallResponse returns immediately while events
+    fire asynchronously.  With MaxNotificationsPerPublish=3 and a 100 ms publish interval,
+    events arrive in batches; waiting for quiescence ensures the final event (e.g.
+    ResultState=COMPLETED) is included in the snapshot before assertions run.
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if len(handler.events) >= min_count:
             break
         await asyncio.sleep(0.2)
+    # Quiescence phase: restart a short timer each time a new event arrives.
+    quiesce_end = time.monotonic() + stable_ms / 1000.0
+    last_count = len(handler.events)
+    while time.monotonic() < min(quiesce_end, deadline):
+        await asyncio.sleep(0.05)
+        cur = len(handler.events)
+        if cur != last_count:
+            quiesce_end = time.monotonic() + stable_ms / 1000.0
+            last_count = cur
     return list(handler.events)
 
 
