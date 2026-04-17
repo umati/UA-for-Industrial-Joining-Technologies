@@ -27,6 +27,7 @@ Spec (result_value_trace_point_index):
 Design: triggers a result WITH traces (include_traces=True) and validates trace structure.
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -46,6 +47,11 @@ _EXTERNAL_TIMEOUT_MS = 60000
 _METHOD_CALL_TIMEOUT_S = 30.0
 _EXTERNAL_CALL_TIMEOUT_S = 90.0
 
+# Retry policy: after triggering, GetLatestResult may return a stale combined result
+# from a previous test. Retry to wait for the freshly triggered SINGLE_RESULT.
+_GLR_RETRY_MAX = 4
+_GLR_RETRY_SLEEP_S = 2.0
+
 # Valid PhysicalQuantity range: 0=OTHER … 28=TORQUE_PER_ANGLE_GRADIENT
 _VALID_PHYSICAL_QUANTITIES: frozenset = frozenset(range(29))
 
@@ -63,6 +69,10 @@ async def _get_result_with_traces(opcua_client, result_trigger, ns_indices):
 
     content_list is the ResultContent list from result_data.
     Returns (None, None) on trigger or retrieval failure.
+
+    After triggering, GetLatestResult may return a stale combined result from a previous
+    test (timing race). This function retries up to _GLR_RETRY_MAX times to wait for the
+    freshly triggered SINGLE_RESULT to be stored on the server.
     """
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -85,26 +95,51 @@ async def _get_result_with_traces(opcua_client, result_trigger, ns_indices):
     wait_ms = _SIMULATOR_TIMEOUT_MS if result_trigger.is_simulator else _EXTERNAL_TIMEOUT_MS
     call_timeout_s = _METHOD_CALL_TIMEOUT_S if result_trigger.is_simulator else _EXTERNAL_CALL_TIMEOUT_S
 
-    result = await call_method(
-        rm,
-        glr.nodeid,
-        ua.Variant(wait_ms, ua.VariantType.Int32),
-        timeout=call_timeout_s,
-        method_name="GetLatestResult",
-    )
-    if not result.success:
-        return None, None
+    result_data = None
+    for attempt in range(_GLR_RETRY_MAX):
+        result = await call_method(
+            rm,
+            glr.nodeid,
+            ua.Variant(wait_ms, ua.VariantType.Int32),
+            timeout=call_timeout_s,
+            method_name="GetLatestResult",
+        )
+        if not result.success:
+            return None, None
 
-    outputs = result.output_list
-    result_data = outputs[1] if len(outputs) > 1 else (outputs[0] if outputs else None)
-    if result_data is None:
-        return None, None
+        outputs = result.output_list
+        result_data = outputs[1] if len(outputs) > 1 else (outputs[0] if outputs else None)
+        if result_data is None:
+            return None, None
 
-    # Trace data only exists on Single Results — skip early with a precise reason
-    # if GetLatestResult returned a combined result (timing race from a prior test).
-    _skip_if_not_single_result(result_data)
+        # Check if we got a combined result (stale from a prior test)
+        meta = getattr(result_data, "ResultMetaData", None)
+        cls = getattr(meta, "Classification", None) if meta is not None else None
+        try:
+            cls_int = int(cls) if cls is not None else None
+        except TypeError, ValueError:
+            cls_int = None
 
-    content = getattr(result_data, "ResultContent", None) or []
+        if cls_int is not None and cls_int != ResultClassification.SINGLE_RESULT:
+            if attempt < _GLR_RETRY_MAX - 1:
+                cls_name = _COMBINED_RESULT_NAMES.get(cls_int, f"classification={cls_int}")
+                logger.debug(
+                    "_get_result_with_traces: got %s instead of SINGLE_RESULT (attempt %d/%d) — retrying",
+                    cls_name,
+                    attempt + 1,
+                    _GLR_RETRY_MAX,
+                )
+                await asyncio.sleep(_GLR_RETRY_SLEEP_S)
+                continue
+            # All retries exhausted — trigger produced combined result; fail clearly
+            cls_name = _COMBINED_RESULT_NAMES.get(cls_int, f"classification={cls_int}")
+            pytest.fail(
+                f"GetLatestResult returned {cls_name} instead of SINGLE_RESULT after "
+                f"{_GLR_RETRY_MAX} retries — server did not store the triggered SINGLE_RESULT"
+            )
+        break
+
+    content = getattr(result_data, "ResultContent", None) or [] if result_data is not None else []
     return result_data, list(content)
 
 

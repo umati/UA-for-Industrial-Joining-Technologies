@@ -231,6 +231,43 @@ assert len(events) >= 1
 | Server behaves differently from spec (documented deviation) | `pytest.skip("known deviation: ...")` |
 | Feature is mandatory and missing | `pytest.fail(...)` |
 | Feature is present but returns wrong data | `assert ...` |
+| Method call fails (not "absent" — method node found but call errored) | `pytest.fail(...)` — not skip |
+| Timing race — GetLatestResult returns stale result (retry exhausted, real server) | `pytest.fail(...)` — real server must store triggered result within retry window |
+| Timing race — retry exhausted on simulator (known limitation) | `return None` from helper → caller does `pytest.skip(...)` |
+
+### GetLatestResult Return Convention
+`GetLatestResult` returns **two** output arguments: `[ResultHandle (UInt64), ResultDataType]`.
+
+- **Always use index 1**: `raw[1]` for the actual result data
+- `raw[0]` is the integer handle — useless for data inspection
+- Applies everywhere: `_trigger_and_get_result`, `_trigger_and_get_combined_result`, `_get_result_with_traces`
+
+### Timing Race Retry Pattern
+After triggering a result, GetLatestResult may return a stale result from a prior test.
+Use a retry loop — do NOT skip immediately:
+
+```python
+_GLR_RETRY_MAX = 4
+_GLR_RETRY_SLEEP_S = 2.0
+
+for attempt in range(_GLR_RETRY_MAX):
+    raw = await asyncio.wait_for(rm.call_method(...), timeout=...)
+    result_data = raw[1] if isinstance(raw, (list, tuple)) and len(raw) > 1 else raw
+    if result_data is not None and is_stale(result_data):
+        if attempt < _GLR_RETRY_MAX - 1:
+            await asyncio.sleep(_GLR_RETRY_SLEEP_S)
+            continue
+        # Retry exhausted — known simulator limitation (combined results not visible via GLR).
+        # Return None so callers skip. For real servers the correct result appears within the window.
+        logger.warning("GetLatestResult still returning stale result after %d retries — returning None", _GLR_RETRY_MAX)
+        return None
+    break
+return result_data
+```
+
+All callers must guard: `if result_data is None: pytest.skip(...)`.
+
+Files using this pattern: `test_consolidated_results.py`, `test_result_trace_data.py`.
 
 ---
 

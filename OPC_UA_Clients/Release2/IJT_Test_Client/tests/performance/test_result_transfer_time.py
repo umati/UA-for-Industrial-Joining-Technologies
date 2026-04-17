@@ -39,7 +39,6 @@ import statistics
 from datetime import datetime, timezone
 
 import pytest
-import pytz
 from asyncua import ua
 
 from helpers.namespaces import (
@@ -139,7 +138,7 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
     """Return dt with UTC tzinfo; treat naïve datetimes as UTC."""
     if dt is None:
         return None
-    return dt if dt.tzinfo is not None else pytz.utc.localize(dt)
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
 def _delta_ms(dt_from: datetime | None, dt_to: datetime | None) -> float | None:

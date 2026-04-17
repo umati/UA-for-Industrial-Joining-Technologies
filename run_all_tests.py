@@ -363,6 +363,7 @@ def _delegate_to_runner(
     phase_args: list[str],
     label: str,
     extra_env: dict | None = None,
+    timeout: int | None = None,
 ) -> SuiteResult:
     """Delegate a test suite to a sub-project's own run_all_tests.py.
 
@@ -383,11 +384,13 @@ def _delegate_to_runner(
     env = {**os.environ}
     if extra_env:
         env.update(extra_env)
+    run_timeout = timeout if timeout is not None else SUITE_TIMEOUT
     rc, out = _run_captured(
         [sys.executable, str(runner)] + phase_args,
         cwd=runner_dir,
         label=label,
         env=env,
+        timeout=run_timeout,
     )
     return SuiteResult(
         name=name,
@@ -1215,6 +1218,7 @@ def _suite_testclient_full() -> SuiteResult:
     """Test Client -- Phase 2 (live conformance).  Delegates to sub-project runner.
 
     Passes OPCUA_SERVER_URL so sub-project connects to the server root started.
+    Uses 1200s timeout — conformance tests span many OPC UA round-trips.
     """
     return _delegate_to_runner(
         name="testclient-full",
@@ -1222,6 +1226,7 @@ def _suite_testclient_full() -> SuiteResult:
         phase_args=["--phase2"],
         label="testclient runner (phase2)",
         extra_env={"OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"},
+        timeout=1200,
     )
 
 

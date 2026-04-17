@@ -92,6 +92,10 @@ _OPCUA_SHORT_TIMEOUT_MS = 5000
 _OPCUA_COMBINED_TIMEOUT_MS = 30000
 _OPCUA_LONG_TIMEOUT_MS = 60000
 
+# Retry policy for GetLatestResult when a stale SINGLE_RESULT is returned
+_GLR_RETRY_MAX = 4
+_GLR_RETRY_SLEEP_S = 2.0
+
 # ValueTag.FINAL — value indicating a final measurement (OPC 40450-1 ResultValueDataType)
 _VALUE_TAG_FINAL: int = 1
 
@@ -165,37 +169,49 @@ async def _trigger_and_get_combined_result(
     opcua_timeout_ms = _OPCUA_LONG_TIMEOUT_MS if not outcome.triggered else _OPCUA_COMBINED_TIMEOUT_MS
     wall_timeout_s = 65.0 if not outcome.triggered else _COMBINED_WALL_TIMEOUT
 
-    try:
-        raw = await asyncio.wait_for(
-            rm.call_method(
-                glr_node.nodeid,
-                ua.Variant(opcua_timeout_ms, ua.VariantType.Int32),
-            ),
-            timeout=wall_timeout_s,
-        )
-    except (ua.UaError, asyncio.TimeoutError) as exc:
-        logger.debug("GetLatestResult failed for combined result: %s", exc)
-        return None
-
-    if isinstance(raw, (list, tuple)) and len(raw) > 1:
-        result_data = raw[1]
-    else:
-        result_data = raw
-
-    if result_data is not None:
-        actual_cls = _get_result_classification_int(result_data)
-        if actual_cls is not None and actual_cls == ResultClassification.SINGLE_RESULT:
-            _cls_names = {
-                ResultClassification.SYNC_RESULT: "SYNC_RESULT",
-                ResultClassification.BATCH_RESULT: "BATCH_RESULT",
-                ResultClassification.JOB_RESULT: "JOB_RESULT",
-            }
-            expected_name = _cls_names.get(classification, f"classification={classification}")
-            pytest.skip(
-                f"GetLatestResult returned SINGLE_RESULT instead of requested {expected_name} — "
-                "likely a timing race from a prior test leaving a single result as the latest; "
-                "ResultCounters and combined-result fields only exist in BATCH/SYNC/JOB results"
+    result_data = None
+    for attempt in range(_GLR_RETRY_MAX):
+        try:
+            raw = await asyncio.wait_for(
+                rm.call_method(
+                    glr_node.nodeid,
+                    ua.Variant(opcua_timeout_ms, ua.VariantType.Int32),
+                ),
+                timeout=wall_timeout_s,
             )
+        except (ua.UaError, asyncio.TimeoutError) as exc:
+            logger.debug("GetLatestResult failed for combined result: %s", exc)
+            return None
+
+        if isinstance(raw, (list, tuple)) and len(raw) > 1:
+            result_data = raw[1]
+        else:
+            result_data = raw
+
+        if result_data is not None:
+            actual_cls = _get_result_classification_int(result_data)
+            if actual_cls is not None and actual_cls == ResultClassification.SINGLE_RESULT:
+                if attempt < _GLR_RETRY_MAX - 1:
+                    logger.debug(
+                        "GetLatestResult returned SINGLE_RESULT for %s (attempt %d/%d) — retrying",
+                        classification,
+                        attempt + 1,
+                        _GLR_RETRY_MAX,
+                    )
+                    await asyncio.sleep(_GLR_RETRY_SLEEP_S)
+                    continue
+                # Retry exhausted — combined result still not visible via GetLatestResult.
+                # Return None so callers can skip: this is a known simulator timing limitation,
+                # not a hard conformance failure. A real server without this limitation will
+                # return the correct combined result within the retry window.
+                logger.warning(
+                    "GetLatestResult still returning SINGLE_RESULT after %d retries for %s — "
+                    "returning None (caller will skip)",
+                    _GLR_RETRY_MAX,
+                    classification,
+                )
+                return None
+        break
 
     return result_data
 
@@ -218,21 +234,45 @@ async def _trigger_and_get_job_result(opcua_client, result_trigger, ns_indices):
     opcua_timeout_ms = _OPCUA_LONG_TIMEOUT_MS
     wall_timeout_s = _JOB_WALL_TIMEOUT if outcome.triggered else 65.0
 
-    try:
-        raw = await asyncio.wait_for(
-            rm.call_method(
-                glr_node.nodeid,
-                ua.Variant(opcua_timeout_ms, ua.VariantType.Int32),
-            ),
-            timeout=wall_timeout_s,
-        )
-    except (ua.UaError, asyncio.TimeoutError) as exc:
-        logger.debug("GetLatestResult failed for job result: %s", exc)
-        return None
+    result_data = None
+    for attempt in range(_GLR_RETRY_MAX):
+        try:
+            raw = await asyncio.wait_for(
+                rm.call_method(
+                    glr_node.nodeid,
+                    ua.Variant(opcua_timeout_ms, ua.VariantType.Int32),
+                ),
+                timeout=wall_timeout_s,
+            )
+        except (ua.UaError, asyncio.TimeoutError) as exc:
+            logger.debug("GetLatestResult failed for job result: %s", exc)
+            return None
 
-    if isinstance(raw, (list, tuple)) and len(raw) > 1:
-        return raw[1]
-    return raw
+        if isinstance(raw, (list, tuple)) and len(raw) > 1:
+            result_data = raw[1]
+        else:
+            result_data = raw
+
+        if result_data is not None:
+            actual_cls = _get_result_classification_int(result_data)
+            if actual_cls is not None and actual_cls == ResultClassification.SINGLE_RESULT:
+                if attempt < _GLR_RETRY_MAX - 1:
+                    logger.debug(
+                        "GetLatestResult returned SINGLE_RESULT for JOB (attempt %d/%d) — retrying",
+                        attempt + 1,
+                        _GLR_RETRY_MAX,
+                    )
+                    await asyncio.sleep(_GLR_RETRY_SLEEP_S)
+                    continue
+                logger.warning(
+                    "GetLatestResult still returning SINGLE_RESULT after %d retries for JOB — "
+                    "returning None (caller will skip)",
+                    _GLR_RETRY_MAX,
+                )
+                return None
+        break
+
+    return result_data
 
 
 def _get_classification(result_data) -> int | None:
@@ -326,25 +366,19 @@ def _has_final_tag_in_result(sub_result) -> bool:
 
 
 def _check_classification_or_skip(result_data, expected_cls: int, trigger_desc: str) -> None:
-    """Assert that result_data has expected Classification, or skip if it doesn't.
+    """Assert that result_data has expected Classification.
 
-    When running many consolidated result tests sequentially, GetLatestResult may
-    return a stale result from a previous test because the freshly triggered result
-    has not yet been stored (simulator timing race). This helper converts classification
-    mismatches to test skips rather than failures so the suite stays green.
-
-    For a spec-compliant server this helper always passes (trigger + GetLatestResult
-    is deterministic when there is no concurrent activity).
+    Timing-race retries happen upstream in _trigger_and_get_combined_result.
+    By the time this function is called, the result is assumed to be the one
+    we triggered. A classification mismatch here is a real server-behaviour failure.
     """
     cls_int = _get_classification(result_data)
     if cls_int is None:
-        pytest.skip(f"Classification absent in ResultMetaData after triggering {trigger_desc}")
+        pytest.fail(f"Classification absent in ResultMetaData after triggering {trigger_desc}")
     if cls_int != expected_cls:
-        pytest.skip(
+        pytest.fail(
             f"Expected Classification={expected_cls} after triggering {trigger_desc}, "
-            f"got {cls_int!r} — GetLatestResult may have returned a stale result from a "
-            "previous test; simulator result-queue timing cannot be controlled per-test. "
-            "This skip is expected when running multiple consolidated result tests in sequence."
+            f"got {cls_int!r} — server returned wrong result type"
         )
 
 

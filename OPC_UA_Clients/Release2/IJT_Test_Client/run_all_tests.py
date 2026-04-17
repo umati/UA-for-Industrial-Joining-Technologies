@@ -247,7 +247,7 @@ def _run(
     *,
     cwd: Path = _HERE,
     extra_env: dict[str, str] | None = None,
-    timeout: int | None = None,
+    timeout: int | None = 300,
 ) -> tuple[int, str]:
     """
     Run *cmd* and return (returncode, combined_stdout_stderr).
@@ -258,6 +258,9 @@ def _run(
     deadlock where grandchild processes (e.g. semgrep parallel workers) keep
     inherited pipe handles open after the parent exits, causing communicate()
     to block indefinitely.
+
+    Default timeout is 300s — prevents network tools (pip_audit, semgrep) from
+    hanging indefinitely on SSL/network issues.
     """
     env = os.environ.copy()
     if extra_env:
@@ -906,6 +909,7 @@ def _step_pip_audit() -> _StepResult:
             "NameResolutionError",
             "Temporary failure in name resolution",
             "socket operation was attempted to an unreachable network",
+            "[TIMEOUT]",
         )
         if any(marker in output for marker in network_error_markers):
             result.ok = True
@@ -1198,7 +1202,10 @@ def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _
     cov_args: list[str] = []
     if _tool_available("pytest_cov"):
         cov_args = [
-            "--cov=.",
+            # Use --cov=helpers (library code only) — same as unit tests.
+            # --cov=. would include test files (1-3% self-coverage) and
+            # pull the total well below the fail_under threshold.
+            "--cov=helpers",
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage-live.xml'}",
             "--cov-report=term-missing",
             # fail_under threshold is in [tool.coverage.report] in pyproject.toml

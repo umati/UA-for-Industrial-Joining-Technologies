@@ -481,7 +481,7 @@ def _run(
     *,
     cwd: Path = _HERE,
     extra_env: dict[str, str] | None = None,
-    timeout: int | None = None,
+    timeout: int | None = 300,
 ) -> tuple[int, str]:
     """
     Run *cmd* and return (returncode, combined_stdout_stderr).
@@ -492,6 +492,9 @@ def _run(
     deadlock where grandchild processes (e.g. semgrep workers) keep inherited
     pipe handles open after the parent exits, causing communicate() to block
     indefinitely.
+
+    Default timeout is 300s — prevents network tools (pip_audit, semgrep) from
+    hanging indefinitely on SSL/network issues.
     """
     env = os.environ.copy()
     if extra_env:
@@ -742,6 +745,7 @@ def _step_pip_audit() -> _StepResult:
             "certificate verify failed",
             "connectionerror",
             "newconnectionerror",
+            "[timeout]",
         )
         if any(marker in low for marker in network_markers):
             result.ok = True

@@ -44,11 +44,10 @@ import statistics
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import pytest
 import pytest_asyncio
-import pytz
 from asyncua import Client, ua
 
 # ── Console Client root on sys.path (done by conftest.py, but guard here too) ──
@@ -180,7 +179,7 @@ class _TimedEventCollector:
     def __init__(self, client: Client) -> None:
         self._client = client
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=500)
-        self._subscription = None
+        self._subscription: Any = None
 
     # ── asyncua handler interface ──────────────────────────────────────────
 
@@ -244,7 +243,7 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
     """Return dt with UTC tzinfo; treat naïve datetimes as UTC."""
     if dt is None:
         return None
-    return dt if dt.tzinfo is not None else pytz.utc.localize(dt)
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
 def _delta_ms(dt_from: datetime | None, dt_to: datetime | None) -> float | None:

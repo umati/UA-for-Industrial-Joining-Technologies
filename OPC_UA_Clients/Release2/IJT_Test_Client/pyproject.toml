@@ -33,13 +33,14 @@ exclude = ["tests/", "conftest.py", ".venv/", ".venv_test/", "tmp/", "test-resul
 ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
 
 [tool.interrogate]
-# 65% minimum docstring coverage (committed baseline was 60%; kept higher).
-# Measures all Python files. Increase gradually as coverage improves.
+# 65% minimum docstring coverage on production code.
+# Test functions (test_* / Test*) are excluded — they do not require docstrings.
 fail-under = 65
 ignore-init-method = true
 ignore-magic = true
 ignore-semiprivate = true
 ignore-private = true
+ignore-regex = ["^test_", "^Test"]
 verbose = 0
 
 [tool.ruff]

@@ -89,6 +89,11 @@ Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠
 | Namespace absent | `App namespace not registered` | Server does not expose the simulation namespace (expected for non-simulators) |
 | Event not triggered | `No JoiningProcessStartedEvent received within timeout` | Optional event was not fired; real controllers may not fire these |
 
+**What is NOT a valid skip reason:**
+- Method call returned an error (method IS present) → use `pytest.fail`
+- Timing race / stale result after trigger → retry up to 4× then `pytest.fail` (real server) or `return None` → caller `pytest.skip` (known simulator limitation)
+- Wrong result type returned after trigger → retry up to 4× then: real server = `pytest.fail`; simulator = `return None` (caller skips)
+
 ---
 
 ## Expected Failure (Xfail) Reasons

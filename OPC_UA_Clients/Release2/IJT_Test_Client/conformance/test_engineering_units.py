@@ -124,7 +124,8 @@ async def _trigger_and_get_result(opcua_client, result_trigger, ns_indices, resu
         return None
 
     if isinstance(raw, (list, tuple)):
-        return raw[0] if raw else None
+        # GetLatestResult returns [ResultHandle, ResultDataType] — index 1 is the result
+        return raw[1] if len(raw) > 1 else (raw[0] if raw else None)
     return raw
 
 
