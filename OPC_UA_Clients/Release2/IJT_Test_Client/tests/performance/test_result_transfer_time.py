@@ -135,14 +135,14 @@ class _TimedEventCollector:
 # ---------------------------------------------------------------------------
 
 
-def _ensure_utc(dt: datetime):
+def _ensure_utc(dt: datetime | None) -> datetime | None:
     """Return dt with UTC tzinfo; treat naïve datetimes as UTC."""
     if dt is None:
         return None
     return dt if dt.tzinfo is not None else pytz.utc.localize(dt)
 
 
-def _delta_ms(dt_from: datetime, dt_to: datetime):
+def _delta_ms(dt_from: datetime | None, dt_to: datetime | None) -> float | None:
     """(dt_to − dt_from) in milliseconds, or None if either argument is None."""
     a = _ensure_utc(dt_from)
     b = _ensure_utc(dt_to)
@@ -369,7 +369,7 @@ async def test_result_transfer_time(
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered — server does not support IJT Base spec")
 
-    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
+    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))  # type: ignore[arg-type]
     server_node = subscription_client.nodes.server
 
     samples = []

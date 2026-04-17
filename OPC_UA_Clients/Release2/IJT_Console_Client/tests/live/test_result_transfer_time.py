@@ -240,14 +240,14 @@ class _TimedEventCollector:
 # ---------------------------------------------------------------------------
 
 
-def _ensure_utc(dt: datetime):
+def _ensure_utc(dt: datetime | None) -> datetime | None:
     """Return dt with UTC tzinfo; treat naïve datetimes as UTC."""
     if dt is None:
         return None
     return dt if dt.tzinfo is not None else pytz.utc.localize(dt)
 
 
-def _delta_ms(dt_from: datetime, dt_to: datetime):
+def _delta_ms(dt_from: datetime | None, dt_to: datetime | None) -> float | None:
     """(dt_to − dt_from) in milliseconds, or None if either argument is None."""
     a = _ensure_utc(dt_from)
     b = _ensure_utc(dt_to)
@@ -487,7 +487,7 @@ async def test_result_transfer_time(
         pytest.skip("SimulateSingleResult method node not found under TighteningSystem/Simulations/SimulateResults")
 
     # Subscription setup
-    event_type_node = _sub_client.get_node(ua.NodeId(_RESULT_READY_EVENT_TYPE_ID, ns_ijt))
+    event_type_node = _sub_client.get_node(ua.NodeId(_RESULT_READY_EVENT_TYPE_ID, ns_ijt))  # type: ignore[arg-type]
     server_node = _sub_client.nodes.server
 
     samples = []

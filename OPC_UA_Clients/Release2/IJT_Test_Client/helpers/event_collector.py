@@ -51,26 +51,67 @@ class EventCollector:
         """Required by asyncua handler interface; not used by EventCollector."""
 
     # ── public API ────────────────────────────────────────────────────────
+    async def _delete_subscription_ref(self, subscription: Any) -> None:
+        """Best-effort deletion for a known subscription object."""
+        try:
+            await asyncio.wait_for(subscription.delete(), timeout=5.0)
+        except Exception as exc:
+            logger.warning("Error deleting subscription: %s", exc)
+
     async def subscribe(
         self,
         server_node,
         event_type_nodes,
         period_ms: int = 100,
         queue_size: int = 200,
+        _max_retries: int = 3,
     ) -> None:
         """
         Create a subscription and subscribe to the specified event types.
+        Retries up to _max_retries times on timeout — the simulator can be slow
+        to respond to subscription requests after a long test run.
         Args:
             server_node:       Source node for the subscription (usually Server node).
             event_type_nodes:  A single event type node or list of event type nodes.
             period_ms:         Subscription publishing interval in milliseconds.
             queue_size:        Maximum queued notifications per monitored item.
         """
-        subscription = await self._client.create_subscription(period_ms, self)
-        self._subscription = subscription
-        if not isinstance(event_type_nodes, (list, tuple)):
-            event_type_nodes = [event_type_nodes]
-        await subscription.subscribe_events(server_node, event_type_nodes, queuesize=queue_size)
+        if _max_retries < 1:
+            raise ValueError("_max_retries must be >= 1")
+
+        # Re-subscribe should be idempotent: clean up any previous subscription first.
+        if self._subscription is not None:
+            await self._delete_subscription_ref(self._subscription)
+            self._subscription = None
+
+        last_exc: Optional[Exception] = None
+        nodes = list(event_type_nodes) if isinstance(event_type_nodes, (list, tuple)) else [event_type_nodes]
+
+        for attempt in range(1, _max_retries + 1):
+            subscription = None
+            try:
+                subscription = await self._client.create_subscription(period_ms, self)
+                await subscription.subscribe_events(server_node, nodes, queuesize=queue_size)
+                self._subscription = subscription
+                return
+            except (TimeoutError, asyncio.TimeoutError) as exc:
+                last_exc = exc
+                # Prevent leaked server-side subscriptions when subscribe_events times out.
+                if subscription is not None:
+                    await self._delete_subscription_ref(subscription)
+                logger.warning(
+                    "Subscription setup timed out (attempt %d/%d): %s — retrying in %ds",
+                    attempt,
+                    _max_retries,
+                    exc,
+                    attempt * 2,
+                )
+                if attempt < _max_retries:
+                    await asyncio.sleep(attempt * 2)
+
+        if last_exc is not None:
+            raise TimeoutError(f"Failed to create subscription after {_max_retries} attempts") from last_exc
+        raise RuntimeError("Subscription setup failed without a captured exception")
 
     async def collect(self, count: int = 1, timeout_s: float = 30.0) -> List:
         """
@@ -95,12 +136,8 @@ class EventCollector:
     async def unsubscribe(self) -> None:
         """Delete the subscription if one is active."""
         if self._subscription is not None:
-            try:
-                await asyncio.wait_for(self._subscription.delete(), timeout=5.0)
-            except Exception as exc:
-                logger.warning("Error deleting subscription: %s", exc)
-            finally:
-                self._subscription = None
+            await self._delete_subscription_ref(self._subscription)
+            self._subscription = None
 
     # ── context manager ───────────────────────────────────────────────────
     async def __aenter__(self) -> "EventCollector":

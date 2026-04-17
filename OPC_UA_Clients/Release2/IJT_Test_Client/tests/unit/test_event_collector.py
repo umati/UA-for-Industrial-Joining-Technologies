@@ -116,6 +116,45 @@ class TestSubscribe:
         call_args = mock_sub.subscribe_events.call_args
         assert call_args[1].get("queuesize") == 100
 
+    @pytest.mark.asyncio
+    async def test_subscribe_retries_on_timeout_and_deletes_failed_subscription(self):
+        mock_client = MagicMock()
+        first_sub = AsyncMock()
+        second_sub = AsyncMock()
+        first_sub.subscribe_events = AsyncMock(side_effect=asyncio.TimeoutError())
+        first_sub.delete = AsyncMock()
+        second_sub.subscribe_events = AsyncMock()
+        mock_client.create_subscription = AsyncMock(side_effect=[first_sub, second_sub])
+
+        collector = EventCollector(mock_client)
+        await collector.subscribe(MagicMock(), MagicMock(), _max_retries=2)
+
+        assert mock_client.create_subscription.call_count == 2
+        first_sub.delete.assert_called_once()
+        assert collector._subscription is second_sub
+
+    @pytest.mark.asyncio
+    async def test_subscribe_fails_fast_when_retry_count_is_invalid(self):
+        collector = EventCollector(MagicMock())
+        with pytest.raises(ValueError, match="_max_retries must be >= 1"):
+            await collector.subscribe(MagicMock(), MagicMock(), _max_retries=0)
+
+    @pytest.mark.asyncio
+    async def test_subscribe_cleans_previous_subscription_before_resubscribe(self):
+        mock_client = MagicMock()
+        old_sub = AsyncMock()
+        old_sub.delete = AsyncMock()
+        new_sub = AsyncMock()
+        new_sub.subscribe_events = AsyncMock()
+        mock_client.create_subscription = AsyncMock(return_value=new_sub)
+
+        collector = EventCollector(mock_client)
+        collector._subscription = old_sub
+        await collector.subscribe(MagicMock(), MagicMock())
+
+        old_sub.delete.assert_called_once()
+        assert collector._subscription is new_sub
+
 
 class TestCollect:
     @pytest.mark.asyncio

@@ -1092,11 +1092,14 @@ def _suite_md_hygiene() -> SuiteResult:
     t0 = time.monotonic()
 
     md_files = sorted(REPO_ROOT.rglob("*.md"))
-    # Exclude generated output directories
+    # Exclude generated output directories and gitignored output files
+    _EXCLUDED_MD_PARTS = {"node_modules", "test-results", ".git"}
+    _EXCLUDED_MD_NAMES = {"TestOutput.md"}
     md_files = [
         f
         for f in md_files
-        if not any(part in f.parts for part in ("node_modules", "test-results", ".git"))
+        if not any(part in f.parts for part in _EXCLUDED_MD_PARTS)
+        and f.name not in _EXCLUDED_MD_NAMES
     ]
 
     violations: list[str] = []
