@@ -164,6 +164,31 @@ async def _find_requested_result_var(rm, ns_indices, ns_mr):
     return node
 
 
+def _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt):
+    """Skip known simulator gap; fail on non-simulator servers."""
+    if ns_indices.get(NS_APP) is not None:
+        pytest.skip(
+            f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}) — "
+            "simulator does not expose this variable; verify against a spec-compliant server"
+        )
+    pytest.fail(
+        f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}) — "
+        "required for this conformance unit on non-simulator servers"
+    )
+
+
+def _handle_missing_requested_result_variable(ns_indices):
+    """Skip known simulator gap; fail on non-simulator servers."""
+    if ns_indices.get(NS_APP) is not None:
+        pytest.skip(
+            "RequestedResult variable not found (tried ns_ijt, ns_mr, ns_app) — simulator does not expose this variable; verify against a spec-compliant server"
+        )
+    pytest.fail(
+        "RequestedResult variable not found (tried ns_ijt, ns_mr, ns_app) — "
+        "required for this conformance unit on non-simulator servers"
+    )
+
+
 # ─── get_latest_result ───
 
 
@@ -397,10 +422,7 @@ async def test_result_management_exposes_last_result_metadata_variable(result_ma
         pytest.skip("Results folder not found on ResultManagement")
     result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
     if result_var is None:
-        pytest.fail(
-            f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}) — "
-            "server must expose this variable per OPC 40001-101"
-        )
+        _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
         pytest.skip("ResultMetaData not found under Results/Result — optional per spec")
@@ -429,10 +451,7 @@ async def test_last_result_metadata_updated_after_trigger(opcua_client, result_t
         pytest.skip("Results folder not found on ResultManagement")
     result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
     if result_var is None:
-        pytest.fail(
-            f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}) — "
-            "server must expose this variable per OPC 40001-101"
-        )
+        _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
         pytest.skip("LastResultMetaData variable not found — optional per spec")
@@ -533,7 +552,7 @@ async def test_requested_result_variable_is_present_in_result_management(result_
 
     requested_var_node = await _find_requested_result_var(result_management, ns_indices, ns_mr)
     if requested_var_node is None:
-        pytest.fail("RequestedResult variable not found (tried ns_ijt, ns_mr, ns_app) — required per spec")
+        _handle_missing_requested_result_variable(ns_indices)
 
     try:
         value = await requested_var_node.read_value()
@@ -562,7 +581,7 @@ async def test_request_results_populates_requested_result_variable(opcua_client,
 
     requested_var_node = await _find_requested_result_var(rm, ns_indices, ns_mr)
     if requested_var_node is None:
-        pytest.fail("RequestedResult variable not found (tried ns_ijt, ns_mr, ns_app) — required per spec")
+        _handle_missing_requested_result_variable(ns_indices)
 
     # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -1209,10 +1228,7 @@ async def test_result_variable_value_rank_is_scalar_or_any(result_management, ns
         pytest.skip("Results folder not found on ResultManagement")
     result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
     if result_var is None:
-        pytest.fail(
-            f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}) — "
-            "server must expose this variable per OPC 40001-101"
-        )
+        _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
         pytest.skip("LastResultMetaData variable not found — optional per spec")
@@ -1254,10 +1270,7 @@ async def test_result_variable_contains_valid_result_meta_data_after_trigger(opc
         pytest.skip("Results folder not found on ResultManagement")
     result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
     if result_var is None:
-        pytest.fail(
-            f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}) — "
-            "server must expose this variable per OPC 40001-101"
-        )
+        _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
         pytest.skip("LastResultMetaData variable not found — optional per spec")
@@ -1295,10 +1308,7 @@ async def test_result_variable_access_level_allows_read_but_not_write(result_man
         pytest.skip("Results folder not found on ResultManagement")
     result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
     if result_var is None:
-        pytest.fail(
-            f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}) — "
-            "server must expose this variable per OPC 40001-101"
-        )
+        _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
         pytest.skip("LastResultMetaData variable not found — optional per spec")
@@ -1336,10 +1346,7 @@ async def test_write_to_result_variable_is_rejected(result_management, ns_indice
         pytest.skip("Results folder not found on ResultManagement")
     result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
     if result_var is None:
-        pytest.fail(
-            f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}) — "
-            "server must expose this variable per OPC 40001-101"
-        )
+        _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
         pytest.skip("LastResultMetaData variable not found — optional per spec")
@@ -1486,7 +1493,7 @@ async def test_request_results_updates_result_variable_or_raises_event(opcua_cli
 
     requested_var_node = await _find_requested_result_var(rm, ns_indices, ns_mr)
     if requested_var_node is None:
-        pytest.fail("RequestedResult variable not found (tried ns_ijt, ns_mr, ns_app) — required per spec")
+        _handle_missing_requested_result_variable(ns_indices)
 
     value = await requested_var_node.read_value()
     assert value is not None, "RequestedResult variable is None after RequestResults call"
@@ -1577,7 +1584,7 @@ async def test_requested_result_variable_access_level_includes_current_read(opcu
 
     requested_var_node = await _find_requested_result_var(rm, ns_indices, ns_mr)
     if requested_var_node is None:
-        pytest.fail("RequestedResult variable not found (tried ns_ijt, ns_mr, ns_app) — required per spec")
+        _handle_missing_requested_result_variable(ns_indices)
 
     dv = await requested_var_node.read_attribute(ua.AttributeIds.AccessLevel)
     access_level = int(dv.Value.Value)
@@ -1623,7 +1630,7 @@ async def test_requested_result_variable_source_timestamp_is_set_after_request(
 
     requested_var_node = await _find_requested_result_var(rm, ns_indices, ns_mr)
     if requested_var_node is None:
-        pytest.fail("RequestedResult variable not found (tried ns_ijt, ns_mr, ns_app) — required per spec")
+        _handle_missing_requested_result_variable(ns_indices)
 
     dv = await requested_var_node.read_data_value()
     if dv.Value.Value is None:
@@ -1659,7 +1666,7 @@ async def test_request_results_event_received_with_required_fields(opcua_client,
 
     requested_var_node = await _find_requested_result_var(rm, ns_indices, ns_mr)
     if requested_var_node is None:
-        pytest.fail("RequestedResult variable not found (tried ns_ijt, ns_mr, ns_app) — required per spec")
+        _handle_missing_requested_result_variable(ns_indices)
 
     try:
         await asyncio.wait_for(

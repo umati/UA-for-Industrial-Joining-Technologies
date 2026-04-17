@@ -219,6 +219,29 @@ class _StepResult:
 # ---------------------------------------------------------------------------
 
 
+def _kill_proc_tree(pid: int) -> None:
+    """Kill *pid* and all its descendants.
+
+    On Windows, ``taskkill /F /T`` also forces child processes to release
+    inherited pipe handles — preventing the communicate() deadlock where
+    grandchild processes (e.g. semgrep workers) keep stdout/stderr pipes open
+    after their parent has been killed.
+    On Unix, SIGKILL is sent to the whole process group.
+    """
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(pid)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    else:
+        import signal
+
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(os.getpgid(pid), signal.SIGKILL)  # pylint: disable=no-member
+
+
 def _run(
     cmd: list[str],
     *,
@@ -229,23 +252,36 @@ def _run(
     """
     Run *cmd* and return (returncode, combined_stdout_stderr).
     Never raises — errors are captured and returned via returncode.
+
+    Uses Popen + communicate(timeout) so that on TimeoutExpired we can kill
+    the entire process tree before draining pipes.  This avoids the Windows
+    deadlock where grandchild processes (e.g. semgrep parallel workers) keep
+    inherited pipe handles open after the parent exits, causing communicate()
+    to block indefinitely.
     """
     env = os.environ.copy()
     if extra_env:
         env.update(extra_env)
     try:
-        proc = subprocess.run(
+        with subprocess.Popen(
             [str(c) for c in cmd],
             cwd=str(cwd),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             env=env,
-            check=False,
-            timeout=timeout,
-        )
-        return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
-    except subprocess.TimeoutExpired:
-        return 1, f"[TIMEOUT] Command exceeded {timeout}s limit: {cmd[0]}\n"
+        ) as proc:
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout)
+                return proc.returncode, (stdout or "") + (stderr or "")
+            except subprocess.TimeoutExpired:
+                _kill_proc_tree(proc.pid)
+                proc.kill()
+                try:
+                    stdout, stderr = proc.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    stdout, stderr = "", ""
+                return 1, f"[TIMEOUT] Command exceeded {timeout}s limit: {cmd[0]}\n"
     except FileNotFoundError:
         return 1, f"[ERROR] Command not found: {cmd[0]}\n"
     except Exception as exc:

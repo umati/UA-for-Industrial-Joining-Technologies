@@ -13,7 +13,7 @@ client connection.
 
 import asyncio
 import logging
-from typing import List
+from typing import Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class EventCollector:
         self._queue: asyncio.Queue = asyncio.Queue(
             maxsize=1_000
         )  # bounded; prevents unbounded memory growth in long sessions
-        self._subscription = None
+        self._subscription: Optional[Any] = None
 
     # ── asyncua handler interface ──────────────────────────────────────────
     def event_notification(self, event) -> None:

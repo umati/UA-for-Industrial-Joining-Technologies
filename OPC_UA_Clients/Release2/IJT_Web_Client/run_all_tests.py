@@ -183,29 +183,61 @@ def _banner(title: str) -> None:
 # ---------------------------------------------------------------------------
 # Subprocess helper
 # ---------------------------------------------------------------------------
+
+
+def _kill_proc_tree(pid: int) -> None:
+    """Kill *pid* and all its descendants.
+
+    On Windows, ``taskkill /F /T`` also forces child processes to release
+    inherited pipe handles — preventing the communicate() deadlock where
+    grandchild processes (e.g. semgrep workers) keep the parent's stdout pipe
+    open after their parent has been killed, blocking the root runner's read.
+    On Unix, SIGKILL is sent to the whole process group.
+    """
+    if IS_WINDOWS:
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(pid)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    else:
+        import signal
+
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(os.getpgid(pid), signal.SIGKILL)  # pylint: disable=no-member
+
+
 def _run(
     cmd: list,
     *,
     cwd: Path = ROOT,
     label: str = "",
     env: dict | None = None,
-    timeout: int | None = None,
+    timeout: int | None = 300,
 ) -> int:
     display = label or " ".join(str(c) for c in cmd[:5])
     print(f"\n{_C.DIM}CMD: {display}{_C.RESET}")
     try:
-        result = subprocess.run(
+        with subprocess.Popen(
             [str(c) for c in cmd],
             cwd=str(cwd),
             env=env or os.environ.copy(),
-            timeout=timeout,
-            check=False,
-            stdin=subprocess.DEVNULL,  # prevent interactive prompts (e.g. npx install)
-        )
-        return result.returncode
-    except subprocess.TimeoutExpired:
-        print(f"{_C.YELLOW}[TIMEOUT] {display} exceeded {timeout}s{_C.RESET}")
-        return -1
+            stdin=subprocess.DEVNULL,
+        ) as proc:
+            try:
+                proc.communicate(timeout=timeout)
+                return proc.returncode
+            except subprocess.TimeoutExpired:
+                _kill_proc_tree(proc.pid)
+                proc.kill()
+                with contextlib.suppress(subprocess.TimeoutExpired):
+                    proc.communicate(timeout=5)
+                print(f"{_C.YELLOW}[TIMEOUT] {display} exceeded {timeout}s{_C.RESET}")
+                return -1
+    except FileNotFoundError:
+        print(f"{_C.YELLOW}[WARN] Command not found: {cmd[0]}{_C.RESET}")
+        return 1
 
 
 def _run_to_file(
@@ -215,21 +247,38 @@ def _run_to_file(
     cwd: Path = ROOT,
     label: str = "",
     env: dict | None = None,
+    timeout: int | None = 300,
 ) -> int:
-    """Run *cmd*, capture stdout to *output_file*, return exit code."""
+    """Run *cmd*, capture stdout to *output_file*, return exit code.
+
+    Uses Popen so that on timeout the process tree is killed before returning,
+    preventing orphaned children from holding inherited handles.
+    """
     display = label or " ".join(str(c) for c in cmd[:5])
     print(f"\n{_C.DIM}CMD: {display} → {output_file.name}{_C.RESET}")
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_file, "w", encoding="utf-8") as fh:
-        result = subprocess.run(
-            [str(c) for c in cmd],
-            cwd=str(cwd),
-            env=env or os.environ.copy(),
-            stdout=fh,
-            check=False,
-            stdin=subprocess.DEVNULL,
-        )
-    return result.returncode
+    try:
+        with open(output_file, "w", encoding="utf-8") as fh:
+            with subprocess.Popen(
+                [str(c) for c in cmd],
+                cwd=str(cwd),
+                env=env or os.environ.copy(),
+                stdout=fh,
+                stdin=subprocess.DEVNULL,
+            ) as proc:
+                try:
+                    proc.communicate(timeout=timeout)
+                    return proc.returncode
+                except subprocess.TimeoutExpired:
+                    _kill_proc_tree(proc.pid)
+                    proc.kill()
+                    with contextlib.suppress(subprocess.TimeoutExpired):
+                        proc.communicate(timeout=5)
+                    print(f"{_C.YELLOW}[TIMEOUT] {display} exceeded {timeout}s{_C.RESET}")
+                    return -1
+    except FileNotFoundError:
+        print(f"{_C.YELLOW}[WARN] Command not found: {cmd[0]}{_C.RESET}")
+        return 1
 
 
 def _py_module_available(mod: str) -> bool:
