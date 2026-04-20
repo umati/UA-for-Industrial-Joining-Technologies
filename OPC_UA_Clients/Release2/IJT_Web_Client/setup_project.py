@@ -1286,6 +1286,9 @@ def _run_cmd(args: list[str], *, check: bool = True) -> int:
 def _bootstrap_disable_puppet_repo() -> None:
     """Comment out Puppet apt repo entries whose key has expired (if present)."""
     import glob as _glob
+    import re as _re
+
+    _puppet_repo_re = _re.compile(r"https?://apt\.puppet\.com(?:/|$)")
 
     candidate_files = ["/etc/apt/sources.list"] + _glob.glob("/etc/apt/sources.list.d/*.list")
     for path in candidate_files:
@@ -1298,7 +1301,7 @@ def _bootstrap_disable_puppet_repo() -> None:
         log.info("Disabling Puppet apt repo entries in %s", path)
         lines = []
         for line in text.splitlines():
-            if line.startswith("deb ") and "apt.puppet.com" in line:
+            if line.startswith("deb ") and _puppet_repo_re.search(line):
                 lines.append(f"# {line}")
             else:
                 lines.append(line)
