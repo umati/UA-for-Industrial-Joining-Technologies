@@ -62,6 +62,23 @@ repos:
       - id: ruff
         args: [--fix]
 
-      # Runs Ruff formatter (similar to Black) to normalise code style and
-      # ensure consistent line endings within Python source files.
-      - id: ruff-format
+      # ruff-format intentionally omitted from pre-commit: it strips semantically-
+      # required parentheses from except (A, B): clauses (ruff 0.15.x formatter bug),
+      # creating an endless normalize→reformat loop. Formatting compliance is
+      # enforced as advisory in the Phase 1 runner (ruff format --check).
+
+  # Normalize and then enforce multi-except syntax AFTER Ruff formatting.
+  # This avoids churn if formatter output changes token layout.
+  - repo: local
+    hooks:
+      - id: normalize-multi-except
+        name: "Normalize multi-except to except (A, B):"
+        language: system
+        entry: python scripts/normalize_multi_except.py --write
+        types: [python]
+
+      - id: except-syntax-gate
+        name: "No unparenthesized multi-except (Python 3 logic bug)"
+        language: system
+        entry: python scripts/normalize_multi_except.py --check
+        types: [python]

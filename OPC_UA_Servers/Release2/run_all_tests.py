@@ -153,7 +153,7 @@ def _is_docker_running() -> bool:
             ).returncode
             == 0
         )
-    except subprocess.TimeoutExpired, FileNotFoundError:
+    except (subprocess.TimeoutExpired, FileNotFoundError):
         return False
 
 

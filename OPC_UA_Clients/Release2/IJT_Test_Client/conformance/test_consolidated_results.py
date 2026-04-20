@@ -285,7 +285,7 @@ def _get_classification(result_data) -> int | None:
         return None
     try:
         return int(cls)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
 
 
@@ -315,7 +315,7 @@ def _get_result_classification_int(result_data) -> int | None:
     cls = getattr(meta, "Classification", None) if meta is not None else None
     try:
         return int(cls) if cls is not None else None
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
 
 
@@ -327,7 +327,7 @@ def _collect_counter_types(counters: list) -> set[int]:
         if ct is not None:
             try:
                 found.add(int(ct))
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 pass
     return found
 
@@ -351,7 +351,7 @@ def _has_final_tag_in_result(sub_result) -> bool:
             try:
                 if int(vt) == _VALUE_TAG_FINAL:
                     return True
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 pass
     for step in getattr(sub_result, "StepResults", None) or []:
         for sv in getattr(step, "StepResultValues", None) or []:
@@ -360,7 +360,7 @@ def _has_final_tag_in_result(sub_result) -> bool:
                 try:
                     if int(vt) == _VALUE_TAG_FINAL:
                         return True
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     pass
     return False
 
@@ -654,7 +654,7 @@ async def test_intervention_result_meta_data_has_non_zero_intervention_type(opcu
 
     try:
         it_int = int(intervention_type)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         pytest.fail(f"InterventionType={intervention_type!r} cannot be converted to an integer")
 
     if it_int == 0:
@@ -1051,7 +1051,7 @@ async def test_sync_result_evaluation_is_valid_value(opcua_client, result_trigge
 
     try:
         eval_int = int(eval_val)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         pytest.skip(f"ResultEvaluation could not be cast to int: {eval_val!r}")
 
     assert eval_int in ResultEvaluation.VALID_VALUES, (
@@ -1149,7 +1149,7 @@ async def test_sync_result_counter_types_within_defined_range(opcua_client, resu
             continue
         try:
             ct_int = int(ct)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             continue
         assert ct_int < 0 or ct_int <= _COUNTER_TYPE_MAX_DEFINED, (
             f"SYNC_RESULT counter[{idx}] CounterType={ct_int} is out of the defined range "
@@ -1181,7 +1181,7 @@ async def test_sync_result_channel_spindle_counter_value_is_positive(opcua_clien
             continue
         try:
             ct_int = int(ct)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             continue
         if ct_int not in (_COUNTER_TYPE_CHANNEL_NUMBER, _COUNTER_TYPE_SPINDLE_NUMBER):
             continue
@@ -1190,7 +1190,7 @@ async def test_sync_result_channel_spindle_counter_value_is_positive(opcua_clien
             continue
         try:
             cv_int = int(cv)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             continue
         checked = True
         assert cv_int > 0, (
@@ -1470,7 +1470,7 @@ async def test_batch_count_not_greater_than_batch_size(opcua_client, result_trig
         try:
             ct_int = int(ct)
             cv_int = int(cv)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             continue
         if ct_int == _COUNTER_TYPE_BATCH_SIZE:
             batch_size_val = cv_int
@@ -1508,7 +1508,7 @@ async def test_batch_size_counter_value_is_positive(opcua_client, result_trigger
             continue
         try:
             ct_int = int(ct)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             continue
         if ct_int != _COUNTER_TYPE_BATCH_SIZE:
             continue
@@ -1517,7 +1517,7 @@ async def test_batch_size_counter_value_is_positive(opcua_client, result_trigger
             pytest.skip("BATCH_SIZE counter CounterValue absent")
         try:
             cv_int = int(cv)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             pytest.skip(f"BATCH_SIZE CounterValue could not be cast to int: {cv!r}")
         assert cv_int > 0, f"BATCH_RESULT BATCH_SIZE counter[{idx}] CounterValue must be > 0, got {cv_int}"
         return
@@ -1645,7 +1645,7 @@ async def test_single_result_has_final_tagged_torque_or_angle_value(opcua_client
                 if int(vt) == _VALUE_TAG_FINAL and int(pq) in (_PHYSICAL_QUANTITY_TORQUE, _PHYSICAL_QUANTITY_ANGLE):
                     found_final_torque_or_angle = True
                     break
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 continue
         if found_final_torque_or_angle:
             break
@@ -1659,7 +1659,7 @@ async def test_single_result_has_final_tagged_torque_or_angle_value(opcua_client
                     if int(vt) == _VALUE_TAG_FINAL and int(pq) in (_PHYSICAL_QUANTITY_TORQUE, _PHYSICAL_QUANTITY_ANGLE):
                         found_final_torque_or_angle = True
                         break
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     continue
             if found_final_torque_or_angle:
                 break
@@ -1699,7 +1699,7 @@ async def test_each_step_has_at_most_one_final_per_physical_quantity(opcua_clien
                 try:
                     vt_int = int(vt)
                     pq_int = int(pq)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     continue
                 if vt_int != _VALUE_TAG_FINAL:
                     continue
@@ -1850,7 +1850,7 @@ async def test_self_contained_parent_evaluation_consistent_with_sub_results(opcu
 
     try:
         parent_eval_int = int(parent_eval)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         pytest.skip(f"Parent ResultEvaluation could not be cast to int: {parent_eval!r}")
 
     assert parent_eval_int in ResultEvaluation.VALID_VALUES, (
@@ -2104,7 +2104,7 @@ async def test_no_single_result_has_is_partial_true(opcua_client, result_trigger
             continue
         try:
             cls_int = int(cls_val)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             continue
         if cls_int != ResultClassification.SINGLE_RESULT:
             continue

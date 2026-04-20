@@ -317,7 +317,7 @@ def _check_prerequisites() -> bool:
     ver = _dotnet_version()
     try:
         major = int(ver.split(".")[0])
-    except ValueError, IndexError:
+    except (ValueError, IndexError):
         major = 0
     if major < _MIN_DOTNET_MAJOR:
         print(

@@ -455,7 +455,7 @@ def _collect_managed_processes() -> list[tuple[str, int]]:
         raw = state.get(key)
         try:
             pid = int(raw or 0)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             continue
         if pid <= 0:
             continue

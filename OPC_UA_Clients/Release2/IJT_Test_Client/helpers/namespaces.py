@@ -189,6 +189,9 @@ class BN:
     # Parameters — Sensor specific
     OVERLOAD_COUNT = "OverloadCount"
     MEASURED_VALUE = "MeasuredValue"
+    # JoiningDataVariable sub-nodes (IJT Base ns — PhysicalQuantity and its EnumStrings)
+    PHYSICAL_QUANTITY = "PhysicalQuantity"
+    ENUM_STRINGS = "EnumStrings"
     # Parameters — Cable specific
     CABLE_LENGTH = "CableLength"
     # Parameters — Battery specific

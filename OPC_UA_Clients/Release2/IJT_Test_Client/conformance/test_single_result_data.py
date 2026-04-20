@@ -428,7 +428,7 @@ async def test_result_value_physical_quantity_in_valid_range(opcua_client, resul
             checked += 1
             try:
                 pq_int = int(pq)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 pq_int = -1
             if pq_int not in valid_range:
                 failures.append(f"value[{i}].PhysicalQuantity={pq!r}")
@@ -464,7 +464,7 @@ async def test_result_value_tag_in_valid_range(opcua_client, result_trigger, ns_
             checked += 1
             try:
                 vt_int = int(vt)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 vt_int = -1
             if vt_int not in valid_range:
                 failures.append(f"value[{i}].ValueTag={vt!r}")
@@ -586,7 +586,7 @@ async def test_nok_result_failure_reason_in_valid_range(opcua_client, result_tri
             checked += 1
             try:
                 fr_int = int(fr)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 fr_int = -1
             if fr_int not in valid_reasons:
                 failures.append(f"Errors[{i}].FailureReason={fr!r}")
@@ -979,7 +979,7 @@ async def test_basic_result_result_state_is_present(opcua_client, result_trigger
     assert result_state is not None, "ResultMetaData.ResultState must be present (mandatory per basic_result CU)"
     try:
         state_int = int(result_state)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         pytest.fail(f"ResultMetaData.ResultState must be numeric, got {result_state!r}")
         return
     assert state_int in _VALID_RESULT_STATE_VALUES, (
@@ -1174,7 +1174,7 @@ async def test_result_assembly_type_in_valid_range_when_present(opcua_client, re
         pytest.skip("AssemblyType not populated — optional field, absence is valid")
     try:
         at_int = int(assembly_type)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         pytest.fail(f"ResultMetaData.AssemblyType must be numeric, got {assembly_type!r}")
         return
     assert at_int in _VALID_ASSEMBLY_TYPE_VALUES, (
@@ -1197,7 +1197,7 @@ async def test_result_operation_mode_in_valid_range_when_present(opcua_client, r
         pytest.skip("OperationMode not populated — optional field, absence is valid")
     try:
         om_int = int(operation_mode)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         pytest.fail(f"ResultMetaData.OperationMode must be numeric, got {operation_mode!r}")
         return
     assert om_int in _VALID_OPERATION_MODE_VALUES, (

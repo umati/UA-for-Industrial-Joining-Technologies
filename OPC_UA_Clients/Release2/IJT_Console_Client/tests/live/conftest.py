@@ -55,7 +55,7 @@ def _resolve_server_host_port() -> tuple[str, int]:
         try:
             parsed = urlparse(url.replace("opc.tcp://", "http://"))
             return parsed.hostname or "localhost", parsed.port or _OPCUA_PORT
-        except ValueError, AttributeError:
+        except (ValueError, AttributeError):
             pass
     return "localhost", _OPCUA_PORT
 

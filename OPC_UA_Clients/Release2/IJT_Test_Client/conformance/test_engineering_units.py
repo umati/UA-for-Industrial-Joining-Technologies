@@ -177,7 +177,7 @@ def _values_for_quantity(all_values: list, physical_quantity_int: int) -> list:
         try:
             if int(pq) == physical_quantity_int:
                 result.append(v)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             pass
     return result
 
@@ -249,7 +249,7 @@ async def test_torque_values_have_expected_engineering_units_identifier(opcua_cl
             continue
         try:
             id_int = int(identifier)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             failures.append(f"torque_value[{idx}].EngineeringUnits.Identifier={identifier!r} is not an integer")
             continue
         if id_int not in _KNOWN_TORQUE_EU_IDENTIFIERS:
@@ -290,7 +290,7 @@ async def test_angle_values_have_expected_engineering_units_identifier(opcua_cli
             continue
         try:
             id_int = int(identifier)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             failures.append(f"angle_value[{idx}].EngineeringUnits.Identifier={identifier!r} is not an integer")
             continue
         if id_int not in _KNOWN_ANGLE_EU_IDENTIFIERS:
@@ -325,7 +325,7 @@ async def test_engineering_units_identifier_is_a_positive_integer(opcua_client, 
             continue
         try:
             id_int = int(identifier)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             failures.append(f"value[{idx}].EngineeringUnits.Identifier={identifier!r} cannot be converted to int")
             continue
         if id_int <= 0:
@@ -433,7 +433,7 @@ async def test_engineering_units_are_consistent_within_same_physical_quantity(
             continue
         try:
             by_quantity.setdefault(int(pq), []).append(int(identifier))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             pass
 
     if not by_quantity:

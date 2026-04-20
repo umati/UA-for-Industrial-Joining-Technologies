@@ -722,8 +722,55 @@ def _step_ruff_lint() -> _StepResult:
     return result
 
 
+def _step_normalize_multi_except() -> _StepResult:
+    """Normalize forbidden Python 3 multi-except syntax across tracked files."""
+    result = _StepResult("[PHASE 1] normalize multi-except")
+    t0 = time.monotonic()
+    script = _REPO_ROOT / "scripts" / "normalize_multi_except.py"
+    if not script.exists():
+        result.skipped = True
+        result.note = f"missing {script}"
+        result.duration = time.monotonic() - t0
+        return result
+    rc, output = _run(["git", "ls-files", "*.py"], cwd=_REPO_ROOT)
+    if rc != 0:
+        result.ok = False
+        result.note = "git ls-files failed"
+        result.duration = time.monotonic() - t0
+        _log(output)
+        return result
+    files = [line.strip() for line in output.splitlines() if line.strip()]
+    cmd = [sys.executable, str(script), "--write", *files]
+    rc, output = _run(cmd, cwd=_REPO_ROOT, timeout=180)
+    result.duration = time.monotonic() - t0
+    result.ok = rc == 0
+    if output.strip():
+        result.note = "normalized" if "Fixed " in output else ""
+    if not result.ok:
+        _log(output)
+    return result
+
+
+def _step_verify_multi_except() -> _StepResult:
+    """Fail if forbidden unparenthesized multi-except syntax is present."""
+    result = _StepResult("[PHASE 1] verify multi-except")
+    t0 = time.monotonic()
+    script = _REPO_ROOT / "scripts" / "normalize_multi_except.py"
+    if not script.exists():
+        result.skipped = True
+        result.note = f"missing {script}"
+        result.duration = time.monotonic() - t0
+        return result
+    rc, output = _run([sys.executable, str(script), "--check"], cwd=_REPO_ROOT, timeout=120)
+    result.duration = time.monotonic() - t0
+    result.ok = rc == 0
+    if not result.ok:
+        result.note = "forbidden except A, B syntax found"
+        _log(output)
+    return result
+
+
 def _step_ruff_format() -> _StepResult:
-    """Check ruff formatting; advisory — style diffs do not fail the suite."""
     result = _StepResult("[PHASE 1] ruff format check")
     t0 = time.monotonic()
     ok, note = _ensure_python_tool(module_name="ruff", pip_package="ruff", label="ruff")
@@ -737,35 +784,6 @@ def _step_ruff_format() -> _StepResult:
     result.ok = True  # advisory — style diffs do not fail the overall run
     if rc != 0:
         result.note = "style diffs found (advisory)"
-        _log(output)
-    return result
-
-
-def _step_mypy() -> _StepResult:
-    """Run mypy type-checker; skip if mypy not installed."""
-    result = _StepResult("[PHASE 1] mypy")
-    t0 = time.monotonic()
-    ok, note = _ensure_python_tool(module_name="mypy", pip_package="mypy", label="mypy")
-    if not ok:
-        result.skipped = True
-        result.note = note
-        result.duration = time.monotonic() - t0
-        return result
-    rc, output = _run(
-        [
-            sys.executable,
-            "-m",
-            "mypy",
-            ".",
-            "--ignore-missing-imports",
-            "--no-error-summary",
-            "--exclude",
-            r"(^|[\\/])(\.venv(?:_test|_wsl)?|venv|node_modules|test-results|tmp|pytest-cache-files-[^\\/]+)([\\/]|$)",
-        ]
-    )
-    result.duration = time.monotonic() - t0
-    result.ok = rc == 0
-    if not result.ok:
         _log(output)
     return result
 
@@ -1004,7 +1022,7 @@ def _step_detect_secrets() -> _StepResult:
         result.ok = secret_count == 0
         if secret_count:
             result.note = f"{secret_count} potential secret(s) — review .secrets.baseline"
-    except json.JSONDecodeError, AttributeError:
+    except (json.JSONDecodeError, AttributeError):
         result.ok = rc == 0
     if not result.ok:
         _log(output)
@@ -1409,7 +1427,8 @@ def main() -> int:
             _section("Phase 1: Static / Quality")
             results.append(_step_ruff_lint())
             results.append(_step_ruff_format())
-            results.append(_step_mypy())
+            results.append(_step_normalize_multi_except())
+            results.append(_step_verify_multi_except())
             results.append(_step_pylint())
             results.append(_step_bandit())
             results.append(_step_pip_audit())

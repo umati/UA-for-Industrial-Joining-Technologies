@@ -58,6 +58,7 @@ from the IJT specification.
 | **No `get_children()`** | Hangs on complex server nodes — use `_browse_refs()` from `helpers/node_discovery.py` |
 | **Always `asyncio.wait_for`** | Every OPC UA call and browse must have a timeout (15–20 s) |
 | **Namespace indices are runtime** | Never hardcode `ns=7` etc. — always resolve via `ns_indices[NS_IJT_BASE]` |
+| **Multi-exception syntax** | Always write `except (A, B):` in this project; `except A, B:` is not allowed |
 | **Simulate path** | SimulateSingleResult etc. live under `Simulations/SimulateResults/` — NOT under ResultManagement |
 | **GetLatestResult needs Timeout** | Signature is `GetLatestResult(Timeout: Int32)` — pass `ua.Variant(5000, ua.VariantType.Int32)` |
 | **include_traces = True** | All SimulateSingleResult calls should pass `True` for include_traces |

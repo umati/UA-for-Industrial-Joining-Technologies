@@ -230,6 +230,47 @@ async def get_add_in_nodes(node: UANode, ns_opc_ua: int = 0) -> list:
     return await get_children_by_reference(node, RefTypes.HAS_ADD_IN, ns_opc_ua)
 
 
+async def find_child_by_reference_type(
+    parent_node: UANode,
+    name: str,
+    ns_index: int,
+    ref_type_id: int,
+    ns_opc_ua: int = 0,
+    timeout: float = _BROWSE_TIMEOUT,
+) -> UANode | None:
+    """
+    Find a direct child reachable from parent_node via a specific reference type whose
+    BrowseName matches (ns_index, name).
+
+    Unlike find_child_by_browse_name (which uses HierarchicalReferences and matches any
+    reference type), this function strictly filters on ref_type_id so callers can assert
+    that the expected OPC UA reference type is used — not merely that the child exists.
+
+    Example — verify PhysicalQuantity is reached via HasComponent (not HasProperty):
+        node = await find_child_by_reference_type(
+            variable_node, "PhysicalQuantity", ns_ijt,
+            RefTypes.HAS_COMPONENT
+        )
+        assert node is not None, "PhysicalQuantity must be HasComponent, not HasProperty"
+    """
+    try:
+        refs = await asyncio.wait_for(
+            parent_node.get_references(
+                refs=_ref_type_nodeid(ref_type_id),
+                direction=ua.BrowseDirection.Forward,
+                includesubtypes=False,
+                nodeclassmask=ua.NodeClass.Unspecified,
+            ),
+            timeout=timeout,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+    for ref in refs:
+        if ref.BrowseName.Name == name and ref.BrowseName.NamespaceIndex == ns_index:
+            return _node_from_ref(parent_node, ref.NodeId)
+    return None
+
+
 async def find_method_set(
     parent_node: UANode,
     ns_di: int,

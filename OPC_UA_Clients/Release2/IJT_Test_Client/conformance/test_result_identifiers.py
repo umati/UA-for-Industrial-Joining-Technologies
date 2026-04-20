@@ -417,7 +417,7 @@ def _entity_type_int(entity) -> int:
         return -1
     try:
         return int(et)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return -1
 
 

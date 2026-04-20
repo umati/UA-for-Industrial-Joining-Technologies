@@ -35,6 +35,7 @@ The three Python runners (Console, Web, Test) call `pre-commit install` automati
 2. `ruff --fix` applies safe lint fixes
 3. `end-of-file-fixer` and `mixed-line-ending` normalise LF/CRLF
 4. `trailing-whitespace` strips trailing spaces
+5. Multi-exception style is normalized to parenthesized form in this repo: use `except (A, B):`, never `except A, B:`
 
 If any hook modifies files, the commit is aborted. **Run `git add -u && git commit` again** — fixed files are already staged.
 

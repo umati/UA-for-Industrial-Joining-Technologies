@@ -136,7 +136,7 @@ def _enable_ansi_windows() -> bool:
             kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
             return True
         return False
-    except AttributeError, OSError:
+    except (AttributeError, OSError):
         return False
 
 

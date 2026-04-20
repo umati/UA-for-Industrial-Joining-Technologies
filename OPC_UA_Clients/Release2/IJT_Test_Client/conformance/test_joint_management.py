@@ -186,7 +186,7 @@ async def _send_test_joint_and_get_id(client, jm_node, ns_ijt):
         ):
             return None, False
         raise
-    except AttributeError, TypeError:
+    except (AttributeError, TypeError):
         return None, False
 
 
@@ -1044,7 +1044,7 @@ async def _send_test_joint_design(jm, ns_ijt, design_id, content="conformance-te
             if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
                 pytest.skip(f"SendJointDesign not callable: {exc}")
             raise
-        except AttributeError, TypeError:
+        except (AttributeError, TypeError):
             pass
     try:
         await jm.call_method(send_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
@@ -1085,7 +1085,7 @@ async def _send_test_joint_component(jm, ns_ijt, component_id, manufacturer="Con
             if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
                 pytest.skip(f"SendJointComponent not callable: {exc}")
             raise
-        except AttributeError, TypeError:
+        except (AttributeError, TypeError):
             pass
     try:
         await jm.call_method(send_node.nodeid, ua.Variant(component_id, ua.VariantType.String))

@@ -220,7 +220,7 @@ async def test_processing_durations_are_non_negative(opcua_client, result_trigge
             try:
                 if float(val) < 0:
                     failures.append(f"ProcessingTimes.{field_name} is negative: {val!r}")
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 failures.append(f"ProcessingTimes.{field_name} is not numeric or timedelta: {val!r}")
 
     assert not failures, "Duration fields must be non-negative:\n  " + "\n  ".join(failures)

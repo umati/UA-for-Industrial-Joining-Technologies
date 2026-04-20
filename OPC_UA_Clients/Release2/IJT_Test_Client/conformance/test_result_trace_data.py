@@ -117,7 +117,7 @@ async def _get_result_with_traces(opcua_client, result_trigger, ns_indices):
         cls = getattr(meta, "Classification", None) if meta is not None else None
         try:
             cls_int = int(cls) if cls is not None else None
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             cls_int = None
 
         if cls_int is not None and cls_int != ResultClassification.SINGLE_RESULT:
@@ -154,7 +154,7 @@ def _skip_if_not_single_result(result_data) -> None:
     cls = getattr(meta, "Classification", None) if meta is not None else None
     try:
         cls_int = int(cls) if cls is not None else None
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         cls_int = None
     if cls_int is not None and cls_int != ResultClassification.SINGLE_RESULT:
         cls_name = _COMBINED_RESULT_NAMES.get(cls_int, f"classification={cls_int}")
@@ -372,7 +372,7 @@ async def test_step_trace_content_has_values_and_physical_quantity(opcua_client,
                 else:
                     try:
                         qty_int = int(phys_qty)
-                    except TypeError, ValueError:
+                    except (TypeError, ValueError):
                         qty_int = -1
                     if qty_int not in _VALID_PHYSICAL_QUANTITIES:
                         failures.append(f"{location}.PhysicalQuantity={phys_qty!r} is outside valid range")
@@ -455,7 +455,7 @@ async def test_step_result_values_trace_point_index_points_to_valid_sample(opcua
                 continue
             try:
                 num_points_int = int(num_points)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 continue
 
             step_result_id = getattr(step_trace, "StepResultId", None)
@@ -475,7 +475,7 @@ async def test_step_result_values_trace_point_index_points_to_valid_sample(opcua
                     found_trace_point_index = True
                     try:
                         tpi_int = int(tpi)
-                    except TypeError, ValueError:
+                    except (TypeError, ValueError):
                         failures.append(
                             f"ResultContent[{result_idx}].StepResults.StepResultValues[{val_idx}]"
                             f".TracePointIndex={tpi!r} is not numeric"
@@ -528,7 +528,7 @@ async def test_step_trace_content_values_length_matches_number_of_trace_points(
                 continue
             try:
                 num_points_int = int(num_points)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 failures.append(
                     f"ResultContent[{result_idx}].Trace.StepTraces[{step_idx}]"
                     f".NumberOfTracePoints is not numeric: {num_points!r}"
@@ -644,7 +644,7 @@ async def test_step_trace_content_array_lengths_are_consistent_across_results(op
                     continue
                 try:
                     num_points_int = int(num_points)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     continue
                 step_content = getattr(step, "StepTraceContent", None) or []
                 for tc_idx, tc_element in enumerate(step_content):
@@ -753,7 +753,7 @@ async def test_trace_point_time_offset_is_non_negative(opcua_client, result_trig
                 found_offset = True
                 try:
                     offset_float = float(tpo)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     failures.append(
                         f"StepResults[{step_idx}].StepResultValues[{val_idx}].TracePointOffset is not numeric: {tpo!r}"
                     )
@@ -799,7 +799,7 @@ async def test_overall_result_values_may_have_trace_point_time_offset(opcua_clie
             overall_offset_found = True
             try:
                 offset_float = float(tpo)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 failures.append(f"OverallResultValues[{val_idx}].TracePointOffset is not numeric: {tpo!r}")
                 continue
             if offset_float < 0:
@@ -919,7 +919,7 @@ async def test_trace_point_time_offset_is_never_negative(opcua_client, result_tr
                         failures.append(
                             f"StepResults[{step_idx}].StepResultValues[{val_idx}].TracePointOffset={tpo!r} is negative"
                         )
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     pass
 
     assert not failures, "Negative TracePointOffset values found:\n  " + "\n  ".join(failures)
@@ -1016,7 +1016,7 @@ async def test_trace_point_index_references_correct_sample_value(opcua_client, r
                 try:
                     tpi_int = int(tpi)
                     measured_float = float(measured)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     continue
 
                 # Find matching TraceContentDataType by PhysicalQuantity
@@ -1038,7 +1038,7 @@ async def test_trace_point_index_references_correct_sample_value(opcua_client, r
                     continue
                 try:
                     num_points_int = int(num_points)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     continue
 
                 if tpi_int < 0 or tpi_int >= num_points_int:
@@ -1055,7 +1055,7 @@ async def test_trace_point_index_references_correct_sample_value(opcua_client, r
                 trace_sample = tc_values[tpi_int]
                 try:
                     trace_float = float(trace_sample)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     continue
 
                 verified_any = True
@@ -1103,7 +1103,7 @@ async def test_trace_point_index_is_non_negative_integer(opcua_client, result_tr
                 found_index = True
                 try:
                     tpi_int = int(tpi)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     failures.append(
                         f"StepResults[{step_idx}].StepResultValues[{val_idx}]"
                         f".TracePointIndex={tpi!r} is not a numeric value"
@@ -1149,7 +1149,7 @@ async def test_overall_result_values_may_have_trace_point_index(opcua_client, re
             overall_index_found = True
             try:
                 tpi_int = int(tpi)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 failures.append(f"OverallResultValues[{val_idx}].TracePointIndex is not numeric: {tpi!r}")
                 continue
             if tpi_int < 0:
@@ -1272,7 +1272,7 @@ async def test_trace_point_index_is_never_negative(opcua_client, result_trigger,
                         failures.append(
                             f"StepResults[{step_idx}].StepResultValues[{val_idx}].TracePointIndex={tpi!r} is negative"
                         )
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     pass
 
     assert not failures, "Negative TracePointIndex values found:\n  " + "\n  ".join(failures)

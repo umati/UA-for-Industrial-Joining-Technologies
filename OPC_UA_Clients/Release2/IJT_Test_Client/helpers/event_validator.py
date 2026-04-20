@@ -86,7 +86,7 @@ class JoiningTechnologyValidator:
         """Check that *value* converts to an integer in {0..7}."""
         try:
             tech_int = int(value)  # type: ignore[arg-type]
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             vr.add(ctx, f"expected integer in {{0..7}}, got {value!r}")
             return
 
@@ -131,7 +131,7 @@ class EntityDataTypeValidator:
         if entity_type is not None:
             try:
                 et_int = int(entity_type)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 et_int = None
             if et_int is None or et_int not in _VALID_EVENT_ENTITY_TYPES:
                 vr.add(
@@ -229,7 +229,7 @@ class ReportedValueValidator:
         if phys_qty is not None:
             try:
                 qty_int = int(phys_qty)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 qty_int = None
             if qty_int is None or qty_int not in _VALID_PHYSICAL_QUANTITIES:
                 vr.add(
@@ -346,7 +346,7 @@ class BaseEventFieldsValidator:
         else:
             try:
                 sev_int = int(severity)  # type: ignore[arg-type]
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 sev_int = None
             if sev_int is None or not _SEVERITY_MIN <= sev_int <= _SEVERITY_MAX:
                 vr.add(
@@ -411,7 +411,7 @@ class JoiningSystemEventValidator:
         if event_code is not None:
             try:
                 code_int = int(event_code)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 code_int = None
             if code_int is None or code_int < 0:
                 vr.add(
@@ -583,7 +583,7 @@ class ConditionClassValidator:
 
         try:
             id_int = int(identifier)  # type: ignore[arg-type]
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             id_int = None
 
         if id_int is None or id_int <= 0:
@@ -686,7 +686,7 @@ class JoiningSystemConditionValidator:
         if event_code is not None:
             try:
                 code_int = int(event_code)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 code_int = None
             if code_int is None or code_int < 0:
                 vr.add(

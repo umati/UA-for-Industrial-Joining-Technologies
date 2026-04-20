@@ -2153,7 +2153,7 @@ async def test_tool_and_controller_joining_technology_is_non_zero(controllers_in
             # whether type definitions are loaded. Extract the numeric value safely.
             try:
                 jt_int = int(val)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 # LocalizedText or named enum — non-zero text means a value was set
                 jt_int = 1 if str(val).strip() not in ("", "0", "Other") else 0
             if jt_int == 0:

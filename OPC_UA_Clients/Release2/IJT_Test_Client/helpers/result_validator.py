@@ -178,7 +178,7 @@ class ResultValueValidator:
         if value_tag is not None:
             try:
                 tag_int = int(value_tag)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 tag_int = None
             if tag_int is None or tag_int not in _VALID_VALUE_TAGS:
                 vr.add(
@@ -191,7 +191,7 @@ class ResultValueValidator:
         if phys_qty is not None:
             try:
                 qty_int = int(phys_qty)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 qty_int = None
             if qty_int is None or qty_int not in _VALID_PHYSICAL_QUANTITIES:
                 vr.add(
@@ -204,7 +204,7 @@ class ResultValueValidator:
         if violation is not None:
             try:
                 viol_int = int(violation)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 viol_int = None
             if viol_int is None or viol_int not in _VALID_VIOLATION_TYPES:
                 vr.add(
@@ -302,7 +302,7 @@ class ErrorInformationValidator:
         if failure_reason is not None:
             try:
                 reason_int = int(failure_reason)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 reason_int = None
             if reason_int is None or reason_int not in _VALID_FAILURE_REASONS:
                 vr.add(
@@ -360,7 +360,7 @@ class ResultMetaDataValidator:
         else:
             try:
                 cls_int = int(classification)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 cls_int = None
             if cls_int is None or cls_int not in ResultClassification.VALID_VALUES:
                 vr.add(
@@ -375,7 +375,7 @@ class ResultMetaDataValidator:
         else:
             try:
                 eval_int = int(evaluation)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 eval_int = None
             if eval_int is None or eval_int not in ResultEvaluation.VALID_VALUES:
                 vr.add(
@@ -395,7 +395,7 @@ class ResultMetaDataValidator:
         if num_content is not None:
             try:
                 num_int = int(num_content)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 num_int = -1
             if num_int < 0:
                 vr.add(
@@ -408,7 +408,7 @@ class ResultMetaDataValidator:
         if seq_num is not None:
             try:
                 seq_int = int(seq_num)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 seq_int = -1
             if seq_int < 0:
                 vr.add(
@@ -441,7 +441,7 @@ class ResultMetaDataValidator:
                 if entity_type is not None:
                     try:
                         et_int = int(entity_type)
-                    except TypeError, ValueError:
+                    except (TypeError, ValueError):
                         et_int = None
                     if et_int is None:
                         vr.add(
@@ -511,7 +511,7 @@ class JoiningResultDataValidator:
                     try:
                         if int(vt) == 1:  # ValueTag.FINAL
                             has_final_tag = True
-                    except TypeError, ValueError:
+                    except (TypeError, ValueError):
                         pass
 
             # Advisory: at least one FINAL value is recommended per spec
@@ -633,7 +633,7 @@ class ConsolidatedResultValidator:
             if classification is not None:
                 try:
                     cls_int = int(classification)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     cls_int = None
                 if cls_int is not None and cls_int not in _COMBINED_CLASSIFICATIONS:
                     vr.add(

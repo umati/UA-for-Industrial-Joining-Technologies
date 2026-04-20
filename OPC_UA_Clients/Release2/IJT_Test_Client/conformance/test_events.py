@@ -188,7 +188,7 @@ def _joining_technology_to_int_or_none(value):
         return None
     try:
         return int(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         pass
 
     # Some servers expose JoiningTechnology as LocalizedText/Text (e.g. "Tightening")
@@ -302,7 +302,7 @@ async def test_joining_system_event_has_event_code_field(subscription_client, op
         pytest.skip("EventCode field absent — server may not populate it for this event type")
     try:
         code_int = int(event_code)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         pytest.fail(f"EventCode must convert to an integer, got {event_code!r}")
     assert code_int >= 0, f"EventCode must be a non-negative integer, got {code_int!r}"
 
@@ -934,7 +934,7 @@ async def test_subscribing_to_nonexistent_event_type_returns_error(subscription_
     try:
         async with EventCollector(subscription_client) as collector:
             await collector.subscribe(server_node, nonexistent_node)
-    except ua.UaError, Exception:
+    except (ua.UaError, Exception):
         caught_error = True
     if not caught_error:
         pytest.skip(

@@ -48,6 +48,13 @@ OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](htt
 
 # Change Log
 
+**2026-04-20:**
+1. **Added** dynamic simulation to`OperationCycleCounter` for Tool assets based on new single result simulation.
+2. **Fixed** reference type from `HasProperty` to `HasComponent` for the **PhysicalQuantity** of `JoiningDataVariableType` in multiple asset properties.
+3. **Fixed** Sensor **MeasuredValue** node path that was incorrect and unreachable via address space browsing.
+4. **Fixed** Battery **Capacity** engineering units that was incorrectly using current unit instead of Capacity Unit.
+5. **Multiple** bug fixes and optimizations.
+
 **2026-04-17:**
 1. **Updated** joining process and joint selection to be **scoped per product** so different clients no longer overwrite each other's active selection.
 2. **Updated** asset simulation with **consistent identifiers** across server restarts and included them in result output.

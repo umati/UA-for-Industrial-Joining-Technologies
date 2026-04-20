@@ -284,7 +284,7 @@ def _check_prerequisites() -> bool:
     print(f"node {node_ver_str}")
     try:
         node_major = int(node_ver_str.split(".")[0])
-    except ValueError, IndexError:
+    except (ValueError, IndexError):
         node_major = 0
     if node_major < _MIN_NODE_MAJOR:
         print(
@@ -298,7 +298,7 @@ def _check_prerequisites() -> bool:
     print(f"npm  {npm_ver_str}")
     try:
         npm_major = int(npm_ver_str.split(".")[0])
-    except ValueError, IndexError:
+    except (ValueError, IndexError):
         npm_major = 0
     if npm_major < _MIN_NPM_MAJOR:
         print(
@@ -583,7 +583,7 @@ def _step_phase2_check(results_dir: Path) -> StepResult:
     try:
         host = host_port[0]
         port = int(host_port[1]) if len(host_port) > 1 else 40451
-    except ValueError, IndexError:
+    except (ValueError, IndexError):
         host, port = "localhost", 40451
     if not _is_port_reachable(host, port):
         return StepResult(label, "PHASE 2", "SKIP", f"server not reachable at {server_url}", 0.0)
