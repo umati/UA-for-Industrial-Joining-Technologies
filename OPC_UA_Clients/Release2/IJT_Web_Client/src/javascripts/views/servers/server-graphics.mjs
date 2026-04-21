@@ -1,5 +1,27 @@
 import BasicScreen from '../graphic-support/basic-screen.mjs'
+import { lowerCaseJsonKeys } from '../graphic-support/json-key-normalization.mjs'
 import EndpointGraphics from '../tab-setup/endpoint-graphics.mjs'
+
+function normalizeConnectionPoint (point) {
+  const loweredPoint = lowerCaseJsonKeys(point)
+  if (!loweredPoint || typeof loweredPoint !== 'object') {
+    return { name: '', address: '', autoconnect: false }
+  }
+  return {
+    name: loweredPoint.name || '',
+    address: loweredPoint.address || '',
+    autoconnect: Boolean(loweredPoint.autoconnect)
+  }
+}
+
+function valuesMatch (left, right, caseInsensitive = false) {
+  if (left === undefined || left === null || right === undefined || right === null) return false
+  const leftValue = String(left)
+  const rightValue = String(right)
+  return caseInsensitive
+    ? leftValue.toLowerCase() === rightValue.toLowerCase()
+    : leftValue === rightValue
+}
 
 /**
  * The purpose of this class is to generate a webpage that shows a list of OPC UA servers that the user is interested in
@@ -54,7 +76,8 @@ export default class ServerGraphics extends BasicScreen {
 
     // Listen to the tree of possible connection points (Available OPC UA servers)
     this.webSocketManager.subscribe(null, 'get connectionpoints', (msg) => {
-      this.connectionPoints(msg.connectionpoints, this.webSocketManager, this.endpointTabGenerator, settings)
+      const loweredMsg = lowerCaseJsonKeys(msg) || {}
+      this.connectionPoints(loweredMsg.connectionpoints, this.webSocketManager, this.endpointTabGenerator, settings)
     })
 
     // Ask for the currently stored connectionpoints (Answer in 'connection points')
@@ -78,16 +101,31 @@ export default class ServerGraphics extends BasicScreen {
     this.webSocketManager = socket
     const connect = (point) => {
       // document.getElementById('displayedServerName').innerText = point.name
-      socket.emit('connect to', point.address)
+      socket.send('connect to', point.address)
     }
     this.rows.innerHTML = ''
-    for (const point of msg) {
+    const points = Array.isArray(msg) ? msg : []
+    for (const rawPoint of points) {
+      const point = normalizeConnectionPoint(rawPoint)
       this.makeConnectionPointRow(point, socket, endpointTabGenerator, settings)
-      if (point.autoConnect && this.lastConnection !== point.address) { // Only automatically connect first time
+      if (point.autoconnect && this.lastConnection !== point.address) { // Only automatically connect first time
         this.lastConnection = point.address
         connect(point)
       }
     }
+  }
+
+  findExistingEndpointTab (point, endpointTabGenerator) {
+    if (!endpointTabGenerator || !Array.isArray(endpointTabGenerator.containerList)) {
+      return null
+    }
+    return endpointTabGenerator.containerList.find((tab) => {
+      const content = tab?.content
+      if (!content) return false
+      if (valuesMatch(point.address, content.endpointUrl)) return true
+      if (valuesMatch(point.name, content.title, true)) return true
+      return false
+    }) || null
   }
 
   /**
@@ -98,30 +136,59 @@ export default class ServerGraphics extends BasicScreen {
    * @param {*} endpointTabGenerator The class that manages the graphical representation of the tabs, so that a tab can be removed when disconnected
    */
   makeConnectionPointRow (point, socket, endpointTabGenerator, settings) {
+    const normalizedPoint = normalizeConnectionPoint(point)
+
     const connect = (point, endpointTabGenerator) => {
+      const existingTab = this.findExistingEndpointTab(point, endpointTabGenerator)
+      if (existingTab) {
+        existingTab.select()
+        return
+      }
       const newConnection = new EndpointGraphics(point.name, settings)
       newConnection.instantiate(point.address, socket)
       endpointTabGenerator.generateTab(newConnection, 1, true)
     }
 
     const disconnect = (point, endpointTabGenerator) => {
-      endpointTabGenerator.close(point)
+      if (!endpointTabGenerator || !Array.isArray(endpointTabGenerator.containerList)) {
+        return
+      }
+      const tabsToClose = endpointTabGenerator.containerList.filter((tab) => {
+        const content = tab?.content
+        if (!content) return false
+        if (valuesMatch(point.address, content.endpointUrl)) return true
+        if (valuesMatch(point.name, content.title, true)) return true
+        return false
+      })
+      for (const tab of tabsToClose) {
+        tab.close()
+      }
+      endpointTabGenerator.containerList = endpointTabGenerator.containerList.filter((tab) => !tabsToClose.includes(tab))
     }
 
-    const nameInput = this.createInput(point.name, null, () => {})
+    const nameInput = this.createInput(normalizedPoint.name, null, () => {})
 
-    const addrInput = this.createInput(point.address, null, (_x) => {})
+    const addrInput = this.createInput(normalizedPoint.address, null, (_x) => {})
 
-    const checkBox = this.createCheckbox(point.autoconnect, (newValue) => {
+    const autoConnect = Boolean(normalizedPoint.autoconnect)
+    const checkBox = this.createCheckbox(autoConnect, (newValue) => {
+      normalizedPoint.autoconnect = newValue
       if (newValue) {
-        connect(point, endpointTabGenerator)
+        connect(normalizedPoint, endpointTabGenerator)
       } else {
-        disconnect(point, endpointTabGenerator)
+        disconnect(normalizedPoint, endpointTabGenerator)
       }
     })
 
-    if (point.autoconnect) {
-      connect(point, endpointTabGenerator)
+    if (autoConnect) {
+      connect(normalizedPoint, endpointTabGenerator)
+    }
+
+    nameInput.oninput = (evt) => {
+      normalizedPoint.name = evt.target.value
+    }
+    addrInput.oninput = (evt) => {
+      normalizedPoint.address = evt.target.value
     }
 
     const deleteButton = this.createButton('Delete', null, () => {

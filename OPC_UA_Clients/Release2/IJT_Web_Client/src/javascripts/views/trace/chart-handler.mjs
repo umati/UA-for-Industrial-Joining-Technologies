@@ -63,7 +63,8 @@ export default class ChartManager {
           const y2 = chart.scales.y.getPixelForValue(end.edge.y)
 
           // Draw the arrow
-          const arrowLength = LIMIT_ENDPOINT_ARROW_LENGTH
+          const endArrowScale = Number(dataset?.envelopeMetaData?.endArrowScale)
+          const arrowLength = LIMIT_ENDPOINT_ARROW_LENGTH * (Number.isFinite(endArrowScale) ? endArrowScale : 1)
           const angle = Math.atan2(y2 - y1, x2 - x1)
 
           ctx.save()
@@ -72,8 +73,10 @@ export default class ChartManager {
           ctx.lineTo(x2 - arrowLength * Math.cos(angle - Math.PI / 6), y2 - arrowLength * Math.sin(angle - Math.PI / 6))
           ctx.moveTo(x2, y2)
           ctx.lineTo(x2 - arrowLength * Math.cos(angle + Math.PI / 6), y2 - arrowLength * Math.sin(angle + Math.PI / 6))
-          ctx.strokeStyle = options.color || 'red'
-          ctx.lineWidth = options.lineWidth || 2
+          const configuredArrowColor = dataset?.envelopeMetaData?.arrowColor
+          const configuredArrowLineWidth = Number(dataset?.envelopeMetaData?.arrowLineWidth)
+          ctx.strokeStyle = configuredArrowColor || dataset.borderColor || options.color || 'red'
+          ctx.lineWidth = Number.isFinite(configuredArrowLineWidth) ? configuredArrowLineWidth : (options.lineWidth || 2)
           ctx.stroke()
           ctx.restore()
         }
@@ -85,7 +88,8 @@ export default class ChartManager {
           const y2 = chart.scales.y.getPixelForValue(start.edge.y)
 
           // Draw the arrow
-          const arrowLength = LIMIT_ENDPOINT_ARROW_LENGTH
+          const startArrowScale = Number(dataset?.envelopeMetaData?.startArrowScale)
+          const arrowLength = LIMIT_ENDPOINT_ARROW_LENGTH * (Number.isFinite(startArrowScale) ? startArrowScale : 1)
           const angle = Math.atan2(y2 - y1, x2 - x1)
 
           ctx.save()
@@ -96,8 +100,10 @@ export default class ChartManager {
           ctx.moveTo(x2, y2)
           ctx.lineTo(x2 - arrowLength * Math.cos(angle + Math.PI / 2),
             y2 - arrowLength * Math.sin(angle + Math.PI / 2))
-          ctx.strokeStyle = options.color || 'red'
-          ctx.lineWidth = options.lineWidth || 2
+          const configuredArrowColor = dataset?.envelopeMetaData?.arrowColor
+          const configuredArrowLineWidth = Number(dataset?.envelopeMetaData?.arrowLineWidth)
+          ctx.strokeStyle = configuredArrowColor || dataset.borderColor || options.color || 'red'
+          ctx.lineWidth = Number.isFinite(configuredArrowLineWidth) ? configuredArrowLineWidth : (options.lineWidth || 2)
           ctx.stroke()
           ctx.restore()
         }

@@ -1,4 +1,5 @@
 import BasicScreen from './basic-screen.mjs' // Basic functionality application code for the screen functionality
+import { lowerCaseJsonKeys } from './json-key-normalization.mjs'
 
 const FADE_TIME_MS = 10_000
 const FADE_STEPS = 5
@@ -103,32 +104,33 @@ export default class Settings extends BasicScreen {
   }
 
   setupPage (msg, initial) {
-    if (msg.productid || msg.initialviewlevel
-    ) {
-      this.settings = msg
-      if (msg.productid) {
-        this.productId = msg.productid
+    const normalizedMsg = lowerCaseJsonKeys(msg) || {}
+
+    if (normalizedMsg.productid !== undefined || normalizedMsg.initialviewlevel !== undefined) {
+      this.settings = { ...this.settings, ...normalizedMsg }
+      if (normalizedMsg.productid !== undefined) {
+        this.productId = normalizedMsg.productid
       }
-      if (msg.button1selection) {
-        this.JoiningProcess1 = msg.button1selection
+      if (normalizedMsg.button1selection !== undefined) {
+        this.JoiningProcess1 = normalizedMsg.button1selection
       }
-      if (msg.button2selection) {
-        this.JoiningProcess2 = msg.button2selection
+      if (normalizedMsg.button2selection !== undefined) {
+        this.JoiningProcess2 = normalizedMsg.button2selection
       }
-      if (msg.button1joint) {
-        this.Joint1 = msg.button1joint
+      if (normalizedMsg.button1joint !== undefined) {
+        this.Joint1 = normalizedMsg.button1joint
       }
-      if (msg.button2joint) {
-        this.Joint2 = msg.button2joint
+      if (normalizedMsg.button2joint !== undefined) {
+        this.Joint2 = normalizedMsg.button2joint
       }
-      if (msg.methoddefaults) {
-        this.methodDefaults = msg.methoddefaults
+      if (normalizedMsg.methoddefaults !== undefined) {
+        this.methodDefaults = normalizedMsg.methoddefaults
       }
-      if (msg.initialviewlevel) {
-        this.initialViewLevel = msg.initialviewlevel
+      if (normalizedMsg.initialviewlevel !== undefined) {
+        this.initialViewLevel = normalizedMsg.initialviewlevel
       }
-      if (msg.envelope) {
-        this.envelope = msg.envelope
+      if (normalizedMsg.envelope !== undefined) {
+        this.envelope = normalizedMsg.envelope
       }
     }
 

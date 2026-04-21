@@ -114,6 +114,7 @@ export default class TabGenerator {
       tab.select()
     }
     this.containerList.push(tab)
+    return tab
     // If it is the first, then show it
     // if (this.containerList.length === 1) {
     //  this.containerList[0].select()
@@ -195,9 +196,11 @@ export default class TabGenerator {
   }
 
   close (point) {
+    const normalize = (value) => value === undefined || value === null ? '' : String(value).toLowerCase()
+    const targetName = normalize(point?.name)
     let removeItem
     for (const tab of this.containerList) {
-      if (!point || point.name === tab?.content?.title) {
+      if (!point || targetName === normalize(tab?.content?.title)) {
         tab.close()
         removeItem = tab
       }

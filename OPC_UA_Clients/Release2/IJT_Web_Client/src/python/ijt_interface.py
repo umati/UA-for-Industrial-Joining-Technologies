@@ -38,9 +38,10 @@ class IJTInterface:
         }
     )
 
-    # Resolve Resources/ relative to this file so the server works regardless
-    # of which directory the process was started from.
-    _RESOURCES_DIR: Path = Path(__file__).resolve().parent.parent / "Resources"
+    # Resolve resources/ relative to this file so the server works regardless
+    # of which directory the process was started from or host filesystem casing.
+    _SOURCE_ROOT: Path = Path(__file__).resolve().parent.parent
+    _RESOURCE_DIR_CANDIDATES: tuple[str, ...] = ("resources", "Resources")
 
     def __init__(self) -> None:
         self.connection_list: Dict[str, Optional[Connection]] = {}
@@ -48,7 +49,20 @@ class IJTInterface:
 
     @classmethod
     def _resource_path(cls, filename: str) -> Path:
-        return cls._RESOURCES_DIR / filename
+        for directory_name in cls._RESOURCE_DIR_CANDIDATES:
+            resource_dir = cls._SOURCE_ROOT / directory_name
+            if resource_dir.exists():
+                return resource_dir / filename
+        return cls._SOURCE_ROOT / cls._RESOURCE_DIR_CANDIDATES[0] / filename
+
+    @classmethod
+    def _normalize_json_keys_lower(cls, payload: Any) -> Any:
+        """Return a deep copy where all object keys are lower-case."""
+        if isinstance(payload, dict):
+            return {str(key).lower(): cls._normalize_json_keys_lower(value) for key, value in payload.items()}
+        if isinstance(payload, list):
+            return [cls._normalize_json_keys_lower(item) for item in payload]
+        return payload
 
     async def ensure_connection_open(self, connection: Connection) -> bool:
         """Coroutine. Ensure a connection is open, reconnecting if necessary.
@@ -121,7 +135,8 @@ class IJTInterface:
         """
         path = self._resource_path("connectionpoints.json")
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            return self._normalize_json_keys_lower(payload)
         except Exception as exc:
             ijt_log.error(f"Error reading connection points: {exc}")
             return {"exception": str(exc)}
@@ -135,7 +150,8 @@ class IJTInterface:
         """
         path = self._resource_path("connectionpoints.json")
         try:
-            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            normalized_data = self._normalize_json_keys_lower(data)
+            path.write_text(json.dumps(normalized_data, indent=2), encoding="utf-8")
         except Exception as exc:
             ijt_log.error(f"Error writing connection points: {exc}")
 
@@ -148,7 +164,8 @@ class IJTInterface:
         """
         path = self._resource_path("settings.json")
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            return self._normalize_json_keys_lower(payload)
         except FileNotFoundError:
             return {"exception": "File not found: Resources/settings.json"}
         except Exception as exc:
@@ -164,7 +181,8 @@ class IJTInterface:
         """
         path = self._resource_path("settings.json")
         try:
-            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            normalized_data = self._normalize_json_keys_lower(data)
+            path.write_text(json.dumps(normalized_data, indent=2), encoding="utf-8")
         except Exception as exc:
             ijt_log.error(f"Error writing settings: {exc}")
 
