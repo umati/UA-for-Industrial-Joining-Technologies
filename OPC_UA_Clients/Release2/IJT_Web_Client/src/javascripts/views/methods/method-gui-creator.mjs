@@ -146,7 +146,7 @@ export default class MethodGUICreator {
         const drop = this.screen.createDropdown('', (x) => {
           if (callback) callback(x)
         })
-        drop.classList.add('inputStyle', 'methodInput')
+        drop.classList.add('inputStyle', 'methodInput', 'methodDropdownWrap')
         for (let i = 0; i < Object.values(arg.Options).length; i++) {
           drop.addOption(Object.values(arg.Options)[i], Object.keys(arg.Options)[i])
         }
@@ -162,6 +162,7 @@ export default class MethodGUICreator {
         area.appendChild(selectionArea)
 
         const drop = this.screen.createDropdown('Type', () => {}, 'dropJoiningProcess')
+        drop.classList.add('methodDropdownWrap')
         drop.addOption('OriginId', 1)
         drop.addOption('Specific Id', 0)
         drop.addOption('Selection name', 2)
@@ -282,7 +283,7 @@ export default class MethodGUICreator {
       case '7': { // UInt32
         if (arg?.Name === 'Result Type') {
           const drop = this.screen.createDropdown('', null)
-          drop.classList.add('inputStyle', 'methodInput')
+          drop.classList.add('inputStyle', 'methodInput', 'methodDropdownWrap')
           for (const [label, val] of RESULT_TYPE_OPTIONS) {
             drop.addOption(label, val)
           }
@@ -303,7 +304,7 @@ export default class MethodGUICreator {
       case '3': {
         if (arg?.Name === 'Classification') {
           const drop = this.screen.createDropdown('', null)
-          drop.classList.add('inputStyle', 'methodInput')
+          drop.classList.add('inputStyle', 'methodInput', 'methodDropdownWrap')
           for (const [label, val] of CLASSIFICATION_OPTIONS) {
             drop.addOption(label, val)
           }

@@ -139,3 +139,61 @@ test('all Basic view tabs are clickable', async ({ page }) => {
   // Just verifying no crash — page still has a title
   await expect(page).toHaveTitle(/OPC UA IJT Demo/i)
 })
+
+// --- Dense view layout smoke checks (desktop + narrow) -----------------------
+const DENSE_VIEWPORTS = [
+  { name: 'desktop', width: 1366, height: 900 },
+  { name: 'narrow', width: 900, height: 900 },
+]
+
+async function assertNoHorizontalOverflow (page, selector, label) {
+  const locator = page.locator(selector).first()
+  await expect(locator, `${label} should be visible`).toBeVisible()
+  const metrics = await locator.evaluate((el) => ({
+    scrollWidth: el.scrollWidth,
+    clientWidth: el.clientWidth,
+  }))
+  expect(
+    metrics.scrollWidth,
+    `${label} overflows horizontally (scrollWidth=${metrics.scrollWidth}, clientWidth=${metrics.clientWidth})`
+  ).toBeLessThanOrEqual(metrics.clientWidth + 1)
+}
+
+for (const vp of DENSE_VIEWPORTS) {
+  test(`dense views have stable layout at ${vp.name} viewport`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height })
+    const app = new AppPage(page)
+    await app.goto()
+    await app.setViewLevel(VIEW_LEVEL.DETAILED)
+
+    // Methods
+    await app.openMethods()
+    await assertNoHorizontalOverflow(page, '.methodsScreen .lefthalf', 'Methods left panel')
+    await assertNoHorizontalOverflow(page, '.methodsScreen .righthalf', 'Methods right panel')
+    const methodDropdowns = page.locator('.methodsScreen .methodDropdownWrap > select')
+    const dropdownCount = await methodDropdowns.count()
+    for (let i = 0; i < dropdownCount; i++) {
+      const aligned = await methodDropdowns.nth(i).evaluate((selectEl) => {
+        const wrapper = selectEl.parentElement
+        if (!wrapper) return true
+        return Math.abs(selectEl.getBoundingClientRect().width - wrapper.getBoundingClientRect().width) <= 1
+      })
+      expect(aligned, `Methods dropdown ${i + 1} should fill its wrapper width`).toBe(true)
+    }
+
+    // Trace
+    await app.clickTab('Trace')
+    await assertNoHorizontalOverflow(page, '.traceScreen .bigTraceMargin', 'Trace chart host')
+    await assertNoHorizontalOverflow(page, '.traceScreen .traceButtonArea', 'Trace control dock')
+
+    // Results
+    await app.openResults()
+    await assertNoHorizontalOverflow(page, '.consolidatedResultScreen .resultHeader', 'Results header')
+    await assertNoHorizontalOverflow(page, '.consolidatedResultScreen .drawResultBox', 'Results draw area')
+
+    // Address Space
+    await app.openAddressSpace()
+    await assertNoHorizontalOverflow(page, '.addressSpaceScreen .lefthalf', 'Address Space left panel')
+    await assertNoHorizontalOverflow(page, '.addressSpaceScreen .righthalf', 'Address Space right panel')
+  })
+}
