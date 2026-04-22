@@ -40,7 +40,7 @@ export default class ResultGraphics extends BasicScreen {
     this.headerRight.classList.add('resultHeaderRight')
     this.header.appendChild(this.headerRight)
 
-    this.simulateJobButton = this.createButton('Simulate job result', this.headerRight, async () => {
+    this.simulateJobButton = this.createButton('Simulate', this.headerRight, async () => {
       await this.simulateJobResult()
     })
     this.simulateJobButton.classList.remove('resultHeaderItem')
@@ -50,7 +50,7 @@ export default class ResultGraphics extends BasicScreen {
       this.simulateJobButton.title = 'Job simulation method setup unavailable in this context.'
     }
 
-    this.toggleQueueingButton = this.createButton('Toggle queueing', this.headerRight, () => {
+    this.toggleQueueingButton = this.createButton('Queue', this.headerRight, () => {
       this.toggleQueueingState = !this.toggleQueueingState
       this.eventManager.queueState(this.toggleQueueingState)
       this.hoveringStepButton(this.toggleQueueingState)
@@ -63,7 +63,7 @@ export default class ResultGraphics extends BasicScreen {
     }
 
     // Type selection dropdown
-    this.selectResultType = this.createDropdown('Select result type', (selection) => {
+    this.selectResultType = this.createDropdown('Type', (selection) => {
       this.selectType = parseInt(selection)
       this.changeResultList(selection)
       this.refreshDrawing(this.selectResult)
@@ -77,7 +77,7 @@ export default class ResultGraphics extends BasicScreen {
     this.headerLeft.appendChild(this.selectResultType)
 
     // Result selection dropdown
-    this.selectResultDropdown = this.createDropdown('Select result', (selection) => {
+    this.selectResultDropdown = this.createDropdown('Result', (selection) => {
       this.selectResult = selection
       this.refreshDrawing(selection)
     })
@@ -87,7 +87,7 @@ export default class ResultGraphics extends BasicScreen {
     this.headerLeft.appendChild(this.selectResultDropdown)
 
     // display type dummy selection dropdown
-    this.dummyDropdown = this.createDropdown('Display type', (selection) => {
+    this.dummyDropdown = this.createDropdown('View', (selection) => {
       this.envelope = selection
       this.refreshDrawing(this.selectResult)
     })

@@ -196,7 +196,7 @@ export class ButtonTraceInterface extends TraceInterface {
     trace.classList.add('fillWidth')
     interfaceArea.appendChild(trace)
 
-    createHeader(trace, 'Traces')
+    createHeader(trace, 'Trace list')
 
     this.traceDiv = document.createElement('div')
     this.traceDiv.classList.add('traceListPanel')
@@ -216,14 +216,14 @@ export class ButtonTraceInterface extends TraceInterface {
     // view.classList.add('smallSettingArea')
     interfaceArea.appendChild(view)
 
-    createHeader(view, 'View')
+    createHeader(view, 'Display')
 
-    this.traceTypeSelect = createSelector(view, 'View type', [['toa', 'Torque over angle'], ['tot', 'Torque over time']], true)
-    this.absoluteSelect = createSelector(view, 'Torque values', [['normal', 'Normal'], ['absolute', 'Absolute']], true)
+    this.traceTypeSelect = createSelector(view, 'Type', [['toa', 'Torque over angle'], ['tot', 'Torque over time']], true)
+    this.absoluteSelect = createSelector(view, 'Torque', [['normal', 'Normal'], ['absolute', 'Absolute']], true)
     // this.xyz = createSelector(interfaceArea, 'Fade old', [['toa','Torque over angle'],['tot','Torque over time']])
 
-    this.valueShower = createSelector(view, 'Show values', [['no', 'Hide values'], ['yes', 'Show values']], true)
-    this.limitShower = createSelector(view, 'Show limits', [['no', 'Hide limits'], ['yes', 'Show limits']], true)
+    this.valueShower = createSelector(view, 'Values', [['no', 'Hide'], ['yes', 'Show']], true)
+    this.limitShower = createSelector(view, 'Limits', [['no', 'Hide'], ['yes', 'Show']], true)
 
     this.deleteButton = document.createElement('button')
     this.deleteButton.classList.add('myButton')

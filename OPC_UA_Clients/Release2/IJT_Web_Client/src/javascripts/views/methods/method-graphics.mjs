@@ -7,7 +7,7 @@ import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
  */
 export default class MethodGraphics extends ControlMessageSplitScreen {
   constructor (methodManager, addressSpace, settings, entityManager) {
-    super('Methods', 'Methods', 'Call results')
+    super('Methods', 'Calls', 'Results')
     this.tabHelpText = 'Invoke available OPC UA methods and inspect call responses for this endpoint.'
     this.backGround.classList.add('methodsScreen')
     this.methodManager = methodManager
