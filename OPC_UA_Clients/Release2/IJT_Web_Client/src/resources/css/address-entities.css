@@ -1,0 +1,224 @@
+.addressSpaceScreen,
+.entitiesScreen {
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.addressSpaceScreen .columns,
+.entitiesScreen .columns {
+  height: 100%;
+  min-height: 0;
+  gap: 12px;
+}
+
+.addressSpaceScreen .lefthalf,
+.addressSpaceScreen .righthalf,
+.entitiesScreen .lefthalf,
+.entitiesScreen .righthalf {
+  width: calc(50% - 8px);
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  min-height: 0;
+}
+
+.addressSpaceScreen .scrollableInfoArea,
+.entitiesScreen .scrollableInfoArea {
+  height: 100%;
+  min-height: 0;
+  border: 1px solid var(--ui-accent);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
+  box-shadow: 0 10px 24px var(--connection-panel-shadow);
+}
+
+.addressSpaceScreen .myHeader,
+.entitiesScreen .myHeader {
+  background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
+  color: var(--ui-text-main);
+  border-bottom: 1px solid var(--connection-panel-border);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 8px 10px;
+}
+
+.addressSpaceScreen .doublecolumnleft,
+.addressSpaceScreen .doublecolumnright,
+.entitiesScreen .doublecolumnleft,
+.entitiesScreen .doublecolumnright {
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+}
+
+.entitiesScreen .methodLabel {
+  width: 42%;
+  color: var(--ui-text-main);
+  font-size: var(--demo-font-small);
+}
+
+.entitiesScreen .methodInputRight,
+.entitiesScreen .methodInput,
+.entitiesScreen .inputStyle {
+  color: var(--ui-text-main);
+}
+
+.entitiesScreen .methodInputRight input,
+.entitiesScreen .methodInputRight select,
+.entitiesScreen .methodInput,
+.entitiesScreen .inputStyle {
+  border: 1px solid var(--connection-panel-border);
+  border-radius: 6px;
+  background-color: var(--ui-control-bg);
+  color: var(--ui-text-main);
+}
+
+.entitiesScreen .myButton {
+  background-color: var(--demo-button-bg);
+  color: var(--ui-text-main);
+  border: 1px solid var(--ui-text-main);
+  border-radius: 6px;
+  font-size: var(--demo-font-button);
+  font-weight: 600;
+}
+
+.entitiesScreen .myButton:hover {
+  background: var(--demo-button-bg-hover);
+  color: var(--demo-button-text-hover);
+}
+
+.addressSpaceScreen .messages > li {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--connection-message-border);
+  border-radius: 6px;
+  background-color: var(--connection-message-bg);
+  color: var(--ui-text-main);
+  font-size: var(--demo-font-small);
+  white-space: pre-wrap;
+}
+
+/* Entities-specific */
+.entitiesScreen .doublecolumnleft {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-x: hidden;
+}
+
+.entitiesScreen .identifierType {
+  color: var(--ui-text-main);
+  font-weight: 700;
+}
+
+.entitiesScreen .identifier {
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--ui-text-main);
+  font-size: var(--demo-font-body);
+}
+
+.entitiesScreen .entityListLabel {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entitiesScreen .doublecolumnleft > .myButton {
+  width: fit-content;
+  min-width: 8rem;
+  max-width: 14rem;
+  align-self: flex-start;
+}
+
+.entitiesScreen .identifier:hover {
+  background: rgb(252 223 7 / 18%);
+  border-color: var(--ui-line-color);
+}
+
+/* Address Space-specific */
+.addressSpaceScreen .doublecolumnleft {
+  background: rgb(0 0 0 / 12%);
+  border-radius: 8px;
+}
+
+.addressSpaceScreen .treeNodeContainer,
+.addressSpaceScreen .treeRelationContainer {
+  position: relative;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.addressSpaceScreen .doublecolumnleft > .treeNodeContainer {
+  padding-left: 0;
+}
+
+.addressSpaceScreen .treeNodeContainer::before,
+.addressSpaceScreen .treeRelationContainer::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid rgb(252 223 7 / 35%);
+}
+
+.addressSpaceScreen .doublecolumnleft > .treeNodeContainer::before {
+  display: none;
+}
+
+.addressSpaceScreen .treeNodeContainer::after,
+.addressSpaceScreen .treeRelationContainer::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 1.15em;
+  width: 9px;
+  border-top: 1px solid rgb(252 223 7 / 35%);
+}
+
+.addressSpaceScreen .treeButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  margin: 0;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ui-text-main);
+  font-size: var(--demo-font-small);
+  line-height: 1.2;
+}
+
+.addressSpaceScreen .treeButton::before {
+  content: '▸';
+  display: inline-block;
+  width: 0.9em;
+  margin-right: 4px;
+  color: rgb(252 223 7 / 90%);
+}
+
+.addressSpaceScreen .treeNodeContainer.is-open > .treeButton::before,
+.addressSpaceScreen .treeRelationContainer.is-open > .treeButton::before {
+  content: '▾';
+}
+
+.addressSpaceScreen .treeButton:hover {
+  background: rgb(252 223 7 / 14%);
+  border-color: rgb(252 223 7 / 28%);
+}
+
+/* Methods/Address Space already pad inner subcomponents; avoid double left spacing */
+.addressSpaceScreen .scrollableInfoArea > .myHeader + .tightUL,
+.addressSpaceScreen .scrollableInfoArea > .myHeader + .contentArea,
+.addressSpaceScreen .scrollableInfoArea > .myHeader + .standardCol {
+  padding: 0;
+}

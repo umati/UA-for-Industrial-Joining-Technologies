@@ -1,0 +1,446 @@
+.demoScreen .scrollableInfoArea,
+.demoScreen .myInfoArea,
+.jointDemoScreen .scrollableInfoArea,
+.jointDemoScreen .myInfoArea {
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
+  box-shadow: 0 10px 24px var(--connection-panel-shadow);
+  overflow: hidden;
+}
+
+
+.demoScreen .myHeader,
+.jointDemoScreen .myHeader {
+  background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
+  color: var(--ui-text-main);
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
+  font-size: var(--demo-font-title);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+
+.demoScreen .labelStyle,
+.jointDemoScreen .labelStyle {
+  color: var(--ui-text-main);
+  font-size: var(--demo-font-body);
+  line-height: 1.35;
+}
+
+.demoScreen {
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.jointDemoScreen {
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+
+.demoScreen .demoRow,
+.jointDemoScreen .demoRow {
+  gap: var(--demo-gap);
+  margin: 0;
+  min-height: 0;
+}
+
+.demoScreen .demoCol,
+.jointDemoScreen .demoCol {
+  gap: var(--demo-gap);
+  margin: 0;
+  height: 100%;
+}
+
+.demoScreen .demoSidebar {
+  width: 22%;
+  min-width: 170px;
+  justify-content: flex-start;
+  padding: 10px;
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 10px;
+  background: var(--demo-surface-bg);
+}
+
+.demoScreen .demoProgramSidebar {
+  width: 170px;
+  min-width: 170px;
+  flex: 0 0 170px;
+}
+
+.demoScreen .demoMainArea,
+.jointDemoScreen .demoMainArea {
+  width: 78%;
+}
+
+.jointDemoScreen .demoCol {
+  height: auto;
+}
+
+.jointDemoScreen .demoMainArea {
+  width: 100%;
+  min-width: 0;
+}
+
+.demoScreen .demoTopPane,
+.jointDemoScreen .demoTopPane {
+  height: auto;
+  min-height: 200px;
+  flex: 0 0 auto;
+}
+
+.demoScreen .demoBottomPane,
+.jointDemoScreen .demoBottomPane {
+  height: auto;
+  flex: 1 1 auto;
+  margin: 0;
+  min-height: 0;
+}
+
+.demoScreen .demoTraceArea {
+  height: 100%;
+  min-height: 0;
+}
+
+.demoScreen .demoTraceArea .standardCol,
+.demoScreen .demoTraceArea .tightUL,
+.demoScreen .demoTraceArea .traceArea {
+  height: 100%;
+  min-height: 0;
+}
+
+.demoScreen .demoMachine,
+.jointDemoScreen .demoMachine,
+.jointDemoScreen .demoTwin {
+  width: 100%;
+  max-width: none;
+}
+
+.demoScreen .demoMachine,
+.demoScreen .demoMachine .kvKey,
+.demoScreen .demoMachine .kvValue,
+.demoScreen .demoMachine div,
+.jointDemoScreen .demoMachine,
+.jointDemoScreen .demoMachine .kvKey,
+.jointDemoScreen .demoMachine .kvValue,
+.jointDemoScreen .demoMachine div {
+  color: var(--ui-text-main);
+}
+
+.demoScreen .demoButton,
+.jointDemoScreen .demoButton,
+.jointDemoScreen .demoButtonFree,
+.jointDemoScreen .jointDemoToolsUseButton {
+  background-color: var(--demo-button-bg);
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  color: var(--ui-text-main);
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: var(--demo-font-button);
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  transition: background-color 120ms linear, transform 120ms ease;
+}
+
+.demoScreen .demoButton {
+  min-height: 34px;
+  width: 100%;
+  margin: 0 0 10px;
+  text-align: left;
+}
+
+.demoScreen .demoButton:hover,
+.jointDemoScreen .demoButton:hover,
+.jointDemoScreen .demoButtonFree:hover,
+.jointDemoScreen .jointDemoToolsUseButton:hover {
+  background: var(--demo-button-bg-hover);
+  color: var(--demo-button-text-hover);
+}
+
+.demoScreen .demoButton:active,
+.jointDemoScreen .demoButton:active,
+.jointDemoScreen .demoButtonFree:active,
+.jointDemoScreen .jointDemoToolsUseButton:active {
+  transform: translateY(1px);
+}
+
+
+.jointDemoToolsArea {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.jointDemoScreen .demoToolsArea {
+  height: 33%;
+  min-height: 180px;
+  max-height: 280px;
+  overflow: hidden;
+}
+
+.jointDemoScreen .demoTopPane .scrollableInfoArea {
+  margin: 0;
+}
+
+.jointDemoScreen .demoTwin {
+  height: 400px;
+  min-height: 400px;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.jointDemoActiveUriLabel {
+  font-size: var(--demo-font-small);
+  color: var(--ui-text-main);
+  margin-bottom: 6px;
+  line-height: 1.35;
+}
+
+.jointDemoHintText {
+  color: var(--demo-muted-text);
+  font-style: italic;
+  margin: 4px 0;
+  font-size: var(--demo-font-small);
+  line-height: 1.35;
+}
+
+.jointDemoToolsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--demo-font-body);
+  line-height: 1.35;
+}
+
+.jointDemoToolsHeaderRow {
+  background: rgb(0 0 0 / 35%);
+  color: var(--ui-text-main);
+}
+
+.jointDemoToolsHeaderCell {
+  padding: 6px 8px;
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
+  font-size: var(--demo-font-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.jointDemoToolsRowEven {
+  background: rgb(0 0 0 / 20%);
+}
+
+.jointDemoToolsRowOdd {
+  background: rgb(0 0 0 / 30%);
+}
+
+.jointDemoToolsCell {
+  padding: 6px 8px;
+}
+
+.jointDemoToolsCellName {
+  color: var(--ui-text-main);
+}
+
+.jointDemoToolsCellUri {
+  color: var(--demo-uri-text);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jointDemoToolsRow {
+  transition: background-color 120ms linear;
+}
+
+.jointDemoToolsRow:hover {
+  background: rgb(252 223 7 / 14%);
+}
+
+.jointDemoScreen .demoRelativeArea img {
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 25%);
+}
+
+.jointDemoToolsCellButton {
+  text-align: center;
+}
+
+.jointDemoToolsUseButton {
+  font-size: 0.8em;
+  padding: 2px 8px;
+  cursor: pointer;
+  background-color: var(--ui-bg-primary);
+  color: var(--ui-text-main);
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 4px;
+}
+
+.jointDemoToolsUseButton:hover {
+  background: darkgray;
+  color: var(--ui-text-dark);
+}
+
+.jointDemoToolsRowSelected {
+  outline: 2px solid var(--demo-row-selected);
+}
+
+.commonResultGrid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0 10px;
+  width: 100%;
+}
+
+.commonResultKeys,
+.commonResultValues {
+  min-width: 0;
+}
+
+.commonResultKeys > div {
+  white-space: nowrap;
+}
+
+.commonResultValues > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (width <= 1100px) {
+  .jointDemoScreen .demoRow {
+    flex-direction: column;
+  }
+
+  .jointDemoScreen .demoMainArea {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+}
+
+.demoRow {
+  display: flex;
+  flex-direction: row;
+
+  /* justify-content: center;
+  align-items: center; */
+  height: 97%;
+  margin: 5px;
+  min-height: 0;
+}
+
+.demoCol {
+  display: flex;
+  flex-direction: column;
+  height: 97%;
+  margin: 5px;
+  min-height: 0;
+}
+
+.demoRelativeArea {
+  position: relative;
+}
+
+.demoSidebar {
+  width: 20%;
+  justify-content: center;
+}
+
+.demoMainArea {
+  width: 80%;
+}
+
+.demoTopPane {
+  height: 200px;
+}
+
+.demoBottomPane {
+  height: 50%;
+  margin: 5px;
+}
+
+.demoWarningText {
+  color: red;
+}
+
+.demoButton {
+  background-color: var(--ui-bg-primary);
+  color: var(--ui-text-main);
+  padding: 5px;
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 5px;
+  margin: 10px;
+}
+
+.demoButton:hover {
+  background: darkgray;
+  transition: background-color 100ms linear;
+}
+
+.demoButton:active {
+  background: lightgray;
+  transition: background-color 100ms linear;
+  color: var(--ui-text-dark);
+}
+
+.demoButtonFree {
+  background-color: var(--ui-bg-primary);
+  color: var(--ui-text-main);
+  padding: 5px;
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 5px;
+  margin: 10px;
+  height: 30px;
+  width: 150px;
+  position: absolute;
+}
+
+.demoButtonFree:hover {
+  background: darkgray;
+  transition: background-color 100ms linear;
+}
+
+.demoButtonFree:active {
+  background: lightgray;
+  transition: background-color 100ms linear;
+  color: var(--ui-text-dark);
+}
+
+.demoActionSelectJoint1 {
+  left: 35px;
+  top: 45px;
+}
+
+.demoActionSelectJoint2 {
+  left: 420px;
+  top: 65px;
+}
+
+.demoActionSimulateTightening {
+  right: 10px;
+  top: 300px;
+}
+
+.demoMachine {
+  color: var(--ui-text-dark);
+  overflow: hidden;
+  height: 180px;
+  width: 500px;
+}
+
+.demoTwin {
+  color: var(--ui-text-dark);
+  overflow: visible;
+  height: 400px;
+  width: 500px;
+  margin: 10px;
+}

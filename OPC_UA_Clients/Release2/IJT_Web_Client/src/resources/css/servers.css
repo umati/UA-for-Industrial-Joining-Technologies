@@ -1,0 +1,112 @@
+.serversScreen {
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.serversScreen .scrollableInfoArea {
+  height: 100%;
+  min-height: 0;
+  border: var(--ui-line-width) solid var(--ui-line-color);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--connection-panel-bg-start) 0%, var(--connection-panel-bg-end) 100%);
+  box-shadow: 0 10px 24px var(--connection-panel-shadow);
+}
+
+.serversScreen .myHeader {
+  background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
+  color: var(--ui-text-main);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 8px 10px;
+  border-bottom: var(--ui-line-width) solid var(--ui-line-color);
+}
+
+.serversScreen .tightUL {
+  padding: 8px;
+}
+
+.serversScreen .serversRows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.serversScreen .serverRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(260px, 2fr) 120px 110px;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--connection-card-bg);
+  color: var(--ui-text-main);
+}
+
+.serversScreen .serverName,
+.serversScreen .serverEndpoint,
+.serversScreen .serverConnect,
+.serversScreen .serverDelete {
+  width: auto;
+  padding: 0;
+  text-align: left;
+  color: var(--ui-text-main);
+}
+
+.serversScreen .serverRow .labelStyle {
+  color: var(--ui-text-main);
+}
+
+.serversScreen .serverName input,
+.serversScreen .serverEndpoint input {
+  width: 100% !important;
+  min-width: 0;
+  border: 1px solid var(--connection-panel-border);
+  border-radius: 6px;
+  background-color: rgb(0 0 0 / 35%);
+  color: var(--ui-text-main);
+}
+
+.serversScreen .serverConnect {
+  display: flex;
+  justify-content: center;
+}
+
+.serversScreen .serversActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.serversScreen .myButton {
+  background-color: var(--demo-button-bg);
+  color: var(--ui-text-main);
+  border: 1px solid var(--ui-text-main);
+  border-radius: 6px;
+  font-size: var(--demo-font-button);
+  font-weight: 600;
+}
+
+.serversScreen .myButton:hover {
+  background: var(--demo-button-bg-hover);
+  color: var(--demo-button-text-hover);
+}
+
+@media (width <= 980px) {
+  .serversScreen .serverRow {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .serversScreen .serverConnect,
+  .serversScreen .serverDelete,
+  .serversScreen .serverName,
+  .serversScreen .serverEndpoint {
+    text-align: left;
+    justify-content: flex-start;
+  }
+}

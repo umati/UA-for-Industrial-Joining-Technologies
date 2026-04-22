@@ -1,0 +1,174 @@
+/* =========================================================
+   Global Base Rules
+   ========================================================= */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: var(--demo-font-body);
+  scrollbar-color: var(--ui-scroll-thumb) var(--ui-scroll-track);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--ui-scroll-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--ui-scroll-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--ui-scroll-track);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-scroll-thumb-hover);
+}
+
+select,
+.kvSelect,
+.envSelect,
+.dropJoiningProcess,
+.methodsScreen .methodInputRight select,
+.methodsScreen .methodInput,
+.methodsScreen .inputStyle,
+.entitiesScreen .methodInputRight select,
+.entitiesScreen .methodInput,
+.entitiesScreen .inputStyle {
+  color-scheme: dark;
+  -webkit-appearance: auto;
+  -moz-appearance: auto;
+  appearance: auto;
+  font-family: inherit;
+  font-size: var(--demo-font-body);
+  font-weight: 400;
+  line-height: 1.25;
+  background-color: var(--ui-control-bg);
+  color: var(--ui-text-main);
+  border: 1px solid var(--ui-control-border);
+  border-radius: 6px;
+  background-image: none;
+}
+
+select:hover,
+.kvSelect:hover,
+.envSelect:hover,
+.dropJoiningProcess:hover,
+.methodsScreen .methodInputRight select:hover,
+.methodsScreen .methodInput:hover,
+.methodsScreen .inputStyle:hover,
+.entitiesScreen .methodInputRight select:hover,
+.entitiesScreen .methodInput:hover,
+.entitiesScreen .inputStyle:hover {
+  background-color: var(--ui-control-bg-hover);
+}
+
+.tabright select {
+  background-color: var(--ui-control-bg) !important;
+  color: var(--ui-text-main) !important;
+  border: 1px solid var(--ui-control-border) !important;
+}
+
+select option,
+select optgroup {
+  background-color: var(--ui-control-menu-bg) !important;
+  color: var(--ui-text-main) !important;
+}
+
+select option:checked {
+  background: var(--ui-control-menu-hover) !important;
+  color: var(--ui-text-main) !important;
+}
+
+#form {
+  background: rgb(0 0 0 / 15%);
+  padding: 0.25rem;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  height: 3rem;
+  box-sizing: border-box;
+
+  /* --webkit-backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px); */
+}
+
+#input {
+  border: none;
+  padding: 0 1rem;
+  flex-grow: 1;
+  border-radius: 2rem;
+  margin: 0.25rem;
+}
+
+#input:focus {
+  outline: none;
+}
+
+#form>button {
+  background: #333;
+  border: none;
+  padding: 0 1rem;
+  margin: 0.25rem;
+  border-radius: 3px;
+  outline: none;
+  color: #fff;
+}
+
+.doublecolumnleft,
+.doublecolumnright {
+  list-style-type: none;
+  padding: 0;
+}
+
+.messages {
+  list-style-type: none;
+  padding: 0;
+  font-size: x-small;
+}
+
+.messages>li {
+  border: 0 solid transparent;
+  border-radius: 0;
+  margin: 0;
+  background-color: var(--ui-bg-panel);
+  color: var(--ui-text-main);
+  padding: 0 0 0 2px;
+}
+
+canvas {
+  margin: 0;
+  display: block;
+}
+
+.messages>li:nth-child(odd) {
+  background-color: var(--ui-bg-panel-alt);
+}
+
+@keyframes errorfade {
+  0% {
+    opacity: 1;
+  }
+
+  75% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+.startScreen {
+  height: 100vh;
+  background-color: var(--ui-bg-panel);
+  width: 100%;
+
+  /* overflow:hidden; */
+}
