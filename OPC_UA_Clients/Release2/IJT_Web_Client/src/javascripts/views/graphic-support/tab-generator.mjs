@@ -15,6 +15,8 @@ export default class TabGenerator {
     this.container = container
     this.containerList = []
     this.viewLevel = -1
+    this.tabIdCounter = 0
+    this.idNamespace = `ijt-tab-${Math.random().toString(36).slice(2, 10)}`
 
     this.currentViewLevel = currentViewLevel
     this.tabBase = document.createElement('div')
@@ -38,9 +40,11 @@ export default class TabGenerator {
 
     this.selector = document.createElement('div')
     this.selector.classList.add('tabSelect')
+    this.selector.setAttribute('role', 'tablist')
+    this.selector.setAttribute('aria-label', 'Endpoint tabs')
     left.appendChild(this.selector)
     this.selector.resetButtons = function () {
-      for (const item of this.childNodes) {
+      for (const item of this.children) {
         if (item.reset) {
           item.reset()
         }
@@ -49,6 +53,9 @@ export default class TabGenerator {
 
     this.contentDiv = document.createElement('div')
     this.contentDiv.classList.add('tabContent')
+    this.contentDiv.id = `${this.idNamespace}-panel`
+    this.contentDiv.setAttribute('role', 'tabpanel')
+    this.contentDiv.setAttribute('tabindex', '0')
     this.tabBase.appendChild(this.contentDiv)
   }
 
@@ -133,6 +140,34 @@ export default class TabGenerator {
         return
       }
     }
+  }
+
+  getVisibleTabs () {
+    return this.containerList.filter((tab) => tab && tab.visible())
+  }
+
+  focusRelativeTab (currentTab, step) {
+    const visibleTabs = this.getVisibleTabs()
+    if (visibleTabs.length === 0) {
+      return
+    }
+    const currentIndex = visibleTabs.indexOf(currentTab)
+    const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0
+    const nextIndex = (safeCurrentIndex + step + visibleTabs.length) % visibleTabs.length
+    const nextTab = visibleTabs[nextIndex]
+    if (!nextTab) return
+    nextTab.button.focus()
+    nextTab.select()
+  }
+
+  focusEdgeTab (toLast = false) {
+    const visibleTabs = this.getVisibleTabs()
+    if (visibleTabs.length === 0) {
+      return
+    }
+    const nextTab = toLast ? visibleTabs[visibleTabs.length - 1] : visibleTabs[0]
+    nextTab.button.focus()
+    nextTab.select()
   }
 
   changeViewLevel (newLevel) {
@@ -235,6 +270,11 @@ class Tab {
     this.button.type = 'button'
     this.button.value = content.title || 'Untitled'
     this.button.classList.add('tabButton')
+    this.button.id = `${this.tabGenerator.idNamespace}-tab-${++this.tabGenerator.tabIdCounter}`
+    this.button.setAttribute('role', 'tab')
+    this.button.setAttribute('aria-controls', this.tabGenerator.contentDiv.id)
+    this.button.setAttribute('aria-selected', 'false')
+    this.button.tabIndex = -1
 
     this.button.aaID = Math.random(1000)
     this.button.aaNAME = content.title || 'Untitled'
@@ -252,6 +292,9 @@ class Tab {
         this.selectorArea.resetButtons()
         this.selected = true
         this.button.classList.add('is-selected')
+        this.button.setAttribute('aria-selected', 'true')
+        this.button.tabIndex = 0
+        this.tabGenerator.contentDiv.setAttribute('aria-labelledby', this.button.id)
         this.tabGenerator.currentSelected = content
       } catch (error) {
         this.tabGenerator.displayError({
@@ -263,6 +306,8 @@ class Tab {
     }
     this.button.reset = () => {
       this.button.classList.remove('is-selected')
+      this.button.setAttribute('aria-selected', 'false')
+      this.button.tabIndex = -1
       this.selected = false
     }
 
@@ -282,6 +327,29 @@ class Tab {
     this.button.onmouseleave = () => {
       this.clearHelpTimer()
       this.clearHelpTooltip()
+    }
+
+    this.button.onkeydown = (evt) => {
+      switch (evt.key) {
+        case 'ArrowRight':
+        case 'Right':
+          evt.preventDefault()
+          this.tabGenerator.focusRelativeTab(this, 1)
+          break
+        case 'ArrowLeft':
+        case 'Left':
+          evt.preventDefault()
+          this.tabGenerator.focusRelativeTab(this, -1)
+          break
+        case 'Home':
+          evt.preventDefault()
+          this.tabGenerator.focusEdgeTab(false)
+          break
+        case 'End':
+          evt.preventDefault()
+          this.tabGenerator.focusEdgeTab(true)
+          break
+      }
     }
 
     this.changeViewLevel(currentViewLevel)
