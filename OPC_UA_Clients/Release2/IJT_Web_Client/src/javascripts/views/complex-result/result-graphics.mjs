@@ -193,6 +193,29 @@ export default class ResultGraphics extends BasicScreen {
   }
 
   /**
+   * If label ends with "Result: <number>" (optionally followed by "[x/y]"),
+   * force a line break before that result suffix.
+   * @param {string} text
+   * @returns {string}
+   */
+  wrapBeforeResultText (text) {
+    if (typeof text !== 'string') {
+      return text
+    }
+    const trimmed = text.trim()
+    const match = trimmed.match(/^(.*?)(\s*Result:\s*-?\d+(?:\.\d+)?)(\s*\[[^\]]+\])?$/)
+    if (!match) {
+      return trimmed
+    }
+    const before = match[1].trimEnd()
+    if (!before) {
+      return trimmed
+    }
+    const suffix = `${match[2].trimStart()}${match[3] || ''}`.trim()
+    return `${before}\n${suffix}`
+  }
+
+  /**
    * This function returns a HTML representation of the parent and its children
    * @date 2/12/2024 - 7:24:26 PM
    *
@@ -388,6 +411,10 @@ export default class ResultGraphics extends BasicScreen {
 
       if (counterInfo.size > 0) {
         top.innerText += ` [${counterInfo.counter}/${counterInfo.size}]`
+      }
+      top.innerText = this.wrapBeforeResultText(top.innerText)
+      if (top.innerText.includes('\n')) {
+        top.style.whiteSpace = 'pre-line'
       }
 
       const contentList = result.ResultContent
