@@ -144,7 +144,7 @@
   font-size: var(--demo-font-button);
   line-height: 1.2;
   letter-spacing: 0.01em;
-  transition: background-color 120ms linear, transform 120ms ease;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard), transform var(--motion-fast) var(--motion-ease-standard);
 }
 
 .demoScreen .demoButton {
@@ -258,11 +258,16 @@
 }
 
 .jointDemoToolsRow {
-  transition: background-color 120ms linear;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard);
 }
 
 .jointDemoToolsRow:hover {
   background: rgb(252 223 7 / 14%);
+}
+
+.jointDemoToolsRow:focus-within {
+  background: rgb(252 223 7 / 18%);
+  box-shadow: inset 0 0 0 1px rgb(252 223 7 / 45%);
 }
 
 .jointDemoScreen .demoRelativeArea img {
@@ -383,12 +388,12 @@
 
 .demoButton:hover {
   background: darkgray;
-  transition: background-color 100ms linear;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard);
 }
 
 .demoButton:active {
   background: lightgray;
-  transition: background-color 100ms linear;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard);
   color: var(--ui-text-dark);
 }
 
@@ -406,12 +411,12 @@
 
 .demoButtonFree:hover {
   background: darkgray;
-  transition: background-color 100ms linear;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard);
 }
 
 .demoButtonFree:active {
   background: lightgray;
-  transition: background-color 100ms linear;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard);
   color: var(--ui-text-dark);
 }
 

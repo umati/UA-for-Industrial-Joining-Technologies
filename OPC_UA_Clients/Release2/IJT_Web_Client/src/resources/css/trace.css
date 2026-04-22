@@ -82,7 +82,7 @@
 }
 
 .traceScreen .traceChartHost.is-trace-fresh > .traceArea {
-  animation: trace-fresh-pulse 220ms ease-out;
+  animation: trace-fresh-pulse var(--motion-pulse) var(--motion-ease-emphasized);
 }
 
 @keyframes trace-fresh-pulse {
@@ -125,7 +125,10 @@
   font-weight: 600;
   font-size: var(--demo-font-button);
   margin: 3px;
-  transition: background-color 110ms linear, transform 110ms ease, box-shadow 120ms ease;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
 }
 
 .traceScreen .myButton:hover {

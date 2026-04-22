@@ -111,6 +111,12 @@ select option:checked {
   outline: none;
 }
 
+#input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  box-shadow: 0 0 0 var(--focus-ring-shadow-spread) var(--focus-ring-shadow-color);
+}
+
 #form>button {
   background: #333;
   border: none;
@@ -149,6 +155,26 @@ canvas {
 
 .messages>li:nth-child(odd) {
   background-color: var(--ui-bg-panel-alt);
+}
+
+button:focus-visible,
+input[type='button']:focus-visible,
+input[type='checkbox']:focus-visible,
+input[type='text']:focus-visible,
+input:not([type]):focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.myButton:focus-visible,
+.demoButton:focus-visible,
+.demoButtonFree:focus-visible,
+.jointDemoToolsUseButton:focus-visible,
+.tabButton:focus-visible,
+.traceItemButton:focus-visible,
+.stepItemButton:focus-visible,
+.identifier:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  box-shadow: 0 0 0 var(--focus-ring-shadow-spread) var(--focus-ring-shadow-color);
 }
 
 @keyframes errorfade {
