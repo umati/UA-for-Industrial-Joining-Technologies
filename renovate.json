@@ -2,5 +2,18 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchManagers": [
+        "nuget"
+      ],
+      "rangeStrategy": "pin",
+      "rebaseWhen": "behind-base-branch",
+      "separateMinorPatch": true
+    }
   ]
 }

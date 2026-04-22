@@ -275,8 +275,10 @@ docs/reference.md
 .pre-commit-cache-local/
 # Local-only colleague working directory — exists on some machines, never push
 # Both cases listed: Windows/macOS are case-insensitive but Linux is not
-Envelope/
-envelope/
+# Anchored with '/' so only the repo-root Envelope/ dir is ignored, not
+# source directories like src/javascripts/views/envelope/ inside the project.
+/Envelope/
+/envelope/
 # Repo-root .state/ guard — created if any tool is accidentally run from repo root
 /.state/
 # Setup timestamp files — written by setup_client.py / setup_project.py in any Python client

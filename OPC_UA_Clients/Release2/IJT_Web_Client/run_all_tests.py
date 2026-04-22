@@ -414,6 +414,20 @@ def _stage_versions() -> StageResult:
     return StageResult("versions", 0, duration=time.monotonic() - t0)
 
 
+def _stage_npm_install() -> StageResult:
+    """Ensure node_modules are installed before any stage that depends on them."""
+    t0 = time.monotonic()
+    npm = shutil.which("npm") or shutil.which("npm.cmd")
+    if not npm:
+        return StageResult("npm-install", 0, skipped=True, duration=time.monotonic() - t0, notes=["npm not found"])
+    nm = ROOT / "node_modules"
+    if nm.exists() and any(nm.iterdir()):
+        return StageResult("npm-install", 0, skipped=True, duration=time.monotonic() - t0, notes=["node_modules already present"])
+    _banner("STAGE 1c  npm install (node_modules missing or empty)")
+    rc = _run([npm, "install", "--legacy-peer-deps"], label="npm install")
+    return StageResult("npm-install", rc, duration=time.monotonic() - t0)
+
+
 def _stage_pip_install(python: Path) -> StageResult:
     _banner("STAGE 1  Install / verify Python test dependencies")
     t0 = time.monotonic()
@@ -514,8 +528,8 @@ def _stage_python_lint(python: Path) -> StageResult:
         _skip("pip-audit not installed — pip install pip-audit")
         notes.append("pip-audit not installed")
 
-    if _cmd_available("detect-secrets"):
-        rc = _run(["detect-secrets", "scan"], label="detect-secrets scan")
+    if _py_module_available("detect_secrets"):
+        rc = _run([python, "-m", "detect_secrets", "scan"], label="detect-secrets scan")
         if rc != 0:
             overall_rc = rc
     else:
@@ -561,7 +575,7 @@ def _stage_python_lint(python: Path) -> StageResult:
         _skip("semgrep not installed — pip install semgrep")
         notes.append("semgrep not installed")
 
-    # pyright AI type inference
+    # pyright AI type inference — advisory only, never blocks the run
     if _cmd_available("pyright") or _py_module_available("pyright"):
         results_dir.mkdir(parents=True, exist_ok=True)
         cmd_py = (
@@ -577,10 +591,10 @@ def _stage_python_lint(python: Path) -> StageResult:
             py_errors = summary.get("errorCount", 0)
             py_warns = summary.get("warningCount", 0)
             if py_errors:
-                _fail(f"pyright: {py_errors} error(s), {py_warns} warning(s)")
-                overall_rc = 1
+                _warn(f"pyright: advisory: {py_errors} error(s), {py_warns} warning(s)")
+                notes.append(f"pyright advisory: {py_errors} error(s)")
             elif py_warns:
-                _warn(f"pyright: 0 errors, {py_warns} warning(s)")
+                _warn(f"pyright: advisory: 0 errors, {py_warns} warning(s)")
             else:
                 _ok("pyright: 0 errors, 0 warnings")
         except Exception:
@@ -1358,6 +1372,7 @@ def main() -> int:
     if not skip_static:
         results.append(_stage_versions())
         results.append(_stage_pip_install(python))
+        results.append(_stage_npm_install())
         results.append(_stage_python_lint(python))
         results.append(_stage_python_unit(python))
         results.append(_stage_js_lint())

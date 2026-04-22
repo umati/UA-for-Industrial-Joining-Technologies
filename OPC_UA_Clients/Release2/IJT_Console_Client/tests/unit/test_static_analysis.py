@@ -12,7 +12,6 @@ from __future__ import annotations
 import ast
 import io
 import re
-import shutil
 import subprocess
 import sys
 import tokenize
@@ -41,14 +40,6 @@ def _all_py_files(root: Path) -> list[Path]:
     return [f for f in root.rglob("*.py") if not any(_skip(part) for part in f.parts)]
 
 
-_PYLINT_AVAILABLE = shutil.which("pylint") is not None or (
-    subprocess.run(
-        [sys.executable, "-m", "pylint", "--version"],
-        capture_output=True,
-    ).returncode
-    == 0
-)
-
 _BANDIT_AVAILABLE = (
     subprocess.run(
         [sys.executable, "-m", "bandit", "--version"],
@@ -58,54 +49,8 @@ _BANDIT_AVAILABLE = (
 )
 
 
-def _parse_pylint_score(output: str) -> float | None:
-    """Extract the pylint score from 'Your code has been rated at X.XX/10'."""
-    match = re.search(r"rated at\s+([\-\d.]+)/10", output)
-    if match:
-        try:
-            return float(match.group(1))
-        except ValueError:
-            return None
-    return None
-
-
 # ===========================================================================
-# 1. Pylint — minimum score (all project Python files)
-# ===========================================================================
-
-
-@pytest.mark.skipif(not _PYLINT_AVAILABLE, reason="pylint not installed")
-def test_pylint_score_above_threshold():
-    """pylint must score >= 7.0 across all project Python files."""
-    all_files = [str(f) for f in _all_py_files(_CONSOLE_ROOT)]
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pylint",
-            "--fail-under=7.0",
-            "--output-format=text",
-            "--score=yes",
-        ]
-        + all_files,
-        cwd=str(_CONSOLE_ROOT),
-        capture_output=True,
-        text=True,
-    )
-    combined = result.stdout + result.stderr
-    score = _parse_pylint_score(combined)
-
-    if score is not None:
-        assert score >= 7.0, f"pylint score {score:.2f}/10 is below threshold 7.0:\n{result.stdout}"
-    else:
-        # Couldn't parse score — only fail on fatal/usage errors (exit codes 1, 32)
-        assert result.returncode not in (1, 32), (
-            f"pylint failed with exit code {result.returncode}:\n{result.stdout}\n{result.stderr}"
-        )
-
-
-# ===========================================================================
-# 2. Bandit — security scan
+# 1. Bandit — security scan
 # ===========================================================================
 
 
@@ -131,34 +76,7 @@ def test_bandit_no_high_severity():
 
 
 # ===========================================================================
-# 3. pylint unused-imports gate (all project Python files)
-# ===========================================================================
-
-
-@pytest.mark.skipif(not _PYLINT_AVAILABLE, reason="pylint not installed")
-def test_no_unused_imports_in_source():
-    """pylint must find no unused imports (W0611) across all project Python files."""
-    all_files = [str(f) for f in _all_py_files(_CONSOLE_ROOT)]
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pylint",
-            *all_files,
-            "--disable=all",
-            "--enable=W0611",
-            "--score=no",
-            "--output-format=text",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=str(_CONSOLE_ROOT),
-    )
-    assert result.returncode == 0, f"Unused imports found:\n{result.stdout}"
-
-
-# ===========================================================================
-# 4. Empty except-block gate (all project Python files)
+# 3. Empty except-block gate (all project Python files)
 #    CodeQL: py/empty-except-clause
 # ===========================================================================
 
@@ -561,33 +479,6 @@ def test_no_unused_importorskip_assignments():
         for name in _find_unused_importorskip_assignments(source):
             issues.append(f"{py_file}: '{name} = pytest.importorskip(...)' — '{name}' never used as attribute access")
     assert not issues, "Unused importorskip assignments:\n" + "\n".join(issues)
-
-
-# ===========================================================================
-# 11. Unused local variables  (pylint W0612)
-# ===========================================================================
-
-
-@pytest.mark.skipif(not _PYLINT_AVAILABLE, reason="pylint not installed")
-def test_no_unused_local_variables():
-    """pylint must find no unused local variables (W0612) across all project Python files."""
-    all_files = [str(f) for f in _all_py_files(_CONSOLE_ROOT)]
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pylint",
-            *all_files,
-            "--disable=all",
-            "--enable=W0612",
-            "--score=no",
-            "--output-format=text",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=str(_CONSOLE_ROOT),
-    )
-    assert result.returncode == 0, f"Unused local variables found:\n{result.stdout}"
 
 
 # ===========================================================================

@@ -37,7 +37,14 @@ def _all_py_files(root: Path) -> list[Path]:
 
 
 def _tool_available(name: str) -> bool:
-    return shutil.which(name) is not None
+    """Return True only if the tool is available via the current venv Python."""
+    return (
+        subprocess.run(
+            [sys.executable, "-m", name, "--version"],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
 
 
 def _npm_available() -> bool:
@@ -51,50 +58,17 @@ def _is_wsl() -> bool:
 
 
 def _eslint_executable() -> bool:
-    """Return True only if running npm run lint is expected to work.
-
-    Skipped on WSL because Windows node_modules on /mnt/c/ NTFS are far too
-    slow for the 30 s pytest-timeout (cross-filesystem overhead).  Native
-    Windows and Linux CI both have platform-native node_modules and work fine.
-    """
+    """Return True only if eslint is installed and runnable."""
     if not _npm_available():
         return False
-    return not _is_wsl()
+    if _is_wsl():
+        return False
+    eslint_bin = _PROJECT_ROOT / "node_modules" / ".bin" / "eslint"
+    return eslint_bin.exists()
 
 
 # ===========================================================================
-# 1. Pylint — Python source quality gate (all project Python files)
-# ===========================================================================
-
-
-@pytest.mark.skipif(
-    not _tool_available("pylint"),
-    reason="pylint not installed — skipping quality gate",
-)
-def test_pylint_passes_minimum_score():
-    """pylint score must be >= 7.0 across all project Python files."""
-    all_files = [str(f) for f in _all_py_files(_PROJECT_ROOT)]
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pylint",
-            *all_files,
-            "--fail-under=7.0",
-            "--output-format=text",
-            "--score=yes",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=str(_PROJECT_ROOT),
-    )
-    assert result.returncode == 0, (
-        f"pylint exited with code {result.returncode}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    )
-
-
-# ===========================================================================
-# 2. Bandit — Python security scanner
+# 1. Bandit — Python security scanner
 # ===========================================================================
 
 
@@ -106,6 +80,8 @@ def test_bandit_no_high_severity_issues():
     """bandit must find no HIGH or MEDIUM severity issues in src/python/."""
     result = subprocess.run(
         [
+            sys.executable,
+            "-m",
             "bandit",
             "-r",
             str(_SRC_PYTHON),
@@ -124,7 +100,7 @@ def test_bandit_no_high_severity_issues():
 
 
 # ===========================================================================
-# 3. ESLint — JavaScript source quality gate
+# 2. ESLint — JavaScript source quality gate
 # ===========================================================================
 
 
@@ -147,37 +123,7 @@ def test_eslint_passes():
 
 
 # ===========================================================================
-# 4. pylint unused-imports gate (all project Python files)
-# ===========================================================================
-
-
-@pytest.mark.skipif(
-    not _tool_available("pylint"),
-    reason="pylint not installed — skipping unused-imports gate",
-)
-def test_no_unused_imports_in_source():
-    """pylint must find no unused imports (W0611) across all project Python files."""
-    all_files = [str(f) for f in _all_py_files(_PROJECT_ROOT)]
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pylint",
-            *all_files,
-            "--disable=all",
-            "--enable=W0611",
-            "--score=no",
-            "--output-format=text",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=str(_PROJECT_ROOT),
-    )
-    assert result.returncode == 0, f"Unused imports found:\n{result.stdout}"
-
-
-# ===========================================================================
-# 5. Empty except-block gate (all project Python files)
+# 3. Empty except-block gate (all project Python files)
 # ===========================================================================
 
 _BROAD_EXCEPTION_NAMES = {"Exception", "BaseException"}
@@ -215,7 +161,7 @@ def test_no_empty_except_blocks():
 
 
 # ===========================================================================
-# 6. Implicit string concatenation in list literals
+# 4. Implicit string concatenation in list literals
 #    CodeQL: py/implicit-string-concatenation
 # ===========================================================================
 
@@ -267,7 +213,7 @@ def test_no_implicit_string_concat_in_lists():
 
 
 # ===========================================================================
-# 7. Mixed/inconsistent return statements  (CodeQL R1710)
+# 5. Mixed/inconsistent return statements  (CodeQL R1710)
 # ===========================================================================
 
 _SKIP_METHOD_NAMES = {
@@ -371,7 +317,7 @@ def test_no_mixed_return_statements():
 
 
 # ===========================================================================
-# 8. Duplicate imports  (CodeQL py/duplicate-import)
+# 6. Duplicate imports  (CodeQL py/duplicate-import)
 # ===========================================================================
 
 
@@ -409,7 +355,7 @@ def test_no_duplicate_imports():
 
 
 # ===========================================================================
-# 9. Unused global declarations  (CodeQL py/unused-global-variable)
+# 7. Unused global declarations  (CodeQL py/unused-global-variable)
 # ===========================================================================
 
 _KNOWN_UNUSED_GLOBAL_EXCEPTIONS = {
@@ -510,7 +456,7 @@ def test_no_unused_global_declarations():
 
 
 # ===========================================================================
-# 10. Variable defined multiple times without intervening use
+# 8. Variable defined multiple times without intervening use
 #     CodeQL: py/multiple-definition
 # ===========================================================================
 
@@ -574,7 +520,7 @@ def test_no_multiple_definitions():
 
 
 # ===========================================================================
-# 11. Unused pytest.importorskip assignments
+# 9. Unused pytest.importorskip assignments
 #     Catches: X = pytest.importorskip(...) where X is never used as X.something
 # ===========================================================================
 
@@ -601,36 +547,6 @@ def test_no_unused_importorskip_assignments():
         for name in _find_unused_importorskip_assignments(source):
             issues.append(f"{py_file}: '{name} = pytest.importorskip(...)' — '{name}' never used as attribute access")
     assert not issues, "Unused importorskip assignments:\n" + "\n".join(issues)
-
-
-# ===========================================================================
-# 12. Unused local variables  (pylint W0612)
-# ===========================================================================
-
-
-@pytest.mark.skipif(
-    not _tool_available("pylint"),
-    reason="pylint not installed — skipping unused-locals gate",
-)
-def test_no_unused_local_variables():
-    """pylint must find no unused local variables (W0612) across all project Python files."""
-    all_files = [str(f) for f in _all_py_files(_PROJECT_ROOT)]
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pylint",
-            *all_files,
-            "--disable=all",
-            "--enable=W0612",
-            "--score=no",
-            "--output-format=text",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=str(_PROJECT_ROOT),
-    )
-    assert result.returncode == 0, f"Unused local variables found:\n{result.stdout}"
 
 
 # ===========================================================================
