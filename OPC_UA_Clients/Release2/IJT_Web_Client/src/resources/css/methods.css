@@ -151,3 +151,37 @@
 .methodsScreen .scrollableInfoArea > .myHeader + .standardCol {
   padding: 0;
 }
+
+@media (width <= 1180px) {
+  .methodsScreen {
+    padding: var(--space-8);
+  }
+
+  .methodsScreen .columns {
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .methodsScreen .lefthalf,
+  .methodsScreen .righthalf {
+    width: 100%;
+    min-height: 0;
+    flex: 1 1 50%;
+  }
+
+  .methodsScreen .doublecolumnleft,
+  .methodsScreen .doublecolumnright {
+    padding: var(--space-6);
+  }
+}
+
+@media (width <= 760px) {
+  .methodsScreen .methodRowDistance {
+    flex-wrap: wrap;
+    gap: var(--space-6);
+  }
+
+  .methodsScreen .methodLabel {
+    width: 100%;
+  }
+}

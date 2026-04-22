@@ -236,3 +236,43 @@
 .addressSpaceScreen .scrollableInfoArea > .myHeader + .standardCol {
   padding: 0;
 }
+
+@media (width <= 1180px) {
+  .addressSpaceScreen,
+  .entitiesScreen {
+    padding: var(--space-8);
+  }
+
+  .addressSpaceScreen .columns,
+  .entitiesScreen .columns {
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .addressSpaceScreen .lefthalf,
+  .addressSpaceScreen .righthalf,
+  .entitiesScreen .lefthalf,
+  .entitiesScreen .righthalf {
+    width: 100%;
+    flex: 1 1 50%;
+  }
+
+  .addressSpaceScreen .doublecolumnleft,
+  .addressSpaceScreen .doublecolumnright,
+  .entitiesScreen .doublecolumnleft,
+  .entitiesScreen .doublecolumnright {
+    padding: var(--space-6);
+  }
+}
+
+@media (width <= 760px) {
+  .addressSpaceScreen,
+  .entitiesScreen {
+    padding: var(--space-6);
+  }
+
+  .entitiesScreen .doublecolumnleft > .myButton {
+    width: 100%;
+    max-width: none;
+  }
+}

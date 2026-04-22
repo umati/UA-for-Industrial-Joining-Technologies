@@ -390,3 +390,52 @@
   max-width: none;
   box-sizing: border-box;
 }
+
+@media (width <= 1180px) {
+  .consolidatedResultScreen {
+    padding: var(--space-8);
+  }
+
+  .consolidatedResultScreen .resultHeader {
+    gap: var(--space-6);
+    padding: var(--space-6) var(--space-8);
+  }
+
+  .consolidatedResultScreen .resultHeaderLeft {
+    flex-wrap: wrap;
+    gap: var(--space-6);
+  }
+
+  .consolidatedResultScreen .resultHeaderItem select {
+    width: 15ch;
+    min-width: 15ch;
+    max-width: 15ch;
+  }
+}
+
+@media (width <= 760px) {
+  .consolidatedResultScreen {
+    padding: var(--space-6);
+    gap: var(--space-6);
+  }
+
+  .consolidatedResultScreen .resultHeaderLeft,
+  .consolidatedResultScreen .resultHeaderRight {
+    width: 100%;
+  }
+
+  .consolidatedResultScreen .resultHeaderRight {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .consolidatedResultScreen .resultHeaderItem {
+    width: 100%;
+  }
+
+  .consolidatedResultScreen .resultHeaderItem select {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+}
