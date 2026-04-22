@@ -1,7 +1,7 @@
 .serversScreen {
   height: 100%;
   min-height: 0;
-  padding: 10px;
+  padding: var(--space-10);
   box-sizing: border-box;
 }
 
@@ -19,27 +19,27 @@
   color: var(--ui-text-main);
   font-weight: 700;
   letter-spacing: 0.02em;
-  padding: 8px 10px;
+  padding: var(--space-8) var(--space-10);
   border-bottom: var(--ui-line-width) solid var(--ui-line-color);
 }
 
 .serversScreen .tightUL {
-  padding: 8px;
+  padding: var(--space-8);
 }
 
 .serversScreen .serversRows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .serversScreen .serverRow {
   display: grid;
   grid-template-columns: minmax(120px, 1fr) minmax(260px, 2fr) 120px 110px;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   margin: 0;
-  padding: 8px 10px;
+  padding: var(--space-8) var(--space-10);
   border: none;
   border-radius: 8px;
   background-color: var(--connection-card-bg);
@@ -78,8 +78,8 @@
 .serversScreen .serversActions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 10px;
+  gap: var(--space-8);
+  margin-top: var(--space-10);
 }
 
 .serversScreen .myButton {
@@ -99,7 +99,7 @@
 @media (width <= 980px) {
   .serversScreen .serverRow {
     grid-template-columns: 1fr;
-    gap: 6px;
+    gap: var(--space-6);
   }
 
   .serversScreen .serverConnect,
