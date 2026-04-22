@@ -88,6 +88,7 @@
   border-radius: 6px;
   background-color: var(--ui-control-bg);
   color: var(--ui-text-main);
+  min-height: var(--control-height);
 }
 
 .entitiesScreen .myButton {
@@ -119,7 +120,7 @@
 .entitiesScreen .doublecolumnleft {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--control-gap);
   overflow-x: hidden;
 }
 
@@ -135,6 +136,7 @@
   border-radius: 6px;
   color: var(--ui-text-main);
   font-size: var(--demo-font-body);
+  min-height: var(--control-height);
 }
 
 .entitiesScreen .entityListLabel {
@@ -201,11 +203,11 @@
 .addressSpaceScreen .treeButton {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
+  min-height: var(--control-height);
   margin: 0;
   padding: 0 var(--space-6);
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: var(--control-radius);
   background: transparent;
   color: var(--ui-text-main);
   font-size: var(--demo-font-small);
@@ -274,5 +276,15 @@
   .entitiesScreen .doublecolumnleft > .myButton {
     width: 100%;
     max-width: none;
+  }
+
+  .entitiesScreen .myButton,
+  .entitiesScreen .methodInputRight input,
+  .entitiesScreen .methodInputRight select,
+  .entitiesScreen .methodInput,
+  .entitiesScreen .inputStyle,
+  .entitiesScreen .identifier,
+  .addressSpaceScreen .treeButton {
+    min-height: var(--control-height-compact);
   }
 }

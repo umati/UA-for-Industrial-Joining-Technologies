@@ -51,7 +51,7 @@
 }
 
 .traceScreen .traceButtonArea {
-  gap: var(--demo-gap);
+  gap: var(--control-gap);
   flex: 0 0 auto;
   margin-top: auto;
 }
@@ -68,7 +68,7 @@
 .traceScreen .traceMetaBar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-6);
+  gap: var(--control-gap);
   padding: var(--space-8) var(--space-10) var(--space-6);
   border-bottom: var(--ui-line-width) solid rgb(252 223 7 / 28%);
   background: rgb(0 0 0 / 20%);
@@ -126,17 +126,17 @@
   color: var(--ui-text-main);
   background-color: rgb(0 0 0 / 35%);
   border: var(--ui-line-width) solid var(--ui-line-color);
-  border-radius: 6px;
+  border-radius: var(--control-radius);
 }
 
 .traceScreen .myButton {
   background-color: var(--demo-button-bg);
   border: var(--ui-line-width) solid var(--ui-line-color);
   color: var(--ui-text-main);
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   font-weight: 600;
   font-size: var(--demo-font-button);
-  margin: 3px;
+  margin: 0;
   transition:
     background-color var(--motion-fast) var(--motion-ease-standard),
     transform var(--motion-fast) var(--motion-ease-standard),
@@ -158,19 +158,22 @@
 .traceScreen .stepListPanel {
   max-height: 8.6rem;
   overflow: auto;
-  padding: 4px 2px;
+  padding: var(--space-4);
   border-top: 1px solid rgb(252 223 7 / 22%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .traceScreen .traceListPanel {
-  margin-bottom: 4px;
+  margin-bottom: var(--space-4);
 }
 
 .traceScreen .traceItemButton,
 .traceScreen .stepItemButton {
-  width: calc(100% - 6px);
+  width: 100%;
   text-align: left;
-  margin: 2px 3px;
+  margin: 0;
 }
 
 .traceScreen .traceItemButton {
@@ -231,5 +234,10 @@
   .traceScreen .traceMetaBar {
     gap: var(--space-4);
     padding: var(--space-6) var(--space-8);
+  }
+
+  .traceScreen .myButton,
+  .traceScreen .kvSelect {
+    min-height: var(--control-height-compact);
   }
 }

@@ -46,10 +46,12 @@ select,
   font-size: var(--demo-font-body);
   font-weight: 400;
   line-height: 1.25;
+  min-height: var(--control-height);
+  padding: 0 var(--control-padding-inline);
   background-color: var(--ui-control-bg);
   color: var(--ui-text-main);
   border: 1px solid var(--ui-control-border);
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   background-image: none;
 }
 
@@ -198,6 +200,16 @@ canvas {
   background: var(--status-empty-bg);
   border-color: var(--status-empty-border);
   color: var(--status-empty-text);
+}
+
+.methodsScreen .myButton,
+.traceScreen .myButton,
+.consolidatedResultScreen .demoButton,
+.entitiesScreen .myButton {
+  min-height: var(--control-height);
+  padding: 0 var(--control-padding-inline);
+  border-radius: var(--control-radius);
+  line-height: 1.1;
 }
 
 button:focus-visible,

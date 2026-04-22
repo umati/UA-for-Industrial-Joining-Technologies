@@ -300,7 +300,7 @@
   min-height: 0;
   padding: 10px;
   box-sizing: border-box;
-  gap: 8px;
+  gap: var(--control-gap);
 }
 
 .consolidatedResultScreen .resultHeader {
@@ -308,12 +308,12 @@
   border: 1px solid var(--ui-line-color);
   border-color: var(--panel-secondary-border);
   border-radius: 10px;
-  padding: 8px 10px;
+  padding: var(--space-8) var(--space-10);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px 10px;
+  gap: var(--control-gap) var(--space-10);
   background: linear-gradient(180deg, var(--connection-header-bg-start) 0%, var(--connection-header-bg-end) 100%);
   box-shadow: var(--panel-secondary-shadow);
 }
@@ -321,7 +321,7 @@
 .consolidatedResultScreen .resultHeaderItem {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-6);
   padding: 0;
 }
 
@@ -329,6 +329,17 @@
   width: 18ch;
   max-width: 18ch;
   min-width: 18ch;
+  min-height: var(--control-height);
+}
+
+.consolidatedResultScreen .resultHeaderRight {
+  gap: var(--control-gap);
+}
+
+.consolidatedResultScreen .resultHeaderRightAction {
+  min-height: var(--control-height);
+  padding: 0 var(--control-padding-inline);
+  border-radius: var(--control-radius);
 }
 
 .consolidatedResultScreen .drawResultBox {
@@ -437,5 +448,10 @@
     width: 100%;
     min-width: 0;
     max-width: none;
+    min-height: var(--control-height-compact);
+  }
+
+  .consolidatedResultScreen .resultHeaderRightAction {
+    min-height: var(--control-height-compact);
   }
 }
