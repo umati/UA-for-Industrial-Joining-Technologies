@@ -259,7 +259,7 @@ export default class ResultGraphics extends BasicScreen {
         continue
       }
       if (this.isTooNarrowForLettersWithText(label, fullText, 10)) {
-        this.setLabelText(label, '')
+        this.setLabelText(label, this.getCollapsedLabelText(fullText))
         label.title = fullText
       } else if (label.textContent !== fullText) {
         this.setLabelText(label, fullText)
@@ -269,6 +269,18 @@ export default class ResultGraphics extends BasicScreen {
         label.style.whiteSpace = fullText.includes('\n') ? 'pre-line' : ''
       }
     }
+  }
+
+  /**
+   * @param {string} text
+   * @returns {string}
+   */
+  getCollapsedLabelText (text) {
+    if (typeof text !== 'string' || text.length === 0) {
+      return ''
+    }
+    const trimmed = text.trim()
+    return trimmed.length > 0 ? trimmed[0] : ''
   }
 
   /**
