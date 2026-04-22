@@ -4,6 +4,7 @@ import { ijtLog } from '../ijt-logger.mjs'
 export class MethodManager {
   constructor (addressSpace) {
     this.addressSpace = addressSpace
+    this.methodObject = {}
   }
 
   /**
@@ -92,7 +93,7 @@ export class MethodManager {
    * @returns
    */
   getMethodNames () {
-    return Object.keys(this.methodObject)
+    return Object.keys(this.methodObject || {})
   }
 
   /**
@@ -101,7 +102,7 @@ export class MethodManager {
    * @returns
    */
   getMethod (name) {
-    return this.methodObject[name]
+    return this.methodObject?.[name]
   }
 
   /**
@@ -133,7 +134,7 @@ export class MethodManager {
         case 13: // DateTime
           castValue = String(row.value ?? '')
           break
-        case 21: // LocalizedText — pass {Text, Locale} object through to Python
+        case 21: // LocalizedText â€” pass {Text, Locale} object through to Python
           castValue = row.value
           break
         case 1: // Boolean
