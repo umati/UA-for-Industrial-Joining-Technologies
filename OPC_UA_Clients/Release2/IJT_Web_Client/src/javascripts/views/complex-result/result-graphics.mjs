@@ -100,6 +100,19 @@ export default class ResultGraphics extends BasicScreen {
     this.display = document.createElement('div')
     this.display.classList.add('drawResultBox')
     this.backGround.appendChild(this.display)
+
+    this._narrowLabelRafId = 0
+    this._narrowLabelResizeHandler = () => {
+      this.scheduleNarrowLabelVisibility()
+    }
+    window.addEventListener('resize', this._narrowLabelResizeHandler)
+    if (typeof window.ResizeObserver === 'function') {
+      this._narrowLabelObserver = new window.ResizeObserver(() => {
+        this.scheduleNarrowLabelVisibility()
+      })
+      this._narrowLabelObserver.observe(this.display)
+      this._narrowLabelObserver.observe(this.backGround)
+    }
   }
 
   activate () {
@@ -193,6 +206,20 @@ export default class ResultGraphics extends BasicScreen {
   }
 
   /**
+   * Centralized label text setter so newline behavior is consistent.
+   * @param {HTMLElement} element
+   * @param {string} text
+   */
+  setLabelText (element, text) {
+    if (!element) {
+      return
+    }
+    const value = (typeof text === 'string') ? text : ''
+    element.textContent = value
+    element.style.whiteSpace = value.includes('\n') ? 'pre-line' : ''
+  }
+
+  /**
    * If label ends with "Result: <number>" (optionally followed by "[x/y]"),
    * force a line break before that result suffix.
    * @param {string} text
@@ -203,7 +230,7 @@ export default class ResultGraphics extends BasicScreen {
       return text
     }
     const trimmed = text.trim()
-    const match = trimmed.match(/^(.*?)(\s*Result:\s*-?\d+(?:\.\d+)?)(\s*\[[^\]]+\])?$/)
+    const match = trimmed.match(/^(.*?)(Result\s*:\s*[+-]?\d+(?:[.,]\d+)?(?:\s*\[[^\]]+\])?)$/i)
     if (!match) {
       return trimmed
     }
@@ -211,8 +238,99 @@ export default class ResultGraphics extends BasicScreen {
     if (!before) {
       return trimmed
     }
-    const suffix = `${match[2].trimStart()}${match[3] || ''}`.trim()
+    const suffix = match[2].trim()
     return `${before}\n${suffix}`
+  }
+
+  /**
+   * Hide label text when the rendered box width is too narrow to reasonably
+   * fit 10 letters, to avoid very tall wrapped boxes.
+   * @param {HTMLElement} scope
+   */
+  applyNarrowLabelVisibility (scope) {
+    if (!scope) {
+      return
+    }
+    const labels = scope.querySelectorAll('.resultBoxLabel')
+    for (const label of labels) {
+      const fullText = label._fullText || label.textContent || ''
+      label._fullText = fullText
+      if (!fullText) {
+        continue
+      }
+      if (this.isTooNarrowForLettersWithText(label, fullText, 10)) {
+        this.setLabelText(label, '')
+        label.title = fullText
+      } else if (label.textContent !== fullText) {
+        this.setLabelText(label, fullText)
+        label.title = ''
+      } else {
+        // Re-assert white-space in case styles were reset externally.
+        label.style.whiteSpace = fullText.includes('\n') ? 'pre-line' : ''
+      }
+    }
+  }
+
+  /**
+   * Measure narrowness using the full label text regardless of current hidden/visible state.
+   * This allows hidden labels to re-appear once room is available.
+   * @param {HTMLElement} element
+   * @param {string} text
+   * @param {number} letterCount
+   * @returns {boolean}
+   */
+  isTooNarrowForLettersWithText (element, text, letterCount) {
+    if (!element) {
+      return false
+    }
+    const previousText = element.textContent
+    const previousWhiteSpace = element.style.whiteSpace
+    this.setLabelText(element, text)
+    const result = this.isTooNarrowForLetters(element, letterCount)
+    this.setLabelText(element, previousText || '')
+    element.style.whiteSpace = previousWhiteSpace
+    return result
+  }
+
+  /**
+   * @param {HTMLElement} element
+   * @param {number} letterCount
+   * @returns {boolean}
+   */
+  isTooNarrowForLetters (element, letterCount) {
+    if (!element || !letterCount) {
+      return false
+    }
+    const width = element.getBoundingClientRect().width
+    if (!width || width <= 0) {
+      return false
+    }
+    const computed = window.getComputedStyle(element)
+    const font = computed.font || `${computed.fontStyle} ${computed.fontVariant} ${computed.fontWeight} ${computed.fontSize}/${computed.lineHeight} ${computed.fontFamily}`
+    const canvas = this._textMeasureCanvas || document.createElement('canvas')
+    this._textMeasureCanvas = canvas
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      return false
+    }
+    ctx.font = font
+    const sample = 'aaaaaaaaaa'.substring(0, Math.max(1, letterCount))
+    const neededWidth = ctx.measureText(sample).width
+    return width < neededWidth
+  }
+
+  scheduleNarrowLabelVisibility () {
+    if (this._narrowLabelRafId) {
+      window.cancelAnimationFrame(this._narrowLabelRafId)
+      this._narrowLabelRafId = 0
+    }
+    this._narrowLabelRafId = window.requestAnimationFrame(() => {
+      this._narrowLabelRafId = 0
+      this.applyNarrowLabelVisibility(this.display)
+      window.requestAnimationFrame(() => {
+        this.applyNarrowLabelVisibility(this.display)
+      })
+    })
   }
 
   /**
@@ -344,6 +462,7 @@ export default class ResultGraphics extends BasicScreen {
         this.display.appendChild(complexWrapper)
       }
     }
+    this.scheduleNarrowLabelVisibility()
   }
 
   /**
@@ -376,28 +495,29 @@ export default class ResultGraphics extends BasicScreen {
     }
     // const classification = result.ResultMetaData.Classification
     const top = document.createElement('div')
+    top.classList.add('resultBoxLabel')
     const children = []
 
     const counterInfo = getSizeAndCounter(result)
     const style = this.getStyle(result)
 
     if (result.isReference) {
-      top.innerText = `Ref ID: ${result.ResultMetaData.ResultId}`
+      this.setLabelText(top, `Ref ID: ${result.ResultMetaData.ResultId}`)
     } else if (!result.id) {
       // console.log('OTHER')
       return
     } else {
       if (result.name) {
-        top.innerText = result.name
+        this.setLabelText(top, result.name)
       } else {
         if (result.ResultMetaData.CreationTime) {
           if (result.ResultMetaData.ResultEvaluationDetails) {
-            top.innerText = result.ResultMetaData.ResultEvaluationDetails.Text
+            this.setLabelText(top, result.ResultMetaData.ResultEvaluationDetails.Text)
           } else {
-            top.innerText = `Other: ${result.id}`
+            this.setLabelText(top, `Other: ${result.id}`)
           }
         } else {
-          top.innerText = `Ref: ${result.id}`
+          this.setLabelText(top, `Ref: ${result.id}`)
         }
       }
 
@@ -410,12 +530,10 @@ export default class ResultGraphics extends BasicScreen {
       } */
 
       if (counterInfo.size > 0) {
-        top.innerText += ` [${counterInfo.counter}/${counterInfo.size}]`
+        this.setLabelText(top, `${top.textContent} [${counterInfo.counter}/${counterInfo.size}]`)
       }
-      top.innerText = this.wrapBeforeResultText(top.innerText)
-      if (top.innerText.includes('\n')) {
-        top.style.whiteSpace = 'pre-line'
-      }
+      this.setLabelText(top, this.wrapBeforeResultText(top.textContent))
+      top._fullText = top.textContent
 
       const contentList = result.ResultContent
 
