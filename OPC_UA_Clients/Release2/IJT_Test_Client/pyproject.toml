@@ -211,3 +211,12 @@ disable_error_code = ["arg-type", "attr-defined"]
 [[tool.mypy.overrides]]
 module = ["conformance.test_joining_system_base"]
 disable_error_code = ["arg-type", "attr-defined", "operator", "union-attr"]
+
+[[tool.mypy.overrides]]
+# Unit tests use asyncua NodeId(int, int) construction (arg-type: asyncua stubs expect
+# Int32|String|Guid|ByteString, plain int is identical at runtime) and mock patterns
+# that replace async methods directly (method-assign). Both are valid at runtime.
+# Blanket override covers all current and future tests/unit/ files — avoids having to
+# extend this list every time a new unit test file is added.
+module = ["tests.unit.*"]
+disable_error_code = ["arg-type", "method-assign"]

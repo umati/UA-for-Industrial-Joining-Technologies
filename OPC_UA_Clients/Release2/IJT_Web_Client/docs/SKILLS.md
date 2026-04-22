@@ -149,7 +149,6 @@ All auto-detected — present=run, absent=skip with install hint.
 | `mypy` | Static type checking |
 | `bandit` | Python security (SAST) |
 | `pip-audit` | CVE scan of Python dependencies |
-| `vulture` | Dead code detection |
 | `semgrep` | Static analysis + security rules |
 | `pyright` | Strict type checking (stricter than mypy) |
 | `detect-secrets` | Hardcoded secrets/tokens |

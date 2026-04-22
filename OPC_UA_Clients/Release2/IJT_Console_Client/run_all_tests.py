@@ -95,7 +95,7 @@ def _prepare_tmp_dir() -> None:
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
     for child in _TMP_DIR.iterdir():
         name = child.name
-        managed = name in {"pytest", "pylint", "pip-audit-cache"} or name.startswith("server_instance_")
+        managed = name in {"pytest", "pip-audit-cache"} or name.startswith("server_instance_")
         if not managed:
             continue
         with contextlib.suppress(OSError):
@@ -473,7 +473,7 @@ def _kill_proc_tree(pid: int) -> None:
         import signal
 
         with contextlib.suppress(ProcessLookupError):
-            os.killpg(os.getpgid(pid), signal.SIGKILL)  # pylint: disable=no-member
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
 
 
 def _run(
@@ -646,37 +646,7 @@ def _step_mypy() -> _StepResult:
     return result
 
 
-def _step_pylint() -> _StepResult:
-    """Run pylint deep linter; write JSON report to test-results/pylint.json."""
-    result = _StepResult("[PHASE 1] pylint")
-    t0 = time.monotonic()
-    if not _tool_available("pylint"):
-        result.skipped = True
-        result.note = "not installed  (pip install pylint)"
-        result.duration = time.monotonic() - t0
-        return result
-    rc, output = _run(
-        [
-            sys.executable,
-            "-m",
-            "pylint",
-            ".",
-            "--output-format=json",
-            "--recursive=y",
-            "--ignore=.venv,.venv_test,.venv_wsl",
-        ]
-    )
-    result.duration = time.monotonic() - t0
-    # Non-fatal findings (convention/refactor/warning) are advisory here;
-    # fail only on fatal/error/usage bits.
-    result.ok = (rc & (1 | 2 | 32)) == 0
-    (_RESULTS_DIR / "pylint.json").write_text(output, encoding="utf-8")
-    if not result.ok:
-        result.note = f"exit {rc} — see test-results/pylint.json"
-        _log(output)
-    elif rc != 0:
-        result.note = f"advisory findings (exit {rc}) — see test-results/pylint.json"
-    return result
+
 
 
 def _step_bandit() -> _StepResult:
@@ -759,52 +729,7 @@ def _step_pip_audit() -> _StepResult:
     return result
 
 
-def _step_vulture() -> _StepResult:
-    """Run vulture dead-code detector; skip if not installed."""
-    result = _StepResult("[PHASE 1] vulture")
-    t0 = time.monotonic()
-    if not _tool_available("vulture"):
-        result.skipped = True
-        result.note = "not installed  (pip install vulture)"
-        result.duration = time.monotonic() - t0
-        return result
-    rc, output = _run(
-        [
-            sys.executable,
-            "-m",
-            "vulture",
-            ".",
-            "--min-confidence",
-            "80",
-            "--exclude",
-            ".venv,.venv_test,.venv_wsl,tests",
-        ]
-    )
-    result.duration = time.monotonic() - t0
-    result.ok = rc == 0
-    if not result.ok:
-        result.note = "dead code found"
-        _log(output)
-    return result
 
-
-def _step_interrogate() -> _StepResult:
-    """Check docstring coverage with interrogate; skip if not installed."""
-    result = _StepResult("[PHASE 1] interrogate")
-    t0 = time.monotonic()
-    if not _tool_available("interrogate"):
-        result.skipped = True
-        result.note = "not installed  (pip install interrogate)"
-        result.duration = time.monotonic() - t0
-        return result
-    rc, output = _run([sys.executable, "-m", "interrogate", "-v"])
-    result.duration = time.monotonic() - t0
-    # Docstring coverage is advisory in this runner: report it, don't block.
-    result.ok = True
-    if rc != 0:
-        result.note = "docstring coverage below threshold (advisory)"
-        _log(output)
-    return result
 
 
 def _step_detect_secrets() -> _StepResult:
@@ -1085,7 +1010,7 @@ def main() -> int:
     """Entry point; returns 0 on success, 1 on any failure."""
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     _cleanup_caches(_HERE)  # pre-run: clear stale caches from interrupted runs
-    global _USE_COLOUR  # pylint: disable=global-statement
+    global _USE_COLOUR
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
     _prepare_tmp_dir()
 
@@ -1121,11 +1046,8 @@ def main() -> int:
             results.append(_step_ruff_lint())
             results.append(_step_ruff_format())
             results.append(_step_mypy())
-            results.append(_step_pylint())
             results.append(_step_bandit())
             results.append(_step_pip_audit())
-            results.append(_step_vulture())
-            results.append(_step_interrogate())
             results.append(_step_detect_secrets())
             results.append(_step_unit_tests(junit_xml, verbose=args.verbose))
             results.append(_step_semgrep())

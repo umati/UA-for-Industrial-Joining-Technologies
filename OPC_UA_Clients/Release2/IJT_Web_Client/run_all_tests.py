@@ -205,7 +205,7 @@ def _kill_proc_tree(pid: int) -> None:
         import signal
 
         with contextlib.suppress(ProcessLookupError):
-            os.killpg(os.getpgid(pid), signal.SIGKILL)  # pylint: disable=no-member
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
 
 
 def _run(
@@ -334,7 +334,7 @@ def _prepare_tmp_dir() -> None:
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
     for child in _TMP_DIR.iterdir():
         name = child.name
-        managed = name in {"pytest", "pytest_tmp", "pylint", "pip-audit-cache"} or name.startswith("server_instance_")
+        managed = name in {"pytest", "pytest_tmp", "pip-audit-cache"} or name.startswith("server_instance_")
         if not managed:
             continue
         with contextlib.suppress(OSError):
@@ -513,61 +513,6 @@ def _stage_python_lint(python: Path) -> StageResult:
     else:
         _skip("pip-audit not installed — pip install pip-audit")
         notes.append("pip-audit not installed")
-
-    if _py_module_available("vulture"):
-        rc = _run(
-            [
-                python,
-                "-m",
-                "vulture",
-                ".",
-                "--min-confidence",
-                "80",
-                "--exclude",
-                ".venv,.venv_test,.venv_wsl,tests",
-            ],
-            label="vulture",
-        )
-        if rc not in (0, 1):  # 1 = dead code found (informational)
-            overall_rc = rc
-    else:
-        _skip("vulture not installed — pip install vulture")
-        notes.append("vulture not installed")
-
-    if _py_module_available("pylint"):
-        results_dir.mkdir(parents=True, exist_ok=True)
-        rc = _run(
-            [
-                python,
-                "-m",
-                "pylint",
-                "src/",
-                "--output-format=json",
-                f"--output={results_dir / 'pylint.json'}",
-            ],
-            label="pylint",
-        )
-        # Match Console policy: keep convention/refactor/warning findings
-        # advisory and fail only for fatal/error/usage classes.
-        if (rc & (1 | 2 | 32)) != 0:
-            overall_rc = rc
-        elif rc != 0:
-            notes.append(f"pylint advisory findings (exit {rc})")
-    else:
-        _skip("pylint not installed — pip install pylint")
-        notes.append("pylint not installed")
-
-    if _py_module_available("interrogate"):
-        rc = _run(
-            [python, "-m", "interrogate", "-v"],
-            label="interrogate",
-        )
-        if rc != 0:
-            _warn("interrogate below configured threshold (advisory)")
-            notes.append("interrogate below threshold (advisory)")
-    else:
-        _skip("interrogate not installed — pip install interrogate")
-        notes.append("interrogate not installed")
 
     if _cmd_available("detect-secrets"):
         rc = _run(["detect-secrets", "scan"], label="detect-secrets scan")

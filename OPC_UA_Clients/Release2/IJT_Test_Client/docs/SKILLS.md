@@ -39,7 +39,15 @@ See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail exp
 ### Zero-Escape Testing Tools (Phase 1, auto-detected)
 
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
-`vulture` (dead code), `semgrep` (static analysis), `pyright` (strict type checking — **advisory, non-blocking**), `detect-secrets` (secrets).
+`semgrep` (static analysis), `pyright` (strict type checking — **advisory, non-blocking**), `detect-secrets` (secrets).
+
+> **Known workaround — ruff 0.15.x formatter bug:** ruff format strips parentheses from
+> `except (A, B):` clauses, producing invalid Python 3 logic. The `scripts/normalize_multi_except.py`
+> script and its pre-commit + Phase 1 runner hooks compensate for this.
+> `tests/unit/test_normalize_multi_except.py::test_ruff_format_bug_still_present_guard` is an
+> **intentional sentinel** — it passes while the bug is present and fails (with a clear message)
+> when a future ruff version fixes it. When it fails: remove the script, hooks, runner steps,
+> and the test file in a single PR.
 
 A **Python pytest suite** that validates an OPC UA server implementing the
 [OPC UA Industrial Joining Technologies (IJT)](https://reference.opcfoundation.org/IJT/Base/v100/)
@@ -138,7 +146,7 @@ Objects/
 IJT_Test_Client/
 ├── docs/SKILLS.md                ← developer reference for this sub-project
 ├── conftest.py                   ← all pytest fixtures (session + function scoped)
-├── pyproject.toml                ← asyncio_mode=auto, timeout=120, mypy check_untyped_defs=true (+ ruff, coverage, bandit, vulture); OPC UA test dirs have [[tool.mypy.overrides]] suppressing asyncua stub false-positives
+├── pyproject.toml                ← asyncio_mode=auto, timeout=120, mypy check_untyped_defs=true (+ ruff, coverage, bandit); OPC UA test dirs have [[tool.mypy.overrides]] suppressing asyncua stub false-positives
 ├── helpers/
 │   ├── namespaces.py             ← ALL type IDs and BrowseName constants
 │   ├── node_discovery.py         ← async browse helpers (_browse_refs, find_child_by_browse_name)

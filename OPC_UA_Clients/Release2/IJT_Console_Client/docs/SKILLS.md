@@ -91,7 +91,7 @@ pip install -r requirements-dev.txt
 All auto-detected — present=run, absent=skip with install hint.
 `pyright` is installed by default (listed in `requirements-dev.txt`) and runs as **advisory** (non-blocking; findings written to `pyright.stderr.txt`).
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
-`vulture` (dead code), `semgrep` (static analysis), `pyright` (strict type checking — **standard install, advisory**), `detect-secrets` (secrets).
+`semgrep` (static analysis), `pyright` (strict type checking — **standard install, advisory**), `detect-secrets` (secrets).
 
 ---
 

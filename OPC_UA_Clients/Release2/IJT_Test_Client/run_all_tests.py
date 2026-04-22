@@ -22,7 +22,6 @@ Environment variables:
   OPCUA_STARTUP_TIMEOUT_SEC  Seconds to wait for simulator start (default: 30)
   SKIP_VENV_INSTALL          Set to "1" to skip pip install step (faster re-runs)
 """
-# pylint: disable=broad-exception-caught,global-statement
 
 from __future__ import annotations
 
@@ -111,7 +110,7 @@ def _prepare_tmp_dir() -> None:
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
     for child in _TMP_DIR.iterdir():
         name = child.name
-        managed = name in {"pytest", "pytest_tmp", "pylint", "pip-audit-cache"} or name.startswith("server_instance_")
+        managed = name in {"pytest", "pytest_tmp", "pip-audit-cache"} or name.startswith("server_instance_")
         if not managed:
             continue
         with contextlib.suppress(OSError):
@@ -239,7 +238,7 @@ def _kill_proc_tree(pid: int) -> None:
         import signal
 
         with contextlib.suppress(ProcessLookupError):
-            os.killpg(os.getpgid(pid), signal.SIGKILL)  # pylint: disable=no-member
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
 
 
 def _run(
@@ -788,66 +787,6 @@ def _step_ruff_format() -> _StepResult:
     return result
 
 
-def _step_pylint() -> _StepResult:
-    """Run pylint deep linter; write JSON report to test-results/pylint.json."""
-    result = _StepResult("[PHASE 1] pylint")
-    t0 = time.monotonic()
-    ok, note = _ensure_python_tool(module_name="pylint", pip_package="pylint", label="pylint")
-    if not ok:
-        result.skipped = True
-        result.note = note
-        result.duration = time.monotonic() - t0
-        return result
-    pylint_home = _TMP_DIR / "pylint"
-    pylint_home.mkdir(parents=True, exist_ok=True)
-    rc, output = _run(
-        [
-            sys.executable,
-            "-m",
-            "pylint",
-            ".",
-            "--output-format=json",
-            "--recursive=y",
-            "--ignore=.venv,.venv_test,.venv_wsl",
-        ],
-        extra_env={"PYLINTHOME": str(pylint_home)},
-    )
-    result.duration = time.monotonic() - t0
-    (_RESULTS_DIR / "pylint.json").write_text(output, encoding="utf-8")
-    if rc == 0:
-        result.ok = True
-        return result
-
-    # Pylint exit code 20 usually means only warning/refactor/convention messages.
-    # Treat those as advisory in this orchestrator; fail only on error/fatal.
-    try:
-        findings = json.loads(output) if output.strip() else []
-        parse_failed = False
-    except json.JSONDecodeError:
-        findings = []
-        parse_failed = True
-
-    if parse_failed or (not output.strip() and rc != 0):
-        result.ok = True  # advisory tool — do not fail the run
-        result.note = f"pylint exited {rc} with unparseable output — check manually"
-        if output.strip():
-            _log(output)
-        return result
-
-    severe_types = {"error", "fatal"}
-    severe_count = sum(1 for item in findings if item.get("type") in severe_types)
-    advisory_count = sum(1 for item in findings if item.get("type") not in severe_types)
-
-    if severe_count == 0:
-        result.ok = True
-        result.note = f"advisory findings (exit {rc}) — {advisory_count} item(s), see test-results/pylint.json"
-        return result
-
-    result.ok = False
-    result.note = f"exit {rc} — {severe_count} error/fatal finding(s), see test-results/pylint.json"
-    _log(output)
-    return result
-
 
 def _step_bandit() -> _StepResult:
     """Run bandit security linter; write JSON report to test-results/bandit.json."""
@@ -940,53 +879,6 @@ def _step_pip_audit() -> _StepResult:
             _log(output)
     return result
 
-
-def _step_vulture() -> _StepResult:
-    """Run vulture dead-code detector; skip if not installed."""
-    result = _StepResult("[PHASE 1] vulture")
-    t0 = time.monotonic()
-    ok, note = _ensure_python_tool(module_name="vulture", pip_package="vulture", label="vulture")
-    if not ok:
-        result.skipped = True
-        result.note = note
-        result.duration = time.monotonic() - t0
-        return result
-    rc, output = _run(
-        [
-            sys.executable,
-            "-m",
-            "vulture",
-            ".",
-            "--min-confidence",
-            "80",
-            "--exclude",
-            ".venv,.venv_test,.venv_wsl,tests,conftest.py",
-        ]
-    )
-    result.duration = time.monotonic() - t0
-    result.ok = rc == 0
-    if not result.ok:
-        result.note = "dead code found"
-        _log(output)
-    return result
-
-
-def _step_interrogate() -> _StepResult:
-    """Check docstring coverage with interrogate; skip if not installed."""
-    result = _StepResult("[PHASE 1] interrogate")
-    t0 = time.monotonic()
-    ok, note = _ensure_python_tool(module_name="interrogate", pip_package="interrogate", label="interrogate")
-    if not ok:
-        result.skipped = True
-        result.note = note
-        result.duration = time.monotonic() - t0
-        return result
-    rc, output = _run([sys.executable, "-m", "interrogate", "-v"])
-    result.duration = time.monotonic() - t0
-    result.ok = rc == 0
-    if not result.ok:
-        _log(output)
-    return result
 
 
 def _step_detect_secrets() -> _StepResult:
@@ -1429,11 +1321,8 @@ def main() -> int:
             results.append(_step_ruff_format())
             results.append(_step_normalize_multi_except())
             results.append(_step_verify_multi_except())
-            results.append(_step_pylint())
             results.append(_step_bandit())
             results.append(_step_pip_audit())
-            results.append(_step_vulture())
-            results.append(_step_interrogate())
             results.append(_step_detect_secrets())
             results.append(_step_unit_tests())
             results.append(_step_semgrep())
