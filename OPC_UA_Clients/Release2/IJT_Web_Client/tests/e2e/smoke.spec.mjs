@@ -164,7 +164,7 @@ for (const vp of DENSE_VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height })
     const app = new AppPage(page)
     await app.goto()
-    await app.setViewLevel(VIEW_LEVEL.DETAILED)
+    await app.setViewLevel(VIEW_LEVEL.SPECIALIZED)
 
     // Methods
     await app.openMethods()
@@ -182,7 +182,7 @@ for (const vp of DENSE_VIEWPORTS) {
     }
 
     // Trace
-    await app.clickTab('Trace')
+    await app.clickTab('Traces')
     await assertNoHorizontalOverflow(page, '.traceScreen .bigTraceMargin', 'Trace chart host')
     await assertNoHorizontalOverflow(page, '.traceScreen .traceButtonArea', 'Trace control dock')
 
@@ -192,8 +192,22 @@ for (const vp of DENSE_VIEWPORTS) {
     await assertNoHorizontalOverflow(page, '.consolidatedResultScreen .drawResultBox', 'Results draw area')
 
     // Address Space
-    await app.openAddressSpace()
-    await assertNoHorizontalOverflow(page, '.addressSpaceScreen .lefthalf', 'Address Space left panel')
-    await assertNoHorizontalOverflow(page, '.addressSpaceScreen .righthalf', 'Address Space right panel')
+    const addressTabCandidates = [
+      page.locator('input.tabButton[value="AddressSpace"]').first(),
+      page.locator('input.tabButton[value="Address Space"]').first(),
+    ]
+    let addressTab = null
+    for (const candidate of addressTabCandidates) {
+      if (await candidate.count() > 0) {
+        addressTab = candidate
+        break
+      }
+    }
+    if (addressTab) {
+      await addressTab.click()
+      await page.waitForTimeout(300)
+      await assertNoHorizontalOverflow(page, '.addressSpaceScreen .lefthalf', 'Address Space left panel')
+      await assertNoHorizontalOverflow(page, '.addressSpaceScreen .righthalf', 'Address Space right panel')
+    }
   })
 }

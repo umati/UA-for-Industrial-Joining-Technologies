@@ -38,6 +38,43 @@
   color: var(--ui-text-dark);
 }
 
+.columns.hasColumnResizer {
+  position: relative;
+}
+
+.columnResizeHandle {
+  position: absolute;
+  top: var(--space-8);
+  bottom: var(--space-8);
+  width: 12px;
+  margin-left: -6px;
+  z-index: 10;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.columnResizeHandle::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgb(252 223 7 / 35%);
+  transition: background-color var(--motion-fast) var(--motion-ease-standard);
+}
+
+.columnResizeHandle:hover::before,
+.columnResizeHandle.is-dragging::before {
+  background: rgb(252 223 7 / 82%);
+}
+
+.columnResizeHandle.is-hidden {
+  display: none;
+}
+
 .rows {
   display: flex;
   flex-direction: column;
