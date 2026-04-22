@@ -70,7 +70,7 @@ def unwrap_result(item: Any) -> Any:
                 inner = inner.Value
             return inner
     except Exception:  # noqa: BLE001
-        pass
+        return item
     return item
 
 

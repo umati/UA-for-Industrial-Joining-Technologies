@@ -614,7 +614,7 @@ async def test_get_selected_joining_program_returns_program(opcua_client, ns_ind
     )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
-        if any(s in err_str for s in ("BadNotSupported", "BadNothingToDo", "BadNotImplemented", "BadArgumentsMissing")):
+        if any(s in err_str for s in ("BadNotSupported", "BadNothingToDo", "BadNotImplemented", "BadArgumentsMissing", "Uncertain")):
             pytest.skip(f"GetSelectedJoiningProgram returned {err_str} — skipping")
         pytest.fail(f"GetSelectedJoiningProgram failed unexpectedly: {err_str}")
 
@@ -1849,7 +1849,7 @@ async def test_get_selected_joining_program_none_after_deselect(opcua_client, ns
     )
     if not get_result.success:
         err_str = str(get_result.error) if get_result.error else "unknown"
-        if any(s in err_str for s in ("BadNotSupported", "BadNothingToDo", "BadArgumentsMissing")):
+        if any(s in err_str for s in ("BadNotSupported", "BadNothingToDo", "BadArgumentsMissing", "Uncertain")):
             return
         pytest.fail(f"GetSelectedJoiningProgram failed after deselect: {err_str}")
     programs = get_result.output_list

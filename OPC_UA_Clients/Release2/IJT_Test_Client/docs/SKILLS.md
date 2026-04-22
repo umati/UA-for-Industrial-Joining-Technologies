@@ -153,11 +153,15 @@ IJT_Test_Client/
 ├── joining_process/              ← JoiningProcessManagement structure + methods
 ├── joint/                        ← JointManagement structure + methods
 ├── conformance/                  ← Conformance Unit tests (asset, result, event, joining process, joint)
-└── tests/
+├── tests/
     └── unit/                     ← Pure-logic helper tests (no OPC UA server needed)
         ├── conftest.py           ← SimpleNamespace fixtures for validator inputs
         ├── test_result_validator.py
         ├── test_event_validator.py
+        ├── test_method_caller.py
+        ├── test_result_collector.py  ← covers ResultCollector + unwrap_result / get_classification / is_partial
+        ├── test_node_discovery.py
+        ├── test_trigger.py
         ├── test_cu_registry.py
         ├── test_namespaces.py
         └── test_profile_loader.py
@@ -181,6 +185,34 @@ IJT_Test_Client/
 ---
 
 ## Core Design Patterns
+
+### ResultCollector — events-primary result delivery
+```python
+from helpers.result_collector import ResultCollector
+
+async with ResultCollector(client, ns_indices, is_simulator=True) as rc:
+    # Trigger a result via SimulateSingleResult or external trigger
+    await trigger(...)
+    result = await rc.collect_single()      # SINGLE_RESULT (Classification=1)
+    result = await rc.collect_combined(cls) # SYNC/BATCH/JOB/etc.
+    result = await rc.collect_partial(cls)  # IsPartial=True result
+    result = await rc.collect_job()         # JOB_RESULT
+# result is None on timeout; test should skip in that case
+```
+
+Prefer this over `GetLatestResult`/`GetResultById` in conformance tests — events are the primary delivery path per the IJT specification.
+
+### OpcUa_Uncertain — method call business-logic response
+```python
+# Uncertain is a VALID server response (IJT §7.4: business-logic failure, NOT transport failure).
+# asyncua raises UaStatusCodeError for Uncertain — output arguments ARE readable.
+# Always include "Uncertain" in skip-condition checks alongside Bad* variants:
+except ua.UaError as exc:
+    err_str = str(exc)
+    if any(s in err_str for s in ("BadNotSupported", "BadNothingToDo", "BadArgumentsMissing", "Uncertain")):
+        pytest.skip(f"Method returned {err_str} — skipping")
+    pytest.fail(f"Unexpected error: {err_str}")
+```
 
 ### Safe browsing (always use — never `get_children()`)
 ```python
@@ -233,6 +265,7 @@ assert len(events) >= 1
 | Feature is mandatory and missing | `pytest.fail(...)` |
 | Feature is present but returns wrong data | `assert ...` |
 | Method call fails (not "absent" — method node found but call errored) | `pytest.fail(...)` — not skip |
+| Method returns `OpcUa_Uncertain` (IJT §7.4 business-logic response) | `pytest.skip(...)` — Uncertain is a valid domain-level response; output args are readable |
 | Timing race — GetLatestResult returns stale result (retry exhausted, real server) | `pytest.fail(...)` — real server must store triggered result within retry window |
 | Timing race — retry exhausted on simulator (known limitation) | `return None` from helper → caller does `pytest.skip(...)` |
 

@@ -74,7 +74,7 @@ def _unwrap_sub_result(item):
                 inner = inner.Value
             return inner
     except Exception:  # noqa: BLE001
-        pass
+        return item
     return item
 
 
