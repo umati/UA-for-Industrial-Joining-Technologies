@@ -16,6 +16,8 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     this.tabHelpText = 'Browse and inspect the OPC UA address space tree, including read and browse responses.'
     this.backGround.classList.add('addressSpaceScreen')
     this.addressSpace = addressSpace
+    this._mandatoryHandlersRegistered = false
+    this._tighteningSystemSubscriptionRegistered = false
     this.ensureStatusBanner('addressSpace')
     this.setStatusBanner('addressSpace', 'info', 'Waiting for endpoint connection.')
 
@@ -41,32 +43,46 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     this.controlArea.innerHTML = ''
     this.addressSpace.reset()
 
-    // Subscribe to browse results to show in right column for debug purposes
-    this.addressSpace.socketHandler.registerMandatory('browseresult', (msg) => {
-      const modelToHTML = new ModelToHTML(this.messages)
-      modelToHTML.display(msg.browseresult, `Browse ${msg.nodeid}:`)
-    })
-
-    // Subscribe to read results to show in right column for debug purposes
-    this.addressSpace.socketHandler.registerMandatory('read', (msg) => {
-      const modelToHTML = new ModelToHTML(this.messages)
-      let shortId = msg.nodeid
-      if (shortId.length > 30) {
-        shortId = `...${shortId.substring(shortId.length - 27, shortId.length)}`
-      }
-      modelToHTML.display(msg.value, `Read ${shortId} (${msg.command}):`)
-    })
-
-    // Initially display the ROOT and toggle it open
-    this.addressSpace.connectionManager.subscribe('tighteningsystem', () => {
-      this.addressSpace.findOrLoadNode('ns=0;i=84').then((newNode) => {
-        const rootArea = this.createGUINode(newNode) // Create the root node button
-        this.toggleNodeContent(newNode, rootArea) // Show the content of the root
-        rootArea.children[1].children[0].onclick() // Click on the first (The Objects) button
-        this.setStatusBanner('addressSpace', 'success', 'Address space tree ready.')
-      }).catch((error) => {
-        this.setStatusBanner('addressSpace', 'error', `Failed to load root node: ${error?.message || error}`)
+    if (!this._mandatoryHandlersRegistered) {
+      // Subscribe to browse results to show in right column for debug purposes
+      this.addressSpace.socketHandler.registerMandatory('browseresult', (msg) => {
+        const modelToHTML = new ModelToHTML(this.messages)
+        modelToHTML.display(msg.browseresult, `Browse ${msg.nodeid}:`)
       })
+
+      // Subscribe to read results to show in right column for debug purposes
+      this.addressSpace.socketHandler.registerMandatory('read', (msg) => {
+        const modelToHTML = new ModelToHTML(this.messages)
+        let shortId = msg.nodeid
+        if (shortId.length > 30) {
+          shortId = `...${shortId.substring(shortId.length - 27, shortId.length)}`
+        }
+        modelToHTML.display(msg.value, `Read ${shortId} (${msg.command}):`)
+      })
+
+      this._mandatoryHandlersRegistered = true
+    }
+
+    if (!this._tighteningSystemSubscriptionRegistered) {
+      // Initially display the ROOT and toggle it open
+      this.addressSpace.connectionManager.subscribe('tighteningsystem', (setToTrue) => {
+        if (!setToTrue) {
+          return
+        }
+        this.loadRootNode()
+      })
+      this._tighteningSystemSubscriptionRegistered = true
+    }
+  }
+
+  loadRootNode () {
+    this.addressSpace.findOrLoadNode('ns=0;i=84').then((newNode) => {
+      const rootArea = this.createGUINode(newNode) // Create the root node button
+      this.toggleNodeContent(newNode, rootArea) // Show the content of the root
+      rootArea.children[1].children[0].onclick() // Click on the first (The Objects) button
+      this.setStatusBanner('addressSpace', 'success', 'Address space tree ready.')
+    }).catch((error) => {
+      this.setStatusBanner('addressSpace', 'error', `Failed to load root node: ${error?.message || error}`)
     })
   }
 
@@ -223,7 +239,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
   }
 
   nodeValueToText (value) {
-    if (!value && value === '{}') {
+    if (value === null || value === undefined || value === '{}') {
       return ''
     }
     if (Array.isArray(value)) {

@@ -103,12 +103,12 @@ export default class TraceGraphics extends BasicScreen {
 
   // ////////////   Setup GUI related functionality ////////////////////////////
   setupEventListeners () {
-    this.traceInterface.traceTypeSelect.addEventListener('click', (event) => {
+    this.traceInterface.traceTypeSelect.addEventListener('change', (event) => {
       this.traceDisplay.decideTraceType(this.traceInterface.traceTypeSelect.options[this.traceInterface.traceTypeSelect.selectedIndex].value)
       this.traceDisplay.update()
     }, false)
 
-    this.traceInterface.absoluteSelect.addEventListener('click', (event) => {
+    this.traceInterface.absoluteSelect.addEventListener('change', (event) => {
       if (this.traceInterface.absoluteSelect.options[this.traceInterface.absoluteSelect.selectedIndex].value === 'absolute') {
         this.traceDisplay.setAbsolutes()
       } else {
@@ -140,12 +140,12 @@ export default class TraceGraphics extends BasicScreen {
       this.traceDisplay.update()
     }, false)
 
-    this.traceInterface.valueShower.addEventListener('click', (event) => {
+    this.traceInterface.valueShower.addEventListener('change', (event) => {
       this.traceDisplay.showPoints(this.traceInterface.valueShower.options[this.traceInterface.valueShower.selectedIndex].value)
       this.traceDisplay.update()
     }, false)
 
-    this.traceInterface.limitShower.addEventListener('click', (event) => {
+    this.traceInterface.limitShower.addEventListener('change', (event) => {
       this.traceDisplay.showLimits(this.traceInterface.limitShower.options[this.traceInterface.limitShower.selectedIndex].value)
       this.traceDisplay.update()
     }, false)

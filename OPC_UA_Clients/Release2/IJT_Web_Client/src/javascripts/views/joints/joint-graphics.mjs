@@ -71,13 +71,13 @@ export default class JointGraphics extends ControlSplitScreen {
     this.controls.innerHTML = ''
 
     const overview = jointManager.makeSelectableEntityView((x, y) => {
-      this.displayEntity(y, this)
+      this.displayJoints(y, this)
     }, '')
 
     this.controls.appendChild(overview)
 
     this.createButton('New', this.controls, () => {
-      this.entityManager.addEntity(new JointDataType({
+      this.jointManager.addEntity(new JointDataType({
         Name: 'NEW',
         Description: '',
         EntityId: '123456',

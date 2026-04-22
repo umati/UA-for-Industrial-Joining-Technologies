@@ -195,6 +195,20 @@ export default class ControlSplitScreen extends BasicScreen {
     window.requestAnimationFrame(() => {
       refreshLayout()
     })
+
+    this._cleanupColumnResizer = () => {
+      stopDragging({ pointerId: -1 })
+      window.removeEventListener('resize', refreshLayout)
+      handle.removeEventListener('pointerdown', onPointerDown)
+      if (this._splitResizeObserver) {
+        this._splitResizeObserver.disconnect()
+        this._splitResizeObserver = null
+      }
+      handle.remove()
+      this.columnSetter?.classList?.remove('hasColumnResizer')
+      leftPanel.style.width = ''
+      rightPanel.style.width = ''
+    }
   }
 
   makeSplitStorageKey () {
@@ -203,5 +217,12 @@ export default class ControlSplitScreen extends BasicScreen {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
     return `ijt.split-screen.left-width.${normalizedTitle || 'default'}`
+  }
+
+  close () {
+    if (typeof this._cleanupColumnResizer === 'function') {
+      this._cleanupColumnResizer()
+      this._cleanupColumnResizer = null
+    }
   }
 }
