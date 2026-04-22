@@ -480,8 +480,16 @@ async def test_send_feedback_invalid_file_reference_returns_bad_status(opcua_cli
     invalid_ref = ua.Variant("urn:invalid:feedback:file:ref:xyz999", ua.VariantType.String)
     result = await find_and_call_method(ms, _BN_SEND_FEEDBACK, ns_ijt, invalid_ref, timeout=_METHOD_TIMEOUT)
     if result.success:
+        # P06/R08: server returns OpcUa_Good + bad methodStatusCode in output[0] for rejected calls
+        output = result.output_list
+        if output:
+            try:
+                if int(output[0]) != 0:
+                    return  # PASS: server correctly signals invalid reference via output methodStatusCode
+            except (TypeError, ValueError):
+                pass
         pytest.fail(
-            "SendFeedback with fabricated file reference unexpectedly returned Good — "
+            "SendFeedback with fabricated file reference returned Good with no bad output status — "
             "server must validate file references against GetFeedbackFileList output"
         )
     err_str = str(result.error) if result.error else "unknown error"

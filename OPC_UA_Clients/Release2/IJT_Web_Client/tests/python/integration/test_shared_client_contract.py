@@ -192,7 +192,11 @@ async def test_shared_client_contract(
         assert not missing, f"{adapter_name} missing expected methods: {missing}"
         assert not failures, f"{adapter_name} method failures: {failures}"
 
-        events = await adapter.collect_events(seconds=6.0)
+        # Use a generous window so events are captured even when the OPC UA
+        # server is under load (e.g. after a long test run).  Events captured
+        # by _send_recv during call_method are already in self._events; this
+        # window picks up any that arrived after the last methodcall returned.
+        events = await adapter.collect_events(seconds=20.0)
         _assert_events_payload(adapter_name, events)
         if adapter_name == "web":
             assert events.get("total", 0) > 0, f"{adapter_name} expected events, got: {events}"

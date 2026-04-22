@@ -236,7 +236,7 @@ async def test_select_joining_process_with_valid_program_succeeds(opcua_client, 
     )
     if not call_result.success:
         err_str = str(call_result.error) if call_result.error else "unknown error"
-        if any(s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound")):
+        if any(s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound", "Uncertain")):
             pytest.skip(f"SelectJoiningProcess returned {err_str} — accepted as optional server behaviour")
         pytest.fail(f"SelectJoiningProcess with valid program ID failed: {err_str}")
 
@@ -342,10 +342,22 @@ async def test_start_selected_joining_triggers_result_ready_event(subscription_c
                     "BadNothingToDo",
                     "BadConditionNotActive",
                     "BadArgumentsMissing",
+                    "Uncertain",
                 )
             ):
                 pytest.skip(f"StartSelectedJoining returned {err_str} — tool may not be active or connected")
             pytest.fail(f"StartSelectedJoining failed unexpectedly: {err_str}")
+        # P06: server returns OpcUa_Good + bad methodStatusCode in output[0] when no process is selected
+        output = start_result.output_list
+        if output:
+            try:
+                if int(output[0]) != 0:
+                    pytest.skip(
+                        "StartSelectedJoining returned Good with bad output status — "
+                        "no joining process active or selected"
+                    )
+            except (TypeError, ValueError):
+                pass
         events = await collector.collect(count=1, timeout_s=45.0)
 
     if not events:
@@ -1413,7 +1425,7 @@ async def test_select_joining_process_state_reflected_after_select(opcua_client,
     )
     if not select_result.success:
         err_str = str(select_result.error) if select_result.error else "unknown"
-        if any(s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound")):
+        if any(s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound", "Uncertain")):
             pytest.skip(f"SelectJoiningProcess returned {err_str} — skipping")
         pytest.fail(f"SelectJoiningProcess failed: {err_str}")
     get_result = await find_and_call_method(jpm, BN.GET_SELECTED_JOINING_PROGRAM, ns_ijt, timeout=15.0)

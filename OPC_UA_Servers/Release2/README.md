@@ -48,6 +48,18 @@ OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](htt
 
 # Change Log
 
+**2026-04-21:**
+1. **Added** a result cache so that recent results remain accessible for retrieval even after the result variables have been overwritten by newer results.
+2. **Updated** simulation methods to run asynchronously — method calls return immediately and simulation runs in the background so that clients are not blocked for the full duration.
+3. **Added** missing `OutputSpecification` node to **PowerSupply** asset that was missing.
+4. **Fixed** linked assets not being correctly updated in the address space after unlinking.
+5. **Fixed** `JoiningTraceDataType.ResultId` not matching the result's `ResultId`.
+6. **Fixed** `StepResult.StartTimeOffset` missing or incorrect in result trace data.
+7. **Fixed** `TracePointIndex` values in result trace data being reported incorrectly.
+8. **Fixed** incorrect ordering of trace data for NOK results.
+9. **Fixed** `FailingStepResultId` being reported incorrectly in step results.
+10. **Multiple** bug fixes, stability improvements and optimizations.
+
 **2026-04-20:**
 1. **Added** dynamic simulation to`OperationCycleCounter` for Tool assets based on new single result simulation.
 2. **Fixed** reference type from `HasProperty` to `HasComponent` for the **PhysicalQuantity** of `JoiningDataVariableType` in multiple asset properties.

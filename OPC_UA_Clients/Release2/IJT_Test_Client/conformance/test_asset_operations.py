@@ -241,10 +241,9 @@ async def test_enable_asset_callable_with_empty_product_instance_uri(opcua_clien
         if "BadNodeIdUnknown" in err_str or "BadNotFound" in err_str:
             pytest.skip("Server requires a non-empty ProductInstanceUri — empty-PIU semantic may not be implemented")
         if "Uncertain" in err_str:
-            pytest.skip(
-                "Server returned Uncertain for empty ProductInstanceUri — "
-                "simulator does not resolve empty PIU to deployed asset (known simulator deviation)"
-            )
+            # C17: server returns OpcUa_Uncertain when methodStatusCode != 0
+            # Uncertain for an empty PIU is the expected production response — not a simulator deviation
+            return
         pytest.fail(f"EnableAsset with empty ProductInstanceUri failed unexpectedly: {err_str}")
 
 
@@ -650,13 +649,12 @@ async def test_method_input_argument_unknown_piu_returns_bad_status(opcua_client
     if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
         pytest.skip(f"EnableAsset not supported on this server: {err_str}")
     if "Uncertain" in err_str:
-        pytest.skip(
-            "EnableAsset returned Uncertain for unknown PIU — "
-            "simulator does not validate ProductInstanceUri and returns Uncertain (known simulator deviation)"
-        )
-    assert any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")), (
-        f"Unexpected status for unknown PIU — expected Bad_NodeIdUnknown/Bad_InvalidArgument, got: {err_str}"
-    )
+        # C17: server returns OpcUa_Uncertain when methodStatusCode != 0 — correct rejection
+        return
+    # Pre-C17 compat: service-level Bad also accepted
+    if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")):
+        return
+    pytest.fail(f"Unexpected status for unknown PIU — expected Uncertain (C17) or Bad_NodeIdUnknown, got: {err_str}")
 
 
 # ─── disconnect_asset — extended ──────────────────────────────────────────────
@@ -735,9 +733,13 @@ async def test_disconnect_asset_invalid_piu_returns_bad_status(opcua_client, ns_
     err_str = str(result.error) if result.error else "unknown error"
     if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
         pytest.skip(f"DisconnectAsset not supported on this server: {err_str}")
-    assert any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")), (
-        f"Unexpected status for invalid PIU — expected Bad_NodeIdUnknown/Bad_InvalidArgument, got: {err_str}"
-    )
+    if "Uncertain" in err_str:
+        # C17: server returns OpcUa_Uncertain when methodStatusCode != 0 — correct rejection
+        return
+    # Pre-C17 compat: service-level Bad also accepted
+    if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")):
+        return
+    pytest.fail(f"Unexpected status for invalid PIU — expected Uncertain (C17) or Bad_NodeIdUnknown, got: {err_str}")
 
 
 # ─── enable_tool — extended ───────────────────────────────────────────────────
@@ -824,13 +826,12 @@ async def test_enable_asset_invalid_piu_returns_bad_node_id_unknown(opcua_client
     if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
         pytest.skip(f"EnableAsset not supported on this server: {err_str}")
     if "Uncertain" in err_str:
-        pytest.skip(
-            f"EnableAsset returned Uncertain for invalid PIU '{_INVALID_PIU}' — "
-            "simulator does not validate ProductInstanceUri, returns Uncertain (known simulator deviation)"
-        )
-    assert any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")), (
-        f"Unexpected status for invalid PIU — expected Bad_NodeIdUnknown, got: {err_str}"
-    )
+        # C17: server returns OpcUa_Uncertain when methodStatusCode != 0 — correct rejection
+        return
+    # Pre-C17 compat: service-level Bad also accepted
+    if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")):
+        return
+    pytest.fail(f"Unexpected status for invalid PIU — expected Uncertain (C17) or Bad_NodeIdUnknown, got: {err_str}")
 
 
 # ─── set_calibration — extended ───────────────────────────────────────────────
@@ -868,16 +869,13 @@ async def test_set_calibration_unknown_piu_returns_bad_status(opcua_client, ns_i
     err_str = str(result.error) if result.error else "unknown error"
     if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
         pytest.skip(f"SetCalibration not supported on this server: {err_str}")
-    assert any(
-        kw in err_str
-        for kw in (
-            "BadNodeIdUnknown",
-            "BadNotFound",
-            "BadNoEntryExists",
-            "BadInvalidArgument",
-            "BadArgumentsMissing",
-        )
-    ), f"Unexpected status for unknown PIU — expected Bad_NoEntryExists or Bad_InvalidArgument, got: {err_str}"
+    if "Uncertain" in err_str:
+        # C17: server returns OpcUa_Uncertain when methodStatusCode != 0 — correct rejection
+        return
+    # Pre-C17 compat: service-level Bad also accepted
+    if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument", "BadArgumentsMissing")):
+        return
+    pytest.fail(f"Unexpected status for unknown PIU — expected Uncertain (C17) or Bad_NoEntryExists/BadInvalidArgument, got: {err_str}")
 
 
 @pytest.mark.requires_cu(CU.SET_CALIBRATION)
@@ -990,9 +988,13 @@ async def test_reboot_asset_unknown_piu_returns_bad_status(opcua_client, ns_indi
     err_str = str(result.error) if result.error else "unknown error"
     if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
         pytest.skip(f"RebootAsset not supported on this server: {err_str}")
-    assert any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")), (
-        f"Unexpected status for unknown PIU — expected Bad_NoEntryExists or Bad_InvalidArgument, got: {err_str}"
-    )
+    if "Uncertain" in err_str:
+        # C17: server returns OpcUa_Uncertain when methodStatusCode != 0 — correct rejection
+        return
+    # Pre-C17 compat: service-level Bad also accepted
+    if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")):
+        return
+    pytest.fail(f"Unexpected status for unknown PIU — expected Uncertain (C17) or Bad_NoEntryExists/BadInvalidArgument, got: {err_str}")
 
 
 # ─── get_error_information — extended ────────────────────────────────────────
@@ -1064,9 +1066,13 @@ async def test_get_error_information_unknown_piu_returns_bad_status(opcua_client
     err_str = str(result.error) if result.error else "unknown error"
     if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
         pytest.skip(f"GetErrorInformation not supported on this server: {err_str}")
-    assert any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")), (
-        f"Unexpected status for unknown PIU — expected Bad_NoEntryExists or Bad_InvalidArgument, got: {err_str}"
-    )
+    if "Uncertain" in err_str:
+        # C17: server returns OpcUa_Uncertain when methodStatusCode != 0 — correct rejection
+        return
+    # Pre-C17 compat: service-level Bad also accepted
+    if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")):
+        return
+    pytest.fail(f"Unexpected status for unknown PIU — expected Uncertain (C17) or Bad_NoEntryExists/BadInvalidArgument, got: {err_str}")
 
 
 # ─── execute_operation — extended ────────────────────────────────────────────
@@ -1138,6 +1144,10 @@ async def test_execute_operation_invalid_operation_id_returns_bad_invalid_argume
     err_str = str(result.error) if result.error else "unknown error"
     if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
         pytest.skip(f"ExecuteOperation not supported on this server: {err_str}")
-    assert any(kw in err_str for kw in ("BadInvalidArgument", "BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists")), (
-        f"Unexpected status for invalid OperationId — expected Bad_InvalidArgument, got: {err_str}"
-    )
+    if "Uncertain" in err_str:
+        # C17: server returns OpcUa_Uncertain when methodStatusCode != 0 — correct rejection
+        return
+    # Pre-C17 compat: service-level Bad also accepted
+    if any(kw in err_str for kw in ("BadInvalidArgument", "BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists")):
+        return
+    pytest.fail(f"Unexpected status for invalid OperationId — expected Uncertain (C17) or Bad_InvalidArgument, got: {err_str}")

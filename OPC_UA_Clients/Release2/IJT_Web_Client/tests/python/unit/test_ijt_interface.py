@@ -124,7 +124,7 @@ async def test_unknown_command_returns_structured_error(fake_websocket, decode_l
 async def test_get_settings_uses_resource_file(local_temp_dir, fake_websocket, decode_last_message):
     interface = IJTInterface()
     settings_file = local_temp_dir / "settings-get.json"
-    settings_file.write_text('{"initialViewLevel": 3}', encoding="utf-8")
+    settings_file.write_text('{"initialviewlevel": 3}', encoding="utf-8")
 
     interface._resource_path = lambda filename: settings_file  # type: ignore[method-assign]
 
@@ -134,7 +134,7 @@ async def test_get_settings_uses_resource_file(local_temp_dir, fake_websocket, d
     )
 
     payload = decode_last_message(fake_websocket)
-    assert payload["data"]["initialViewLevel"] == 3
+    assert payload["data"]["initialviewlevel"] == 3
     assert payload["uniqueid"] == 11
 
 
@@ -148,11 +148,11 @@ async def test_set_settings_writes_json(local_temp_dir, fake_websocket):
 
     await interface.handle(
         fake_websocket,
-        {"command": "set settings", "endpoint": "common", "initialViewLevel": 2},
+        {"command": "set settings", "endpoint": "common", "initialviewlevel": 2},
     )
 
     saved = json.loads(settings_file.read_text(encoding="utf-8"))
-    assert saved["initialViewLevel"] == 2
+    assert saved["initialviewlevel"] == 2
     assert fake_websocket.sent_messages == []
 
 

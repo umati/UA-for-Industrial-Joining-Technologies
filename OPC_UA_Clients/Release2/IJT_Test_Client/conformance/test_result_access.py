@@ -343,14 +343,18 @@ async def test_get_result_by_id_with_nonexistent_id_returns_error(opcua_client, 
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-        # Call succeeded — per spec BadNotFound is required for unknown IDs.
-        # Some simulator implementations return a result object even for bogus IDs,
-        # which is non-compliant behaviour. Skip rather than fail so CI stays green.
+        # R08/R09: server returns OpcUa_Good + bad methodStatusCode in output[0]
+        # Check output[0] — non-zero status means server correctly reported "not found"
+        output = list(result) if isinstance(result, (list, tuple)) else ([] if result is None else [result])
+        if output:
+            try:
+                if int(output[0]) != 0:
+                    return  # PASS: server correctly signals not-found via output methodStatusCode
+            except (TypeError, ValueError):
+                pass
         pytest.skip(
-            "GetResultById with nonexistent ID returned Success instead of BadNotFound — "
-            "server does not reject unknown IDs (non-compliant behaviour). "
-            f"Returned: {type(result).__name__}. "
-            "Skipping; verify against a fully spec-compliant server."
+            "GetResultById with nonexistent identifier returned Success with no bad output status — "
+            "expected non-zero methodStatusCode in output[0] (OPC 40450-1 compliance gap)"
         )
     except ua.UaError:
         pass  # Expected: server correctly rejected the unknown identifier

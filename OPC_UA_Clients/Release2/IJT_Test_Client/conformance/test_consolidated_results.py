@@ -78,6 +78,7 @@ from helpers.namespaces import (
     ResultEvaluation,
 )
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.result_collector import ResultCollector
 from helpers.result_validator import ConsolidatedResultValidator
 
 logger = logging.getLogger(__name__)
@@ -91,10 +92,6 @@ _JOB_WALL_TIMEOUT = 65.0
 _OPCUA_SHORT_TIMEOUT_MS = 5000
 _OPCUA_COMBINED_TIMEOUT_MS = 30000
 _OPCUA_LONG_TIMEOUT_MS = 60000
-
-# Retry policy for GetLatestResult when a stale SINGLE_RESULT is returned
-_GLR_RETRY_MAX = 4
-_GLR_RETRY_SLEEP_S = 2.0
 
 # ValueTag.FINAL — value indicating a final measurement (OPC 40450-1 ResultValueDataType)
 _VALUE_TAG_FINAL: int = 1
@@ -135,144 +132,64 @@ async def _get_result_management(client, ns_mr):
     return rm
 
 
-async def _trigger_and_get_combined_result(
-    opcua_client,
+async def _get_combined(
+    subscription_client,
     result_trigger,
     ns_indices,
-    classification,
-    num_children=_DEFAULT_CHILD_COUNT,
-    send_as_refs=False,
-):
-    """Trigger a combined result and retrieve it via GetLatestResult.
-
-    Returns result_data, or None when the trigger is unavailable or
-    GetLatestResult fails. Callers must skip when None is returned.
-    """
-    outcome = await result_trigger.trigger_batch_or_sync(
-        classification=classification,
-        num_children=num_children,
-        include_traces=False,
-        send_as_refs=send_as_refs,
-    )
-    if not outcome.triggered and result_trigger.is_simulator:
-        return None
-
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        return None
-
-    rm = await _get_result_management(opcua_client, ns_mr)
-    glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
-    if glr_node is None:
-        return None
-
-    opcua_timeout_ms = _OPCUA_LONG_TIMEOUT_MS if not outcome.triggered else _OPCUA_COMBINED_TIMEOUT_MS
-    wall_timeout_s = 65.0 if not outcome.triggered else _COMBINED_WALL_TIMEOUT
-
-    result_data = None
-    for attempt in range(_GLR_RETRY_MAX):
-        try:
-            raw = await asyncio.wait_for(
-                rm.call_method(
-                    glr_node.nodeid,
-                    ua.Variant(opcua_timeout_ms, ua.VariantType.Int32),
-                ),
-                timeout=wall_timeout_s,
-            )
-        except (ua.UaError, asyncio.TimeoutError) as exc:
-            logger.debug("GetLatestResult failed for combined result: %s", exc)
+    classification: int,
+    num_children: int = _DEFAULT_CHILD_COUNT,
+    send_as_refs: bool = True,
+) -> object:
+    """Events-primary combined result retrieval. Returns final combined result or None."""
+    async with ResultCollector(
+        subscription_client, ns_indices, is_simulator=result_trigger.is_simulator
+    ) as rc:
+        outcome = await result_trigger.trigger_batch_or_sync(
+            classification=classification,
+            num_children=num_children,
+            include_traces=False,
+            send_as_refs=send_as_refs,
+        )
+        if not outcome.triggered and result_trigger.is_simulator:
             return None
-
-        if isinstance(raw, (list, tuple)) and len(raw) > 1:
-            result_data = raw[1]
-        else:
-            result_data = raw
-
-        if result_data is not None:
-            actual_cls = _get_result_classification_int(result_data)
-            if actual_cls is not None and actual_cls == ResultClassification.SINGLE_RESULT:
-                if attempt < _GLR_RETRY_MAX - 1:
-                    logger.debug(
-                        "GetLatestResult returned SINGLE_RESULT for %s (attempt %d/%d) — retrying",
-                        classification,
-                        attempt + 1,
-                        _GLR_RETRY_MAX,
-                    )
-                    await asyncio.sleep(_GLR_RETRY_SLEEP_S)
-                    continue
-                # Retry exhausted — combined result still not visible via GetLatestResult.
-                # Return None so callers can skip: this is a known simulator timing limitation,
-                # not a hard conformance failure. A real server without this limitation will
-                # return the correct combined result within the retry window.
-                logger.warning(
-                    "GetLatestResult still returning SINGLE_RESULT after %d retries for %s — "
-                    "returning None (caller will skip)",
-                    _GLR_RETRY_MAX,
-                    classification,
-                )
-                return None
-        break
-
-    return result_data
+        return await rc.collect_combined(classification)
 
 
-async def _trigger_and_get_job_result(opcua_client, result_trigger, ns_indices):
-    """Trigger a job result and retrieve it via GetLatestResult. Returns result_data or None."""
-    outcome = await result_trigger.trigger_job()
-    if not outcome.triggered and result_trigger.is_simulator:
-        return None
-
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        return None
-
-    rm = await _get_result_management(opcua_client, ns_mr)
-    glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
-    if glr_node is None:
-        return None
-
-    opcua_timeout_ms = _OPCUA_LONG_TIMEOUT_MS
-    wall_timeout_s = _JOB_WALL_TIMEOUT if outcome.triggered else 65.0
-
-    result_data = None
-    for attempt in range(_GLR_RETRY_MAX):
-        try:
-            raw = await asyncio.wait_for(
-                rm.call_method(
-                    glr_node.nodeid,
-                    ua.Variant(opcua_timeout_ms, ua.VariantType.Int32),
-                ),
-                timeout=wall_timeout_s,
-            )
-        except (ua.UaError, asyncio.TimeoutError) as exc:
-            logger.debug("GetLatestResult failed for job result: %s", exc)
+async def _get_partial(
+    subscription_client,
+    result_trigger,
+    ns_indices,
+    classification: int,
+    num_children: int = _DEFAULT_CHILD_COUNT,
+) -> object:
+    """Events-primary partial result retrieval (IsPartial=True). Returns partial result or None."""
+    async with ResultCollector(
+        subscription_client, ns_indices, is_simulator=result_trigger.is_simulator
+    ) as rc:
+        outcome = await result_trigger.trigger_batch_or_sync(
+            classification=classification,
+            num_children=num_children,
+            include_traces=False,
+            send_as_refs=True,
+        )
+        if not outcome.triggered and result_trigger.is_simulator:
             return None
+        return await rc.collect_partial(classification)
 
-        if isinstance(raw, (list, tuple)) and len(raw) > 1:
-            result_data = raw[1]
-        else:
-            result_data = raw
 
-        if result_data is not None:
-            actual_cls = _get_result_classification_int(result_data)
-            if actual_cls is not None and actual_cls == ResultClassification.SINGLE_RESULT:
-                if attempt < _GLR_RETRY_MAX - 1:
-                    logger.debug(
-                        "GetLatestResult returned SINGLE_RESULT for JOB (attempt %d/%d) — retrying",
-                        attempt + 1,
-                        _GLR_RETRY_MAX,
-                    )
-                    await asyncio.sleep(_GLR_RETRY_SLEEP_S)
-                    continue
-                logger.warning(
-                    "GetLatestResult still returning SINGLE_RESULT after %d retries for JOB — "
-                    "returning None (caller will skip)",
-                    _GLR_RETRY_MAX,
-                )
-                return None
-        break
-
-    return result_data
+async def _get_job(
+    subscription_client,
+    result_trigger,
+    ns_indices,
+) -> object:
+    """Events-primary job result retrieval. Returns final job result or None."""
+    async with ResultCollector(
+        subscription_client, ns_indices, is_simulator=result_trigger.is_simulator
+    ) as rc:
+        outcome = await result_trigger.trigger_job(send_as_refs=True)
+        if not outcome.triggered and result_trigger.is_simulator:
+            return None
+        return await rc.collect_job()
 
 
 def _get_classification(result_data) -> int | None:
@@ -368,7 +285,7 @@ def _has_final_tag_in_result(sub_result) -> bool:
 def _check_classification_or_skip(result_data, expected_cls: int, trigger_desc: str) -> None:
     """Assert that result_data has expected Classification.
 
-    Timing-race retries happen upstream in _trigger_and_get_combined_result.
+    Timing-race retries happen upstream in _get_combined/_get_job.
     By the time this function is called, the result is assumed to be the one
     we triggered. A classification mismatch here is a real server-behaviour failure.
     """
@@ -426,13 +343,10 @@ def _unwrap_sub_result(item):
 
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
-async def test_sync_result_has_sync_classification(opcua_client, result_trigger, ns_indices):
+async def test_sync_result_has_sync_classification(subscription_client, result_trigger, ns_indices):
     """The Server supports Sync Results where Result.ResultMetaData.Classification is SYNC_RESULT."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.SYNC_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve sync result — trigger not supported or server unavailable")
@@ -445,13 +359,10 @@ async def test_sync_result_has_sync_classification(opcua_client, result_trigger,
 
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
-async def test_sync_result_classification_is_not_single_result(opcua_client, result_trigger, ns_indices):
+async def test_sync_result_classification_is_not_single_result(subscription_client, result_trigger, ns_indices):
     """A SyncResult must never carry a SINGLE_RESULT classification value."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.SYNC_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve sync result for classification check")
@@ -471,13 +382,10 @@ async def test_sync_result_classification_is_not_single_result(opcua_client, res
 
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT_COUNTERS)
-async def test_sync_result_counters_contains_channel_or_spindle_counter(opcua_client, result_trigger, ns_indices):
+async def test_sync_result_counters_contains_channel_or_spindle_counter(subscription_client, result_trigger, ns_indices):
     """The Server supports Sync Results where ResultCounters[] contains at least one of: CHANNEL_NUMBER, SPINDLE_NUMBER."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.SYNC_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve sync result for counter check")
@@ -507,13 +415,10 @@ async def test_sync_result_counters_contains_channel_or_spindle_counter(opcua_cl
 
 
 @pytest.mark.requires_cu(CU.BATCH_RESULT)
-async def test_batch_result_has_batch_classification(opcua_client, result_trigger, ns_indices):
+async def test_batch_result_has_batch_classification(subscription_client, result_trigger, ns_indices):
     """The Server supports Batch Results where Result.ResultMetaData.Classification is BATCH_RESULT."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result — trigger not supported or server unavailable")
@@ -522,13 +427,10 @@ async def test_batch_result_has_batch_classification(opcua_client, result_trigge
 
 
 @pytest.mark.requires_cu(CU.BATCH_RESULT)
-async def test_batch_result_classification_is_not_single_result(opcua_client, result_trigger, ns_indices):
+async def test_batch_result_classification_is_not_single_result(subscription_client, result_trigger, ns_indices):
     """A BatchResult must never carry a SINGLE_RESULT classification value."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result for negative classification check")
@@ -545,13 +447,10 @@ async def test_batch_result_classification_is_not_single_result(opcua_client, re
 
 
 @pytest.mark.requires_cu(CU.BATCH_RESULT)
-async def test_batch_result_overall_evaluation_reflects_sub_results(opcua_client, result_trigger, ns_indices):
+async def test_batch_result_overall_evaluation_reflects_sub_results(subscription_client, result_trigger, ns_indices):
     """When sub-results carry errors the overall batch evaluation must be NOK."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result for evaluation consistency check")
@@ -584,13 +483,10 @@ async def test_batch_result_overall_evaluation_reflects_sub_results(opcua_client
 
 
 @pytest.mark.requires_cu(CU.BATCH_RESULT_COUNTERS)
-async def test_batch_result_counters_contains_batch_size_or_count(opcua_client, result_trigger, ns_indices):
+async def test_batch_result_counters_contains_batch_size_or_count(subscription_client, result_trigger, ns_indices):
     """The Server supports Batch Results where ResultCounters[] contains at least one of: BATCH_SIZE, BATCH_COUNT."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result for counter check")
@@ -614,13 +510,10 @@ async def test_batch_result_counters_contains_batch_size_or_count(opcua_client, 
 
 
 @pytest.mark.requires_cu(CU.INTERVENTION_RESULT)
-async def test_intervention_result_has_intervention_classification(opcua_client, result_trigger, ns_indices):
+async def test_intervention_result_has_intervention_classification(subscription_client, result_trigger, ns_indices):
     """The Server supports Intervention Results where Classification is INTERVENTION_RESULT. Each instance includes InterventionType with an appropriate value."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.INTERVENTION_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.INTERVENTION_RESULT
     )
     if result_data is None:
         pytest.skip("INTERVENTION_RESULT not supported by this server — skipping")
@@ -633,13 +526,10 @@ async def test_intervention_result_has_intervention_classification(opcua_client,
 
 
 @pytest.mark.requires_cu(CU.INTERVENTION_RESULT)
-async def test_intervention_result_meta_data_has_non_zero_intervention_type(opcua_client, result_trigger, ns_indices):
+async def test_intervention_result_meta_data_has_non_zero_intervention_type(subscription_client, result_trigger, ns_indices):
     """Intervention Results must include ResultMetaData.InterventionType with a value appropriate to the joining operation."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.INTERVENTION_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.INTERVENTION_RESULT
     )
     if result_data is None:
         pytest.skip("INTERVENTION_RESULT not supported — skipping InterventionType check")
@@ -669,9 +559,9 @@ async def test_intervention_result_meta_data_has_non_zero_intervention_type(opcu
 
 
 @pytest.mark.requires_cu(CU.JOB_RESULT)
-async def test_job_result_has_job_classification(opcua_client, result_trigger, ns_indices):
+async def test_job_result_has_job_classification(subscription_client, result_trigger, ns_indices):
     """The Server supports Job Results where Result.ResultMetaData.Classification is JOB_RESULT."""
-    result_data = await _trigger_and_get_job_result(opcua_client, result_trigger, ns_indices)
+    result_data = await _get_job(subscription_client, result_trigger, ns_indices)
     if result_data is None:
         pytest.skip("Could not retrieve job result — trigger not supported or server unavailable")
 
@@ -683,9 +573,9 @@ async def test_job_result_has_job_classification(opcua_client, result_trigger, n
 
 
 @pytest.mark.requires_cu(CU.JOB_RESULT)
-async def test_job_result_contains_multiple_sub_results(opcua_client, result_trigger, ns_indices):
+async def test_job_result_contains_multiple_sub_results(subscription_client, result_trigger, ns_indices):
     """JobResult must contain more than one sub-result after triggering a job."""
-    result_data = await _trigger_and_get_job_result(opcua_client, result_trigger, ns_indices)
+    result_data = await _get_job(subscription_client, result_trigger, ns_indices)
     if result_data is None:
         pytest.skip("Could not retrieve job result")
 
@@ -703,14 +593,10 @@ async def test_job_result_contains_multiple_sub_results(opcua_client, result_tri
 
 
 @pytest.mark.requires_cu(CU.RESULT_VALUE_FINAL_TAG)
-async def test_batch_result_sub_results_contain_final_tagged_values(opcua_client, result_trigger, ns_indices):
+async def test_batch_result_sub_results_contain_final_tagged_values(subscription_client, result_trigger, ns_indices):
     """The Server supports instances where StepResultValues[] or OverallResultValues[] contains ValueTag=FINAL."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result for FINAL tag check")
@@ -730,14 +616,10 @@ async def test_batch_result_sub_results_contain_final_tagged_values(opcua_client
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_self_contained_batch_result_sub_results_pass_validator(opcua_client, result_trigger, ns_indices):
+async def test_self_contained_batch_result_sub_results_pass_validator(subscription_client, result_trigger, ns_indices):
     """The Server supports Consolidated Results where ResultContent contains sub-results with both ResultMetaData and ResultContent of each sub-result."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result for inline sub-result validation")
@@ -754,13 +636,10 @@ async def test_self_contained_batch_result_sub_results_pass_validator(opcua_clie
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_combined_result_number_of_result_content_matches_actual_count(opcua_client, result_trigger, ns_indices):
+async def test_combined_result_number_of_result_content_matches_actual_count(subscription_client, result_trigger, ns_indices):
     """ResultMetaData.NumberOfResultContent must equal len(ResultContent) when present."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result for NumberOfResultContent check")
@@ -781,15 +660,10 @@ async def test_combined_result_number_of_result_content_matches_actual_count(opc
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_combined_result_sub_result_count_matches_requested(opcua_client, result_trigger, ns_indices):
+async def test_combined_result_sub_result_count_matches_requested(subscription_client, result_trigger, ns_indices):
     """Requesting N children must yield exactly N sub-results (inline or by reference)."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        num_children=_DEFAULT_CHILD_COUNT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, num_children=_DEFAULT_CHILD_COUNT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result for sub-result count check")
@@ -815,14 +689,10 @@ async def test_combined_result_sub_result_count_matches_requested(opcua_client, 
 
 
 @pytest.mark.requires_cu(CU.CONSOLIDATED_RESULT_WITH_REFERENCES)
-async def test_references_mode_produces_non_empty_reference_list(opcua_client, result_trigger, ns_indices):
+async def test_references_mode_produces_non_empty_reference_list(subscription_client, result_trigger, ns_indices):
     """The Server supports Consolidated Results where ResultContent of sub-results is reported as empty; only ResultId and Classification are included per sub-result reference."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=True,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=True
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result in reference mode — may not be supported")
@@ -888,13 +758,10 @@ async def test_partial_combined_result_is_marked_as_partial_with_combined_classi
 
 
 @pytest.mark.requires_cu(CU.RESULT_CONTENT)
-async def test_batch_result_content_contains_at_least_one_sub_result(opcua_client, result_trigger, ns_indices):
+async def test_batch_result_content_contains_at_least_one_sub_result(subscription_client, result_trigger, ns_indices):
     """Batch/Sync/Job/Stitching results must include one or more ResultDataType sub-results in ResultContent."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result for ResultContent check")
@@ -915,18 +782,15 @@ async def test_batch_result_content_contains_at_least_one_sub_result(opcua_clien
     ],
 )
 async def test_combined_result_carries_correct_classification_value(
-    opcua_client,
+    subscription_client,
     result_trigger,
     ns_indices,
     classification,
     description,
 ):
     """Triggered combined result must carry the Classification value matching the type requested."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=classification,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, classification
     )
     if result_data is None:
         pytest.skip(f"Could not retrieve {description} result — trigger not supported or server unavailable")
@@ -960,13 +824,10 @@ _RESULT_STATE_PROCESSING: str = "Processing"
 
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
-async def test_sync_result_content_is_non_empty(opcua_client, result_trigger, ns_indices):
+async def test_sync_result_content_is_non_empty(subscription_client, result_trigger, ns_indices):
     """Triggered SYNC_RESULT must have a non-empty ResultContent (inline sub-results)."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.SYNC_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve sync result — trigger not supported or server unavailable")
@@ -979,13 +840,10 @@ async def test_sync_result_content_is_non_empty(opcua_client, result_trigger, ns
 
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
-async def test_sync_result_sub_results_each_have_result_id(opcua_client, result_trigger, ns_indices):
+async def test_sync_result_sub_results_each_have_result_id(subscription_client, result_trigger, ns_indices):
     """Each sub-result inside a SYNC_RESULT ResultContent must carry a non-empty ResultId."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.SYNC_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
@@ -1010,13 +868,10 @@ async def test_sync_result_sub_results_each_have_result_id(opcua_client, result_
 
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
-async def test_sync_result_is_partial_false_for_completed(opcua_client, result_trigger, ns_indices):
+async def test_sync_result_is_partial_false_for_completed(subscription_client, result_trigger, ns_indices):
     """A completed SYNC_RESULT must have IsPartial absent or False in ResultMetaData."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.SYNC_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
@@ -1030,13 +885,10 @@ async def test_sync_result_is_partial_false_for_completed(opcua_client, result_t
 
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
-async def test_sync_result_evaluation_is_valid_value(opcua_client, result_trigger, ns_indices):
+async def test_sync_result_evaluation_is_valid_value(subscription_client, result_trigger, ns_indices):
     """ResultEvaluation on a SYNC_RESULT must be one of the defined enum values."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.SYNC_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
@@ -1062,25 +914,33 @@ async def test_sync_result_evaluation_is_valid_value(opcua_client, result_trigge
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
 @pytest.mark.negative
-async def test_sync_result_get_result_by_id_returns_parent(opcua_client, result_trigger, ns_indices):
-    """GetResultById called with a SYNC_RESULT's ResultId must return a result with Classification=SYNC_RESULT."""
+async def test_sync_result_get_result_by_id_returns_parent(subscription_client, opcua_client, result_trigger, ns_indices):
+    """GetResultById called with a SYNC_RESULT's ResultId must return Classification=SYNC_RESULT.
+
+    Note: This test validates the GetResultById METHOD behaviour, not result structure.
+    Result structure/content is validated via events (the primary delivery path).
+    GetResultById is supplementary context-based access — requires a real controller
+    with persistent result storage; the simulator generates a fresh result regardless of ID.
+    """
+    if result_trigger.is_simulator:
+        pytest.skip(
+            "Simulator has no persistent result storage — GetResultById cannot return "
+            "a previously triggered combined result; verify on a real controller"
+        )
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
 
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.SYNC_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
     )
     if result_data is None:
-        pytest.skip("Could not retrieve sync result")
+        pytest.skip("Could not retrieve sync result via events")
 
     meta = getattr(result_data, "ResultMetaData", None)
     result_id = getattr(meta, "ResultId", None) if meta is not None else None
     if not result_id:
-        pytest.skip("ResultId absent — cannot call GetResultById")
+        pytest.skip("ResultId absent in event result — cannot call GetResultById")
 
     rm = await _get_result_management(opcua_client, ns_mr)
     grbi_node = await find_child_by_browse_name(rm, BN.GET_RESULT_BY_ID, ns_mr)
@@ -1107,13 +967,10 @@ async def test_sync_result_get_result_by_id_returns_parent(opcua_client, result_
 
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT_COUNTERS)
-async def test_sync_result_counters_list_is_non_empty(opcua_client, result_trigger, ns_indices):
+async def test_sync_result_counters_list_is_non_empty(subscription_client, result_trigger, ns_indices):
     """SYNC_RESULT ResultCounters list must be non-empty when the server supports sync counters."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.SYNC_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
@@ -1126,13 +983,10 @@ async def test_sync_result_counters_list_is_non_empty(opcua_client, result_trigg
 
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT_COUNTERS)
-async def test_sync_result_counter_types_within_defined_range(opcua_client, result_trigger, ns_indices):
+async def test_sync_result_counter_types_within_defined_range(subscription_client, result_trigger, ns_indices):
     """Each counter in a SYNC_RESULT must have CounterType that is either negative (vendor) or within the spec-defined range."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.SYNC_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
@@ -1159,13 +1013,10 @@ async def test_sync_result_counter_types_within_defined_range(opcua_client, resu
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT_COUNTERS)
 @pytest.mark.negative
-async def test_sync_result_channel_spindle_counter_value_is_positive(opcua_client, result_trigger, ns_indices):
+async def test_sync_result_channel_spindle_counter_value_is_positive(subscription_client, result_trigger, ns_indices):
     """CHANNEL_NUMBER and SPINDLE_NUMBER counters in a SYNC_RESULT must have CounterValue > 0."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.SYNC_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
@@ -1205,13 +1056,10 @@ async def test_sync_result_channel_spindle_counter_value_is_positive(opcua_clien
 
 
 @pytest.mark.requires_cu(CU.BATCH_RESULT)
-async def test_batch_result_content_is_non_empty_list(opcua_client, result_trigger, ns_indices):
+async def test_batch_result_content_is_non_empty_list(subscription_client, result_trigger, ns_indices):
     """BATCH_RESULT ResultContent must be a non-empty list of sub-results."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result")
@@ -1224,13 +1072,10 @@ async def test_batch_result_content_is_non_empty_list(opcua_client, result_trigg
 
 
 @pytest.mark.requires_cu(CU.BATCH_RESULT)
-async def test_batch_result_sub_results_each_have_result_id(opcua_client, result_trigger, ns_indices):
+async def test_batch_result_sub_results_each_have_result_id(subscription_client, result_trigger, ns_indices):
     """Each sub-result inside a BATCH_RESULT ResultContent must carry a non-empty ResultId."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result")
@@ -1316,13 +1161,10 @@ async def test_batch_result_variable_is_not_writable(opcua_client, result_trigge
 
 
 @pytest.mark.requires_cu(CU.INTERVENTION_RESULT)
-async def test_intervention_result_content_is_none_or_joining_result(opcua_client, result_trigger, ns_indices):
+async def test_intervention_result_content_is_none_or_joining_result(subscription_client, result_trigger, ns_indices):
     """INTERVENTION_RESULT ResultContent must be absent/None or a JoiningResultDataType instance."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.INTERVENTION_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.INTERVENTION_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve intervention result — trigger not supported")
@@ -1353,18 +1195,15 @@ async def test_intervention_result_content_is_none_or_joining_result(opcua_clien
 
 @pytest.mark.requires_cu(CU.INTERVENTION_RESULT)
 async def test_intervention_result_get_result_by_id_returns_intervention_result(
-    opcua_client, result_trigger, ns_indices
+    subscription_client, opcua_client, result_trigger, ns_indices
 ):
     """GetResultById for an INTERVENTION_RESULT must return Classification=INTERVENTION_RESULT."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
 
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.INTERVENTION_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.INTERVENTION_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve intervention result")
@@ -1397,13 +1236,10 @@ async def test_intervention_result_get_result_by_id_returns_intervention_result(
 
 @pytest.mark.requires_cu(CU.INTERVENTION_RESULT)
 @pytest.mark.negative
-async def test_intervention_type_absent_for_single_results(opcua_client, result_trigger, ns_indices):
+async def test_intervention_type_absent_for_single_results(subscription_client, result_trigger, ns_indices):
     """A plain SINGLE_RESULT must not have InterventionType set in ResultMetaData."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve result for intervention type check")
@@ -1426,13 +1262,10 @@ async def test_intervention_type_absent_for_single_results(opcua_client, result_
 
 
 @pytest.mark.requires_cu(CU.BATCH_RESULT_COUNTERS)
-async def test_batch_result_counters_list_is_non_empty(opcua_client, result_trigger, ns_indices):
+async def test_batch_result_counters_list_is_non_empty(subscription_client, result_trigger, ns_indices):
     """BATCH_RESULT ResultCounters list must be non-empty when the server supports batch counters."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result")
@@ -1445,13 +1278,10 @@ async def test_batch_result_counters_list_is_non_empty(opcua_client, result_trig
 
 
 @pytest.mark.requires_cu(CU.BATCH_RESULT_COUNTERS)
-async def test_batch_count_not_greater_than_batch_size(opcua_client, result_trigger, ns_indices):
+async def test_batch_count_not_greater_than_batch_size(subscription_client, result_trigger, ns_indices):
     """BATCH_COUNT counter value must not exceed BATCH_SIZE counter value."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result")
@@ -1487,13 +1317,10 @@ async def test_batch_count_not_greater_than_batch_size(opcua_client, result_trig
 
 @pytest.mark.requires_cu(CU.BATCH_RESULT_COUNTERS)
 @pytest.mark.negative
-async def test_batch_size_counter_value_is_positive(opcua_client, result_trigger, ns_indices):
+async def test_batch_size_counter_value_is_positive(subscription_client, result_trigger, ns_indices):
     """BATCH_SIZE counter in a BATCH_RESULT must have CounterValue > 0."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result")
@@ -1529,16 +1356,9 @@ async def test_batch_size_counter_value_is_positive(opcua_client, result_trigger
 
 
 @pytest.mark.requires_cu(CU.JOB_RESULT)
-async def test_job_result_content_is_non_empty(opcua_client, result_trigger, ns_indices):
+async def test_job_result_content_is_non_empty(subscription_client, result_trigger, ns_indices):
     """JOB_RESULT must include at least one sub-result via ResultContent or References."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.JOB_RESULT,
-    )
-    if result_data is None:
-        result_data = await _trigger_and_get_job_result(opcua_client, result_trigger, ns_indices)
+    result_data = await _get_job(subscription_client, result_trigger, ns_indices)
     if result_data is None:
         pytest.skip("Could not retrieve job result — trigger not supported or server unavailable")
 
@@ -1549,20 +1369,24 @@ async def test_job_result_content_is_non_empty(opcua_client, result_trigger, ns_
 
 
 @pytest.mark.requires_cu(CU.JOB_RESULT)
-async def test_job_result_get_result_by_id_returns_job_result(opcua_client, result_trigger, ns_indices):
-    """GetResultById called with a JOB_RESULT's ResultId must return Classification=JOB_RESULT."""
+async def test_job_result_get_result_by_id_returns_job_result(subscription_client, opcua_client, result_trigger, ns_indices):
+    """GetResultById called with a JOB_RESULT's ResultId must return Classification=JOB_RESULT.
+
+    Note: This test validates the GetResultById METHOD behaviour, not result structure.
+    Result structure/content is validated via events (the primary delivery path).
+    GetResultById is supplementary context-based access — requires a real controller
+    with persistent result storage; the simulator generates a fresh result regardless of ID.
+    """
+    if result_trigger.is_simulator:
+        pytest.skip(
+            "Simulator has no persistent result storage — GetResultById cannot return "
+            "a previously triggered job result; verify on a real controller"
+        )
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
 
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.JOB_RESULT,
-    )
-    if result_data is None:
-        result_data = await _trigger_and_get_job_result(opcua_client, result_trigger, ns_indices)
+    result_data = await _get_job(subscription_client, result_trigger, ns_indices)
     if result_data is None:
         pytest.skip("Could not retrieve job result")
 
@@ -1618,14 +1442,10 @@ async def test_job_result_get_result_id_list_filtered_is_not_supported(opcua_cli
 
 
 @pytest.mark.requires_cu(CU.RESULT_VALUE_FINAL_TAG)
-async def test_single_result_has_final_tagged_torque_or_angle_value(opcua_client, result_trigger, ns_indices):
+async def test_single_result_has_final_tagged_torque_or_angle_value(subscription_client, result_trigger, ns_indices):
     """At least one sub-result in a BATCH_RESULT must have a FINAL-tagged Torque or Angle value."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result for final-tag check")
@@ -1671,14 +1491,10 @@ async def test_single_result_has_final_tagged_torque_or_angle_value(opcua_client
 
 
 @pytest.mark.requires_cu(CU.RESULT_VALUE_FINAL_TAG)
-async def test_each_step_has_at_most_one_final_per_physical_quantity(opcua_client, result_trigger, ns_indices):
+async def test_each_step_has_at_most_one_final_per_physical_quantity(subscription_client, result_trigger, ns_indices):
     """Within a single step, no PhysicalQuantity may appear more than once with ValueTag=FINAL."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result")
@@ -1716,15 +1532,10 @@ async def test_each_step_has_at_most_one_final_per_physical_quantity(opcua_clien
 
 @pytest.mark.requires_cu(CU.RESULT_VALUE_FINAL_TAG)
 @pytest.mark.negative
-async def test_final_tag_present_in_consecutive_results(opcua_client, result_trigger, ns_indices):
+async def test_final_tag_present_in_consecutive_results(subscription_client, result_trigger, ns_indices):
     """All inline sub-results in a BATCH_RESULT (3 children) must each have at least one FINAL-tagged value."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        num_children=_DEFAULT_CHILD_COUNT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, num_children=_DEFAULT_CHILD_COUNT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result with 3 sub-results")
@@ -1745,14 +1556,10 @@ async def test_final_tag_present_in_consecutive_results(opcua_client, result_tri
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_self_contained_consolidated_classification_is_combined_type(opcua_client, result_trigger, ns_indices):
+async def test_self_contained_consolidated_classification_is_combined_type(subscription_client, result_trigger, ns_indices):
     """Self-contained BATCH_RESULT (inline) Classification must be one of the combined types."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve self-contained batch result")
@@ -1771,14 +1578,10 @@ async def test_self_contained_consolidated_classification_is_combined_type(opcua
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_self_contained_sub_result_classifications_not_same_as_parent(opcua_client, result_trigger, ns_indices):
+async def test_self_contained_sub_result_classifications_not_same_as_parent(subscription_client, result_trigger, ns_indices):
     """Inline sub-results must not carry the same Classification as the parent combined result."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve self-contained batch result")
@@ -1798,14 +1601,10 @@ async def test_self_contained_sub_result_classifications_not_same_as_parent(opcu
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_self_contained_sub_result_ids_are_all_unique(opcua_client, result_trigger, ns_indices):
+async def test_self_contained_sub_result_ids_are_all_unique(subscription_client, result_trigger, ns_indices):
     """All sub-result ResultIds within a self-contained BATCH_RESULT must be unique."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve self-contained batch result")
@@ -1828,14 +1627,10 @@ async def test_self_contained_sub_result_ids_are_all_unique(opcua_client, result
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_self_contained_parent_evaluation_consistent_with_sub_results(opcua_client, result_trigger, ns_indices):
+async def test_self_contained_parent_evaluation_consistent_with_sub_results(subscription_client, result_trigger, ns_indices):
     """If all sub-results evaluate OK, the parent combined result must not be NOK."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve self-contained batch result")
@@ -1877,14 +1672,10 @@ async def test_self_contained_parent_evaluation_consistent_with_sub_results(opcu
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
 @pytest.mark.negative
-async def test_self_contained_sub_results_have_non_empty_result_content(opcua_client, result_trigger, ns_indices):
+async def test_self_contained_sub_results_have_non_empty_result_content(subscription_client, result_trigger, ns_indices):
     """In CU33 mode each inline sub-result must carry its full content (non-None result data)."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve self-contained batch result")
@@ -1921,14 +1712,10 @@ async def test_self_contained_sub_results_have_non_empty_result_content(opcua_cl
 
 
 @pytest.mark.requires_cu(CU.CONSOLIDATED_RESULT_WITH_REFERENCES)
-async def test_references_mode_classification_is_combined_type(opcua_client, result_trigger, ns_indices):
+async def test_references_mode_classification_is_combined_type(subscription_client, result_trigger, ns_indices):
     """BATCH_RESULT (references mode) Classification must be one of the combined types."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=True,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=True
     )
     if result_data is None:
         pytest.skip("Could not retrieve reference-mode batch result — not supported")
@@ -1946,14 +1733,10 @@ async def test_references_mode_classification_is_combined_type(opcua_client, res
 
 
 @pytest.mark.requires_cu(CU.CONSOLIDATED_RESULT_WITH_REFERENCES)
-async def test_references_mode_sub_result_classification_not_same_as_parent(opcua_client, result_trigger, ns_indices):
+async def test_references_mode_sub_result_classification_not_same_as_parent(subscription_client, result_trigger, ns_indices):
     """In references mode, each referenced sub-result Classification must differ from the parent."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=True,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=True
     )
     if result_data is None:
         pytest.skip("Could not retrieve reference-mode batch result")
@@ -1973,14 +1756,10 @@ async def test_references_mode_sub_result_classification_not_same_as_parent(opcu
 
 
 @pytest.mark.requires_cu(CU.CONSOLIDATED_RESULT_WITH_REFERENCES)
-async def test_references_mode_is_partial_false_for_completed(opcua_client, result_trigger, ns_indices):
+async def test_references_mode_is_partial_false_for_completed(subscription_client, result_trigger, ns_indices):
     """A completed reference-mode BATCH_RESULT must have IsPartial absent or False."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=True,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=True
     )
     if result_data is None:
         pytest.skip("Could not retrieve reference-mode batch result")
@@ -2119,14 +1898,10 @@ async def test_no_single_result_has_is_partial_true(opcua_client, result_trigger
 
 
 @pytest.mark.requires_cu(CU.RESULT_CONTENT)
-async def test_single_result_content_has_joining_result_attributes(opcua_client, result_trigger, ns_indices):
+async def test_single_result_content_has_joining_result_attributes(subscription_client, result_trigger, ns_indices):
     """Sub-results from a BATCH_RESULT (SINGLE_RESULT type) must resemble JoiningResultDataType."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result for single-result content check")
@@ -2159,14 +1934,10 @@ async def test_single_result_content_has_joining_result_attributes(opcua_client,
 
 
 @pytest.mark.requires_cu(CU.RESULT_CONTENT)
-async def test_consolidated_sub_result_type_matches_its_classification(opcua_client, result_trigger, ns_indices):
+async def test_consolidated_sub_result_type_matches_its_classification(subscription_client, result_trigger, ns_indices):
     """SINGLE_RESULT sub-results in an inline BATCH_RESULT must carry JoiningResultDataType structure."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result")
@@ -2188,14 +1959,10 @@ async def test_consolidated_sub_result_type_matches_its_classification(opcua_cli
 
 @pytest.mark.requires_cu(CU.RESULT_CONTENT)
 @pytest.mark.negative
-async def test_result_content_type_consistent_with_classification(opcua_client, result_trigger, ns_indices):
+async def test_result_content_type_consistent_with_classification(subscription_client, result_trigger, ns_indices):
     """Sub-results in an inline BATCH_RESULT must not carry Classification=UNDEFINED."""
-    result_data = await _trigger_and_get_combined_result(
-        opcua_client,
-        result_trigger,
-        ns_indices,
-        classification=ResultClassification.BATCH_RESULT,
-        send_as_refs=False,
+    result_data = await _get_combined(
+        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result")

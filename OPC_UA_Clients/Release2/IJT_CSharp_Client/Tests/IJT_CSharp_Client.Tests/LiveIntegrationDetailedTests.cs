@@ -1912,6 +1912,9 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset).ConfigureAwait(false);
         Skip.IfNot(!methodId.IsNullNodeId, "EnableAsset method not found; skipping");
 
+        // Per IJT spec 7.4: business logic failures return OpcUa_Uncertain (not Bad) so output
+        // arguments remain readable.  The method-level StatusCode is Good or Uncertain; the
+        // application error is communicated via the methodStatusCode output argument.
         var outputs = await WithTimeout(
             () => session.CallMethod(methodSetNode, methodId, SimToolUri, true),
             10, "EnableAsset(toolUri, true)").ConfigureAwait(false);
@@ -2334,7 +2337,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     }
 
     [SkippableFact]
-    public async Task GetIOSignals_EmptyFilter_Returns500Signals()
+    public async Task GetIOSignals_EmptyFilter_ExecutesAndLogsSuccessfully()
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));

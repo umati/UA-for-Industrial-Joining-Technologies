@@ -264,10 +264,9 @@ class WebAdapter(BaseAdapter):
         return await self._send_recv("read", {"nodeid": "ns=0;i=85"})
 
     async def subscribe(self) -> dict[str, Any]:
-        if self.ws is None:
-            raise RuntimeError("WebSocket not started.")
-        await self.ws.send(json.dumps({"command": "subscribe", "endpoint": self.endpoint}))
-        return {"ok": True}
+        # Use _send_recv so we wait for the server to confirm the OPC UA
+        # subscription is fully established before we trigger any events.
+        return await self._send_recv("subscribe")
 
     async def call_method(self, spec: MethodSpec) -> dict[str, Any]:
         payload = {

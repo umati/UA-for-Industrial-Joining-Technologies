@@ -639,23 +639,18 @@ async def test_result_management_get_result_by_id_with_invalid_id_returns_error(
         method_name="GetResultById(invalid)",
     )
     if result.success:
-        # Per OPC 40450-1 the server MUST return BadNotFound (or equivalent) for an
-        # unknown ResultId. Some simulators return Success with empty/null output instead.
-        # Check whether the output looks like real data — if it's empty, treat as an
-        # advisory compliance gap rather than a hard failure so CI passes while the
-        # non-compliance is still visible in the test output.
-        output = getattr(result, "output_args", None) or []
-        has_data = any(v is not None and v != "" for v in output)
-        if not has_data:
-            pytest.skip(
-                "Simulator returned Success with empty data for invalid ResultId instead of "
-                "BadNotFound — this is a known simulator compliance gap (OPC 40450-1 §GetResultById). "
-                "Test skipped; investigate against a fully compliant server."
-            )
-        pytest.fail(
-            "GetResultById with a non-existent ResultId must return a "
-            "Bad status (e.g. BadNotFound), but the call succeeded with non-empty data — "
-            "server behaviour is incorrect"
+        # R08/R09: server returns OpcUa_Good + bad methodStatusCode in output[0]
+        # This is the correct IDS-style response for "not found" — check and pass
+        output = result.output_list
+        if output:
+            try:
+                if int(output[0]) != 0:
+                    return  # PASS: server correctly reports not-found via output methodStatusCode
+            except (TypeError, ValueError):
+                pass
+        pytest.skip(
+            "GetResultById with invalid ResultId returned Success with no bad output status — "
+            "server must report not-found via output methodStatusCode (OPC 40450-1 §GetResultById)"
         )
 
 
