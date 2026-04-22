@@ -16,11 +16,16 @@ export default class TraceGraphics extends BasicScreen {
     this.traceDisplay = new TraceDisplay(dimensions, resultManager, this, this.traceInterface.traceArea, 'Main trace tab')
 
     this.zoomHandler = new ZoomHandler(this.traceDisplay)
+    this.ensureStatusBanner('trace')
+    this.setStatusBanner('trace', 'info', 'Waiting for trace subscription.')
 
     this.setupEventListeners()
     addressSpace.connectionManager.subscribe('subscription', (setToTrue) => {
       if (setToTrue) {
         this.traceDisplay.activate()
+        this.setStatusBanner('trace', 'success', 'Trace stream active.')
+      } else {
+        this.setStatusBanner('trace', 'empty', 'No active trace subscription.')
       }
     })
   }

@@ -19,9 +19,12 @@ export default class ResultGraphics extends BasicScreen {
     this.toggleQueueingState = false
     this.hoverDiv = null
     this.queueInfo = null
+    this.ensureStatusBanner('results')
+    this.setStatusBanner('results', 'empty', 'No results yet.')
     // Subscribe to new results
     resultManager.subscribe((result) => {
       this.refreshDrawing(result.id)
+      this.setStatusBanner('results', 'success', `Updated result: ${result.id}`)
     })
 
     this.header = document.createElement('div')
@@ -126,9 +129,12 @@ export default class ResultGraphics extends BasicScreen {
     if (!this.simulateJobInvoker) {
       return
     }
+    this.setStatusBanner('results', 'loading', 'Running result simulation...')
     try {
       await this.simulateJobInvoker.invoke()
+      this.setStatusBanner('results', 'success', 'Simulation request sent.')
     } catch (error) {
+      this.setStatusBanner('results', 'error', `Simulation failed: ${error?.message || error}`)
       this.messageDisplay(`Job simulation failed: ${error?.message || error}`)
     }
   }
@@ -461,6 +467,7 @@ export default class ResultGraphics extends BasicScreen {
     } else {
       selection = [this.resultManager.resultFromId(id, this.selectType)]
     }
+    let renderedCount = 0
     for (const result of selection) {
       const drawResult = this.drawResultBoxes(result)
       if (drawResult) {
@@ -472,9 +479,13 @@ export default class ResultGraphics extends BasicScreen {
         complexWrapper.classList.add('complewrapper')
         complexWrapper.appendChild(drawResult.element)
         this.display.appendChild(complexWrapper)
+        renderedCount++
       }
     }
     this.scheduleNarrowLabelVisibility()
+    if (renderedCount === 0) {
+      this.setStatusBanner('results', 'empty', 'No results match this filter.')
+    }
   }
 
   /**

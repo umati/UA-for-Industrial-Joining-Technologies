@@ -14,13 +14,17 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
     this.settings = settings
     this.entityManager = entityManager
     this.methodGUICreator = new MethodGUICreator(this, methodManager, entityManager, settings)
+    this.ensureStatusBanner('methods')
+    this.setStatusBanner('methods', 'info', 'Waiting for endpoint connection.')
 
     this.addressSpace = addressSpace // This is just used to get the namespace number. Can this be done in a better way?
     addressSpace.connectionManager.subscribe('tighteningsystem', (setToTrue) => {
       if (setToTrue) {
         try {
+          this.setStatusBanner('methods', 'loading', 'Loading methods...')
           this.activate()
         } catch (error) {
+          this.setStatusBanner('methods', 'error', `Failed to load methods: ${error?.message || error}`)
           ijtLog.error('Error in activating method view')
           ijtLog.error(`${error.name}: ${error.message}`)
         }
@@ -53,9 +57,19 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
     ]
 
     this.methodManager.setupMethodsInFolders(methodFolders).then(() => {
-      this.settings.settingPromise().then(() => {
-        this.createMethodAreas(this.methodManager.getMethodNames())
+      return this.settings.settingPromise().then(() => {
+        const methodNames = this.methodManager.getMethodNames()
+        this.createMethodAreas(methodNames)
+        if (methodNames.length === 0) {
+          this.setStatusBanner('methods', 'empty', 'No methods available for this endpoint.')
+        } else {
+          this.setStatusBanner('methods', 'success', `${methodNames.length} methods ready.`)
+        }
       })
+    }).catch((error) => {
+      this.setStatusBanner('methods', 'error', `Method discovery failed: ${error?.message || error}`)
+      ijtLog.error('Method discovery failed')
+      ijtLog.error(error)
     })
   }
 

@@ -14,6 +14,7 @@ export default class BasicScreen {
     this.tabHelpText = ''
     this.backGround = document.createElement('div')
     this.backGround.classList.add('basescreen')
+    this.statusBanners = new Map()
   }
 
   initiate () {}
@@ -243,6 +244,69 @@ export default class BasicScreen {
   makeSelectionList (title, context) {
     const area = this.makeNamedArea(title, 'selectionArea', context)
     return new SelectionList(title, area, this)
+  }
+
+  /**
+   * Ensure a reusable status banner exists.
+   * @param {string} key unique key for the banner
+   * @param {HTMLElement} parent optional host (defaults to screen background)
+   * @returns {HTMLElement}
+   */
+  ensureStatusBanner (key = 'main', parent = null) {
+    if (this.statusBanners.has(key)) {
+      return this.statusBanners.get(key)
+    }
+    const host = parent || this.backGround
+    const banner = document.createElement('div')
+    banner.classList.add('uiStatus', 'uiStatusHidden', 'uiStatusInfo')
+    banner.setAttribute('role', 'status')
+    banner.setAttribute('aria-live', 'polite')
+    banner.setAttribute('aria-hidden', 'true')
+    host.insertBefore(banner, host.firstChild || null)
+    this.statusBanners.set(key, banner)
+    return banner
+  }
+
+  /**
+   * Update a status banner with semantic tone and message text.
+   * @param {string} key banner key
+   * @param {string} tone one of info/loading/success/error/empty
+   * @param {string} text status message
+   */
+  setStatusBanner (key = 'main', tone = 'info', text = '') {
+    const banner = this.ensureStatusBanner(key)
+    banner.classList.remove('uiStatusInfo', 'uiStatusLoading', 'uiStatusSuccess', 'uiStatusError', 'uiStatusEmpty')
+    const normalizedTone = String(tone || 'info').toLowerCase()
+    switch (normalizedTone) {
+      case 'loading':
+        banner.classList.add('uiStatusLoading')
+        break
+      case 'success':
+        banner.classList.add('uiStatusSuccess')
+        break
+      case 'error':
+        banner.classList.add('uiStatusError')
+        break
+      case 'empty':
+        banner.classList.add('uiStatusEmpty')
+        break
+      default:
+        banner.classList.add('uiStatusInfo')
+        break
+    }
+    const value = String(text || '').trim()
+    banner.textContent = value
+    if (value.length === 0) {
+      banner.classList.add('uiStatusHidden')
+      banner.setAttribute('aria-hidden', 'true')
+    } else {
+      banner.classList.remove('uiStatusHidden')
+      banner.setAttribute('aria-hidden', 'false')
+    }
+  }
+
+  clearStatusBanner (key = 'main') {
+    this.setStatusBanner(key, 'info', '')
   }
 }
 

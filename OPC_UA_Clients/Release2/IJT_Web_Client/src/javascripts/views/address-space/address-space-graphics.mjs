@@ -16,10 +16,15 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     this.tabHelpText = 'Browse and inspect the OPC UA address space tree, including read and browse responses.'
     this.backGround.classList.add('addressSpaceScreen')
     this.addressSpace = addressSpace
+    this.ensureStatusBanner('addressSpace')
+    this.setStatusBanner('addressSpace', 'info', 'Waiting for endpoint connection.')
 
     addressSpace.connectionManager.subscribe(addressSpace.connectionManager.CONNECTION_STATES.CONNECTION, (setToTrue) => {
       if (setToTrue) {
+        this.setStatusBanner('addressSpace', 'loading', 'Loading address space tree...')
         this.initiateNodeTree()
+      } else {
+        this.setStatusBanner('addressSpace', 'empty', 'Address space unavailable while disconnected.')
       }
     })
   }
@@ -58,6 +63,9 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
         const rootArea = this.createGUINode(newNode) // Create the root node button
         this.toggleNodeContent(newNode, rootArea) // Show the content of the root
         rootArea.children[1].children[0].onclick() // Click on the first (The Objects) button
+        this.setStatusBanner('addressSpace', 'success', 'Address space tree ready.')
+      }).catch((error) => {
+        this.setStatusBanner('addressSpace', 'error', `Failed to load root node: ${error?.message || error}`)
       })
     })
   }
