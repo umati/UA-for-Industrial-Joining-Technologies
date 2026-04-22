@@ -272,6 +272,25 @@ export default class ChartManager {
   }
 
   /**
+   * Set only x-axis zoom limits and keep y-axis auto-scaling unchanged
+   * @param {number} minX minimum x value in view
+   * @param {number} maxX maximum x value in view
+   */
+  setXZoom (minX, maxX) {
+    const ticksX = this.myChart?.config?.options?.scales?.x
+    if (ticksX) {
+      ticksX.min = minX
+      ticksX.max = maxX
+    }
+
+    const scaleX = this.myChart?.scales?.x
+    if (scaleX) {
+      scaleX.min = minX
+      scaleX.max = maxX
+    }
+  }
+
+  /**
    * reset zoom
    * @date 3/14/2024 - 11:06:11 AM
    */

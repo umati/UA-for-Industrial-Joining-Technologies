@@ -1,6 +1,7 @@
 import SingleTraceData from './single-trace-data.mjs'
 import ChartManager from './chart-handler.mjs'
 import { createOptionalTraceExtensionLoader } from './optional-trace-extension-loader.mjs'
+import { detectRundownZoomRange } from './rundown-detector.mjs'
 
 const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/core/limit-curve-geometry.mjs')
 
@@ -145,7 +146,21 @@ export default class TraceDisplay {
     }
     // Select it
     this.selectTrace(newResultandTrace)
+
+    this.zoomToExcludeRundown(newResultandTrace)
+    this.traceInterface?.pulseTraceViewport?.()
     this.update()
+  }
+
+  zoomToExcludeRundown (trace) {
+    const range = detectRundownZoomRange(trace, this.xDimensionName)
+    if (!range) {
+      return
+    }
+    const remainingInterval = range.maxX - range.snugX
+    const paddedLeft = range.snugX - (remainingInterval * 0.2)
+    const zoomLeft = Math.max(range.minX, paddedLeft)
+    this.chartManager.setXZoom(zoomLeft, range.maxX)
   }
 
   handleOldTraces (refreshCallback) {
@@ -166,9 +181,11 @@ export default class TraceDisplay {
     switch (yName) {
       case 'toa': // Torque over Angle
         this.xDimensionName = 'angle'
+        this.traceInterface?.setTraceMode?.('toa')
         break
       case 'tot': // Torque over time
         this.xDimensionName = 'time'
+        this.traceInterface?.setTraceMode?.('tot')
         break
       // case 'sot': // Speed over time
       //    this.xDimensionName
@@ -176,6 +193,7 @@ export default class TraceDisplay {
       default:
         throw new Error(`No matching type of trace: ${yName}`)
     }
+    this.traceInterface?.setAxisInfo?.(this.xDimensionName, this.yDimensionName)
     this.refreshAllData()
     this.chartManager.update()
   }

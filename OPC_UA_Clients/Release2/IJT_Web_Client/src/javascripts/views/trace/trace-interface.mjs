@@ -51,6 +51,12 @@ export class TraceInterface {
   updateTracesInGUI (allTraces) {
 
   }
+
+  setTraceMode (_mode) {}
+
+  setAxisInfo (_xAxis, _yAxis) {}
+
+  pulseTraceViewport () {}
 }
 export class ButtonTraceInterface extends TraceInterface {
   constructor (container) {
@@ -68,7 +74,7 @@ export class ButtonTraceInterface extends TraceInterface {
     this.traceDiv.innerHTML = ''
     for (const trace of allTraces) {
       const tracebutton = document.createElement('button')
-      tracebutton.classList.add('myButton')
+      tracebutton.classList.add('myButton', 'traceItemButton')
       tracebutton.innerText = trace.displayName
       this.traceDiv.appendChild(tracebutton)
       tracebutton.resultId = trace.result.id
@@ -98,9 +104,8 @@ export class ButtonTraceInterface extends TraceInterface {
 
   addStepInGUI (step) {
     const stepButton = document.createElement('button')
-    stepButton.classList.add('myButton')
+    stepButton.classList.add('myButton', 'stepItemButton')
     stepButton.innerText = step.name
-    this.traceDiv.appendChild(stepButton)
     stepButton.stepId = step.stepId.value
 
     stepButton.addEventListener('click', this.selectStepEventHandler)
@@ -166,6 +171,18 @@ export class ButtonTraceInterface extends TraceInterface {
     title.innerText = 'Trace'
     backGround.appendChild(title)
 
+    this.traceMetaBar = document.createElement('div')
+    this.traceMetaBar.classList.add('traceMetaBar')
+    backGround.appendChild(this.traceMetaBar)
+
+    this.traceModeBadge = document.createElement('div')
+    this.traceModeBadge.classList.add('traceMetaBadge')
+    this.traceMetaBar.appendChild(this.traceModeBadge)
+
+    this.traceAxisBadge = document.createElement('div')
+    this.traceAxisBadge.classList.add('traceMetaBadge', 'traceMetaBadgeAxis')
+    this.traceMetaBar.appendChild(this.traceAxisBadge)
+
     this.traceArea = document.createElement('div') // This is where the trace graphics will do
     this.traceArea.classList.add('traceChartHost')
     backGround.appendChild(this.traceArea)
@@ -182,6 +199,7 @@ export class ButtonTraceInterface extends TraceInterface {
     createHeader(trace, 'Traces')
 
     this.traceDiv = document.createElement('div')
+    this.traceDiv.classList.add('traceListPanel')
     trace.appendChild(this.traceDiv)
 
     // this.traceDiv.classList.add('traceList')
@@ -189,6 +207,7 @@ export class ButtonTraceInterface extends TraceInterface {
     createHeader(trace, 'Steps')
 
     this.stepDiv = document.createElement('div')
+    this.stepDiv.classList.add('stepListPanel')
     trace.appendChild(this.stepDiv)
 
     const view = document.createElement('div')
@@ -215,5 +234,39 @@ export class ButtonTraceInterface extends TraceInterface {
     this.alignButton.classList.add('myButton')
     this.alignButton.innerText = 'Align'
     view.appendChild(this.alignButton)
+
+    this.setTraceMode('toa')
+    this.setAxisInfo('angle', 'torque')
+  }
+
+  setTraceMode (mode) {
+    if (!this.traceModeBadge) {
+      return
+    }
+    const modeLabel = mode === 'tot' ? 'Mode: Torque over Time' : 'Mode: Torque over Angle'
+    this.traceModeBadge.innerText = modeLabel
+  }
+
+  setAxisInfo (xAxis, yAxis) {
+    if (!this.traceAxisBadge) {
+      return
+    }
+    const normalizedX = String(xAxis || '').toUpperCase() || 'ANGLE'
+    const normalizedY = String(yAxis || '').toUpperCase() || 'TORQUE'
+    this.traceAxisBadge.innerText = `X: ${normalizedX} | Y: ${normalizedY}`
+  }
+
+  pulseTraceViewport () {
+    if (!this.traceArea) {
+      return
+    }
+    this.traceArea.classList.remove('is-trace-fresh')
+    // Force reflow so repeated trace updates can replay the animation.
+    // eslint-disable-next-line no-unused-expressions
+    this.traceArea.offsetWidth
+    this.traceArea.classList.add('is-trace-fresh')
+    window.setTimeout(() => {
+      this.traceArea?.classList?.remove('is-trace-fresh')
+    }, 260)
   }
 }

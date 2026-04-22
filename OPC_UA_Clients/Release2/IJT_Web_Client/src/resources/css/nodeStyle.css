@@ -1240,6 +1240,52 @@ html {
   height: 100%;
 }
 
+.traceScreen .traceMetaBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px 6px;
+  border-bottom: var(--ui-line-width) solid rgb(252 223 7 / 28%);
+  background: rgb(0 0 0 / 20%);
+}
+
+.traceScreen .traceMetaBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border: 1px solid rgb(252 223 7 / 48%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 34%);
+  color: var(--ui-text-main);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.traceScreen .traceMetaBadgeAxis {
+  opacity: 0.9;
+  border-style: dashed;
+}
+
+.traceScreen .traceChartHost.is-trace-fresh > .traceArea {
+  animation: trace-fresh-pulse 220ms ease-out;
+}
+
+@keyframes trace-fresh-pulse {
+  0% {
+    box-shadow: inset 0 0 0 0 rgb(252 223 7 / 0%);
+  }
+
+  40% {
+    box-shadow: inset 0 0 0 2px rgb(252 223 7 / 36%);
+  }
+
+  100% {
+    box-shadow: inset 0 0 0 0 rgb(252 223 7 / 0%);
+  }
+}
+
 .traceScreen .thinView {
   margin: 0;
   min-width: 170px;
@@ -1265,15 +1311,60 @@ html {
   border-radius: 6px;
   font-weight: 600;
   font-size: var(--demo-font-button);
+  margin: 3px;
+  transition: background-color 110ms linear, transform 110ms ease, box-shadow 120ms ease;
 }
 
 .traceScreen .myButton:hover {
   background: var(--demo-button-bg-hover);
   color: var(--demo-button-text-hover);
+  transform: translateY(-1px);
 }
 
 .traceScreen .myButtonSelected {
   background: rgb(252 223 7 / 35%);
+  box-shadow: inset 0 0 0 1px rgb(252 223 7 / 70%);
+}
+
+.traceScreen .traceListPanel,
+.traceScreen .stepListPanel {
+  max-height: 8.6rem;
+  overflow: auto;
+  padding: 4px 2px;
+  border-top: 1px solid rgb(252 223 7 / 22%);
+}
+
+.traceScreen .traceListPanel {
+  margin-bottom: 4px;
+}
+
+.traceScreen .traceItemButton,
+.traceScreen .stepItemButton {
+  width: calc(100% - 6px);
+  text-align: left;
+  margin: 2px 3px;
+}
+
+.traceScreen .traceItemButton {
+  border-color: rgb(252 223 7 / 55%);
+}
+
+.traceScreen .stepItemButton {
+  border-style: dashed;
+  border-color: rgb(252 223 7 / 40%);
+  opacity: 0.92;
+}
+
+.traceScreen .traceItemButton.myButtonSelected,
+.traceScreen .stepItemButton.myButtonSelected {
+  background: rgb(252 223 7 / 30%);
+  color: #fff8c4;
+}
+
+.traceScreen .traceItemButton.myButtonSelected::before,
+.traceScreen .stepItemButton.myButtonSelected::before {
+  content: '• ';
+  color: #fff6a8;
 }
 
 .jointDemoToolsArea {
