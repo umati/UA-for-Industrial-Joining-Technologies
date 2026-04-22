@@ -100,9 +100,9 @@
   font-weight: 600;
 }
 
-.entitiesScreen .myButton:hover {
-  background: var(--demo-button-bg-hover);
-  color: var(--demo-button-text-hover);
+.entitiesScreen .myButton:not(:disabled):hover {
+  background: var(--interactive-hover-bg);
+  color: var(--interactive-hover-text);
 }
 
 .addressSpaceScreen .messages > li {
@@ -227,9 +227,10 @@
   content: '▾';
 }
 
-.addressSpaceScreen .treeButton:hover {
-  background: rgb(252 223 7 / 14%);
-  border-color: rgb(252 223 7 / 28%);
+.addressSpaceScreen .treeButton:not(:disabled):hover {
+  background: var(--interactive-hover-bg);
+  border-color: var(--ui-line-color);
+  color: var(--interactive-hover-text);
 }
 
 /* Methods/Address Space already pad inner subcomponents; avoid double left spacing */

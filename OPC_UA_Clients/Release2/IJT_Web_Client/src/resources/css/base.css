@@ -53,6 +53,11 @@ select,
   border: 1px solid var(--ui-control-border);
   border-radius: var(--control-radius);
   background-image: none;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
 }
 
 select:hover,
@@ -66,6 +71,7 @@ select:hover,
 .entitiesScreen .methodInput:hover,
 .entitiesScreen .inputStyle:hover {
   background-color: var(--ui-control-bg-hover);
+  border-color: var(--ui-line-color);
 }
 
 .tabright select {
@@ -210,6 +216,58 @@ canvas {
   padding: 0 var(--control-padding-inline);
   border-radius: var(--control-radius);
   line-height: 1.1;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.methodsScreen .myButton:not(:disabled):hover,
+.traceScreen .myButton:not(:disabled):hover,
+.consolidatedResultScreen .demoButton:not(:disabled):hover,
+.entitiesScreen .myButton:not(:disabled):hover,
+.addressSpaceScreen .treeButton:not(:disabled):hover,
+.traceScreen .kvSelect:not(:disabled):hover,
+.consolidatedResultScreen .resultHeaderItem select:not(:disabled):hover,
+.methodsScreen .methodInputRight input:not(:disabled):hover,
+.methodsScreen .methodInputRight select:not(:disabled):hover,
+.entitiesScreen .methodInputRight input:not(:disabled):hover,
+.entitiesScreen .methodInputRight select:not(:disabled):hover {
+  background: var(--interactive-hover-bg);
+  color: var(--interactive-hover-text);
+  box-shadow: var(--interactive-hover-shadow);
+}
+
+.methodsScreen .myButton:not(:disabled):active,
+.traceScreen .myButton:not(:disabled):active,
+.consolidatedResultScreen .demoButton:not(:disabled):active,
+.entitiesScreen .myButton:not(:disabled):active,
+.addressSpaceScreen .treeButton:not(:disabled):active {
+  background: var(--interactive-active-bg);
+  color: var(--interactive-active-text);
+  transform: translateY(0);
+}
+
+.methodsScreen .myButton:disabled,
+.traceScreen .myButton:disabled,
+.consolidatedResultScreen .demoButton:disabled,
+.entitiesScreen .myButton:disabled,
+.addressSpaceScreen .treeButton:disabled,
+.traceScreen .kvSelect:disabled,
+.consolidatedResultScreen .resultHeaderItem select:disabled,
+.methodsScreen .methodInputRight input:disabled,
+.methodsScreen .methodInputRight select:disabled,
+.entitiesScreen .methodInputRight input:disabled,
+.entitiesScreen .methodInputRight select:disabled {
+  background: var(--interactive-disabled-bg);
+  border-color: var(--interactive-disabled-border);
+  color: var(--interactive-disabled-text);
+  opacity: var(--interactive-disabled-opacity);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 button:focus-visible,
