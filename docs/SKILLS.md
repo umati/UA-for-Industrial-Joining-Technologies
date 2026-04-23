@@ -291,16 +291,17 @@ UA-for-Industrial-Joining-Technologies/
 
 ## CI/CD
 
-**Workflows**: `.github/workflows/ci-required.yml`, `.github/workflows/ci-extended.yml`, and `.github/workflows/codeql.yml` (all at **repo root**)
+**Workflows**: `.github/workflows/ci.yml`, `.github/workflows/integration.yml`, and `.github/workflows/codeql.yml` (all at **repo root**)
 
-### CI Required (`ci-required.yml`) — triggers on every push/PR to `main`
+### CI (`ci.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
 |-----|--------------|
 | `web-client` | Python unit tests, JS unit tests, ESLint, Bandit, npm audit |
 | `console-client` | Python unit tests (`tests/unit/`), Bandit, Ruff, mypy |
 | `node-client` | JS unit tests, ESLint, npm audit |
-| `test-client` | pytest unit tests (`tests/unit/`) + collect-only import check, Bandit, Ruff, mypy |
-| `csharp-client` | dotnet restore (locked mode) + build (`-warnaserror`) + NuGet CVE scan + xUnit test (`--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
+| `test-client` | pytest unit tests (`tests/unit/`) + Bandit, Ruff, mypy |
+| `csharp-client` | dotnet restore (locked mode) + build (`-warnaserror`) + NuGet CVE scan + xUnit unit tests (`Category!=Live`, `--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
+| `csharp-live` | xUnit live tests (`Category=Live`, 110 tests) against server on port 40464 via `scripts/start_server_on_port.py` |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
 | `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |
 
@@ -320,24 +321,31 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 
 | Job | Workflow | Port | Protocol |
 |-----|----------|------|----------|
-| `csharp-client` | `ci-required.yml` | 40451 | Windows native EXE |
-| `server-smoke-windows` | `ci-required.yml` | 40451 | Windows native EXE |
-| `server-smoke-docker` | `ci-extended.yml` | 40451 | Docker (Linux) |
-| `int-testclient` | `ci-extended.yml` | 40451 | Windows native EXE |
-| `int-live-others` | `ci-extended.yml` | 40451 | Windows native EXE |
+| `csharp-unit` | `ci.yml` | — | No server (unit tests only) |
+| `csharp-live` | `ci.yml` | **40464** | Windows native EXE |
+| `server-smoke-windows` | `ci.yml` | 40451 | Windows native EXE (server self-test) |
+| `server-smoke-docker` | `integration.yml` | 40451 | Docker Linux (server self-test) |
+| `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
+| `live-webclient` | `integration.yml` | **40463** | Windows native EXE |
+| `live-console` | `integration.yml` | **40461** | Windows native EXE |
+| `csharp-live` (nightly) | `integration.yml` | **40464** | Windows native EXE |
 
-> Release1 Node Client always uses 40451 (fixed — no dynamic port support). Release2 clients all use 40451 in ci-extended. The old per-job isolated Docker ports (40452–40455) are no longer used in CI.
+> Release 1 Node Client always uses 40451 (fixed — no dynamic port support).
+> Server self-tests (smoke) correctly use 40451 — they test the server in its native configuration.
+> All Release 2 client jobs now use dedicated isolated ports.
 
-### CI Extended (`ci-extended.yml`) — nightly + path-triggered
-Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJT_Test_Client/**`, or workflow file change.
+### Integration (`integration.yml`) — nightly + path-triggered
+Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJT_Test_Client/**`, Console Client live/deps, or workflow file change.
 | Job | What it tests |
 |-----|--------------|
-| `docker-smoke` | Full Docker build + server smoke (10/10) |
+| `server-smoke-docker` | Full Docker build + server smoke (10/10) |
 | `webclient-docker` | Web Client Docker test image (Python unit + JS unit) + HTTP:3000 production health |
-| `int-testclient` | Windows live: Test Client full suite against running server (counts vary by server profile/features) |
-| `int-live-others` | Windows live: Web Client integration (13 tests) + Console Client live tests |
+| `int-testclient` | Windows live: Test Client full suite against server on port 40462 |
+| `live-webclient` | Windows live: Web Client integration tests (13 tests) — server on port 40463 |
+| `live-console` | Windows live: Console Client live tests — server on port 40461 |
+| `csharp-live` | Windows live: C# xUnit live tests (nightly drift detection) — server on port 40464 |
 
-Runtime: ~10 minutes (int-testclient + int-live-others run in parallel). NOT triggered on GUI/JS-only changes (deliberate — keep fast CI fast).
+Runtime: ~10–15 minutes (int-testclient, live-webclient, live-console, csharp-live all run in parallel). NOT triggered on GUI/JS-only changes (deliberate — keep fast CI fast).
 All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents: read`.
 
 ---

@@ -20,6 +20,7 @@ namespace IJT_CSharp_Client.Tests;
 /// All tests skip automatically if the server is unavailable.
 /// </summary>
 [Collection("LiveServer")]
+[Trait("Category", "Live")]
 public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
 {
     private readonly OpcUaServerFixture _fixture = fixture;

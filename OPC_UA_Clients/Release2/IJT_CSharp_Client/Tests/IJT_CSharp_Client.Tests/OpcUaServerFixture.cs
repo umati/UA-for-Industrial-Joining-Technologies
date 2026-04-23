@@ -33,6 +33,7 @@ public sealed class OpcUaServerFixture : IDisposable
     private Process? _serverProcess;
     private bool _dockerStarted;
     private string? _dockerComposeDir;
+    private string? _tempServerDir;
 
     public bool IsAvailable { get; private set; }
     public string ServerUrl { get; } = $"opc.tcp://localhost:{_port}";
@@ -81,6 +82,12 @@ public sealed class OpcUaServerFixture : IDisposable
         _log.LogInformation("Starting OPC UA server: {Path}", exePath);
         try
         {
+            // When using a non-default port, copy the server binary dir and patch the
+            // server_configuration.json so the server starts on the requested port.
+            // This mirrors the same copy-patch mechanism used by the Python clients.
+            if (_port != 40451)
+                exePath = PrepareCopiedServerDir(exePath, _port, out _tempServerDir);
+
             _serverProcess = new Process
             {
                 StartInfo = new ProcessStartInfo
@@ -280,6 +287,48 @@ public sealed class OpcUaServerFixture : IDisposable
         return false;
     }
 
+    /// <summary>
+    /// Copies the server binary directory to a temp location and patches
+    /// <c>server_configuration.json</c> so the server starts on <paramref name="port"/>.
+    /// Returns the path to the copied executable.
+    /// </summary>
+    /// <remarks>
+    /// The server EXE reads its configuration from <c>server_configuration.json</c>
+    /// in its working directory, which overrides any environment variable. To run
+    /// on a non-default port without modifying the source files, we copy the entire
+    /// binary directory to a temp location and patch the JSON in the copy. This is
+    /// the same copy-patch pattern used by the Python clients via <c>run_all_tests.py</c>.
+    /// </remarks>
+    private static string PrepareCopiedServerDir(string srcExePath, int port, out string tmpDir)
+    {
+        var srcDir = Path.GetDirectoryName(srcExePath)!;
+        tmpDir = Path.Combine(Path.GetTempPath(), $"opcua_csharp_{port}_{Guid.NewGuid():N}");
+
+        CopyDirectoryRecursive(srcDir, tmpDir);
+
+        var cfgPath = Path.Combine(tmpDir, "server_configuration.json");
+        if (File.Exists(cfgPath))
+        {
+            var json = File.ReadAllText(cfgPath);
+            var patched = System.Text.RegularExpressions.Regex.Replace(
+                json,
+                @"""serverEndpointTCPPort""\s*:\s*\d+",
+                $@"""serverEndpointTCPPort"": {port}");
+            File.WriteAllText(cfgPath, patched, System.Text.Encoding.UTF8);
+        }
+
+        return Path.Combine(tmpDir, Path.GetFileName(srcExePath));
+    }
+
+    private static void CopyDirectoryRecursive(string srcDir, string dstDir)
+    {
+        Directory.CreateDirectory(dstDir);
+        foreach (var file in Directory.GetFiles(srcDir))
+            File.Copy(file, Path.Combine(dstDir, Path.GetFileName(file)), overwrite: true);
+        foreach (var subDir in Directory.GetDirectories(srcDir))
+            CopyDirectoryRecursive(subDir, Path.Combine(dstDir, Path.GetFileName(subDir)));
+    }
+
     public void Dispose()
     {
         if (_serverProcess is not null)
@@ -321,6 +370,12 @@ public sealed class OpcUaServerFixture : IDisposable
                 }
             }
             catch (Exception ex) { _log.LogWarning("Error stopping Docker server: {Message}", ex.Message); }
+        }
+
+        if (_tempServerDir is not null)
+        {
+            try { Directory.Delete(_tempServerDir, recursive: true); }
+            catch (Exception ex) { _log.LogWarning("Error cleaning up temp server dir {Dir}: {Message}", _tempServerDir, ex.Message); }
         }
 
         GC.SuppressFinalize(this);

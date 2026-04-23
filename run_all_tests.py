@@ -7,7 +7,7 @@ Architecture: Two-phase execution
   Phase 1 (PARALLEL)   -- static analysis + unit tests, no OPC UA server required.
                           Delegates to each sub-project's own run_all_tests.py --phase1,
                           ensuring local runs cover CI checks or stricter (e.g. testclient
-                          runs full phase1 locally vs collect-only in ci-required):
+                          runs full phase1 locally, matching ci.yml pytest tests/unit/ run):
                             - ruff, mypy, bandit (Python projects)
                             - ESLint, npm audit (Node/JS projects)
                             - dotnet format, NuGet vulnerability scan (C# project)
@@ -370,7 +370,7 @@ def _delegate_to_runner(
     The sub-project runner is the single source of truth for what that
     sub-project tests.  Calling it here ensures local runs cover CI checks
     or are stricter (ruff, mypy, bandit, npm audit, dotnet format, ...).
-    Note: testclient runs full phase1 locally; ci-required uses collect-only.
+    Note: testclient runs full phase1 locally; ci.yml also runs real pytest tests/unit/.
     """
     t0 = time.monotonic()
     runner = runner_dir / "run_all_tests.py"
@@ -890,8 +890,7 @@ def _suite_webclient_unit() -> SuiteResult:
 def _suite_testclient_phase1() -> SuiteResult:
     """Test Client -- Phase 1 (static + full collection).  Delegates to sub-project runner.
 
-    Covers: ruff, mypy, bandit, pytest (import check + any unit tests).
-    Replaces the old collect-only stub with the full sub-project phase1.
+    Covers: ruff, mypy, bandit, pytest tests/unit/ (real unit test run).
     """
     return _delegate_to_runner(
         name="testclient",

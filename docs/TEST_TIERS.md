@@ -6,15 +6,15 @@ All tests in this repository are classified into two tiers:
 
 | Tier | Workflow | Blocking | Runs on |
 |------|----------|----------|---------|
-| **ci-required** | `ci-required.yml` | ✅ Blocks every PR and push | Every commit |
-| **ci-extended** | `ci-extended.yml` | ℹ️ Non-blocking — tracked, not blocking | Nightly · Manual · Path-triggered |
+| **ci** | `ci.yml` | ✅ Blocks every PR and push | Every commit |
+| **integration** | `integration.yml` | ℹ️ Non-blocking — tracked, not blocking | Nightly · Manual · Path-triggered |
 
 ---
 
-## ci-required (`ci-required.yml`)
+## CI (`ci.yml`)
 
 Fast and deterministic on GitHub-hosted runners. **Must pass before any merge.**
-Most jobs are fully environment-independent; `csharp-client` is the exception — it auto-launches the Windows OPC UA server binary on the runner.
+`csharp-unit` runs build, format, vuln scan, and all non-live xUnit tests. `csharp-live` runs the 110 live xUnit tests on a dedicated server instance (port 40464).
 
 ### Jobs
 
@@ -26,16 +26,16 @@ Every skip in this tier must have:
 - An explicit `reason=` (pytest) / message string (xUnit `Skip.IfNot`) / `skipIf` condition (Vitest)
 - A documented condition to unskip (see table below)
 
-### Known expected skips in ci-required
+### Known expected skips in ci
 
 | Test | Reason | Condition to unskip |
 |------|--------|---------------------|
-| C# `LiveIntegrationTests` × 15 | `IJT_PHASE1_ONLY=true` suppresses server auto-launch in the unit-test CI phase | These same tests **pass** in the `csharp-client` CI job where the server is launched |
+| C# `LiveIntegrationTests` × 15 | `IJT_PHASE1_ONLY=true` suppresses server auto-launch in the unit-test CI phase (`csharp-unit`) | These same tests **pass** in the `csharp-live` CI job where the server is launched on port 40464 |
 | Vitest `source-coverage` git check | `git` unavailable in bare zip-export environments | Not applicable in CI — git is always present; this protects zip-distribution consumers |
 
 ---
 
-## ci-extended (`ci-extended.yml`)
+## Integration (`integration.yml`)
 
 Live, integration, Docker, and optional security checks.
 **Failures and skips are tracked but do not block merges.**
@@ -48,7 +48,7 @@ For full job descriptions, test baselines, and toolchain versions, see the **CI/
 
 - **Nightly** at 2am UTC
 - **Manual dispatch** (`workflow_dispatch`)
-- **Push / PR** touching server/client code paths **or any `.github/workflows/` file** (see path filters in `ci-extended.yml`)
+- **Push / PR** touching server/client code paths **or any `.github/workflows/` file** (see path filters in `integration.yml`)
 
 ### Zero-skip policy for live/integration tests
 
@@ -60,14 +60,14 @@ fails with `pytest.fail()` (loud, never silent). This applies to:
 - `IJT_Web_Client/tests/python/integration/` — both servers
 - `IJT_Console_Client/tests/live/` — OPC UA server
 
-### Known expected non-skip conditions in ci-extended
+### Known expected non-skip conditions in integration
 
 | Test | Status | Reason |
 |------|--------|--------|
 | Console `TestMethods` × 7 | `xfail` | `ProductInstanceUri` is NULL on demo server — tool identity not configured. Uses `pytest.xfail()` so the test runs and is reported as expected-failure, not silently skipped. |
 | Test Client conformance (unsupported-result APIs) | skip/fail-by-design checks | Server profile intentionally does not implement `GetResultIdListFiltered`, `ReleaseResultHandle`, `AcknowledgeResults`, `RequestUnacknowledgedResults`; tests assert absence or Bad-status rejection |
 | Test Client asset sub-type folders (controllers, tools, etc.) | pass | All asset category folders are required in the current server configuration; tests assert presence and fail on missing nodes |
-| `zizmor` job | pass | SARIF upload to Code Scanning — see Security → Code scanning alerts. No action needed; job always passes (skipped on fork PRs). |
+| `zizmor` job | promoted to ci | SARIF upload to Code Scanning (Security → Code scanning alerts). Skipped on fork PRs. Now **blocking** in ci. |
 
 ---
 
@@ -124,27 +124,38 @@ run their live/integration tests in parallel without port conflicts.
 
 | Client             | Test Port | venv         | Notes                                   |
 |--------------------|-----------|--------------|------------------------------------------|
-| IJT_CSharp_Client  | 40451     | N/A (.NET)   | Uses server's native port — no copy needed |
-| IJT_Console_Client | 40461     | `.venv_test` | Per-port isolated launch                |
-| IJT_Test_Client    | 40462     | `.venv_test` | Per-port isolated launch                |
-| IJT_Web_Client     | 40463     | `.venv_test` | Per-port isolated launch                |
+| IJT_CSharp_Client  | **40464** | N/A (.NET)   | Dedicated port — copy-patch mechanism in `OpcUaServerFixture.cs` |
+| IJT_Console_Client | 40461     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
+| IJT_Test_Client    | 40462     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
+| IJT_Web_Client     | 40463     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
 | IJT_Node_Client    | **40451** (fixed) | N/A (Node) | **Release 1 legacy** — server port is hardcoded, dynamic isolation not supported |
-| Server native port | 40451     | —            | Built-in default (from `server_configuration.json`) |
+| Server native/default | 40451  | —            | Built-in default (from `server_configuration.json`) — freed for direct dev + monorepo tests |
+
+> **Rule:** Release 2 clients MUST NOT use port 40451. That port is reserved as the server's native
+> default and must remain free for direct development work and monorepo tests.
+> Server self-tests (smoke tests) may use 40451 because they test the server in its native configuration.
 
 ### How `server_configuration.json` Copy Mechanism Works
 
 The OPC UA server binary always starts on port 40451 (its built-in `server_configuration.json`).
-To run a second instance on a different port, `run_all_tests.py` in each client:
+To run on a different port, the copy-patch mechanism:
 
-1. Copies the **entire binary directory** (`shutil.copytree`) to `tmp/server_instance_{port}/`
+1. Copies the **entire binary directory** to a temp location
 2. Patches `serverConfigurationData.serverEndpointTCPPort` in the **copy's** `server_configuration.json`
-3. Launches the binary **with `cwd=tmp/server_instance_{port}/`** so it reads the patched config
-4. Waits up to 30 s for `localhost:{port}` to become reachable
+3. Launches the binary **with `cwd=<copied dir>/`** so it reads the patched config
+4. Waits up to 30–60 s for `localhost:{port}` to become reachable
 5. Sets `OPCUA_SERVER_URL=opc.tcp://localhost:{port}` for the test session
-6. On teardown: terminates the process, then removes the temp dir (`shutil.rmtree`)
+6. On teardown: terminates the process, then removes the temp dir
 
-The temp dir lives inside the client's own `tmp/` folder (e.g.
-`IJT_Console_Client/tmp/server_instance_40461/`) for easy manual cleanup.
+**Python clients** (`run_all_tests.py`): temp dir in `{client}/tmp/server_instance_{port}/`
+
+**C# client** (`OpcUaServerFixture.cs`): temp dir in `{TEMP}/opcua_csharp_{port}_{guid}/`
+- Triggered automatically when `OPCUA_SERVER_PORT != 40451`
+- Cleaned up in `Dispose()` — works for both local dev and CI
+
+- **CI** (`scripts/start_server_on_port.py`): temp dir in `tmp/server_{port}/`
+- Cross-platform Python script that handles copy, patch, start, port-wait, and GITHUB_ENV export
+- Used in all Windows live test jobs in `ci.yml` and `integration.yml`
 
 ### `.venv_test` Isolation Pattern
 

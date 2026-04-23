@@ -1,17 +1,19 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# CI Extended — Live / Integration / Docker / Security Tests
+# Integration — Live / Integration / Docker Tests
 #
-# TIER: ci-extended (non-blocking) — skips and failures are tracked but do
+# TIER: integration (non-blocking) — skips and failures are tracked but do
 # not gate merges. See docs/TEST_TIERS.md for the full tier policy and the
 # known-expected-skips table.
 #
 # Jobs:
 #   server-smoke-docker  Release2 / OPC UA Server        Linux native Docker build + smoke
 #   webclient-docker     Release2 / IJT Web Client        Docker unit/prod tests
-#   int-testclient       Release2 / Test Client           Windows: OPC UA server + Test Client full suite
-#   int-live-others      Release2 / Web Client + Console  Windows: Web Client integration + Console live (parallel)
-#   zizmor               GHA Security Audit               Optional — non-blocking; findings tracked
+#   int-testclient       Release2 / Test Client           Windows: OPC UA server (port 40462) + Test Client full suite
+#   live-webclient       Release2 / IJT Web Client        Windows: Web Client live integration (port 40463)
+#   live-console         Release2 / IJT Console Client   Windows: Console Client live tests (port 40461)
+#   csharp-live          Release2 / IJT C# Client         Windows: xUnit live tests (port 40464) — nightly
 #   report               Combined summary                 Always runs after all jobs
+# (zizmor promoted to ci.yml — removed from integration)
 #
 # Triggers:
 #   - Nightly at 2am UTC
@@ -19,7 +21,7 @@
 #   - Push / PR touching server or client code paths (see path filters below)
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: CI Extended
+name: Integration
 
 on:
   schedule:
@@ -82,7 +84,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  group: ci-extended-${{ github.ref }}
+  group: integration-${{ github.ref }}
   cancel-in-progress: true
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -277,7 +279,7 @@ jobs:
   #   it runs in parallel with int-live-others (Web Client + Console).
   # ───────────────────────────────────────────────────────────────────────────
   int-testclient:
-    name: "Release2 / Test Client (Windows Live)"
+    name: "Release2 / Test Client (Windows Live, port 40462)"
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -287,33 +289,6 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           persist-credentials: false
-
-      - name: Extract server ZIP
-        run: |
-          Expand-Archive `
-            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
-            -DestinationPath "OPC_UA_Servers\Release2\" `
-            -Force
-
-      - name: Start OPC UA Server (background)
-        run: |
-          $proc = Start-Process `
-            -FilePath "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\opcua_ijt_demo_application.exe" `
-            -WorkingDirectory "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\" `
-            -PassThru -WindowStyle Hidden
-          echo "SERVER_PID=$($proc.Id)" >> $env:GITHUB_ENV
-
-      - name: Wait for OPC UA port 40451
-        run: |
-          $start = Get-Date
-          while (((Get-Date) - $start).TotalSeconds -lt 60) {
-            if (Test-NetConnection -ComputerName localhost -Port 40451 `
-                  -InformationLevel Quiet -WarningAction SilentlyContinue) {
-              Write-Host "Port 40451 open"; exit 0
-            }
-            Start-Sleep -Seconds 3
-          }
-          Write-Host "ERROR: Timeout waiting for port 40451"; exit 1
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
@@ -332,7 +307,20 @@ jobs:
             -r OPC_UA_Clients/Release2/IJT_Test_Client/requirements.txt `
             -r OPC_UA_Clients/Release2/IJT_Test_Client/requirements-dev.txt
 
+      - name: Extract server ZIP
+        run: |
+          Expand-Archive `
+            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+            -DestinationPath "OPC_UA_Servers\Release2\" `
+            -Force
+
+      - name: Start OPC UA server on port 40462
+        working-directory: ${{ github.workspace }}
+        run: python scripts/start_server_on_port.py --port 40462
+
       - name: Run smoke test (quick server sanity check)
+        env:
+          OPCUA_SERVER_URL: opc.tcp://localhost:40462
         run: |
           New-Item -ItemType Directory -Force -Path test-results | Out-Null
           python OPC_UA_Servers/Release2/tests/smoke_test.py `
@@ -342,7 +330,7 @@ jobs:
       - name: Run IJT Test Client tests (all tests)
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
         env:
-          OPCUA_SERVER_URL: opc.tcp://localhost:40451
+          OPCUA_SERVER_URL: opc.tcp://localhost:40462
         run: |
           python -m pytest `
             conformance/ assets/ joining_process/ results/ joint/ events/ common/ `
@@ -354,7 +342,7 @@ jobs:
         if: always()
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
         env:
-          OPCUA_SERVER_URL: opc.tcp://localhost:40451
+          OPCUA_SERVER_URL: opc.tcp://localhost:40462
         run: |
           python scripts/make_excel_report.py
           python scripts/make_ci_summary.py
@@ -363,8 +351,6 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          # Both XMLs must land flat under test-results/ so the artifact has a
-          # single root (avoiding LCA path expansion from multi-root uploads).
           Copy-Item OPC_UA_Clients/Release2/IJT_Test_Client/test-results/pytest.xml `
             test-results/pytest.xml -ErrorAction SilentlyContinue
           Copy-Item OPC_UA_Clients/Release2/IJT_Test_Client/test-results/report.html `
@@ -386,22 +372,20 @@ jobs:
             test-results/report.xlsx
             test-results/summary.md
 
-      - name: Stop server
+      - name: Stop OPC UA server
         if: always()
-        run: |
-          if ($env:SERVER_PID) {
-            Stop-Process -Id $env:SERVER_PID -Force -ErrorAction SilentlyContinue
-          }
+        working-directory: ${{ github.workspace }}
+        run: python scripts/start_server_on_port.py --port 40462 --stop
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / Web Client + Console — Windows Live Tests
-  #   Runs Web Client integration tests (13) and Console Client live tests
-  #   in parallel with int-testclient — each job has its own server copy.
+  # Release2 / IJT Web Client — Windows Live Integration (port 40463)
+  #   Runs Web Client Python integration tests against a live OPC UA server.
+  #   Uses dedicated port 40463 — safe to run in parallel with other live jobs.
   # ───────────────────────────────────────────────────────────────────────────
-  int-live-others:
-    name: "Release2 / Web Client + Console (Windows Live)"
+  live-webclient:
+    name: "Release2 / IJT Web Client — Windows Live Integration (port 40463)"
     runs-on: windows-latest
-    timeout-minutes: 35
+    timeout-minutes: 25
     permissions:
       contents: read
 
@@ -409,33 +393,6 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           persist-credentials: false
-
-      - name: Extract server ZIP
-        run: |
-          Expand-Archive `
-            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
-            -DestinationPath "OPC_UA_Servers\Release2\" `
-            -Force
-
-      - name: Start OPC UA Server (background)
-        run: |
-          $proc = Start-Process `
-            -FilePath "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\opcua_ijt_demo_application.exe" `
-            -WorkingDirectory "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\" `
-            -PassThru -WindowStyle Hidden
-          echo "SERVER_PID=$($proc.Id)" >> $env:GITHUB_ENV
-
-      - name: Wait for OPC UA port 40451
-        run: |
-          $start = Get-Date
-          while (((Get-Date) - $start).TotalSeconds -lt 60) {
-            if (Test-NetConnection -ComputerName localhost -Port 40451 `
-                  -InformationLevel Quiet -WarningAction SilentlyContinue) {
-              Write-Host "Port 40451 open"; exit 0
-            }
-            Start-Sleep -Seconds 3
-          }
-          Write-Host "ERROR: Timeout waiting for port 40451"; exit 1
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
@@ -444,81 +401,257 @@ jobs:
           cache-dependency-path: |
             OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
             OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
-            OPC_UA_Clients/Release2/IJT_Console_Client/requirements.txt
-            OPC_UA_Clients/Release2/IJT_Console_Client/requirements-dev.txt
 
-      - name: Install dependencies
+      - name: Install Web Client dependencies
         run: |
           python -m pip install --upgrade pip
           pip install `
             -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt `
-            -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt `
-            -r OPC_UA_Clients/Release2/IJT_Console_Client/requirements.txt `
-            -r OPC_UA_Clients/Release2/IJT_Console_Client/requirements-dev.txt
+            -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
+
+      - name: Extract server ZIP
+        run: |
+          Expand-Archive `
+            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+            -DestinationPath "OPC_UA_Servers\Release2\" `
+            -Force
+
+      - name: Start OPC UA server on port 40463
+        working-directory: ${{ github.workspace }}
+        run: python scripts/start_server_on_port.py --port 40463
 
       - name: Run Web Client integration tests
         env:
-          OPCUA_TEST_ENDPOINT: opc.tcp://localhost:40451
+          OPCUA_TEST_ENDPOINT: opc.tcp://localhost:40463
           OPCUA_WS_URL: ws://localhost:8001
         run: |
+          New-Item -ItemType Directory -Force -Path OPC_UA_Clients/Release2/IJT_Web_Client/test-results | Out-Null
           python -m pytest OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/ `
             -v --tb=short --timeout=60 `
             --junitxml=OPC_UA_Clients/Release2/IJT_Web_Client/test-results/pytest-integration.xml
 
-      - name: Run Console Client live tests
-        working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
-        env:
-          OPCUA_SERVER_URL: opc.tcp://localhost:40451
-        run: |
-          New-Item -ItemType Directory -Force -Path test-results | Out-Null
-          python -m pytest tests/live/ `
-            -v --tb=short --timeout=120 `
-            --junitxml=test-results/pytest-live.xml
-
-      - name: Upload Web Client + Console results
+      - name: Upload Web Client results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
-          name: results-live-others
-          path: |
-            OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
-            OPC_UA_Clients/Release2/IJT_Console_Client/test-results/
+          name: results-live-webclient
+          path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
 
-      - name: Stop server
+      - name: Stop OPC UA server
         if: always()
-        run: |
-          if ($env:SERVER_PID) {
-            Stop-Process -Id $env:SERVER_PID -Force -ErrorAction SilentlyContinue
-          }
+        working-directory: ${{ github.workspace }}
+        run: python scripts/start_server_on_port.py --port 40463 --stop
 
   # ───────────────────────────────────────────────────────────────────────────
-  # GHA Security Audit (zizmor) — OPTIONAL / NON-BLOCKING
-  #   Audits all GHA workflow files for supply-chain and injection risks.
-  #   Findings are uploaded to GitHub Code Scanning (Security tab) as SARIF —
-  #   the job never fails CI. Review alerts at: Security → Code scanning alerts.
-  #   Fork PRs are skipped: security-events: write is unavailable in fork context.
-  #   Docs: https://woodruffw.github.io/zizmor/
+  # Release2 / IJT Console Client — Windows Live Tests (port 40461)
+  #   Runs Console Client live test suite against a dedicated server instance.
+  #   Uses dedicated port 40461 — safe to run in parallel with other live jobs.
   # ───────────────────────────────────────────────────────────────────────────
-  zizmor:
-    name: "GHA Security Audit (zizmor) [optional]"
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # Skip fork PRs: they cannot write to Code Scanning (no security-events: write).
-    # Non-PR events (push, schedule, workflow_dispatch) always run.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+  live-console:
+    name: "Release2 / IJT Console Client — Windows Live Tests (port 40461)"
+    runs-on: windows-latest
+    timeout-minutes: 25
     permissions:
       contents: read
-      security-events: write  # required to upload SARIF to Code Scanning
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           persist-credentials: false
 
-      - name: Run zizmor (GHA security audit → SARIF upload)
-        uses: zizmorcore/zizmor-action@b1d7e1fb5de872772f31590499237e7cce841e8e  # v0.5.3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
-          inputs: .github/workflows/
+          python-version: "3.14"
+          cache: 'pip'
+          cache-dependency-path: |
+            OPC_UA_Clients/Release2/IJT_Console_Client/requirements.txt
+            OPC_UA_Clients/Release2/IJT_Console_Client/requirements-dev.txt
+
+      - name: Install Console Client dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install `
+            -r OPC_UA_Clients/Release2/IJT_Console_Client/requirements.txt `
+            -r OPC_UA_Clients/Release2/IJT_Console_Client/requirements-dev.txt
+
+      - name: Extract server ZIP
+        run: |
+          Expand-Archive `
+            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+            -DestinationPath "OPC_UA_Servers\Release2\" `
+            -Force
+
+      - name: Start OPC UA server on port 40461
+        working-directory: ${{ github.workspace }}
+        run: python scripts/start_server_on_port.py --port 40461
+
+      - name: Run Console Client live tests
+        working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
+        env:
+          OPCUA_SERVER_URL: opc.tcp://localhost:40461
+        run: |
+          New-Item -ItemType Directory -Force -Path test-results | Out-Null
+          python -m pytest tests/live/ `
+            -v --tb=short --timeout=120 `
+            --junitxml=test-results/pytest-live.xml
+
+      - name: Upload Console Client results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        if: always()
+        with:
+          name: results-live-console
+          path: OPC_UA_Clients/Release2/IJT_Console_Client/test-results/
+
+      - name: Stop OPC UA server
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: python scripts/start_server_on_port.py --port 40461 --stop
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Release2 / IJT C# Client — Live Tests (nightly, port 40464)
+  #   Mirrors ci.yml/csharp-live for nightly drift detection.
+  #   Non-blocking: failures are visible but do not gate merges.
+  #   Port 40464 is the C# client's dedicated port — see docs/TEST_TIERS.md.
+  # ───────────────────────────────────────────────────────────────────────────
+  csharp-live:
+    name: "Release2 / IJT C# Client — Live Tests (port 40464)"
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - name: Extract server ZIP
+        working-directory: ${{ github.workspace }}
+        run: |
+          Expand-Archive `
+            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+            -DestinationPath "OPC_UA_Servers\Release2\" `
+            -Force
+
+      - name: Start OPC UA server on port 40464
+        working-directory: ${{ github.workspace }}
+        run: python scripts/start_server_on_port.py --port 40464
+
+      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7  # v5
+        with:
+          dotnet-version: '10.x'
+
+      - name: Prepare C# test-result artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path test-results | Out-Null
+          '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests.Live" tests="0"/></testsuites>' | Out-File test-results\tests.xml -Encoding UTF8
+
+      - name: Cache NuGet Packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore NuGet Packages
+        run: |
+          $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+          $lockFiles = Get-ChildItem -Path . -Recurse -Filter "packages.lock.json" -File -ErrorAction SilentlyContinue
+          if ($lockFiles.Count -gt 0) {
+            Write-Host "Lock files detected — using locked mode restore."
+            dotnet restore $target --locked-mode
+          } else {
+            Write-Host "No lock files yet — using normal restore."
+            dotnet restore $target
+          }
+
+      - name: Build
+        id: build
+        continue-on-error: true
+        run: dotnet build Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj --no-restore --configuration Release
+
+      - name: Run xUnit Live Tests
+        id: tests
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        env:
+          IJT_AUTO_ACCEPT: 'true'
+        run: |
+          New-Item -ItemType Directory -Force -Path test-results | Out-Null
+          dotnet test Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj `
+            --no-build `
+            --no-restore `
+            --configuration Release `
+            --filter "Category=Live" `
+            --logger "trx;LogFileName=tests.trx" `
+            --logger "console;verbosity=normal" `
+            --results-directory test-results `
+            --blame-hang --blame-hang-timeout 120s
+
+      - name: Convert TRX to JUnit XML
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path test-results | Out-Null
+          $trx   = "test-results\tests.trx"
+          $junit = "test-results\tests.xml"
+          if (Test-Path $trx) {
+            [xml]$x = Get-Content $trx
+            $ns = @{ t = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010" }
+            $results = Select-Xml -Xml $x -XPath "//t:UnitTestResult" -Namespace $ns | Select-Object -ExpandProperty Node
+            $passed  = ($results | Where-Object { $_.outcome -eq "Passed"  }).Count
+            $failed  = ($results | Where-Object { $_.outcome -eq "Failed"  }).Count
+            $total   = $results.Count
+            $xml  = '<?xml version="1.0" encoding="UTF-8"?>' + "`n"
+            $xml += "<testsuites tests=`"$total`" failures=`"$failed`">`n"
+            $xml += "  <testsuite name=`"IJT_CSharp_Client.Tests.Live`" tests=`"$total`" failures=`"$failed`">`n"
+            foreach ($r in $results) {
+              $name = [System.Security.SecurityElement]::Escape($r.testName)
+              $outcome = $r.outcome
+              if ($outcome -eq "Passed") {
+                $xml += "    <testcase name=`"$name`" classname=`"IJT`" />`n"
+              } elseif ($outcome -eq "NotExecuted") {
+                $xml += "    <testcase name=`"$name`" classname=`"IJT`"><skipped/></testcase>`n"
+              } else {
+                $msg = [System.Security.SecurityElement]::Escape($r.Output.ErrorInfo.Message)
+                $xml += "    <testcase name=`"$name`" classname=`"IJT`"><failure>$msg</failure></testcase>`n"
+              }
+            }
+            $xml += "  </testsuite>`n</testsuites>"
+            $xml | Out-File $junit -Encoding UTF8
+            Write-Host "Converted TRX → JUnit: $total tests, $failed failures"
+          } else {
+            Write-Host "No TRX file found — creating empty JUnit"
+            '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests.Live" tests="0"/></testsuites>' | Out-File $junit -Encoding UTF8
+          }
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        if: always()
+        with:
+          name: results-csharp-live
+          path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
+
+      - name: Stop OPC UA server
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: python scripts/start_server_on_port.py --port 40464 --stop
+
+      - name: Fail if Tests Failed
+        if: always() && (steps.build.outcome == 'failure' || steps.tests.outcome == 'failure')
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+        run: |
+          echo "C# live tests failed:"
+          echo "  build -> $BUILD_OUTCOME"
+          echo "  tests -> $TESTS_OUTCOME"
+          exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
   # Combined Report — always runs after all jobs.
@@ -528,7 +661,7 @@ jobs:
     name: "📋 Extended Test Report"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [server-smoke-docker, webclient-docker, int-testclient, int-live-others, zizmor]
+    needs: [server-smoke-docker, webclient-docker, int-testclient, live-webclient, live-console, csharp-live]
     if: always()
     permissions:
       contents: read
@@ -598,7 +731,7 @@ jobs:
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
           name: "Web Client — Integration Tests (Live)"
-          path: all-results/results-live-others/**/pytest-integration.xml
+          path: all-results/results-live-webclient/**/pytest-integration.xml
           reporter: java-junit
           fail-on-error: false
           fail-on-empty: false
@@ -609,7 +742,18 @@ jobs:
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
           name: "Console Client — Live Tests"
-          path: all-results/results-live-others/**/pytest-live.xml
+          path: all-results/results-live-console/**/pytest-live.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: "Report — C# Client Live Tests"
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
+        with:
+          name: "C# Client — Live Tests (xUnit)"
+          path: all-results/results-csharp-live/tests.xml
           reporter: java-junit
           fail-on-error: false
           fail-on-empty: false
@@ -619,8 +763,9 @@ jobs:
           SD_RESULT:   ${{ needs.server-smoke-docker.result }}
           WD_RESULT:   ${{ needs.webclient-docker.result }}
           TC_RESULT:   ${{ needs.int-testclient.result }}
-          LO_RESULT:   ${{ needs.int-live-others.result }}
-          AL_RESULT:   ${{ needs.zizmor.result }}
+          WC_RESULT:   ${{ needs.live-webclient.result }}
+          CON_RESULT:  ${{ needs.live-console.result }}
+          CS_RESULT:   ${{ needs.csharp-live.result }}
           GH_SHA:         ${{ github.sha }}
           GH_BRANCH:      ${{ github.ref_name }}
           GH_RUN_NUMBER:  ${{ github.run_number }}
@@ -671,8 +816,9 @@ jobs:
           sd_r  = E("SD_RESULT",  "unknown")
           wd_r  = E("WD_RESULT",  "unknown")
           tc_r  = E("TC_RESULT",  "unknown")
-          lo_r  = E("LO_RESULT",  "unknown")
-          al_r  = E("AL_RESULT",  "unknown")
+          wc_r  = E("WC_RESULT",  "unknown")
+          con_r = E("CON_RESULT", "unknown")
+          cs_r  = E("CS_RESULT",  "unknown")
 
           sha     = (E("GH_SHA",        "") or "")[:8]
           branch  = E("GH_BRANCH",      "main")
@@ -686,8 +832,9 @@ jobs:
           wd_js     = parse_junit("all-results/results-webclient-docker/vitest.xml")
           tc_smoke  = parse_junit("all-results/results-testclient/smoke-sanity.xml")
           tc_tests  = parse_junit("all-results/results-testclient/pytest.xml")
-          lo_web    = parse_junit("all-results/results-live-others/**/pytest-integration.xml")
-          lo_con    = parse_junit("all-results/results-live-others/**/pytest-live.xml")
+          wc_web    = parse_junit("all-results/results-live-webclient/**/pytest-integration.xml")
+          con_live  = parse_junit("all-results/results-live-console/**/pytest-live.xml")
+          cs_live   = parse_junit("all-results/results-csharp-live/tests.xml")
 
           # ── Artifact sanity gate ─────────────────────────────────────────
 
@@ -697,32 +844,28 @@ jobs:
                   artifact_warnings.append(
                       f"⚠️ **{job_name}**: job succeeded but `{artifact}` not found — possible silent failure"
                   )
-          _warn(sd_r, sd_smoke[0], "server-smoke-docker", "smoke.xml")
-          _warn(wd_r, wd_py[0],    "webclient-docker",    "pytest-unit.xml")
-          _warn(wd_r, wd_js[0],    "webclient-docker",    "vitest.xml")
-          _warn(tc_r, tc_smoke[0], "int-testclient",      "smoke-sanity.xml")
-          _warn(tc_r, tc_tests[0], "int-testclient",      "pytest.xml")
-          _warn(lo_r, lo_web[0],   "int-live-others",     "pytest-integration.xml")
-          _warn(lo_r, lo_con[0],   "int-live-others",     "pytest-live.xml")
+          _warn(sd_r,  sd_smoke[0],  "server-smoke-docker", "smoke.xml")
+          _warn(wd_r,  wd_py[0],     "webclient-docker",    "pytest-unit.xml")
+          _warn(wd_r,  wd_js[0],     "webclient-docker",    "vitest.xml")
+          _warn(tc_r,  tc_smoke[0],  "int-testclient",      "smoke-sanity.xml")
+          _warn(tc_r,  tc_tests[0],  "int-testclient",      "pytest.xml")
+          _warn(wc_r,  wc_web[0],    "live-webclient",      "pytest-integration.xml")
+          _warn(con_r, con_live[0],  "live-console",        "pytest-live.xml")
+          _warn(cs_r,  cs_live[0],   "csharp-live",         "tests.xml")
 
           # ── Overall status ────────────────────────────────────────────────
 
-          core_jobs = [sd_r, wd_r, tc_r, lo_r]
+          core_jobs = [sd_r, wd_r, tc_r, wc_r, con_r, cs_r]
           n_pass  = sum(1 for r in core_jobs if r == "success")
           n_fail  = sum(1 for r in core_jobs if r == "failure")
           n_total = len(core_jobs)
 
-          zizmor_ok = al_r in ("success", "skipped")
-
-          if n_fail == 0 and zizmor_ok:
+          if n_fail == 0:
               status_icon = "✅"
-              status_msg  = f"All {n_pass} / {n_total} core jobs passed"
-          elif n_fail == 0 and not zizmor_ok:
-              status_icon = "⚠️"
-              status_msg  = f"All {n_pass} / {n_total} core jobs passed  ·  security audit findings"
+              status_msg  = f"All {n_pass} / {n_total} jobs passed"
           else:
               status_icon = "❌"
-              status_msg  = f"{n_fail} / {n_total} core jobs failed  ·  {n_pass} passed"
+              status_msg  = f"{n_fail} / {n_total} jobs failed  ·  {n_pass} passed"
 
           run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
           sha_str  = f"`{sha}`" if sha else "—"
@@ -730,7 +873,7 @@ jobs:
           # ── Build report ──────────────────────────────────────────────────
 
           out = [
-              "## IJT OPC UA — CI Extended",
+              "## IJT OPC UA — Integration",
               "",
               f"> {status_icon} **{status_msg}**",
               f"> **Branch:** `{branch}` &nbsp;·&nbsp; **Commit:** {sha_str} &nbsp;·&nbsp; **Run:** {run_link}",
@@ -752,26 +895,20 @@ jobs:
               "",
               "### 🖥️ Live Integration Tests",
               "",
-              "> Platform: Windows Server — native OPC UA server on port 40451",
+              "> Platform: Windows Server — native OPC UA server (dedicated ports per client)",
               "",
-              "| Suite | Tests | Skipped | Notes |",
-              "|:------|------:|--------:|:------|",
-              f"| Test Client — Smoke sanity       | {tests(*tc_smoke)} | {skips(tc_smoke[3])} | Server and namespace reachability |",
-              f"| Test Client — Conformance (live) | {tests(*tc_tests)} | {skips(tc_tests[3])} | Expected skips — see Checks tab |",
-              f"| Web Client — Integration (live)  | {tests(*lo_web)} | {skips(lo_web[3])} | OPC UA subscriptions + WebSocket |",
-              f"| Console Client — Live            | {tests(*lo_con)} | {skips(lo_con[3])} | {skip_note(lo_con[3], 'See Checks tab')} |",
-              "",
-              "---",
-              "",
-              "### 🔒 Security Audit",
-              "",
-              "| Tool | Status | Detail |",
-              "|:-----|:------:|:-------|",
-              f"| GHA Workflows — zizmor | {job_icon(al_r)} | Findings reported to Security → Code Scanning |",
+              "| Suite | Port | Tests | Skipped | Notes |",
+              "|:------|-----:|------:|--------:|:------|",
+              f"| Test Client — Smoke sanity       | 40462 | {tests(*tc_smoke)} | {skips(tc_smoke[3])} | Server and namespace reachability |",
+              f"| Test Client — Conformance (live) | 40462 | {tests(*tc_tests)} | {skips(tc_tests[3])} | Expected skips — see Checks tab |",
+              f"| Web Client — Integration (live)  | 40463 | {tests(*wc_web)} | {skips(wc_web[3])} | OPC UA subscriptions + WebSocket |",
+              f"| Console Client — Live            | 40461 | {tests(*con_live)} | {skips(con_live[3])} | {skip_note(con_live[3], 'See Checks tab')} |",
+              f"| C# Client — Live (xUnit)         | 40464 | {tests(*cs_live)} | {skips(cs_live[3])} | Nightly drift detection |",
               "",
               "---",
               "",
               "> 📋 **Checks** tab — per-test drill-down &nbsp;·&nbsp; 📦 **Artifacts** — JUnit XML",
+              "> 🔒 Security audit (zizmor) results are in **CI** → Security → Code Scanning",
           ]
 
           if artifact_warnings:

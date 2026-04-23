@@ -12,13 +12,14 @@ namespace IJT_CSharp_Client.Tests;
 /// All tests skip automatically if the server is not available.
 /// </summary>
 [Collection("LiveServer")]
+[Trait("Category", "Live")]
 public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
 {
     private readonly OpcUaServerFixture _fixture = fixture;
 
-    private static ClientConfig LiveConfig => new()
+    private ClientConfig LiveConfig => new()
     {
-        ServerUrl = "opc.tcp://localhost:40451",
+        ServerUrl = _fixture.ServerUrl,
         AutoAcceptServerCertificate = true,
     };
 
