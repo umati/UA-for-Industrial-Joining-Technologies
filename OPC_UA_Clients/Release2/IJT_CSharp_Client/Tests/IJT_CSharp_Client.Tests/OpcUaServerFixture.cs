@@ -40,8 +40,22 @@ public sealed class OpcUaServerFixture : IDisposable
 
     public OpcUaServerFixture()
     {
-        // If already listening, use it (developer has server running manually)
-        if (IsPortOpen(_port))
+        // When OPCUA_SERVER_PORT is explicitly set the caller is the test runner, which
+        // wants a freshly-managed server on that port.  A stale process from a previous
+        // run may still hold the port (or be in a dying state), causing BadConnectionClosed.
+        // Kill it now so the fixture always launches a clean instance in this mode.
+        var testRunnerPort = Environment.GetEnvironmentVariable("OPCUA_SERVER_PORT");
+        var managedByRunner = !string.IsNullOrWhiteSpace(testRunnerPort);
+        if (managedByRunner && IsPortOpen(_port))
+        {
+            _log.LogInformation("OPCUA_SERVER_PORT is set — killing stale process on port {Port} before fresh launch.", _port);
+            KillProcessOnPort(_port);
+            Thread.Sleep(500); // brief pause for the OS to release the port
+        }
+
+        // If already listening (and NOT in test-runner mode), use it —
+        // the developer has a server running manually.
+        if (!managedByRunner && IsPortOpen(_port))
         {
             _log.LogInformation("OPC UA server already running on port {Port} — skipping auto-launch.", _port);
             IsAvailable = true;
@@ -105,20 +119,26 @@ public sealed class OpcUaServerFixture : IDisposable
             _serverProcess.BeginOutputReadLine();
             _serverProcess.BeginErrorReadLine();
 
-            IsAvailable = WaitForPort(_port, timeoutSeconds: 30);
+            // Step 3: wait for TCP port to open
+            var portOpen = WaitForPort(_port, timeoutSeconds: 30);
+            if (!portOpen)
+            {
+                _log.LogWarning("OPC UA server did not open TCP port {Port} within 30 s. Live tests will be skipped.", _port);
+                IsAvailable = false;
+                return;
+            }
+
+            // Step 4: OPC UA readiness probe — verify the process is alive and the OPC UA
+            // service layer is accepting connections (not just TCP).  The server opens the
+            // TCP listener before the OPC UA stack is fully initialised, so we retry with
+            // back-off rather than using a fixed sleep.
+            IsAvailable = ProbeOpcUaReady(_port, maxAttempts: 10, delayMs: 1000);
             if (!IsAvailable)
-            {
-                _log.LogWarning("OPC UA server did not become ready within 30 s on port {Port}. Live tests will be skipped.", _port);
-            }
+                _log.LogWarning(
+                    "OPC UA server on port {Port} opened TCP but did not accept OPC UA connections within timeout. " +
+                    "Live tests will be skipped.", _port);
             else
-            {
-                // The OPC UA service layer needs a few extra seconds to initialize
-                // after the TCP port first becomes reachable. Without this grace
-                // period, the first connection attempt in a live test races against
-                // server startup and throws a transport-level error.
-                Thread.Sleep(3000);
                 _log.LogInformation("OPC UA server ready on port {Port}.", _port);
-            }
         }
         catch (Exception ex)
         {
@@ -276,6 +296,72 @@ public sealed class OpcUaServerFixture : IDisposable
         catch (Exception) { return false; }
     }
 
+    /// <summary>
+    /// Kills any process currently listening on <paramref name="port"/> using
+    /// platform-specific commands (netstat + taskkill on Windows, fuser on Linux/macOS).
+    /// Best-effort — logs a warning and continues if it fails.
+    /// </summary>
+    private static void KillProcessOnPort(int port)
+    {
+        try
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // netstat -ano lists PID in the last column for LISTENING entries
+                using var ns = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "netstat.exe",
+                        Arguments = "-ano",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true,
+                    },
+                };
+                ns.Start();
+                var output = ns.StandardOutput.ReadToEnd();
+                ns.WaitForExit(5000);
+
+                foreach (var line in output.Split('\n'))
+                {
+                    if (!line.Contains($":{port} ") && !line.Contains($":{port}\t")) continue;
+                    if (!line.Contains("LISTENING")) continue;
+                    var parts = line.Trim().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 5 && int.TryParse(parts[^1], out var pid) && pid > 0)
+                    {
+                        _log.LogInformation("Killing stale server process PID {Pid} on port {Port}.", pid, port);
+                        using var kill = Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "taskkill.exe",
+                            Arguments = $"/F /T /PID {pid}",
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                        });
+                        kill?.WaitForExit(3000);
+                    }
+                }
+            }
+            else
+            {
+                // fuser -k <port>/tcp on Linux/macOS
+                using var fuser = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "fuser",
+                    Arguments = $"-k {port}/tcp",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                });
+                fuser?.WaitForExit(5000);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning("KillProcessOnPort({Port}) failed (non-fatal): {Message}", port, ex.Message);
+        }
+    }
+
+
     private static bool WaitForPort(int port, int timeoutSeconds)
     {
         var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
@@ -286,6 +372,78 @@ public sealed class OpcUaServerFixture : IDisposable
         }
         return false;
     }
+
+    /// <summary>
+    /// Probes the OPC UA server by sending a binary Hello message and checking for an
+    /// Acknowledge response.  This confirms the OPC UA stack is initialised, not just
+    /// that the TCP port is open.  Retries with a fixed delay to allow the server time
+    /// to fully start.  Returns <c>true</c> when the probe succeeds.
+    /// </summary>
+    private static bool ProbeOpcUaReady(int port, int maxAttempts, int delayMs)
+    {
+        // OPC UA Binary Hello message (UABH) — minimal well-formed hello for opc.tcp
+        // Layout: MessageType(3) + 'F'(1) + MessageSize(4-LE) + Version(4-LE) +
+        //         ReceiveBufSize(4-LE) + SendBufSize(4-LE) + MaxMsgSize(4-LE) +
+        //         MaxChunkCount(4-LE) + EndpointUrl length(4-LE) + EndpointUrl bytes
+        var url = $"opc.tcp://localhost:{port}";
+        var urlBytes = System.Text.Encoding.UTF8.GetBytes(url);
+        var msgSize = 28 + urlBytes.Length;
+        var hello = new byte[msgSize];
+        // Message type "HEL" + chunk type 'F'
+        hello[0] = (byte)'H'; hello[1] = (byte)'E'; hello[2] = (byte)'L'; hello[3] = (byte)'F';
+        // Message size (little-endian)
+        BitConverter.GetBytes(msgSize).CopyTo(hello, 4);
+        // Protocol version = 0
+        BitConverter.GetBytes(0u).CopyTo(hello, 8);
+        // Receive buffer size = 65535
+        BitConverter.GetBytes(65535u).CopyTo(hello, 12);
+        // Send buffer size = 65535
+        BitConverter.GetBytes(65535u).CopyTo(hello, 16);
+        // Max message size = 0 (unlimited)
+        BitConverter.GetBytes(0u).CopyTo(hello, 20);
+        // Max chunk count = 0 (unlimited)
+        BitConverter.GetBytes(0u).CopyTo(hello, 24);
+        // Endpoint URL length + bytes
+        BitConverter.GetBytes(urlBytes.Length).CopyTo(hello, 28);
+        urlBytes.CopyTo(hello, 32);
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var tcp = new TcpClient();
+                tcp.Connect("127.0.0.1", port);
+                tcp.ReceiveTimeout = 3000;
+                tcp.SendTimeout = 3000;
+                var stream = tcp.GetStream();
+                stream.Write(hello, 0, hello.Length);
+                // Read at least 4 bytes — enough to check the response message type
+                var buf = new byte[8];
+                var read = stream.Read(buf, 0, buf.Length);
+                // OPC UA Acknowledge is "ACK" + 'F'; OPC UA Error is "ERR" + 'F'
+                // Either response means the OPC UA stack is alive and responding
+                if (read >= 4
+                    && buf[3] == (byte)'F'
+                    && ((buf[0] == 'A' && buf[1] == 'C' && buf[2] == 'K')
+                        || (buf[0] == 'E' && buf[1] == 'R' && buf[2] == 'R')))
+                {
+                    _log.LogInformation("OPC UA probe succeeded on port {Port} (attempt {Attempt}/{Max}).", port, attempt, maxAttempts);
+                    return true;
+                }
+            }
+            catch (Exception)
+            {
+                // Not ready yet — will retry
+            }
+
+            if (attempt < maxAttempts)
+                Thread.Sleep(delayMs);
+        }
+
+        _log.LogWarning("OPC UA probe failed after {Max} attempts on port {Port}.", maxAttempts, port);
+        return false;
+    }
+
 
     /// <summary>
     /// Copies the server binary directory to a temp location and patches
