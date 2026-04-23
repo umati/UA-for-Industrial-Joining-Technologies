@@ -110,7 +110,7 @@ The CI nightly job (`int-testclient`) runs at 2am UTC and produces a `results-te
 
 To view results after a CI run:
 1. Go to the **Actions** tab on GitHub
-2. Click **CI Extended** → most recent nightly run
+2. Click **Integration** → most recent nightly run
 3. Click **results-testclient** in the Artifacts section
 4. Download and open `report.xlsx`
 

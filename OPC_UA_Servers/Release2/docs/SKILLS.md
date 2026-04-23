@@ -136,6 +136,8 @@ Both files live inside the binary folder (extracted ZIP):
 |----|------|-----------|
 | STUB-001 | `GetResultIdListFiltered` | Returns `BadNotImplemented` |
 | STUB-002 | `ReleaseResultHandle` | Returns `BadNotImplemented` |
+| STUB-003 | `AcknowledgeResults` | Not implemented; compliant behavior is method absence or `BadNotImplemented` |
+| STUB-004 | `RequestUnacknowledgedResults` | Not implemented; compliant behavior is method absence or `BadNotImplemented` |
 | GAP-001 | HasInterface references | Not emitted on asset instance nodes — 17 Test Client tests xfailed |
 | GAP-002 | AssociatedWith references | Not exposed on controller/tool nodes |
 | GAP-003 | `ProductInstanceUri` | Empty in simulator — methods requiring it return None |

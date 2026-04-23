@@ -48,6 +48,12 @@ OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](htt
 
 # Change Log
 
+**2026-04-23:**
+1. **Fixed** delays in result variable updates — when results arrive in quick succession, the server now waits only the minimum necessary time between updates instead of always waiting the full interval. Connected clients will see result data appear more promptly.
+2. **Fixed** server startup and shutdown responsiveness — the server now becomes ready faster after launch and stops more cleanly on shutdown, reducing the time clients need to wait.
+3. **Fixed** a rare issue where a simulation start or stop command could appear unresponsive due to a timing gap in state change handling.
+4. **Multiple** internal bug fixes and improvements.
+
 **2026-04-21:**
 1. **Added** a result cache so that recent results remain accessible for retrieval even after the result variables have been overwritten by newer results.
 2. **Updated** simulation methods to run asynchronously — method calls return immediately and simulation runs in the background so that clients are not blocked for the full duration.

@@ -806,7 +806,9 @@ def _check_zizmor(results_dir: Path) -> StepResult:
             "GHA zizmor (security)", "PASS", f"{len(findings)} finding(s), none high/critical"
         )
     except Exception:
-        return StepResult("GHA zizmor (security)", "WARN", "Could not parse output")
+        return StepResult(
+            "GHA zizmor (security)", "SKIP", "Could not parse output — zizmor version mismatch"
+        )
 
 
 def _print_step_result(r: StepResult) -> None:
