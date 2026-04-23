@@ -53,7 +53,8 @@ _PHASE2_TEST_FILTER = "FullyQualifiedName~LiveIntegration"
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-_SERVER_NATIVE_PORT = 40451
+_SERVER_NATIVE_PORT = 40451  # server binary default — used for fallback pre-flight
+_OPCUA_SERVER_PORT  = 40464  # dedicated port for C# client test isolation (copy-and-patch)
 _WELL_KNOWN_SIMULATOR_PATHS = [
     _REPO_ROOT
     / "OPC_UA_Servers"
@@ -738,8 +739,16 @@ def main() -> int:
     # -- Phase 2 --------------------------------------------------------------
     if run_phase2:
         sim_proc: subprocess.Popen | None = None
+        port_override = os.environ.get("OPCUA_SERVER_PORT", "").strip()
         user_url_was_set = bool(os.environ.get("OPCUA_SERVER_URL"))
-        if not user_url_was_set:
+
+        if port_override:
+            # OPCUA_SERVER_PORT is set → OpcUaServerFixture.cs manages the server
+            # lifecycle (copy-and-patch mechanism).  Skip the Python pre-flight;
+            # passing the resolved URL to dotnet test is sufficient.
+            server_url = _resolve_server_url()
+            server_ready = True
+        elif not user_url_was_set:
             server_url = _resolve_server_url()
             host, port = _parse_opcua_endpoint(server_url)
             server_ready = _is_port_reachable(host, port)
@@ -757,7 +766,11 @@ def main() -> int:
             # Re-read URL in case _try_launch_simulator updated it
             server_url = _resolve_server_url()
             if server_ready:
-                print(f"[PHASE 2] OPC UA server reachable at {server_url}")
+                if port_override:
+                    print(f"[PHASE 2] OpcUaServerFixture.cs will manage server on port"
+                          f" {port_override}")
+                else:
+                    print(f"[PHASE 2] OPC UA server reachable at {server_url}")
                 r = _step_live_tests(server_url, verbose=args.verbose)
             else:
                 print(

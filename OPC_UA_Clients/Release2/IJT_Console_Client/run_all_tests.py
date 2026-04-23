@@ -14,7 +14,7 @@ Usage:
   python run_all_tests.py --help
 
 Environment variables:
-  OPCUA_SERVER_URL      Override server URL (default: opc.tcp://localhost:40451)
+  OPCUA_SERVER_URL      Override server URL (default: opc.tcp://localhost:40461)
   OPCUA_SIMULATOR_EXE   Path to opcua_ijt_demo_application(.exe)
   SKIP_VENV_INSTALL     Set to "1" to skip pip install (for CI where deps are pre-installed)
 """
@@ -62,7 +62,11 @@ _TESTS_LIVE = _TESTS_DIR / "live"
 _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest-unit.xml"
 _TMP_DIR = _HERE / "tmp"
-_DEFAULT_SERVER_URL = "opc.tcp://localhost:40461"
+# The OPC UA server port this client connects to.  Defined once here so every
+# reference below derives from it — change the port in one place only.
+_OPCUA_SERVER_PORT = 40461
+
+_DEFAULT_SERVER_URL = f"opc.tcp://localhost:{_OPCUA_SERVER_PORT}"
 _MIN_PYTHON = (3, 14)
 
 _WELL_KNOWN_SIMULATOR_PATHS = [
@@ -112,7 +116,7 @@ def _parse_server_url(url: str) -> tuple[str, int]:
     if ":" in stripped:
         host_part, port_part = stripped.rsplit(":", 1)
         return host_part, int(port_part.split("/")[0])
-    return stripped, 40451
+    return stripped, _OPCUA_SERVER_PORT
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +325,6 @@ def _binary_available(name: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-_SERVER_NATIVE_PORT = 40451  # port the binary always uses (from server_configuration.json)
 _server_tmp_dir: Path | None = None  # set by _launch_simulator_on_port; cleared in finally
 
 
@@ -390,7 +393,7 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
     return None
 
 
-def _ensure_server(port: int = 40461) -> subprocess.Popen | None:
+def _ensure_server(port: int = _OPCUA_SERVER_PORT) -> subprocess.Popen | None:
     """Start OPC UA server if not already running. Returns Popen handle or None.
 
     If OPCUA_SERVER_URL is already set the caller manages the server — skip auto-launch.
@@ -402,10 +405,6 @@ def _ensure_server(port: int = 40461) -> subprocess.Popen | None:
         return None
     if _is_port_reachable("localhost", port):
         _log(f"  [server] Already running on port {port}")
-        return None
-    if _is_port_reachable("localhost", _SERVER_NATIVE_PORT):
-        _log(f"  [server] Already running on native port {_SERVER_NATIVE_PORT}")
-        os.environ["OPCUA_SERVER_URL"] = f"opc.tcp://localhost:{_SERVER_NATIVE_PORT}"
         return None
     exe = os.environ.get("OPCUA_SIMULATOR_EXE")
     if not exe:

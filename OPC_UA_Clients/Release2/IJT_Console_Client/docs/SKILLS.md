@@ -223,28 +223,9 @@ python main.py --url "opc.tcp://localhost:40451" --call start_selected_joining -
 
 ### Server Auto-Launch & Port Isolation
 
-Each client reserves its own server port so multiple clients can run tests in parallel without conflicts.
+This client's test runner auto-launches a dedicated server instance on port **40461** (copy-and-patch
+mechanism — copies the binary, patches `server_configuration.json`, and manages the full lifecycle).
+Port 40451 is never used by this test runner.
 
-| Client             | Test Port | venv         |
-|--------------------|-----------|--------------|
-| IJT_CSharp_Client  | 40451     | N/A (.NET)   |
-| IJT_Console_Client | 40461     | .venv_test   |
-| IJT_Test_Client    | 40462     | .venv_test   |
-| IJT_Web_Client     | 40463     | .venv_test   |
-| IJT_Node_Client    | **40451** (fixed) | N/A (Node) | Release 1 legacy — no dynamic port support |
-
-**How auto-launch works (per-port isolation):**
-1. If `OPCUA_SERVER_URL` env var is set → use it, skip auto-launch (root runner path)
-2. If client's port (e.g. 40461) is already reachable → reuse that server
-3. If native port 40451 is reachable → use it (single-instance convenience mode)
-4. Otherwise → copy server binary dir to `tmp/server_instance_{port}/`, patch
-   `server_configuration.json` with the client's port, launch from that temp dir,
-   wait up to 30s for the port to open, set `OPCUA_SERVER_URL` env var
-5. After tests → terminate process, delete temp dir
-
-**Why two venvs (Python clients):**
-- `.venv` — runtime-only, created by `setup_client.py` / `setup_project.py`
-- `.venv_test` — test runner + dev tools, created by `run_all_tests.py`
-- Kept separate so installing test tools never alters the production environment
-
-**Override:** Set `OPCUA_SERVER_URL=opc.tcp://myserver:40451` to point at any server; auto-launch is skipped entirely.
+For the full port assignment table, auto-launch mechanics, and venv rationale, see
+[`docs/TEST_TIERS.md`](../../../../docs/TEST_TIERS.md).

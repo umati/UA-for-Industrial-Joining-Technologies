@@ -13,23 +13,25 @@ Architecture: Two-phase execution
                             - dotnet format, NuGet vulnerability scan (C# project)
                             - hadolint, yamllint (Server / Docker)
                           Extra root-level checks: git-sanity, md-hygiene, GHA workflow validation.
-  Phase 2 (SEQUENTIAL) -- live integration tests, requires OPC UA server on
-                          port 40451 (managed via Docker Compose by default).
-                          Delegates to each sub-project's own run_all_tests.py --phase2
-                          with OPCUA_SERVER_URL pointing to the Docker server root manages.
+  Phase 2 (PARALLEL)   -- live integration tests, no shared server.
+                          Each sub-runner owns its server on a dedicated port
+                          and manages its full lifecycle independently:
+                            - Console Client  → OPCUA_SERVER_PORT_CONSOLE_CLIENT (40461)
+                            - Test Client     → OPCUA_SERVER_PORT_TEST_CLIENT    (40462)
+                            - Web Client      → OPCUA_SERVER_PORT_WEB_CLIENT     (40463)
+                            - C# Client       → OPCUA_SERVER_PORT_CSHARP_CLIENT  (40464)
+                          Port 40451 is reserved for Release 1 / Node client only.
 
 Usage:
-  python run_all_tests.py                    # full run (Phase 1 + Docker + Phase 2)
+  python run_all_tests.py                    # full run (Phase 1 + Phase 2)
   python run_all_tests.py --phase1           # static + unit tests only (no server)
-  python run_all_tests.py --phase2           # live tests only (server must exist)
+  python run_all_tests.py --phase2           # live tests only (sub-runners auto-start servers)
   python run_all_tests.py --suite md-hygiene # single suite by name
-  python run_all_tests.py --skip-docker      # assume server already on :40451
-  python run_all_tests.py --no-rebuild       # docker compose up --no-build
+  python run_all_tests.py --suite server-smoke  # manual utility: smoke-test server on port 40451
   python run_all_tests.py --verbose          # DEBUG-level logging
   python run_all_tests.py --help
 
 Environment variables:
-  OPCUA_SERVER_URL      Override server URL (default: opc.tcp://localhost:40451)
   IJT_SUITE_TIMEOUT     Per-suite timeout in seconds (default: 600)
 """
 
@@ -172,10 +174,19 @@ WEB_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client"
 NODE_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release1" / "IJT_Node_Client"
 SMOKE_TEST = SERVER_DIR / "tests" / "smoke_test.py"
 
-# OPC UA server port — all sub-runners receive OPCUA_SERVER_URL pointing here.
-# Sub-runners may probe additional ports (Console: 40461, Test: 40462) as
-# convenience defaults for standalone use, but always fall back to this port.
-# Web internal client port: 40463. Node: no OPC UA server needed.
+# ---------------------------------------------------------------------------
+# Canonical OPC UA server port assignments — change here, change everywhere.
+# Each value is the port the OPC UA server instance listens on for that client.
+# ---------------------------------------------------------------------------
+OPCUA_SERVER_PORT_CONSOLE_CLIENT = 40461  # server port the Console Client connects to
+OPCUA_SERVER_PORT_TEST_CLIENT    = 40462  # server port the Test Client connects to
+OPCUA_SERVER_PORT_WEB_CLIENT     = 40463  # server port the Web Client connects to
+OPCUA_SERVER_PORT_CSHARP_CLIENT  = 40464  # server port the C# Client connects to
+
+# Release 1 / Node client — legacy default, unchanged for backward compatibility.
+# Smoke / utility suites also use this port: they specifically test the server's
+# native/default configuration, so 40451 is intentional and correct there.
+# Release 2 sub-runners each own their dedicated port above.
 OPCUA_PORT = 40451
 
 IS_WINDOWS = sys.platform == "win32"
@@ -1135,12 +1146,17 @@ def _suite_md_hygiene() -> SuiteResult:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 suites -- live / integration (run sequentially, server required)
+# Phase 2 suites -- live / integration (run in parallel, each owns its server)
 # ---------------------------------------------------------------------------
 
 
 def _suite_server_smoke() -> SuiteResult:
-    """OPC UA server smoke test (TCP connection + basic node browse)."""
+    """OPC UA server smoke test (TCP connection + basic node browse).
+
+    Starts a server on the native port (OPCUA_PORT / 40451), runs smoke_test.py,
+    then stops the server.  Uses the same _start_server / _stop_server helpers
+    that previously backed the full Phase 2 shared server.
+    """
     name = "server-smoke"
     t0 = time.monotonic()
 
@@ -1149,74 +1165,86 @@ def _suite_server_smoke() -> SuiteResult:
 
     python = _current_python()
     outputs: list[str] = []
+    started_server = False
 
-    smoke_reqs = SERVER_DIR / "tests" / "requirements.txt"
-    if smoke_reqs.exists():
-        rc_pip, out = _run_captured(
-            [
-                python,
-                "-m",
-                "pip",
-                "install",
-                "-q",
-                "--disable-pip-version-check",
-                "-r",
-                str(smoke_reqs),
-            ],
+    try:
+        started_server = _start_server()
+
+        smoke_reqs = SERVER_DIR / "tests" / "requirements.txt"
+        if smoke_reqs.exists():
+            rc_pip, out = _run_captured(
+                [
+                    python,
+                    "-m",
+                    "pip",
+                    "install",
+                    "-q",
+                    "--disable-pip-version-check",
+                    "-r",
+                    str(smoke_reqs),
+                ],
+                cwd=SERVER_DIR,
+                label="pip install (smoke)",
+            )
+            outputs.append(out)
+            if rc_pip != 0:
+                return SuiteResult(
+                    name,
+                    False,
+                    time.monotonic() - t0,
+                    output="\n".join(outputs),
+                    notes=["pip install failed"],
+                )
+
+        rc, out = _run_captured(
+            [python, str(SMOKE_TEST), "--tcp-timeout", "30"],
             cwd=SERVER_DIR,
-            label="pip install (smoke)",
+            label="smoke_test.py --tcp-timeout 30",
         )
         outputs.append(out)
-        if rc_pip != 0:
-            return SuiteResult(
-                name,
-                False,
-                time.monotonic() - t0,
-                output="\n".join(outputs),
-                notes=["pip install failed"],
-            )
-
-    rc, out = _run_captured(
-        [python, str(SMOKE_TEST), "--tcp-timeout", "30"],
-        cwd=SERVER_DIR,
-        label="smoke_test.py --tcp-timeout 30",
-    )
-    outputs.append(out)
-    return SuiteResult(name, rc == 0, time.monotonic() - t0, output="\n".join(outputs))
+        return SuiteResult(name, rc == 0, time.monotonic() - t0, output="\n".join(outputs))
+    finally:
+        if started_server:
+            _stop_server()
 
 
 def _suite_csharp_live() -> SuiteResult:
     """C# Client -- Phase 2 (live).  Delegates to sub-project runner.
 
-    Passes OPCUA_SERVER_URL so sub-project connects to the server root started.
+    Passes OPCUA_SERVER_PORT only (not OPCUA_SERVER_URL) so the C# runner's
+    Phase 2 logic enters the fixture-managed path: OpcUaServerFixture.cs
+    copies the binary, patches the port to 40464, and manages its own server
+    instance.  Passing OPCUA_SERVER_URL would trigger the "user-managed server"
+    branch which skips live tests when 40464 isn't already reachable.
     """
     return _delegate_to_runner(
         name="csharp-live",
         runner_dir=CSHARP_DIR,
         phase_args=["--phase2"],
         label="csharp runner (phase2)",
-        extra_env={"OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"},
+        extra_env={
+            "OPCUA_SERVER_PORT": str(OPCUA_SERVER_PORT_CSHARP_CLIENT),
+        },
     )
 
 
 def _suite_console_live() -> SuiteResult:
     """Console Client -- Phase 2 (live).  Delegates to sub-project runner.
 
-    Passes OPCUA_SERVER_URL so sub-project connects to the server root started.
+    No OPCUA_SERVER_URL passed — the Console runner owns its server on port 40461.
     """
     return _delegate_to_runner(
         name="console-live",
         runner_dir=CONSOLE_DIR,
         phase_args=["--phase2"],
         label="console runner (phase2)",
-        extra_env={"OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"},
     )
 
 
 def _suite_testclient_full() -> SuiteResult:
     """Test Client -- Phase 2 (live conformance).  Delegates to sub-project runner.
 
-    Passes OPCUA_SERVER_URL so sub-project connects to the server root started.
+    No OPCUA_SERVER_URL passed — the TestClient runner owns its server on port 40462.
     Uses 1200s timeout — conformance tests span many OPC UA round-trips.
     """
     return _delegate_to_runner(
@@ -1224,7 +1252,6 @@ def _suite_testclient_full() -> SuiteResult:
         runner_dir=TEST_CLIENT_DIR,
         phase_args=["--phase2"],
         label="testclient runner (phase2)",
-        extra_env={"OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}"},
         timeout=1200,
     )
 
@@ -1232,17 +1259,13 @@ def _suite_testclient_full() -> SuiteResult:
 def _suite_webclient_live() -> SuiteResult:
     """Web Client -- Phase 2 (live + integration).  Delegates to sub-project runner.
 
-    Passes OPCUA_SERVER_URL so sub-project connects to the server root started.
+    No OPCUA_SERVER_URL passed — the WebClient runner owns its server on port 40463.
     """
     return _delegate_to_runner(
         name="webclient-live",
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--phase2"],
         label="webclient runner (phase2)",
-        extra_env={
-            "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_PORT}",
-            "OPCUA_TEST_ENDPOINT": f"opc.tcp://localhost:{OPCUA_PORT}",
-        },
     )
 
 
@@ -1262,14 +1285,19 @@ PHASE1_SUITES: dict[str, object] = {
 }
 
 PHASE2_SUITES: dict[str, object] = {
-    "server": _suite_server_smoke,
-    "csharp-live": _suite_csharp_live,
-    "console-live": _suite_console_live,
+    "csharp-live":     _suite_csharp_live,
+    "console-live":    _suite_console_live,
     "testclient-full": _suite_testclient_full,
-    "webclient-live": _suite_webclient_live,
+    "webclient-live":  _suite_webclient_live,
 }
 
-ALL_SUITE_KEYS: list[str] = list(PHASE1_SUITES) + list(PHASE2_SUITES)
+# Utility suites — not part of the default parallel Phase 2 run.
+# Run individually with --suite <name> for manual checks.
+_UTILITY_SUITES: dict[str, object] = {
+    "server-smoke": _suite_server_smoke,
+}
+
+ALL_SUITE_KEYS: list[str] = list(PHASE1_SUITES) + list(PHASE2_SUITES) + list(_UTILITY_SUITES)
 
 # ---------------------------------------------------------------------------
 # Phase runners
@@ -1299,18 +1327,33 @@ def run_phase1(suites: dict) -> list[SuiteResult]:
 
 
 def run_phase2(suites: dict) -> list[SuiteResult]:
-    """Run all Phase 2 suites sequentially (server required, shared port state)."""
-    _banner("PHASE 2 \u2014 Live / Integration tests  (sequential, server required)")
+    """Run Phase 2 suites in parallel.
+
+    Each suite delegates to its sub-project runner, which fully owns its OPC UA
+    server lifecycle on a dedicated port:
+
+        Console Client   → OPCUA_SERVER_PORT_CONSOLE_CLIENT (40461)
+        Test Client      → OPCUA_SERVER_PORT_TEST_CLIENT    (40462)
+        Web Client       → OPCUA_SERVER_PORT_WEB_CLIENT     (40463)
+        C# Client        → OPCUA_SERVER_PORT_CSHARP_CLIENT  (40464)
+
+    The root runner starts no shared server.  Results are emitted as each
+    suite completes; order is non-deterministic (fastest finishes first).
+    """
+    _banner("PHASE 2 \u2014 Live / Integration tests  (parallel, dedicated ports per suite)")
     results: list[SuiteResult] = []
 
-    for key, fn in suites.items():
-        log.info("\u25b6 Phase 2 suite: %s", key)
-        try:
-            result: SuiteResult = fn()  # type: ignore[operator]
-        except Exception as exc:
-            result = SuiteResult(key, False, output=f"[unexpected error: {exc}]\n")
-        _emit_suite_output(result)
-        results.append(result)
+    with ThreadPoolExecutor(max_workers=len(suites), thread_name_prefix="phase2") as ex:
+        future_to_key: dict = {ex.submit(fn): key for key, fn in suites.items()}  # type: ignore[arg-type]
+        for future in as_completed(future_to_key):
+            key = future_to_key[future]
+            log.info("\u25c0 Phase 2 suite completed: %s", key)
+            try:
+                result: SuiteResult = future.result()
+            except Exception as exc:
+                result = SuiteResult(key, False, output=f"[unexpected error: {exc}]\n")
+            _emit_suite_output(result)
+            results.append(result)
 
     return results
 
@@ -1368,23 +1411,13 @@ def _build_parser() -> argparse.ArgumentParser:
     group.add_argument(
         "--phase2",
         action="store_true",
-        help=f"Phase 2 only: live tests, server must already be on :{OPCUA_PORT}",
+        help="Phase 2 only: live tests, each sub-runner manages its own server (40461-40464)",
     )
     group.add_argument(
         "--suite",
         choices=ALL_SUITE_KEYS,
         metavar="{" + "|".join(ALL_SUITE_KEYS) + "}",
         help="Run a single named suite and exit",
-    )
-    parser.add_argument(
-        "--skip-docker",
-        action="store_true",
-        help="Skip Docker management -- assume OPC UA server already running",
-    )
-    parser.add_argument(
-        "--no-rebuild",
-        action="store_true",
-        help="Pass --no-build to docker compose (use cached image)",
     )
     parser.add_argument(
         "--verbose",
@@ -1410,8 +1443,11 @@ def main() -> int:
         print("Phase 1 suites (parallel, no server):")
         for k in PHASE1_SUITES:
             print(f"  {k}")
-        print("Phase 2 suites (sequential, server required):")
+        print("Phase 2 suites (parallel, each runner owns its server on a dedicated port):")
         for k in PHASE2_SUITES:
+            print(f"  {k}")
+        print("Utility suites (run manually with --suite <name>):")
+        for k in _UTILITY_SUITES:
             print(f"  {k}")
         return 0
 
@@ -1446,12 +1482,11 @@ def main() -> int:
 
     t_total = time.monotonic()
     all_results: list[SuiteResult] = []
-    server_was_started = False
 
     try:
         # -- Single-suite shortcut -------------------------------------------
         if args.suite:
-            fn = {**PHASE1_SUITES, **PHASE2_SUITES}[args.suite]  # type: ignore[index]
+            fn = {**PHASE1_SUITES, **PHASE2_SUITES, **_UTILITY_SUITES}[args.suite]  # type: ignore[index]
             log.info("Running single suite: %s", args.suite)
             result = fn()  # type: ignore[operator]
             _emit_suite_output(result)
@@ -1465,34 +1500,13 @@ def main() -> int:
             p1 = run_phase1(PHASE1_SUITES)
             all_results.extend(p1)
 
-        # -- Server startup (skipped for --phase1) ---------------------------
-        if not args.phase1:
-            if args.skip_docker:
-                log.info("--skip-docker: checking for existing server on :%d", OPCUA_PORT)
-                if not _wait_for_port(OPCUA_PORT, timeout=10):
-                    log.error(
-                        "No server on port %d and --skip-docker was set. "
-                        "Start the OPC UA server first.",
-                        OPCUA_PORT,
-                    )
-                    return 1
-            else:
-                server_was_started = _start_server(no_rebuild=args.no_rebuild)
-                if not _wait_for_port(OPCUA_PORT, timeout=90):
-                    log.error(
-                        "OPC UA server did not become ready on port %d. Aborting Phase 2.",
-                        OPCUA_PORT,
-                    )
-                    return 1
-
-        # -- Phase 2 ---------------------------------------------------------
+        # -- Phase 2 (parallel — each sub-runner owns its server) ------------
         if not args.phase1:
             p2 = run_phase2(PHASE2_SUITES)
             all_results.extend(p2)
 
     finally:
-        if server_was_started:
-            _stop_server()
+        pass  # sub-runners own their server lifecycle; nothing to tear down here
 
     rc = _print_summary(all_results, time.monotonic() - t_total)
     _cleanup_caches(ROOT)

@@ -120,6 +120,10 @@ it.skipIf(!gitAvailable, 'git not available — skip source-coverage checks (zip
 Each Python client runner reserves a dedicated server port so that multiple clients can
 run their live/integration tests in parallel without port conflicts.
 
+> **Root runner Phase 2:** The root-level `run_all_tests.py` runs all 4 client suites
+> **simultaneously** via `ThreadPoolExecutor` — not sequentially. Each sub-runner
+> auto-launches its own server on its dedicated port.
+
 ### Port Assignment
 
 | Client             | Test Port | venv         | Notes                                   |
@@ -171,9 +175,10 @@ environment, and vice versa.
 
 ### `OPCUA_SERVER_URL` Override
 
-Set `OPCUA_SERVER_URL=opc.tcp://myserver:40451` (or the Web Client's `OPCUA_TEST_ENDPOINT`)
-to point all clients at a shared server. Auto-launch is skipped entirely when this variable
-is present — this is the path used by the root-level `run_all_tests.py` and CI workflows.
+Set `OPCUA_SERVER_URL` to point a client at a specific server; auto-launch is skipped when
+this variable is present. CI workflows set this per-job. The root-level `run_all_tests.py`
+does NOT set this for Python sub-runners — each auto-launches on its dedicated port. Only
+the C# runner receives `OPCUA_SERVER_PORT=40464` from the root runner.
 
 ---
 

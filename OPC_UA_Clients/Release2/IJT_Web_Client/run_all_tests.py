@@ -12,7 +12,7 @@ Usage:
 
 Optional stages activate automatically when available:
   Docker smoke  — if Docker daemon is running  (BuildKit build + compose-up + readiness + down)
-  Live OPC UA   — if server reachable at OPCUA_TEST_ENDPOINT  (default: opc.tcp://localhost:40451)
+  Live OPC UA   — if server reachable at OPCUA_TEST_ENDPOINT  (default: opc.tcp://localhost:40463)
   Playwright E2E — if WebSocket backend reachable at WS_TEST_URL (default: ws://localhost:8001)
 
 Force flags (override auto-detection):
@@ -21,7 +21,7 @@ Force flags (override auto-detection):
   --all          force every optional stage
 
 Environment variables (all optional):
-  OPCUA_TEST_ENDPOINT   default: opc.tcp://localhost:40451
+  OPCUA_TEST_ENDPOINT   default: opc.tcp://localhost:40463
   WS_TEST_URL           default: ws://localhost:8001
   UI_TEST_BASE_URL      default: http://127.0.0.1:3000
   IJT_DOCKER_TIMEOUT    seconds to wait for Docker HTTP readiness (default: 90)
@@ -914,8 +914,9 @@ _WELL_KNOWN_SIMULATOR_PATHS: list[Path] = [
     _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe",
     _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application",
 ]
-_SERVER_NATIVE_PORT = 40451
-_CLIENT_DEFAULT_PORT = 40463
+# The OPC UA server port this client connects to.  Defined once here so every
+# reference below derives from it — change the port in one place only.
+_OPCUA_SERVER_PORT = 40463
 _server_tmp_dir: Path | None = None  # set by _launch_simulator_on_port; cleared in _stop_opcua_server
 
 
@@ -950,7 +951,7 @@ _DOCKER_TIMEOUT = _parse_int_env("IJT_DOCKER_TIMEOUT", 90)
 
 
 def _opcua_server_port() -> int:
-    return int(os.getenv("OPCUA_SERVER_PORT", str(_CLIENT_DEFAULT_PORT)))
+    return int(os.getenv("OPCUA_SERVER_PORT", str(_OPCUA_SERVER_PORT)))
 
 
 def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
@@ -1037,12 +1038,6 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
     port = _opcua_server_port()
     if _port_open("localhost", port):
         _info(f"OPC UA server already listening on port {port}")
-        return False, True, None
-
-    # Check native port as well
-    if _port_open("localhost", _SERVER_NATIVE_PORT):
-        _info(f"OPC UA server already on native port {_SERVER_NATIVE_PORT}")
-        os.environ["OPCUA_TEST_ENDPOINT"] = f"opc.tcp://localhost:{_SERVER_NATIVE_PORT}"
         return False, True, None
 
     # Try binary launch first
@@ -1308,7 +1303,7 @@ def main() -> int:
     parser.add_argument("--phase1", action="store_true", help="Static/unit tests only — no live/E2E stages (CI use)")
     parser.add_argument("--phase2", action="store_true", help="Live/E2E stages only — skip static analysis (CI use)")
     parser.add_argument("--list", action="store_true", help="Print available stages and exit")
-    parser.add_argument("--opcua-endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451"))
+    parser.add_argument("--opcua-endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{_OPCUA_SERVER_PORT}"))
     parser.add_argument("--ws-url", default=os.getenv("WS_TEST_URL", "ws://localhost:8001"))
     parser.add_argument("--ui-url", default=os.getenv("UI_TEST_BASE_URL", "http://127.0.0.1:3000"))
     args = parser.parse_args()
