@@ -1115,7 +1115,7 @@ def _cleanup_caches(root: Path) -> None:
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")]
         for d in list(dirs):
-            if d in _CACHE_DIRS or d.startswith("pytest-cache-files-"):
+            if d in _CACHE_DIRS or d.startswith("pytest-cache-files-") or d.startswith(".dotnet"):
                 _force_rmtree(Path(dirpath) / d)
                 dirs.remove(d)
         for f in files:

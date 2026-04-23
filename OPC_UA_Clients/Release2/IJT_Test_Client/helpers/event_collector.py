@@ -52,11 +52,23 @@ class EventCollector:
 
     # ── public API ────────────────────────────────────────────────────────
     async def _delete_subscription_ref(self, subscription: Any) -> None:
-        """Best-effort deletion for a known subscription object."""
+        """Best-effort deletion for a known subscription object.
+
+        Logs at ERROR on failure because, with module-scoped subscription_client,
+        a failed delete leaves a server-side subscription alive for the rest of the
+        module.  asyncua routes incoming notifications by subscription ID, so a
+        leaked subscription delivers to this collector's queue (not to the next
+        test's collector), but it does consume server resources and may slow the
+        simulator.  The queue is drained at the start of each subscribe() call to
+        prevent any stale deliveries from accumulating.
+        """
         try:
             await asyncio.wait_for(subscription.delete(), timeout=5.0)
         except Exception as exc:
-            logger.warning("Error deleting subscription: %s", exc)
+            logger.error(
+                "Subscription delete failed — server-side subscription may persist "
+                "until module teardown closes the connection: %s", exc
+            )
 
     async def subscribe(
         self,
@@ -83,6 +95,11 @@ class EventCollector:
         if self._subscription is not None:
             await self._delete_subscription_ref(self._subscription)
             self._subscription = None
+
+        # Drain stale events that may have arrived after the previous subscription's
+        # delete was issued (or if delete failed and delivery continued briefly).
+        while not self._queue.empty():
+            self._queue.get_nowait()
 
         last_exc: Optional[Exception] = None
         nodes = list(event_type_nodes) if isinstance(event_type_nodes, (list, tuple)) else [event_type_nodes]

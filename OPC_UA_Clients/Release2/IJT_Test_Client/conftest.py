@@ -1,19 +1,22 @@
 """
-conftest.py — Session, module, and function-scoped pytest fixtures for the OPC UA IJT test suite.
+conftest.py — Session and module-scoped pytest fixtures for the OPC UA IJT test suite.
 Session fixtures are created once per test run and shared across all tests that
 perform read-only address-space discovery.
 opcua_client is module-scoped — one OPC UA connection per test file.  This cuts
 CI time from ~27 min to ~7 min by avoiding ~400 individual connection handshakes
 (each takes ~3 s on GitHub Actions Windows runners).
-subscription_client remains function-scoped because event subscriptions must be
-isolated per test to avoid cross-test event noise.
+subscription_client is module-scoped — one OPC UA connection per test file that
+uses event subscriptions.  Event subscription isolation is maintained per-test by
+EventCollector (which subscribes and unsubscribes on every call), so no cross-test
+event noise occurs.  Promoting from function scope to module scope saves ~420 s
+(~7 min) by eliminating 152 redundant TCP handshakes at ~3 s each.
 All async fixtures require pytest-asyncio with asyncio_mode = "auto" (pyproject.toml).
 Design rules enforced here:
   - JoiningSystem is discovered by HasTypeDefinition, never by browse name.
   - Namespace indices are resolved once and cached in ns_indices dict.
   - Two separate client fixtures prevent asyncua concurrency issues with subscriptions.
-  - Function-scoped clients depend on session_client (not managed_server) so that
-    load_type_definitions() runs exactly once per session — not once per test.
+  - Module-scoped clients depend on session_client (not managed_server) so that
+    load_type_definitions() runs exactly once per session — not once per module.
     This cuts per-test connection overhead from ~4 s to ~0.5 s.
 """
 # pylint: disable=redefined-outer-name,unused-argument,broad-exception-caught
@@ -565,7 +568,7 @@ async def opcua_client(session_client):
     Depends on session_client so that load_type_definitions() has already run
     once before any per-module client connects.
 
-    Use subscription_client (function-scoped) for event subscription tests —
+    Use subscription_client (module-scoped) for event subscription tests —
     subscriptions must remain isolated per test to avoid cross-test event noise.
     """
     client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
@@ -577,16 +580,22 @@ async def opcua_client(session_client):
         logger.debug("opcua_client disconnect failed (ignored): %s", exc)
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="module")
 async def subscription_client(session_client):
     """
-    Function-scoped asyncua Client dedicated to event subscriptions.
+    Module-scoped asyncua Client dedicated to event subscriptions.
     Kept separate from opcua_client because asyncua cannot safely handle
     concurrent OPC UA calls (method invocations + subscription callbacks)
     on a single client connection.
 
+    Module scope (not function scope) avoids one OPC UA TCP handshake (~3 s on
+    GitHub Actions Windows runners) per test.  Subscription isolation is still
+    maintained per-test by EventCollector, which subscribes and unsubscribes on
+    every call regardless of the underlying connection scope.  Tests remain
+    sequential so no cross-test event noise can occur.
+
     Depends on session_client so that load_type_definitions() has already
-    run before any per-test client connects — no redundant type loading.
+    run before any per-module client connects — no redundant type loading.
     """
     client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
     await client.connect()
