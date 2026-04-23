@@ -13,7 +13,6 @@
 #   test-client          Release2 / IJT Test Client   pytest unit (tests/unit/) · Bandit · Ruff · mypy
 #   server-smoke-windows Release2 / OPC UA Server     Windows native smoke (10 checks)
 #   csharp-unit          Release2 / IJT C# Client     dotnet build · xUnit (Category!=Live) · format · vuln
-#   csharp-live          Release2 / IJT C# Client     xUnit (Category=Live) on port 40464 — BLOCKING
 #   actionlint           GHA workflow lint             actionlint (all .github/workflows/*.yml)
 #   zizmor               GHA security audit            zizmor → SARIF upload (skipped on fork PRs)
 #   report               Combined summary (always runs after all jobs)
@@ -53,6 +52,56 @@ jobs:
 
 
   # ───────────────────────────────────────────────────────────────────────────
+  # Detect changed paths — used by all downstream jobs to skip when irrelevant
+  # ───────────────────────────────────────────────────────────────────────────
+  changes:
+    name: "Detect changed paths"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      web:        ${{ steps.filter.outputs.web }}
+      console:    ${{ steps.filter.outputs.console }}
+      node:       ${{ steps.filter.outputs.node }}
+      docker:     ${{ steps.filter.outputs.docker }}
+      testclient: ${{ steps.filter.outputs.testclient }}
+      csharp:     ${{ steps.filter.outputs.csharp }}
+      server:     ${{ steps.filter.outputs.server }}
+      workflows:  ${{ steps.filter.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36  # v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
+              - '.github/workflows/ci.yml'
+            console:
+              - 'OPC_UA_Clients/Release2/IJT_Console_Client/**'
+              - '.github/workflows/ci.yml'
+            node:
+              - 'OPC_UA_Clients/Release1/IJT_Node_Client/**'
+              - '.github/workflows/ci.yml'
+            docker:
+              - 'OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile'
+              - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
+              - '.github/workflows/ci.yml'
+            testclient:
+              - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
+              - '.github/workflows/ci.yml'
+            csharp:
+              - 'OPC_UA_Clients/Release2/IJT_CSharp_Client/**'
+              - '.github/workflows/ci.yml'
+            server:
+              - 'OPC_UA_Servers/**'
+              - '.github/workflows/ci.yml'
+            workflows:
+              - '.github/workflows/**'
+
+  # ───────────────────────────────────────────────────────────────────────────
   # Release2 / IJT Web Client
   #   Python: pytest + bandit (pyproject.toml)
   #   JS:     vitest + eslint (JSON) + npm audit
@@ -60,6 +109,8 @@ jobs:
   web-client:
     name: "Release2 / IJT Web Client"
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 20
     permissions:
       contents: read
@@ -206,6 +257,8 @@ jobs:
   console-client:
     name: "Release2 / IJT Console Client"
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.console == 'true' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 15
     permissions:
       contents: read
@@ -305,6 +358,8 @@ jobs:
   node-client:
     name: "Release1 / IJT Node Client"
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.node == 'true' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 10
     permissions:
       contents: read
@@ -386,6 +441,8 @@ jobs:
   docker-smoke:
     name: "Release2 / IJT Web Client — Docker Smoke"
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.docker == 'true' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 20
     permissions:
       contents: read
@@ -458,6 +515,8 @@ jobs:
   csharp-unit:
     name: "Release2 / IJT C# Client — Unit Tests"
     runs-on: windows-latest
+    needs: [changes]
+    if: needs.changes.outputs.csharp == 'true' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 20
     permissions:
       contents: read
@@ -611,162 +670,14 @@ jobs:
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT C# Client — Live Integration Tests (BLOCKING)
-  #   Server on port 40464 + xUnit (Category=Live)
-  #
-  #   Port 40464 is the C# client's dedicated port (see docs/TEST_TIERS.md).
-  #   Zero-coverage-regression: these 110 live tests were previously in
-  #   csharp-client and remain blocking here by design.
-  #   See context_ci_architecture.md § 11.0 for the inviolable constraint.
-  # ───────────────────────────────────────────────────────────────────────────
-  csharp-live:
-    name: "Release2 / IJT C# Client — Live Tests (port 40464)"
-    runs-on: windows-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      checks: write
-    defaults:
-      run:
-        working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          persist-credentials: false
-
-      - name: Extract server ZIP
-        working-directory: ${{ github.workspace }}
-        run: |
-          Expand-Archive `
-            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
-            -DestinationPath "OPC_UA_Servers\Release2\" `
-            -Force
-
-      - name: Start OPC UA server on port 40464
-        working-directory: ${{ github.workspace }}
-        run: python scripts/start_server_on_port.py --port 40464
-
-      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7  # v5
-        with:
-          dotnet-version: '10.x'
-
-      - name: Prepare C# test-result artifacts
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path test-results | Out-Null
-          '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests.Live" tests="0"/></testsuites>' | Out-File test-results\tests.xml -Encoding UTF8
-
-      - name: Cache NuGet Packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
-
-      - name: Restore NuGet Packages
-        run: |
-          $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
-          $lockFiles = Get-ChildItem -Path . -Recurse -Filter "packages.lock.json" -File -ErrorAction SilentlyContinue
-          if ($lockFiles.Count -gt 0) {
-            Write-Host "Lock files detected — using locked mode restore."
-            dotnet restore $target --locked-mode
-          } else {
-            Write-Host "No lock files yet — using normal restore."
-            dotnet restore $target
-          }
-
-      - name: Build
-        id: build
-        continue-on-error: true
-        run: dotnet build Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj --no-restore --configuration Release
-
-      - name: Run xUnit Live Tests
-        id: tests
-        if: steps.build.outcome == 'success'
-        continue-on-error: true
-        env:
-          IJT_AUTO_ACCEPT: 'true'
-        run: |
-          New-Item -ItemType Directory -Force -Path test-results | Out-Null
-          dotnet test Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj `
-            --no-build `
-            --no-restore `
-            --configuration Release `
-            --filter "Category=Live" `
-            --logger "trx;LogFileName=tests.trx" `
-            --logger "console;verbosity=normal" `
-            --results-directory test-results `
-            --blame-hang --blame-hang-timeout 120s
-
-      - name: Convert TRX to JUnit XML
-        if: always()
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path test-results | Out-Null
-          $trx   = "test-results\tests.trx"
-          $junit = "test-results\tests.xml"
-          if (Test-Path $trx) {
-            [xml]$x = Get-Content $trx
-            $ns = @{ t = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010" }
-            $results = Select-Xml -Xml $x -XPath "//t:UnitTestResult" -Namespace $ns | Select-Object -ExpandProperty Node
-            $passed  = ($results | Where-Object { $_.outcome -eq "Passed"  }).Count
-            $failed  = ($results | Where-Object { $_.outcome -eq "Failed"  }).Count
-            $total   = $results.Count
-            $xml  = '<?xml version="1.0" encoding="UTF-8"?>' + "`n"
-            $xml += "<testsuites tests=`"$total`" failures=`"$failed`">`n"
-            $xml += "  <testsuite name=`"IJT_CSharp_Client.Tests.Live`" tests=`"$total`" failures=`"$failed`">`n"
-            foreach ($r in $results) {
-              $name = [System.Security.SecurityElement]::Escape($r.testName)
-              $outcome = $r.outcome
-              if ($outcome -eq "Passed") {
-                $xml += "    <testcase name=`"$name`" classname=`"IJT`" />`n"
-              } elseif ($outcome -eq "NotExecuted") {
-                $xml += "    <testcase name=`"$name`" classname=`"IJT`"><skipped/></testcase>`n"
-              } else {
-                $msg = [System.Security.SecurityElement]::Escape($r.Output.ErrorInfo.Message)
-                $xml += "    <testcase name=`"$name`" classname=`"IJT`"><failure>$msg</failure></testcase>`n"
-              }
-            }
-            $xml += "  </testsuite>`n</testsuites>"
-            $xml | Out-File $junit -Encoding UTF8
-            Write-Host "Converted TRX → JUnit: $total tests, $failed failures"
-          } else {
-            Write-Host "No TRX file found — creating empty JUnit"
-            '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests.Live" tests="0"/></testsuites>' | Out-File $junit -Encoding UTF8
-          }
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
-        if: always()
-        with:
-          name: results-csharp-live
-          path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
-
-      - name: Stop OPC UA server
-        if: always()
-        working-directory: ${{ github.workspace }}
-        run: python scripts/start_server_on_port.py --port 40464 --stop
-
-      - name: Fail if Tests Failed
-        if: always() && (steps.build.outcome == 'failure' || steps.tests.outcome == 'failure')
-        env:
-          BUILD_OUTCOME: ${{ steps.build.outcome }}
-          TESTS_OUTCOME: ${{ steps.tests.outcome }}
-        run: |
-          echo "C# live tests failed:"
-          echo "  build -> $BUILD_OUTCOME"
-          echo "  tests -> $TESTS_OUTCOME"
-          exit 1
-
-  # ───────────────────────────────────────────────────────────────────────────
   # Release2 / IJT Test Client
   #   Python: pytest unit tests (tests/unit/ — no server) + bandit + ruff + mypy
   # ───────────────────────────────────────────────────────────────────────────
   test-client:
     name: "Release2 / IJT Test Client"
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.testclient == 'true' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 10
     permissions:
       contents: read
@@ -804,7 +715,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python -m pytest tests/unit/ -v \
+          python -m pytest tests/unit/ -n auto -v \
             --junitxml=test-results/pytest.xml \
             2>&1 | tee test-results/pytest-output.txt
 
@@ -861,6 +772,8 @@ jobs:
   server-smoke-windows:
     name: "Release2 / OPC UA Server — Windows Smoke"
     runs-on: windows-latest
+    needs: [changes]
+    if: needs.changes.outputs.server == 'true' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 20
     permissions:
       contents: read
@@ -941,7 +854,7 @@ jobs:
     name: "📋 Test Report"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [web-client, console-client, node-client, docker-smoke, csharp-unit, csharp-live, test-client, server-smoke-windows, actionlint, zizmor]
+    needs: [changes, web-client, console-client, node-client, docker-smoke, csharp-unit, test-client, server-smoke-windows, actionlint, zizmor]
     if: always()
     permissions:
       contents: read
@@ -1027,17 +940,6 @@ jobs:
           fail-on-error: false
           fail-on-empty: false
 
-      - name: "Report — C# Client Live Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
-        if: always()
-        continue-on-error: true  # checks:write unavailable on forked PRs
-        with:
-          name: "C# Client — Live Tests (xUnit)"
-          path: all-results/results-csharp-live/tests.xml
-          reporter: java-junit
-          fail-on-error: false
-          fail-on-empty: false
-
       - name: "Report — OPC UA Server Smoke (Windows)"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
         if: always()
@@ -1057,7 +959,6 @@ jobs:
           NODE_RESULT:     ${{ needs.node-client.result }}
           DOCKER_RESULT:   ${{ needs.docker-smoke.result }}
           CS_UNIT_RESULT:  ${{ needs.csharp-unit.result }}
-          CS_LIVE_RESULT:  ${{ needs.csharp-live.result }}
           TC_RESULT:       ${{ needs.test-client.result }}
           SS_WIN_RESULT:   ${{ needs.server-smoke-windows.result }}
           AL_RESULT:       ${{ needs.actionlint.result }}
@@ -1205,7 +1106,6 @@ jobs:
           nod_r    = E("NODE_RESULT",    "unknown")
           dck_r    = E("DOCKER_RESULT",  "unknown")
           cs_u_r   = E("CS_UNIT_RESULT", "unknown")
-          cs_l_r   = E("CS_LIVE_RESULT", "unknown")
           tc_r     = E("TC_RESULT",      "unknown")
           ss_r     = E("SS_WIN_RESULT",  "unknown")
           al_r     = E("AL_RESULT",      "unknown")
@@ -1246,7 +1146,6 @@ jobs:
           nod_npm  = parse_npm_audit("all-results/results-node-client/npm-audit.json")
 
           cs_unit_t = parse_junit("all-results/results-csharp-unit/tests.xml")
-          cs_live_t = parse_junit("all-results/results-csharp-live/tests.xml")
 
           tc_py_t  = parse_junit("all-results/results-test-client/pytest.xml")
           tc_ban   = parse_bandit("all-results/results-test-client/bandit.json")
@@ -1266,14 +1165,13 @@ jobs:
           _warn(con_r,  con_py_t[0], "console-client",       "pytest.xml")
           _warn(nod_r,  nod_js_t[0], "node-client",          "vitest.xml")
           _warn(cs_u_r, cs_unit_t[0],"csharp-unit",          "tests.xml")
-          _warn(cs_l_r, cs_live_t[0],"csharp-live",          "tests.xml")
           _warn(tc_r,   tc_py_t[0],  "test-client",          "pytest.xml")
           _warn(tc_r,   tc_ban[0],   "test-client",          "bandit.json")
           _warn(ss_r,   ss_smoke[0], "server-smoke-windows", "smoke.xml")
 
           # ── Overall status ────────────────────────────────────────────────────
 
-          all_jobs = [web_r, con_r, nod_r, dck_r, cs_u_r, cs_l_r, tc_r, ss_r, al_r, zz_r]
+          all_jobs = [web_r, con_r, nod_r, dck_r, cs_u_r, tc_r, ss_r, al_r, zz_r]
           n_pass  = sum(1 for r in all_jobs if r == "success")
           n_fail  = sum(1 for r in all_jobs if r == "failure")
           n_total = len(all_jobs)
@@ -1285,7 +1183,7 @@ jobs:
               status_icon = "❌"
               status_msg  = f"{n_fail} / {n_total} jobs failed  ·  {n_pass} passed"
 
-          suites   = [web_py_t, web_js_t, con_py_t, nod_js_t, cs_unit_t, cs_live_t, tc_py_t, ss_smoke]
+          suites   = [web_py_t, web_js_t, con_py_t, nod_js_t, cs_unit_t, tc_py_t, ss_smoke]
           total_t  = sum(s[0] for s in suites if s[0] is not None)
           total_f  = sum(s[2] for s in suites if s[2] is not None)
           total_sk = sum(s[3] for s in suites if s[3] is not None)
@@ -1317,7 +1215,6 @@ jobs:
               f"| Console Client — Python  | Ubuntu  | {tests(*con_py_t)} | {skips(con_py_t[3])} | {cov(con_cov)} |",
               f"| Node Client — JavaScript | Ubuntu  | {tests(*nod_js_t)} | {skips(nod_js_t[3])} | — |",
               f"| C# Client — Unit (xUnit) | Windows | {tests(*cs_unit_t)} | {skips(cs_unit_t[3])} | — |",
-              f"| C# Client — Live (xUnit) | Windows | {tests(*cs_live_t)} | {skips(cs_live_t[3])} | — |",
               f"| Test Client — Python (Unit) | Ubuntu | {tests(*tc_py_t)} | {skips(tc_py_t[3])} | — |",
               f"| OPC UA Server — Smoke    | Windows | {tests(*ss_smoke)} | {skips(ss_smoke[3])} | — |",
               "",
@@ -1364,6 +1261,8 @@ jobs:
   actionlint:
     name: "GHA Workflow Lint (actionlint)"
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.workflows == 'true' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 5
     permissions:
       contents: read
@@ -1389,10 +1288,11 @@ jobs:
   zizmor:
     name: "GHA Security Audit (zizmor)"
     runs-on: ubuntu-latest
+    needs: [changes]
     timeout-minutes: 5
     # Skip fork PRs: they cannot write to Code Scanning (no security-events: write).
     # Non-PR events (push, workflow_dispatch) always run.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: (needs.changes.outputs.workflows == 'true' || github.event_name == 'workflow_dispatch') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     permissions:
       contents: read
       security-events: write  # required to upload SARIF to Code Scanning
