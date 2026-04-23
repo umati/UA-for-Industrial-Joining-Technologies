@@ -772,6 +772,14 @@ def main() -> int:
                 else:
                     print(f"[PHASE 2] OPC UA server reachable at {server_url}")
                 r = _step_live_tests(server_url, verbose=args.verbose)
+                # If fixture silently set IsAvailable=false, all tests skip — surface that.
+                if port_override and r.status == "PASS" and r.passed == 0 and r.total > 0:
+                    print(
+                        f"[PHASE 2] WARNING: all {r.total} C# live tests were skipped (0 passed). "
+                        f"OpcUaServerFixture could not start the server on port {port_override}. "
+                        f"Check stderr above for [OpcUaServerFixture] lines.",
+                        flush=True,
+                    )
             else:
                 print(
                     f"[PHASE 2] OPC UA server not reachable at {server_url} — skipping live tests"

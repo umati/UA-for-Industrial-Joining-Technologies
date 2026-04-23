@@ -83,12 +83,18 @@ public sealed class OpcUaServerFixture : IDisposable
             {
                 IsAvailable = WaitForPort(_port, timeoutSeconds: 60);
                 if (!IsAvailable)
-                    _log.LogWarning("Docker OPC UA server did not become ready within 60 s on port {Port}. Live tests will be skipped.", _port);
+                {
+                    var msg = $"[OpcUaServerFixture] Docker OPC UA server did not become ready within 60 s on port {_port}. Live tests will be skipped.";
+                    _log.LogWarning("{Message}", msg);
+                    Console.Error.WriteLine(msg);
+                }
                 else
                     _log.LogInformation("OPC UA server (Docker) ready on port {Port}.", _port);
                 return;
             }
-            _log.LogWarning("OPC UA server binary not found and Docker unavailable. Set OPCUA_SIMULATOR_EXE or ensure Docker is running. Live tests will be skipped.");
+            var notFoundMsg = $"[OpcUaServerFixture] Server binary not found and Docker unavailable on port {_port}. Set OPCUA_SIMULATOR_EXE or ensure Docker is running. Live tests will be skipped.";
+            _log.LogWarning("{Message}", notFoundMsg);
+            Console.Error.WriteLine(notFoundMsg);
             IsAvailable = false;
             return;
         }
@@ -100,7 +106,15 @@ public sealed class OpcUaServerFixture : IDisposable
             // server_configuration.json so the server starts on the requested port.
             // This mirrors the same copy-patch mechanism used by the Python clients.
             if (_port != 40451)
+            {
+                _log.LogInformation(
+                    "Preparing isolated server copy for port {Port}. Source executable: {ExePath}",
+                    _port, exePath);
                 exePath = PrepareCopiedServerDir(exePath, _port, out _tempServerDir);
+                _log.LogInformation(
+                    "Isolated server copy prepared. Copied executable: {ExePath}, temp directory: {TempDir}",
+                    exePath, _tempServerDir);
+            }
 
             _serverProcess = new Process
             {
@@ -134,15 +148,19 @@ public sealed class OpcUaServerFixture : IDisposable
             // back-off rather than using a fixed sleep.
             IsAvailable = ProbeOpcUaReady(_port, maxAttempts: 10, delayMs: 1000);
             if (!IsAvailable)
-                _log.LogWarning(
-                    "OPC UA server on port {Port} opened TCP but did not accept OPC UA connections within timeout. " +
-                    "Live tests will be skipped.", _port);
+            {
+                var probeMsg = $"[OpcUaServerFixture] Server on port {_port} opened TCP but did not accept OPC UA connections within timeout. Live tests will be skipped.";
+                _log.LogWarning("{Message}", probeMsg);
+                Console.Error.WriteLine(probeMsg);
+            }
             else
                 _log.LogInformation("OPC UA server ready on port {Port}.", _port);
         }
         catch (Exception ex)
         {
-            _log.LogWarning("Failed to start OPC UA server: {Message}. Live tests will be skipped.", ex.Message);
+            var catchMsg = $"[OpcUaServerFixture] Failed to start server on port {_port}. Live tests will be skipped. {ex}";
+            _log.LogWarning("{Message}", catchMsg);
+            Console.Error.WriteLine(catchMsg);
             IsAvailable = false;
         }
     }
