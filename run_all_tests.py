@@ -43,6 +43,7 @@ import json
 import logging
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -179,9 +180,9 @@ SMOKE_TEST = SERVER_DIR / "tests" / "smoke_test.py"
 # Each value is the port the OPC UA server instance listens on for that client.
 # ---------------------------------------------------------------------------
 OPCUA_SERVER_PORT_CONSOLE_CLIENT = 40461  # server port the Console Client connects to
-OPCUA_SERVER_PORT_TEST_CLIENT    = 40462  # server port the Test Client connects to
-OPCUA_SERVER_PORT_WEB_CLIENT     = 40463  # server port the Web Client connects to
-OPCUA_SERVER_PORT_CSHARP_CLIENT  = 40464  # server port the C# Client connects to
+OPCUA_SERVER_PORT_TEST_CLIENT = 40462  # server port the Test Client connects to
+OPCUA_SERVER_PORT_WEB_CLIENT = 40463  # server port the Web Client connects to
+OPCUA_SERVER_PORT_CSHARP_CLIENT = 40464  # server port the C# Client connects to
 
 # Release 1 / Node client — legacy default, unchanged for backward compatibility.
 # Smoke / utility suites also use this port: they specifically test the server's
@@ -207,6 +208,7 @@ class SuiteResult:
     skipped: bool = False
     output: str = ""  # captured stdout+stderr; printed atomically after run
     notes: list[str] = field(default_factory=list)
+    counts: str = ""  # parsed test counts, e.g. "490 passed, 3 skipped"
 
 
 @dataclass
@@ -368,6 +370,48 @@ def _emit_suite_output(result: SuiteResult) -> None:
     sys.stdout.flush()
 
 
+def _parse_suite_counts(text: str) -> str:
+    """Return the most informative test-count string from sub-runner captured output.
+
+    Handles three output formats:
+      - pytest:  "1298 passed, 267 skipped, 2 xfailed in 409.92s"
+      - C# dotnet test:  "Failed: 0, Passed: 800, Skipped: 0, Total: 800"
+      - Vitest:  "Tests  152 passed (152)"
+    For suites that run both Python and JS (Web Client), combines both counts.
+    """
+    _WORD = r"(?:failed|error|errors|skipped|xfailed|xpassed|warnings?|deselected)"
+    best: tuple[int, str] = (0, "")
+    for m in re.finditer(rf"(\d+ passed(?:,\s*\d+ {_WORD})*)\s+in\s+[\d.]+s", text):
+        snippet = m.group(1)
+        total = sum(int(n) for n in re.findall(r"\d+", snippet))
+        if total > best[0]:
+            best = (total, snippet)
+    py_counts = best[1]
+
+    vm = re.search(r"\bTests\s+(\d+) passed", text)
+    js_counts = f"{vm.group(1)} passed" if vm else ""
+
+    if py_counts and js_counts:
+        return f"{py_counts} (py), {js_counts} (js)"
+    if py_counts:
+        return py_counts
+    if js_counts:
+        return js_counts
+
+    cs_passed = re.search(r"Passed:\s*(\d+)", text)
+    if cs_passed:
+        cs_failed = re.search(r"Failed:\s*(\d+)", text)
+        cs_skipped = re.search(r"Skipped:\s*(\d+)", text)
+        parts = [f"{cs_passed.group(1)} passed"]
+        if cs_failed and cs_failed.group(1) != "0":
+            parts.append(f"{cs_failed.group(1)} failed")
+        if cs_skipped and cs_skipped.group(1) != "0":
+            parts.append(f"{cs_skipped.group(1)} skipped")
+        return ", ".join(parts)
+
+    return ""
+
+
 def _delegate_to_runner(
     name: str,
     runner_dir: Path,
@@ -408,6 +452,7 @@ def _delegate_to_runner(
         ok=(rc == 0),
         duration=time.monotonic() - t0,
         output=out,
+        counts=_parse_suite_counts(out),
     )
 
 
@@ -1302,10 +1347,10 @@ PHASE1_SUITES: dict[str, object] = {
 }
 
 PHASE2_SUITES: dict[str, object] = {
-    "csharp-live":     _suite_csharp_live,
-    "console-live":    _suite_console_live,
+    "csharp-live": _suite_csharp_live,
+    "console-live": _suite_console_live,
     "testclient-full": _suite_testclient_full,
-    "webclient-live":  _suite_webclient_live,
+    "webclient-live": _suite_webclient_live,
 }
 
 # Utility suites — not part of the default parallel Phase 2 run.
@@ -1404,7 +1449,8 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:
             tag = _c("\033[91m", "FAIL")
             overall = 1
         dur = f"{r.duration:6.1f}s"
-        sys.stdout.write(f"  {tag}  {r.name:<{col_w}}  {dur}\n")
+        counts = f"   {r.counts}" if r.counts else ""
+        sys.stdout.write(f"  {tag}  {r.name:<{col_w}}  {dur}{counts}\n")
         for note in r.notes:
             sys.stdout.write(f"          ^ {note}\n")
 
