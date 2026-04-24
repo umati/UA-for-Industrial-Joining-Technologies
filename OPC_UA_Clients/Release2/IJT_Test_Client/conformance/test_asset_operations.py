@@ -873,9 +873,14 @@ async def test_set_calibration_unknown_piu_returns_bad_status(opcua_client, ns_i
         # C17: server returns OpcUa_Uncertain when methodStatusCode != 0 — correct rejection
         return
     # Pre-C17 compat: service-level Bad also accepted
-    if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument", "BadArgumentsMissing")):
+    if any(
+        kw in err_str
+        for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument", "BadArgumentsMissing")
+    ):
         return
-    pytest.fail(f"Unexpected status for unknown PIU — expected Uncertain (C17) or Bad_NoEntryExists/BadInvalidArgument, got: {err_str}")
+    pytest.fail(
+        f"Unexpected status for unknown PIU — expected Uncertain (C17) or Bad_NoEntryExists/BadInvalidArgument, got: {err_str}"
+    )
 
 
 @pytest.mark.requires_cu(CU.SET_CALIBRATION)
@@ -994,7 +999,9 @@ async def test_reboot_asset_unknown_piu_returns_bad_status(opcua_client, ns_indi
     # Pre-C17 compat: service-level Bad also accepted
     if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")):
         return
-    pytest.fail(f"Unexpected status for unknown PIU — expected Uncertain (C17) or Bad_NoEntryExists/BadInvalidArgument, got: {err_str}")
+    pytest.fail(
+        f"Unexpected status for unknown PIU — expected Uncertain (C17) or Bad_NoEntryExists/BadInvalidArgument, got: {err_str}"
+    )
 
 
 # ─── get_error_information — extended ────────────────────────────────────────
@@ -1072,7 +1079,9 @@ async def test_get_error_information_unknown_piu_returns_bad_status(opcua_client
     # Pre-C17 compat: service-level Bad also accepted
     if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")):
         return
-    pytest.fail(f"Unexpected status for unknown PIU — expected Uncertain (C17) or Bad_NoEntryExists/BadInvalidArgument, got: {err_str}")
+    pytest.fail(
+        f"Unexpected status for unknown PIU — expected Uncertain (C17) or Bad_NoEntryExists/BadInvalidArgument, got: {err_str}"
+    )
 
 
 # ─── execute_operation — extended ────────────────────────────────────────────
@@ -1150,4 +1159,6 @@ async def test_execute_operation_invalid_operation_id_returns_bad_invalid_argume
     # Pre-C17 compat: service-level Bad also accepted
     if any(kw in err_str for kw in ("BadInvalidArgument", "BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists")):
         return
-    pytest.fail(f"Unexpected status for invalid OperationId — expected Uncertain (C17) or Bad_InvalidArgument, got: {err_str}")
+    pytest.fail(
+        f"Unexpected status for invalid OperationId — expected Uncertain (C17) or Bad_InvalidArgument, got: {err_str}"
+    )

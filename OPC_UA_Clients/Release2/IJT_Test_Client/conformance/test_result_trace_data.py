@@ -102,9 +102,7 @@ async def _get_single_result_with_traces(subscription_client, result_trigger, ns
     Subscribes BEFORE triggering to eliminate race conditions.
     Returns (None, None) on failure.
     """
-    async with ResultCollector(
-        subscription_client, ns_indices, is_simulator=result_trigger.is_simulator
-    ) as rc:
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=True)
         if not outcome.triggered and result_trigger.is_simulator:
             return None, None
@@ -364,7 +362,9 @@ async def test_step_result_values_with_trace_have_start_time_offset(subscription
 
 
 @pytest.mark.requires_cu(CU.RESULT_VALUE_TRACE_POINT_INDEX)
-async def test_step_result_values_trace_point_index_points_to_valid_sample(subscription_client, result_trigger, ns_indices):
+async def test_step_result_values_trace_point_index_points_to_valid_sample(
+    subscription_client, result_trigger, ns_indices
+):
     """For StepResultValues with TracePointIndex, the index must be less than
     NumberOfTracePoints in the corresponding StepTrace (out-of-range would dereference
     a non-existent sample)."""
@@ -553,7 +553,9 @@ async def test_result_without_trace_data_is_returned_without_error(subscription_
 
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.JOINING_RESULT_TRACE)
-async def test_step_trace_content_array_lengths_are_consistent_across_results(subscription_client, result_trigger, ns_indices):
+async def test_step_trace_content_array_lengths_are_consistent_across_results(
+    subscription_client, result_trigger, ns_indices
+):
     """Across multiple results the StepTraceContent.Values[] length must always equal
     NumberOfTracePoints for every StepTrace — the array-length invariant must hold
     universally, not just for a single result."""
@@ -612,7 +614,9 @@ async def test_step_trace_content_array_lengths_are_consistent_across_results(su
 
 
 @pytest.mark.requires_cu(CU.RESULT_VALUE_TRACE_POINT_TIME_OFFSET)
-async def test_trace_point_time_offset_present_when_trace_point_index_absent(subscription_client, result_trigger, ns_indices):
+async def test_trace_point_time_offset_present_when_trace_point_index_absent(
+    subscription_client, result_trigger, ns_indices
+):
     """For every StepResultValues entry that has a trace reference: when TracePointIndex
     is absent, TracePointOffset must be present — the two fields are mutually informative
     and at least one must be populated for a trace-linked result value."""
@@ -767,7 +771,6 @@ async def test_result_without_trace_has_no_trace_point_time_offset(opcua_client,
     outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
     if not outcome.triggered and result_trigger.is_simulator:
         pytest.skip("Simulator trigger failed")
-
 
     js = await find_joining_system(opcua_client)
     if js is None:
@@ -1116,7 +1119,6 @@ async def test_result_without_trace_has_no_trace_point_index(opcua_client, resul
     outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
     if not outcome.triggered and result_trigger.is_simulator:
         pytest.skip("Simulator trigger failed")
-
 
     js = await find_joining_system(opcua_client)
     if js is None:

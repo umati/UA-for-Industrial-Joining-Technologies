@@ -334,7 +334,9 @@ def _prepare_tmp_dir() -> None:
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
     for child in _TMP_DIR.iterdir():
         name = child.name
-        managed = name in {"pytest", "pytest_tmp", "pip-audit-cache"} or name.startswith("server_instance_")
+        managed = name in {"pytest", "pytest_tmp", "pip-audit-cache", "ruff-cache"} or name.startswith(
+            "server_instance_"
+        )
         if not managed:
             continue
         with contextlib.suppress(OSError):
@@ -471,47 +473,32 @@ def _stage_python_lint(python: Path) -> StageResult:
     if ruff:
         results_dir.mkdir(parents=True, exist_ok=True)
         rc = _run(
-            [ruff, "check", ".", "--output-format=json", "--output-file", str(results_dir / "ruff.json")],
+            [
+                ruff,
+                "check",
+                ".",
+                "--output-format=json",
+                "--output-file",
+                str(results_dir / "ruff.json"),
+                "--cache-dir",
+                str(_TMP_DIR / "ruff-cache"),
+            ],
             label="ruff check",
         )
         if rc not in (0, 1):  # 0 = clean, 1 = lint findings
             overall_rc = rc
-        rc_fmt = _run([ruff, "format", "--check", "."], label="ruff format --check")
+        rc_fmt = _run(
+            [ruff, "format", "--check", ".", "--cache-dir", str(_TMP_DIR / "ruff-cache")], label="ruff format --check"
+        )
         if rc_fmt != 0:
-            # advisory — normalize multi-except gate below enforces except (A, B): policy.
-            notes.append("ruff format: style diffs (normalized by multi-except step)")
+            overall_rc = rc_fmt
     else:
         _skip("ruff not found — pip install ruff")
         notes.append("ruff not installed")
 
-    # --- normalize multi-except gate ---
-    # Canonical policy: except (A, B): only. normalize --write repairs any violations;
-    # --check hard-gates so the runner fails if any forbidden bare form is present.
-    _norm_script = ROOT.parent.parent.parent / "scripts" / "normalize_multi_except.py"
-    if _norm_script.exists():
-        _py_files = [
-            str(p)
-            for p in ROOT.rglob("*.py")
-            if not any(part in {".venv", ".venv_test", "tmp", "test-results"} for part in p.parts)
-        ]
-        if _py_files:
-            _run(
-                [sys.executable, str(_norm_script), "--write", *_py_files],
-                label="normalize multi-except (write)",
-            )
-            rc = _run(
-                [sys.executable, str(_norm_script), "--check", *_py_files],
-                label="normalize multi-except (check)",
-            )
-            if rc != 0:
-                overall_rc = rc
-    else:
-        _skip(f"normalize_multi_except.py not found at {_norm_script} — multi-except gate skipped")
-        notes.append("normalize_multi_except.py missing")
-
     if _py_module_available("mypy"):
         rc = _run(
-            [python, "-m", "mypy", "src/", "--ignore-missing-imports"],
+            [python, "-m", "mypy", "src/", "--ignore-missing-imports", "--cache-dir", str(_TMP_DIR / "mypy-cache")],
             label="mypy",
         )
         if rc != 0:
@@ -1491,7 +1478,7 @@ def _force_rmtree(path: Path) -> None:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}  # tmp workspace is handled by _prepare_tmp_dir()
+    _SKIP = {"node_modules", ".git", "test-results", "tmp"}  # tmp workspace is handled by _prepare_tmp_dir()
     _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "htmlcov"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")]

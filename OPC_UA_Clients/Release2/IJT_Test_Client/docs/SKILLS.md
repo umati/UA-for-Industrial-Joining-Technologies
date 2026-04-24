@@ -41,14 +41,6 @@ See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail exp
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
 `semgrep` (static analysis), `pyright` (strict type checking — **advisory, non-blocking**), `detect-secrets` (secrets).
 
-> **Known workaround — ruff 0.15.x formatter bug:** ruff format strips parentheses from
-> `except (A, B):` clauses, producing invalid Python 3 logic. The `scripts/normalize_multi_except.py`
-> script and its pre-commit + Phase 1 runner hooks compensate for this.
-> `tests/unit/test_normalize_multi_except.py::test_ruff_format_bug_still_present_guard` is an
-> **intentional sentinel** — it passes while the bug is present and fails (with a clear message)
-> when a future ruff version fixes it. When it fails: remove the script, hooks, runner steps,
-> and the test file in a single PR.
-
 A **Python pytest suite** that validates an OPC UA server implementing the
 [OPC UA Industrial Joining Technologies (IJT)](https://reference.opcfoundation.org/IJT/Base/v100/)
 companion specifications against a live OPC UA IJT server.
@@ -172,7 +164,8 @@ IJT_Test_Client/
         ├── test_trigger.py
         ├── test_cu_registry.py
         ├── test_namespaces.py
-        └── test_profile_loader.py
+        ├── test_profile_loader.py
+        └── test_ruff_format_guard.py ← canary: ruff format must not corrupt except (A, B): clauses
 ```
 
 ### Key Fixtures (conftest.py)

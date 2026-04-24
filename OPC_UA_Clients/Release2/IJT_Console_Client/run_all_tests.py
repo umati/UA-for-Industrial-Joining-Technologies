@@ -99,7 +99,7 @@ def _prepare_tmp_dir() -> None:
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
     for child in _TMP_DIR.iterdir():
         name = child.name
-        managed = name in {"pytest", "pip-audit-cache"} or name.startswith("server_instance_")
+        managed = name in {"pytest", "pip-audit-cache", "ruff-cache"} or name.startswith("server_instance_")
         if not managed:
             continue
         with contextlib.suppress(OSError):
@@ -585,7 +585,18 @@ def _step_ruff_lint() -> _StepResult:
         result.note = "not installed  (pip install ruff)"
         result.duration = time.monotonic() - t0
         return result
-    rc, output = _run([sys.executable, "-m", "ruff", "check", ".", "--output-format=json"])
+    rc, output = _run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            ".",
+            "--output-format=json",
+            "--cache-dir",
+            str(_TMP_DIR / "ruff-cache"),
+        ]
+    )
     result.duration = time.monotonic() - t0
     result.ok = rc == 0
     (_RESULTS_DIR / "ruff.json").write_text(output, encoding="utf-8")
@@ -595,7 +606,7 @@ def _step_ruff_lint() -> _StepResult:
 
 
 def _step_ruff_format() -> _StepResult:
-    """Check ruff formatting; advisory — style diffs do not fail the suite."""
+    """Check ruff formatting; style diffs fail the suite (ruff format is deterministic with py313)."""
     result = _StepResult("[PHASE 1] ruff format check")
     t0 = time.monotonic()
     if not _tool_available("ruff"):
@@ -603,11 +614,13 @@ def _step_ruff_format() -> _StepResult:
         result.note = "not installed"
         result.duration = time.monotonic() - t0
         return result
-    rc, output = _run([sys.executable, "-m", "ruff", "format", "--check", "."])
+    rc, output = _run(
+        [sys.executable, "-m", "ruff", "format", "--check", ".", "--cache-dir", str(_TMP_DIR / "ruff-cache")]
+    )
     result.duration = time.monotonic() - t0
-    result.ok = True  # advisory — style diffs do not fail the overall run
+    result.ok = rc == 0
     if rc != 0:
-        result.note = "style diffs found (advisory)"
+        result.note = "style diffs found — run: ruff format ."
         _log(output)
     return result
 
@@ -637,6 +650,8 @@ def _step_mypy() -> _StepResult:
             *sources,
             "--ignore-missing-imports",
             "--no-error-summary",
+            "--cache-dir",
+            str(_TMP_DIR / "mypy-cache"),
             "--exclude",
             r"(\.venv|pytest-cache-files-.*)",
         ]
@@ -1111,7 +1126,7 @@ def _force_rmtree(path: Path) -> None:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}  # tmp workspace is handled by _prepare_tmp_dir()
+    _SKIP = {"node_modules", ".git", "test-results", "tmp"}  # tmp workspace is handled by _prepare_tmp_dir()
     _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "htmlcov"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")]

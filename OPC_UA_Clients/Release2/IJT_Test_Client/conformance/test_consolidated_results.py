@@ -141,9 +141,7 @@ async def _get_combined(
     send_as_refs: bool = True,
 ) -> object:
     """Events-primary combined result retrieval. Returns final combined result or None."""
-    async with ResultCollector(
-        subscription_client, ns_indices, is_simulator=result_trigger.is_simulator
-    ) as rc:
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_batch_or_sync(
             classification=classification,
             num_children=num_children,
@@ -163,9 +161,7 @@ async def _get_partial(
     num_children: int = _DEFAULT_CHILD_COUNT,
 ) -> object:
     """Events-primary partial result retrieval (IsPartial=True). Returns partial result or None."""
-    async with ResultCollector(
-        subscription_client, ns_indices, is_simulator=result_trigger.is_simulator
-    ) as rc:
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_batch_or_sync(
             classification=classification,
             num_children=num_children,
@@ -183,9 +179,7 @@ async def _get_job(
     ns_indices,
 ) -> object:
     """Events-primary job result retrieval. Returns final job result or None."""
-    async with ResultCollector(
-        subscription_client, ns_indices, is_simulator=result_trigger.is_simulator
-    ) as rc:
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_job(send_as_refs=True)
         if not outcome.triggered and result_trigger.is_simulator:
             return None
@@ -345,9 +339,7 @@ def _unwrap_sub_result(item):
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
 async def test_sync_result_has_sync_classification(subscription_client, result_trigger, ns_indices):
     """The Server supports Sync Results where Result.ResultMetaData.Classification is SYNC_RESULT."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT)
     if result_data is None:
         pytest.skip("Could not retrieve sync result — trigger not supported or server unavailable")
 
@@ -361,9 +353,7 @@ async def test_sync_result_has_sync_classification(subscription_client, result_t
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
 async def test_sync_result_classification_is_not_single_result(subscription_client, result_trigger, ns_indices):
     """A SyncResult must never carry a SINGLE_RESULT classification value."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT)
     if result_data is None:
         pytest.skip("Could not retrieve sync result for classification check")
 
@@ -382,11 +372,11 @@ async def test_sync_result_classification_is_not_single_result(subscription_clie
 
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT_COUNTERS)
-async def test_sync_result_counters_contains_channel_or_spindle_counter(subscription_client, result_trigger, ns_indices):
+async def test_sync_result_counters_contains_channel_or_spindle_counter(
+    subscription_client, result_trigger, ns_indices
+):
     """The Server supports Sync Results where ResultCounters[] contains at least one of: CHANNEL_NUMBER, SPINDLE_NUMBER."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT)
     if result_data is None:
         pytest.skip("Could not retrieve sync result for counter check")
 
@@ -526,7 +516,9 @@ async def test_intervention_result_has_intervention_classification(subscription_
 
 
 @pytest.mark.requires_cu(CU.INTERVENTION_RESULT)
-async def test_intervention_result_meta_data_has_non_zero_intervention_type(subscription_client, result_trigger, ns_indices):
+async def test_intervention_result_meta_data_has_non_zero_intervention_type(
+    subscription_client, result_trigger, ns_indices
+):
     """Intervention Results must include ResultMetaData.InterventionType with a value appropriate to the joining operation."""
     result_data = await _get_combined(
         subscription_client, result_trigger, ns_indices, ResultClassification.INTERVENTION_RESULT
@@ -636,7 +628,9 @@ async def test_self_contained_batch_result_sub_results_pass_validator(subscripti
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_combined_result_number_of_result_content_matches_actual_count(subscription_client, result_trigger, ns_indices):
+async def test_combined_result_number_of_result_content_matches_actual_count(
+    subscription_client, result_trigger, ns_indices
+):
     """ResultMetaData.NumberOfResultContent must equal len(ResultContent) when present."""
     result_data = await _get_combined(
         subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT
@@ -663,7 +657,12 @@ async def test_combined_result_number_of_result_content_matches_actual_count(sub
 async def test_combined_result_sub_result_count_matches_requested(subscription_client, result_trigger, ns_indices):
     """Requesting N children must yield exactly N sub-results (inline or by reference)."""
     result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, num_children=_DEFAULT_CHILD_COUNT, send_as_refs=False
+        subscription_client,
+        result_trigger,
+        ns_indices,
+        ResultClassification.BATCH_RESULT,
+        num_children=_DEFAULT_CHILD_COUNT,
+        send_as_refs=False,
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result for sub-result count check")
@@ -789,9 +788,7 @@ async def test_combined_result_carries_correct_classification_value(
     description,
 ):
     """Triggered combined result must carry the Classification value matching the type requested."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, classification
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, classification)
     if result_data is None:
         pytest.skip(f"Could not retrieve {description} result — trigger not supported or server unavailable")
 
@@ -826,9 +823,7 @@ _RESULT_STATE_PROCESSING: str = "Processing"
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
 async def test_sync_result_content_is_non_empty(subscription_client, result_trigger, ns_indices):
     """Triggered SYNC_RESULT must have a non-empty ResultContent (inline sub-results)."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT)
     if result_data is None:
         pytest.skip("Could not retrieve sync result — trigger not supported or server unavailable")
 
@@ -842,9 +837,7 @@ async def test_sync_result_content_is_non_empty(subscription_client, result_trig
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
 async def test_sync_result_sub_results_each_have_result_id(subscription_client, result_trigger, ns_indices):
     """Each sub-result inside a SYNC_RESULT ResultContent must carry a non-empty ResultId."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT)
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
 
@@ -870,9 +863,7 @@ async def test_sync_result_sub_results_each_have_result_id(subscription_client, 
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
 async def test_sync_result_is_partial_false_for_completed(subscription_client, result_trigger, ns_indices):
     """A completed SYNC_RESULT must have IsPartial absent or False in ResultMetaData."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT)
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
 
@@ -887,9 +878,7 @@ async def test_sync_result_is_partial_false_for_completed(subscription_client, r
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
 async def test_sync_result_evaluation_is_valid_value(subscription_client, result_trigger, ns_indices):
     """ResultEvaluation on a SYNC_RESULT must be one of the defined enum values."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT)
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
 
@@ -914,7 +903,9 @@ async def test_sync_result_evaluation_is_valid_value(subscription_client, result
 
 @pytest.mark.requires_cu(CU.SYNC_RESULT)
 @pytest.mark.negative
-async def test_sync_result_get_result_by_id_returns_parent(subscription_client, opcua_client, result_trigger, ns_indices):
+async def test_sync_result_get_result_by_id_returns_parent(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
     """GetResultById called with a SYNC_RESULT's ResultId must return Classification=SYNC_RESULT.
 
     Note: This test validates the GetResultById METHOD behaviour, not result structure.
@@ -931,9 +922,7 @@ async def test_sync_result_get_result_by_id_returns_parent(subscription_client, 
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
 
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT)
     if result_data is None:
         pytest.skip("Could not retrieve sync result via events")
 
@@ -969,9 +958,7 @@ async def test_sync_result_get_result_by_id_returns_parent(subscription_client, 
 @pytest.mark.requires_cu(CU.SYNC_RESULT_COUNTERS)
 async def test_sync_result_counters_list_is_non_empty(subscription_client, result_trigger, ns_indices):
     """SYNC_RESULT ResultCounters list must be non-empty when the server supports sync counters."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT)
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
 
@@ -985,9 +972,7 @@ async def test_sync_result_counters_list_is_non_empty(subscription_client, resul
 @pytest.mark.requires_cu(CU.SYNC_RESULT_COUNTERS)
 async def test_sync_result_counter_types_within_defined_range(subscription_client, result_trigger, ns_indices):
     """Each counter in a SYNC_RESULT must have CounterType that is either negative (vendor) or within the spec-defined range."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT)
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
 
@@ -1015,9 +1000,7 @@ async def test_sync_result_counter_types_within_defined_range(subscription_clien
 @pytest.mark.negative
 async def test_sync_result_channel_spindle_counter_value_is_positive(subscription_client, result_trigger, ns_indices):
     """CHANNEL_NUMBER and SPINDLE_NUMBER counters in a SYNC_RESULT must have CounterValue > 0."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT
-    )
+    result_data = await _get_combined(subscription_client, result_trigger, ns_indices, ResultClassification.SYNC_RESULT)
     if result_data is None:
         pytest.skip("Could not retrieve sync result")
 
@@ -1369,7 +1352,9 @@ async def test_job_result_content_is_non_empty(subscription_client, result_trigg
 
 
 @pytest.mark.requires_cu(CU.JOB_RESULT)
-async def test_job_result_get_result_by_id_returns_job_result(subscription_client, opcua_client, result_trigger, ns_indices):
+async def test_job_result_get_result_by_id_returns_job_result(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
     """GetResultById called with a JOB_RESULT's ResultId must return Classification=JOB_RESULT.
 
     Note: This test validates the GetResultById METHOD behaviour, not result structure.
@@ -1535,7 +1520,12 @@ async def test_each_step_has_at_most_one_final_per_physical_quantity(subscriptio
 async def test_final_tag_present_in_consecutive_results(subscription_client, result_trigger, ns_indices):
     """All inline sub-results in a BATCH_RESULT (3 children) must each have at least one FINAL-tagged value."""
     result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, num_children=_DEFAULT_CHILD_COUNT, send_as_refs=False
+        subscription_client,
+        result_trigger,
+        ns_indices,
+        ResultClassification.BATCH_RESULT,
+        num_children=_DEFAULT_CHILD_COUNT,
+        send_as_refs=False,
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result with 3 sub-results")
@@ -1556,7 +1546,9 @@ async def test_final_tag_present_in_consecutive_results(subscription_client, res
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_self_contained_consolidated_classification_is_combined_type(subscription_client, result_trigger, ns_indices):
+async def test_self_contained_consolidated_classification_is_combined_type(
+    subscription_client, result_trigger, ns_indices
+):
     """Self-contained BATCH_RESULT (inline) Classification must be one of the combined types."""
     result_data = await _get_combined(
         subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
@@ -1578,7 +1570,9 @@ async def test_self_contained_consolidated_classification_is_combined_type(subsc
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_self_contained_sub_result_classifications_not_same_as_parent(subscription_client, result_trigger, ns_indices):
+async def test_self_contained_sub_result_classifications_not_same_as_parent(
+    subscription_client, result_trigger, ns_indices
+):
     """Inline sub-results must not carry the same Classification as the parent combined result."""
     result_data = await _get_combined(
         subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
@@ -1627,7 +1621,9 @@ async def test_self_contained_sub_result_ids_are_all_unique(subscription_client,
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_self_contained_parent_evaluation_consistent_with_sub_results(subscription_client, result_trigger, ns_indices):
+async def test_self_contained_parent_evaluation_consistent_with_sub_results(
+    subscription_client, result_trigger, ns_indices
+):
     """If all sub-results evaluate OK, the parent combined result must not be NOK."""
     result_data = await _get_combined(
         subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
@@ -1672,7 +1668,9 @@ async def test_self_contained_parent_evaluation_consistent_with_sub_results(subs
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
 @pytest.mark.negative
-async def test_self_contained_sub_results_have_non_empty_result_content(subscription_client, result_trigger, ns_indices):
+async def test_self_contained_sub_results_have_non_empty_result_content(
+    subscription_client, result_trigger, ns_indices
+):
     """In CU33 mode each inline sub-result must carry its full content (non-None result data)."""
     result_data = await _get_combined(
         subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
@@ -1733,7 +1731,9 @@ async def test_references_mode_classification_is_combined_type(subscription_clie
 
 
 @pytest.mark.requires_cu(CU.CONSOLIDATED_RESULT_WITH_REFERENCES)
-async def test_references_mode_sub_result_classification_not_same_as_parent(subscription_client, result_trigger, ns_indices):
+async def test_references_mode_sub_result_classification_not_same_as_parent(
+    subscription_client, result_trigger, ns_indices
+):
     """In references mode, each referenced sub-result Classification must differ from the parent."""
     result_data = await _get_combined(
         subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=True

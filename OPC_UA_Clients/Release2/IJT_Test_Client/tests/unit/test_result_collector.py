@@ -5,6 +5,7 @@ Tests the pure-Python utility functions (unwrap_result, get_classification,
 is_partial) and the ResultCollector class using AsyncMock — no live OPC UA
 server required.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -346,9 +347,7 @@ class TestPublicCollectMethods:
         rc = self._make_rc_returning("data")
         result = await rc.collect_single()
         assert result == "data"
-        rc._collect_until.assert_awaited_once_with(
-            ResultClassification.SINGLE_RESULT, False, pytest.approx(10.0)
-        )
+        rc._collect_until.assert_awaited_once_with(ResultClassification.SINGLE_RESULT, False, pytest.approx(10.0))
 
     @pytest.mark.asyncio
     async def test_collect_single_uses_custom_timeout(self):

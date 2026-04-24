@@ -67,7 +67,8 @@ class EventCollector:
         except Exception as exc:
             logger.error(
                 "Subscription delete failed — server-side subscription may persist "
-                "until module teardown closes the connection: %s", exc
+                "until module teardown closes the connection: %s",
+                exc,
             )
 
     async def subscribe(

@@ -35,7 +35,10 @@ The three Python runners (Console, Web, Test) call `pre-commit install` automati
 2. `ruff --fix` applies safe lint fixes
 3. `end-of-file-fixer` and `mixed-line-ending` normalise LF/CRLF
 4. `trailing-whitespace` strips trailing spaces
-5. Multi-exception style is normalized to parenthesized form in this repo: use `except (A, B):`, never `except A, B:`
+
+Multi-exception style rule: always write `except (A, B):`, never `except A, B:`. This is enforced
+by the unit-level guard test (`test_ruff_format_guard.py`) which verifies ruff does not corrupt
+parenthesized except clauses — see **Key Technical Decisions** below.
 
 If any hook modifies files, the commit is aborted. **Run `git add -u && git commit` again** — fixed files are already staged.
 
@@ -88,7 +91,7 @@ and use the OS default temp location instead.
 
 | Project | Basetemp configuration |
 |---------|------------------------|
-| `IJT_Console_Client` | `addopts = "--basetemp=tmp/pytest"` in `pyproject.toml` |
+| `IJT_Console_Client` | `pytest_configure` hook in `conftest.py` (CWD-independent absolute path) |
 | `IJT_Test_Client` | `pytest_configure` hook in `conftest.py` |
 | `IJT_Web_Client` | `pytest_configure` hook in `tests/conftest.py` |
 
@@ -182,7 +185,7 @@ Built-in protections already in place:
 | `_force_rmtree(path)` | All 7 runners + 2 setup scripts — `shutil.rmtree(onexc=...)` with `os.chmod` retry for read-only files |
 | `[tool.mypy] exclude` | Skips `pytest-cache-files-*` before mypy walks into them |
 | `norecursedirs` | pytest never collects from `pytest-cache-files-*` or `tmp` |
-| `-p no:cacheprovider` (Web + Test Client) | Prevents `pytest-cache-files-*` creation entirely |
+| `-p no:cacheprovider` (all 3 Python clients) | Prevents `pytest-cache-files-*` creation entirely |
 | `.dockerignore` | `tests/fixtures/tmp/` excluded from Docker build context |
 | Project-local basetemp | All Python clients write to `tmp/pytest/` instead of system temp |
 
@@ -385,7 +388,7 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 | Skip venv in Docker (`IS_DOCKER=true`) | Container runs as non-root; `/opt/ijt_venv` not writable |
 | No `scripts/` at repo root | Each project owns its own helpers; nothing shared at root level |
 | `Python/network_utils.py` canonical | Moved from root; all imports use `from Python.network_utils import ...` |
-| `SimulateBulkResults` retry loop | Server `BULK_RESULTS_IN_PROGRESS` flag → `BadTooManyOperations` on concurrent calls |
+| `ruff target-version = "py313"` (not py314) | ruff 0.15.x bug #24041: `ruff format` with py314 strips parens from `except (A, B):` → Python 2 syntax. py313 is the workaround; guard test `test_ruff_format_guard.py` in Console + Test Client unit suites catches any regression. Restore to py314 once upstream fixes #24041 |
 | No custom EventFilter | Full `ResultDataType` payload arrives in event without custom filter |
 | C# live-test sync OPC UA calls wrapped in hard timeouts | `BrowseChild`, `Subscribe`, `CallMethod`, and `Unsubscribe` are synchronous and can stall under server load; guarded `Task.WhenAny` timeouts prevent test-host hangs |
 | `JoiningSystem.DisposeAsync` cleanup guard timeout | Management-object dispose calls can perform synchronous network operations; timeout-bounded cleanup (8s management + 10s session close) avoids indefinite teardown stalls |

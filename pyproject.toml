@@ -9,8 +9,15 @@ collect_ignore_glob = ["*"]
 
 [tool.ruff]
 # Repo-wide ruff defaults; sub-projects may override in their own pyproject.toml.
-target-version = "py314"
+# Set to py313 (not py314) to avoid ruff formatter bug #24041: ruff format with
+# target-version = "py314" strips parentheses from except (A, B): clauses, producing
+# invalid Python 3 syntax. py313 is unaffected. Restore to py314 when the bug is
+# fixed upstream: https://github.com/astral-sh/ruff/issues/24041
+target-version = "py313"
 line-length = 100
+# Direct ruff cache into tmp/ — resolved relative to this file, so it never
+# leaks to the repo root or any ancestor regardless of the invoking CWD.
+cache-dir = "tmp/ruff-cache"
 # Exclude auto-generated files (UA-ModelCompiler output) — never hand-edit these.
 exclude = [
     "OPC_UA_Clients/Release2/IJT_CSharp_Client/Types/",

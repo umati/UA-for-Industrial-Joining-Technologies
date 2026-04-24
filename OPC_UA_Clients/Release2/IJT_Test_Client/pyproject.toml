@@ -46,8 +46,11 @@ verbose = 0
 [tool.ruff]
 # Intentionally overrides root pyproject.toml: line-length=120 (matches existing code style)
 # and select=["E","F","I"] (minimal rules; security/complexity rules not enforced here).
-target-version = "py314"
+# Set to py313 (not py314) to avoid ruff formatter bug #24041 — see root pyproject.toml.
+target-version = "py313"
 line-length = 120
+# Cache inside tmp/ — ruff resolves this relative to the pyproject.toml location (not CWD).
+cache-dir = "tmp/ruff-cache"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
@@ -129,6 +132,10 @@ ignore_missing_imports = true
 check_untyped_defs = true
 # Exclude pytest bookkeeping dirs that may be locked on Windows.
 exclude = ["pytest-cache-files-.*"]
+# Keep mypy's incremental cache inside tmp/ for CWD-independent operation.
+# Note: mypy resolves cache_dir relative to CWD (not config file location), so
+# this config only works when mypy runs from the project root (CI / runner).
+cache_dir = "tmp/mypy-cache"
 
 [tool.pyright]
 # asyncua 1.2b2 uses class-based OPC UA primitive types (Int32, UInt32, etc.)

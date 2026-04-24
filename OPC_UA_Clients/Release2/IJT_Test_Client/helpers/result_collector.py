@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 
 # Simulator: results arrive within ~2 s; use generous-but-not-excessive timeouts
 _SIM_SINGLE_TIMEOUT = 10.0
-_SIM_COMBINED_TIMEOUT = 15.0    # stops as soon as IsPartial=False arrives
-_SIM_JOB_TIMEOUT = 30.0         # stops as soon as final JOB_RESULT arrives
+_SIM_COMBINED_TIMEOUT = 15.0  # stops as soon as IsPartial=False arrives
+_SIM_JOB_TIMEOUT = 30.0  # stops as soon as final JOB_RESULT arrives
 
 # Real controller: joining takes seconds; be generous
 _CTRL_SINGLE_TIMEOUT = 60.0
@@ -149,9 +149,7 @@ class ResultCollector:
             raise RuntimeError("IJT Base namespace not registered — cannot subscribe to result events")
 
         server_node = self._client.nodes.server
-        event_type_node = self._client.get_node(
-            ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt)
-        )
+        event_type_node = self._client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
 
         self._collector = EventCollector(self._client)
         await self._collector.subscribe(server_node, event_type_node)
@@ -217,9 +215,7 @@ class ResultCollector:
             if remaining <= 0:
                 break
             # Poll for one event; short inner window keeps the loop responsive
-            events = await self._collector.collect(
-                count=1, timeout_s=min(remaining, _INNER_POLL_S)
-            )
+            events = await self._collector.collect(count=1, timeout_s=min(remaining, _INNER_POLL_S))
             if not events:
                 # No event in this window — loop back and check deadline
                 continue
@@ -242,14 +238,14 @@ class ResultCollector:
         Returns:
             result_data, or None if no matching event arrived within timeout.
         """
-        timeout = timeout_s if timeout_s is not None else (
-            _SIM_SINGLE_TIMEOUT if self._is_simulator else _CTRL_SINGLE_TIMEOUT
+        timeout = (
+            timeout_s
+            if timeout_s is not None
+            else (_SIM_SINGLE_TIMEOUT if self._is_simulator else _CTRL_SINGLE_TIMEOUT)
         )
         return await self._collect_until(ResultClassification.SINGLE_RESULT, False, timeout)
 
-    async def collect_combined(
-        self, classification: int, timeout_s: Optional[float] = None
-    ) -> Optional[Any]:
+    async def collect_combined(self, classification: int, timeout_s: Optional[float] = None) -> Optional[Any]:
         """Collect the final combined result event for the given classification.
 
         Consumes events one at a time.  Returns immediately when a result with
@@ -262,14 +258,14 @@ class ResultCollector:
         Returns:
             result_data (IsPartial=False), or None if timeout expired.
         """
-        timeout = timeout_s if timeout_s is not None else (
-            _SIM_COMBINED_TIMEOUT if self._is_simulator else _CTRL_COMBINED_TIMEOUT
+        timeout = (
+            timeout_s
+            if timeout_s is not None
+            else (_SIM_COMBINED_TIMEOUT if self._is_simulator else _CTRL_COMBINED_TIMEOUT)
         )
         return await self._collect_until(classification, False, timeout)
 
-    async def collect_partial(
-        self, classification: int, timeout_s: Optional[float] = None
-    ) -> Optional[Any]:
+    async def collect_partial(self, classification: int, timeout_s: Optional[float] = None) -> Optional[Any]:
         """Collect the first partial combined result event (IsPartial=True).
 
         Returns as soon as the first partial result with matching classification
@@ -281,8 +277,10 @@ class ResultCollector:
         Returns:
             result_data with IsPartial=True, or None if none arrived within timeout.
         """
-        timeout = timeout_s if timeout_s is not None else (
-            _SIM_COMBINED_TIMEOUT if self._is_simulator else _CTRL_COMBINED_TIMEOUT
+        timeout = (
+            timeout_s
+            if timeout_s is not None
+            else (_SIM_COMBINED_TIMEOUT if self._is_simulator else _CTRL_COMBINED_TIMEOUT)
         )
         return await self._collect_until(classification, True, timeout)
 
@@ -297,7 +295,7 @@ class ResultCollector:
         Returns:
             result_data, or None if no matching event arrived within timeout.
         """
-        timeout = timeout_s if timeout_s is not None else (
-            _SIM_JOB_TIMEOUT if self._is_simulator else _CTRL_JOB_TIMEOUT
+        timeout = (
+            timeout_s if timeout_s is not None else (_SIM_JOB_TIMEOUT if self._is_simulator else _CTRL_JOB_TIMEOUT)
         )
         return await self._collect_until(ResultClassification.JOB_RESULT, False, timeout)

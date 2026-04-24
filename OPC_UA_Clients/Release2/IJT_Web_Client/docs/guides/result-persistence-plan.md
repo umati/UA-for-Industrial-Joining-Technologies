@@ -18,12 +18,12 @@ Primary scope is the JS frontend result pipeline (`ResultManager` + result views
 
 ## Current State (Relevant)
 
-- Results are held in-memory by [result-manager.mjs](C:\Code\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Web_Client\src\javascripts\ijt-support\results\result-manager.mjs).
+- Results are held in-memory by [result-manager.mjs](../../src/javascripts/ijt-support/results/result-manager.mjs).
 - Result models are class instances (`ResultDataType`, `TighteningDataType`, etc.) with runtime helpers and `ClientData.rebuildState`.
 - UI tabs subscribe through `resultManager.subscribe(...)`.
-- Envelope already has a good reference pattern for serialization versioning:
-  - [envelope-serialization.mjs](C:\Code\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Web_Client\src\javascripts\views\envelope\core\envelope-serialization.mjs)
-  - [envelope-storage-io.mjs](C:\Code\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Web_Client\src\javascripts\views\envelope\core\envelope-storage-io.mjs)
+- Existing serialization reference files in the same module:
+  - [result-serialization.mjs](../../src/javascripts/ijt-support/results/result-serialization.mjs)
+  - [result-storage-constants.mjs](../../src/javascripts/ijt-support/results/result-storage-constants.mjs)
 
 ## Key Design Decisions
 
@@ -102,7 +102,7 @@ Deliverable:
 
 ## Phase 3: UI Controls
 
-- In consolidated result view ([result-graphics.mjs](C:\Code\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Web_Client\src\javascripts\views\complex-result\result-graphics.mjs)):
+- In consolidated result view ([result-graphics.mjs](../../src/javascripts/views/complex-result/result-graphics.mjs)):
   - Add `Export Results` button.
   - Add `Import Results` button.
   - Add status messages for success/failure and counts imported/skipped/replaced.

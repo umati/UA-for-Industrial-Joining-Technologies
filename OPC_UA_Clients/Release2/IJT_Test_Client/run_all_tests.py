@@ -114,7 +114,9 @@ def _prepare_tmp_dir() -> None:
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
     for child in _TMP_DIR.iterdir():
         name = child.name
-        managed = name in {"pytest", "pytest_tmp", "pip-audit-cache"} or name.startswith("server_instance_")
+        managed = name in {"pytest", "pytest_tmp", "pip-audit-cache", "ruff-cache"} or name.startswith(
+            "server_instance_"
+        )
         if not managed:
             continue
         with contextlib.suppress(OSError):
@@ -714,59 +716,22 @@ def _step_ruff_lint() -> _StepResult:
         result.note = note
         result.duration = time.monotonic() - t0
         return result
-    rc, output = _run([sys.executable, "-m", "ruff", "check", ".", "--output-format=json"])
+    rc, output = _run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            ".",
+            "--output-format=json",
+            "--cache-dir",
+            str(_TMP_DIR / "ruff-cache"),
+        ]
+    )
     result.duration = time.monotonic() - t0
     result.ok = rc == 0
     (_RESULTS_DIR / "ruff.json").write_text(output, encoding="utf-8")
     if not result.ok:
-        _log(output)
-    return result
-
-
-def _step_normalize_multi_except() -> _StepResult:
-    """Normalize forbidden Python 3 multi-except syntax across tracked files."""
-    result = _StepResult("[PHASE 1] normalize multi-except")
-    t0 = time.monotonic()
-    script = _REPO_ROOT / "scripts" / "normalize_multi_except.py"
-    if not script.exists():
-        result.skipped = True
-        result.note = f"missing {script}"
-        result.duration = time.monotonic() - t0
-        return result
-    rc, output = _run(["git", "ls-files", "*.py"], cwd=_REPO_ROOT)
-    if rc != 0:
-        result.ok = False
-        result.note = "git ls-files failed"
-        result.duration = time.monotonic() - t0
-        _log(output)
-        return result
-    files = [line.strip() for line in output.splitlines() if line.strip()]
-    cmd = [sys.executable, str(script), "--write", *files]
-    rc, output = _run(cmd, cwd=_REPO_ROOT, timeout=180)
-    result.duration = time.monotonic() - t0
-    result.ok = rc == 0
-    if output.strip():
-        result.note = "normalized" if "Fixed " in output else ""
-    if not result.ok:
-        _log(output)
-    return result
-
-
-def _step_verify_multi_except() -> _StepResult:
-    """Fail if forbidden unparenthesized multi-except syntax is present."""
-    result = _StepResult("[PHASE 1] verify multi-except")
-    t0 = time.monotonic()
-    script = _REPO_ROOT / "scripts" / "normalize_multi_except.py"
-    if not script.exists():
-        result.skipped = True
-        result.note = f"missing {script}"
-        result.duration = time.monotonic() - t0
-        return result
-    rc, output = _run([sys.executable, str(script), "--check"], cwd=_REPO_ROOT, timeout=120)
-    result.duration = time.monotonic() - t0
-    result.ok = rc == 0
-    if not result.ok:
-        result.note = "forbidden except A, B syntax found"
         _log(output)
     return result
 
@@ -780,11 +745,13 @@ def _step_ruff_format() -> _StepResult:
         result.note = note
         result.duration = time.monotonic() - t0
         return result
-    rc, output = _run([sys.executable, "-m", "ruff", "format", "--check", "."])
+    rc, output = _run(
+        [sys.executable, "-m", "ruff", "format", "--check", ".", "--cache-dir", str(_TMP_DIR / "ruff-cache")]
+    )
     result.duration = time.monotonic() - t0
-    result.ok = True  # advisory — style diffs do not fail the overall run
+    result.ok = rc == 0
     if rc != 0:
-        result.note = "style diffs found (advisory)"
+        result.note = "style diffs found — run: ruff format ."
         _log(output)
     return result
 
@@ -1361,8 +1328,6 @@ def main() -> int:
             _section("Phase 1: Static / Quality")
             results.append(_step_ruff_lint())
             results.append(_step_ruff_format())
-            results.append(_step_normalize_multi_except())
-            results.append(_step_verify_multi_except())
             results.append(_step_bandit())
             results.append(_step_pip_audit())
             results.append(_step_detect_secrets())
@@ -1445,7 +1410,7 @@ def _force_rmtree(path: Path) -> None:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}  # tmp workspace is handled by _prepare_tmp_dir()
+    _SKIP = {"node_modules", ".git", "test-results", "tmp"}  # tmp workspace is handled by _prepare_tmp_dir()
     _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "htmlcov"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")]
