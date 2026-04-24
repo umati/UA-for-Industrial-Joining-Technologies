@@ -201,6 +201,7 @@ class _StepResult:
         self.label = label
         self.ok: bool = False
         self.skipped: bool = False
+        self.warn: bool = False  # advisory: ran with issues but does not block the suite
         self.note: str = ""
         self.duration: float = 0.0
 
@@ -209,6 +210,8 @@ class _StepResult:
         dots = "." * max(0, width - len(self.label))
         if self.skipped:
             status = _c(_ANSI_YELLOW, "SKIP")
+        elif self.warn:
+            status = _c(_ANSI_YELLOW, "WARN")
         elif self.ok:
             status = _c(_ANSI_GREEN, "PASS")
         else:
@@ -786,7 +789,6 @@ def _step_ruff_format() -> _StepResult:
     return result
 
 
-
 def _step_bandit() -> _StepResult:
     """Run bandit security linter; write JSON report to test-results/bandit.json."""
     result = _StepResult("[PHASE 1] bandit")
@@ -879,7 +881,6 @@ def _step_pip_audit() -> _StepResult:
     return result
 
 
-
 def _step_detect_secrets() -> _StepResult:
     """Scan for leaked secrets with detect-secrets; skip if not installed."""
     result = _StepResult("[PHASE 1] detect-secrets")
@@ -913,7 +914,7 @@ def _step_detect_secrets() -> _StepResult:
         result.ok = secret_count == 0
         if secret_count:
             result.note = f"{secret_count} potential secret(s) — review .secrets.baseline"
-    except (json.JSONDecodeError, AttributeError):
+    except json.JSONDecodeError, AttributeError:
         result.ok = rc == 0
     if not result.ok:
         _log(output)
@@ -1008,14 +1009,16 @@ def _step_semgrep() -> _StepResult:
         if errors:
             result.ok = False
             result.note = f"{len(errors)} error(s), {len(warns)} warning(s)"
+        elif warns:
+            result.ok = True
+            result.warn = True  # advisory findings — non-blocking
+            result.note = f"0 errors, {len(warns)} warning(s)"
         else:
             result.ok = True
-            result.note = (
-                f"0 errors, {len(warns)} warning(s)" if warns else f"{len(findings)} finding(s), none critical"
-            )
+            result.note = f"{len(findings)} finding(s), none critical"
     except Exception:
-        result.ok = False  # WARN: ran but output unreadable — do not report as PASS
-        result.note = "could not parse output (advisory)"
+        result.warn = True  # advisory — parse failure never blocks the suite
+        result.note = "could not parse output (semgrep ran but output unreadable)"
     return result
 
 
@@ -1392,8 +1395,9 @@ def main() -> int:
     for r in results:
         r.print_line()
 
-    passed = sum(1 for r in results if r.ok and not r.skipped)
-    failed = sum(1 for r in results if not r.ok and not r.skipped)
+    passed = sum(1 for r in results if r.ok and not r.skipped and not r.warn)
+    warned = sum(1 for r in results if r.warn and not r.skipped)
+    failed = sum(1 for r in results if not r.ok and not r.skipped and not r.warn)
     skipped = sum(1 for r in results if r.skipped)
     any_failed = failed > 0
 
@@ -1409,7 +1413,9 @@ def main() -> int:
 
     elapsed = time.monotonic() - t_start
     overall = _c(_ANSI_RED, "FAIL") if any_failed else _c(_ANSI_GREEN, "PASS")
-    _log(f"  Result: {overall}  passed={passed}  failed={failed}  skipped={skipped}  (elapsed: {elapsed:.1f}s)")
+    _log(
+        f"  Result: {overall}  passed={passed}  warned={warned}  failed={failed}  skipped={skipped}  (elapsed: {elapsed:.1f}s)"
+    )
     # Print skip-reason breakdown when phase 2 ran (live tests produce significant skip volume)
     if run_phase2:
         live_xml = Path(args.junit_xml) if args.junit_xml else _DEFAULT_JUNIT

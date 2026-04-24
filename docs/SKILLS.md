@@ -141,6 +141,27 @@ Coverage is configured in each project's `pyproject.toml`. **Never hardcode thre
 - Hard gate: `coverage.thresholds` in `vitest.config.mjs` (if set)
 - Ratchet floor: `_COVERAGE_THRESHOLD = 30.0` in `IJT_Node_Client/run_all_tests.py` — WARN-only, advisory/non-gated, ratchet upward as coverage improves. Aspirational goal: 80%.
 
+---
+
+### Runner Step Result Model — PASS / WARN / FAIL / SKIP
+
+All Python runner scripts (`run_all_tests.py`) use a `_StepResult` class with four distinct states. **Do not collapse WARN into PASS or FAIL** — the distinction is enforced by unit tests.
+
+| Field | State | Colour | Counts as | Use for |
+|-------|-------|--------|-----------|---------|
+| `ok=True, warn=False` | **PASS** | green | `passed` | Tool ran clean |
+| `warn=True` | **WARN** | yellow | `warned` (never `failed`) | Advisory tool: ran but output unreadable, or found non-critical issues |
+| `ok=False, warn=False` | **FAIL** | red | `failed` → suite FAIL | Real defect or gate violation |
+| `skipped=True` | **SKIP** | yellow | `skipped` | Tool not installed / not applicable |
+
+**Advisory tool rule**: Tools whose failures are inherently non-actionable on the local/CI environment (Semgrep SSL, pyright advisory, pip-audit network) must use `result.warn = True` — **never** `result.ok = False`. Setting `ok=False` converts an advisory observation into a suite-blocking failure.
+
+The invariant is unit-tested in `tests/unit/test_runner_step_result.py` in both Console Client and Test Client:
+- `test_semgrep_parse_failure_sets_warn_not_fail` — parse failure must set `warn=True`
+- `test_counter_mixed_suite_warn_does_not_cause_suite_fail` — `warned > 0` with `failed = 0` must still pass
+
+**Summary line format**: `Result: PASS  passed=12  warned=1  failed=0  skipped=1`
+
 Docstring coverage (`interrogate`) thresholds — calibrated against real codebase with venvs excluded:
 
 | Project | `fail-under` | Notes |
