@@ -82,6 +82,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}   # empty string when secret absent
 
 concurrency:
   group: integration-${{ github.ref }}
@@ -130,12 +131,8 @@ jobs:
           hadolint --ignore DL3008 --ignore DL3009 OPC_UA_Servers/Release2/Dockerfile
           echo "Dockerfile lint OK"
 
-      # Docker Hub gives 100 anonymous pulls / 6h on shared runners.
-      # Authenticated free-tier accounts get 200 / 6h — set DOCKERHUB_USERNAME
-      # + DOCKERHUB_TOKEN repo secrets to enable this.  The step is silent on
-      # failure so the job continues with anonymous pulls when secrets are absent.
-      - name: Log in to Docker Hub (reduces pull rate-limit risk)
-        continue-on-error: true
+      - name: Log in to Docker Hub (optional — increases pull rate limit)
+        if: env.DOCKERHUB_USER != ''
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -222,8 +219,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Log in to Docker Hub (reduces pull rate-limit risk)
-        continue-on-error: true
+      - name: Log in to Docker Hub (optional — increases pull rate limit)
+        if: env.DOCKERHUB_USER != ''
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
