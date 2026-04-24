@@ -18,6 +18,14 @@ function makeEventManager () {
   }
 }
 
+function makeSettingsProvider (maxStoredResults) {
+  return {
+    settings: {
+      maxstoredresults: maxStoredResults
+    }
+  }
+}
+
 function makeResult (id, classification = '2', partial = 'False', content = []) {
   return {
     id,
@@ -212,5 +220,34 @@ describe('ResultManager — resolveOld', () => {
     rm.unresolved.push(ref)
     rm.resolveOld()
     expect(rm.unresolved).toHaveLength(1)
+  })
+})
+
+describe('ResultManager - max storage cap', () => {
+  it('uses default max storage limit when settings are missing', () => {
+    const rm = new ResultManager(makeEventManager())
+    expect(rm.getMaxStoredResults()).toBe(200)
+  })
+
+  it('prunes oldest results above configured limit', () => {
+    const rm = new ResultManager(makeEventManager(), makeSettingsProvider(2))
+    const r1 = makeResult('cap-1', '1')
+    const r2 = makeResult('cap-2', '1')
+    const r3 = makeResult('cap-3', '1')
+
+    rm.addResult(r1)
+    rm.addResult(r2)
+    rm.addResult(r3)
+
+    expect(rm.resultFromId('cap-1')).toBeUndefined()
+    expect(rm.resultFromId('cap-2')).toBe(r2)
+    expect(rm.resultFromId('cap-3')).toBe(r3)
+    expect(rm.lastResult).toBe(r3)
+    expect(rm.getResultOfType(1)).toHaveLength(2)
+  })
+
+  it('falls back to default when configured limit is invalid', () => {
+    const rm = new ResultManager(makeEventManager(), makeSettingsProvider(0))
+    expect(rm.getMaxStoredResults()).toBe(200)
   })
 })

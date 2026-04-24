@@ -8,7 +8,7 @@
 import {
   SocketHandler
 } from 'ijt-support/ijt-support.mjs'
-import { ijtLog } from '../ijt-logger.mjs'
+import { ObservableManagerBase } from '../observable-manager-base.mjs'
 
 /** Named state constants — prevents typo bugs in trigger/subscribe calls. */
 export const CONNECTION_STATES = Object.freeze({
@@ -20,10 +20,10 @@ export const CONNECTION_STATES = Object.freeze({
   ATTEMPT_CLOSE: 'attemptclose'
 })
 
-export class ConnectionManager {
+export class ConnectionManager extends ObservableManagerBase {
   constructor (webSocketManager, endpointUrl) {
+    super('ConnectionManager')
     this.socketHandler = new SocketHandler(webSocketManager, endpointUrl)
-    this.callbacks = []
 
     this.socketHandler.registerMandatory('connection established', (_msg) => {
       this.trigger(CONNECTION_STATES.CONNECTION, true)
@@ -51,10 +51,11 @@ export class ConnectionManager {
    * @param {Function} callback
    */
   subscribe (state, callback) {
-    this.callbacks.push({ state, callback })
+    const unsubscribe = this._subscribeTopic(state, callback)
     if (this[state]) { // If this state is already reached, immediately call back
       callback(this[state])
     }
+    return unsubscribe
   }
 
   /**
@@ -64,15 +65,7 @@ export class ConnectionManager {
    */
   trigger (state, changeTo = true) {
     if (this[state] !== changeTo) {
-      for (const row of this.callbacks) {
-        if (row.state === state) {
-          try {
-            row.callback(changeTo)
-          } catch (err) {
-            ijtLog.error(`ConnectionManager callback for "${state}" threw:`, err)
-          }
-        }
-      }
+      this._notifyTopic(state, changeTo)
       this[state] = changeTo
     }
   }

@@ -3,6 +3,7 @@ import { lowerCaseJsonKeys } from './json-key-normalization.mjs'
 
 const FADE_TIME_MS = 10_000
 const FADE_STEPS = 5
+const DEFAULT_MAX_STORED_RESULTS = 200
 
 /**
  * The purpose of this class is to generate an GUI
@@ -21,6 +22,7 @@ export default class Settings extends BasicScreen {
     this.JoiningProcess2 = '-'
     this.Joint1 = '-'
     this.Joint2 = '-'
+    this.maxStoredResults = DEFAULT_MAX_STORED_RESULTS
 
     this.settings = { // default values
       productid: 'www.company.com/ProductABC123',
@@ -29,6 +31,7 @@ export default class Settings extends BasicScreen {
       button1joint: 'Joint_1',
       button2joint: 'Joint_2',
       initialviewlevel: 4,
+      maxstoredresults: DEFAULT_MAX_STORED_RESULTS,
       command: 'set settings',
       endpoint: 'common'
     }
@@ -95,6 +98,7 @@ export default class Settings extends BasicScreen {
       if (this.initialViewLevel) {
         this.settings.initialviewlevel = this.initialViewLevel
       }
+      this.settings.maxstoredresults = this.getMaxStoredResults()
       this.webSocketManager.send('set settings', null, null, this.settings)
     })
 
@@ -106,7 +110,9 @@ export default class Settings extends BasicScreen {
   setupPage (msg, initial) {
     const normalizedMsg = lowerCaseJsonKeys(msg) || {}
 
-    if (normalizedMsg.productid !== undefined || normalizedMsg.initialviewlevel !== undefined) {
+    if (normalizedMsg.productid !== undefined ||
+        normalizedMsg.initialviewlevel !== undefined ||
+        normalizedMsg.maxstoredresults !== undefined) {
       this.settings = { ...this.settings, ...normalizedMsg }
       if (normalizedMsg.productid !== undefined) {
         this.productId = normalizedMsg.productid
@@ -128,6 +134,11 @@ export default class Settings extends BasicScreen {
       }
       if (normalizedMsg.initialviewlevel !== undefined) {
         this.initialViewLevel = normalizedMsg.initialviewlevel
+      }
+      if (normalizedMsg.maxstoredresults !== undefined) {
+        this.maxStoredResults = this.normalizeMaxStoredResults(normalizedMsg.maxstoredresults)
+      } else {
+        this.maxStoredResults = this.normalizeMaxStoredResults(this.settings.maxstoredresults)
       }
       if (normalizedMsg.envelope !== undefined) {
         this.envelope = normalizedMsg.envelope
@@ -205,6 +216,14 @@ export default class Settings extends BasicScreen {
       }
 
       this.container.appendChild(document.createElement('br'))
+
+      const labelElement5 = document.createElement('label')
+      labelElement5.textContent = 'Max stored results   '
+      this.container.appendChild(labelElement5)
+      this.createInput(String(this.getMaxStoredResults()), this.container, (evt) => {
+        this.maxStoredResults = this.normalizeMaxStoredResults(evt)
+      }, '20')
+      this.container.appendChild(document.createElement('br'))
     } finally {
       if (!initial) {
         this.loaded = true
@@ -224,5 +243,17 @@ export default class Settings extends BasicScreen {
         this.resolvers.push(resolve)
       }
     })
+  }
+
+  normalizeMaxStoredResults (value) {
+    const parsed = Number.parseInt(value, 10)
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      return DEFAULT_MAX_STORED_RESULTS
+    }
+    return parsed
+  }
+
+  getMaxStoredResults () {
+    return this.normalizeMaxStoredResults(this.maxStoredResults)
   }
 }

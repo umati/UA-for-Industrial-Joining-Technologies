@@ -97,7 +97,7 @@ export default class EndpointGraphics extends BasicScreen {
     const eventManager = new EventManager(this.connectionManager, modelManager)
     const eventGraphics = new EventGraphics(eventManager)
 
-    const resultManager = new ResultManager(eventManager)
+    const resultManager = new ResultManager(eventManager, this.settings)
 
     // Asset view is not critical
     let assetGraphics = null

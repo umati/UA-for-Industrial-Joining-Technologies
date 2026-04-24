@@ -73,8 +73,8 @@ export default class ChartManager {
           ctx.lineTo(x2 - arrowLength * Math.cos(angle - Math.PI / 6), y2 - arrowLength * Math.sin(angle - Math.PI / 6))
           ctx.moveTo(x2, y2)
           ctx.lineTo(x2 - arrowLength * Math.cos(angle + Math.PI / 6), y2 - arrowLength * Math.sin(angle + Math.PI / 6))
-          const configuredArrowColor = dataset?.envelopeMetaData?.arrowColor
-          const configuredArrowLineWidth = Number(dataset?.envelopeMetaData?.arrowLineWidth)
+          const configuredArrowColor = dataset?.envelopeMetaData?.endArrowColor || dataset?.envelopeMetaData?.arrowColor
+          const configuredArrowLineWidth = Number(dataset?.envelopeMetaData?.endArrowLineWidth ?? dataset?.envelopeMetaData?.arrowLineWidth)
           ctx.strokeStyle = configuredArrowColor || dataset.borderColor || options.color || 'red'
           ctx.lineWidth = Number.isFinite(configuredArrowLineWidth) ? configuredArrowLineWidth : (options.lineWidth || 2)
           ctx.stroke()
@@ -100,8 +100,8 @@ export default class ChartManager {
           ctx.moveTo(x2, y2)
           ctx.lineTo(x2 - arrowLength * Math.cos(angle + Math.PI / 2),
             y2 - arrowLength * Math.sin(angle + Math.PI / 2))
-          const configuredArrowColor = dataset?.envelopeMetaData?.arrowColor
-          const configuredArrowLineWidth = Number(dataset?.envelopeMetaData?.arrowLineWidth)
+          const configuredArrowColor = dataset?.envelopeMetaData?.startArrowColor || dataset?.envelopeMetaData?.arrowColor
+          const configuredArrowLineWidth = Number(dataset?.envelopeMetaData?.startArrowLineWidth ?? dataset?.envelopeMetaData?.arrowLineWidth)
           ctx.strokeStyle = configuredArrowColor || dataset.borderColor || options.color || 'red'
           ctx.lineWidth = Number.isFinite(configuredArrowLineWidth) ? configuredArrowLineWidth : (options.lineWidth || 2)
           ctx.stroke()

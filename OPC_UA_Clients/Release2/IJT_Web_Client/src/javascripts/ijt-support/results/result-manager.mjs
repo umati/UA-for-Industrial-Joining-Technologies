@@ -3,14 +3,19 @@
  * query for them, in addition to a specialized subscription focusing on results
  */
 import { ijtLog } from '../ijt-logger.mjs'
+import { ObservableManagerBase } from '../observable-manager-base.mjs'
 
-export class ResultManager {
-  constructor (eventManager) {
+const DEFAULT_MAX_STORED_RESULTS = 200
+const MIN_MAX_STORED_RESULTS = 1
+
+export class ResultManager extends ObservableManagerBase {
+  constructor (eventManager, settingsProvider = null) {
+    super('ResultManager')
     this.eventManager = eventManager
+    this.settingsProvider = settingsProvider
     this.eventManager.modelManager.subscribeSubResults((r) => {
       this.addResult(r)
     })
-    this.subscribers = []
     this.resultUniqueCounter = 0
     this.unresolved = []
     this.results = {
@@ -23,12 +28,89 @@ export class ResultManager {
     this.lastResult = null
   }
 
+  getMaxStoredResults () {
+    const fallback = DEFAULT_MAX_STORED_RESULTS
+    const parseLimit = (value) => {
+      const parsed = Number.parseInt(value, 10)
+      if (!Number.isFinite(parsed) || parsed < MIN_MAX_STORED_RESULTS) {
+        return null
+      }
+      return parsed
+    }
+
+    if (!this.settingsProvider) {
+      return fallback
+    }
+
+    if (typeof this.settingsProvider.getMaxStoredResults === 'function') {
+      const explicit = parseLimit(this.settingsProvider.getMaxStoredResults())
+      if (explicit !== null) {
+        return explicit
+      }
+    }
+
+    const fromSettingsObject = parseLimit(this.settingsProvider?.settings?.maxstoredresults)
+    if (fromSettingsObject !== null) {
+      return fromSettingsObject
+    }
+
+    const fromDirectProp = parseLimit(this.settingsProvider?.maxStoredResults)
+    if (fromDirectProp !== null) {
+      return fromDirectProp
+    }
+
+    return fallback
+  }
+
+  getAllResultsChronological () {
+    return Object
+      .values(this.results)
+      .flat()
+      .sort((a, b) => {
+        const left = Number.isFinite(a?.uniqueCounter) ? a.uniqueCounter : Number.MAX_SAFE_INTEGER
+        const right = Number.isFinite(b?.uniqueCounter) ? b.uniqueCounter : Number.MAX_SAFE_INTEGER
+        return left - right
+      })
+  }
+
+  removeStoredResult (result) {
+    if (!result) {
+      return
+    }
+    for (const key of Object.keys(this.results)) {
+      const list = this.results[key]
+      const index = list.indexOf(result)
+      if (index >= 0) {
+        list.splice(index, 1)
+      }
+    }
+    this.unresolved = this.unresolved.filter((item) => item !== result)
+  }
+
+  enforceStorageLimit () {
+    const maxStoredResults = this.getMaxStoredResults()
+    const chronological = this.getAllResultsChronological()
+    const removeCount = chronological.length - maxStoredResults
+    if (removeCount <= 0) {
+      return
+    }
+
+    const toRemove = chronological.slice(0, removeCount)
+    for (const result of toRemove) {
+      this.removeStoredResult(result)
+    }
+
+    const refreshed = this.getAllResultsChronological()
+    this.lastResult = refreshed.length > 0 ? refreshed[refreshed.length - 1] : null
+    ijtLog.info(`Result storage capped at ${maxStoredResults}. Removed ${toRemove.length} oldest result(s).`)
+  }
+
   /**
    * Subscribe to results
    * @param {*} func the callback to call when new results occur
    */
   subscribe (func) {
-    this.subscribers.push(func)
+    return this._subscribeTopic('results', func)
   }
 
   /**
@@ -90,14 +172,9 @@ export class ResultManager {
     this.resolveOld() // resolve all unresolved references that can be resolved
 
     result.clientLatestRecievedTime = new Date().getTime()
+    this.enforceStorageLimit()
 
-    for (const subscriber of this.subscribers) {
-      try {
-        subscriber(result)
-      } catch (err) {
-        ijtLog.error(err)
-      }
-    }
+    this._notifyTopic('results', result)
   }
 
   /**
