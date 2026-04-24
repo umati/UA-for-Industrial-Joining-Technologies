@@ -137,6 +137,10 @@ Coverage is configured in each project's `pyproject.toml`. **Never hardcode thre
 | Console Client | 80% | Configured in `pyproject.toml` — applies to unit run |
 | Test Client | **90%** | Configured in `pyproject.toml` — live-test-only helpers reduce coverage on conformance-only runs; `tests/unit/` supplements with pure-logic coverage |
 
+**Node Client (JavaScript/Vitest)**: Coverage threshold is NOT in pyproject.toml (JS project).
+- Hard gate: `coverage.thresholds` in `vitest.config.mjs` (if set)
+- Ratchet floor: `_COVERAGE_THRESHOLD = 30.0` in `IJT_Node_Client/run_all_tests.py` — WARN-only, advisory/non-gated, ratchet upward as coverage improves. Aspirational goal: 80%.
+
 Docstring coverage (`interrogate`) thresholds — calibrated against real codebase with venvs excluded:
 
 | Project | `fail-under` | Notes |

@@ -853,8 +853,8 @@ def _step_semgrep() -> _StepResult:
                 f"0 errors, {len(warns)} warning(s)" if warns else f"{len(findings)} finding(s), none critical"
             )
     except Exception:
-        result.ok = True
-        result.note = "could not parse output"
+        result.ok = False  # WARN: ran but output unreadable — do not report as PASS
+        result.note = "could not parse output (advisory)"
     return result
 
 

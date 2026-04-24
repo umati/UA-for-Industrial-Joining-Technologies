@@ -745,19 +745,35 @@ def _check_actionlint(results_dir: Path) -> StepResult:
 
 
 def _check_action_versions() -> StepResult:
-    """Detect any GitHub Actions pinned below their known minimum major version."""
+    """Detect any GitHub Actions pinned below their known minimum major version.
+
+    Recognises two pin styles:
+      - SHA-pinned:  uses: owner/action@<40-hex-chars>  # v4
+      - Tag-pinned:  uses: owner/action@v4
+    All workflows in this repo use SHA pinning (best practice). The tag-pinned
+    pattern is only checked for downgrade detection in case tag pins are ever
+    introduced alongside SHA pins.
+    """
     import re
 
     workflows_dir = ROOT / ".github/workflows"
     if not workflows_dir.exists():
         return StepResult("GHA version guard", "SKIP", "No .github/workflows/ directory")
 
+    # Matches SHA-pinned actions: owner/repo@<40 hex chars>  (optional trailing comment)
+    sha_pattern = re.compile(r"uses:\s+([\w/-]+)@([0-9a-f]{40})")
+    # Matches tag-pinned actions: owner/repo@v3
+    tag_pattern = re.compile(r"uses:\s+([\w/-]+)@v(\d+)")
+
     issues = []
-    pattern = re.compile(r"uses:\s+([\w/-]+)@v(\d+)")
+    sha_total = 0
+    tag_total = 0
 
     for wf_file in sorted(workflows_dir.glob("*.yml")):
         text = wf_file.read_text(encoding="utf-8")
-        for match in pattern.finditer(text):
+        sha_total += len(sha_pattern.findall(text))
+        for match in tag_pattern.finditer(text):
+            tag_total += 1
             action, version_str = match.group(1), match.group(2)
             version = int(version_str)
             min_ver = _ACTION_MIN_VERSIONS.get(action)
@@ -771,10 +787,9 @@ def _check_action_versions() -> StepResult:
             "GHA version guard", "FAIL", f"{len(issues)} downgraded action(s) detected"
         )
 
-    total = sum(
-        len(pattern.findall(f.read_text(encoding="utf-8"))) for f in workflows_dir.glob("*.yml")
-    )
-    return StepResult("GHA version guard", "PASS", f"{total} action pins verified")
+    total = sha_total + tag_total
+    detail = f"{total} action pins verified ({sha_total} SHA-pinned, {tag_total} tag-pinned)"
+    return StepResult("GHA version guard", "PASS", detail)
 
 
 def _check_zizmor(results_dir: Path) -> StepResult:

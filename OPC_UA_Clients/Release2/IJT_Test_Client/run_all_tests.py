@@ -1014,8 +1014,8 @@ def _step_semgrep() -> _StepResult:
                 f"0 errors, {len(warns)} warning(s)" if warns else f"{len(findings)} finding(s), none critical"
             )
     except Exception:
-        result.ok = True
-        result.note = "could not parse output"
+        result.ok = False  # WARN: ran but output unreadable — do not report as PASS
+        result.note = "could not parse output (advisory)"
     return result
 
 
@@ -1131,6 +1131,46 @@ def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _
 def _default_excel_mode() -> str:
     """Default Excel behavior: always in CI, on-success for local runs."""
     return "always" if os.environ.get("CI") else "on-success"
+
+
+def _print_skip_reason_summary(junit_xml_path: Path | None) -> None:
+    """Parse a pytest JUnit XML and print a grouped skip-reason summary.
+
+    Helps catch regressions where a new skip reason appears or skip volume
+    grows unexpectedly.  Printed only when there are skipped test cases.
+    """
+    import xml.etree.ElementTree as ET
+    from collections import Counter
+
+    if junit_xml_path is None or not junit_xml_path.exists():
+        return
+    try:
+        tree = ET.parse(junit_xml_path)
+    except ET.ParseError:
+        return
+
+    reasons: Counter[str] = Counter()
+    for testcase in tree.iter("testcase"):
+        skip_el = testcase.find("skipped")
+        if skip_el is None:
+            continue
+        # pytest sets the skip reason in 'message'; fall back to element text
+        msg = (skip_el.get("message") or "").strip()
+        if not msg:
+            msg = (skip_el.text or "").strip()
+        # Normalise: strip leading "Skipped: " prefix that pytest sometimes adds
+        msg = msg.removeprefix("Skipped: ").strip()
+        # Truncate long reasons to keep the table readable
+        reason = msg[:80] + "…" if len(msg) > 80 else msg
+        reasons[reason or "(no reason)"] += 1
+
+    if not reasons:
+        return
+
+    total_skipped = sum(reasons.values())
+    _log(f"  Skip reason summary ({total_skipped} total):")
+    for reason, count in reasons.most_common():
+        _log(f"    {count:>5}  {reason}")
 
 
 def _resolve_junit_xml_path(explicit_junit_xml: str | None) -> Path | None:
@@ -1370,6 +1410,10 @@ def main() -> int:
     elapsed = time.monotonic() - t_start
     overall = _c(_ANSI_RED, "FAIL") if any_failed else _c(_ANSI_GREEN, "PASS")
     _log(f"  Result: {overall}  passed={passed}  failed={failed}  skipped={skipped}  (elapsed: {elapsed:.1f}s)")
+    # Print skip-reason breakdown when phase 2 ran (live tests produce significant skip volume)
+    if run_phase2:
+        live_xml = Path(args.junit_xml) if args.junit_xml else _DEFAULT_JUNIT
+        _print_skip_reason_summary(live_xml)
     _log(_c(_ANSI_CYAN, "═" * 52))
     _log("")
 
