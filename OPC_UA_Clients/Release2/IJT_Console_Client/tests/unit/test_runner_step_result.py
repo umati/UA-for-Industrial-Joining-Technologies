@@ -143,7 +143,8 @@ def _run_semgrep_step_with_bad_json():
         patch.object(_mod, "_run", return_value=(0, "")),
         patch("pathlib.Path.read_text", return_value="NOT VALID JSON ]["),
     ):
-        return _mod._step_semgrep()
+        result = _mod._step_semgrep()
+    return result
 
 
 def test_semgrep_parse_failure_sets_warn_not_fail():
@@ -183,7 +184,8 @@ def _run_semgrep_step_with_findings(findings: list):
         patch.object(_mod, "_run", return_value=(0, "")),
         patch("pathlib.Path.read_text", return_value=json.dumps(payload)),
     ):
-        return _mod._step_semgrep()
+        result = _mod._step_semgrep()
+    return result
 
 
 def test_semgrep_no_findings_is_pass():
