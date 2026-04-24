@@ -1309,6 +1309,11 @@ ALL_SUITE_KEYS: list[str] = list(PHASE1_SUITES) + list(PHASE2_SUITES) + list(_UT
 def run_phase1(suites: dict) -> list[SuiteResult]:
     """Run all Phase 1 suites in parallel; emit each result atomically as it completes."""
     _banner("PHASE 1 \u2014 Unit / Static tests  (parallel, no server required)")
+    log.info(
+        "\u25b6 Starting %d suites simultaneously: %s",
+        len(suites),
+        ", ".join(suites.keys()),
+    )
     results: list[SuiteResult] = []
 
     with ThreadPoolExecutor(max_workers=len(suites), thread_name_prefix="phase1") as ex:
@@ -1343,6 +1348,11 @@ def run_phase2(suites: dict) -> list[SuiteResult]:
     suite completes; order is non-deterministic (fastest finishes first).
     """
     _banner("PHASE 2 \u2014 Live / Integration tests  (parallel, dedicated ports per suite)")
+    log.info(
+        "\u25b6 Starting %d suites simultaneously: %s",
+        len(suites),
+        ", ".join(suites.keys()),
+    )
     results: list[SuiteResult] = []
 
     with ThreadPoolExecutor(max_workers=len(suites), thread_name_prefix="phase2") as ex:
@@ -1542,6 +1552,7 @@ def _cleanup_caches(root: Path) -> None:
         "htmlcov",
         "pki",
         "PKI",
+        "tmp",  # sub-runner workspace (tmp/pytest/, tmp/server_instance_*/); recreated on next run
     }
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [

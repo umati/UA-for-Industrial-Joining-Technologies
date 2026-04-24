@@ -2,5 +2,14 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Docker OS base-image bumps (ubuntu, debian, alpine…) must pass CI before merging. They can break compiled binaries, rename packages, or change system defaults. Renovate creates the PR; a human merges after CI is green.",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["^ubuntu$", "^debian$", "^alpine$"],
+      "automerge": false,
+      "addLabels": ["needs-manual-review", "docker-base-image"]
+    }
   ]
 }

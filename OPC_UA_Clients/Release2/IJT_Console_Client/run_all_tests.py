@@ -682,7 +682,7 @@ def _step_pip_audit() -> _StepResult:
         result.note = "not installed  (pip install pip-audit)"
         result.duration = time.monotonic() - t0
         return result
-    rc, output = _run([sys.executable, "-m", "pip_audit", "--format", "json"])
+    rc, output = _run([sys.executable, "-m", "pip_audit", "--format", "json"], timeout=60)
     result.duration = time.monotonic() - t0
     (_RESULTS_DIR / "pip-audit.json").write_text(output, encoding="utf-8")
     try:

@@ -6,7 +6,11 @@
 #   - Requires glibc 2.38+ (built on Ubuntu 24.04 / glibc 2.39)
 #   - No Wine, no Xvfb, no DISPLAY needed
 #
-# Base image: ubuntu:24.04 — matches build machine glibc (2.39)
+# Base image: ubuntu:26.04 (latest LTS)
+#   glibc is strictly backward-compatible; a binary built on 24.04/glibc-2.39
+#   runs correctly on 26.04/glibc-2.41. No binary rebuild is required for an
+#   OS base-image bump. Rebuild the binary from source only when moving to a
+#   newer compiler toolchain or to pick up new library features.
 #
 # Default port: 40451 — always used when launching normally.
 #

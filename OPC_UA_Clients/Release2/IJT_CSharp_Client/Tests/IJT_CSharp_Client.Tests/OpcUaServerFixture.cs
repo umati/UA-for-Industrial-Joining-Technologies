@@ -405,7 +405,8 @@ public sealed class OpcUaServerFixture : IDisposable
         //         MaxChunkCount(4-LE) + EndpointUrl length(4-LE) + EndpointUrl bytes
         var url = $"opc.tcp://localhost:{port}";
         var urlBytes = System.Text.Encoding.UTF8.GetBytes(url);
-        var msgSize = 28 + urlBytes.Length;
+        // Message layout: 28 bytes fixed fields + 4 bytes URL length + N URL bytes
+        var msgSize = 32 + urlBytes.Length;
         var hello = new byte[msgSize];
         // Message type "HEL" + chunk type 'F'
         hello[0] = (byte)'H'; hello[1] = (byte)'E'; hello[2] = (byte)'L'; hello[3] = (byte)'F';

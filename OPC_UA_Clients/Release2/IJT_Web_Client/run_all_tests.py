@@ -521,8 +521,9 @@ def _stage_python_lint(python: Path) -> StageResult:
         rc = _run(
             [python, "-m", "pip_audit", "--format", "json", "-o", str(results_dir / "pip-audit.json")],
             label="pip-audit",
+            timeout=60,  # corporate network often blocks osv.dev; fail fast rather than wait 300s
         )
-        if rc not in (0, 1):  # 1 = vulnerabilities found (informational)
+        if rc not in (0, 1, -1):  # 1 = CVEs found (informational); -1 = timeout/network (advisory)
             overall_rc = rc
     else:
         _skip("pip-audit not installed — pip install pip-audit")
