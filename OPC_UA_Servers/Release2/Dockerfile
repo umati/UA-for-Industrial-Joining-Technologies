@@ -24,7 +24,7 @@
 #   OPCUA_SERVER_PORT=40452 docker compose up
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 WORKDIR /app
 
