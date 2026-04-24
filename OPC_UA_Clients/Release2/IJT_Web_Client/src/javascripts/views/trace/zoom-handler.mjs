@@ -8,6 +8,7 @@ export default class ZoomHandler {
   constructor (traceDisplay) {
     this.canvasCoverLayer = traceDisplay.canvasCoverLayer
     this.chartManager = traceDisplay.chartManager
+    this.zoomDragMoved = false
   }
 
   zoomBoxDraw (pos1, pos2, offset) {
@@ -59,6 +60,7 @@ export default class ZoomHandler {
     this.zoomBoxDraw(null, null)
     this.pressed = null
     this.startZoomCoord = null
+    this.zoomDragMoved = false
   }
 
   /**
@@ -75,6 +77,7 @@ export default class ZoomHandler {
         }
         this.startZoomCoord = coord
         this.pressed = evt
+        this.zoomDragMoved = false
         break
       default:
         this.chartManager.resetZoom()
@@ -88,6 +91,11 @@ export default class ZoomHandler {
    */
   onmousemove = (evt, coord) => {
     if (this.pressed) {
+      const dx = Math.abs((evt?.clientX ?? 0) - (this.pressed?.clientX ?? 0))
+      const dy = Math.abs((evt?.clientY ?? 0) - (this.pressed?.clientY ?? 0))
+      if (dx > 2 || dy > 2) {
+        this.zoomDragMoved = true
+      }
       this.zoomBoxDraw(evt, this.pressed, this.divOffset)
     }
   }

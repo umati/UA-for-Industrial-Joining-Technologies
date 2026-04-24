@@ -125,7 +125,7 @@ export default class EndpointGraphics extends BasicScreen {
     // Consolidated result view is not critical
     let resultGraphics = null
     try {
-      resultGraphics = new ResultGraphics(resultManager, methodManager, addressSpace, eventManager)
+      resultGraphics = new ResultGraphics(resultManager, methodManager, addressSpace, eventManager, this.settings)
     } catch (error) {
       ijtLog.error(error)
     }

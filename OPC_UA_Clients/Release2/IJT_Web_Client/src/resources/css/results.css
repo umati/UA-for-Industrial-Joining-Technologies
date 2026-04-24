@@ -148,22 +148,31 @@
 
 .resultHeader {
   height: 20px;
-  border: var(--ui-line-width) solid var(--ui-line-color);
-  display:flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 6px;
+  background: transparent;
 }
 
 .resultHeaderLeft {
   display: flex;
   flex-direction: row;
   align-items: center;
+  border: none;
+  background: var(--ui-bg-primary);
+  padding: 0 6px;
+  justify-self: start;
 }
 
-.resultHeaderSpacer {
-  flex: 1 1 auto;
-  min-width: 8px;
+.resultHeaderCenter {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  border: none;
+  background: var(--ui-bg-primary);
+  padding: 0 6px;
+  justify-self: center;
 }
 
 .resultHeaderRight {
@@ -171,6 +180,10 @@
   flex-direction: row;
   align-items: center;
   gap: 6px;
+  border: none;
+  background: var(--ui-bg-primary);
+  padding: 0 6px;
+  justify-self: end;
 }
 
 .resultHeaderRightAction {
@@ -303,14 +316,21 @@
   gap: var(--control-gap);
 }
 
+.consolidatedResultScreen.isResultBusy {
+  cursor: progress;
+}
+
+.consolidatedResultScreen.isResultBusy .resultHeader {
+  opacity: 0.82;
+}
+
 .consolidatedResultScreen .resultHeader {
   height: auto;
-  padding: var(--space-8) var(--space-10);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--control-gap) var(--space-10);
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--control-gap);
 }
 
 .consolidatedResultScreen .resultHeaderItem {
@@ -331,6 +351,13 @@
   gap: var(--control-gap);
 }
 
+.consolidatedResultScreen .resultHeaderLeft,
+.consolidatedResultScreen .resultHeaderCenter,
+.consolidatedResultScreen .resultHeaderRight {
+  min-height: calc(var(--control-height) + var(--space-6));
+  border-radius: 8px;
+}
+
 .consolidatedResultScreen .resultHeaderRightAction {
   min-height: var(--control-height);
   padding: 0 var(--control-padding-inline);
@@ -348,11 +375,62 @@
 }
 
 .consolidatedResultScreen .complewrapper {
+  position: relative;
   margin: 6px 0 0;
   padding: 10px;
   border: 1px solid var(--ui-line-color);
   border-radius: 8px;
   background: var(--result-complex-bg);
+}
+
+.consolidatedResultScreen .resultExportSelect {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-8);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--type-12);
+  color: var(--ui-text-main);
+  background: rgb(0 0 0 / 35%);
+  border: 1px solid var(--ui-control-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  z-index: 1;
+}
+
+.consolidatedResultScreen .resultExportSelectInput {
+  margin: 0;
+}
+
+.consolidatedResultScreen .resultExportSelectText {
+  line-height: 1;
+}
+
+.consolidatedResultScreen .resultImportInput {
+  display: none;
+}
+
+.consolidatedResultScreen .resultImportMode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.consolidatedResultScreen .resultImportMode select {
+  min-height: var(--control-height);
+}
+
+.consolidatedResultScreen .resultImportStrict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  color: var(--ui-text-main);
+  font-size: var(--type-12);
+}
+
+.consolidatedResultScreen .resultImportStrictInput {
+  margin: 0;
 }
 
 .consolidatedResultScreen .resTightening,
@@ -399,10 +477,15 @@
 
   .consolidatedResultScreen .resultHeader {
     gap: var(--space-6);
-    padding: var(--space-6) var(--space-8);
+    padding: 0;
   }
 
   .consolidatedResultScreen .resultHeaderLeft {
+    flex-wrap: wrap;
+    gap: var(--space-6);
+  }
+
+  .consolidatedResultScreen .resultHeaderCenter {
     flex-wrap: wrap;
     gap: var(--space-6);
   }
@@ -420,14 +503,33 @@
     gap: var(--space-6);
   }
 
+  .consolidatedResultScreen .resultHeader {
+    grid-template-columns: 1fr;
+  }
+
   .consolidatedResultScreen .resultHeaderLeft,
+  .consolidatedResultScreen .resultHeaderCenter,
   .consolidatedResultScreen .resultHeaderRight {
     width: 100%;
+  }
+
+  .consolidatedResultScreen .resultHeaderLeft,
+  .consolidatedResultScreen .resultHeaderCenter,
+  .consolidatedResultScreen .resultHeaderRight {
+    justify-self: stretch;
   }
 
   .consolidatedResultScreen .resultHeaderRight {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .consolidatedResultScreen .resultImportMode {
+    width: 100%;
+  }
+
+  .consolidatedResultScreen .resultImportMode select {
+    width: 100%;
   }
 
   .consolidatedResultScreen .resultHeaderItem {

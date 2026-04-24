@@ -4,6 +4,15 @@
  */
 import { ijtLog } from '../ijt-logger.mjs'
 import { ObservableManagerBase } from '../observable-manager-base.mjs'
+import {
+  createResultBundle,
+  parseResultBundle,
+  serializeResultForStorage
+} from './result-serialization.mjs'
+import ResultDataType from '../models/results/result-data-type.mjs'
+import TighteningDataType from '../models/results/tightening-data-type.mjs'
+import BatchDataModel from '../models/results/batch-data-type.mjs'
+import JobDataModel from '../models/results/job-data-model.mjs'
 
 const DEFAULT_MAX_STORED_RESULTS = 200
 const MIN_MAX_STORED_RESULTS = 1
@@ -71,6 +80,210 @@ export class ResultManager extends ObservableManagerBase {
         const right = Number.isFinite(b?.uniqueCounter) ? b.uniqueCounter : Number.MAX_SAFE_INTEGER
         return left - right
       })
+  }
+
+  getLatestFullResult () {
+    const all = this.getAllResultsChronological()
+    for (let index = all.length - 1; index >= 0; index--) {
+      const candidate = all[index]
+      if (!candidate || candidate.isReference) {
+        continue
+      }
+      if (candidate.ResultMetaData?.IsPartial === 'True' || candidate.isPartial === true) {
+        continue
+      }
+      return candidate
+    }
+    return null
+  }
+
+  getResultId (result) {
+    return result?.ResultMetaData?.ResultId ?? result?.id ?? null
+  }
+
+  isResultReference (result) {
+    if (!result || typeof result !== 'object') {
+      return false
+    }
+    if (result.isReference === true) {
+      return true
+    }
+    return !result?.ResultMetaData?.CreationTime && !!result?.ResultMetaData?.ResultId
+  }
+
+  collectResultClosure (rootResults = []) {
+    const includedById = new Map()
+    const stack = [...(Array.isArray(rootResults) ? rootResults : [rootResults])].filter(Boolean)
+    const warnings = []
+
+    while (stack.length > 0) {
+      const current = stack.pop()
+      const currentId = this.getResultId(current)
+      if (!currentId || includedById.has(currentId)) {
+        continue
+      }
+      includedById.set(currentId, current)
+
+      const children = Array.isArray(current?.ResultContent) ? current.ResultContent : []
+      for (const child of children) {
+        if (!child) {
+          continue
+        }
+        if (this.isResultReference(child)) {
+          const refId = this.getResultId(child)
+          const resolved = refId ? this.resultFromId(refId) : null
+          if (resolved) {
+            stack.push(resolved)
+          } else {
+            warnings.push({
+              reason: 'missing_referenced_subresult',
+              resultId: refId || null,
+              parentId: currentId
+            })
+          }
+        } else {
+          stack.push(child)
+        }
+      }
+    }
+
+    return {
+      results: [...includedById.values()],
+      warnings
+    }
+  }
+
+  exportBundle ({ rootResults = null, typeFilter = null, includeUnresolved = false } = {}) {
+    let roots = []
+    if (Array.isArray(rootResults) && rootResults.length > 0) {
+      roots = rootResults.filter(Boolean)
+    } else if (includeUnresolved) {
+      roots = this.getUnfinished()
+    } else if (Number.isFinite(typeFilter) && typeFilter >= 0) {
+      roots = this.getResultOfType(typeFilter) || []
+    } else {
+      roots = this.getAllResultsChronological()
+    }
+
+    const closure = this.collectResultClosure(roots)
+    const serializedRaw = closure.results
+      .map((result) => serializeResultForStorage(result))
+      .filter(Boolean)
+    const exportedById = new Map()
+    let duplicateExportIdsRemoved = 0
+
+    for (const item of serializedRaw) {
+      const resultId = item?.ResultMetaData?.ResultId
+      if (!resultId) {
+        continue
+      }
+      if (exportedById.has(resultId)) {
+        duplicateExportIdsRemoved++
+        continue
+      }
+      exportedById.set(resultId, item)
+    }
+
+    const serialized = [...exportedById.values()]
+
+    if (duplicateExportIdsRemoved > 0) {
+      closure.warnings.push({
+        reason: 'duplicate_result_id_removed',
+        count: duplicateExportIdsRemoved
+      })
+    }
+
+    return {
+      bundle: createResultBundle(serialized),
+      warnings: closure.warnings,
+      selectedRootCount: roots.length,
+      exportedCount: serialized.length
+    }
+  }
+
+  createRuntimeResultFromPayload (payload) {
+    const modelManager = this.eventManager?.modelManager
+    if (!modelManager) {
+      return payload
+    }
+    try {
+      const classification = Number.parseInt(payload?.ResultMetaData?.Classification, 10)
+      switch (classification) {
+        case 1:
+          return new TighteningDataType(payload, modelManager)
+        case 3:
+          return new BatchDataModel(payload, modelManager)
+        case 4:
+          return new JobDataModel(payload, modelManager)
+        default:
+          return new ResultDataType(payload, modelManager)
+      }
+    } catch (error) {
+      throw new Error(`Model conversion failed: ${error?.message || error}`)
+    }
+  }
+
+  importBundleFromText (rawText, { mode = 'replace', strict = false } = {}) {
+    const parsed = parseResultBundle(rawText)
+    if (mode !== 'replace' && mode !== 'skip-duplicates') {
+      throw new Error(`Invalid import mode '${mode}'`)
+    }
+    const summary = {
+      total: parsed.results.length,
+      imported: 0,
+      skipped: 0,
+      replaced: 0,
+      skipReasons: {}
+    }
+
+    const incrementSkip = (reason) => {
+      summary.skipped++
+      summary.skipReasons[reason] = (summary.skipReasons[reason] || 0) + 1
+    }
+
+    for (const rawPayload of parsed.results) {
+      const payload = serializeResultForStorage(rawPayload)
+      if (!payload) {
+        if (strict) {
+          throw new Error('Import failed: invalid_result_shape')
+        }
+        incrementSkip('invalid_result_shape')
+        continue
+      }
+
+      const resultId = payload?.ResultMetaData?.ResultId
+      if (!resultId) {
+        if (strict) {
+          throw new Error('Import failed: missing_result_id')
+        }
+        incrementSkip('missing_result_id')
+        continue
+      }
+
+      const alreadyStored = this.resultFromId(resultId)
+      if (alreadyStored && mode === 'skip-duplicates') {
+        incrementSkip('duplicate_result_id')
+        continue
+      }
+
+      try {
+        const runtimeResult = this.createRuntimeResultFromPayload(payload)
+        const hadBefore = !!alreadyStored
+        this.addResult(runtimeResult)
+        if (hadBefore) {
+          summary.replaced++
+        } else {
+          summary.imported++
+        }
+      } catch (error) {
+        if (strict) {
+          throw error
+        }
+        incrementSkip('invalid_result_shape')
+      }
+    }
+
+    return summary
   }
 
   removeStoredResult (result) {
@@ -152,7 +365,13 @@ export class ResultManager extends ObservableManagerBase {
    * @param {*} result the new result
    */
   addResult (result) {
-    result.ClientData.rebuildState.partial = result.ResultMetaData.IsPartial === 'True'
+    if (!result?.ClientData) {
+      result.ClientData = { rebuildState: { claimed: false, resolved: false, partial: false } }
+    }
+    if (!result.ClientData.rebuildState) {
+      result.ClientData.rebuildState = { claimed: false, resolved: false, partial: false }
+    }
+    result.ClientData.rebuildState.partial = result?.ResultMetaData?.IsPartial === 'True'
     const stored = this.resultFromId(result.ResultMetaData.ResultId)
 
     if (stored) { // Old partial being extended

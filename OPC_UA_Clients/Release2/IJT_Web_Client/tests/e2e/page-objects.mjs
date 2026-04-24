@@ -35,6 +35,10 @@ export const SEL = {
   RESULT_HEADER: '.resultheader',
   RESULT_TYPE_SELECT: '.resultheader select:first-of-type',
   RESULT_ITEM_SELECT: '.resultheader select:nth-of-type(2)',
+  RESULT_IMPORT_MODE_SELECT: '.resultImportMode select',
+  RESULT_IMPORT_STRICT_CHECKBOX: '.resultImportStrictInput',
+  RESULT_IMPORT_FILE_INPUT: '.resultImportInput',
+  RESULT_STATUS: '.consolidatedResultScreen .uiStatus',
   DRAW_BOX: '.drawResultBox',
   COMPLE_WRAPPER: '.complewrapper',
   RES_TIGHTENING: '.resTightening',
@@ -345,6 +349,31 @@ export class ResultsPage {
 
   async getResultOptionCount () {
     return this.page.locator(`${SEL.RESULT_ITEM_SELECT} option`).count()
+  }
+
+  async setImportMode (mode) {
+    await this.page.locator(SEL.RESULT_IMPORT_MODE_SELECT).selectOption(mode)
+    await this.page.waitForTimeout(200)
+  }
+
+  async setImportStrict (strict) {
+    const checkbox = this.page.locator(SEL.RESULT_IMPORT_STRICT_CHECKBOX).first()
+    await checkbox.setChecked(!!strict)
+    await this.page.waitForTimeout(150)
+  }
+
+  async importBundleObject (bundleObject) {
+    const payload = Buffer.from(JSON.stringify(bundleObject, null, 2), 'utf-8')
+    await this.page.setInputFiles(SEL.RESULT_IMPORT_FILE_INPUT, {
+      name: 'ijt-results-import.json',
+      mimeType: 'application/json',
+      buffer: payload
+    })
+  }
+
+  async getStatusText () {
+    const status = this.page.locator(SEL.RESULT_STATUS).first()
+    return (await status.textContent())?.trim() || ''
   }
 
   async waitForResultBox ({ timeout = 60_000 } = {}) {

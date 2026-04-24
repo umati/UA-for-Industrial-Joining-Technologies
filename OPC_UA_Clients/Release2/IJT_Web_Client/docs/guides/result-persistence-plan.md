@@ -94,6 +94,8 @@ Deliverable:
 - Duplicate policy (v1 recommendation):
   - default: `replace` by `ResultMetaData.ResultId` via existing `handlePartial`/replace logic.
 - Ensure `lastResult`, `results`, `unresolved`, and subscriber notifications remain consistent.
+- Runtime-only manager state is not persisted directly:
+  - `lastResult`, `unresolved`, `ClientData.rebuildState`, and UI-only fields are rebuilt/recomputed during import via normal `addResult(...)` flow.
 
 Deliverable:
 - Persistence-aware manager methods + tests for add/import/duplicate semantics.
@@ -215,12 +217,17 @@ The implementation must satisfy all items below before release:
   - export file exists,
   - import file restores result list and latest selection behavior.
 
-## Open Decisions
+## Resolved Decisions
 
-1. Import duplicate policy default: `skip` vs `replace`?
-2. Export scope default: all results vs current filter?
-3. Do we store unresolved references exactly as received, or only resolved snapshots?
-4. Max file size and max result count thresholds?
+1. Import duplicate policy default is `replace`; UI now also exposes `skip-duplicates` and `strict` options.
+2. Export scope default is:
+   - selected root rows when checkboxes are set,
+   - otherwise fallback to latest full result (then latest available if full is unavailable).
+3. Runtime shortcuts and unresolved/rebuild helper state are not persisted directly:
+   - link shortcuts are removed from stored payloads and re-established during model reconstruction.
+4. Guardrails are enforced in parser/serializer:
+   - max file size and max result count are validated,
+   - depth limit and circular reference checks prevent runaway recursion.
 
 ## Suggested Task Breakdown (Ticket-sized)
 

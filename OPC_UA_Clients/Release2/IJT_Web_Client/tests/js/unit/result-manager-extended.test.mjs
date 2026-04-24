@@ -5,6 +5,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { ResultManager } from '../../../src/javascripts/ijt-support/results/result-manager.mjs'
+import { createResultBundle } from '../../../src/javascripts/ijt-support/results/result-serialization.mjs'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -249,5 +250,117 @@ describe('ResultManager - max storage cap', () => {
   it('falls back to default when configured limit is invalid', () => {
     const rm = new ResultManager(makeEventManager(), makeSettingsProvider(0))
     expect(rm.getMaxStoredResults()).toBe(200)
+  })
+})
+
+describe('ResultManager - export helpers', () => {
+  it('returns latest full result when latest is partial', () => {
+    const rm = new ResultManager(makeEventManager())
+    const full = makeResult('full-1', '1', 'False')
+    const partial = makeResult('partial-1', '1', 'True')
+    rm.addResult(full)
+    rm.addResult(partial)
+    expect(rm.getLatestFullResult()).toBe(full)
+  })
+
+  it('collects closure through referenced descendants', () => {
+    const rm = new ResultManager(makeEventManager())
+    const child = makeResult('child-a', '1', 'False', [])
+    const parent = makeResult('parent-a', '4', 'False', [
+      {
+        id: 'child-a',
+        isReference: true,
+        ResultMetaData: { ResultId: 'child-a' },
+        ResultContent: [],
+        ClientData: { rebuildState: { claimed: false, partial: false, resolved: false } },
+        replaceReference: vi.fn()
+      }
+    ])
+    rm.addResult(child)
+    const closure = rm.collectResultClosure([parent])
+    expect(closure.results.some((x) => x.id === 'parent-a')).toBe(true)
+    expect(closure.results.some((x) => x.id === 'child-a')).toBe(true)
+    expect(closure.warnings).toHaveLength(0)
+  })
+
+  it('reports warning when referenced descendant is missing during export', () => {
+    const rm = new ResultManager(makeEventManager())
+    const parent = makeResult('parent-missing', '4', 'False', [
+      {
+        id: 'missing-child',
+        isReference: true,
+        ResultMetaData: { ResultId: 'missing-child' },
+        ResultContent: [],
+        ClientData: { rebuildState: { claimed: false, partial: false, resolved: false } },
+        replaceReference: vi.fn()
+      }
+    ])
+    const exported = rm.exportBundle({ rootResults: [parent] })
+    expect(exported.warnings).toHaveLength(1)
+    expect(exported.warnings[0].reason).toBe('missing_referenced_subresult')
+  })
+
+  it('keeps nested descendants embedded so export stays self-contained', () => {
+    const rm = new ResultManager(makeEventManager())
+    const child = makeResult('child-compact', '1', 'False', [])
+    const parent = makeResult('parent-compact', '4', 'False', [child])
+    rm.addResult(child)
+    rm.addResult(parent)
+
+    const exported = rm.exportBundle({ rootResults: [parent] })
+    const exportedParent = exported.bundle.results.find((x) => x?.ResultMetaData?.ResultId === 'parent-compact')
+    const exportedChild = exported.bundle.results.find((x) => x?.ResultMetaData?.ResultId === 'child-compact')
+
+    expect(exportedParent).toBeTruthy()
+    expect(exportedChild).toBeTruthy()
+    expect(exportedParent.ResultContent).toHaveLength(1)
+    expect(exportedParent.ResultContent[0]?.ResultMetaData?.ResultId).toBe('child-compact')
+    expect(Array.isArray(exportedParent.ResultContent[0]?.ResultContent)).toBe(true)
+  })
+})
+
+describe('ResultManager - bundle import', () => {
+  it('imports valid results and skips invalid ones in best-effort mode', () => {
+    const rm = new ResultManager(makeEventManager())
+    vi.spyOn(rm, 'createRuntimeResultFromPayload').mockImplementation((payload) =>
+      makeResult(payload.ResultMetaData.ResultId, payload.ResultMetaData.Classification || '1', 'False', payload.ResultContent || [])
+    )
+
+    const bundle = createResultBundle([
+      { ResultMetaData: { ResultId: 'ok-1', Classification: '1' }, ResultContent: [] },
+      { ResultMetaData: null, ResultContent: [] }
+    ])
+    const summary = rm.importBundleFromText(JSON.stringify(bundle), { mode: 'replace', strict: false })
+
+    expect(summary.total).toBe(2)
+    expect(summary.imported).toBe(1)
+    expect(summary.skipped).toBe(1)
+    expect(summary.skipReasons.invalid_result_shape).toBe(1)
+    expect(rm.resultFromId('ok-1')).toBeTruthy()
+  })
+
+  it('supports skip-duplicates mode with deterministic skip reason', () => {
+    const rm = new ResultManager(makeEventManager())
+    vi.spyOn(rm, 'createRuntimeResultFromPayload').mockImplementation((payload) =>
+      makeResult(payload.ResultMetaData.ResultId, payload.ResultMetaData.Classification || '1')
+    )
+
+    const bundle = createResultBundle([
+      { ResultMetaData: { ResultId: 'dup-1', Classification: '1' }, ResultContent: [] },
+      { ResultMetaData: { ResultId: 'dup-1', Classification: '1' }, ResultContent: [] }
+    ])
+    const summary = rm.importBundleFromText(JSON.stringify(bundle), { mode: 'skip-duplicates', strict: false })
+
+    expect(summary.imported).toBe(1)
+    expect(summary.skipped).toBe(1)
+    expect(summary.skipReasons.duplicate_result_id).toBe(1)
+  })
+
+  it('fails fast in strict mode for invalid result shape', () => {
+    const rm = new ResultManager(makeEventManager())
+    const bundle = createResultBundle([
+      { ResultMetaData: null, ResultContent: [] }
+    ])
+    expect(() => rm.importBundleFromText(JSON.stringify(bundle), { strict: true })).toThrow('Import failed: invalid_result_shape')
   })
 })

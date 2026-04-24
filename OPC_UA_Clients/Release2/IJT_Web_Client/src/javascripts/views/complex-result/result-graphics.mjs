@@ -1,15 +1,24 @@
 import BasicScreen from '../graphic-support/basic-screen.mjs'
 import SimulateJobResultInvoker from '../graphic-support/simulate-job-result.mjs'
+import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
+import {
+  DEFAULT_RESULT_SESSION_AUTO_RESTORE,
+  DEFAULT_RESULT_SESSION_AUTO_SAVE,
+  RESULT_SESSION_STORAGE_KEY
+} from '../../ijt-support/results/result-storage-constants.mjs'
 /**
  * This illustrates how a nested result can be displayed
  */
+const RESULT_SESSION_SAVE_DEBOUNCE_MS = 800
+
 export default class ResultGraphics extends BasicScreen {
-  constructor (resultManager, methodManager = null, addressSpace = null, eventManager = null) {
+  constructor (resultManager, methodManager = null, addressSpace = null, eventManager = null, settingsProvider = null) {
     super('Consolidated Result')
     this.tabHelpText = 'Inspect aggregated results (tightening, batch, job) in hierarchical or enveloped view.'
     this.resultManager = resultManager
     this.simulateJobInvoker = (methodManager && addressSpace) ? new SimulateJobResultInvoker(methodManager, addressSpace) : null
     this.eventManager = eventManager
+    this.settingsProvider = settingsProvider
     this.backGround.classList.add('consolidatedResultScreen')
 
     this.displayedIdentity = 0
@@ -19,12 +28,18 @@ export default class ResultGraphics extends BasicScreen {
     this.toggleQueueingState = false
     this.hoverDiv = null
     this.queueInfo = null
+    this.importMode = 'replace'
+    this.importStrict = false
+    this.selectedExportResultIds = new Set()
+    this._sessionSaveTimer = null
+    this._busyCounter = 0
     this.ensureStatusBanner('results')
     this.setStatusBanner('results', 'empty', 'No results yet.')
     // Subscribe to new results
     resultManager.subscribe((result) => {
       this.refreshDrawing(result.id)
       this.setStatusBanner('results', 'success', `Updated result: ${result.id}`)
+      this.scheduleSessionPersist()
     })
 
     this.header = document.createElement('div')
@@ -35,35 +50,85 @@ export default class ResultGraphics extends BasicScreen {
     this.headerLeft.classList.add('resultHeaderLeft')
     this.header.appendChild(this.headerLeft)
 
-    this.headerSpacer = document.createElement('div')
-    this.headerSpacer.classList.add('resultHeaderSpacer')
-    this.header.appendChild(this.headerSpacer)
+    this.headerCenter = document.createElement('div')
+    this.headerCenter.classList.add('resultHeaderCenter')
+    this.header.appendChild(this.headerCenter)
 
     this.headerRight = document.createElement('div')
     this.headerRight.classList.add('resultHeaderRight')
     this.header.appendChild(this.headerRight)
 
-    this.simulateJobButton = this.createButton('Simulate', this.headerRight, async () => {
+    this.simulateJobButton = this.createButton('Simulate', this.headerCenter, async () => {
       await this.simulateJobResult()
     })
     this.simulateJobButton.classList.remove('resultHeaderItem')
     this.simulateJobButton.classList.add('demoButton', 'resultHeaderRightAction')
+    this.simulateJobButton.title = 'Trigger a simulated Job result from the server.'
     if (!this.simulateJobInvoker) {
       this.simulateJobButton.disabled = true
       this.simulateJobButton.title = 'Job simulation method setup unavailable in this context.'
     }
 
-    this.toggleQueueingButton = this.createButton('Queue', this.headerRight, () => {
+    this.toggleQueueingButton = this.createButton('Queue', this.headerCenter, () => {
       this.toggleQueueingState = !this.toggleQueueingState
       this.eventManager.queueState(this.toggleQueueingState)
       this.hoveringStepButton(this.toggleQueueingState)
     })
     this.toggleQueueingButton.classList.remove('resultHeaderItem')
     this.toggleQueueingButton.classList.add('demoButton', 'resultHeaderRightAction')
+    this.toggleQueueingButton.title = 'Toggle event queue mode. When enabled, events can be stepped manually.'
     if (!this.eventManager || typeof this.eventManager.queueState !== 'function') {
       this.toggleQueueingButton.disabled = true
       this.toggleQueueingButton.title = 'Event manager unavailable in this context.'
     }
+
+    this.exportResultsButton = this.createButton('Export', this.headerRight, () => {
+      this.exportSelectedResults()
+    })
+    this.exportResultsButton.classList.remove('resultHeaderItem')
+    this.exportResultsButton.classList.add('demoButton', 'resultHeaderRightAction')
+    this.exportResultsButton.title = 'Export selected result boxes. If none are selected, exports the latest visible box with full hierarchy.'
+
+    this.importResultsButton = this.createButton('Import', this.headerRight, () => {
+      this.importFileInput.click()
+    })
+    this.importResultsButton.classList.remove('resultHeaderItem')
+    this.importResultsButton.classList.add('demoButton', 'resultHeaderRightAction')
+    this.importResultsButton.title = 'Import result bundle JSON file into the current result manager.'
+
+    this.importModeDropdown = this.createDropdown('Import mode', (selection) => {
+      this.importMode = selection === 'skip-duplicates' ? 'skip-duplicates' : 'replace'
+    })
+    this.importModeDropdown.addOption('Replace', 'replace')
+    this.importModeDropdown.addOption('Skip duplicates', 'skip-duplicates')
+    this.importModeDropdown.select.value = this.importMode
+    this.importModeDropdown.classList.add('resultHeaderItem', 'resultImportMode')
+    this.importModeDropdown.title = 'Import mode controls duplicate ResultId handling.'
+    this.importModeDropdown.select.title = 'Replace: incoming results with existing IDs overwrite stored ones. Skip duplicates: existing IDs are kept.'
+    this.headerRight.appendChild(this.importModeDropdown)
+
+    this.importStrictLabel = document.createElement('label')
+    this.importStrictLabel.classList.add('resultImportStrict')
+    this.importStrictLabel.title = 'Strict import fails the entire import on first invalid result.'
+    const strictText = document.createElement('span')
+    strictText.textContent = 'Strict'
+    this.importStrictLabel.appendChild(strictText)
+    this.importStrictCheckbox = this.createCheckbox(this.importStrict, (checked) => {
+      this.importStrict = !!checked
+    })
+    this.importStrictCheckbox.classList.add('resultImportStrictInput')
+    this.importStrictCheckbox.title = 'Strict import fails the full import when one result is invalid.'
+    this.importStrictLabel.appendChild(this.importStrictCheckbox)
+    this.headerRight.appendChild(this.importStrictLabel)
+
+    this.importFileInput = document.createElement('input')
+    this.importFileInput.type = 'file'
+    this.importFileInput.accept = '.json,application/json'
+    this.importFileInput.classList.add('resultImportInput')
+    this.importFileInput.addEventListener('change', async () => {
+      await this.importSelectedFile()
+    })
+    this.headerRight.appendChild(this.importFileInput)
 
     // Type selection dropdown
     this.selectResultType = this.createDropdown('Type', (selection) => {
@@ -77,6 +142,8 @@ export default class ResultGraphics extends BasicScreen {
     this.selectResultType.addOption('Single tightenings', 1)
     this.selectResultType.addOption('Other', 0)
     this.selectResultType.classList.add('resultHeaderItem')
+    this.selectResultType.title = 'Filter results by classification.'
+    this.selectResultType.select.title = 'Choose which result type to list.'
     this.headerLeft.appendChild(this.selectResultType)
 
     // Result selection dropdown
@@ -87,6 +154,8 @@ export default class ResultGraphics extends BasicScreen {
     this.selectResultDropdown.addOption('Unresolved', -2)
     this.selectResultDropdown.addOption('Latest', -1)
     this.selectResultDropdown.classList.add('resultHeaderItem')
+    this.selectResultDropdown.title = 'Choose which result root to render.'
+    this.selectResultDropdown.select.title = 'Select unresolved, latest, or a specific result.'
     this.headerLeft.appendChild(this.selectResultDropdown)
 
     // display type dummy selection dropdown
@@ -98,6 +167,8 @@ export default class ResultGraphics extends BasicScreen {
     this.dummyDropdown.addOption('Hierarchical', false)
     this.dummyDropdown.addOption('Enveloped', true)
     this.dummyDropdown.classList.add('resultHeaderItem')
+    this.dummyDropdown.title = 'Change how nested result hierarchy is displayed.'
+    this.dummyDropdown.select.title = 'Hierarchical shows tree branches. Enveloped shows full-width nested boxes.'
     this.headerLeft.appendChild(this.dummyDropdown)
 
     this.display = document.createElement('div')
@@ -116,6 +187,283 @@ export default class ResultGraphics extends BasicScreen {
       this._narrowLabelObserver.observe(this.display)
       this._narrowLabelObserver.observe(this.backGround)
     }
+
+    this.restoreSessionFromLocalStorage()
+  }
+
+  getVisibleRootResults () {
+    if (this.selectResult === '-2') {
+      return this.resultManager.getUnfinished()
+    }
+    if (this.selectType === -1) {
+      return [this.resultManager.lastResult].filter(Boolean)
+    }
+    if (this.selectResult === '-1') {
+      return [this.resultManager.getLatest(this.selectType)].filter(Boolean)
+    }
+    return [this.resultManager.resultFromId(this.selectResult, this.selectType)].filter(Boolean)
+  }
+
+  getExportRootResults () {
+    const selected = [...this.selectedExportResultIds]
+      .map((id) => this.resultManager.resultFromId(id))
+      .filter(Boolean)
+    if (selected.length > 0) {
+      return { roots: selected, mode: 'selection' }
+    }
+    const visibleRoots = this.getVisibleRootResults()
+    if (visibleRoots.length > 0) {
+      return { roots: [visibleRoots[visibleRoots.length - 1]], mode: 'fallback-latest-visible-box' }
+    }
+    const latestFull = this.resultManager.getLatestFullResult()
+    if (latestFull) {
+      return { roots: [latestFull], mode: 'fallback-latest-full-global' }
+    }
+    if (this.resultManager.lastResult) {
+      return { roots: [this.resultManager.lastResult], mode: 'fallback-latest-any-global' }
+    }
+    return { roots: [], mode: 'none' }
+  }
+
+  createExportSelectionControl (wrapper, result) {
+    const resultId = result?.id
+    if (!resultId) {
+      return
+    }
+
+    const label = document.createElement('label')
+    label.classList.add('resultExportSelect')
+    label.title = `Include ${resultId} in export`
+
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.classList.add('resultExportSelectInput')
+    input.setAttribute('aria-label', `Include result ${resultId} in export`)
+    input.checked = this.selectedExportResultIds.has(resultId)
+    input.addEventListener('change', () => {
+      if (input.checked) {
+        this.selectedExportResultIds.add(resultId)
+      } else {
+        this.selectedExportResultIds.delete(resultId)
+      }
+    })
+    label.appendChild(input)
+
+    const text = document.createElement('span')
+    text.classList.add('resultExportSelectText')
+    text.textContent = 'Include in export'
+    label.appendChild(text)
+
+    wrapper.appendChild(label)
+  }
+
+  makeExportFileName () {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    return `ijt-results-${stamp}.json`
+  }
+
+  downloadTextFile (text, filename) {
+    const blob = new Blob([text], { type: 'application/json;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    window.URL.revokeObjectURL(url)
+  }
+
+  exportSelectedResults () {
+    this.beginBusyState('Preparing export...')
+    try {
+      const { roots, mode } = this.getExportRootResults()
+      if (roots.length === 0) {
+        this.setStatusBanner('results', 'empty', 'No result available to export.')
+        return
+      }
+      const exported = this.resultManager.exportBundle({ rootResults: roots })
+      const text = JSON.stringify(exported.bundle)
+      this.downloadTextFile(text, this.makeExportFileName())
+      const warningCount = exported.warnings?.length || 0
+      const warningSuffix = warningCount > 0 ? ` (${warningCount} missing sub-results)` : ''
+      this.setStatusBanner('results', 'success', `Exported ${exported.exportedCount} result(s) via ${mode}${warningSuffix}.`)
+    } catch (error) {
+      this.setStatusBanner('results', 'error', `Export failed: ${error?.message || error}`)
+    } finally {
+      this.endBusyState()
+    }
+  }
+
+  async importSelectedFile () {
+    const file = this.importFileInput?.files?.[0]
+    if (!file) {
+      return
+    }
+    this.beginBusyState('Importing results...')
+    try {
+      const text = await file.text()
+      const summary = this.resultManager.importBundleFromText(text, { mode: this.importMode, strict: this.importStrict })
+      let message = `Imported ${summary.imported}, replaced ${summary.replaced}, skipped ${summary.skipped} of ${summary.total}.`
+      if (summary.skipped > 0) {
+        const reasons = Object.entries(summary.skipReasons || {}).map(([reason, count]) => `${reason}:${count}`).join(', ')
+        message += ` Reasons: ${reasons}`
+      }
+      this.setStatusBanner('results', summary.skipped > 0 ? 'info' : 'success', message)
+      this.refreshDrawing(this.selectResult)
+      this.scheduleSessionPersist()
+    } catch (error) {
+      this.setStatusBanner('results', 'error', `Import failed: ${error?.message || error}`)
+    } finally {
+      this.importFileInput.value = ''
+      this.endBusyState()
+    }
+  }
+
+  beginBusyState (message = 'Working...') {
+    this._busyCounter = Math.max(0, this._busyCounter) + 1
+    this.backGround.classList.add('isResultBusy')
+    this.setStatusBanner('results', 'loading', message)
+    this.setHeaderInteractivity(false)
+  }
+
+  endBusyState () {
+    this._busyCounter = Math.max(0, this._busyCounter - 1)
+    if (this._busyCounter > 0) {
+      return
+    }
+    this.backGround.classList.remove('isResultBusy')
+    this.setHeaderInteractivity(true)
+  }
+
+  setHeaderInteractivity (enabled) {
+    const controls = [
+      this.simulateJobButton,
+      this.toggleQueueingButton,
+      this.exportResultsButton,
+      this.importResultsButton,
+      this.importModeDropdown?.select,
+      this.importStrictCheckbox,
+      this.selectResultType?.select,
+      this.selectResultDropdown?.select,
+      this.dummyDropdown?.select
+    ].filter(Boolean)
+
+    for (const control of controls) {
+      control.disabled = !enabled
+    }
+  }
+
+  canUseLocalStorage () {
+    try {
+      return typeof window !== 'undefined' && !!window.localStorage
+    } catch (_error) {
+      return false
+    }
+  }
+
+  scheduleSessionPersist () {
+    if (!this.isSessionAutoSaveEnabled()) {
+      return
+    }
+    if (!this.canUseLocalStorage()) {
+      return
+    }
+    if (this._sessionSaveTimer) {
+      window.clearTimeout(this._sessionSaveTimer)
+      this._sessionSaveTimer = null
+    }
+    this._sessionSaveTimer = window.setTimeout(() => {
+      this._sessionSaveTimer = null
+      this.persistSessionToLocalStorage()
+    }, RESULT_SESSION_SAVE_DEBOUNCE_MS)
+  }
+
+  persistSessionToLocalStorage () {
+    if (!this.canUseLocalStorage()) {
+      return
+    }
+    try {
+      const exported = this.resultManager.exportBundle()
+      if (exported.exportedCount <= 0) {
+        window.localStorage.removeItem(RESULT_SESSION_STORAGE_KEY)
+        return
+      }
+      const text = JSON.stringify(exported.bundle)
+      window.localStorage.setItem(RESULT_SESSION_STORAGE_KEY, text)
+    } catch (error) {
+      ijtLog.warn('Result session persistence failed:', error?.message || error)
+    }
+  }
+
+  restoreSessionFromLocalStorage () {
+    if (!this.isSessionAutoRestoreEnabled()) {
+      return
+    }
+    if (!this.canUseLocalStorage()) {
+      return
+    }
+    const existingCount = this.resultManager.getAllResultsChronological().length
+    if (existingCount > 0) {
+      return
+    }
+    const raw = window.localStorage.getItem(RESULT_SESSION_STORAGE_KEY)
+    if (!raw) {
+      return
+    }
+    try {
+      const summary = this.resultManager.importBundleFromText(raw, { mode: 'replace', strict: false })
+      if (summary.total <= 0) {
+        this.setStatusBanner('results', 'empty', 'No restorable results found in local session.')
+        return
+      }
+      let message = `Restored ${summary.imported}, replaced ${summary.replaced}, skipped ${summary.skipped} of ${summary.total} from local session.`
+      if (summary.skipped > 0) {
+        const reasons = Object.entries(summary.skipReasons || {}).map(([reason, count]) => `${reason}:${count}`).join(', ')
+        message += ` Reasons: ${reasons}`
+      }
+      this.setStatusBanner('results', summary.skipped > 0 ? 'info' : 'success', message)
+      this.refreshDrawing(this.selectResult)
+    } catch (error) {
+      ijtLog.warn('Result session restore failed:', error?.message || error)
+      this.setStatusBanner('results', 'error', 'Stored local results are invalid and were ignored.')
+    }
+  }
+
+  normalizeBooleanSetting (value, fallback = true) {
+    if (typeof value === 'boolean') {
+      return value
+    }
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase()
+      if (normalized === 'true') {
+        return true
+      }
+      if (normalized === 'false') {
+        return false
+      }
+    }
+    return fallback
+  }
+
+  isSessionAutoSaveEnabled () {
+    if (!this.settingsProvider) {
+      return DEFAULT_RESULT_SESSION_AUTO_SAVE
+    }
+    if (typeof this.settingsProvider.getResultSessionAutoSave === 'function') {
+      return this.normalizeBooleanSetting(this.settingsProvider.getResultSessionAutoSave(), DEFAULT_RESULT_SESSION_AUTO_SAVE)
+    }
+    return this.normalizeBooleanSetting(this.settingsProvider?.settings?.resultsessionautosave, DEFAULT_RESULT_SESSION_AUTO_SAVE)
+  }
+
+  isSessionAutoRestoreEnabled () {
+    if (!this.settingsProvider) {
+      return DEFAULT_RESULT_SESSION_AUTO_RESTORE
+    }
+    if (typeof this.settingsProvider.getResultSessionAutoRestore === 'function') {
+      return this.normalizeBooleanSetting(this.settingsProvider.getResultSessionAutoRestore(), DEFAULT_RESULT_SESSION_AUTO_RESTORE)
+    }
+    return this.normalizeBooleanSetting(this.settingsProvider?.settings?.resultsessionautorestore, DEFAULT_RESULT_SESSION_AUTO_RESTORE)
   }
 
   activate () {
@@ -457,16 +805,7 @@ export default class ResultGraphics extends BasicScreen {
   refreshDrawing (id) {
     this.display.innerHTML = ''
     this.display.classList.toggle('drawResultBoxEnveloped', this.envelope === 'true')
-    let selection = []
-    if (this.selectResult === '-2') {
-      selection = this.resultManager.getUnfinished()
-    } else if (this.selectType === -1) {
-      selection = [this.resultManager.lastResult]
-    } else if (this.selectResult === '-1') {
-      selection = [this.resultManager.getLatest(this.selectType)]
-    } else {
-      selection = [this.resultManager.resultFromId(id, this.selectType)]
-    }
+    const selection = this.getVisibleRootResults()
     let renderedCount = 0
     for (const result of selection) {
       const drawResult = this.drawResultBoxes(result)
@@ -477,6 +816,7 @@ export default class ResultGraphics extends BasicScreen {
 
         const complexWrapper = document.createElement('div')
         complexWrapper.classList.add('complewrapper')
+        this.createExportSelectionControl(complexWrapper, result)
         complexWrapper.appendChild(drawResult.element)
         this.display.appendChild(complexWrapper)
         renderedCount++

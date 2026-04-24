@@ -124,6 +124,45 @@ test('Results: .complewrapper is present in draw area for all result types', asy
   }
 })
 
+test('Results: import controls are visible', async ({ connected: app }) => {
+  const results = await app.openResults()
+  await results.waitForHeader({ timeout: 60_000 })
+  await expect(app.page.locator('.resultImportMode select')).toBeVisible()
+  await expect(app.page.locator('.resultImportStrictInput')).toBeVisible()
+})
+
+test('Results: skip-duplicates import mode reports duplicate skip reason', async ({ connected: app }) => {
+  test.setTimeout(120_000)
+  const results = await app.openResults()
+  await results.waitForHeader({ timeout: 60_000 })
+
+  const resultId = `e2e-import-${Date.now()}`
+  const bundle = {
+    type: 'ijt-result-export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    source: { app: 'e2e-test', format: 'result-bundle' },
+    results: [{
+      ResultMetaData: {
+        ResultId: resultId,
+        Classification: '1',
+        IsPartial: 'False',
+        CreationTime: new Date().toISOString()
+      },
+      ResultContent: []
+    }]
+  }
+
+  await results.setImportMode('skip-duplicates')
+  await results.setImportStrict(false)
+  await results.importBundleObject(bundle)
+
+  await expect.poll(async () => results.getStatusText(), { timeout: 10_000 }).toContain('Imported 1')
+
+  await results.importBundleObject(bundle)
+  await expect.poll(async () => results.getStatusText(), { timeout: 10_000 }).toContain('duplicate_result_id:1')
+})
+
 // ── WS data validation ────────────────────────────────────────────────────────
 
 test('WS: result event payload has valid ResultMetaData structure', async ({ ws }) => {
