@@ -480,24 +480,40 @@ def _check_semgrep(results: list) -> None:
         _record(results, 1, label, True, "SKIP (Install: pip install semgrep)")
         return
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [
-            "semgrep",
-            "--config=p/default",
-            "--json",
-            "--output",
-            str(RESULTS_DIR / "semgrep.json"),
-            "--exclude=.venv",
-            "--exclude=test-results",
-            ".",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=str(PROJ_DIR),
-    )
+    json_file = RESULTS_DIR / "semgrep.json"
     try:
-        data = json.loads((RESULTS_DIR / "semgrep.json").read_text(encoding="utf-8"))
+        proc = subprocess.run(
+            [
+                "semgrep",
+                "--config=p/default",
+                "--json",
+                "--output",
+                str(json_file),
+                "--exclude=.venv",
+                "--exclude=test-results",
+                ".",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=str(PROJ_DIR),
+            timeout=120,
+        )
+        rc = proc.returncode
+    except subprocess.TimeoutExpired:
+        _record(results, 1, label, True, "SKIP (semgrep timed out after 120s)")
+        return
+    if not json_file.exists():
+        _record(
+            results,
+            1,
+            label,
+            True,
+            f"WARN (exit {rc}) — semgrep produced no output: network unavailable or auth required",
+        )
+        return
+    try:
+        data = json.loads(json_file.read_text(encoding="utf-8"))
         findings = data.get("results", [])
         errors = [f for f in findings if f.get("extra", {}).get("severity") == "ERROR"]
         warns = [f for f in findings if f.get("extra", {}).get("severity") == "WARNING"]
@@ -509,8 +525,8 @@ def _check_semgrep(results: list) -> None:
             _record(results, 1, label, True, f"WARN (0 errors, {len(warns)} warning(s))")
         else:
             _record(results, 1, label, True, f"PASS ({len(findings)} finding(s), none critical)")
-    except Exception:
-        _record(results, 1, label, True, "WARN (could not parse semgrep output)")
+    except Exception as exc:
+        _record(results, 1, label, True, f"WARN — semgrep.json parse failed (rc={rc}): {exc!s:.80}")
 
 
 # ---------------------------------------------------------------------------

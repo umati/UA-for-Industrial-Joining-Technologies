@@ -832,7 +832,7 @@ def _step_semgrep() -> _StepResult:
         result.duration = time.monotonic() - t0
         return result
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    _, output = _run(
+    rc, output = _run(
         [
             "semgrep",
             "--config=p/default",
@@ -851,8 +851,19 @@ def _step_semgrep() -> _StepResult:
         result.duration = time.monotonic() - t0
         return result
     result.duration = time.monotonic() - t0
+    json_file = _RESULTS_DIR / "semgrep.json"
+    if not json_file.exists():
+        # Semgrep exited without writing output — typically a network or auth failure
+        # when downloading cloud rules (p/default requires internet + optional login).
+        result.warn = True
+        result.note = (
+            f"semgrep produced no output (rc={rc}) — network unavailable or authentication required (semgrep login)"
+        )
+        if output.strip():
+            _log(output)
+        return result
     try:
-        data = json.loads((_RESULTS_DIR / "semgrep.json").read_text(encoding="utf-8"))
+        data = json.loads(json_file.read_text(encoding="utf-8"))
         findings = data.get("results", [])
         errors = [f for f in findings if f.get("extra", {}).get("severity") == "ERROR"]
         warns = [f for f in findings if f.get("extra", {}).get("severity") == "WARNING"]
@@ -866,9 +877,11 @@ def _step_semgrep() -> _StepResult:
         else:
             result.ok = True
             result.note = f"{len(findings)} finding(s), none critical"
-    except Exception:
-        result.warn = True  # advisory — parse failure never blocks the suite
-        result.note = "could not parse output (semgrep ran but output unreadable)"
+    except Exception as exc:
+        # JSON exists but is malformed — log content for diagnosis, never block.
+        result.warn = True
+        result.note = f"semgrep.json parse failed (rc={rc}): {exc!s:.120}"
+        _log(output)
     return result
 
 

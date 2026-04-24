@@ -141,6 +141,7 @@ def _run_semgrep_step_with_bad_json():
         patch.object(_mod, "_binary_available", return_value=True),
         patch.object(_mod, "_RESULTS_DIR", _RUNNER_DIR),
         patch.object(_mod, "_run", return_value=(0, "")),
+        patch.object(Path, "exists", return_value=True),
         patch("pathlib.Path.read_text", return_value="NOT VALID JSON ]["),
     ):
         result = _mod._step_semgrep()
@@ -162,16 +163,55 @@ def test_semgrep_parse_failure_does_not_block_suite():
 
 
 def test_semgrep_parse_failure_note_contains_advisory():
-    """Semgrep parse failure note must mention 'advisory' or 'unreadable' for clarity."""
+    """Semgrep parse failure note must contain clear diagnostic info (parse failed + rc)."""
     result = _run_semgrep_step_with_bad_json()
     note_lower = result.note.lower()
-    assert "advisory" in note_lower or "unreadable" in note_lower, (
-        f"Semgrep parse-failure note must mention advisory/unreadable; got: {result.note!r}"
+    assert "parse failed" in note_lower or "rc=" in note_lower, (
+        f"Semgrep parse-failure note must contain diagnostic info (parse failed / rc=); got: {result.note!r}"
     )
 
 
 # ---------------------------------------------------------------------------
-# Semgrep findings paths
+# Semgrep no-output-file path: network/auth failure — non-blocking by contract
+# ---------------------------------------------------------------------------
+
+
+def _run_semgrep_step_with_no_output_file():
+    """Run _step_semgrep() simulating the real-world case where semgrep exits
+    without writing semgrep.json (e.g. network unavailable for p/default rules)."""
+    with (
+        patch.object(_mod, "_binary_available", return_value=True),
+        patch.object(_mod, "_RESULTS_DIR", _RUNNER_DIR),
+        patch.object(_mod, "_run", return_value=(-1, "")),
+        patch.object(Path, "exists", return_value=False),
+    ):
+        result = _mod._step_semgrep()
+    return result
+
+
+def test_semgrep_no_output_file_sets_warn_not_fail():
+    """When semgrep produces no output file it must be advisory WARN, never FAIL."""
+    result = _run_semgrep_step_with_no_output_file()
+    assert result.warn, "No-output-file path must set warn=True"
+    assert not result.skipped, "No-output-file path must not mark as skipped"
+
+
+def test_semgrep_no_output_file_does_not_block_suite():
+    """No-output-file path must not appear as a suite failure."""
+    result = _run_semgrep_step_with_no_output_file()
+    c = _counts([result])
+    assert c["failed"] == 0, "No-output-file must not appear in failed count"
+
+
+def test_semgrep_no_output_file_note_mentions_network():
+    """No-output-file note must mention network or authentication so the cause is clear."""
+    result = _run_semgrep_step_with_no_output_file()
+    note_lower = result.note.lower()
+    assert "network" in note_lower or "auth" in note_lower, (
+        f"No-output-file note must mention network/auth; got: {result.note!r}"
+    )
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -182,6 +222,7 @@ def _run_semgrep_step_with_findings(findings: list):
         patch.object(_mod, "_binary_available", return_value=True),
         patch.object(_mod, "_RESULTS_DIR", _RUNNER_DIR),
         patch.object(_mod, "_run", return_value=(0, "")),
+        patch.object(Path, "exists", return_value=True),
         patch("pathlib.Path.read_text", return_value=json.dumps(payload)),
     ):
         result = _mod._step_semgrep()
