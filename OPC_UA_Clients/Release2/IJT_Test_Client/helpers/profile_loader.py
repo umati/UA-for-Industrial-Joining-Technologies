@@ -45,7 +45,8 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 def _load_yaml(path: Path) -> dict:
     """Load a YAML file and return its contents as a dict."""
     with path.open(encoding="utf-8") as fh:
-        return yaml.safe_load(fh) or {}
+        data = yaml.safe_load(fh) or {}
+    return data
 
 
 def _load_facets() -> dict[str, list[str]]:

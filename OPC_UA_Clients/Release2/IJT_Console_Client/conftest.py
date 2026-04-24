@@ -11,8 +11,8 @@ mounts or read-only overlays).
 
 Probe order: tmp/pytest → tmp/pytest_tmp → tmp/pytest_session_<pid>
 If all three fail the ACL probe, basetemp falls through to pytest's default
-(system temp).  This is the same pattern used by IJT_Test_Client/conftest.py
-and IJT_Web_Client/tests/conftest.py — keep them in sync.
+(system temp).  This pattern is shared across all three client conftest files
+— keep them in sync.
 """
 
 import os
