@@ -914,7 +914,7 @@ def _step_detect_secrets() -> _StepResult:
         result.ok = secret_count == 0
         if secret_count:
             result.note = f"{secret_count} potential secret(s) — review .secrets.baseline"
-    except json.JSONDecodeError, AttributeError:
+    except (json.JSONDecodeError, AttributeError):
         result.ok = rc == 0
     if not result.ok:
         _log(output)

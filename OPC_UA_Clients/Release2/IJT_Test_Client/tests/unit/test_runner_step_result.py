@@ -18,6 +18,7 @@ import importlib
 import json
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
@@ -27,7 +28,8 @@ from unittest.mock import patch
 _RUNNER_DIR = Path(__file__).parents[2]  # = IJT_Test_Client/
 sys.path.insert(0, str(_RUNNER_DIR))
 _mod = importlib.import_module("run_all_tests")
-_StepResult = _mod._StepResult
+# Assign as Any so mypy can resolve attribute access on dynamically-imported class
+_StepResult: Any = _mod._StepResult
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +82,7 @@ def _counts(results: list) -> dict:
     return {"passed": passed, "warned": warned, "failed": failed, "skipped": skipped}
 
 
-def _make(*, ok: bool = False, warn: bool = False, skipped: bool = False) -> "_StepResult":
+def _make(*, ok: bool = False, warn: bool = False, skipped: bool = False):
     r = _StepResult("x")
     r.ok = ok
     r.warn = warn
@@ -133,7 +135,7 @@ def test_counter_mixed_suite_warn_does_not_cause_suite_fail():
 # ---------------------------------------------------------------------------
 
 
-def _run_semgrep_step_with_bad_json() -> "_StepResult":
+def _run_semgrep_step_with_bad_json():
     """Run _step_semgrep() with a corrupt semgrep.json so the except branch fires."""
     with (
         patch.object(_mod, "_binary_available", return_value=True),
@@ -173,7 +175,7 @@ def test_semgrep_parse_failure_note_contains_advisory():
 # ---------------------------------------------------------------------------
 
 
-def _run_semgrep_step_with_findings(findings: list) -> "_StepResult":
+def _run_semgrep_step_with_findings(findings: list):
     payload = {"results": findings, "errors": []}
 
     with (
