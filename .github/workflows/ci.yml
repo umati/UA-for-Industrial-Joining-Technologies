@@ -78,14 +78,16 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         id: dispatch
         run: |
-          echo "web=true"        >> $GITHUB_OUTPUT
-          echo "console=true"    >> $GITHUB_OUTPUT
-          echo "node=true"       >> $GITHUB_OUTPUT
-          echo "docker=true"     >> $GITHUB_OUTPUT
-          echo "testclient=true" >> $GITHUB_OUTPUT
-          echo "csharp=true"     >> $GITHUB_OUTPUT
-          echo "server=true"     >> $GITHUB_OUTPUT
-          echo "workflows=true"  >> $GITHUB_OUTPUT
+          {
+            echo "web=true"
+            echo "console=true"
+            echo "node=true"
+            echo "docker=true"
+            echo "testclient=true"
+            echo "csharp=true"
+            echo "server=true"
+            echo "workflows=true"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         if: github.event_name != 'workflow_dispatch'

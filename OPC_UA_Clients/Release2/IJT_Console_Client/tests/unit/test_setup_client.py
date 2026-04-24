@@ -508,6 +508,39 @@ class TestGetLastSetupAgeDays:
         assert result is None
         assert any("setup timestamp" in r.message.lower() for r in caplog.records)
 
+    def test_migrates_legacy_root_timestamp_to_state_dir(self, fs, monkeypatch):
+        """Legacy .setup_timestamp at project root is moved into .state/ on first read."""
+        state_dir = Path(".state")
+        new_path = state_dir / "setup_timestamp"
+        monkeypatch.setattr(sc, "STATE_DIR", state_dir)
+        monkeypatch.setattr(sc, "SETUP_TIMESTAMP_FILE", new_path)
+        one_day_ago = time.time() - (60 * 60 * 24)
+        Path(".setup_timestamp").write_text(str(one_day_ago), encoding="utf-8")
+
+        age = sc._get_last_setup_age_days()
+
+        assert age is not None
+        assert 0.99 < age < 1.01
+        assert not Path(".setup_timestamp").exists(), "legacy file must be removed after migration"
+        assert new_path.exists(), "timestamp must exist in .state/ after migration"
+
+    def test_removes_stale_legacy_when_both_exist(self, fs, monkeypatch):
+        """If both old root .setup_timestamp and new .state/setup_timestamp exist, stale root copy is deleted."""
+        state_dir = Path(".state")
+        new_path = state_dir / "setup_timestamp"
+        state_dir.mkdir()
+        one_day_ago = time.time() - (60 * 60 * 24)
+        new_path.write_text(str(one_day_ago), encoding="utf-8")
+        Path(".setup_timestamp").write_text("stale", encoding="utf-8")
+        monkeypatch.setattr(sc, "STATE_DIR", state_dir)
+        monkeypatch.setattr(sc, "SETUP_TIMESTAMP_FILE", new_path)
+
+        age = sc._get_last_setup_age_days()
+
+        assert age is not None
+        assert not Path(".setup_timestamp").exists(), "stale root copy must be removed"
+        assert new_path.exists(), "canonical .state/ copy must remain"
+
 
 # =============================================================================
 # _update_setup_timestamp
@@ -535,6 +568,19 @@ class TestUpdateSetupTimestamp:
         sc._update_setup_timestamp()
         stamp = float(ts_file.read_text(encoding="utf-8").strip())
         assert stamp > 1_000_000_000  # should be a real Unix timestamp, not 0.0
+
+    def test_creates_state_dir_if_missing(self, fs, monkeypatch):
+        """STATE_DIR is created automatically — no manual mkdir needed before first setup."""
+        state_dir = Path(".state")
+        ts_file = state_dir / "setup_timestamp"
+        monkeypatch.setattr(sc, "STATE_DIR", state_dir)
+        monkeypatch.setattr(sc, "SETUP_TIMESTAMP_FILE", ts_file)
+        assert not state_dir.exists()
+
+        sc._update_setup_timestamp()
+
+        assert state_dir.exists(), "STATE_DIR must be created automatically"
+        assert ts_file.exists(), "timestamp file must be written inside STATE_DIR"
 
 
 # =============================================================================

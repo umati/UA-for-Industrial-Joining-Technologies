@@ -37,7 +37,8 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 VENV_DIR = Path(".venv")  # Runtime venv — launch only (requirements.txt)
-SETUP_TIMESTAMP_FILE = Path(".setup_timestamp")
+STATE_DIR = Path(".state")  # Persistent local state — gitignored, never committed
+SETUP_TIMESTAMP_FILE = STATE_DIR / "setup_timestamp"  # Matches Web Client convention
 IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -101,7 +102,7 @@ def _cleanup_local_project_artifacts(project_dir: Path) -> None:
                 with contextlib.suppress(OSError):
                     (Path(dirpath) / f).unlink(missing_ok=True)
     # Clean transient pip temp dir created by venv_bootstrap
-    state_tmp = project_dir / ".state" / "tmp"
+    state_tmp = project_dir / STATE_DIR / "tmp"
     if state_tmp.exists():
         _force_rmtree(state_tmp)
 
@@ -422,6 +423,13 @@ def _get_environment_age_days() -> float | None:
 
 def _get_last_setup_age_days() -> float | None:
     try:
+        # Migrate legacy root-level .setup_timestamp to .state/setup_timestamp on first read.
+        legacy = Path(".setup_timestamp")
+        if legacy.exists() and not SETUP_TIMESTAMP_FILE.exists():
+            STATE_DIR.mkdir(parents=True, exist_ok=True)
+            legacy.replace(SETUP_TIMESTAMP_FILE)
+        elif legacy.exists():
+            legacy.unlink(missing_ok=True)  # Both exist — remove stale root copy
         if SETUP_TIMESTAMP_FILE.exists():
             stamp = float(SETUP_TIMESTAMP_FILE.read_text(encoding="utf-8").strip())
             return (time.time() - stamp) / (60 * 60 * 24)
@@ -432,6 +440,7 @@ def _get_last_setup_age_days() -> float | None:
 
 def _update_setup_timestamp() -> None:
     try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
         SETUP_TIMESTAMP_FILE.write_text(str(time.time()), encoding="utf-8")
     except Exception as exc:
         log.warning("Could not update setup timestamp: %s", exc)
@@ -462,7 +471,7 @@ def _create_virtualenv(latest_cmd: list[str]) -> None:
         sys.exit(1)
 
     try:
-        tmp_dir = Path(".state") / "tmp"
+        tmp_dir = STATE_DIR / "tmp"
         tmp_dir.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
         env["TMPDIR"] = str(tmp_dir)
