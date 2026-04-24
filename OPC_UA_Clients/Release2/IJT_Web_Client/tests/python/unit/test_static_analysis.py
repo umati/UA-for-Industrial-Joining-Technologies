@@ -376,7 +376,7 @@ def _collect_all_imported_names(root: Path) -> set[str]:
         try:
             src = py_file.read_text(encoding="utf-8")
             tree = ast.parse(src)
-        except (SyntaxError, OSError):
+        except (SyntaxError, OSError):  # fmt: skip
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):

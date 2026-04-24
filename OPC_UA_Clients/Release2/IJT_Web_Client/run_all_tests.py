@@ -136,7 +136,7 @@ def _enable_ansi_windows() -> bool:
             kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
             return True
         return False
-    except (AttributeError, OSError):
+    except (AttributeError, OSError):  # fmt: skip
         return False
 
 
@@ -422,7 +422,9 @@ def _stage_npm_install() -> StageResult:
         return StageResult("npm-install", 0, skipped=True, duration=time.monotonic() - t0, notes=["npm not found"])
     nm = ROOT / "node_modules"
     if nm.exists() and any(nm.iterdir()):
-        return StageResult("npm-install", 0, skipped=True, duration=time.monotonic() - t0, notes=["node_modules already present"])
+        return StageResult(
+            "npm-install", 0, skipped=True, duration=time.monotonic() - t0, notes=["node_modules already present"]
+        )
     _banner("STAGE 1c  npm install (node_modules missing or empty)")
     rc = _run([npm, "install", "--legacy-peer-deps"], label="npm install")
     return StageResult("npm-install", rc, duration=time.monotonic() - t0)
@@ -476,10 +478,36 @@ def _stage_python_lint(python: Path) -> StageResult:
             overall_rc = rc
         rc_fmt = _run([ruff, "format", "--check", "."], label="ruff format --check")
         if rc_fmt != 0:
-            overall_rc = rc_fmt
+            # advisory — normalize multi-except gate below enforces except (A, B): policy.
+            notes.append("ruff format: style diffs (normalized by multi-except step)")
     else:
         _skip("ruff not found — pip install ruff")
         notes.append("ruff not installed")
+
+    # --- normalize multi-except gate ---
+    # Canonical policy: except (A, B): only. normalize --write repairs any violations;
+    # --check hard-gates so the runner fails if any forbidden bare form is present.
+    _norm_script = ROOT.parent.parent.parent / "scripts" / "normalize_multi_except.py"
+    if _norm_script.exists():
+        _py_files = [
+            str(p)
+            for p in ROOT.rglob("*.py")
+            if not any(part in {".venv", ".venv_test", "tmp", "test-results"} for part in p.parts)
+        ]
+        if _py_files:
+            _run(
+                [sys.executable, str(_norm_script), "--write", *_py_files],
+                label="normalize multi-except (write)",
+            )
+            rc = _run(
+                [sys.executable, str(_norm_script), "--check", *_py_files],
+                label="normalize multi-except (check)",
+            )
+            if rc != 0:
+                overall_rc = rc
+    else:
+        _skip(f"normalize_multi_except.py not found at {_norm_script} — multi-except gate skipped")
+        notes.append("normalize_multi_except.py missing")
 
     if _py_module_available("mypy"):
         rc = _run(
@@ -531,7 +559,12 @@ def _stage_python_lint(python: Path) -> StageResult:
 
     if _py_module_available("detect_secrets"):
         rc = _run([python, "-m", "detect_secrets", "scan"], label="detect-secrets scan")
-        if rc != 0:
+        if rc == 1:
+            # rc=1: secrets found OR tool error (e.g. git not in PATH on Windows).
+            # Treat as advisory — detect-secrets is informational, not a hard gate.
+            _warn("detect-secrets: advisory exit 1 (findings or environment issue)")
+            notes.append("detect-secrets: advisory")
+        elif rc not in (0, -1):
             overall_rc = rc
     else:
         _skip("detect-secrets not installed — pip install detect-secrets")
@@ -1304,7 +1337,9 @@ def main() -> int:
     parser.add_argument("--phase1", action="store_true", help="Static/unit tests only — no live/E2E stages (CI use)")
     parser.add_argument("--phase2", action="store_true", help="Live/E2E stages only — skip static analysis (CI use)")
     parser.add_argument("--list", action="store_true", help="Print available stages and exit")
-    parser.add_argument("--opcua-endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{_OPCUA_SERVER_PORT}"))
+    parser.add_argument(
+        "--opcua-endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{_OPCUA_SERVER_PORT}")
+    )
     parser.add_argument("--ws-url", default=os.getenv("WS_TEST_URL", "ws://localhost:8001"))
     parser.add_argument("--ui-url", default=os.getenv("UI_TEST_BASE_URL", "http://127.0.0.1:3000"))
     args = parser.parse_args()

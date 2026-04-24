@@ -71,8 +71,8 @@ class Connection:
         self.sub_result_event = "sub"
         self.sub_joining_event = "sub"
 
-        self.handler_joining_event = None
-        self.handler_result_event = None
+        self.handler_joining_event: EventHandler | None = None
+        self.handler_result_event: ResultEventHandler | None = None
 
         # Initialised in connect() / subscribe() — declared here so pylint
         # does not flag W0201 (attribute-defined-outside-init).

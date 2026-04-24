@@ -53,8 +53,8 @@ class Short:
         self.EventCode = getattr(event, "JoiningSystemEventContent/EventCode", None)
         self.EventText = localizedtext_to_str(getattr(event, "JoiningSystemEventContent/EventText", None))  # type: ignore[arg-type]
         self.JoiningTechnology = localizedtext_to_str(
-            getattr(event, "JoiningSystemEventContent/JoiningTechnology", None)
-        )  # type: ignore[arg-type]
+            getattr(event, "JoiningSystemEventContent/JoiningTechnology", None)  # type: ignore[arg-type]
+        )
         self.AssociatedEntities = getattr(event, "JoiningSystemEventContent/AssociatedEntities", [])
 
         self.ReportedValues = getattr(event, "JoiningSystemEventContent/ReportedValues", [])

@@ -233,7 +233,7 @@ def _check_tool(cmd: list[str], name: str) -> bool:
             timeout=10,
         )
         return r.returncode == 0
-    except FileNotFoundError, subprocess.TimeoutExpired, OSError:
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):  # fmt: skip
         log.warning(
             "Tool unavailable: %s (%s) -- dependent suites will fail naturally.",
             name,
