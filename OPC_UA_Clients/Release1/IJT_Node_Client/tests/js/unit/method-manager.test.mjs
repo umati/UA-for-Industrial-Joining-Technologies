@@ -226,3 +226,126 @@ describe('MethodManager.setupMethodsInFolders()', () => {
     expect(mm.methodObject).toEqual({})
   })
 })
+
+describe('MethodManager.addressFolder() and folderPromise()', () => {
+  let mm, addressSpace
+
+  beforeEach(() => {
+    addressSpace = {
+      addressSpacePromise: vi.fn(() => Promise.resolve({ nodeId: 'ns=7;i=1' })),
+      findNodeFromPathPromise: vi.fn(() => Promise.resolve({
+        nodeId: 'ns=7;i=2',
+        getChildRelations: vi.fn(() => [])
+      })),
+      relationsToNodes: vi.fn(() => Promise.resolve([])),
+      methodCall: vi.fn(),
+      dataTypeEnumeration: {}
+    }
+    mm = new MethodManager(addressSpace)
+    mm.methodObject = {}
+  })
+
+  it('addressFolder with empty path calls folderPromise on tighteningSystemNode', async () => {
+    mm.tighteningSystemNode = {
+      nodeId: 'ns=7;i=1',
+      getChildRelations: vi.fn(() => [])
+    }
+    await mm.addressFolder('')
+    expect(addressSpace.relationsToNodes).toHaveBeenCalled()
+  })
+
+  it('addressFolder with non-empty path calls findNodeFromPathPromise', async () => {
+    mm.tighteningSystemNode = { nodeId: 'ns=7;i=1' }
+    await mm.addressFolder('2:MethodsFolder')
+    expect(addressSpace.findNodeFromPathPromise).toHaveBeenCalledWith('2:MethodsFolder')
+  })
+
+  it('folderPromise with nodeclass=4 child calls setupMethod', async () => {
+    const mockInputArgNode = {
+      data: {
+        value: {
+          message: {
+            dataValue: { value: { value: [] } }
+          }
+        }
+      }
+    }
+    addressSpace.relationsToNodes = vi.fn()
+      .mockResolvedValueOnce([
+        {
+          nodeId: 'ns=7;i=10',
+          displayName: 'SimulateJobResult',
+          data: { nodeclass: { value: 4 } },
+          getChildRelations: vi.fn(() => [{ browseName: { name: 'InputArguments' } }])
+        }
+      ])
+      .mockResolvedValueOnce([mockInputArgNode])
+
+    mm.methodObject = {}
+    const folderNode = {
+      nodeId: 'ns=7;i=5',
+      getChildRelations: vi.fn(() => [{ nodeId: 'ns=7;i=6' }])
+    }
+    await mm.folderPromise(folderNode)
+    expect(Object.keys(mm.methodObject)).toHaveLength(1)
+  })
+})
+
+describe('MethodManager.setupMethod()', () => {
+  let mm, addressSpace
+
+  beforeEach(() => {
+    addressSpace = {
+      addressSpacePromise: vi.fn(),
+      findNodeFromPathPromise: vi.fn(),
+      relationsToNodes: vi.fn(),
+      methodCall: vi.fn(),
+      dataTypeEnumeration: { '12': 'String', '7': 'Int32' }
+    }
+    mm = new MethodManager(addressSpace)
+    mm.methodObject = {}
+  })
+
+  it('setupMethod resolves with methodNode and empty arguments when no input args data', async () => {
+    const mockInputArgNode = {
+      data: {
+        value: {
+          message: {
+            dataValue: { value: { value: [] } }
+          }
+        }
+      }
+    }
+    addressSpace.relationsToNodes = vi.fn(() => Promise.resolve([mockInputArgNode]))
+
+    const methodNode = {
+      displayName: 'TestMethod',
+      getChildRelations: vi.fn(() => [{ browseName: { name: 'InputArguments' } }])
+    }
+    const result = await mm.setupMethod(methodNode)
+    expect(result.methodNode).toBe(methodNode)
+    expect(result.arguments).toEqual([])
+  })
+
+  it('setupMethod resolves with argument that has typeName when dataType in enumeration', async () => {
+    const argContent = { dataType: '12', typeName: undefined }
+    const mockInputArgNode = {
+      data: {
+        value: {
+          message: {
+            dataValue: { value: { value: [argContent] } }
+          }
+        }
+      }
+    }
+    addressSpace.relationsToNodes = vi.fn(() => Promise.resolve([mockInputArgNode]))
+
+    const methodNode = {
+      displayName: 'TestMethod2',
+      getChildRelations: vi.fn(() => [{ browseName: { name: 'InputArguments' } }])
+    }
+    const result = await mm.setupMethod(methodNode)
+    expect(result.arguments).toHaveLength(1)
+    expect(result.arguments[0].typeName).toBe('String')
+  })
+})

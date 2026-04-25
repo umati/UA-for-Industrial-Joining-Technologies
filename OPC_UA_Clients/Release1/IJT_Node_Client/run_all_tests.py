@@ -3,10 +3,14 @@
 run_all_tests.py — IJT Node Client test runner.
 
 Usage:
-    python run_all_tests.py              # full run (Phase 1 only; Phase 2 N/A)
+    python run_all_tests.py              # full run (Phase 1 + Phase 2)
     python run_all_tests.py --phase1     # unit/static tests only
-    python run_all_tests.py --phase2     # live tests (prints skip — not applicable)
+    python run_all_tests.py --phase2     # Playwright E2E tests (requires running server)
     python run_all_tests.py --help
+
+Phase 2 requires:
+    node index.js                        # start the Node Client HTTP server on :3000
+    npx playwright install chromium      # install Playwright browsers (one-time)
 
 Environment variables:
     SKIP_NPM_INSTALL=1   Skip `npm ci` (deps already installed)
@@ -603,8 +607,67 @@ def _step_phase2_check(results_dir: Path) -> StepResult:
     return StepResult(label, "PHASE 2", "PASS", f"server reachable at {server_url}", 0.0)
 
 
-def _phase2_skip() -> StepResult:
-    return StepResult("Live Tests", "PHASE 2", "SKIP", "not applicable")
+def _step_playwright_e2e(results_dir: Path) -> StepResult:
+    """Phase 2: Run Playwright E2E tests.
+
+    All specs use e2e-fixtures.mjs which skips gracefully when the Node Client
+    HTTP server (http://localhost:3000) is not reachable.  In Phase 2 the server
+    has been started by _ensure_server(), so UI tests should run.
+
+    The Playwright binary (chromium) must be installed:
+        npx playwright install chromium
+    If not installed, this step is skipped (SKIP, never FAIL).
+    """
+    label = "Playwright E2E"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    json_out = results_dir / "playwright.json"
+    # Check that the HTTP server (not OPC UA) is reachable on port 3000
+    if not _is_port_reachable("localhost", 3000, timeout=1.0):
+        return StepResult(
+            label, "PHASE 2", "SKIP", "Node Client HTTP server not running on :3000", 0.0
+        )
+    # Check Playwright browsers are installed (list chromium channel)
+    rc_check, _ = _run(
+        [_NPX, "playwright", "install", "--dry-run", "chromium"],
+        capture_stdout=True,
+    )
+    if rc_check != 0:
+        # Browsers not installed — skip instead of failing (optional E2E setup step)
+        return StepResult(
+            label,
+            "PHASE 2",
+            "SKIP",
+            "Playwright browsers not installed — run: npx playwright install chromium",
+            0.0,
+        )
+    t0 = time.monotonic()
+    rc, _ = _run(
+        [
+            _NPX,
+            "playwright",
+            "test",
+            "--project=views",
+            "--reporter=list",
+            f"--reporter=json:{json_out}",
+        ]
+    )
+    dur = time.monotonic() - t0
+    # Parse JSON report for pass/fail counts
+    passed = failed = total = 0
+    with contextlib.suppress(Exception):
+        data = json.loads(json_out.read_text(encoding="utf-8"))
+        for suite in data.get("suites", []):
+            for spec in suite.get("specs", []):
+                for result in spec.get("results", []):
+                    total += 1
+                    if result.get("status") in ("passed", "skipped"):
+                        passed += 1
+                    else:
+                        failed += 1
+    detail = f"{passed}/{total}" if total else "runner error — no test results parsed"
+    if rc != 0:
+        return StepResult(label, "PHASE 2", "FAIL", detail, dur, passed, failed, total)
+    return StepResult(label, "PHASE 2", "PASS", detail, dur, passed, failed, total)
 
 
 # ---------------------------------------------------------------------------
@@ -620,7 +683,9 @@ def _parse_args() -> argparse.Namespace:
     group = p.add_mutually_exclusive_group()
     group.add_argument("--phase1", action="store_true", help="Unit/static tests only")
     group.add_argument(
-        "--phase2", action="store_true", help="Live tests only (N/A for this project)"
+        "--phase2",
+        action="store_true",
+        help="Playwright E2E tests (requires node index.js + npx playwright install chromium)",
     )
     p.add_argument(
         "--junit-xml",
@@ -711,6 +776,11 @@ def main() -> int:
         try:
             server_proc = _ensure_server()
             r = _step_phase2_check(results_dir)
+            results.append(r)
+            _row(r.phase, r.label, r.status, r.detail)
+
+            # Playwright E2E tests — skip gracefully when server or browsers unavailable
+            r = _step_playwright_e2e(results_dir)
             results.append(r)
             _row(r.phase, r.label, r.status, r.detail)
         finally:

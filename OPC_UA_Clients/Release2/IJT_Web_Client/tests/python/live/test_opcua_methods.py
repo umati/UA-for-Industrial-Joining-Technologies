@@ -711,7 +711,7 @@ class TestJoiningProcess:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
     async def _jp(self, c):
-        jp = ua.JoiningProcessIdentificationDataType()
+        jp = ua.JoiningProcessIdentificationDataType()  # type: ignore[attr-defined]
         jp.JoiningProcessId = jp.JoiningProcessOriginId = jp.SelectionName = ""
         return jp
 

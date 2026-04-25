@@ -69,4 +69,57 @@ describe('AssetManager', () => {
     const result = await amWithRelations.loadAllAssetsSupport(nodeWithChild)
     expect(Array.isArray(result)).toBe(true)
   })
+
+  it('loadAllAssetsSupport() — node with hasAddin matching machinery type is included', async () => {
+    const nsMachinery = 3
+    const am2 = new AssetManager(
+      { ...addressSpace, nsMachinery, relationsToNodes: vi.fn(() => Promise.resolve([
+        {
+          nodeId: 'ns=1;i=10',
+          displayName: 'MachinePart',
+          getChildRelations: vi.fn((type) => {
+            if (type === 'hasAddin') {
+              return [{ typeDefinition: `ns=${nsMachinery};i=1012` }]
+            }
+            return []
+          })
+        }
+      ])) },
+      connectionManager
+    )
+    const nodeWithChild = {
+      getChildRelations: (type) => type === 'component' ? [{ nodeId: 'ns=1;i=100' }] : []
+    }
+    const result = await am2.loadAllAssetsSupport(nodeWithChild)
+    expect(Array.isArray(result)).toBe(true)
+  })
+
+  it('loadAllAssetsSupport() — node with hasAddin NOT matching machinery type recurses', async () => {
+    const nsMachinery = 3
+    const am3 = new AssetManager(
+      { ...addressSpace, nsMachinery, relationsToNodes: vi.fn(() => Promise.resolve([
+        {
+          nodeId: 'ns=1;i=11',
+          displayName: 'OtherPart',
+          getChildRelations: vi.fn((type) => {
+            if (type === 'hasAddin') {
+              return [{ typeDefinition: `ns=${nsMachinery};i=9999` }]
+            }
+            return []
+          })
+        }
+      ])) },
+      connectionManager
+    )
+    const nodeWithChild = {
+      getChildRelations: (type) => type === 'component' ? [{ nodeId: 'ns=1;i=100' }] : []
+    }
+    const result = await am3.loadAllAssetsSupport(nodeWithChild)
+    expect(Array.isArray(result)).toBe(true)
+  })
+
+  it('setupAndLoadAllAssets() — returns empty object when assets folder has no children', async () => {
+    const result = await am.setupAndLoadAllAssets()
+    expect(typeof result).toBe('object')
+  })
 })

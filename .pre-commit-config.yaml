@@ -66,3 +66,45 @@ repos:
       # pyproject.toml files — the py314 formatter bug (#24041) that corrupted
       # except (A, B): clauses does not trigger with py313.
       - id: ruff-format
+
+  # JS linting for the Node Client (ESLint + custom CSS checker).
+  # Both hooks use `npm --prefix` so they run with the project's own node_modules
+  # (exact same versions as during development) without requiring a global install.
+  # pass_filenames: false — the npm scripts handle their own file globs.
+  - repo: local
+    hooks:
+      - id: eslint-node-client
+        name: ESLint (Node Client)
+        language: system
+        entry: npm
+        args: ['--prefix', 'OPC_UA_Clients/Release1/IJT_Node_Client', 'run', 'lint:js']
+        pass_filenames: false
+        files: '^OPC_UA_Clients/Release1/IJT_Node_Client/.*\.(js|mjs)$'
+
+      - id: css-node-client
+        name: CSS Lint (Node Client)
+        language: system
+        entry: npm
+        args: ['--prefix', 'OPC_UA_Clients/Release1/IJT_Node_Client', 'run', 'lint:css']
+        pass_filenames: false
+        files: '^OPC_UA_Clients/Release1/IJT_Node_Client/.*\.css$'
+
+      # Web Client — ESLint (JS) and stylelint (CSS).
+      # Runs with the project's own node_modules (same versions as CI) via --prefix.
+      # Previously managed by Husky+lint-staged inside the Web Client; consolidated
+      # here so the entire repo uses one hook manager (pre-commit).
+      - id: eslint-web-client
+        name: ESLint (Web Client)
+        language: system
+        entry: npm
+        args: ['--prefix', 'OPC_UA_Clients/Release2/IJT_Web_Client', 'run', 'lint']
+        pass_filenames: false
+        files: '^OPC_UA_Clients/Release2/IJT_Web_Client/(src/javascripts|config).*\.(js|mjs)$'
+
+      - id: stylelint-web-client
+        name: Stylelint (Web Client)
+        language: system
+        entry: npm
+        args: ['--prefix', 'OPC_UA_Clients/Release2/IJT_Web_Client', 'run', 'lint:css']
+        pass_filenames: false
+        files: '^OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/css/.*\.css$'

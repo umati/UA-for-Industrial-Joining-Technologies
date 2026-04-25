@@ -1345,13 +1345,12 @@ async def test_start_selected_joining_after_select_returns_good(opcua_client, ns
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
 
-    list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, timeout=15.0)
+    list_result = await find_and_call_method(
+        jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, ua.Variant("", ua.VariantType.String), timeout=15.0
+    )
     if not list_result.success:
         err_str = str(list_result.error) if list_result.error else "unknown"
-        pytest.skip(
-            f"GetJoiningProcessList failed ({err_str}) — cannot establish SelectJoiningProcess precondition; "
-            "known simulator limitation when method requires arguments"
-        )
+        pytest.skip(f"GetJoiningProcessList failed ({err_str}) — cannot establish SelectJoiningProcess precondition")
     if not list_result.output_list:
         pytest.skip("GetJoiningProcessList returned empty list — no programs configured; cannot establish precondition")
     first_program = list_result.output_list[0]
@@ -1403,13 +1402,12 @@ async def test_select_joining_process_state_reflected_after_select(opcua_client,
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
 
-    list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, timeout=15.0)
+    list_result = await find_and_call_method(
+        jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, ua.Variant("", ua.VariantType.String), timeout=15.0
+    )
     if not list_result.success:
         err_str = str(list_result.error) if list_result.error else "unknown"
-        pytest.skip(
-            f"GetJoiningProcessList failed ({err_str}) — cannot determine a valid program ID; "
-            "known simulator limitation when method requires arguments"
-        )
+        pytest.skip(f"GetJoiningProcessList failed ({err_str}) — cannot determine a valid program ID")
     if not list_result.output_list:
         pytest.skip(
             "GetJoiningProcessList returned empty list — no programs configured; cannot determine a valid program ID"
@@ -1758,13 +1756,12 @@ async def test_get_selected_joining_program_result_has_valid_fields(opcua_client
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
-    list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, timeout=15.0)
+    list_result = await find_and_call_method(
+        jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, ua.Variant("", ua.VariantType.String), timeout=15.0
+    )
     if not list_result.success:
         err_str = str(list_result.error) if list_result.error else "unknown"
-        pytest.skip(
-            f"GetJoiningProcessList failed ({err_str}) — cannot select a program; "
-            "known simulator limitation when method requires arguments"
-        )
+        pytest.skip(f"GetJoiningProcessList failed ({err_str}) — cannot select a program")
     if not list_result.output_list:
         pytest.skip("GetJoiningProcessList returned empty list — no programs configured; cannot select a program")
     first_program = list_result.output_list[0]

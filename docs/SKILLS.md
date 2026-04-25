@@ -35,6 +35,13 @@ The three Python runners (Console, Web, Test) call `pre-commit install` automati
 2. `ruff --fix` applies safe lint fixes
 3. `end-of-file-fixer` and `mixed-line-ending` normalise LF/CRLF
 4. `trailing-whitespace` strips trailing spaces
+5. `eslint-node-client` lints Node Client JS (`.js`, `.mjs`)
+6. `css-node-client` runs the Node Client CSS checker
+7. `eslint-web-client` lints Web Client JS (`src/javascripts/`, `config.js`)
+8. `stylelint-web-client` lints Web Client CSS (`src/resources/css/`)
+
+JS hooks (#5–#8) run with the project's own `node_modules` via `npm --prefix` — no global
+install required. They only trigger when matching files are staged.
 
 Multi-exception style rule: always write `except (A, B):`, never `except A, B:`. This is enforced
 by the unit-level guard test (`test_ruff_format_guard.py`) which verifies ruff does not corrupt
@@ -140,9 +147,14 @@ Coverage is configured in each project's `pyproject.toml`. **Never hardcode thre
 | Console Client | 80% | Configured in `pyproject.toml` — applies to unit run |
 | Test Client | **90%** | Configured in `pyproject.toml` — live-test-only helpers reduce coverage on conformance-only runs; `tests/unit/` supplements with pure-logic coverage |
 
+**C# Client (coverlet)**: Exclusions defined in `coverlet.runsettings` — excludes `UAModel` (auto-generated OPC UA type bindings) and `Program` namespaces, plus `[GeneratedCode]`, `[ExcludeFromCodeCoverage]`, and `[CompilerGeneratedAttribute]` attributes. CI passes `--settings coverlet.runsettings` to `dotnet test` so exclusions are applied to both collection and the summary table.
+
 **Node Client (JavaScript/Vitest)**: Coverage threshold is NOT in pyproject.toml (JS project).
 - Hard gate: `coverage.thresholds` in `vitest.config.mjs` (if set)
-- Ratchet floor: `_COVERAGE_THRESHOLD = 30.0` in `IJT_Node_Client/run_all_tests.py` — WARN-only, advisory/non-gated, ratchet upward as coverage improves. Aspirational goal: 80%.
+- Ratchet floor: `_COVERAGE_THRESHOLD = 52.0` in `IJT_Node_Client/run_all_tests.py` — WARN-only, advisory/non-gated, ratchet upward as coverage improves. Aspirational goal: 80%. (Current: ~79% statements with 705 tests)
+- Coverage reporters: `text-summary`, `cobertura` — the cobertura XML is parsed by the CI report job
+
+**Web Client JS (Vitest)**: Threshold enforced at 80% via `vitest.config.mjs` `thresholds.lines`. Reporters: `text`, `lcov`, `cobertura`.
 
 ---
 
@@ -286,9 +298,10 @@ UA-for-Industrial-Joining-Technologies/
 - **Details**: read `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md`
 
 ### IJT Node Client (`OPC_UA_Clients/Release1/IJT_Node_Client/`)
-- **Stack**: Node.js 24+, node-opcua, Socket.io, Vitest
+- **Stack**: Node.js 24+, node-opcua, Socket.io, Vitest, Playwright
 - **Purpose**: Node.js + browser OPC UA IJT client (Release 1)
 - **One test command**: `python run_all_tests.py` (npm ci + vitest + eslint + npm audit)
+- **E2E tests**: 27 Playwright specs in `tests/e2e/` — skip gracefully in CI (no server); run locally with `node index.js` then `npx playwright test`
 - **Details**: read `OPC_UA_Clients/Release1/IJT_Node_Client/docs/SKILLS.md`
 
 ---
@@ -393,6 +406,10 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 | C# live-test sync OPC UA calls wrapped in hard timeouts | `BrowseChild`, `Subscribe`, `CallMethod`, and `Unsubscribe` are synchronous and can stall under server load; guarded `Task.WhenAny` timeouts prevent test-host hangs |
 | `JoiningSystem.DisposeAsync` cleanup guard timeout | Management-object dispose calls can perform synchronous network operations; timeout-bounded cleanup (8s management + 10s session close) avoids indefinite teardown stalls |
 | Console live tests override coverage gate (`--cov-fail-under=0`) | Live tests intentionally exercise a narrow surface against a live server; global unit-test coverage threshold should not fail live stage |
+| `pre-commit` as sole hook manager (no Husky) | Polyglot monorepo best practice — one hook manager for all languages. Husky is idiomatic for pure Node.js repos; `pre-commit` handles Python + JS + YAML + TOML uniformly. JS linting wired via `npm --prefix` local hooks in `.pre-commit-config.yaml`. Husky removed from Web Client `package.json` to prevent hook ownership conflict. |
+| `coverlet.runsettings` passed via `--settings` in CI | Without `--settings`, `ExcludeByNamespace` (UAModel, Program) and `[GeneratedCode]` exclusions are ignored — auto-generated code inflates C# line count and deflates coverage % |
+| `playwright/test` import (not `@playwright/test` package) | Node Client has `playwright` (not `@playwright/test`) in `package.json`. `playwright` exposes the same test API at `playwright/test`. Avoids adding a second overlapping Playwright package. |
+| `pytest_sessionfinish` cleanup hook in Web Client `conftest.py` | `__pycache__` and `tmp/pytest` created by direct `pytest` invocations are cleaned up post-session even when `run_all_tests.py` is not used. Keeps project tree clean on every run path. |
 
 ---
 

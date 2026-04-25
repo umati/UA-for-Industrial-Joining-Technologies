@@ -1,4 +1,4 @@
-import { test as base } from '@playwright/test'
+import { test as base } from 'playwright/test'
 
 const BASE_URL = 'http://localhost:3000'
 const OPCUA_ENDPOINT = 'opc.tcp://localhost:40451'
@@ -22,4 +22,4 @@ export const test = base.extend({
 })
 
 export { BASE_URL, OPCUA_ENDPOINT }
-export { expect } from '@playwright/test'
+export { expect } from 'playwright/test'

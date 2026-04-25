@@ -17,7 +17,7 @@ export default defineConfig({
     environment: 'node',
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'lcov'],
+      reporter: ['text', 'lcov', 'cobertura'],
       reportsDirectory: 'test-results/coverage',
       include: ['src/javascripts/ijt-support/**/*.mjs'],
       exclude: ['src/javascripts/views/**/*.mjs'],  // views require DOM

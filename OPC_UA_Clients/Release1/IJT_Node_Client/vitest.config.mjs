@@ -6,9 +6,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   resolve: {
-    alias: {
-      'ijt-support': path.resolve(__dirname, 'javascripts/ijt-support')
-    }
+    alias: [
+      { find: 'ijt-support', replacement: path.resolve(__dirname, 'javascripts/ijt-support') },
+      { find: 'views', replacement: path.resolve(__dirname, 'javascripts/views') },
+      // Redirect the browser-side vendor bundle to a lightweight test stub so
+      // tests that import chart-handler.mjs don't need the actual UMD file.
+      { find: '/vendor/chart.umd.js', replacement: path.resolve(__dirname, 'tests/__mocks__/chart-vendor.mjs') },
+    ]
   },
   test: {
     environment: 'jsdom',
@@ -17,10 +21,8 @@ export default defineConfig({
     coverage: {
       reportsDirectory: 'test-results/coverage',
       provider: 'v8',
-      // Scope to the testable business-logic layer only.
-      // The views/ layer requires a real browser (DOM + canvas + chart libs) and
-      // is exercised by Playwright E2E tests, not Vitest unit tests.
-      include: ['javascripts/ijt-support/**/*.mjs'],
+      // The views/ layer is tested in jsdom (unit) as well as Playwright (E2E).
+      include: ['javascripts/ijt-support/**/*.mjs', 'javascripts/views/**/*.mjs'],
       all: true,
       // cobertura: parsed by CI report job (parse_coverage function expects line-rate attribute)
       // text-summary: human-readable output in the CI log

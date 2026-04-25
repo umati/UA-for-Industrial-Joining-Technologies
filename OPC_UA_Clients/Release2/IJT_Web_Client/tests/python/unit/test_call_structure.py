@@ -256,11 +256,11 @@ def ijt_nodeset_types():
         sdef = ua.StructureDefinition()
         sdef.StructureType = ua.StructureType.Structure
         sdef.Fields = [
-            ua.StructureField(Name="JoiningProcessId", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),
-            ua.StructureField(Name="JoiningProcessOriginId", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),
-            ua.StructureField(Name="SelectionName", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),
+            ua.StructureField(Name="JoiningProcessId", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),  # type: ignore[arg-type]
+            ua.StructureField(Name="JoiningProcessOriginId", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),  # type: ignore[arg-type]
+            ua.StructureField(Name="SelectionName", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),  # type: ignore[arg-type]
         ]
-        make_structure(ua.NodeId(3029, 4), "JoiningProcessIdentificationDataType", sdef)
+        make_structure(ua.NodeId(3029, 4), "JoiningProcessIdentificationDataType", sdef)  # type: ignore[arg-type]
 
     yield
 
@@ -269,13 +269,7 @@ def ijt_nodeset_types():
 
 
 def test_joining_process_type_happy_path(ijt_nodeset_types):  # noqa: ARG001 — fixture registers types
-    """Verifies the happy path for type 3029 (JoiningProcessIdentificationDataType).
-
-    The ``ijt_nodeset_types`` fixture registers the struct via asyncua's
-    standard ``make_structure`` API — the same path taken when a live server
-    loads its type dictionary — so this test exercises real production behaviour
-    without requiring a running OPC UA server.
-    """
+    """Verifies the happy path for type 3029 (JoiningProcessIdentificationDataType)."""
     arg = {
         "dataType": 3029,
         "value": [
@@ -285,7 +279,83 @@ def test_joining_process_type_happy_path(ijt_nodeset_types):  # noqa: ARG001 —
         ],
     }
     result = create_call_structure(arg)
-    assert isinstance(result, ua.JoiningProcessIdentificationDataType)
+    assert isinstance(result, ua.JoiningProcessIdentificationDataType)  # type: ignore[attr-defined]
     assert result.JoiningProcessId == "proc-001"
     assert result.JoiningProcessOriginId == "origin-001"
     assert result.SelectionName == "selection-A"
+
+
+# ---------------------------------------------------------------------------
+# create_call_structure — type 3010 (EntityDataType array)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def ijt_entity_type():
+    """Register EntityDataType using asyncua's native make_structure API (NodeId 3010)."""
+    from asyncua.common.structures104 import make_structure
+
+    already_registered = hasattr(ua, "EntityDataType")
+    if not already_registered:
+        sdef = ua.StructureDefinition()
+        sdef.StructureType = ua.StructureType.Structure
+        sdef.Fields = [
+            ua.StructureField(Name="Name", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),  # type: ignore[arg-type]
+            ua.StructureField(Name="Description", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),  # type: ignore[arg-type]
+            ua.StructureField(Name="EntityId", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),  # type: ignore[arg-type]
+            ua.StructureField(Name="EntityOriginId", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),  # type: ignore[arg-type]
+            ua.StructureField(Name="IsExternal", DataType=ua.NodeId(ua.ObjectIds.Boolean), ValueRank=-1),  # type: ignore[arg-type]
+            # EntityType is Int16 per Opc.Ua.Ijt.Base.NodeSet2.xml NodeId 3010
+            ua.StructureField(Name="EntityType", DataType=ua.NodeId(ua.ObjectIds.Int16), ValueRank=-1),  # type: ignore[arg-type]
+        ]
+        make_structure(ua.NodeId(3010, 4), "EntityDataType", sdef)  # type: ignore[arg-type]
+
+    yield
+
+    if not already_registered and hasattr(ua, "EntityDataType"):
+        delattr(ua, "EntityDataType")
+
+
+def test_entity_data_type_array_happy_path(ijt_entity_type):  # noqa: ARG001
+    """EntityDataType array (type 3010) wraps entities in ExtensionObject Variant."""
+    arg = {
+        "dataType": 3010,
+        "value": [
+            {
+                "value": {
+                    "Name": "Wrench-1",
+                    "Description": "Electric torque wrench",
+                    "EntityId": "ent-001",
+                    "EntityOriginId": "orig-001",
+                    "IsExternal": False,
+                    "EntityType": 1,
+                }
+            },
+            {
+                "value": {
+                    "Name": "Socket-1",
+                    "Description": "Socket adapter",
+                    "EntityId": "ent-002",
+                    "EntityOriginId": "orig-002",
+                    "IsExternal": True,
+                    "EntityType": 2,
+                }
+            },
+        ],
+    }
+    result = create_call_structure(arg)
+    assert isinstance(result, ua.Variant)
+    assert result.VariantType is ua.VariantType.ExtensionObject
+    assert isinstance(result.Value, list)
+    assert len(result.Value) == 2
+    assert result.Value[0].Name == "Wrench-1"
+    assert result.Value[1].IsExternal is True
+
+
+def test_entity_data_type_array_empty_list(ijt_entity_type):  # noqa: ARG001
+    """Empty entity list still returns an ExtensionObject Variant."""
+    arg = {"dataType": 3010, "value": []}
+    result = create_call_structure(arg)
+    assert isinstance(result, ua.Variant)
+    assert result.VariantType is ua.VariantType.ExtensionObject
+    assert result.Value == []

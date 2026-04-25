@@ -6,7 +6,6 @@
   "type": "module",
   "scripts": {
     "start": "npx serve --listen tcp://127.0.0.1:3000 --no-clipboard .",
-    "prepare": "husky || true",
     "test": "npm run test:unit:js",
     "test:unit:python": "python run_all_tests.py",
     "test:integration:python": "python run_all_tests.py --integration",
@@ -22,7 +21,8 @@
     "lint:fix": "eslint src/javascripts config.js --fix --config eslint.config.mjs",
     "lint:css": "stylelint src/resources/css/*.css",
     "lint:css:fix": "stylelint src/resources/css/*.css --fix",
-    "lint:all": "npm run lint && npm run lint:css"
+    "lint:all": "npm run lint && npm run lint:css",
+    "clean": "node -e \"require('fs').rmSync('test-results', {recursive: true, force: true})\""
   },
   "author": "Joakim Gustafsson <joakim.gustafsson@atlascopco.com>",
   "license": "ISC",
@@ -38,8 +38,6 @@
     "eslint-plugin-n": "^17.24.0",
     "eslint-plugin-promise": "^7.2.1",
     "globals": "^17.4.0",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.4.0",
     "neostandard": "^0.13.0",
     "serve": "^14.2.6",
     "stylelint": "^17.6.0",
@@ -59,10 +57,5 @@
   ],
   "overrides": {
     "compression": "1.8.1"
-  },
-  "lint-staged": {
-    "src/resources/css/*.css": "stylelint --fix",
-    "src/javascripts/**/*.js": "eslint --fix --config eslint.config.mjs",
-    "config.js": "eslint --fix --config eslint.config.mjs"
   }
 }

@@ -11,6 +11,7 @@ addopts = "-v -p no:cacheprovider"
 # so pytest temp dirs always land in tmp/pytest/ regardless of the invoking CWD.
 # -p no:cacheprovider prevents .pytest_cache creation (matches Test/Web clients).
 tmp_path_retention_policy = "failed"
+tmp_path_retention_count = 1
 norecursedirs = ["live", "fixtures", "tmp", "pytest-cache-files-*"]
 markers = [
     "integration: tests requiring a running OPC UA server",

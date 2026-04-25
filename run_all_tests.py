@@ -373,10 +373,11 @@ def _emit_suite_output(result: SuiteResult) -> None:
 def _parse_suite_counts(text: str) -> str:
     """Return the most informative test-count string from sub-runner captured output.
 
-    Handles three output formats:
+    Handles four output formats:
       - pytest:  "1298 passed, 267 skipped, 2 xfailed in 409.92s"
       - C# dotnet test:  "Failed: 0, Passed: 800, Skipped: 0, Total: 800"
-      - Vitest:  "Tests  152 passed (152)"
+      - Vitest raw:  "Tests  152 passed (152)"
+      - Node sub-runner:  "[PHASE 1] Vitest (unit) .... PASS (299/299)"
     For suites that run both Python and JS (Web Client), combines both counts.
     """
     _WORD = r"(?:failed|error|errors|skipped|xfailed|xpassed|warnings?|deselected)"
@@ -388,8 +389,11 @@ def _parse_suite_counts(text: str) -> str:
             best = (total, snippet)
     py_counts = best[1]
 
+    # Raw vitest output: "Tests  152 passed (152)"
     vm = re.search(r"\bTests\s+(\d+) passed", text)
-    js_counts = f"{vm.group(1)} passed" if vm else ""
+    # Node sub-runner summary: "[PHASE 1] Vitest (unit) .... PASS (299/299)"
+    vnm = re.search(r"Vitest \(unit\).*?PASS \((\d+)/\d+\)", text)
+    js_counts = f"{vm.group(1)} passed" if vm else f"{vnm.group(1)} passed" if vnm else ""
 
     if py_counts and js_counts:
         return f"{py_counts} (py), {js_counts} (js)"
@@ -1435,31 +1439,146 @@ def run_phase2(suites: dict) -> list[SuiteResult]:
 # ---------------------------------------------------------------------------
 
 
-def _print_summary(results: list[SuiteResult], total_time: float) -> int:
+def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noqa: C901
+    """Print a structured summary table grouped by phase.
+
+    Layout (single-line box drawing, Unicode):
+
+        ┌──────────────────────┬────────┬──────────┬──────────────────────┐
+        │ Suite                │ Status │     Time │ Detail               │
+        ├──────────────────────┴────────┴──────────┴──────────────────────┤
+        │  GHA / Repo Checks                                               │
+        ├──────────────────────┬────────┬──────────┬──────────────────────┤
+        │ GHA actionlint       │  PASS  │     0.0s │ 3 workflow(s) valid  │
+        │ GHA zizmor           │  SKIP  │     0.0s │ zizmor unavailable   │
+        ├──────────────────────┴────────┴──────────┴──────────────────────┤
+        │  Phase 1 — Unit & Static                                         │
+        ├──────────────────────┬────────┬──────────┬──────────────────────┤
+        │ node                 │  PASS  │   160.8s │ 705 passed           │
+        ├──────────────────────┼────────┼──────────┼──────────────────────┤
+        │ TOTAL                │        │   732.6s │ 14 suites  ✔ 13 ...  │
+        └──────────────────────┴────────┴──────────┴──────────────────────┘
+    """
     _banner("FINAL SUMMARY")
-    overall = 0
-    col_w = max((len(r.name) for r in results), default=20) + 2
 
-    for r in results:
+    phase1_names = set(PHASE1_SUITES.keys())
+    phase2_names = set(PHASE2_SUITES.keys())
+
+    gha_rows = [r for r in results if r.name not in phase1_names and r.name not in phase2_names]
+    p1_rows = [r for r in results if r.name in phase1_names]
+    p2_rows = [r for r in results if r.name in phase2_names]
+
+    # ── Column content widths (each cell = " {content} " → adds 2 chars) ──────
+    nw = max(max((len(r.name) for r in results), default=14), 18)
+    sw = 6  # "Status" / center-padded "PASS" etc. → 8 chars per cell total
+    tw = 8  # time right-aligned                   → 10 chars per cell total
+    dw = 38  # detail / first note (truncated)      → 40 chars per cell total
+
+    # Visible chars between the two outer │ borders in a spanning (section) row:
+    #   (nw+2) + │ + (sw+2) + │ + (tw+2) + │ + (dw+2) = nw+sw+tw+dw+11
+    span_w = nw + sw + tw + dw + 11
+
+    # ── Box-drawing characters ─────────────────────────────────────────────────
+    H = "\u2500"
+    V = "\u2502"  # ─  │
+    TL = "\u250c"
+    TR = "\u2510"  # ┌  ┐
+    BL = "\u2514"
+    BR = "\u2518"  # └  ┘
+    LM = "\u251c"
+    RM = "\u2524"  # ├  ┤
+    TT = "\u252c"
+    BT = "\u2534"
+    CR = "\u253c"  # ┬  ┴  ┼
+
+    def _hcols(lc: str, mid: str, r: str) -> str:
+        """4-column separator (mid char at every junction)."""
+        return f"  {lc}{H * (nw + 2)}{mid}{H * (sw + 2)}{mid}{H * (tw + 2)}{mid}{H * (dw + 2)}{r}"
+
+    def _hclose(lc: str, r: str) -> str:
+        """Merge columns into a full-width span (┴ closes each column above)."""
+        return f"  {lc}{H * (nw + 2)}{BT}{H * (sw + 2)}{BT}{H * (tw + 2)}{BT}{H * (dw + 2)}{r}"
+
+    def _hopen(lc: str, r: str) -> str:
+        """Re-open columns from a span (┬ opens each column below)."""
+        return f"  {lc}{H * (nw + 2)}{TT}{H * (sw + 2)}{TT}{H * (tw + 2)}{TT}{H * (dw + 2)}{r}"
+
+    def _row(name: str, scell: str, time_str: str, detail: str) -> str:
+        """One data row. `scell` must be exactly sw+2 visible chars (ANSI OK)."""
+        n = f" {name[:nw]:<{nw}} "
+        t = f" {time_str[:tw]:>{tw}} "
+        d = f" {detail[:dw]:<{dw}} "
+        return f"  {V}{n}{V}{scell}{V}{t}{V}{d}{V}"
+
+    def _scell(r: SuiteResult) -> str:
+        """Coloured status badge — exactly sw+2 visible chars."""
         if r.skipped:
-            tag = _c("\033[93m", "SKIP")
+            label, colour = "SKIP", "\033[93m"
         elif r.ok:
-            tag = _c("\033[92m", "PASS")
+            label, colour = "PASS", "\033[92m"
         else:
-            tag = _c("\033[91m", "FAIL")
-            overall = 1
-        dur = f"{r.duration:6.1f}s"
-        counts = f"   {r.counts}" if r.counts else ""
-        sys.stdout.write(f"  {tag}  {r.name:<{col_w}}  {dur}{counts}\n")
-        for note in r.notes:
-            sys.stdout.write(f"          ^ {note}\n")
+            label, colour = "FAIL", "\033[91m"
+        return _c(colour, f" {label:^{sw}} ")
 
-    sys.stdout.write(f"\n  Total: {total_time:.1f}s\n")
+    def _section_row(label: str) -> str:
+        """Full-width row with a bold group label (spanning all columns)."""
+        content = f"  {label}"
+        padded = content + " " * max(0, span_w - len(content))
+        text = _c("\033[1m", padded) if _USE_COLOUR else padded
+        return f"  {V}{text}{V}"
+
+    blank_s = f" {'':{sw}} "  # sw+2 spaces — blank status cell
+
+    out = sys.stdout.write
+    overall = 0
+
+    # ── Header ────────────────────────────────────────────────────────────────
+    out(_hcols(TL, TT, TR) + "\n")
+    out(_row("Suite", f" {'Status':^{sw}} ", "Time", "Detail") + "\n")
+
+    # ── One group of rows (GHA / Phase 1 / Phase 2) ───────────────────────────
+    def _emit_group(label: str, rows: list[SuiteResult]) -> None:
+        nonlocal overall
+        if not rows:
+            return
+        out(_hclose(LM, RM) + "\n")  # ├──┴──┴──┴──┤  collapse columns
+        out(_section_row(label) + "\n")  # │  Label     │
+        out(_hopen(LM, RM) + "\n")  # ├──┬──┬──┬──┤  re-open columns
+        for r in rows:
+            if not r.ok and not r.skipped:
+                overall = 1
+            t = f"{r.duration:.1f}s"
+            det = r.counts or (r.notes[0] if r.notes else "")
+            out(_row(r.name, _scell(r), t, det) + "\n")
+            # Show extra notes as indented continuation rows
+            extra = r.notes if r.counts else r.notes[1:]
+            for note in extra:
+                out(_row("", blank_s, "", f"  \u2514 {note}") + "\n")
+
+    _emit_group("GHA / Repo Checks", gha_rows)
+    _emit_group("Phase 1 \u2014 Unit & Static", p1_rows)
+    _emit_group("Phase 2 \u2014 Live / Integration", p2_rows)
+
+    # ── Totals row ────────────────────────────────────────────────────────────
+    n_pass = sum(1 for r in results if r.ok and not r.skipped)
+    n_skip = sum(1 for r in results if r.skipped)
+    n_fail = sum(1 for r in results if not r.ok and not r.skipped)
+    totals = (
+        f"{len(results)} suites"
+        + (f"   \u2714 {n_pass}" if n_pass else "")
+        + (f"   \u25cb {n_skip}" if n_skip else "")
+        + (f"   \u2718 {n_fail}" if n_fail else "")
+    )
+    out(_hcols(LM, CR, RM) + "\n")
+    out(_row("TOTAL", blank_s, f"{total_time:.1f}s", totals) + "\n")
+    out(_hcols(BL, BT, BR) + "\n\n")
+
+    # ── Verdict ───────────────────────────────────────────────────────────────
     if overall == 0:
-        sys.stdout.write(_c("\033[92m\033[1m", "\n  ALL TESTS PASSED \u2714\n"))
+        out(_c("\033[92m\033[1m", "  \u2714  ALL TESTS PASSED\n"))
     else:
-        sys.stdout.write(_c("\033[91m\033[1m", "\n  ONE OR MORE SUITES FAILED \u2718\n"))
-    sys.stdout.write("\u2550" * 66 + "\n\n")
+        out(_c("\033[91m\033[1m", "  \u2718  ONE OR MORE SUITES FAILED\n"))
+    out("\u2550" * 66 + "\n\n")
     sys.stdout.flush()
     return overall
 
@@ -1579,10 +1698,9 @@ def main() -> int:
             all_results.extend(p2)
 
     finally:
-        pass  # sub-runners own their server lifecycle; nothing to tear down here
+        _cleanup_caches(ROOT)  # always runs: normal exit, Ctrl+C, or exception
 
     rc = _print_summary(all_results, time.monotonic() - t_total)
-    _cleanup_caches(ROOT)
     return rc
 
 

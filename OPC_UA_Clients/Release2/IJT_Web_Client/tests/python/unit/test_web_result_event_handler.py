@@ -30,7 +30,7 @@ from python.result_event_handler import ResultEventHandler, Short  # noqa: E402
 
 
 def test_short_stores_all_fields():
-    event_type = ua.NodeId(1007, 2)
+    event_type = ua.NodeId(1007, 2)  # type: ignore[arg-type]
     result_data = {"Steps": [1, 2]}
     # asyncua 1.x: LocalizedText(Text, Locale)
     message = ua.LocalizedText("Tightening OK", "en")
@@ -42,7 +42,7 @@ def test_short_stores_all_fields():
 
 
 def test_short_result_can_be_none():
-    short = Short(ua.NodeId(0, 0), None, ua.LocalizedText("", "en"), "id-0")
+    short = Short(ua.NodeId(0, 0), None, ua.LocalizedText("", "en"), "id-0")  # type: ignore[arg-type]
     assert short.Result is None
 
 
@@ -98,7 +98,7 @@ async def test_process_event_enqueues_json_string():
     server_url = "opc.tcp://localhost:40451"
     handler = ResultEventHandler(ws, server_url)
 
-    short = Short(ua.NodeId(1007, 2), {"result": 1}, ua.LocalizedText("OK", "en"), "id-1")
+    short = Short(ua.NodeId(1007, 2), {"result": 1}, ua.LocalizedText("OK", "en"), "id-1")  # type: ignore[arg-type]
 
     with patch("python.result_event_handler.serialize_full_event", return_value={"serialized": True}):
         await handler.process_event(short)
@@ -122,7 +122,7 @@ async def test_process_event_respects_closed_flag():
     handler = ResultEventHandler(ws, "opc.tcp://localhost:40451")
     handler.closed = True
 
-    short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("", "en"), "id-0")
+    short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("", "en"), "id-0")  # type: ignore[arg-type]
     await handler.process_event(short)
 
     assert handler.queue.qsize() == 0
@@ -134,7 +134,7 @@ async def test_process_event_exception_caught():
     ws = AsyncMock()
     handler = ResultEventHandler(ws, "opc.tcp://localhost:40451")
 
-    short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("", "en"), "id-0")
+    short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("", "en"), "id-0")  # type: ignore[arg-type]
     with patch("python.result_event_handler.serialize_full_event", side_effect=ValueError("bad")):
         # Must not raise
         await handler.process_event(short)
@@ -148,7 +148,7 @@ async def test_process_event_exception_caught():
 
 def _make_result_event():
     event = MagicMock()
-    event.EventType = ua.NodeId(1007, 2)
+    event.EventType = ua.NodeId(1007, 2)  # type: ignore[arg-type]
     event.Result = {"status": 1}
     # asyncua 1.x: LocalizedText(Text, Locale)
     event.Message = ua.LocalizedText("Pass", "en")
@@ -221,7 +221,7 @@ async def test_handle_queue_breaks_on_connection_closed_ok():
     server_url = "opc.tcp://localhost:40451"
     handler = ResultEventHandler(ws, server_url)
 
-    short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("msg", "en"), "id-ok")
+    short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("msg", "en"), "id-ok")  # type: ignore[arg-type]
     with patch("python.result_event_handler.serialize_full_event", return_value={}):
         await handler.process_event(short)
     await asyncio.wait_for(handler._queue_task, timeout=2.0)
@@ -233,7 +233,7 @@ async def test_handle_queue_breaks_on_exception():
     ws.send = AsyncMock(side_effect=RuntimeError("connection reset"))
     handler = ResultEventHandler(ws, "opc.tcp://localhost:40451")
 
-    short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("msg", "en"), "id-err")
+    short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("msg", "en"), "id-err")  # type: ignore[arg-type]
     with patch("python.result_event_handler.serialize_full_event", return_value={}):
         await handler.process_event(short)
     await asyncio.wait_for(handler._queue_task, timeout=2.0)

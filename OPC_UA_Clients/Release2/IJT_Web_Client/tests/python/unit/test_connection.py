@@ -502,3 +502,45 @@ async def test_methodcall_array_argument_creates_list_variant():
     assert "output" in result
     assert len(captured) == 1
     assert isinstance(captured[0].Value, list)
+
+
+# ---------------------------------------------------------------------------
+# id_object_to_string — pure function, no OPC UA required
+# ---------------------------------------------------------------------------
+
+
+from python.connection import id_object_to_string  # noqa: E402
+
+
+def test_id_object_to_string_returns_string_unchanged():
+    assert id_object_to_string("ns=2;i=1001") == "ns=2;i=1001"
+
+
+def test_id_object_to_string_dict_integer_identifier():
+    result = id_object_to_string({"Identifier": 1001, "NamespaceIndex": 2})
+    assert result == "ns=2;i=1001"
+
+
+def test_id_object_to_string_dict_string_identifier():
+    result = id_object_to_string({"Identifier": "MyNode", "NamespaceIndex": 3})
+    assert result == "ns=3;s=MyNode"
+
+
+def test_id_object_to_string_dict_zero_namespace():
+    result = id_object_to_string({"Identifier": 84, "NamespaceIndex": 0})
+    assert result == "ns=0;i=84"
+
+
+def test_id_object_to_string_fallback_on_int():
+    result = id_object_to_string(42)
+    assert result == "42"
+
+
+def test_id_object_to_string_fallback_on_none():
+    result = id_object_to_string(None)
+    assert result == "None"
+
+
+def test_id_object_to_string_fallback_on_list():
+    result = id_object_to_string([1, 2, 3])
+    assert result == "[1, 2, 3]"

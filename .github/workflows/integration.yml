@@ -886,6 +886,15 @@ jobs:
 
           # ── Overall status ────────────────────────────────────────────────
 
+          all_suites_data = [sd_smoke, wd_py, wd_js, tc_smoke, tc_tests, wc_web, con_live, cs_live]
+          total_t  = sum(s[0] for s in all_suites_data if s[0] is not None)
+          total_f  = sum(s[2] for s in all_suites_data if s[2] is not None)
+          total_sk = sum(s[3] for s in all_suites_data if s[3] is not None)
+          if total_t > 0:
+              totals_str = f"{total_t:,} tests &nbsp;·&nbsp; {total_f} failed &nbsp;·&nbsp; {total_sk} skipped"
+          else:
+              totals_str = "no test data"
+
           core_jobs = [sd_r, wd_r, tc_r, wc_r, con_r, cs_r]
           n_pass  = sum(1 for r in core_jobs if r == "success")
           n_fail  = sum(1 for r in core_jobs if r == "failure")
@@ -893,10 +902,10 @@ jobs:
 
           if n_fail == 0:
               status_icon = "✅"
-              status_msg  = f"All {n_pass} / {n_total} jobs passed"
+              status_msg  = f"All {n_pass} / {n_total} jobs passed &nbsp;·&nbsp; {totals_str}"
           else:
               status_icon = "❌"
-              status_msg  = f"{n_fail} / {n_total} jobs failed  ·  {n_pass} passed"
+              status_msg  = f"{n_fail} / {n_total} jobs failed &nbsp;·&nbsp; {n_pass} passed &nbsp;·&nbsp; {totals_str}"
 
           run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
           sha_str  = f"`{sha}`" if sha else "—"

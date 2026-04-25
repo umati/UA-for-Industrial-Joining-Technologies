@@ -90,14 +90,14 @@ def test_utils_has_required_api():
 
 
 def test_nodeid_to_str_numeric():
-    node = ua.NodeId(84, 0)
+    node = ua.NodeId(84, 0)  # type: ignore[arg-type]
     result = web_utils.nodeid_to_str(node)
     assert "84" in result
     assert "0" in result
 
 
 def test_nodeid_to_str_string_node():
-    node = ua.NodeId("TighteningSystem", 1)
+    node = ua.NodeId("TighteningSystem", 1)  # type: ignore[arg-type]
     result = web_utils.nodeid_to_str(node)
     assert "TighteningSystem" in result
     assert "1" in result

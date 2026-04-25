@@ -552,6 +552,7 @@ jobs:
       build_result:  ${{ steps.build.outcome }}     # zizmor: ignore[template-injection]
       format_result: ${{ steps.format.outcome }}    # zizmor: ignore[template-injection]
       vuln_result:   ${{ steps.vuln_scan.outcome }} # zizmor: ignore[template-injection]
+      coverage_pct:  ${{ steps.coverage.outputs.pct }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
@@ -617,6 +618,7 @@ jobs:
           IJT_PHASE1_ONLY: 'true'
         run: |
           New-Item -ItemType Directory -Force -Path test-results | Out-Null
+          New-Item -ItemType Directory -Force -Path test-results\coverage | Out-Null
           dotnet test Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj `
             --no-build `
             --no-restore `
@@ -625,7 +627,28 @@ jobs:
             --logger "trx;LogFileName=tests.trx" `
             --logger "console;verbosity=normal" `
             --results-directory test-results `
+            --collect:"XPlat Code Coverage" `
+            --settings coverlet.runsettings `
             --blame-hang --blame-hang-timeout 60s
+
+      - name: Collect Coverage Report
+        id: coverage
+        if: always()
+        shell: pwsh
+        working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
+        run: |
+          # Coverlet writes to test-results/<GUID>/coverage.cobertura.xml — copy to canonical path.
+          $covXml = Get-ChildItem test-results -Recurse -Filter "coverage.cobertura.xml" | Select-Object -First 1
+          if ($covXml) {
+            Copy-Item $covXml.FullName test-results\coverage\cobertura.xml -Force
+            [xml]$cov = Get-Content test-results\coverage\cobertura.xml
+            $pct = [math]::Round([double]$cov.coverage.'line-rate' * 100, 1)
+            Write-Host "C# line coverage: $pct%"
+            "pct=$pct" | Out-File $Env:GITHUB_OUTPUT -Append
+          } else {
+            Write-Host "Coverage XML not generated (tests may have failed or --collect flag not picked up)"
+            "pct=" | Out-File $Env:GITHUB_OUTPUT -Append
+          }
 
       - name: Format Check
         id: format
@@ -1179,6 +1202,7 @@ jobs:
           nod_npm  = parse_npm_audit("all-results/results-node-client/npm-audit.json")
 
           cs_unit_t = parse_junit("all-results/results-csharp-unit/tests.xml")
+          cs_cov    = parse_coverage("all-results/results-csharp-unit/coverage/cobertura.xml")
 
           tc_py_t  = parse_junit("all-results/results-test-client/pytest.xml")
           tc_ban   = parse_bandit("all-results/results-test-client/bandit.json")
@@ -1201,6 +1225,7 @@ jobs:
           _warn(con_r,  con_py_t[0], "console-client",       "pytest.xml")
           _warn(nod_r,  nod_js_t[0], "node-client",          "vitest.xml")
           _warn(cs_u_r, cs_unit_t[0],"csharp-unit",          "tests.xml")
+          _warn(cs_u_r, cs_cov,      "csharp-unit",          "coverage/cobertura.xml")
           _warn(tc_r,   tc_py_t[0],  "test-client",          "pytest.xml")
           _warn(tc_r,   tc_ban[0],   "test-client",          "bandit.json")
           _warn(tc_r,   tc_cov,      "test-client",          "coverage.xml")
@@ -1251,7 +1276,7 @@ jobs:
               f"| Web Client — JavaScript  | Ubuntu  | {tests(*web_js_t)} | {skips(web_js_t[3])} | — |",
               f"| Console Client — Python  | Ubuntu  | {tests(*con_py_t)} | {skips(con_py_t[3])} | {cov(con_cov)} |",
               f"| Node Client — JavaScript | Ubuntu  | {tests(*nod_js_t)} | {skips(nod_js_t[3])} | {cov(nod_cov)} |",
-              f"| C# Client — Unit (xUnit) | Windows | {tests(*cs_unit_t)} | {skips(cs_unit_t[3])} | — |",
+              f"| C# Client — Unit (xUnit) | Windows | {tests(*cs_unit_t)} | {skips(cs_unit_t[3])} | {cov(cs_cov)} |",
               f"| Test Client — Python (Unit) | Ubuntu | {tests(*tc_py_t)} | {skips(tc_py_t[3])} | {cov(tc_cov)} |",
               f"| OPC UA Server — Smoke    | Windows | {tests(*ss_smoke)} | {skips(ss_smoke[3])} | — |",
               "",
@@ -1280,7 +1305,7 @@ jobs:
               "---",
               "",
               "> 📋 **Checks** tab — per-test drill-down &nbsp;·&nbsp; 📦 **Artifacts** — JUnit XML · Coverage XML · ESLint JSON · Bandit JSON",
-              "> Coverage: ✅ ≥ 90% &nbsp;·&nbsp; ⚠️ ≥ 70% &nbsp;·&nbsp; ❌ < 70% (Node Client aspirational goal: 80%; floor: 52%)",
+              "> Coverage key: ✅ ≥ 90% &nbsp;·&nbsp; ⚠️ 70–89% (below target) &nbsp;·&nbsp; ❌ < 70% (needs improvement) &nbsp;·&nbsp; **Project target: ≥ 80% per component**",
           ]
 
           # ── Skip budget check ─────────────────────────────────────────────────

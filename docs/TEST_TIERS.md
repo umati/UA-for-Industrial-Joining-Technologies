@@ -2,19 +2,21 @@
 
 ## Overview
 
-All tests in this repository are classified into two tiers:
+All tests in this repository are classified into three tiers:
 
 | Tier | Workflow | Blocking | Runs on |
 |------|----------|----------|---------|
 | **ci** | `ci.yml` | ✅ Blocks every PR and push | Every commit |
 | **integration** | `integration.yml` | ℹ️ Non-blocking — tracked, not blocking | Nightly · Manual · Path-triggered |
+| **e2e** | Local only | ℹ️ Non-blocking — dev machine only | Local when server running |
 
 ---
 
 ## CI (`ci.yml`)
 
 Fast and deterministic on GitHub-hosted runners. **Must pass before any merge.**
-`csharp-unit` runs build, format, vuln scan, and all non-live xUnit tests. `csharp-live` runs the 110 live xUnit tests on a dedicated server instance (port 40464).
+`csharp-unit` runs build, format, vuln scan, and all non-live xUnit tests.
+`csharp-live` runs the 110 live xUnit tests on a dedicated server instance (port 40464) — part of the `ci.yml` live job.
 
 ### Jobs
 
@@ -179,6 +181,61 @@ Set `OPCUA_SERVER_URL` to point a client at a specific server; auto-launch is sk
 this variable is present. CI workflows set this per-job. The root-level `run_all_tests.py`
 does NOT set this for Python sub-runners — each auto-launches on its dedicated port. Only
 the C# runner receives `OPCUA_SERVER_PORT=40464` from the root runner.
+
+---
+
+## E2E (`tests/e2e/` — Local Dev Only)
+
+Playwright browser-automation tests for the Node Client UI. **Not run in CI** — they
+require a running HTTP server (`node index.js`) and installed browser binaries.
+
+### Node Client E2E
+
+| Spec | Tests | OPC UA required? | Notes |
+|------|-------|-----------------|-------|
+| `servers.spec.mjs` | 7 | No | Servers tab always visible; tests Add/Save/Delete buttons, row management |
+| `connection.spec.mjs` | 4 | No | Connection form always visible |
+| `events.spec.mjs` | 3 | Optional | Tab skips gracefully if not connected |
+| `methods.spec.mjs` | 3 | Optional | Tab skips gracefully if not connected |
+| `address-space.spec.mjs` | 3 | Optional | Tab skips gracefully if not connected |
+| `trace.spec.mjs` | 3 | Optional | Tab skips gracefully if not connected |
+| `assets.spec.mjs` | 4 | Optional | Tab skips gracefully if not connected |
+
+### How skip guard works
+
+All specs use `e2e-fixtures.mjs` which checks `http://localhost:3000` before any test:
+```js
+if (!await isServerRunning()) {
+  test.skip(true, 'IJT Node Client not running — start with: node index.js')
+}
+```
+This means **zero tests fail in CI** — they all skip cleanly when no server is running.
+The fixtures module imports from `playwright/test` (the `playwright` npm package exposes
+this, equivalent to `@playwright/test`).
+
+### Running E2E locally
+
+```sh
+# Start server
+node OPC_UA_Clients/Release1/IJT_Node_Client/index.js
+
+# Install browsers once
+cd OPC_UA_Clients/Release1/IJT_Node_Client
+npx playwright install chromium
+
+# Run all E2E tests
+npx playwright test --project=views
+
+# Or via run_all_tests.py Phase 2
+python run_all_tests.py --phase2
+```
+
+### Playwright configuration
+
+`playwright.config.mjs` defines three projects:
+- `smoke` — matches `smoke.spec.mjs` (future smoke specs)
+- `regression` — matches `regression-no-server.spec.mjs` (future no-server regression)
+- `views` — matches all current view specs (servers, connection, events, methods, assets, address-space, trace)
 
 ---
 

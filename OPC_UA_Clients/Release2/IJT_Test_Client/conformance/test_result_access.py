@@ -135,15 +135,20 @@ async def _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indice
     return rm, handle, result_data
 
 
-async def _find_result_var(results_folder, ns_mr, ns_ijt):
+async def _find_result_var(results_folder, ns_mr, ns_ijt, ns_indices=None):
     """Locate the Result variable inside the Results folder.
 
     Per OPC 40001-101, the Result variable BrowseName uses NS_MACH_RESULT (ns_mr).
-    Falls back to NS_IJT_BASE (ns_ijt) for older server implementations.
+    Falls back to NS_IJT_BASE (ns_ijt) and then the vendor-specific NS_APP for
+    older or non-standard server implementations.
     """
     node = await find_child_by_browse_name(results_folder, BN.RESULT, ns_mr)
     if node is None and ns_ijt is not None:
         node = await find_child_by_browse_name(results_folder, BN.RESULT, ns_ijt)
+    if node is None and ns_indices is not None:
+        ns_app = ns_indices.get(NS_APP)
+        if ns_app is not None:
+            node = await find_child_by_browse_name(results_folder, BN.RESULT, ns_app)
     return node
 
 
@@ -168,11 +173,11 @@ def _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt):
     """Skip known simulator gap; fail on non-simulator servers."""
     if ns_indices.get(NS_APP) is not None:
         pytest.skip(
-            f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}) — "
+            f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}, ns_app) — "
             "simulator does not expose this variable; verify against a spec-compliant server"
         )
     pytest.fail(
-        f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}) — "
+        f"Result variable not found under Results folder (tried ns_mr={ns_mr}, ns_ijt={ns_ijt}, ns_app) — "
         "required for this conformance unit on non-simulator servers"
     )
 
@@ -424,7 +429,7 @@ async def test_result_management_exposes_last_result_metadata_variable(result_ma
     results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
     if results_folder is None:
         pytest.skip("Results folder not found on ResultManagement")
-    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
+    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt, ns_indices)
     if result_var is None:
         _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
@@ -453,7 +458,7 @@ async def test_last_result_metadata_updated_after_trigger(opcua_client, result_t
     results_folder = await find_child_by_browse_name(rm, BN.RESULTS, ns_mr)
     if results_folder is None:
         pytest.skip("Results folder not found on ResultManagement")
-    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
+    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt, ns_indices)
     if result_var is None:
         _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
@@ -1230,7 +1235,7 @@ async def test_result_variable_value_rank_is_scalar_or_any(result_management, ns
     results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
     if results_folder is None:
         pytest.skip("Results folder not found on ResultManagement")
-    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
+    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt, ns_indices)
     if result_var is None:
         _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
@@ -1272,7 +1277,7 @@ async def test_result_variable_contains_valid_result_meta_data_after_trigger(opc
     results_folder = await find_child_by_browse_name(rm, BN.RESULTS, ns_mr)
     if results_folder is None:
         pytest.skip("Results folder not found on ResultManagement")
-    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
+    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt, ns_indices)
     if result_var is None:
         _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
@@ -1310,7 +1315,7 @@ async def test_result_variable_access_level_allows_read_but_not_write(result_man
     results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
     if results_folder is None:
         pytest.skip("Results folder not found on ResultManagement")
-    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
+    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt, ns_indices)
     if result_var is None:
         _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
@@ -1348,7 +1353,7 @@ async def test_write_to_result_variable_is_rejected(result_management, ns_indice
     results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
     if results_folder is None:
         pytest.skip("Results folder not found on ResultManagement")
-    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt)
+    result_var = await _find_result_var(results_folder, ns_mr, ns_ijt, ns_indices)
     if result_var is None:
         _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)

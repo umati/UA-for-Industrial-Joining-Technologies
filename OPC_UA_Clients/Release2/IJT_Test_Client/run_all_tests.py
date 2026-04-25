@@ -926,7 +926,7 @@ def _step_unit_tests() -> _StepResult:
     for line in reversed(output.splitlines()):
         stripped = line.strip()
         if "passed" in stripped or "failed" in stripped or "error" in stripped:
-            result.note = stripped.split("=")[-1].strip().rstrip("=").strip()
+            result.note = stripped.strip("= ").strip()
             break
     if not result.ok:
         _log(output)

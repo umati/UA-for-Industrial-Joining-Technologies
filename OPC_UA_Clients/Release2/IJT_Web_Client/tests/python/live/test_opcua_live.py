@@ -114,7 +114,7 @@ async def ws_client():
         raise TimeoutError(f"No response to '{command}' within {timeout}s")
 
     async with websockets.connect(WS_URL) as ws:
-        ws.send_recv = lambda cmd, body=None, **kw: send_recv(ws, cmd, body, **kw)
+        ws.send_recv = lambda cmd, body=None, **kw: send_recv(ws, cmd, body, **kw)  # type: ignore[attr-defined]
         yield ws
 
 
@@ -289,8 +289,8 @@ class TestOpcuaSubscription:
             # Give asyncua's publish loop a moment to register the subscription
             await asyncio.sleep(1)
 
-            parent = client.get_node(ua.NodeId(_SIM_R_ID, _NS, ua.NodeIdType.String))
-            method = client.get_node(ua.NodeId(_SIM_SINGLE_ID, _NS, ua.NodeIdType.String))
+            parent = client.get_node(ua.NodeId(_SIM_R_ID, _NS, ua.NodeIdType.String))  # type: ignore[arg-type]
+            method = client.get_node(ua.NodeId(_SIM_SINGLE_ID, _NS, ua.NodeIdType.String))  # type: ignore[arg-type]
             with contextlib.suppress(
                 ua.UaError, OSError
             ):  # Method call may fail; we validate the event subscription below

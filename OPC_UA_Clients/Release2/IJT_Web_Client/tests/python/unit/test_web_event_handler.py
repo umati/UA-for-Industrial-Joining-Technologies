@@ -31,17 +31,17 @@ from python.event_handler import EventHandler, Short  # noqa: E402
 
 def _fake_raw_event(message_text="Event", event_id_bytes=b"evt-001"):
     event = MagicMock()
-    event.EventType = ua.NodeId(1006, 2)
+    event.EventType = ua.NodeId(1006, 2)  # type: ignore[arg-type]
     event.EventId = event_id_bytes
     # asyncua 1.x: LocalizedText(Text, Locale) — text is the first positional arg
     event.Message = ua.LocalizedText(message_text, "en")
     event.SourceName = "ToolController"
-    event.SourceNode = ua.NodeId(500, 1)
+    event.SourceNode = ua.NodeId(500, 1)  # type: ignore[arg-type]
     event.Severity = 300
     event.Time = None
     event.ReceiveTime = None
     event.LocalTime = None
-    event.ConditionClassId = ua.NodeId(0, 0)
+    event.ConditionClassId = ua.NodeId(0, 0)  # type: ignore[arg-type]
     event.ConditionClassName = ua.LocalizedText("JoiningSystemEventType", "en")
     event.ConditionSubClassId = []
     event.ConditionSubClassName = []
@@ -88,7 +88,7 @@ def test_short_severity_is_string():
 
 def test_short_condition_subclass_id_is_list():
     raw = _fake_raw_event()
-    raw.ConditionSubClassId = [ua.NodeId(1, 2), ua.NodeId(3, 4)]
+    raw.ConditionSubClassId = [ua.NodeId(1, 2), ua.NodeId(3, 4)]  # type: ignore[arg-type]
     short = Short(raw)
     assert isinstance(short.ConditionSubClassId, list)
     assert all(isinstance(x, str) for x in short.ConditionSubClassId)
@@ -131,7 +131,7 @@ def test_short_associated_entities_is_list():
 def test_short_missing_attribute_does_not_raise():
     """If an optional attribute is absent, getattr should return default without raising."""
     raw = MagicMock()
-    raw.EventType = ua.NodeId(0, 0)
+    raw.EventType = ua.NodeId(0, 0)  # type: ignore[arg-type]
     raw.EventId = b""
     raw.ConditionSubClassId = []
     raw.ConditionSubClassName = []

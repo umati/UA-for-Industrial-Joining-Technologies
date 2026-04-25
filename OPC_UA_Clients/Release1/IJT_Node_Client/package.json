@@ -15,7 +15,8 @@
     "test:unit:js:watch": "vitest",
     "test:unit:js:coverage": "vitest run --coverage",
     "test:e2e": "playwright test tests/e2e/",
-    "test": "npm run lint && npm run test:unit:js"
+    "test": "npm run lint && npm run test:unit:js",
+    "clean": "node -e \"require('fs').rmSync('test-results', {recursive: true, force: true})\""
   },
   "author": "Joakim Gustafsson <joakim.gustafsson@atlascopco.com>",
   "license": "ISC",

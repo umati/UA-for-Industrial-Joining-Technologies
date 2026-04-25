@@ -89,10 +89,40 @@ npx vitest run --coverage
 
 # Verbose output
 npx vitest --reporter=verbose
+
+# E2E tests (Playwright — requires running server + installed browsers)
+node index.js &                          # start Node Client HTTP server on :3000
+npx playwright install chromium          # first-time browser install
+npx playwright test                      # all E2E specs (views project)
+npx playwright test --project=views      # UI view tests
+npx playwright test tests/e2e/servers.spec.mjs  # single spec
+npx playwright show-report               # open HTML report after a run
 ```
 
 Unit tests live in `tests/js/unit/` and use Vitest with jsdom.
 E2E tests live in `tests/e2e/` and use Playwright (requires running server).
+
+### E2E Test Architecture
+
+All E2E specs use `e2e-fixtures.mjs` which **skips all tests gracefully** when
+`http://localhost:3000` is not reachable. This means:
+- E2E tests **never fail** in CI (server not started in CI)
+- E2E tests **run locally** when `node index.js` is running
+
+Spec overview:
+
+| Spec | Tests | OPC UA required? |
+|------|-------|-----------------|
+| `servers.spec.mjs` | 7 | No — Servers tab always visible |
+| `connection.spec.mjs` | 4 | No — connection form always visible |
+| `events.spec.mjs` | 3 | Optional — tab skips if not connected |
+| `methods.spec.mjs` | 3 | Optional — tab skips if not connected |
+| `address-space.spec.mjs` | 3 | Optional — tab skips if not connected |
+| `trace.spec.mjs` | 3 | Optional — tab skips if not connected |
+| `assets.spec.mjs` | 4 | Optional — tab skips if not connected |
+
+Run `python run_all_tests.py --phase2` to execute Playwright E2E as part of
+the full Phase 2 suite (server auto-launched if binary is present).
 
 ### Zero-Escape Testing Tools (run_all_tests.py Phase 1, auto-detected)
 

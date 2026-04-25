@@ -110,6 +110,10 @@ test-results/
 playwright-report/
 *.tmp
 
+# Codex session temp manifests (codex_temp_cleanup.py creates these when
+# run with --root pointing at this repo; safe to leave gitignored globally)
+.codex_tmp/
+
 # ---------------------------------------------------------------------------
 # Backup files (auto-created by tools — git history IS the backup)
 # Delete .bak* files after every task; never commit them.
@@ -154,6 +158,14 @@ inspect_output*.txt
 # ---------------------------------------------------------------------------
 .docker-build-cache/
 MockCache/
+
+# ---------------------------------------------------------------------------
+# IJT Node Client — project-specific
+# (.state/ scoped here — defensive guard; Node Client run_all_tests.py does
+#  not currently create .state/ but the entry prevents accidental future commits.)
+# ---------------------------------------------------------------------------
+OPC_UA_Clients/Release1/IJT_Node_Client/.state/
+OPC_UA_Clients/Release1/IJT_Node_Client/tmp/
 
 # ---------------------------------------------------------------------------
 # IJT C# Client — project-specific

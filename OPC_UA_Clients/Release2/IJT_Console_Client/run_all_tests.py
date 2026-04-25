@@ -815,7 +815,7 @@ def _step_unit_tests(junit_xml: str | None, verbose: bool = False) -> _StepResul
     for line in reversed(output.splitlines()):
         stripped = line.strip()
         if "passed" in stripped or "failed" in stripped or "error" in stripped:
-            result.note = stripped.split("=")[-1].strip().rstrip("=").strip()
+            result.note = stripped.strip("= ").strip()
             break
     if not result.ok:
         _log(output)
@@ -996,7 +996,7 @@ def _step_live_tests(_junit_xml: str | None, verbose: bool = False) -> _StepResu
     for line in reversed(output.splitlines()):
         stripped = line.strip()
         if "passed" in stripped or "failed" in stripped or "error" in stripped:
-            result.note = stripped.split("=")[-1].strip().rstrip("=").strip()
+            result.note = stripped.strip("= ").strip()
             break
     if not result.ok:
         _log(output)
