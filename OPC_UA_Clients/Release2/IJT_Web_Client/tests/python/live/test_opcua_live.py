@@ -335,7 +335,7 @@ class TestBackendWebSocket:
         resp = await ws_client.send_recv("namespaces")
         data = resp.get("data", {})
         ns = data.get("namespaces") if isinstance(data, dict) else data
-        flat = " ".join(str(n) for n in ns)
+        flat = " ".join(str(n) for n in (ns or []))
         assert "IJT" in flat or "ijt" in flat.lower() or "joining" in flat.lower(), f"IJT not found in namespaces: {ns}"
 
     async def test_read_objects_node(self, ws_client):

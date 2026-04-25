@@ -44,7 +44,7 @@ class FakeIJTInterface:
 @pytest.mark.asyncio
 async def test_handler_routes_message_and_disconnects(monkeypatch):
     idx = importlib.import_module("index")
-    idx.opcuaHandler = None
+    idx.opcuaHandler = None  # type: ignore[attr-defined]
     monkeypatch.setattr(idx, "IJTInterface", FakeIJTInterface)
 
     ws = FakeWebSocket([json.dumps({"command": "ping", "value": 1})])
@@ -61,7 +61,7 @@ async def test_handler_routes_message_and_disconnects(monkeypatch):
 @pytest.mark.asyncio
 async def test_handler_disconnects_on_invalid_json(monkeypatch):
     idx = importlib.import_module("index")
-    idx.opcuaHandler = None
+    idx.opcuaHandler = None  # type: ignore[attr-defined]
     monkeypatch.setattr(idx, "IJTInterface", FakeIJTInterface)
 
     ws = FakeWebSocket(["not-json"])

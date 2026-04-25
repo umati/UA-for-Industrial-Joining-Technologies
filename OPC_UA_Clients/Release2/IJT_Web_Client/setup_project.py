@@ -1003,6 +1003,9 @@ def _create_nodeenv():
         log.error("Please install Node.js with npm and npx, and ensure they are in your PATH.")
         sys.exit(1)
 
+    # All three are non-None: sys.exit(1) above if any were missing.
+    assert node_path is not None and npm_path is not None and npx_path is not None
+
     # quick smoke checks
     try:
         subprocess.check_call([node_path, "-v"])

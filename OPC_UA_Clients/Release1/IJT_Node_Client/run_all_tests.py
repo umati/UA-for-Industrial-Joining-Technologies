@@ -40,10 +40,10 @@ _REPO_ROOT: Path = Path(__file__).resolve().parents[3]
 _MIN_NODE_MAJOR = 20
 _MIN_NPM_MAJOR = 9
 # Coverage threshold — aspirational target (80%).
-# Current measured coverage is ~35%; WARN is advisory and never blocks CI.
-# A ratchet floor of 30% catches genuine regressions without firing on every run.
+# Current measured coverage is ~54%; WARN is advisory and never blocks CI.
+# A ratchet floor of 52% catches genuine regressions without firing on every run.
 _COVERAGE_THRESHOLD_ASPIRATIONAL = 80.0
-_COVERAGE_THRESHOLD = 30.0  # ratchet floor — drop below this triggers WARN
+_COVERAGE_THRESHOLD = 52.0  # ratchet floor — drop below this triggers WARN
 
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))

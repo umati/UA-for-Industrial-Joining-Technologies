@@ -242,6 +242,7 @@ jobs:
         with:
           name: results-web-client
           path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
+          retention-days: 14
 
       - name: Fail if Any Check Failed
         if: always() && (
@@ -353,6 +354,7 @@ jobs:
         with:
           name: results-console-client
           path: OPC_UA_Clients/Release2/IJT_Console_Client/test-results/
+          retention-days: 14
 
       - name: Fail if Any Check Failed
         if: always() && (
@@ -411,7 +413,7 @@ jobs:
       - name: JS Unit Tests
         id: vitest
         continue-on-error: true
-        run: npx vitest run --reporter=verbose --reporter=junit --outputFile.junit=test-results/vitest.xml
+        run: npx vitest run --coverage --reporter=verbose --reporter=junit --outputFile.junit=test-results/vitest.xml
 
       - name: ESLint
         id: eslint
@@ -439,6 +441,7 @@ jobs:
         with:
           name: results-node-client
           path: OPC_UA_Clients/Release1/IJT_Node_Client/test-results/
+          retention-days: 14
 
       - name: Fail if Any Check Failed
         if: always() && (
@@ -673,6 +676,7 @@ jobs:
         with:
           name: results-csharp-unit
           path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
+          retention-days: 14
 
       - name: Fail if Any Check Failed
         if: always() && (
@@ -741,6 +745,9 @@ jobs:
           set -o pipefail
           python -m pytest tests/unit/ -v \
             --junitxml=test-results/pytest.xml \
+            --cov=helpers \
+            --cov-report=xml:test-results/coverage.xml \
+            --cov-fail-under=90 \
             2>&1 | tee test-results/pytest-output.txt
 
       - name: Bandit (Python Security)
@@ -764,6 +771,7 @@ jobs:
         with:
           name: results-test-client
           path: OPC_UA_Clients/Release2/IJT_Test_Client/test-results/
+          retention-days: 14
 
       - name: Fail if Any Check Failed
         if: always() && (
@@ -861,6 +869,7 @@ jobs:
         with:
           name: results-server-smoke
           path: test-results/smoke.xml
+          retention-days: 14
 
       - name: Stop OPC UA Server
         if: always()
@@ -1173,6 +1182,9 @@ jobs:
 
           tc_py_t  = parse_junit("all-results/results-test-client/pytest.xml")
           tc_ban   = parse_bandit("all-results/results-test-client/bandit.json")
+          tc_cov   = parse_coverage("all-results/results-test-client/coverage.xml")
+
+          nod_cov  = parse_coverage("all-results/results-node-client/coverage/cobertura-coverage.xml")
 
           ss_smoke = parse_junit("all-results/results-server-smoke/smoke.xml")
 
@@ -1191,6 +1203,7 @@ jobs:
           _warn(cs_u_r, cs_unit_t[0],"csharp-unit",          "tests.xml")
           _warn(tc_r,   tc_py_t[0],  "test-client",          "pytest.xml")
           _warn(tc_r,   tc_ban[0],   "test-client",          "bandit.json")
+          _warn(tc_r,   tc_cov,      "test-client",          "coverage.xml")
           _warn(ss_r,   ss_smoke[0], "server-smoke-windows", "smoke.xml")
 
           # ── Overall status ────────────────────────────────────────────────────
@@ -1237,9 +1250,9 @@ jobs:
               f"| Web Client — Python      | Ubuntu  | {tests(*web_py_t)} | {skips(web_py_t[3])} | {cov(web_cov)} |",
               f"| Web Client — JavaScript  | Ubuntu  | {tests(*web_js_t)} | {skips(web_js_t[3])} | — |",
               f"| Console Client — Python  | Ubuntu  | {tests(*con_py_t)} | {skips(con_py_t[3])} | {cov(con_cov)} |",
-              f"| Node Client — JavaScript | Ubuntu  | {tests(*nod_js_t)} | {skips(nod_js_t[3])} | — |",
+              f"| Node Client — JavaScript | Ubuntu  | {tests(*nod_js_t)} | {skips(nod_js_t[3])} | {cov(nod_cov)} |",
               f"| C# Client — Unit (xUnit) | Windows | {tests(*cs_unit_t)} | {skips(cs_unit_t[3])} | — |",
-              f"| Test Client — Python (Unit) | Ubuntu | {tests(*tc_py_t)} | {skips(tc_py_t[3])} | — |",
+              f"| Test Client — Python (Unit) | Ubuntu | {tests(*tc_py_t)} | {skips(tc_py_t[3])} | {cov(tc_cov)} |",
               f"| OPC UA Server — Smoke    | Windows | {tests(*ss_smoke)} | {skips(ss_smoke[3])} | — |",
               "",
               "---",
@@ -1267,8 +1280,37 @@ jobs:
               "---",
               "",
               "> 📋 **Checks** tab — per-test drill-down &nbsp;·&nbsp; 📦 **Artifacts** — JUnit XML · Coverage XML · ESLint JSON · Bandit JSON",
-              "> Coverage: ✅ ≥ 90% &nbsp;·&nbsp; ⚠️ ≥ 70% &nbsp;·&nbsp; ❌ < 70%",
+              "> Coverage: ✅ ≥ 90% &nbsp;·&nbsp; ⚠️ ≥ 70% &nbsp;·&nbsp; ❌ < 70% (Node Client aspirational goal: 80%; floor: 52%)",
           ]
+
+          # ── Skip budget check ─────────────────────────────────────────────────
+          # Known expected skips per TEST_TIERS.md; any extra skip is a warning.
+          skip_budget = {
+              "web-client (Python)":      0,
+              "console-client (Python)":  0,
+              "node-client (JS)":         1,  # git unavailable in CI (vitest)
+              "csharp-unit":             15,  # IJT_PHASE1_ONLY filter
+              "test-client (Python)":     0,
+              "server-smoke (Windows)":   0,
+          }
+          actual_skips = {
+              "web-client (Python)":      web_py_t[3],
+              "console-client (Python)":  con_py_t[3],
+              "node-client (JS)":         nod_js_t[3],
+              "csharp-unit":              cs_unit_t[3],
+              "test-client (Python)":     tc_py_t[3],
+              "server-smoke (Windows)":   ss_smoke[3],
+          }
+          budget_warnings = []
+          for suite, budget in skip_budget.items():
+              actual = actual_skips[suite]
+              if actual is not None and actual > budget:
+                  budget_warnings.append(
+                      f"⚠️ **{suite}**: {actual} skips (budget: {budget}) — unexpected skips detected"
+                  )
+          if budget_warnings:
+              out += ["", "---", "", "### ⏭️ Skip Budget Exceeded", ""]
+              out += budget_warnings
 
           if artifact_warnings:
               out += ["", "---", "", "### ⚠️ Artifact Warnings", ""]
@@ -1336,3 +1378,38 @@ jobs:
   # workflow (Advanced Setup). GitHub Default Setup was disabled in repo
   # Settings → Security → Code scanning to avoid duplicate SARIF uploads.
   # ───────────────────────────────────────────────────────────────────────────
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Branch-protection aggregator — converts path-filtered "skipped" jobs to
+  # "success" so the branch protection rule can check a single status name
+  # instead of tracking all 9 individual jobs.
+  #
+  # Rule: configure branch protection to require only "All checks passed".
+  # "skipped" is treated as success (path filter didn't touch that component).
+  # "failure" or "cancelled" causes this job to fail.
+  # ───────────────────────────────────────────────────────────────────────────
+  all-required:
+    name: "All checks passed"
+    needs: [web-client, console-client, node-client, docker-smoke, csharp-unit, test-client, server-smoke-windows, actionlint, zizmor]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs passed (skipped = success)
+        env:
+          RESULTS: >-
+            ${{ needs.web-client.result }}
+            ${{ needs.console-client.result }}
+            ${{ needs.node-client.result }}
+            ${{ needs.docker-smoke.result }}
+            ${{ needs.csharp-unit.result }}
+            ${{ needs.test-client.result }}
+            ${{ needs.server-smoke-windows.result }}
+            ${{ needs.actionlint.result }}
+            ${{ needs.zizmor.result }}
+        run: |
+          echo "Job results: $RESULTS"
+          if echo "$RESULTS" | grep -qE '\b(failure|cancelled)\b'; then
+            echo "One or more required jobs failed or were cancelled."
+            exit 1
+          fi
+          echo "All required checks passed (skipped jobs count as success)."

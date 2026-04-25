@@ -85,7 +85,7 @@ def apply_send_request_timeout_patch() -> None:
     async def _fixed(self, request, timeout=None, message_type=ua.MessageType.SecureMessage):
         if timeout is None:
             timeout = self._timeout  # use the configured timeout (e.g. 60 s)
-        return await _orig(self, request, timeout, message_type)
+        return await _orig(self, request, timeout, message_type)  # type: ignore[arg-type]
 
     _fixed._ijt_patched = True  # type: ignore[attr-defined]
     _uc.UaClient._send_request = _fixed  # type: ignore[method-assign]

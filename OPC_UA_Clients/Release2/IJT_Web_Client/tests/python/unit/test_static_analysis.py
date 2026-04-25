@@ -228,7 +228,7 @@ _SKIP_METHOD_NAMES = {
 }
 
 
-def _is_generator(func_node: ast.FunctionDef) -> bool:
+def _is_generator(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """Return True if function contains yield or yield from."""
     for node in ast.walk(func_node):
         if isinstance(node, (ast.Yield, ast.YieldFrom)):
@@ -236,7 +236,7 @@ def _is_generator(func_node: ast.FunctionDef) -> bool:
     return False
 
 
-def _has_abstract_decorator(func_node: ast.FunctionDef) -> bool:
+def _has_abstract_decorator(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     for dec in func_node.decorator_list:
         if isinstance(dec, ast.Name) and dec.id == "abstractmethod":
             return True
@@ -245,7 +245,7 @@ def _has_abstract_decorator(func_node: ast.FunctionDef) -> bool:
     return False
 
 
-def _collect_returns_at_scope(func_node: ast.FunctionDef) -> list[ast.Return]:
+def _collect_returns_at_scope(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.Return]:
     """Collect Return nodes only at this function's direct scope (not nested)."""
     returns: list[ast.Return] = []
 
@@ -264,7 +264,7 @@ def _collect_returns_at_scope(func_node: ast.FunctionDef) -> list[ast.Return]:
     return returns
 
 
-def _function_can_fall_through(func_node: ast.FunctionDef) -> bool:
+def _function_can_fall_through(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """Heuristic: True if function body's last statement is not a definitive exit."""
     body = func_node.body
     if not body:
@@ -275,7 +275,7 @@ def _function_can_fall_through(func_node: ast.FunctionDef) -> bool:
     return not isinstance(last, (ast.Return, ast.Raise, ast.Try))
 
 
-def _has_mixed_returns(func_node: ast.FunctionDef) -> bool:
+def _has_mixed_returns(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """True if function mixes return-with-value and implicit/explicit None return."""
     if func_node.name in _SKIP_METHOD_NAMES:
         return False
@@ -385,7 +385,7 @@ def _collect_all_imported_names(root: Path) -> set[str]:
     return imported
 
 
-def _find_unused_global_decls(func_node: ast.FunctionDef) -> list[str]:
+def _find_unused_global_decls(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
     """Return global names declared inside a function but never read or written there."""
     declared: set[str] = set()
     for node in ast.walk(func_node):
@@ -461,7 +461,7 @@ def test_no_unused_global_declarations():
 # ===========================================================================
 
 
-def _find_multiple_defs(func_node: ast.FunctionDef) -> list[tuple[str, int]]:
+def _find_multiple_defs(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[tuple[str, int]]:
     """Find names assigned twice at function top scope without an intervening read."""
     issues: list[tuple[str, int]] = []
     # Maps name -> line of its last unread assignment at this scope level.

@@ -1,0 +1,70 @@
+# EditorConfig — https://editorconfig.org
+# Applies to the entire IJT monorepo.
+root = true
+
+# ───────────────────────────────────────────────────────────────
+# Universal defaults
+# ───────────────────────────────────────────────────────────────
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# ───────────────────────────────────────────────────────────────
+# Python
+# ───────────────────────────────────────────────────────────────
+[*.py]
+indent_size = 4
+max_line_length = 120
+
+# ───────────────────────────────────────────────────────────────
+# C# / .NET
+# ───────────────────────────────────────────────────────────────
+[*.{cs,csx,vb}]
+indent_size = 4
+
+[*.{csproj,sln,props,targets}]
+indent_size = 2
+
+# ───────────────────────────────────────────────────────────────
+# JavaScript / TypeScript / JSON / YAML / TOML
+# ───────────────────────────────────────────────────────────────
+[*.{js,mjs,cjs,ts,tsx,jsx}]
+indent_size = 2
+
+[*.{json,jsonc}]
+indent_size = 2
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.toml]
+indent_size = 2
+
+# ───────────────────────────────────────────────────────────────
+# Markdown — preserve trailing spaces (used for line breaks)
+# ───────────────────────────────────────────────────────────────
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+# ───────────────────────────────────────────────────────────────
+# CSS / HTML / XML
+# ───────────────────────────────────────────────────────────────
+[*.{css,scss,less}]
+indent_size = 2
+
+[*.{html,htm}]
+indent_size = 2
+
+[*.xml]
+indent_size = 2
+
+# ───────────────────────────────────────────────────────────────
+# Makefiles require hard tabs
+# ───────────────────────────────────────────────────────────────
+[Makefile]
+indent_style = tab

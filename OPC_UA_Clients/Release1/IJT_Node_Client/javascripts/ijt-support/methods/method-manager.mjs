@@ -135,6 +135,10 @@ export class MethodManager {
           castValue = row.value
           break
         }
+        default: {
+          castValue = row.value
+          break
+        }
       }
       inputArguments.push({
         dataType: parseInt(typeNr),

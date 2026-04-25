@@ -22,7 +22,7 @@ from python.serialize_data import serialize_full_event
 ENABLE_RESULT_FILE_LOGGING = False  # Set to True to enable result file logging
 
 
-def log_field(label: str, value: str, label_width: int = 35):
+def log_field(label: str, value: object, label_width: int = 35):
     """Log a single labelled field at INFO level with consistent column alignment.
 
     Args:
