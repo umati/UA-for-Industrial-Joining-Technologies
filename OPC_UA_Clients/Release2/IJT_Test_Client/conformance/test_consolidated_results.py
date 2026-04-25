@@ -714,43 +714,29 @@ async def test_references_mode_produces_non_empty_reference_list(subscription_cl
 
 @pytest.mark.requires_cu(CU.PARTIAL_CONSOLIDATED_RESULT)
 async def test_partial_combined_result_is_marked_as_partial_with_combined_classification(
-    opcua_client, result_trigger, ns_indices
+    subscription_client, result_trigger, ns_indices
 ):
     """The Server supports partial Consolidated Results during processing where IsPartial is TRUE and Classification is a combined type."""
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered on server")
-
-    rm = await _get_result_management(opcua_client, ns_mr)
-    results_folder = await find_child_by_browse_name(rm, BN.RESULTS, ns_mr)
-    if results_folder is None:
-        pytest.skip("Results folder not found — cannot inspect partial results")
-
-    children = await results_folder.get_children()
-    partial_found = False
-    for child in children:
-        try:
-            value = await child.read_value()
-        except ua.UaError:
-            continue
-        if value is None:
-            continue
-        meta = getattr(value, "ResultMetaData", None)
-        if meta is None:
-            continue
-        is_partial = getattr(meta, "IsPartial", None)
-        if not is_partial:
-            continue
-        cls_int = _get_classification(value)
-        if cls_int in _COMBINED_CLASSIFICATIONS:
-            partial_found = True
-            break
-
-    if not partial_found:
+    result_data = await _get_partial(subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT)
+    if result_data is None:
         pytest.skip(
-            "No partial consolidated result found in Results folder — "
-            "partial results require a live joining operation in progress"
+            "Simulator did not deliver a partial consolidated result — "
+            "partial results are sent as events during a combined (Batch/Sync) operation "
+            "and require send_as_refs=True"
         )
+
+    meta = getattr(result_data, "ResultMetaData", None)
+    if meta is None:
+        pytest.skip("Partial result has no ResultMetaData")
+
+    is_partial = getattr(meta, "IsPartial", None)
+    assert is_partial is True, f"Expected IsPartial=True on partial consolidated result, got {is_partial!r}"
+
+    cls_int = _get_classification(result_data)
+    assert cls_int in _COMBINED_CLASSIFICATIONS, (
+        f"Partial consolidated result Classification={cls_int!r} is not a combined type — "
+        f"expected one of {sorted(_COMBINED_CLASSIFICATIONS)}"
+    )
 
 
 # ─── result_content ───
@@ -1815,40 +1801,25 @@ async def test_references_mode_get_result_by_id_invalid_id_returns_error(opcua_c
 
 
 @pytest.mark.requires_cu(CU.PARTIAL_CONSOLIDATED_RESULT)
-async def test_partial_result_state_is_processing(opcua_client, result_trigger, ns_indices):
+async def test_partial_result_state_is_processing(subscription_client, result_trigger, ns_indices):
     """A partial result (IsPartial=True) must have a non-null ResultState."""
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered on server")
+    result_data = await _get_partial(subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT)
+    if result_data is None:
+        pytest.skip(
+            "Simulator did not deliver a partial consolidated result — "
+            "partial results are sent as events during a combined (Batch/Sync) operation "
+            "and require send_as_refs=True"
+        )
 
-    rm = await _get_result_management(opcua_client, ns_mr)
-    results_folder = await find_child_by_browse_name(rm, BN.RESULTS, ns_mr)
-    if results_folder is None:
-        pytest.skip("Results folder not found — cannot inspect partial results")
+    meta = getattr(result_data, "ResultMetaData", None)
+    if meta is None:
+        pytest.skip("Partial result has no ResultMetaData")
 
-    children = await results_folder.get_children()
-    for child in children:
-        try:
-            value = await child.read_value()
-        except ua.UaError:
-            continue
-        if value is None:
-            continue
-        meta = getattr(value, "ResultMetaData", None)
-        if meta is None:
-            continue
-        is_partial = getattr(meta, "IsPartial", None)
-        if not is_partial:
-            continue
+    is_partial = getattr(meta, "IsPartial", None)
+    assert is_partial is True, f"Expected IsPartial=True on partial result, got {is_partial!r}"
 
-        result_state = getattr(meta, "ResultState", None)
-        assert result_state is not None, "Partial result (IsPartial=True) must have a non-null ResultState"
-        return
-
-    pytest.skip(
-        "No partial consolidated result found in Results folder — "
-        "partial results require a live joining operation in progress"
-    )
+    result_state = getattr(meta, "ResultState", None)
+    assert result_state is not None, "Partial result (IsPartial=True) must have a non-null ResultState"
 
 
 @pytest.mark.requires_cu(CU.PARTIAL_CONSOLIDATED_RESULT)

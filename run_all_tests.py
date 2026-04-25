@@ -1472,7 +1472,14 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
     nw = max(max((len(r.name) for r in results), default=14), 18)
     sw = 6  # "Status" / center-padded "PASS" etc. → 8 chars per cell total
     tw = 8  # time right-aligned                   → 10 chars per cell total
-    dw = 38  # detail / first note (truncated)      → 40 chars per cell total
+    # Detail column: auto-sized to fit the longest detail string (min 38)
+    _all_details: list[str] = []
+    for _r in results:
+        _det = _r.counts or (_r.notes[0] if _r.notes else "")
+        _all_details.append(_det)
+        for _note in _r.notes if _r.counts else _r.notes[1:]:
+            _all_details.append(f"  \u2514 {_note}")
+    dw = max(max((len(d) for d in _all_details), default=14), 38)
 
     # Visible chars between the two outer │ borders in a spanning (section) row:
     #   (nw+2) + │ + (sw+2) + │ + (tw+2) + │ + (dw+2) = nw+sw+tw+dw+11

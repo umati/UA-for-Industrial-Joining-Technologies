@@ -205,7 +205,7 @@ def _kill_proc_tree(pid: int) -> None:
         import signal
 
         with contextlib.suppress(ProcessLookupError):
-            os.killpg(os.getpgid(pid), signal.SIGKILL)  # type: ignore[attr-defined]  — Unix only
+            os.killpg(os.getpgid(pid), signal.SIGKILL)  # type: ignore[attr-defined]  # Unix only
 
 
 def _run(

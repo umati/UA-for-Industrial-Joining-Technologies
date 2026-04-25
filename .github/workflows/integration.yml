@@ -193,7 +193,7 @@ jobs:
         with:
           name: results-server-smoke-docker
           path: test-results/smoke.xml
-          retention-days: 30
+          retention-days: 14
 
       - name: Dump container logs
         if: always()
@@ -263,7 +263,7 @@ jobs:
         with:
           name: results-webclient-docker
           path: test-results/
-          retention-days: 30
+          retention-days: 14
 
       - name: Build Web Client Docker image (production target)
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
@@ -398,7 +398,7 @@ jobs:
             test-results/report.html
             test-results/report.xlsx
             test-results/summary.md
-          retention-days: 30
+          retention-days: 14
 
       - name: Stop OPC UA server
         if: always()
@@ -464,7 +464,7 @@ jobs:
         with:
           name: results-live-webclient
           path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
-          retention-days: 30
+          retention-days: 14
 
       - name: Stop OPC UA server
         if: always()
@@ -530,7 +530,7 @@ jobs:
         with:
           name: results-live-console
           path: OPC_UA_Clients/Release2/IJT_Console_Client/test-results/
-          retention-days: 30
+          retention-days: 14
 
       - name: Stop OPC UA server
         if: always()
@@ -666,7 +666,7 @@ jobs:
         with:
           name: results-csharp-live
           path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
-          retention-days: 30
+          retention-days: 14
 
       - name: Stop OPC UA server
         if: always()

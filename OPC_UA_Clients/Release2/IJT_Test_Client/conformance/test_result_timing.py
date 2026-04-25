@@ -408,12 +408,6 @@ async def test_acquisition_duration_does_not_exceed_total_operation_window(opcua
     else:
         acq_ms = float(acq)
 
-    if total_ms == 0:
-        pytest.skip(
-            f"StartTime==EndTime (zero-duration operation); AcquisitionDuration={acq_ms:.3f} ms "
-            "cannot be meaningfully compared to a zero-length window — "
-            "known simulator limitation for fast simulated operations."
-        )
     assert acq_ms <= total_ms + 1.0, (  # 1 ms tolerance for rounding
         f"AcquisitionDuration={acq_ms:.3f} ms exceeds total operation window (EndTime−StartTime)={total_ms:.3f} ms"
     )
@@ -446,11 +440,6 @@ async def test_processing_duration_does_not_exceed_total_operation_window(opcua_
     else:
         proc_ms = float(proc)
 
-    if total_ms == 0:
-        pytest.skip(
-            f"StartTime==EndTime (zero-duration operation); ProcessingDuration={proc_ms:.3f} ms "
-            "cannot be compared to a zero-length window — known simulator limitation."
-        )
     assert proc_ms <= total_ms + 1.0, (  # 1 ms tolerance for rounding
         f"ProcessingDuration={proc_ms:.3f} ms exceeds total operation window (EndTime−StartTime)={total_ms:.3f} ms"
     )
@@ -484,11 +473,6 @@ async def test_sum_of_durations_does_not_exceed_total_operation_window(opcua_cli
     proc_ms = proc.total_seconds() * 1000 if isinstance(proc, datetime.timedelta) else float(proc)
     combined_ms = acq_ms + proc_ms
 
-    if total_ms == 0:
-        pytest.skip(
-            f"StartTime==EndTime (zero-duration); combined={combined_ms:.3f} ms cannot be "
-            "compared to zero-length window — known simulator limitation."
-        )
     assert combined_ms <= total_ms + 1.0, (  # 1 ms tolerance for rounding
         f"AcquisitionDuration ({acq_ms:.3f} ms) + ProcessingDuration ({proc_ms:.3f} ms) "
         f"= {combined_ms:.3f} ms exceeds total operation window {total_ms:.3f} ms"

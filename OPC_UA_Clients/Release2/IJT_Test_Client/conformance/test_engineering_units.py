@@ -130,21 +130,33 @@ async def _trigger_and_get_result(opcua_client, result_trigger, ns_indices, resu
 
 
 def _collect_all_result_values(result_data) -> list:
-    """Return every ResultValueDataType from a result's metadata and content.
+    """Return every ResultValueDataType from a result and its sub-results.
 
-    Collects from:
-    - ResultMetaData.OverallResultValues
-    - ResultContent[i].OverallResultValues
-    - ResultContent[i].StepResults[j].StepResultValues
+    Collects from (per OPC 40450-1 JoiningResultDataType structure):
+    - result_data.OverallResultValues             (top-level overall values)
+    - result_data.StepResults[j].StepResultValues (top-level step values)
+    - ResultContent[i].OverallResultValues        (sub-result overall values)
+    - ResultContent[i].StepResults[j].StepResultValues (sub-result step values)
+
+    Note: OverallResultValues lives on JoiningResultDataType directly, NOT on
+    ResultMetaData — ResultMetaDataType has no OverallResultValues field.
     """
     values: list = []
 
-    meta = getattr(result_data, "ResultMetaData", None)
-    if meta is not None:
-        ovr = getattr(meta, "OverallResultValues", None)
-        if isinstance(ovr, (list, tuple)):
-            values.extend(ovr)
+    # Top-level OverallResultValues (on JoiningResultDataType, not on ResultMetaData)
+    ovr = getattr(result_data, "OverallResultValues", None)
+    if isinstance(ovr, (list, tuple)):
+        values.extend(ovr)
 
+    # Top-level StepResults → StepResultValues
+    steps = getattr(result_data, "StepResults", None)
+    if isinstance(steps, (list, tuple)):
+        for step in steps:
+            step_vals = getattr(step, "StepResultValues", None)
+            if isinstance(step_vals, (list, tuple)):
+                values.extend(step_vals)
+
+    # Sub-results in ResultContent (batch/sync/job combined results carry sub-results here)
     content = getattr(result_data, "ResultContent", None)
     if isinstance(content, (list, tuple)):
         for item in content:
@@ -152,9 +164,9 @@ def _collect_all_result_values(result_data) -> list:
             if isinstance(item_ovr, (list, tuple)):
                 values.extend(item_ovr)
 
-            steps = getattr(item, "StepResults", None)
-            if isinstance(steps, (list, tuple)):
-                for step in steps:
+            item_steps = getattr(item, "StepResults", None)
+            if isinstance(item_steps, (list, tuple)):
+                for step in item_steps:
                     step_vals = getattr(step, "StepResultValues", None)
                     if isinstance(step_vals, (list, tuple)):
                         values.extend(step_vals)

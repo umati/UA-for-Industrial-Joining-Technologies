@@ -85,7 +85,7 @@ def test_nodeid_to_str_opaque():
 
 def test_nodeid_to_str_fallback_on_non_nodeid():
     """Non-NodeId input should fall back to str() without raising."""
-    result = nodeid_to_str("not_a_nodeid")  # type: ignore[arg-type]  — intentional wrong-type fallback test
+    result = nodeid_to_str("not_a_nodeid")  # type: ignore[arg-type]  # intentional wrong-type fallback test
     assert result == "not_a_nodeid"
 
 
@@ -124,12 +124,12 @@ def test_localizedtext_to_str_none_locale():
 
 def test_localizedtext_to_str_fallback_on_non_localizedtext():
     """Non-LocalizedText input falls back to str()."""
-    result = localizedtext_to_str(42)  # type: ignore[arg-type]  — intentional wrong-type fallback test
+    result = localizedtext_to_str(42)  # type: ignore[arg-type]  # intentional wrong-type fallback test
     assert result == "42"
 
 
 def test_localizedtext_to_str_fallback_on_string():
-    result = localizedtext_to_str("plain string")  # type: ignore[arg-type]  — intentional wrong-type fallback test
+    result = localizedtext_to_str("plain string")  # type: ignore[arg-type]  # intentional wrong-type fallback test
     assert result == "plain string"
 
 
