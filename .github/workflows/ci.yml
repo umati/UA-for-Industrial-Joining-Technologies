@@ -954,7 +954,7 @@ jobs:
 
       - name: "Report — Console Client Python Tests"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
-        if: always()
+        if: always() && needs.console-client.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
           name: "Console Client — Python Tests"
@@ -965,7 +965,7 @@ jobs:
 
       - name: "Report — Node Client JS Tests"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
-        if: always()
+        if: always() && needs.node-client.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
           name: "Node Client — JS Tests (Vitest)"
@@ -998,7 +998,7 @@ jobs:
 
       - name: "Report — OPC UA Server Smoke (Windows)"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
-        if: always()
+        if: always() && needs.server-smoke-windows.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
           name: "OPC UA Server — Smoke Tests (Windows)"
