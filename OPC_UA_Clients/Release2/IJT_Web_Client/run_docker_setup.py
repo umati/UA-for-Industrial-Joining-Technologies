@@ -12,7 +12,7 @@ Handles:
 import argparse
 import shutil
 
-# nosec justification: subprocess used only to invoke docker/compose with no user-controlled input.
+# safe: subprocess used only to invoke docker/compose with no user-controlled input.
 import subprocess  # nosec B404
 import sys
 from pathlib import Path

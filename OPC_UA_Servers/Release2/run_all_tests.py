@@ -139,7 +139,7 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     import urllib.request
 
     try:
-        # nosec justification: always https; host is a known constant (pypi.org, semgrep.dev)
+        # safe: always https; host is a known constant (pypi.org, semgrep.dev)
         urllib.request.urlopen(f"https://{host}/", timeout=timeout)  # nosec B310
         return True
     except Exception:

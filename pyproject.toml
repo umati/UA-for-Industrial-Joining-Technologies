@@ -3,9 +3,21 @@
 # for project-specific settings. This file holds repo-root concerns only.
 
 [tool.pytest.ini_options]
-# Guard: prevents accidental bare `pytest` runs from the repo root.
-# All tests must be run via each sub-project's own run_all_tests.py.
-collect_ignore_glob = ["*"]
+# Root-level pytest is reserved for repo-root infrastructure tests under tests/.
+# Sub-project suites still run via their own run_all_tests.py entrypoints.
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
+norecursedirs = [
+    ".git",
+    ".venv",
+    "node_modules",
+    "tmp",
+    "test-results",
+    "OPC_UA_Clients",
+    "OPC_UA_Servers",
+    "IJT_Documents",
+    "logs",
+]
 
 [tool.ruff]
 # Repo-wide ruff defaults; sub-projects may override in their own pyproject.toml.

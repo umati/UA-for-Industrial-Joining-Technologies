@@ -126,7 +126,7 @@ async def main():
         ijt_log.error("Invalid WS_PORT environment variable. Falling back to 8001.")
         port = 8001
 
-    # nosec justification: server intentionally binds to all interfaces (containerised deployment).
+    # safe: server intentionally binds to all interfaces (containerised deployment).
     host = "0.0.0.0"  # nosec B104
     start_time = time.time()
     websocket_server = await websockets.serve(handler, host, port)

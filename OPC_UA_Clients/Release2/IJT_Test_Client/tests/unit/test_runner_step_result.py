@@ -225,6 +225,7 @@ def _run_semgrep_step_with_findings(findings: list):
     with (
         patch.object(_mod, "_binary_available", return_value=True),
         patch.object(_mod, "_ensure_cli_tool", return_value=(True, "")),
+        patch.object(_mod, "_is_https_reachable", return_value=True),
         patch.object(_mod, "_RESULTS_DIR", _RUNNER_DIR),
         patch.object(_mod, "_run", return_value=(0, "")),
         patch.object(Path, "exists", return_value=True),

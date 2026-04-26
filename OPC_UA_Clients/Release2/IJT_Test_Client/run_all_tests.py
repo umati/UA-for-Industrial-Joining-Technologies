@@ -140,6 +140,7 @@ logging.basicConfig(
 logger = logging.getLogger("run_all_tests")
 
 _USE_COLOUR: bool = False
+_VERBOSE: bool = False
 
 _ANSI_GREEN = "\033[92m"
 _ANSI_RED = "\033[91m"
@@ -171,6 +172,12 @@ def _log(msg: str) -> None:
     """Write *msg* to stdout immediately."""
     sys.stdout.write(msg + "\n")
     sys.stdout.flush()
+
+
+def _log_verbose(msg: str) -> None:
+    """Emit noisy diagnostic output only when verbose mode is enabled."""
+    if _VERBOSE and msg.strip():
+        _log(msg)
 
 
 def _banner(title: str) -> None:
@@ -792,7 +799,7 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     import urllib.request
 
     try:
-        # nosec justification: always https; host is a known constant (pypi.org, semgrep.dev)
+        # safe: always https; host is a known constant (pypi.org, semgrep.dev)
         urllib.request.urlopen(f"https://{host}/", timeout=timeout)  # nosec B310
         return True
     except Exception:
@@ -1005,8 +1012,7 @@ def _step_semgrep() -> _StepResult:
         result.note = (
             f"semgrep produced no output (rc={rc}) — network unavailable or authentication required (semgrep login)"
         )
-        if output.strip():
-            _log(output)
+        _log_verbose(output)
         return result
     try:
         data = json.loads(json_file.read_text(encoding="utf-8"))
@@ -1027,7 +1033,7 @@ def _step_semgrep() -> _StepResult:
         # JSON exists but is malformed — log content for diagnosis, never block.
         result.warn = True
         result.note = f"semgrep.json parse failed (rc={rc}): {exc!s:.120}"
-        _log(output)
+        _log_verbose(output)
     return result
 
 
@@ -1326,12 +1332,13 @@ def main() -> int:
     _RUN_START = time.time()
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     _cleanup_caches(_HERE)  # pre-run: clear stale caches from interrupted runs
-    global _USE_COLOUR, _AUTO_INSTALL_TOOLS
+    global _USE_COLOUR, _AUTO_INSTALL_TOOLS, _VERBOSE
 
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
     _prepare_tmp_dir()
 
     args = _build_parser().parse_args()
+    _VERBOSE = bool(args.verbose)
     _AUTO_INSTALL_TOOLS = bool(args.auto_install_tools)
     run_phase1 = not args.phase2
     run_phase2 = not args.phase1
