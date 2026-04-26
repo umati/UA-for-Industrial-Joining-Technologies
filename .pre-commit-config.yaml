@@ -1,18 +1,21 @@
-# Pre-commit configuration — AUTO-FIX philosophy
+# Pre-commit configuration
 #
-# All hooks here are auto-fixers, not hard blockers.
-# If a hook modifies a file, it will exit with a non-zero code (causing the
-# commit to be rejected), but the files are already corrected on disk.
-# Simply run:
+# Hooks fall into two categories:
+#
+# AUTO-FIXERS — modify files in place and exit non-zero so the commit is
+# rejected with the corrected content already on disk.  Simply run:
 #
 #   git add -u && git commit
 #
 # …and the commit will succeed with the fixed content.
+# Hooks in this category: end-of-file-fixer, trailing-whitespace,
+# mixed-line-ending, ruff, ruff-format.
 #
-# Exceptions: check-merge-conflict, check-yaml, check-toml, check-json, and
-# debug-statements are detectors only — they do not modify files, but they
-# block commits that contain genuine errors (merge markers, syntax errors,
-# or stray debugger calls) that require manual intervention.
+# DETECTOR/BLOCKERS — do not modify files; they exit non-zero when a
+# violation is found and require manual intervention before committing.
+# Hooks in this category: check-merge-conflict, check-yaml, check-toml,
+# check-json, debug-statements, bandit.
+# For bandit: fix the finding or add a justified # nosec comment, then re-commit.
 
 # Global exclusion: auto-generated output from UA-ModelCompiler.
 # These files are never hand-edited and will be overwritten on next codegen run.
@@ -66,6 +69,42 @@ repos:
       # pyproject.toml files — the py314 formatter bug (#24041) that corrupted
       # except (A, B): clauses does not trigger with py313.
       - id: ruff-format
+
+  # Bandit SAST scan — Console Client only, MEDIUM+ severity (-ll).
+  #
+  # This hook is intentionally narrow: it mirrors the actual blocking CI gate
+  # that caught the B310 regression. The Console Client has two pytest tests
+  # that both enforce a directory-wide `bandit -r . -ll --exclude ...` scan.
+  # To match that behavior, this hook disables filename passing and runs the
+  # same recursive scan over the entire Console Client tree.
+  #
+  # Web Client is intentionally excluded here. Its pytest bandit check uses
+  # `--exit-zero`, so findings do not currently block CI. Adding a blocking
+  # pre-commit hook there would be stricter than CI and would reintroduce the
+  # local-vs-CI mismatch this config is meant to remove.
+  #
+  # When this hook blocks your commit:
+  #   1. Read the bandit output — it shows the file, line, rule ID (e.g. B310),
+  #      severity, and a one-line description of the issue.
+  #   2. Real security issue → fix the code.
+  #   3. False positive → add a justified # nosec comment (project convention):
+  #        # nosec justification: <one-line reason why this is safe>
+  #        some_call(...)  # nosec BXXX
+  #      Re-stage and commit. The nosec suppresses only that specific rule on
+  #      that specific line; it does not silence bandit globally.
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        name: Bandit — Console Client (Medium+)
+        args:
+          - "-r"
+          - "OPC_UA_Clients/Release2/IJT_Console_Client"
+          - "-ll"
+          - "--exclude"
+          - "OPC_UA_Clients/Release2/IJT_Console_Client/tests,OPC_UA_Clients/Release2/IJT_Console_Client/.state,OPC_UA_Clients/Release2/IJT_Console_Client/venv,OPC_UA_Clients/Release2/IJT_Console_Client/venv_test,OPC_UA_Clients/Release2/IJT_Console_Client/.venv,OPC_UA_Clients/Release2/IJT_Console_Client/.venv_test,OPC_UA_Clients/Release2/IJT_Console_Client/env,OPC_UA_Clients/Release2/IJT_Console_Client/ENV"
+        pass_filenames: false
+        files: '^OPC_UA_Clients/Release2/IJT_Console_Client/.*\.py$'
 
   # JS linting for the Node Client (ESLint + custom CSS checker).
   # Both hooks use `npm --prefix` so they run with the project's own node_modules
