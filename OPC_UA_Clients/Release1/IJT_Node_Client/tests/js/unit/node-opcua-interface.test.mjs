@@ -11,16 +11,11 @@ afterAll(() => { ijtLog.setLevel('info') })
 
 // Prevent real filesystem access — the 'get/set connectionpoints' handlers
 // read/write resources/connectionpoints.json which must not be modified by tests.
-vi.mock('fs', async (importOriginal) => {
-  const actual = await importOriginal()
-  return {
-    ...actual,
-    promises: {
-      ...actual.promises,
-      readFile: vi.fn().mockResolvedValue(Buffer.from('[]')),
-      writeFile: vi.fn().mockResolvedValue(undefined),
-    },
-  }
+// Sync factory avoids the async-hoisting race that lets fs.writeFile bypass the mock.
+vi.mock('fs/promises', () => {
+  const readFile = vi.fn().mockResolvedValue(Buffer.from('[]'))
+  const writeFile = vi.fn().mockResolvedValue(undefined)
+  return { default: { readFile, writeFile }, readFile, writeFile }
 })
 
 describe('isValidEndpointUrl (SSRF guard)', () => {
