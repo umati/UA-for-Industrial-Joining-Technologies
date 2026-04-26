@@ -782,6 +782,22 @@ def _step_bandit() -> _StepResult:
     return result
 
 
+def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
+    """Fast preflight: return True only if a verified HTTPS connection to host succeeds.
+
+    Uses the default SSL context (certificate verification enabled). Returns False
+    immediately on SSL cert errors, connection refused, or timeout — avoiding
+    the multi-minute retry delays that pip-audit and semgrep impose on failure.
+    """
+    import urllib.request
+
+    try:
+        urllib.request.urlopen(f"https://{host}/", timeout=timeout)
+        return True
+    except Exception:
+        return False
+
+
 def _step_pip_audit() -> _StepResult:
     """Run pip-audit CVE scanner; write JSON report to test-results/pip-audit.json."""
     result = _StepResult("[PHASE 1] pip-audit")
@@ -790,6 +806,12 @@ def _step_pip_audit() -> _StepResult:
     if not ok:
         result.skipped = True
         result.note = note
+        result.duration = time.monotonic() - t0
+        return result
+    if not _is_https_reachable("pypi.org"):
+        result.ok = True
+        result.skipped = True
+        result.note = "network/TLS unavailable — pip-audit skipped"
         result.duration = time.monotonic() - t0
         return result
     pip_audit_cache = _TMP_DIR / "pip-audit-cache"
@@ -946,6 +968,11 @@ def _step_semgrep() -> _StepResult:
     if not ok:
         result.skipped = True
         result.note = note
+        result.duration = time.monotonic() - t0
+        return result
+    if not _is_https_reachable("semgrep.dev"):
+        result.warn = True
+        result.note = "semgrep produced no output (rc=N/A) — network/TLS unavailable (preflight)"
         result.duration = time.monotonic() - t0
         return result
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)

@@ -129,6 +129,22 @@ def _cmd_available(cmd: str) -> bool:
     return shutil.which(cmd) is not None
 
 
+def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
+    """Fast preflight: return True only if a verified HTTPS connection to host succeeds.
+
+    Uses the default SSL context (certificate verification enabled). Returns False
+    immediately on SSL cert errors, connection refused, or timeout — avoiding
+    the multi-minute retry delays that pip-audit and semgrep impose on failure.
+    """
+    import urllib.request
+
+    try:
+        urllib.request.urlopen(f"https://{host}/", timeout=timeout)
+        return True
+    except Exception:
+        return False
+
+
 def _py_module_available(mod: str) -> bool:
     return (
         subprocess.run(
@@ -351,6 +367,9 @@ def _check_pip_audit(results: list) -> None:
     if not _py_module_available("pip_audit"):
         _record(results, 1, label, True, "SKIP (pip-audit not installed — pip install pip-audit)")
         return
+    if not _is_https_reachable("pypi.org"):
+        _record(results, 1, label, True, "SKIP — network/TLS unavailable (preflight)")
+        return
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     audit_out = RESULTS_DIR / "pip-audit.json"
@@ -478,6 +497,15 @@ def _check_semgrep(results: list) -> None:
     label = "Semgrep (AI review)"
     if not _cmd_available("semgrep"):
         _record(results, 1, label, True, "SKIP (Install: pip install semgrep)")
+        return
+    if not _is_https_reachable("semgrep.dev"):
+        _record(
+            results,
+            1,
+            label,
+            True,
+            "WARN (N/A) — semgrep network/TLS unavailable (preflight)",
+        )
         return
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     json_file = RESULTS_DIR / "semgrep.json"

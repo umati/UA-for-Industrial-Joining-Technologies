@@ -1,9 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
 import {
   isValidEndpointUrl,
   ENDPOINT_URL_PATTERN,
   NodeOPCUAInterface,
 } from '../../../javascripts/ijt-support/client/node-opcua-interface.mjs'
+import { ijtLog } from '../../../javascripts/ijt-support/ijt-logger.mjs'
+
+beforeAll(() => { ijtLog.setLevel('error') })
+afterAll(() => { ijtLog.setLevel('info') })
 
 // Prevent real filesystem access — the 'get/set connectionpoints' handlers
 // read/write resources/connectionpoints.json which must not be modified by tests.

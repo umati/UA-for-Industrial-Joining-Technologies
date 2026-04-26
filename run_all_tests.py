@@ -856,7 +856,7 @@ def _check_zizmor(results_dir: Path) -> StepResult:
     )
     out_file = results_dir / "zizmor.json"
     out_file.write_text(result.stdout or "{}", encoding="utf-8")
-    if result.returncode not in (0, 1):  # 0=clean, 1=findings, others=error
+    if result.returncode not in (0, 1, 13):  # 0=clean, 1 or 13=findings (zizmor v1.x), others=error
         return StepResult("GHA zizmor (security)", "SKIP", "zizmor error — skipping")
     try:
         data = json.loads(result.stdout or "{}")

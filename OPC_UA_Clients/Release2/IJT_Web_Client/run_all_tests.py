@@ -298,6 +298,22 @@ def _cmd_available(cmd: str) -> bool:
     return shutil.which(cmd) is not None
 
 
+def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
+    """Fast preflight: return True only if a verified HTTPS connection to host succeeds.
+
+    Uses the default SSL context (certificate verification enabled). Returns False
+    immediately on SSL cert errors, connection refused, or timeout — avoiding
+    the multi-minute retry delays that pip-audit and semgrep impose on failure.
+    """
+    import urllib.request
+
+    try:
+        urllib.request.urlopen(f"https://{host}/", timeout=timeout)
+        return True
+    except Exception:
+        return False
+
+
 def _requirements_hash() -> str:
     """Return a short hash of all requirements files combined."""
     import hashlib
@@ -533,13 +549,17 @@ def _stage_python_lint(python: Path) -> StageResult:
 
     if _py_module_available("pip_audit"):
         results_dir.mkdir(parents=True, exist_ok=True)
-        rc = _run(
-            [python, "-m", "pip_audit", "--format", "json", "-o", str(results_dir / "pip-audit.json")],
-            label="pip-audit",
-            timeout=60,  # corporate network often blocks osv.dev; fail fast rather than wait 300s
-        )
-        if rc not in (0, 1, -1):  # 1 = CVEs found (informational); -1 = timeout/network (advisory)
-            overall_rc = rc
+        if not _is_https_reachable("pypi.org"):
+            _skip("pip-audit skipped — network/TLS unavailable")
+            notes.append("pip-audit skipped (network)")
+        else:
+            rc = _run(
+                [python, "-m", "pip_audit", "--format", "json", "-o", str(results_dir / "pip-audit.json")],
+                label="pip-audit",
+                timeout=60,  # corporate network often blocks osv.dev; fail fast rather than wait 300s
+            )
+            if rc not in (0, 1, -1):  # 1 = CVEs found (informational); -1 = timeout/network (advisory)
+                overall_rc = rc
     else:
         _skip("pip-audit not installed — pip install pip-audit")
         notes.append("pip-audit not installed")
@@ -559,39 +579,47 @@ def _stage_python_lint(python: Path) -> StageResult:
 
     # Semgrep AI code review
     if _cmd_available("semgrep"):
-        results_dir.mkdir(parents=True, exist_ok=True)
-        rc = _run(
-            [
-                "semgrep",
-                "--config=p/default",
-                "--json",
-                "--output",
-                str(results_dir / "semgrep.json"),
-                "--exclude=.venv,.venv_test",
-                "--exclude=test-results",
-                ".",
-            ],
-            label="semgrep",
-            timeout=120,
-        )
-        if rc == -1:
-            _skip("semgrep timed out (>120s) — skipped")
-            notes.append("semgrep timed out")
+        if not _is_https_reachable("semgrep.dev"):
+            _warn("semgrep: network/TLS unavailable — rules not downloaded")
+            notes.append("semgrep skipped (network)")
         else:
-            try:
-                data = json.loads((results_dir / "semgrep.json").read_text(encoding="utf-8"))
-                findings = data.get("results", [])
-                errors = [f for f in findings if f.get("extra", {}).get("severity") == "ERROR"]
-                warns = [f for f in findings if f.get("extra", {}).get("severity") == "WARNING"]
-                if errors:
-                    _fail(f"semgrep: {len(errors)} error(s), {len(warns)} warning(s)")
-                    overall_rc = 1
-                elif warns:
-                    _warn(f"semgrep: 0 errors, {len(warns)} warning(s)")
+            results_dir.mkdir(parents=True, exist_ok=True)
+            rc = _run(
+                [
+                    "semgrep",
+                    "--config=p/default",
+                    "--json",
+                    "--output",
+                    str(results_dir / "semgrep.json"),
+                    "--exclude=.venv,.venv_test",
+                    "--exclude=test-results",
+                    ".",
+                ],
+                label="semgrep",
+                timeout=120,
+            )
+            if rc == -1:
+                _skip("semgrep timed out (>120s) — skipped")
+                notes.append("semgrep timed out")
+            else:
+                json_file = results_dir / "semgrep.json"
+                if not json_file.exists():
+                    _warn("semgrep: no output file (network/auth failure)")
                 else:
-                    _ok(f"semgrep: {len(findings)} finding(s), none critical")
-            except Exception:
-                _warn("semgrep: could not parse output")
+                    try:
+                        data = json.loads(json_file.read_text(encoding="utf-8"))
+                        findings = data.get("results", [])
+                        errors = [f for f in findings if f.get("extra", {}).get("severity") == "ERROR"]
+                        warns = [f for f in findings if f.get("extra", {}).get("severity") == "WARNING"]
+                        if errors:
+                            _fail(f"semgrep: {len(errors)} error(s), {len(warns)} warning(s)")
+                            overall_rc = 1
+                        elif warns:
+                            _warn(f"semgrep: 0 errors, {len(warns)} warning(s)")
+                        else:
+                            _ok(f"semgrep: {len(findings)} finding(s), none critical")
+                    except Exception as exc:
+                        _warn(f"semgrep: parse failed (rc={rc}): {exc}")
     else:
         _skip("semgrep not installed — pip install semgrep")
         notes.append("semgrep not installed")

@@ -11,7 +11,9 @@ Handles:
 
 import argparse
 import shutil
-import subprocess  # nosec B404 — subprocess used to invoke docker/compose; no user-controlled input
+
+# nosec justification: subprocess used only to invoke docker/compose with no user-controlled input.
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 

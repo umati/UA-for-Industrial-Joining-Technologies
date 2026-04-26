@@ -54,7 +54,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 _SERVER_NATIVE_PORT = 40451  # server binary default — used for fallback pre-flight
-_OPCUA_SERVER_PORT  = 40464  # dedicated port for C# client test isolation (copy-and-patch)
+_OPCUA_SERVER_PORT = 40464  # dedicated port for C# client test isolation (copy-and-patch)
 _WELL_KNOWN_SIMULATOR_PATHS = [
     _REPO_ROOT
     / "OPC_UA_Servers"
@@ -97,6 +97,22 @@ def _parse_opcua_endpoint(url: str) -> tuple[str, int]:
 
 def _dotnet_available() -> bool:
     return shutil.which("dotnet") is not None
+
+
+def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
+    """Fast preflight: return True only if a verified HTTPS connection to host succeeds.
+
+    Uses the default SSL context (certificate verification enabled). Returns False
+    immediately on SSL cert errors, connection refused, or timeout — avoiding
+    the multi-minute retry delays that pip-audit and semgrep impose on failure.
+    """
+    import urllib.request
+
+    try:
+        urllib.request.urlopen(f"https://{host}/", timeout=timeout)
+        return True
+    except Exception:
+        return False
 
 
 def _dotnet_version() -> str:
@@ -504,15 +520,24 @@ def _step_semgrep() -> StepResult:
     label = "Semgrep (AI review)"
     if not shutil.which("semgrep"):
         return StepResult(label, "PHASE 1", "SKIP", "Install: pip install semgrep", 0.0)
+    if not _is_https_reachable("semgrep.dev"):
+        return StepResult(
+            label,
+            "PHASE 1",
+            "WARN",
+            "semgrep produced no output (rc=N/A) — network/TLS unavailable (preflight)",
+            0.0,
+        )
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
-    subprocess.run(
+    json_file = _RESULTS_DIR / "semgrep.json"
+    proc = subprocess.run(
         [
             "semgrep",
             "--config=p/default",
             "--json",
             "--output",
-            str(_RESULTS_DIR / "semgrep.json"),
+            str(json_file),
             ".",
         ],
         check=False,
@@ -521,8 +546,18 @@ def _step_semgrep() -> StepResult:
         cwd=str(_PROJECT_DIR),
     )
     dur = time.monotonic() - t0
+    if not json_file.exists():
+        # Semgrep exited without writing output — typically a network or auth failure
+        # when downloading cloud rules (p/default requires internet + optional login).
+        return StepResult(
+            label,
+            "PHASE 1",
+            "WARN",
+            f"semgrep produced no output (rc={proc.returncode}) — network/auth unavailable",
+            dur,
+        )
     try:
-        data = json.loads((_RESULTS_DIR / "semgrep.json").read_text(encoding="utf-8"))
+        data = json.loads(json_file.read_text(encoding="utf-8"))
         findings = data.get("results", [])
         errors = [f for f in findings if f.get("extra", {}).get("severity") == "ERROR"]
         warns = [f for f in findings if f.get("extra", {}).get("severity") == "WARNING"]
@@ -535,8 +570,14 @@ def _step_semgrep() -> StepResult:
         return StepResult(
             label, "PHASE 1", "PASS", f"{len(findings)} finding(s), none critical", dur
         )
-    except Exception:
-        return StepResult(label, "PHASE 1", "WARN", "could not parse semgrep output", dur)
+    except Exception as exc:
+        return StepResult(
+            label,
+            "PHASE 1",
+            "WARN",
+            f"semgrep.json parse failed (rc={proc.returncode}): {exc!s:.120}",
+            dur,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -767,8 +808,10 @@ def main() -> int:
             server_url = _resolve_server_url()
             if server_ready:
                 if port_override:
-                    print(f"[PHASE 2] OpcUaServerFixture.cs will manage server on port"
-                          f" {port_override}")
+                    print(
+                        f"[PHASE 2] OpcUaServerFixture.cs will manage server on port"
+                        f" {port_override}"
+                    )
                 else:
                     print(f"[PHASE 2] OPC UA server reachable at {server_url}")
                 r = _step_live_tests(server_url, verbose=args.verbose)
