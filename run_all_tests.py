@@ -841,6 +841,35 @@ def _check_action_versions() -> StepResult:
     return StepResult("GHA version guard", "PASS", detail)
 
 
+def _parse_zizmor_output(stdout: str, returncode: int) -> StepResult:
+    """Parse zizmor JSON stdout and return a StepResult. Pure function — no I/O or subprocess."""
+    if returncode not in (0, 13):  # 0=clean, 13=findings present (zizmor v1.x); 1=tool error
+        return StepResult("GHA zizmor (security)", "SKIP", "zizmor error — skipping")
+    try:
+        data = json.loads(stdout or "[]")
+        if not isinstance(data, list):
+            return StepResult(
+                "GHA zizmor (security)", "SKIP", "Could not parse output — zizmor version mismatch"
+            )
+        findings = data
+        high = [
+            f
+            for f in findings
+            if f.get("determinations", {}).get("severity") in ("High", "Critical")
+        ]
+        if high:
+            return StepResult(
+                "GHA zizmor (security)", "FAIL", f"{len(high)} high/critical finding(s)"
+            )
+        return StepResult(
+            "GHA zizmor (security)", "PASS", f"{len(findings)} finding(s), none high/critical"
+        )
+    except Exception:
+        return StepResult(
+            "GHA zizmor (security)", "SKIP", "Could not parse output — zizmor version mismatch"
+        )
+
+
 def _check_zizmor(results_dir: Path) -> StepResult:
     """Security audit GitHub Actions workflows with zizmor."""
     if not shutil.which("zizmor"):
@@ -855,24 +884,8 @@ def _check_zizmor(results_dir: Path) -> StepResult:
         check=False,
     )
     out_file = results_dir / "zizmor.json"
-    out_file.write_text(result.stdout or "{}", encoding="utf-8")
-    if result.returncode not in (0, 1, 13):  # 0=clean, 1 or 13=findings (zizmor v1.x), others=error
-        return StepResult("GHA zizmor (security)", "SKIP", "zizmor error — skipping")
-    try:
-        data = json.loads(result.stdout or "{}")
-        findings = data.get("findings", [])
-        high = [f for f in findings if f.get("severity") in ("high", "critical")]
-        if high:
-            return StepResult(
-                "GHA zizmor (security)", "FAIL", f"{len(high)} high/critical finding(s)"
-            )
-        return StepResult(
-            "GHA zizmor (security)", "PASS", f"{len(findings)} finding(s), none high/critical"
-        )
-    except Exception:
-        return StepResult(
-            "GHA zizmor (security)", "SKIP", "Could not parse output — zizmor version mismatch"
-        )
+    out_file.write_text(result.stdout or "[]", encoding="utf-8")
+    return _parse_zizmor_output(result.stdout, result.returncode)
 
 
 def _print_step_result(r: StepResult) -> None:
