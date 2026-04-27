@@ -143,7 +143,7 @@ Coverage is configured in each project's `pyproject.toml`. **Never hardcode thre
 
 | Project | `fail_under` | Notes |
 |---------|-------------|-------|
-| Web Client | 70% | Configured in `pyproject.toml` — applies to Python unit run |
+| Web Client | **90%** | Configured in `pyproject.toml` — applies to Python unit run. Raised 70→90 in coverage sprint 2026-04-27 (94.53% actual, 599 tests). |
 | Console Client | 80% | Configured in `pyproject.toml` — applies to unit run |
 | Test Client | **90%** | Configured in `pyproject.toml` — live-test-only helpers reduce coverage on conformance-only runs; `tests/unit/` supplements with pure-logic coverage |
 
@@ -151,7 +151,7 @@ Coverage is configured in each project's `pyproject.toml`. **Never hardcode thre
 
 **Node Client (JavaScript/Vitest)**: Coverage threshold is NOT in pyproject.toml (JS project).
 - Hard gate: `coverage.thresholds` in `vitest.config.mjs` (if set)
-- Ratchet floor: `_COVERAGE_THRESHOLD = 52.0` in `IJT_Node_Client/run_all_tests.py` — WARN-only, advisory/non-gated, ratchet upward as coverage improves. Aspirational goal: 80%. (Current: ~79% statements with 705 tests)
+- Ratchet floor: `_COVERAGE_THRESHOLD = 85.0` in `IJT_Node_Client/run_all_tests.py` — WARN-only, advisory/non-gated, ratchet upward as coverage improves. Aspirational goal: 90%. (Current: 90.62% statements with 851 tests)
 - Coverage reporters: `text-summary`, `cobertura` — the cobertura XML is parsed by the CI report job
 
 **Web Client JS (Vitest)**: Threshold enforced at 80% via `vitest.config.mjs` `thresholds.lines`. Reporters: `text`, `lcov`, `cobertura`.

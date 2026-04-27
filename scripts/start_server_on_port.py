@@ -106,8 +106,7 @@ def start_server(port: int, server_dir: Path, tmp_base: Path, timeout: int) -> N
     exe_candidates = sorted(dst_dir.glob("*.exe"))
     if not exe_candidates:
         exe_candidates = [
-            p for p in dst_dir.iterdir()
-            if p.is_file() and os.access(p, os.X_OK) and not p.suffix
+            p for p in dst_dir.iterdir() if p.is_file() and os.access(p, os.X_OK) and not p.suffix
         ]
     if not exe_candidates:
         print(f"ERROR: No executable found in {dst_dir}", file=sys.stderr)
@@ -177,25 +176,34 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--port", type=int, required=True,
+        "--port",
+        type=int,
+        required=True,
         help="TCP port number (1024–65535)",
     )
     parser.add_argument(
-        "--stop", action="store_true",
+        "--stop",
+        action="store_true",
         help="Stop mode: terminate the server process and remove the temp directory",
     )
     parser.add_argument(
-        "--server-dir", type=Path, default=DEFAULT_SERVER_DIR,
+        "--server-dir",
+        type=Path,
+        default=DEFAULT_SERVER_DIR,
         metavar="PATH",
         help=f"Server binary directory (default: {DEFAULT_SERVER_DIR})",
     )
     parser.add_argument(
-        "--tmp-base", type=Path, default=DEFAULT_TMP_BASE,
+        "--tmp-base",
+        type=Path,
+        default=DEFAULT_TMP_BASE,
         metavar="DIR",
         help=f"Base temp directory for copies (default: {DEFAULT_TMP_BASE})",
     )
     parser.add_argument(
-        "--timeout", type=int, default=DEFAULT_TIMEOUT,
+        "--timeout",
+        type=int,
+        default=DEFAULT_TIMEOUT,
         help=f"Seconds to wait for port to open (default: {DEFAULT_TIMEOUT})",
     )
 

@@ -907,3 +907,575 @@ async def test_read_product_instance_uri_returns_empty_when_paths_not_accessible
     result = await conn.read_product_instance_uri({})
 
     assert result == {"tools": []}
+
+
+# ===========================================================================
+# NEW TESTS — covering missed lines:
+#   355-409  subscribe success paths
+#   438-471  read success paths
+#   508-521  pathtoid success path
+#   566-576  browse details=True
+#   628-649  read_product_instance_uri success paths
+#   749-754  methodcall array else-branch
+#   758      methodcall digit-string → int conversion
+#   768      methodcall float with int-type → VariantType.Double
+#   770      methodcall bool value (pass branch)
+#   774-778  methodcall inner arg-mapping exception fallback
+#   787-796  methodcall except ua.UaError handling
+#   801-804  methodcall except Exception "Unhandled exception" handling
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# subscribe — success paths (lines 355-409)
+# ---------------------------------------------------------------------------
+
+
+def _make_sub_client():
+    """Return a MagicMock wired as a subscription client for subscribe() tests."""
+    mock_sub = MagicMock()
+    mock_sub.subscribe_events = AsyncMock(return_value=MagicMock())
+    sub_client = MagicMock()
+    sub_client.get_namespace_index = AsyncMock(return_value=2)
+    sub_client.nodes.root.get_child = AsyncMock(return_value=MagicMock())
+    sub_client.create_subscription = AsyncMock(return_value=mock_sub)
+    return sub_client, mock_sub
+
+
+@pytest.mark.asyncio
+async def test_subscribe_creates_both_subscriptions_when_no_eventtype():
+    """subscribe() with no eventtype creates both result and joining subscriptions."""
+    conn = _make_connection()
+    conn.handler_joining_event = MagicMock()
+    conn.handler_result_event = MagicMock()
+    sub_client, mock_sub = _make_sub_client()
+    conn.subscription_client = None
+    conn.client = sub_client
+
+    result = await conn.subscribe({})
+
+    assert result == {}
+    assert sub_client.create_subscription.await_count == 2
+    assert conn.sub_result_event is mock_sub
+    assert conn.sub_joining_event is mock_sub
+
+
+@pytest.mark.asyncio
+async def test_subscribe_creates_only_result_subscription_for_resultevent():
+    """subscribe() with eventtype='resultevent' creates only the result subscription."""
+    conn = _make_connection()
+    conn.handler_joining_event = MagicMock()
+    conn.handler_result_event = MagicMock()
+    sub_client, mock_sub = _make_sub_client()
+    conn.subscription_client = None
+    conn.client = sub_client
+
+    result = await conn.subscribe({"eventtype": "resultevent"})
+
+    assert result == {}
+    assert sub_client.create_subscription.await_count == 1
+    assert conn.sub_result_event is mock_sub
+    assert conn.sub_joining_event == "sub"
+
+
+@pytest.mark.asyncio
+async def test_subscribe_creates_only_joining_subscription_for_joiningsystemevent():
+    """subscribe() with eventtype='joiningsystemevent' creates only the joining subscription."""
+    conn = _make_connection()
+    conn.handler_joining_event = MagicMock()
+    conn.handler_result_event = MagicMock()
+    sub_client, mock_sub = _make_sub_client()
+    conn.subscription_client = None
+    conn.client = sub_client
+
+    result = await conn.subscribe({"eventtype": "joiningsystemevent"})
+
+    assert result == {}
+    assert sub_client.create_subscription.await_count == 1
+    assert conn.sub_joining_event is mock_sub
+    assert conn.sub_result_event == "sub"
+
+
+@pytest.mark.asyncio
+async def test_subscribe_skips_already_active_subscriptions():
+    """subscribe() does not recreate subscriptions already set to a non-'sub' value."""
+    conn = _make_connection()
+    conn.handler_joining_event = MagicMock()
+    conn.handler_result_event = MagicMock()
+    sub_client, _ = _make_sub_client()
+    conn.subscription_client = None
+    conn.client = sub_client
+    # Pre-set both — subscribe() must not call create_subscription again
+    conn.sub_result_event = MagicMock()
+    conn.sub_joining_event = MagicMock()
+
+    result = await conn.subscribe({})
+
+    assert result == {}
+    sub_client.create_subscription.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# read — success paths (lines 438-471) and exception path (lines 479-482)
+# ---------------------------------------------------------------------------
+
+
+def _make_read_node(node_class_value):
+    """Return a MagicMock node ready for read() with the given NodeClass."""
+    mock_reply = MagicMock()
+    mock_reply.Value.Value = "v"
+    mock_node = MagicMock()
+    mock_node.read_attributes = AsyncMock(return_value=[mock_reply] * 12)
+    mock_node.get_references = AsyncMock(return_value=[])
+    mock_node.read_node_class = AsyncMock(return_value=node_class_value)
+    mock_node.get_value = AsyncMock(return_value=99)
+    return mock_node
+
+
+@pytest.mark.asyncio
+async def test_read_variable_node_fetches_value():
+    """read() on a Variable node calls get_value() and returns a readresult dict."""
+    from asyncua import ua
+
+    conn = _make_connection()
+    mock_node = _make_read_node(ua.NodeClass.Variable)
+    conn.client = MagicMock()
+    conn.client.get_node = MagicMock(return_value=mock_node)
+
+    with patch("python.connection.serialize_tuple", return_value="{}"):
+        with patch("python.connection.serialize_value", return_value="{}"):
+            result = await conn.read({"nodeid": "ns=1;s=Var1"})
+
+    assert result.get("command") == "readresult"
+    assert result.get("nodeid") == "ns=1;s=Var1"
+    mock_node.get_value.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_read_non_variable_node_does_not_fetch_value():
+    """read() on a non-Variable (Object) node skips the get_value() call."""
+    from asyncua import ua
+
+    conn = _make_connection()
+    mock_node = _make_read_node(ua.NodeClass.Object)
+    conn.client = MagicMock()
+    conn.client.get_node = MagicMock(return_value=mock_node)
+
+    with patch("python.connection.serialize_tuple", return_value="{}"):
+        with patch("python.connection.serialize_value", return_value="{}"):
+            result = await conn.read({"nodeid": "ns=1;s=Obj1"})
+
+    assert result.get("command") == "readresult"
+    mock_node.get_value.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_read_exception_returns_exception_dict():
+    """read() returns an exception dict when an OPC UA call raises."""
+    conn = _make_connection()
+    conn.client = MagicMock()
+    conn.client.get_node = MagicMock(side_effect=RuntimeError("node not found"))
+
+    result = await conn.read({"nodeid": "ns=1;s=Missing"})
+
+    assert "exception" in result
+    assert "Read Exception" in result["exception"]
+
+
+# ---------------------------------------------------------------------------
+# pathtoid — success and exception paths (lines 508-525)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pathtoid_success_returns_serialized_nodeid():
+    """pathtoid() translates a browse path and returns the serialized target node-id."""
+    conn = _make_connection()
+
+    mock_node = MagicMock()
+    mock_node.nodeid = MagicMock()
+    mock_target = MagicMock()
+    mock_result_item = MagicMock()
+    mock_result_item.Targets = [mock_target]
+
+    conn.client = MagicMock()
+    conn.client.get_node = MagicMock(return_value=mock_node)
+    conn.client.uaclient.translate_browsepaths_to_nodeids = AsyncMock(return_value=[mock_result_item])
+
+    path_json = json.dumps([{"identifier": "Child", "namespaceindex": 1}])
+    with patch("python.connection.serialize_full_event", return_value="ns=1;s=Child"):
+        result = await conn.pathtoid(
+            {
+                "nodeid": {"NamespaceIndex": 1, "Identifier": "Parent"},
+                "path": path_json,
+            }
+        )
+
+    assert result == {"nodeid": "ns=1;s=Child"}
+
+
+@pytest.mark.asyncio
+async def test_pathtoid_exception_returns_exception_dict():
+    """pathtoid() returns an exception dict when translate_browsepaths raises."""
+    conn = _make_connection()
+
+    mock_node = MagicMock()
+    mock_node.nodeid = MagicMock()
+    conn.client = MagicMock()
+    conn.client.get_node = MagicMock(return_value=mock_node)
+    conn.client.uaclient.translate_browsepaths_to_nodeids = AsyncMock(side_effect=RuntimeError("translate failed"))
+
+    path_json = json.dumps([{"identifier": "Child", "namespaceindex": 1}])
+    result = await conn.pathtoid(
+        {
+            "nodeid": {"NamespaceIndex": 1, "Identifier": "Parent"},
+            "path": path_json,
+        }
+    )
+
+    assert "exception" in result
+    assert "PathToId Exception" in result["exception"]
+
+
+# ---------------------------------------------------------------------------
+# browse — details=True adds TypeDefinition to each entry (lines 574-575)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_browse_with_details_true_includes_type_definition_field():
+    """browse() with details=True adds a TypeDefinition key to each result entry."""
+    conn = _make_connection()
+
+    mock_ref = MagicMock()
+    mock_ref.TypeDefinition = "ns=0;i=58"
+    mock_ref.IsForward = True
+    mock_node = MagicMock()
+    mock_node.get_references = AsyncMock(return_value=[mock_ref])
+
+    conn.client = MagicMock()
+    conn.client.get_node = MagicMock(return_value=mock_node)
+
+    result = await conn.browse({"nodeid": "ns=1;i=1", "details": True})
+
+    assert "nodes" in result
+    assert len(result["nodes"]) == 1
+    assert "TypeDefinition" in result["nodes"][0]
+
+
+# ---------------------------------------------------------------------------
+# read_product_instance_uri — tools found on first path (lines 628-649)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_read_product_instance_uri_returns_tools_found_on_first_path():
+    """read_product_instance_uri returns tool list when first path has accessible tools."""
+    conn = _make_connection()
+
+    mock_pi_node = MagicMock()
+    mock_pi_node.read_value = AsyncMock(return_value="urn:tool:SN001")
+    mock_browse_name = MagicMock()
+    mock_browse_name.Name = "Wrench1"
+    mock_child = MagicMock()
+    mock_child.read_browse_name = AsyncMock(return_value=mock_browse_name)
+    mock_tools_node = MagicMock()
+    mock_tools_node.get_children = AsyncMock(return_value=[mock_child])
+
+    def _get_node(path):
+        if "ProductInstanceUri" in path:
+            return mock_pi_node
+        return mock_tools_node
+
+    conn.client = MagicMock()
+    conn.client.get_node = MagicMock(side_effect=_get_node)
+
+    result = await conn.read_product_instance_uri({})
+
+    assert len(result["tools"]) == 1
+    assert result["tools"][0]["toolName"] == "Wrench1"
+    assert result["tools"][0]["productInstanceUri"] == "urn:tool:SN001"
+
+
+@pytest.mark.asyncio
+async def test_read_product_instance_uri_child_pi_read_raises_skips_child():
+    """read_product_instance_uri skips a child when pi_node.read_value raises."""
+    conn = _make_connection()
+
+    mock_pi_node = MagicMock()
+    mock_pi_node.read_value = AsyncMock(side_effect=RuntimeError("node inaccessible"))
+    mock_browse_name = MagicMock()
+    mock_browse_name.Name = "Wrench2"
+    mock_child = MagicMock()
+    mock_child.read_browse_name = AsyncMock(return_value=mock_browse_name)
+    mock_tools_node = MagicMock()
+    mock_tools_node.get_children = AsyncMock(return_value=[mock_child])
+
+    def _get_node(path):
+        if "ProductInstanceUri" in path:
+            return mock_pi_node
+        return mock_tools_node
+
+    conn.client = MagicMock()
+    conn.client.get_node = MagicMock(side_effect=_get_node)
+
+    result = await conn.read_product_instance_uri({})
+
+    # Child is silently skipped; both paths try and both fail → empty list
+    assert result == {"tools": []}
+
+
+# ---------------------------------------------------------------------------
+# methodcall — shared helper for argument-capture tests
+# ---------------------------------------------------------------------------
+
+
+def _make_methodcall_conn(expected_args, call_method_func=None, call_method_exc=None):
+    """Build a Connection whose client is wired for a single methodcall invocation.
+
+    Returns (conn, captured_list).  captured_list is populated with the
+    ua.Variant objects passed to call_method when call_method_func is None.
+    """
+    captured: list = []
+
+    async def _capture(_method_node, *args):
+        captured.extend(args)
+        return []
+
+    mock_input_args_node = MagicMock()
+    mock_input_args_node.get_value = AsyncMock(return_value=expected_args)
+    mock_method = MagicMock()
+    mock_method.get_child = AsyncMock(return_value=mock_input_args_node)
+    mock_obj = MagicMock()
+    if call_method_exc is not None:
+        mock_obj.call_method = AsyncMock(side_effect=call_method_exc)
+    elif call_method_func is not None:
+        mock_obj.call_method = call_method_func
+    else:
+        mock_obj.call_method = _capture
+
+    mock_client = MagicMock()
+    mock_client.get_node = MagicMock(side_effect=[mock_obj, mock_method])
+
+    conn = _make_connection()
+    conn.client = mock_client
+    return conn, captured
+
+
+_MC_PAYLOAD = {
+    "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+    "methodnode": {"NamespaceIndex": 1, "Identifier": "SimulateResult"},
+}
+
+
+# ---------------------------------------------------------------------------
+# methodcall — array else-branch: non-String, non-ExtensionObject (lines 752-754)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_methodcall_list_of_ints_hits_array_else_branch():
+    """Int32 list value goes through the 'else' array branch (lines 752-754)."""
+    from asyncua import ua
+
+    mock_arg_desc = MagicMock()
+    mock_arg_desc.DataType.Identifier = 6  # Int32
+    conn, captured = _make_methodcall_conn(expected_args=[mock_arg_desc])
+
+    with patch("python.connection.serialize_full_event", return_value=[]):
+        with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+            result = await conn.methodcall({**_MC_PAYLOAD, "arguments": [{"dataType": 6, "value": [10, 20, 30]}]})
+
+    assert "output" in result
+    assert len(captured) == 1
+    assert isinstance(captured[0].Value, list)
+    assert captured[0].VariantType == ua.VariantType.Int32
+
+
+# ---------------------------------------------------------------------------
+# methodcall — string digit → int conversion (line 758)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_methodcall_digit_string_value_is_converted_to_int():
+    """Scalar string value '42' is converted to int 42 before Variant creation (line 758)."""
+    mock_arg_desc = MagicMock()
+    mock_arg_desc.DataType.Identifier = 6  # Int32 — avoids UInt abs() branch
+    conn, captured = _make_methodcall_conn(expected_args=[mock_arg_desc])
+
+    with patch("python.connection.serialize_full_event", return_value=[]):
+        with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+            result = await conn.methodcall({**_MC_PAYLOAD, "arguments": [{"dataType": 6, "value": "42"}]})
+
+    assert "output" in result
+    assert len(captured) == 1
+    assert captured[0].Value == 42  # was a string; must be converted
+
+
+# ---------------------------------------------------------------------------
+# methodcall — float with integer variant type → VariantType.Double (line 768)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_methodcall_float_with_int_type_promotes_to_double():
+    """Float scalar value with an Int32 variant type is promoted to Double (line 768)."""
+    from asyncua import ua
+
+    mock_arg_desc = MagicMock()
+    mock_arg_desc.DataType.Identifier = 6  # Int32
+    conn, captured = _make_methodcall_conn(expected_args=[mock_arg_desc])
+
+    with patch("python.connection.serialize_full_event", return_value=[]):
+        with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+            result = await conn.methodcall({**_MC_PAYLOAD, "arguments": [{"dataType": 6, "value": 3.14}]})
+
+    assert "output" in result
+    assert len(captured) == 1
+    assert captured[0].VariantType == ua.VariantType.Double
+
+
+# ---------------------------------------------------------------------------
+# methodcall — bool value passes through the 'elif isinstance(bool)' branch (line 770)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_methodcall_bool_value_reaches_bool_branch():
+    """Boolean scalar value hits the 'elif isinstance(value, bool): pass' branch (line 770)."""
+    from asyncua import ua
+
+    mock_arg_desc = MagicMock()
+    mock_arg_desc.DataType.Identifier = 1  # Boolean
+    conn, captured = _make_methodcall_conn(expected_args=[mock_arg_desc])
+
+    with patch("python.connection.serialize_full_event", return_value=[]):
+        with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+            result = await conn.methodcall({**_MC_PAYLOAD, "arguments": [{"dataType": 1, "value": True}]})
+
+    assert "output" in result
+    assert len(captured) == 1
+    assert captured[0].Value is True
+    assert captured[0].VariantType == ua.VariantType.Boolean
+
+
+# ---------------------------------------------------------------------------
+# methodcall — inner arg-mapping exception → fallback to create_call_structure
+#              (lines 774-778)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_methodcall_arg_mapping_exception_falls_back_to_create_call_structure():
+    """IndexError on expected_args triggers the fallback to create_call_structure (lines 774-778)."""
+    # expected_args=[] but 1 argument supplied → IndexError on expected_args[0]
+    conn, captured = _make_methodcall_conn(expected_args=[])
+
+    fallback_variant = MagicMock()
+    with patch("python.connection.create_call_structure", return_value=fallback_variant) as mock_ccs:
+        with patch("python.connection.serialize_full_event", return_value=[]):
+            with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+                result = await conn.methodcall({**_MC_PAYLOAD, "arguments": [{"dataType": 12, "value": "hello"}]})
+
+    assert "output" in result
+    mock_ccs.assert_called_once()
+    assert fallback_variant in captured
+
+
+# ---------------------------------------------------------------------------
+# methodcall — except ua.UaError handling (lines 787-796)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_methodcall_uaerror_bad_too_many_sessions_returns_specific_message():
+    """ua.UaError with 'BadTooManySessions' returns the server-overloaded message (line 790)."""
+    from asyncua import ua
+
+    conn, _ = _make_methodcall_conn(expected_args=[], call_method_exc=ua.UaError("BadTooManySessions"))
+
+    with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+        result = await conn.methodcall({**_MC_PAYLOAD, "arguments": []})
+
+    assert "exception" in result
+    assert "too many open sessions" in result["exception"].lower()
+
+
+@pytest.mark.asyncio
+async def test_methodcall_uaerror_secure_channel_closed_connection_alive_returns_output():
+    """ua.UaError with 'BadSecureChannelClosed' returns {'output': []} when session alive (line 794)."""
+    from asyncua import ua
+
+    conn, _ = _make_methodcall_conn(expected_args=[], call_method_exc=ua.UaError("BadSecureChannelClosed"))
+
+    # First call (entry guard) → True; second call (inside except) → True
+    with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+        result = await conn.methodcall({**_MC_PAYLOAD, "arguments": []})
+
+    assert result == {"output": []}
+
+
+@pytest.mark.asyncio
+async def test_methodcall_uaerror_secure_channel_closed_connection_dead_returns_exception():
+    """ua.UaError with 'BadSecureChannelClosed' returns connection-lost message when dead (line 795)."""
+    from asyncua import ua
+
+    conn, _ = _make_methodcall_conn(expected_args=[], call_method_exc=ua.UaError("BadSecureChannelClosed"))
+
+    # First call (entry guard) → True; second call (inside except) → False (connection lost)
+    with patch.object(conn, "is_connection_open", new=AsyncMock(side_effect=[True, False])):
+        result = await conn.methodcall({**_MC_PAYLOAD, "arguments": []})
+
+    assert "exception" in result
+    assert "reconnect" in result["exception"].lower()
+
+
+@pytest.mark.asyncio
+async def test_methodcall_uaerror_generic_returns_opc_ua_error_message():
+    """A generic ua.UaError (no special keyword) returns the OPC UA error message (line 796)."""
+    from asyncua import ua
+
+    conn, _ = _make_methodcall_conn(expected_args=[], call_method_exc=ua.UaError("BadNodeIdUnknown"))
+
+    with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+        result = await conn.methodcall({**_MC_PAYLOAD, "arguments": []})
+
+    assert "exception" in result
+    assert "OPC UA error" in result["exception"]
+
+
+# ---------------------------------------------------------------------------
+# methodcall — except Exception with "Unhandled exception" (lines 800-804)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_methodcall_generic_exception_unhandled_connection_alive_returns_output():
+    """Generic Exception containing 'Unhandled exception' returns {'output': []} when alive (lines 801-803)."""
+    conn, _ = _make_methodcall_conn(
+        expected_args=[],
+        call_method_exc=RuntimeError("Unhandled exception while sending request"),
+    )
+
+    # First call (entry guard) → True; second call (inside except) → True
+    with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+        result = await conn.methodcall({**_MC_PAYLOAD, "arguments": []})
+
+    assert result == {"output": []}
+
+
+@pytest.mark.asyncio
+async def test_methodcall_generic_exception_unhandled_connection_dead_returns_exception():
+    """Generic Exception containing 'Unhandled exception' returns connection-lost when dead (line 804)."""
+    conn, _ = _make_methodcall_conn(
+        expected_args=[],
+        call_method_exc=RuntimeError("Unhandled exception while sending request"),
+    )
+
+    # First call (entry guard) → True; second call (inside except) → False
+    with patch.object(conn, "is_connection_open", new=AsyncMock(side_effect=[True, False])):
+        result = await conn.methodcall({**_MC_PAYLOAD, "arguments": []})
+
+    assert "exception" in result
+    assert "reconnect" in result["exception"].lower()

@@ -77,13 +77,15 @@ omit = [
     "tests/python/live/*",
     "tests/python/integration/*",
     "tests/shared_opcua/*",
+    # Compatibility shim only imported by live/integration tests (already omitted above).
+    "tests/python/_asyncua_compat.py",
     ".venv/*",
     ".venv_test/*",
 ]
 
 [tool.coverage.report]
-# Threshold is achievable by unit tests alone with the omit list above (~74%).
-fail_under = 70
+# Unit tests alone now reach ~95% with setup_project/index/connection coverage sprint (2026-04-27).
+fail_under = 90
 skip_empty = true
 exclude_lines = [
     "pragma: no cover",

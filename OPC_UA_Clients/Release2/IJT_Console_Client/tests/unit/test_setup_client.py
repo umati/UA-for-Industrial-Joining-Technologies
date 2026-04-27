@@ -818,3 +818,629 @@ class TestListPythonsWindows:
     def test_returns_empty_on_empty_output(self, monkeypatch):
         monkeypatch.setattr(subprocess, "check_output", lambda *a, **_kw: "")
         assert sc._list_pythons_windows() == []
+
+
+# =============================================================================
+# Additional imports for new test classes
+# =============================================================================
+import os  # noqa: E402  (appended after sys.path manipulation block)
+import shutil  # noqa: E402
+
+# =============================================================================
+# _detect_repo_root
+# =============================================================================
+
+
+class TestDetectRepoRoot:
+    """Tests for _detect_repo_root() — walks parent chain to find repo root."""
+
+    def test_finds_root_in_grandparent(self, tmp_path):
+        (tmp_path / "OPC_UA_Clients").mkdir()
+        (tmp_path / "OPC_UA_Servers").mkdir()
+        start_dir = tmp_path / "deep" / "nested"
+        start_dir.mkdir(parents=True)
+        assert sc._detect_repo_root(start_dir) == tmp_path
+
+    def test_returns_start_dir_when_markers_absent(self, fs):
+        # Use pyfakefs to avoid the real repo root being found via parent traversal
+        start_dir = Path("/isolated/project/src")
+        start_dir.mkdir(parents=True)
+        assert sc._detect_repo_root(start_dir) == start_dir
+
+    def test_finds_root_when_start_dir_is_root(self, tmp_path):
+        (tmp_path / "OPC_UA_Clients").mkdir()
+        (tmp_path / "OPC_UA_Servers").mkdir()
+        assert sc._detect_repo_root(tmp_path) == tmp_path
+
+    def test_only_one_marker_present_falls_back(self, fs):
+        # Use pyfakefs so no real repo markers exist in parent chain
+        start_dir = Path("/isolated/sub")
+        start_dir.mkdir(parents=True)
+        (Path("/isolated") / "OPC_UA_Clients").mkdir()
+        # OPC_UA_Servers intentionally absent
+        assert sc._detect_repo_root(start_dir) == start_dir
+
+
+# =============================================================================
+# _force_rmtree
+# =============================================================================
+
+
+class TestForceRmtree:
+    """Tests for _force_rmtree() — robust directory removal with error handler."""
+
+    def test_removes_directory_tree(self, tmp_path):
+        target = tmp_path / "to_remove"
+        target.mkdir()
+        (target / "file.txt").write_text("content")
+        (target / "sub").mkdir()
+        sc._force_rmtree(target)
+        assert not target.exists()
+
+    def test_passes_onexc_kwarg_to_shutil_rmtree(self, tmp_path, monkeypatch):
+        target = tmp_path / "to_remove"
+        target.mkdir()
+        captured = {}
+        monkeypatch.setattr(
+            shutil,
+            "rmtree",
+            lambda path, onexc=None: captured.update({"path": path, "onexc": onexc}),
+        )
+        sc._force_rmtree(target)
+        assert captured["onexc"] is not None, "error handler must be supplied to rmtree"
+
+    def test_on_exc_handler_calls_chmod_and_retries_func(self, tmp_path, monkeypatch):
+        """Capture the onexc handler then invoke it — verifies chmod+retry path."""
+        target = tmp_path / "locked"
+        target.mkdir()
+        captured_onexc = [None]
+
+        def fake_rmtree(path, onexc=None):
+            captured_onexc[0] = onexc
+
+        monkeypatch.setattr(shutil, "rmtree", fake_rmtree)
+        sc._force_rmtree(target)
+        assert captured_onexc[0] is not None
+
+        chmod_calls = []
+        func_calls = []
+        monkeypatch.setattr(os, "chmod", lambda p, m: chmod_calls.append((p, m)))
+
+        def mock_func(p):
+            func_calls.append(p)
+
+        captured_onexc[0](mock_func, "/some/locked/file", OSError("locked"))
+        assert len(chmod_calls) == 1
+        assert len(func_calls) == 1
+
+
+# =============================================================================
+# _cleanup_local_project_artifacts
+# =============================================================================
+
+
+class TestCleanupLocalProjectArtifacts:
+    """Tests for _cleanup_local_project_artifacts() — removes caches and temp files."""
+
+    def test_removes_pycache_directory(self, tmp_path):
+        pycache = tmp_path / "__pycache__"
+        pycache.mkdir()
+        (pycache / "mod.cpython-314.pyc").write_bytes(b"")
+        sc._cleanup_local_project_artifacts(tmp_path)
+        assert not pycache.exists()
+
+    def test_removes_pyc_file(self, tmp_path):
+        pyc = tmp_path / "module.pyc"
+        pyc.write_bytes(b"fake pyc")
+        sc._cleanup_local_project_artifacts(tmp_path)
+        assert not pyc.exists()
+
+    def test_removes_coverage_file(self, tmp_path):
+        cov = tmp_path / ".coverage"
+        cov.write_text("fake coverage")
+        sc._cleanup_local_project_artifacts(tmp_path)
+        assert not cov.exists()
+
+    def test_removes_coverage_variant_file(self, tmp_path):
+        cov = tmp_path / ".coverage.worker1"
+        cov.write_text("fake")
+        sc._cleanup_local_project_artifacts(tmp_path)
+        assert not cov.exists()
+
+    def test_skips_venv_directory_and_its_contents(self, tmp_path):
+        venv_dir = tmp_path / ".venv"
+        venv_dir.mkdir()
+        pyc_inside = venv_dir / "module.pyc"
+        pyc_inside.write_bytes(b"")
+        sc._cleanup_local_project_artifacts(tmp_path)
+        assert venv_dir.exists()
+        assert pyc_inside.exists()
+
+    def test_removes_state_tmp_subdir(self, tmp_path):
+        state_tmp = tmp_path / ".state" / "tmp"
+        state_tmp.mkdir(parents=True)
+        (state_tmp / "pip_work").write_text("temp")
+        sc._cleanup_local_project_artifacts(tmp_path)
+        assert not state_tmp.exists()
+
+    def test_removes_pytest_cache(self, tmp_path):
+        cache = tmp_path / ".pytest_cache"
+        cache.mkdir()
+        (cache / "v" / "cache").mkdir(parents=True)
+        sc._cleanup_local_project_artifacts(tmp_path)
+        assert not cache.exists()
+
+
+# =============================================================================
+# _find_latest_python_executable
+# =============================================================================
+
+
+class TestFindLatestPythonExecutable:
+    """Tests for _find_latest_python_executable() — picks newest Python."""
+
+    # ── Windows branch ────────────────────────────────────────────────────────
+
+    def test_windows_picks_highest_version_from_launcher(self, monkeypatch):
+        monkeypatch.setattr(sc, "IS_WINDOWS", True)
+        monkeypatch.setattr(sc, "_list_pythons_windows", lambda: ["3.13", "3.14"])
+        monkeypatch.setattr(sys, "version_info", (3, 12, 0, "final", 0))
+        cmd, ver = sc._find_latest_python_executable()
+        assert ver == "3.14"
+        assert cmd == ["py", "-3.14"]
+
+    def test_windows_current_interpreter_included_in_candidates(self, monkeypatch):
+        monkeypatch.setattr(sc, "IS_WINDOWS", True)
+        monkeypatch.setattr(sc, "_list_pythons_windows", lambda: ["3.13"])
+        monkeypatch.setattr(sys, "version_info", (3, 14, 0, "final", 0))
+        cmd, ver = sc._find_latest_python_executable()
+        assert ver == "3.14"
+        assert cmd == [sys.executable]
+
+    # ── POSIX branch ──────────────────────────────────────────────────────────
+
+    def test_posix_finds_python3_14(self, monkeypatch):
+        monkeypatch.setattr(sc, "IS_WINDOWS", False)
+
+        def mock_check_call(args, **kwargs):
+            if args[0] == "python3.14":
+                return 0
+            raise FileNotFoundError(f"{args[0]} not found")
+
+        monkeypatch.setattr(subprocess, "check_call", mock_check_call)
+        cmd, ver = sc._find_latest_python_executable()
+        assert cmd == ["python3.14"]
+        assert ver == "3.14"
+
+    def test_posix_falls_back_to_python3(self, monkeypatch):
+        monkeypatch.setattr(sc, "IS_WINDOWS", False)
+
+        def mock_check_call(args, **kwargs):
+            if args[0] == "python3":
+                return 0
+            raise FileNotFoundError(f"{args[0]} not found")
+
+        def mock_check_output(args, **kwargs):
+            return "3.11\n"
+
+        monkeypatch.setattr(subprocess, "check_call", mock_check_call)
+        monkeypatch.setattr(subprocess, "check_output", mock_check_output)
+        cmd, ver = sc._find_latest_python_executable()
+        assert cmd == ["python3"]
+        assert ver == "3.11"
+
+    def test_posix_all_fail_calls_sys_exit(self, monkeypatch):
+        monkeypatch.setattr(sc, "IS_WINDOWS", False)
+        monkeypatch.setattr(
+            subprocess, "check_call", lambda args, **kw: (_ for _ in ()).throw(FileNotFoundError("not found"))
+        )
+        with pytest.raises(SystemExit) as exc_info:
+            sc._find_latest_python_executable()
+        assert exc_info.value.code == 1
+
+
+# =============================================================================
+# _relaunch_under_latest_python
+# =============================================================================
+
+
+class TestRelaunchUnderLatestPython:
+    """Tests for _relaunch_under_latest_python() — re-execs under newest Python."""
+
+    def test_same_version_does_not_call_execvp(self, monkeypatch):
+        monkeypatch.setattr(sys, "version_info", (3, 14, 0, "final", 0))
+        monkeypatch.setattr(sc, "_find_latest_python_executable", lambda: (["python3.14"], "3.14"))
+        execvp_calls = []
+        monkeypatch.setattr(os, "execvp", lambda cmd, args: execvp_calls.append((cmd, args)))
+        sc._relaunch_under_latest_python()
+        assert execvp_calls == []
+
+    def test_different_version_calls_execvp_with_correct_args(self, monkeypatch):
+        monkeypatch.setattr(sys, "version_info", (3, 13, 0, "final", 0))
+        monkeypatch.setattr(sc, "_find_latest_python_executable", lambda: (["python3.14"], "3.14"))
+        monkeypatch.setattr(sys, "argv", ["setup_client.py", "--verbose"])
+        execvp_calls = []
+        monkeypatch.setattr(os, "execvp", lambda cmd, args: execvp_calls.append((cmd, args)))
+        sc._relaunch_under_latest_python()
+        assert len(execvp_calls) == 1
+        assert execvp_calls[0][0] == "python3.14"
+        assert "--verbose" in execvp_calls[0][1]
+
+
+# =============================================================================
+# _check_internet
+# =============================================================================
+
+
+class TestCheckInternet:
+    """Tests for _check_internet() — connectivity probe via raw socket."""
+
+    def test_returns_true_on_successful_connect(self, monkeypatch):
+        mock_sock = MagicMock()
+        mock_sock.connect.return_value = None
+        monkeypatch.setattr(socket, "socket", lambda *a, **kw: mock_sock)
+        assert sc._check_internet("8.8.8.8", 53, 1.0) is True
+
+    def test_returns_false_on_socket_error(self, monkeypatch):
+        mock_sock = MagicMock()
+        mock_sock.connect.side_effect = socket.error("connection refused")
+        monkeypatch.setattr(socket, "socket", lambda *a, **kw: mock_sock)
+        assert sc._check_internet("8.8.8.8", 53, 1.0) is False
+
+    def test_socket_close_called_on_success(self, monkeypatch):
+        mock_sock = MagicMock()
+        mock_sock.connect.return_value = None
+        monkeypatch.setattr(socket, "socket", lambda *a, **kw: mock_sock)
+        sc._check_internet()
+        mock_sock.close.assert_called_once()
+
+    def test_socket_close_called_on_failure(self, monkeypatch):
+        mock_sock = MagicMock()
+        mock_sock.connect.side_effect = socket.error("refused")
+        monkeypatch.setattr(socket, "socket", lambda *a, **kw: mock_sock)
+        sc._check_internet()
+        mock_sock.close.assert_called_once()
+
+
+# =============================================================================
+# _wait_for_endpoint_ready
+# =============================================================================
+
+
+class TestWaitForEndpointReady:
+    """Tests for _wait_for_endpoint_ready() — polls endpoint until reachable or timeout."""
+
+    def test_returns_true_immediately_if_reachable(self, monkeypatch):
+        monkeypatch.setattr(sc, "_is_endpoint_reachable", lambda ep, **kw: True)
+        monkeypatch.setattr(time, "sleep", lambda s: None)
+        monkeypatch.setattr(time, "time", lambda: 100.0)
+        assert sc._wait_for_endpoint_ready("opc.tcp://localhost:40451", timeout_seconds=30.0) is True
+
+    def test_returns_false_after_timeout(self, monkeypatch):
+        monkeypatch.setattr(sc, "_is_endpoint_reachable", lambda ep, **kw: False)
+        monkeypatch.setattr(time, "sleep", lambda s: None)
+        # deadline = 100.0 + 1.0 = 101.0; first loop at 100.0, second at 102.0 (exits)
+        time_seq = [100.0, 100.0, 102.0, 102.0]
+        idx = [0]
+
+        def fake_time():
+            v = time_seq[min(idx[0], len(time_seq) - 1)]
+            idx[0] += 1
+            return v
+
+        monkeypatch.setattr(time, "time", fake_time)
+        assert sc._wait_for_endpoint_ready("opc.tcp://localhost:40451", timeout_seconds=1.0) is False
+
+    def test_returns_true_on_second_poll(self, monkeypatch):
+        call_count = [0]
+
+        def fake_reachable(ep, **kw):
+            call_count[0] += 1
+            return call_count[0] >= 2
+
+        monkeypatch.setattr(sc, "_is_endpoint_reachable", fake_reachable)
+        monkeypatch.setattr(time, "sleep", lambda s: None)
+        monkeypatch.setattr(time, "time", lambda: 100.0)  # never expire
+        assert sc._wait_for_endpoint_ready("opc.tcp://localhost:40451", timeout_seconds=30.0) is True
+        assert call_count[0] == 2
+
+
+# =============================================================================
+# _get_environment_age_days
+# =============================================================================
+
+
+class TestGetEnvironmentAgeDays:
+    """Tests for _get_environment_age_days() — venv mtime → age in days."""
+
+    def test_returns_correct_age_when_venv_exists(self, fs, monkeypatch):
+        venv_path = Path("/fake/.venv")
+        venv_path.mkdir(parents=True)
+        monkeypatch.setattr(sc, "VENV_DIR", venv_path)
+        one_day_secs = 86400.0
+        monkeypatch.setattr(time, "time", lambda: 2 * one_day_secs)
+        monkeypatch.setattr(os.path, "getmtime", lambda p: one_day_secs)
+        result = sc._get_environment_age_days()
+        assert result is not None
+        assert 0.99 < result < 1.01
+
+    def test_returns_none_when_venv_missing(self, fs, monkeypatch):
+        monkeypatch.setattr(sc, "VENV_DIR", Path("/fake/.venv_nonexistent"))
+        assert sc._get_environment_age_days() is None
+
+    def test_returns_none_and_warns_when_getmtime_raises(self, fs, monkeypatch, caplog):
+        venv_path = Path("/fake/.venv")
+        venv_path.mkdir(parents=True)
+        monkeypatch.setattr(sc, "VENV_DIR", venv_path)
+
+        def raise_oserror(p):
+            raise OSError("permission denied")
+
+        monkeypatch.setattr(os.path, "getmtime", raise_oserror)
+        with caplog.at_level(logging.WARNING, logger="setup_client"):
+            result = sc._get_environment_age_days()
+        assert result is None
+        assert any("environment age" in r.message.lower() for r in caplog.records)
+
+
+# =============================================================================
+# _resolve_python_executable
+# =============================================================================
+
+
+class TestResolvePythonExecutable:
+    """Tests for _resolve_python_executable() — asks Python to print its own path."""
+
+    def test_returns_stripped_executable_path(self, monkeypatch):
+        monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "/usr/bin/python3.14\n")
+        result = sc._resolve_python_executable(["python3.14"])
+        assert result == "/usr/bin/python3.14"
+
+    def test_subprocess_failure_calls_sys_exit(self, monkeypatch):
+        def fail(*a, **kw):
+            raise subprocess.CalledProcessError(1, "python3.14")
+
+        monkeypatch.setattr(subprocess, "check_output", fail)
+        with pytest.raises(SystemExit) as exc_info:
+            sc._resolve_python_executable(["python3.14"])
+        assert exc_info.value.code == 1
+
+    def test_empty_output_calls_sys_exit(self, monkeypatch):
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: "   \n")
+        with pytest.raises(SystemExit) as exc_info:
+            sc._resolve_python_executable(["python3.14"])
+        assert exc_info.value.code == 1
+
+
+# =============================================================================
+# _create_virtualenv
+# =============================================================================
+
+
+class TestCreateVirtualenv:
+    """Tests for _create_virtualenv() — creates .venv and installs pip."""
+
+    def test_success_calls_venv_and_ensurepip(self, tmp_path, monkeypatch):
+        venv_path = tmp_path / ".venv"
+        state_path = tmp_path / ".state"
+        monkeypatch.setattr(sc, "VENV_DIR", venv_path)
+        monkeypatch.setattr(sc, "STATE_DIR", state_path)
+        monkeypatch.setattr(sc, "_resolve_python_executable", lambda cmd: "/usr/bin/python3.14")
+        calls = []
+        monkeypatch.setattr(subprocess, "check_call", lambda args, **kw: calls.append(list(args)))
+        sc._create_virtualenv(["python3.14"])
+        venv_calls = [c for c in calls if "venv" in c and "--without-pip" in c]
+        ensurepip_calls = [c for c in calls if "ensurepip" in c]
+        assert len(venv_calls) == 1
+        assert len(ensurepip_calls) == 1
+
+    def test_ensurepip_failure_triggers_fallback_pip(self, tmp_path, monkeypatch):
+        venv_path = tmp_path / ".venv"
+        state_path = tmp_path / ".state"
+        monkeypatch.setattr(sc, "VENV_DIR", venv_path)
+        monkeypatch.setattr(sc, "STATE_DIR", state_path)
+        monkeypatch.setattr(sc, "_resolve_python_executable", lambda cmd: "/usr/bin/python3.14")
+        calls = []
+
+        def controlled_check_call(args, **kw):
+            calls.append(list(args))
+            if "ensurepip" in args:
+                raise OSError("ensurepip not available")
+
+        monkeypatch.setattr(subprocess, "check_call", controlled_check_call)
+        sc._create_virtualenv(["python3.14"])
+        fallback_calls = [c for c in calls if "--python" in c and "pip" in c]
+        assert len(fallback_calls) == 1
+
+    def test_venv_creation_failure_calls_sys_exit(self, tmp_path, monkeypatch):
+        venv_path = tmp_path / ".venv"
+        state_path = tmp_path / ".state"
+        monkeypatch.setattr(sc, "VENV_DIR", venv_path)
+        monkeypatch.setattr(sc, "STATE_DIR", state_path)
+        monkeypatch.setattr(sc, "_resolve_python_executable", lambda cmd: "/usr/bin/python3.14")
+
+        def failing_check_call(args, **kw):
+            if "venv" in args:
+                raise subprocess.CalledProcessError(1, args)
+
+        monkeypatch.setattr(subprocess, "check_call", failing_check_call)
+        with pytest.raises(SystemExit) as exc_info:
+            sc._create_virtualenv(["python3.14"])
+        assert exc_info.value.code == 1
+
+    def test_existing_venv_dir_is_removed_first(self, tmp_path, monkeypatch):
+        venv_path = tmp_path / ".venv"
+        venv_path.mkdir()
+        state_path = tmp_path / ".state"
+        monkeypatch.setattr(sc, "VENV_DIR", venv_path)
+        monkeypatch.setattr(sc, "STATE_DIR", state_path)
+        monkeypatch.setattr(sc, "_resolve_python_executable", lambda cmd: "/usr/bin/python3.14")
+        rmtree_calls = []
+
+        def mock_rmtree(path, onexc=None, ignore_errors=False):
+            rmtree_calls.append(path)
+
+        monkeypatch.setattr(shutil, "rmtree", mock_rmtree)
+        monkeypatch.setattr(subprocess, "check_call", lambda args, **kw: None)
+        sc._create_virtualenv(["python3.14"])
+        assert venv_path in rmtree_calls
+
+
+# =============================================================================
+# _install_python_packages
+# =============================================================================
+
+
+class TestInstallPythonPackages:
+    """Tests for _install_python_packages() — pip installs into .venv."""
+
+    def test_missing_requirements_txt_calls_sys_exit(self, fs, monkeypatch):
+        rundir = Path("/fake/rundir")
+        rundir.mkdir(parents=True)
+        monkeypatch.chdir(rundir)
+        monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
+        with pytest.raises(SystemExit) as exc_info:
+            sc._install_python_packages()
+        assert exc_info.value.code == 1
+
+    def test_success_installs_all_packages(self, fs, monkeypatch):
+        rundir = Path("/fake/rundir")
+        rundir.mkdir(parents=True)
+        monkeypatch.chdir(rundir)
+        (rundir / "requirements.txt").write_text("requests\n")
+        monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
+        calls = []
+        monkeypatch.setattr(subprocess, "check_call", lambda args, **kw: calls.append(list(args)))
+        monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "1.2.0\n")
+        sc._install_python_packages()
+        assert any("requirements.txt" in str(c) for c in calls)
+        assert any("asyncua" in str(c) for c in calls)
+
+    def test_crypto_upgrade_exception_does_not_exit(self, fs, monkeypatch):
+        rundir = Path("/fake/rundir")
+        rundir.mkdir(parents=True)
+        monkeypatch.chdir(rundir)
+        (rundir / "requirements.txt").write_text("requests\n")
+        monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
+
+        def selective_check_call(args, **kw):
+            if "cryptography" in args or "pyOpenSSL" in args:
+                raise subprocess.CalledProcessError(1, args)
+
+        monkeypatch.setattr(subprocess, "check_call", selective_check_call)
+        monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "1.2.0\n")
+        sc._install_python_packages()  # must not raise
+
+    def test_asyncua_too_old_calls_sys_exit(self, fs, monkeypatch):
+        rundir = Path("/fake/rundir")
+        rundir.mkdir(parents=True)
+        monkeypatch.chdir(rundir)
+        (rundir / "requirements.txt").write_text("requests\n")
+        monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
+        monkeypatch.setattr(subprocess, "check_call", lambda args, **kw: None)
+        monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "1.1.0\n")
+        with pytest.raises(SystemExit) as exc_info:
+            sc._install_python_packages()
+        assert exc_info.value.code == 1
+
+    def test_asyncua_version_check_failure_logs_warning_no_exit(self, fs, monkeypatch, caplog):
+        rundir = Path("/fake/rundir")
+        rundir.mkdir(parents=True)
+        monkeypatch.chdir(rundir)
+        (rundir / "requirements.txt").write_text("requests\n")
+        monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
+        monkeypatch.setattr(subprocess, "check_call", lambda args, **kw: None)
+
+        def failing_output(args, **kw):
+            raise subprocess.CalledProcessError(1, args)
+
+        monkeypatch.setattr(subprocess, "check_output", failing_output)
+        with caplog.at_level(logging.WARNING, logger="setup_client"):
+            sc._install_python_packages()  # must not raise
+        assert any("asyncua" in r.message.lower() for r in caplog.records)
+
+
+# =============================================================================
+# main
+# =============================================================================
+
+
+class TestMain:
+    """Tests for main() — argument parsing and setup orchestration flows."""
+
+    def _mock_basics(self, monkeypatch):
+        """Patch all main() side-effectful calls to safe no-ops."""
+        monkeypatch.setattr(sc, "_relaunch_under_latest_python", lambda: None)
+        monkeypatch.setattr(sc, "_require_python_314_or_newer", lambda *a: None)
+        monkeypatch.setattr(sc, "_warn_if_untested_python", lambda *a: None)
+        monkeypatch.setattr(sc, "_find_latest_python_executable", lambda: (["python3.14"], "3.14"))
+        monkeypatch.setattr(sc, "_remove_stale_venvs", lambda *a: None)
+        monkeypatch.setattr(sc, "_cleanup_local_project_artifacts", lambda *a: None)
+        monkeypatch.setattr(sc, "_is_runtime_ready", lambda: False)
+        monkeypatch.setattr(sc, "_validate_url_or_default", lambda url: "opc.tcp://localhost:40451")
+        monkeypatch.setattr(sc, "_ensure_opc_server_running", lambda *a, **kw: True)
+        monkeypatch.setattr(sc, "_run_client", lambda *a, **kw: None)
+        monkeypatch.setattr(sc, "_check_internet", lambda: True)
+        monkeypatch.setattr(sc, "_create_virtualenv", lambda cmd: None)
+        monkeypatch.setattr(sc, "_install_python_packages", lambda: None)
+        monkeypatch.setattr(sc, "_update_setup_timestamp", lambda: None)
+        monkeypatch.setattr(shutil, "rmtree", lambda *a, **kw: None)
+
+    def test_clean_with_venv_present_calls_rmtree(self, fs, monkeypatch):
+        venv_path = Path("/fake/.venv")
+        venv_path.mkdir(parents=True)
+        monkeypatch.setattr(sc, "VENV_DIR", venv_path)
+        self._mock_basics(monkeypatch)
+        rmtree_calls = []
+        monkeypatch.setattr(shutil, "rmtree", lambda p: rmtree_calls.append(p))
+        monkeypatch.setattr(sys, "argv", ["setup_client.py", "--clean"])
+        sc.main()
+        assert venv_path in rmtree_calls
+
+    def test_clean_without_venv_logs_message(self, fs, monkeypatch, caplog):
+        monkeypatch.setattr(sc, "VENV_DIR", Path("/fake/.venv_missing"))
+        self._mock_basics(monkeypatch)
+        monkeypatch.setattr(sys, "argv", ["setup_client.py", "--clean"])
+        with caplog.at_level(logging.INFO, logger="setup_client"):
+            sc.main()
+        assert any("No virtual environment to clean" in r.message for r in caplog.records)
+
+    def test_fast_path_when_runtime_ready(self, monkeypatch):
+        self._mock_basics(monkeypatch)
+        monkeypatch.setattr(sc, "_is_runtime_ready", lambda: True)
+        run_calls = []
+        monkeypatch.setattr(sc, "_run_client", lambda *a, **kw: run_calls.append(a))
+        monkeypatch.setattr(sys, "argv", ["setup_client.py"])
+        sc.main()
+        assert len(run_calls) == 1
+
+    def test_force_full_skips_fast_path_even_when_runtime_ready(self, monkeypatch):
+        self._mock_basics(monkeypatch)
+        monkeypatch.setattr(sc, "_is_runtime_ready", lambda: True)
+        create_calls = []
+        monkeypatch.setattr(sc, "_create_virtualenv", lambda cmd: create_calls.append(cmd))
+        monkeypatch.setattr(sys, "argv", ["setup_client.py", "--force_full"])
+        sc.main()
+        assert len(create_calls) == 1
+
+    def test_full_setup_with_internet_calls_create_and_install(self, monkeypatch):
+        self._mock_basics(monkeypatch)
+        create_calls = []
+        install_calls = []
+        stamp_calls = []
+        monkeypatch.setattr(sc, "_create_virtualenv", lambda cmd: create_calls.append(cmd))
+        monkeypatch.setattr(sc, "_install_python_packages", lambda: install_calls.append(1))
+        monkeypatch.setattr(sc, "_update_setup_timestamp", lambda: stamp_calls.append(1))
+        monkeypatch.setattr(sys, "argv", ["setup_client.py"])
+        sc.main()
+        assert len(create_calls) == 1
+        assert len(install_calls) == 1
+        assert len(stamp_calls) == 1
+
+    def test_full_setup_no_internet_calls_sys_exit(self, monkeypatch):
+        self._mock_basics(monkeypatch)
+        monkeypatch.setattr(sc, "_check_internet", lambda: False)
+        monkeypatch.setattr(sys, "argv", ["setup_client.py"])
+        with pytest.raises(SystemExit) as exc_info:
+            sc.main()
+        assert exc_info.value.code == 1
