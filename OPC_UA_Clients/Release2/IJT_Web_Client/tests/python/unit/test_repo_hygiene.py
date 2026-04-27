@@ -171,9 +171,9 @@ class TestGitignoreCoverage:
         assert "node_modules/" in text, "node_modules/ not found in .gitignore"
 
     def test_gitignore_covers_log_files(self):
-        """*.log must be in .gitignore."""
+        """Log file pattern must be in .gitignore (accepts full case-insensitive bracket form)."""
         text = self._gitignore_text()
-        assert "*.log" in text, "*.log not found in .gitignore"
+        assert "*.[Ll][Oo][Gg]" in text or "*.log" in text, "log file pattern not found in .gitignore"
 
     def test_gitignore_covers_venv(self):
         """venv/ must be in .gitignore."""
