@@ -230,6 +230,7 @@ async def test_enable_asset_true():
     ):
         result = await caller.enable_asset("obj", "mth", True)
 
+    assert result is not None
     assert result["status"] == 0
     assert result["status_message"] == "Asset enabled"
     # Boolean variant must be True
@@ -307,6 +308,7 @@ async def test_start_selected_joining_deselect_true():
     ):
         result = await caller.start_selected_joining("obj", "mth", True)
 
+    assert result is not None
     assert result["status"] == 0
     call_args = node_mock.call_method.call_args[0]
     deselect_variant = call_args[2]

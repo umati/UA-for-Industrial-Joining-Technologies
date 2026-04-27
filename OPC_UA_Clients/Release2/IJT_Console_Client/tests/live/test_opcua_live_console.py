@@ -90,7 +90,7 @@ async def test_browse_root_node_returns_results():
     client = OPCUAClient(_SERVER_URL)
     try:
         await client.connect()
-        root = client.client.get_root_node()
+        root = client.client.get_root_node()  # type: ignore[union-attr]
         children = await root.get_children()
         assert len(children) > 0, "Root node must have child nodes"
     finally:

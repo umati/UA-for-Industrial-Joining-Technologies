@@ -44,10 +44,10 @@ class OPCUAClient:
 
     def setup_client_metadata(self) -> None:
         computer_name = socket.getfqdn()
-        self.client.name = f"urn:{computer_name}:IJT:ConsoleClient"
-        self.client.description = f"urn:{computer_name}:IJT:ConsoleClient"
-        self.client.application_uri = f"urn:{computer_name}:IJT:ConsoleClient"
-        self.client.product_uri = "urn:IJT:ConsoleClient"
+        self.client.name = f"urn:{computer_name}:IJT:ConsoleClient"  # type: ignore[union-attr]
+        self.client.description = f"urn:{computer_name}:IJT:ConsoleClient"  # type: ignore[union-attr]
+        self.client.application_uri = f"urn:{computer_name}:IJT:ConsoleClient"  # type: ignore[union-attr]
+        self.client.product_uri = "urn:IJT:ConsoleClient"  # type: ignore[union-attr]
 
     async def connect(self):
         await self.clear_old_logs()
@@ -62,8 +62,8 @@ class OPCUAClient:
         for attempt in range(1, max_attempts + 1):
             try:
                 start_time = time.time()
-                await self.client.connect()
-                await self.client.load_type_definitions()
+                await self.client.connect()  # type: ignore[union-attr]
+                await self.client.load_type_definitions()  # type: ignore[union-attr]
                 duration = time.time() - start_time
                 ijt_log.info(f"Connected to OPC UA server at {self.server_url} in {duration:.2f}s")
                 return
@@ -84,7 +84,7 @@ class OPCUAClient:
             self.handler_result_event = ResultEventHandler(self.server_url)
             self.handler_joining_event = EventHandler(None, self.server_url, self.client)
 
-            root = self.client.get_root_node()
+            root = self.client.get_root_node()  # type: ignore[union-attr]
             server_node = await root.get_child(["0:Objects", "0:Server"])
 
             (
@@ -93,11 +93,11 @@ class OPCUAClient:
                 joining_system_event_node,
             ) = await get_event_types(self.client, root)
 
-            await self.client.load_data_type_definitions()
+            await self.client.load_data_type_definitions()  # type: ignore[union-attr]
 
             # Subscribe to Result and Joining Result Events
             if self.sub_result_event is None:
-                self.sub_result_event = await self.client.create_subscription(
+                self.sub_result_event = await self.client.create_subscription(  # type: ignore[union-attr]
                     _SUBSCRIPTION_PERIOD_MS, self.handler_result_event
                 )
                 await self.sub_result_event.subscribe_events(
@@ -108,7 +108,7 @@ class OPCUAClient:
 
             # Subscribe to Joining System Events
             if self.sub_joining_event is None:
-                self.sub_joining_event = await self.client.create_subscription(
+                self.sub_joining_event = await self.client.create_subscription(  # type: ignore[union-attr]
                     _SUBSCRIPTION_PERIOD_MS, self.handler_joining_event
                 )
                 await self.sub_joining_event.subscribe_events(

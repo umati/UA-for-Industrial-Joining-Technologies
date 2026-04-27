@@ -469,7 +469,7 @@ def test_nodeid_to_str_exception_returns_str_fallback():
 
     class _BadNodeId(ua.NodeId):
         @property
-        def NodeIdType(self):
+        def NodeIdType(self):  # type: ignore[override]
             raise RuntimeError("forced failure")
 
         def __str__(self):
@@ -488,7 +488,7 @@ def test_localizedtext_to_str_exception_returns_str_fallback():
 
     class _BadLocalizedText(ua.LocalizedText):
         @property
-        def Text(self):
+        def Text(self):  # type: ignore[override]
             raise RuntimeError("bad text access")
 
         def __str__(self):

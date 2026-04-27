@@ -89,9 +89,9 @@ pip install -r requirements-dev.txt
 ## Zero-Escape Testing Tools (run_all_tests.py Phase 1)
 
 All auto-detected — present=run, absent=skip with install hint.
-`pyright` is installed by default (listed in `requirements-dev.txt`) and runs as **advisory** (non-blocking; findings written to `pyright.stderr.txt`).
+`pyright` is installed by default (listed in `requirements-dev.txt`) and runs as **advisory** (non-blocking; findings written to `pyright.stderr.txt`). Current baseline: **0 errors** (basic mode; `tests/unit` excluded from pyright scope — unit tests intentionally pass wrong types for edge-case testing; see `pyrightconfig.json`).
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
-`semgrep` (static analysis), `pyright` (strict type checking — **standard install, advisory**), `detect-secrets` (secrets).
+`semgrep` (static analysis), `pyright` (basic mode, 0 errors — **standard install, advisory**), `detect-secrets` (secrets).
 
 ---
 

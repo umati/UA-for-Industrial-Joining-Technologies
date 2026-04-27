@@ -8,7 +8,7 @@ SRC = pathlib.Path(__file__).parent.parent.parent
 TESTS_DIR = pathlib.Path(__file__).parent.parent
 FORBIDDEN = ["shared_python", "IJT_Web_Client", "Web_Client"]
 
-SKIP_DIRS = {"venv", "__pycache__", ".venv", "node_modules", "logs"}
+SKIP_DIRS = {"venv", "__pycache__", ".venv", ".venv_test", "node_modules", "logs"}
 
 
 def _source_files():
