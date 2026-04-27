@@ -35,6 +35,7 @@ Run a group:
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import os
 import time
 
@@ -71,6 +72,10 @@ _SINGLE_EXPECT = {
     3: (2, 3, "MULTI_STEP_NOK_FAILING_STEP"),
     4: (2, 4, "MULTI_STEP_NOK_TRIGGER_LOST"),
 }
+
+# Joint IDs — configurable via env vars; defaults match the simulator's factory config.
+_REGRESSION_JOINT_1 = os.getenv("REGRESSION_JOINT_1", "Joint_1")
+_REGRESSION_JOINT_2 = os.getenv("REGRESSION_JOINT_2", "Joint_2")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -921,3 +926,350 @@ class TestAssetIdentifiers:
             assert result is not None
         except (OSError, ua.UaStatusCodeError):
             pass  # Uncertain / not supported / server arg mismatch is acceptable
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 11.  Joint Demo Page workflow — SelectJoint → StartSelectedJoining → result event
+#
+# Covers the core Joint Demo Page interaction:
+#   1. SelectJoint activates a joint on the tightening tool
+#   2. StartSelectedJoining(deselect_after_joining=True) runs a tightening cycle
+#   3. The server fires a JoiningSystemResultReadyEvent when done
+#
+# All boolean arguments use True throughout (per project rule: booleans always True
+# in Simulate* calls to get the richest payload without ambiguity).
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.live
+class TestJointDemoWorkflow:
+    """Full Joint Demo Page workflow: SelectJoint → StartSelectedJoining → result event.
+
+    Covers both joints shown on the Joint Demo page.  Uses the module-scoped
+    ijt_session fixture so no extra connections are created.
+
+    Joint IDs are read from REGRESSION_JOINT_1 / REGRESSION_JOINT_2 env vars
+    (defaults: "Joint_1" / "Joint_2" — capital J, underscore, no spaces).
+    """
+
+    pytestmark = pytest.mark.asyncio(loop_scope="module")
+
+    async def test_select_joint_2_returns_status(self, ijt_session):
+        """SelectJoint("Joint_2") must complete without raising.
+
+        MethodStatusCode 2 (URI_NOT_FOUND) or 5 (INVALID_INPUT) are valid
+        server responses if "Joint_2" is not configured on this simulator.
+        """
+        c, *_ = ijt_session
+        try:
+            result = await _call(
+                c,
+                _JT,
+                f"{_JT}/SelectJoint",
+                _v(await _pi_uri(c), ua.VariantType.String),
+                _v(_REGRESSION_JOINT_2, ua.VariantType.String),
+                _v("", ua.VariantType.String),
+            )
+            assert result is not None
+        except OSError:
+            pass  # Uncertain status is a valid server response
+
+    async def test_get_joint_list_all_items_have_joint_id(self, ijt_session):
+        """GetJointList must return at least one joint; every item must have a non-empty JointId."""
+        c, *_ = ijt_session
+        result = await _call(c, _JT, f"{_JT}/GetJointList", _v(await _pi_uri(c), ua.VariantType.String))
+        joints = result[0] if result else []
+        assert joints and len(joints) > 0, "GetJointList must return at least one joint"
+        for i, joint in enumerate(joints):
+            joint_id = getattr(joint, "JointId", None) or getattr(joint, "Id", None)
+            assert joint_id is not None, (
+                f"Joint[{i}] must have JointId or Id attribute, "
+                f"got attributes: {[a for a in dir(joint) if not a.startswith('_')]}"
+            )
+            assert str(joint_id).strip(), f"Joint[{i}].JointId must not be empty"
+
+    @pytest.mark.parametrize("joint_id", [_REGRESSION_JOINT_1, _REGRESSION_JOINT_2])
+    async def test_select_then_start_fires_result_event(self, ijt_session, joint_id):
+        """Select joint → start tightening → result event must arrive within 15 s.
+
+        SelectJoint activates a joint; StartSelectedJoining(deselect_after_joining=True)
+        runs a tightening cycle; the server fires a ResultReadyEvent when done.
+        The test skips (not fails) when the server returns Uncertain — that signals
+        a physical trigger is required on the simulator configuration.
+        """
+        c, result_h, _ = ijt_session
+        pi = await _pi_uri(c)
+
+        # SelectJoint — Uncertain / URI_NOT_FOUND is acceptable; proceed regardless.
+        try:
+            await _call(
+                c,
+                _JT,
+                f"{_JT}/SelectJoint",
+                _v(pi, ua.VariantType.String),
+                _v(joint_id, ua.VariantType.String),
+                _v("", ua.VariantType.String),
+            )
+        except OSError:
+            pass
+
+        # StartSelectedJoining fires a result event on success.
+        # Record call time; events with Time < call_time are stale from prior tests.
+        call_time = dt.datetime.now(dt.timezone.utc)
+        result_h.events.clear()
+        try:
+            await _call(
+                c,
+                _JP,
+                f"{_JP}/StartSelectedJoining",
+                _v(pi, ua.VariantType.String),
+                _v(True, ua.VariantType.Boolean),  # deselect_after_joining=True
+            )
+        except OSError:
+            pytest.skip(
+                f"StartSelectedJoining returned Uncertain for joint={joint_id!r} — "
+                "server may require a physical trigger for this configuration"
+            )
+
+        raw = await _wait_events(result_h, 1, timeout=15.0)
+        events = [e for e in raw if getattr(e, "Time", call_time) >= call_time]
+        assert events, (
+            f"SelectJoint({joint_id!r}) + StartSelectedJoining: no result event within 15 s. "
+            "Server must fire a ResultReadyEvent after a successful tightening cycle."
+        )
+        _assert_meta(events, cls=1, ev=1, code=0, simulated=None)  # IsSimulated varies: True on simulator, False on real controller
+
+    @pytest.mark.parametrize("joint_id", [_REGRESSION_JOINT_1, _REGRESSION_JOINT_2])
+    async def test_joint_workflow_result_payload_metadata(self, ijt_session, joint_id):
+        """After SelectJoint + StartSelectedJoining, result event metadata must be fully valid.
+
+        Verifies: ResultState, OperationMode, AssemblyType, IsPartial, JoiningTechnology.
+        """
+        c, result_h, _ = ijt_session
+        pi = await _pi_uri(c)
+
+        try:
+            await _call(
+                c,
+                _JT,
+                f"{_JT}/SelectJoint",
+                _v(pi, ua.VariantType.String),
+                _v(joint_id, ua.VariantType.String),
+                _v("", ua.VariantType.String),
+            )
+        except OSError:
+            pass
+
+        # Record call time; filter by event.Time so stale events from prior tests are excluded.
+        call_time = dt.datetime.now(dt.timezone.utc)
+        result_h.events.clear()
+        try:
+            await _call(
+                c,
+                _JP,
+                f"{_JP}/StartSelectedJoining",
+                _v(pi, ua.VariantType.String),
+                _v(True, ua.VariantType.Boolean),
+            )
+        except OSError:
+            pytest.skip(f"StartSelectedJoining Uncertain for joint={joint_id!r}")
+
+        raw = await _wait_events(result_h, 1, timeout=15.0)
+        events = [e for e in raw if getattr(e, "Time", call_time) >= call_time]
+        if not events:
+            pytest.skip("No result event — server may require a physical tightening trigger")
+
+        meta = _meta(events)
+        assert int(meta.ResultState) == 1, f"ResultState must be COMPLETED(1), got {meta.ResultState}"
+        assert int(meta.OperationMode) == 2, f"OperationMode must be MANUAL(2), got {meta.OperationMode}"
+        assert int(meta.AssemblyType) == 1, f"AssemblyType must be ASSEMBLED(1), got {meta.AssemblyType}"
+        assert meta.IsPartial is False, "Result must not be partial"
+        tech = getattr(meta.JoiningTechnology, "Text", str(meta.JoiningTechnology)) or ""
+        assert "Tightening" in tech, f"JoiningTechnology must contain 'Tightening', got: {tech!r}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 12.  Deep result payload validation
+#
+# Uses SimulateSingleResult with all booleans=True to get the richest payload.
+# Validates metadata field-by-field, content structure, and ProcessingTimes.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.live
+class TestResultPayloadDeepValidation:
+    """Deep validation of result event payload fields.
+
+    All boolean arguments to Simulate* methods are True throughout — this produces
+    the richest output (traces included) and avoids ambiguity about field presence.
+    """
+
+    pytestmark = pytest.mark.asyncio(loop_scope="module")
+
+    async def test_required_metadata_fields_all_present(self, ijt_session):
+        """SimulateSingleResult(type=1, traces=True): every required metadata field must be valid.
+
+        Checks all fields in a single test: SequenceNumber, IsSimulated, ResultState,
+        OperationMode, AssemblyType, Classification, ResultEvaluation, ResultEvaluationCode,
+        IsPartial, JoiningTechnology.
+        """
+        c, result_h, _ = ijt_session
+        events = await _invoke_result(
+            c,
+            result_h,
+            f"{_SIM_R}/SimulateSingleResult",
+            timeout=8.0,
+            *[_v(1, ua.VariantType.UInt32), _v(True, ua.VariantType.Boolean)],
+        )
+        assert events, "SimulateSingleResult(type=1, traces=True): no event received"
+        meta = _meta(events)
+
+        assert int(meta.SequenceNumber) > 0, f"SequenceNumber must be >0, got {meta.SequenceNumber}"
+        assert meta.IsSimulated is True, "IsSimulated must be True for simulated results"
+        assert int(meta.ResultState) == 1, f"ResultState must be COMPLETED(1), got {meta.ResultState}"
+        assert int(meta.OperationMode) == 2, f"OperationMode must be MANUAL(2), got {meta.OperationMode}"
+        assert int(meta.AssemblyType) == 1, f"AssemblyType must be ASSEMBLED(1), got {meta.AssemblyType}"
+        assert int(meta.Classification) == 1, f"Classification must be SINGLE_RESULT(1), got {meta.Classification}"
+        assert int(meta.ResultEvaluation) == 1, f"ResultEvaluation must be OK(1), got {meta.ResultEvaluation}"
+        assert int(meta.ResultEvaluationCode) == 0, f"ResultEvaluationCode must be 0(OK), got {meta.ResultEvaluationCode}"
+        assert meta.IsPartial is False, "IsPartial must be False for a complete result"
+        tech = getattr(meta.JoiningTechnology, "Text", str(meta.JoiningTechnology)) or ""
+        assert "Tightening" in tech, f"JoiningTechnology must contain 'Tightening', got: {tech!r}"
+
+    async def test_result_content_single_has_step_results(self, ijt_session):
+        """SimulateSingleResult(type=1, traces=True): exactly 1 ResultContent item with non-empty StepResults."""
+        c, result_h, _ = ijt_session
+        events = await _invoke_result(
+            c,
+            result_h,
+            f"{_SIM_R}/SimulateSingleResult",
+            timeout=8.0,
+            *[_v(1, ua.VariantType.UInt32), _v(True, ua.VariantType.Boolean)],
+        )
+        assert events, "No event received"
+
+        content = events[-1].Result.ResultContent or []
+        assert len(content) == 1, (
+            f"ONE_STEP_OK with traces must have exactly 1 ResultContent item, got {len(content)}"
+        )
+        # asyncua may wrap the struct in a Variant — unwrap if needed
+        joining_result = getattr(content[0], "Value", content[0])
+        steps = joining_result.StepResults
+        assert steps is not None, "JoiningResultDataType.StepResults must not be None when traces=True"
+        assert len(steps) > 0, "JoiningResultDataType.StepResults must not be empty when traces=True"
+
+    async def test_processing_times_are_valid_datetimes(self, ijt_session):
+        """SimulateSingleResult(type=1, traces=True): ProcessingTimes must carry valid datetime values.
+
+        Verifies StartTime and EndTime are Python datetime objects and that EndTime >= StartTime.
+        """
+        c, result_h, _ = ijt_session
+        events = await _invoke_result(
+            c,
+            result_h,
+            f"{_SIM_R}/SimulateSingleResult",
+            timeout=8.0,
+            *[_v(1, ua.VariantType.UInt32), _v(True, ua.VariantType.Boolean)],
+        )
+        assert events, "No event received"
+
+        content = events[-1].Result.ResultContent or []
+        assert content, "ResultContent must not be empty"
+        joining_result = getattr(content[0], "Value", content[0])
+        pt = getattr(joining_result, "ProcessingTimes", None)
+        if pt is None:
+            pytest.skip("ProcessingTimes not present in this result type — skipping datetime check")
+
+        start = getattr(pt, "StartTime", None)
+        end = getattr(pt, "EndTime", None)
+        assert start is not None, "ProcessingTimes.StartTime must be present"
+        assert end is not None, "ProcessingTimes.EndTime must be present"
+        assert isinstance(start, dt.datetime), f"StartTime must be a datetime, got {type(start)}"
+        assert isinstance(end, dt.datetime), f"EndTime must be a datetime, got {type(end)}"
+        assert end >= start, f"EndTime ({end}) must be >= StartTime ({start})"
+
+    async def test_sequence_number_positive_across_all_single_types(self, ijt_session):
+        """All 5 SimulateSingleResult types (0-4) with traces=True must fire events with SequenceNumber > 0."""
+        c, result_h, _ = ijt_session
+        for rtype in range(5):
+            events = await _invoke_result(
+                c,
+                result_h,
+                f"{_SIM_R}/SimulateSingleResult",
+                timeout=8.0,
+                *[_v(rtype, ua.VariantType.UInt32), _v(True, ua.VariantType.Boolean)],
+            )
+            assert events, f"SimulateSingleResult(type={rtype}, traces=True): no event"
+            seq = int(_meta(events).SequenceNumber)
+            assert seq > 0, f"type={rtype}: SequenceNumber must be >0, got {seq}"
+
+    async def test_simulated_flag_true_for_all_simulate_methods(self, ijt_session):
+        """IsSimulated must be True for all Simulate* result types (booleans always True)."""
+        c, result_h, _ = ijt_session
+        for rtype in range(5):
+            events = await _invoke_result(
+                c,
+                result_h,
+                f"{_SIM_R}/SimulateSingleResult",
+                timeout=8.0,
+                *[_v(rtype, ua.VariantType.UInt32), _v(True, ua.VariantType.Boolean)],
+            )
+            assert events, f"SimulateSingleResult(type={rtype}): no event"
+            assert _meta(events).IsSimulated is True, (
+                f"type={rtype}: IsSimulated must be True for all Simulate* calls"
+            )
+
+    async def test_bulk_result_metadata_with_all_booleans_true(self, ijt_session):
+        """SimulateBulkResults(type=1, traces=True, UpdateResultVariables=True): metadata must be valid.
+
+        Verifies Classification=SINGLE(1), IsSimulated=True, SequenceNumber>0 for final event.
+        """
+        from asyncua.ua.uaerrors import BadTooManyOperations
+
+        c, result_h, _ = ijt_session
+        for _ in range(5):
+            result_h.events.clear()
+            try:
+                await _call(
+                    c,
+                    _SIM_R,
+                    f"{_SIM_R}/SimulateBulkResults",
+                    _v(1, ua.VariantType.UInt32),   # ResultType=ONE_STEP_OK
+                    _v(True, ua.VariantType.Boolean),  # IncludeTraces=True
+                    _v(1, ua.VariantType.UInt64),   # FromSequenceNumber=1
+                    _v(5, ua.VariantType.UInt64),   # ToSequenceNumber=5
+                    _v(50, ua.VariantType.Int64),   # DelayBetweenResults=50ms
+                    _v(True, ua.VariantType.Boolean),  # UpdateResultVariables=True
+                )
+                break
+            except BadTooManyOperations:
+                await asyncio.sleep(1.0)
+        else:
+            pytest.fail("SimulateBulkResults still busy after 5 retries")
+
+        events = await _wait_events(result_h, 5, timeout=15.0)
+        assert events, "SimulateBulkResults: no events received"
+        meta = _meta(events, -1)
+        assert int(meta.Classification) == 1, f"Classification must be SINGLE_RESULT(1), got {meta.Classification}"
+        assert meta.IsSimulated is True, "IsSimulated must be True for BulkResults"
+        assert int(meta.SequenceNumber) > 0, f"SequenceNumber must be >0, got {meta.SequenceNumber}"
+
+    async def test_job_result_classification_and_counters_with_refs_true(self, ijt_session):
+        """SimulateJobResult(refs=True): Classification=JOB(4), ResultCounters has 2 items, IsSimulated=True."""
+        c, result_h, _ = ijt_session
+        await asyncio.sleep(0.5)  # drain any residual events from prior test
+        result_h.events.clear()
+
+        await _call(c, _SIM_R, f"{_SIM_R}/SimulateJobResult", _v(True, ua.VariantType.Boolean))
+
+        events = await _wait_events(result_h, 1, timeout=25.0)
+        assert events, "SimulateJobResult(refs=True): no events received"
+        meta = _meta(events, -1)
+        assert int(meta.Classification) == 4, f"Classification must be JOB_RESULT(4), got {meta.Classification}"
+        assert meta.IsSimulated is True, "IsSimulated must be True for SimulateJobResult"
+        counters = meta.ResultCounters
+        if counters and hasattr(counters[0], "Value"):
+            counters = [ctr.Value for ctr in counters]
+        assert counters and len(counters) == 2, (
+            f"JOB result must have 2 ResultCounters (JOB_COUNT + JOB_SIZE), got {len(counters or [])}"
+        )

@@ -428,6 +428,14 @@ class TestRuntimeState:
         monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", Path("/fake/missing.json"))
         sp._clear_runtime_state()  # must not raise
 
+    def test_read_returns_empty_on_corrupt_json(self, fs, monkeypatch):
+        base = Path("/fake")
+        base.mkdir(parents=True, exist_ok=True)
+        state_file = base / "runtime_processes.json"
+        state_file.write_text("not-valid-json", encoding="utf-8")
+        monkeypatch.setattr(sp, "RUNTIME_STATE_FILE", state_file)
+        assert sp._read_runtime_state() == {}  # lines 426-427: except → return {}
+
 
 # =============================================================================
 # _collect_managed_processes — running vs stale PIDs
@@ -1073,6 +1081,10 @@ class TestRequirePython314OrNewer:
     def test_no_arg_uses_sys_version(self):
         sp._require_python_314_or_newer()  # must not raise in 3.14+ env
 
+    def test_malformed_version_falls_back_to_sys_version(self):
+        # "3.14.1" unpacks to 3 values → ValueError → except branch (lines 355-356)
+        sp._require_python_314_or_newer("3.14.1")  # must not raise in 3.14+ env
+
 
 # =============================================================================
 # _check_internet
@@ -1431,6 +1443,16 @@ class TestWaitForEndpointReady:
         result = sp._wait_for_endpoint_ready("opc.tcp://localhost:40451", timeout_seconds=1.0)
         assert result is False
 
+    def test_sleeps_and_retries_until_success(self, monkeypatch):
+        import time as _t
+
+        # First call returns False (triggers time.sleep on line 656), second returns True
+        calls = iter([False, True])
+        monkeypatch.setattr(sp, "_is_endpoint_reachable", lambda ep: next(calls))
+        monkeypatch.setattr(_t, "sleep", lambda t: None)
+        result = sp._wait_for_endpoint_ready("opc.tcp://localhost:40451", timeout_seconds=10.0, poll_interval=0.01)
+        assert result is True
+
 
 # =============================================================================
 # _ensure_opc_server_running — Windows creationflags branch (line 724)
@@ -1454,6 +1476,7 @@ class TestEnsureOpcServerRunningWindows:
         monkeypatch.setattr(sp, "_extract_simulator_zip_if_needed", lambda: None)
         monkeypatch.setattr(sp, "_find_simulator_executable", lambda: exe)
         monkeypatch.setattr(subprocess, "Popen", _fake_popen)
+        monkeypatch.setattr(subprocess, "CREATE_NEW_CONSOLE", 0x10, raising=False)
         monkeypatch.setattr(sp, "_wait_for_endpoint_ready", lambda _ep, **_kw: True)
         sp._ensure_opc_server_running("opc.tcp://localhost:40451", allow_launch=True, context="win-test")
         assert "creationflags" in kwargs_received

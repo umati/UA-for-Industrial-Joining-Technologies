@@ -272,3 +272,47 @@ class TestContextManager:
         mock_client = MagicMock()
         async with EventCollector(mock_client) as collector:
             assert isinstance(collector, EventCollector)
+
+
+# ---------------------------------------------------------------------------
+# Coverage gap tests — lines 103, 130-131, 146
+# ---------------------------------------------------------------------------
+
+
+class TestSubscribeAndCollectCoverageGaps:
+    @pytest.mark.asyncio
+    async def test_subscribe_drains_stale_queue_events_when_resubscribing(self):
+        """Line 103: queue drain runs when re-subscribing with non-empty queue."""
+        mock_client = MagicMock()
+        mock_sub = AsyncMock()
+        mock_sub.subscribe_events = AsyncMock()
+        mock_client.create_subscription = AsyncMock(return_value=mock_sub)
+
+        collector = EventCollector(mock_client)
+        # A previous subscription exists → triggers the re-subscribe cleanup path
+        collector._subscription = AsyncMock()
+        collector._queue.put_nowait("stale-event")
+        # Override _delete_subscription_ref so the old-sub delete completes cleanly
+        collector._delete_subscription_ref = AsyncMock()
+
+        await collector.subscribe(MagicMock(), MagicMock())
+
+        assert collector._queue.empty()
+
+    @pytest.mark.asyncio
+    async def test_subscribe_raises_timeout_error_when_all_retries_exhausted(self):
+        """Lines 130-131: TimeoutError is raised after every retry attempt fails."""
+        mock_client = MagicMock()
+        mock_client.create_subscription = AsyncMock(side_effect=TimeoutError("timeout"))
+
+        collector = EventCollector(mock_client)
+        with pytest.raises(TimeoutError):
+            # _max_retries=1 so the loop runs once and exits without sleeping
+            await collector.subscribe(MagicMock(), MagicMock(), _max_retries=1)
+
+    @pytest.mark.asyncio
+    async def test_collect_returns_empty_list_when_timeout_is_zero(self):
+        """Line 146: remaining <= 0 immediately triggers break, returning []."""
+        collector = EventCollector(MagicMock())
+        results = await collector.collect(count=1, timeout_s=0)
+        assert results == []

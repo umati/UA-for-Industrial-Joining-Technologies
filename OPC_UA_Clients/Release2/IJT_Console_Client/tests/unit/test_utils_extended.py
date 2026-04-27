@@ -580,3 +580,48 @@ async def test_log_result_to_file_exception_is_caught(monkeypatch):
     finally:
         monkeypatch.chdir(orig_cwd)
         shutil.rmtree(work_dir, ignore_errors=True)
+
+
+# ── _to_json_str — orjson.dumps raises (L23-24) ──
+
+
+def test_to_json_str_orjson_raises_falls_back_to_stdlib(monkeypatch):
+    """_to_json_str falls back to stdlib json when orjson.dumps raises (covers L23-24)."""
+    from unittest.mock import Mock
+
+    monkeypatch.setattr("utils.orjson.dumps", Mock(side_effect=ValueError("bad")))
+    result = _to_json_str({"x": 1})
+    assert isinstance(result, str)
+    import json
+
+    assert json.loads(result) == {"x": 1}
+
+
+# ── log_joining_system_event — non-empty ConditionSubClassId/Name (L212, L217) ──
+
+
+@pytest.mark.asyncio
+async def test_log_joining_system_event_with_subclass_ids_and_names():
+    """log_joining_system_event logs each item in non-empty ConditionSubClassId/ClassName (L212, L217)."""
+    event = _make_mock_joining_event()
+    event.ConditionSubClassId = [MagicMock()]
+    event.ConditionSubClassName = [MagicMock()]
+
+    with patch("utils.ijt_log"):
+        with patch("utils.nodeid_to_str", return_value="ns=0;i=1"):
+            with patch("utils.localizedtext_to_str", return_value="SubclassName"):
+                await log_joining_system_event(event)  # must not raise
+
+
+# ── log_joining_system_event — log_reported_value raises (L238-239) ──
+
+
+@pytest.mark.asyncio
+async def test_log_joining_system_event_reported_value_raises():
+    """log_joining_system_event handles exceptions in log_reported_value gracefully (L238-239)."""
+    bad_rv = MagicMock()
+    event = _make_mock_joining_event(reported_values=[bad_rv])
+
+    with patch("utils.ijt_log"):
+        with patch("utils.log_reported_value", side_effect=RuntimeError("rv boom")):
+            await log_joining_system_event(event)  # must not raise

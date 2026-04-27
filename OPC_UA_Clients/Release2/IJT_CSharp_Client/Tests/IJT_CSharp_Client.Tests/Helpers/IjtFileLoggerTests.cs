@@ -3,8 +3,36 @@ using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Helpers;
 
-public class IjtFileLoggerTests
+public class IjtFileLoggerTests : IDisposable
 {
+    private readonly string _tempRoot;
+    private readonly IDisposable _overrideScope;
+
+    public IjtFileLoggerTests()
+    {
+        _tempRoot = Path.Combine(Path.GetTempPath(), "ijt-file-logger-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_tempRoot);
+        _overrideScope = IjtFileLogger.PushBaseLogDirOverride(Path.Combine(_tempRoot, "logs"));
+    }
+
+    public void Dispose()
+    {
+        _overrideScope.Dispose();
+        if (Directory.Exists(_tempRoot))
+        {
+            try
+            {
+                Directory.Delete(_tempRoot, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
     [Fact]
     public void WriteResult_CreatesFile()
     {

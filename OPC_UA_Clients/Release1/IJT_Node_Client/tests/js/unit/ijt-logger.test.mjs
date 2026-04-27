@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { ijtLog } from '../../../javascripts/ijt-support/ijt-logger.mjs'
+import { ijtLog as barrelLog } from '../../../javascripts/ijt-support/ijt-support.mjs'
 
 describe('ijtLog', () => {
   it('is exported as a singleton object', () => {
@@ -72,5 +73,39 @@ describe('ijtLog', () => {
   it('same singleton is imported twice', async () => {
     const { ijtLog: secondImport } = await import('../../../javascripts/ijt-support/ijt-logger.mjs')
     expect(secondImport).toBe(ijtLog)
+  })
+
+  it('warn is called when level allows it', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    ijtLog.setLevel('info')
+    ijtLog.warn('a warning')
+    expect(spy).toHaveBeenCalledWith('[IJT WARN]', 'a warning')
+    spy.mockRestore()
+    ijtLog.setLevel('info')
+  })
+
+  it('setLevel accepts a numeric level value', () => {
+    ijtLog.setLevel(3) // debug = 3
+    const spy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    ijtLog.debug('numeric level debug')
+    expect(spy).toHaveBeenCalled()
+    spy.mockRestore()
+    ijtLog.setLevel('info')
+  })
+
+  it('setLevel falls back to info for unknown string level', () => {
+    ijtLog.setLevel('verbose') // not in LEVELS → LEVELS.info (2)
+    const spy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    ijtLog.debug('should not appear at info level')
+    expect(spy).not.toHaveBeenCalled()
+    spy.mockRestore()
+    ijtLog.setLevel('info')
+  })
+})
+
+describe('ijt-support barrel — ijtLog smoke test', () => {
+  it('ijtLog is exported from ijt-support.mjs', () => {
+    expect(barrelLog).toBeDefined()
+    expect(typeof barrelLog.setLevel).toBe('function')
   })
 })

@@ -26,66 +26,45 @@ public static class IjtFileLogger
 {
     private static readonly ILogger _log = IjtLog.ForCategory("IJT.FileLogger");
 
-    private static readonly string _baseDir =
+    private static readonly string _defaultBaseDir =
         Path.Combine(AppContext.BaseDirectory, "logs");
 
-    private static readonly string _resultLogPath =
-        Path.Combine(_baseDir, "result", "result.json");
+    // Test code can override the log root per execution context without affecting
+    // parallel tests or production callers in the same process.
+    private static readonly AsyncLocal<string?> _baseDirOverride = new();
 
-    private static readonly string _eventLogPath =
-        Path.Combine(_baseDir, "events", "joining_system_event.json");
-
-    private static readonly string _joiningProcessListLogPath =
-        Path.Combine(_baseDir, "joining_process", "joining_process_list.json");
-
-    private static readonly string _selectedProgramLogPath =
-        Path.Combine(_baseDir, "joining_process", "selected_joining_program.json");
-
-    private static readonly string _jointListLogPath =
-        Path.Combine(_baseDir, "joint", "joint_list.json");
-
-    private static readonly string _jointLogPath =
-        Path.Combine(_baseDir, "joint", "joint.json");
-
-    private static readonly string _identifiersLogPath =
-        Path.Combine(_baseDir, "entity_list", "entity_list.json");
-
-    private static readonly string _ioSignalsLogPath =
-        Path.Combine(_baseDir, "io_signals", "io_signals.json");
-
-    private static readonly string _assetLogDir =
-        Path.Combine(_baseDir, "assets");
+    private static string CurrentBaseDir => _baseDirOverride.Value ?? _defaultBaseDir;
 
     /// <summary>Overwrites result.json with the latest result payload.</summary>
-    public static void WriteResult(string content) => WriteFile(_resultLogPath, content);
+    public static void WriteResult(string content) => WriteFile(ResultLogPath, content);
 
     /// <summary>Overwrites events/joining_system_event.json with the latest JoiningSystemEvent payload.</summary>
-    public static void WriteEvent(string content) => WriteFile(_eventLogPath, content);
+    public static void WriteEvent(string content) => WriteFile(EventLogPath, content);
 
     /// <summary>Overwrites joining_process_list.json with the given content.</summary>
-    public static void WriteJoiningProcessList(string content) => WriteFile(_joiningProcessListLogPath, content);
+    public static void WriteJoiningProcessList(string content) => WriteFile(JoiningProcessListLogPath, content);
 
     /// <summary>Overwrites selected_joining_program.json with the given content.</summary>
-    public static void WriteSelectedProgram(string content) => WriteFile(_selectedProgramLogPath, content);
+    public static void WriteSelectedProgram(string content) => WriteFile(SelectedProgramLogPath, content);
 
     /// <summary>Overwrites joint_list.json with the given content.</summary>
-    public static void WriteJointList(string content) => WriteFile(_jointListLogPath, content);
+    public static void WriteJointList(string content) => WriteFile(JointListLogPath, content);
 
     /// <summary>Overwrites joint.json with the given content.</summary>
-    public static void WriteJoint(string content) => WriteFile(_jointLogPath, content);
+    public static void WriteJoint(string content) => WriteFile(JointLogPath, content);
 
     /// <summary>Overwrites entity_list.json with the given content.</summary>
-    public static void WriteIdentifiers(string content) => WriteFile(_identifiersLogPath, content);
+    public static void WriteIdentifiers(string content) => WriteFile(IdentifiersLogPath, content);
 
     /// <summary>Overwrites io_signals.json with the given content.</summary>
-    public static void WriteIOSignals(string content) => WriteFile(_ioSignalsLogPath, content);
+    public static void WriteIOSignals(string content) => WriteFile(IOSignalsLogPath, content);
 
     /// <summary>
     /// Overwrites logs/assets/<paramref name="assetKey"/>.json with the full asset variable tree.
     /// One file per asset object instance — file name is sanitized to be filesystem-safe.
     /// </summary>
     public static void WriteAsset(string assetKey, string content) =>
-        WriteFile(Path.Combine(_assetLogDir, $"{SanitizeFileName(assetKey)}.json"), content);
+        WriteFile(Path.Combine(AssetLogDir, $"{SanitizeFileName(assetKey)}.json"), content);
 
     private static string SanitizeFileName(string name)
     {
@@ -94,20 +73,40 @@ public static class IjtFileLogger
     }
 
     /// <summary>Base log directory (relative to executable).</summary>
-    public static string BaseLogDir => _baseDir;
+    public static string BaseLogDir => CurrentBaseDir;
 
-    public static string ResultLogPath => _resultLogPath;
-    public static string EventLogPath => _eventLogPath;
-    public static string JoiningProcessListLogPath => _joiningProcessListLogPath;
-    public static string SelectedProgramLogPath => _selectedProgramLogPath;
-    public static string JointListLogPath => _jointListLogPath;
-    public static string JointLogPath => _jointLogPath;
-    public static string IdentifiersLogPath => _identifiersLogPath;
-    public static string IOSignalsLogPath => _ioSignalsLogPath;
-    public static string AssetLogDir => _assetLogDir;
+    public static string ResultLogPath => Path.Combine(BaseLogDir, "result", "result.json");
+    public static string EventLogPath => Path.Combine(BaseLogDir, "events", "joining_system_event.json");
+    public static string JoiningProcessListLogPath => Path.Combine(BaseLogDir, "joining_process", "joining_process_list.json");
+    public static string SelectedProgramLogPath => Path.Combine(BaseLogDir, "joining_process", "selected_joining_program.json");
+    public static string JointListLogPath => Path.Combine(BaseLogDir, "joint", "joint_list.json");
+    public static string JointLogPath => Path.Combine(BaseLogDir, "joint", "joint.json");
+    public static string IdentifiersLogPath => Path.Combine(BaseLogDir, "entity_list", "entity_list.json");
+    public static string IOSignalsLogPath => Path.Combine(BaseLogDir, "io_signals", "io_signals.json");
+    public static string AssetLogDir => Path.Combine(BaseLogDir, "assets");
+
+    /// <summary>
+    /// Temporarily overrides the base log directory for the current execution context.
+    /// Intended for tests that need isolated file paths while the rest of the process keeps
+    /// using the default runtime log root.
+    /// </summary>
+    internal static IDisposable PushBaseLogDirOverride(string baseDir)
+    {
+        var previous = _baseDirOverride.Value;
+        _baseDirOverride.Value = baseDir;
+        return new BaseLogDirOverrideScope(previous);
+    }
 
     // Single lock for all file writes — event callbacks and menu calls can race on the same file.
     private static readonly object _fileLock = new();
+
+    private sealed class BaseLogDirOverrideScope(string? previous) : IDisposable
+    {
+        public void Dispose()
+        {
+            _baseDirOverride.Value = previous;
+        }
+    }
 
     private static void WriteFile(string path, string content)
     {

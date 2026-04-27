@@ -5,6 +5,10 @@ Tests namespace URI constants, enum values, and type NodeId classes.
 No OPC UA server required.
 """
 
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 # Legacy aliases
 from helpers.namespaces import (
     ALL_NAMESPACE_URIS,
@@ -464,3 +468,29 @@ class TestNsIndices:
 class TestIJTTighteningTypes:
     def test_itightening_tool_parameters_type(self):
         assert IJTTighteningTypes.ITIGHTENING_TOOL_PARAMETERS_TYPE == 1003
+
+
+# ---------------------------------------------------------------------------
+# NsIndices.resolve_all
+# ---------------------------------------------------------------------------
+
+
+class TestNsIndicesResolveAll:
+    @pytest.mark.asyncio
+    async def test_resolve_all_populates_all_slots(self):
+        """resolve_all() must call get_namespace_index once per namespace and
+        store the result in the corresponding slot."""
+        ns = NsIndices()
+        client = MagicMock()
+        client.get_namespace_index = AsyncMock(side_effect=range(1, 10))
+        await ns.resolve_all(client)
+        assert ns.opc_ua == 1
+        assert ns.di == 2
+        assert ns.amb == 3
+        assert ns.ia == 4
+        assert ns.machinery == 5
+        assert ns.mach_result == 6
+        assert ns.ijt_base == 7
+        assert ns.ijt_tightening == 8
+        assert ns.app == 9
+        assert client.get_namespace_index.await_count == 9

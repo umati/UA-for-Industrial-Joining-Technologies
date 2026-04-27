@@ -9,7 +9,7 @@ export class DefaultNode extends IJTBaseModel {
     }
     const parameters = node.browseData
     super(parameters, modelManager, castMapping)
-    if (node.value) {
+    if (node.value !== undefined && node.value !== null) {
       this.value = node.value
     }
     this.relations = node.relations

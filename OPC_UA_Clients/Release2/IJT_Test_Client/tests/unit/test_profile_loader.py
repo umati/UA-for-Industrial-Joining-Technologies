@@ -4,9 +4,11 @@ Unit tests for helpers/profile_loader.py
 Tests with temporary YAML files — no OPC UA server required.
 """
 
+import logging
 import textwrap
 from pathlib import Path
 
+import helpers.profile_loader as _pl_module
 from helpers.profile_loader import get_skip_reason, is_cu_supported, load_supported_cus
 
 # ---------------------------------------------------------------------------
@@ -329,3 +331,49 @@ class TestLoadSupportedCusEnvVar:
         monkeypatch.setenv("OPCUA_CAPABILITIES_FILE", str(env_caps))
         supported = load_supported_cus(capabilities_path=explicit_caps)
         assert "explicit_only_cu" in supported
+
+
+# ---------------------------------------------------------------------------
+# _load_facets — missing facets.yaml warns and returns empty dict
+# ---------------------------------------------------------------------------
+
+
+class TestLoadFacetsMissingFile:
+    def test_missing_facets_yaml_warns_and_returns_empty(self, tmp_path, monkeypatch, caplog):
+        """When profiles/facets.yaml is absent, a WARNING is logged and the result
+        is an empty frozenset (no facets to populate from)."""
+        monkeypatch.setattr(_pl_module, "_PROFILES_DIR", tmp_path)
+        caps_file = tmp_path / "caps.yaml"
+        caps_file.write_text("active_profile: full_conformance\n", encoding="utf-8")
+        with caplog.at_level(logging.WARNING, logger="helpers.profile_loader"):
+            supported = load_supported_cus(capabilities_path=caps_file)
+        assert isinstance(supported, frozenset)
+        assert len(supported) == 0
+        assert "facets.yaml not found" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Coverage gap test — line 129
+# ---------------------------------------------------------------------------
+
+
+class TestLoadSupportedCusUnknownFacetInProfile:
+    def test_unknown_facet_in_active_profile_logs_warning(self, monkeypatch, caplog, tmp_path):
+        """Line 129: warning logged when profile resolves to a facet not in facets.yaml."""
+        caps_file = tmp_path / "caps.yaml"
+        caps_file.write_text("active_profile: some_profile\n", encoding="utf-8")
+
+        # Force profile to list a facet that doesn't exist in the facets dict
+        monkeypatch.setattr(
+            _pl_module,
+            "_resolve_profile_facets",
+            lambda profile: ["nonexistent_facet_xyz"],
+        )
+        # No facets defined at all
+        monkeypatch.setattr(_pl_module, "_load_facets", lambda: {})
+
+        with caplog.at_level(logging.WARNING, logger="helpers.profile_loader"):
+            result = load_supported_cus(capabilities_path=caps_file)
+
+        assert isinstance(result, frozenset)
+        assert "nonexistent_facet_xyz" in caplog.text

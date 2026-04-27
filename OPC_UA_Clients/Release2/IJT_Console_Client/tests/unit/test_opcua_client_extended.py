@@ -325,3 +325,22 @@ async def test_clear_old_logs_creates_directory_if_missing(monkeypatch):
     finally:
         monkeypatch.chdir(orig_cwd)
         shutil.rmtree(work_dir, ignore_errors=True)
+
+
+# ── cleanup() — outer except catches unexpected error (L175-177) ──
+
+
+@pytest.mark.asyncio
+async def test_cleanup_outer_except_catches_unexpected_error():
+    """cleanup() outer except block catches and logs unexpected errors (L175-177)."""
+    with patch("opcua_client.Client"):
+        c = OPCUAClient("opc.tcp://localhost:4840")
+
+    c.client = None  # skip inner disconnect branch
+
+    with patch("opcua_client.asyncio.sleep", side_effect=RuntimeError("sleep boom")):
+        with patch("opcua_client.ijt_log") as mock_log:
+            await c.cleanup()  # must NOT raise
+
+    error_calls = [str(call) for call in mock_log.error.call_args_list]
+    assert any("sleep boom" in s or "Cleanup error" in s for s in error_calls)

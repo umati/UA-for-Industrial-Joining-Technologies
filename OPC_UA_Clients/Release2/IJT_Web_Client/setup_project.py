@@ -721,7 +721,7 @@ def _ensure_opc_server_running(endpoint: str, *, allow_launch: bool, context: st
                 )
                 popen_kwargs: "dict[str, Any]" = {"cwd": str(exe.parent)}
                 if IS_WINDOWS:
-                    popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE  # type: ignore[attr-defined]
+                    popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_CONSOLE", 0x10)
                 subprocess.Popen([str(exe)], **popen_kwargs)
                 startup_timeout = _env_float("OPCUA_STARTUP_TIMEOUT_SEC", 45.0, 1.0)
                 startup_poll = _env_float("OPCUA_STARTUP_POLL_SEC", 0.5, 0.1)

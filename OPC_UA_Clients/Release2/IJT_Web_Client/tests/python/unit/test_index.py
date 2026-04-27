@@ -220,7 +220,9 @@ class TestShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_stops_websocket_server(self):
         """websocket_server.close() and wait_closed() are called."""
-        mock_server = AsyncMock()
+        mock_server = MagicMock()
+        mock_server.close = MagicMock()
+        mock_server.wait_closed = AsyncMock()
         index.websocket_server = mock_server
 
         await index.shutdown()

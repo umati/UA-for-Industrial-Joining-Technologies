@@ -378,6 +378,20 @@ public sealed class ResultManagementUnitTests
             It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.AtLeastOnce);
     }
 
+    // ── Constructor ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Constructor_WithValidJoiningSystem_DoesNotThrow()
+    {
+        var session = MockSessionBuilder.Create();
+        var ex = Record.Exception(() =>
+        {
+            using var rm = new ResultManagement(session.Object);
+        });
+
+        Assert.Null(ex);
+    }
+
     // ── IsResultVarSubscribed property ────────────────────────────────────────
 
     [Fact]
@@ -387,6 +401,19 @@ public sealed class ResultManagementUnitTests
         using var rm = new ResultManagement(session.Object);
 
         Assert.False(rm.IsResultVarSubscribed);
+    }
+
+    // ── InvalidateNodeCache ───────────────────────────────────────────────────
+
+    [Fact]
+    public void InvalidateNodeCache_DoesNotThrow()
+    {
+        var session = MockSessionBuilder.Create();
+        using var rm = new ResultManagement(session.Object);
+
+        var ex = Record.Exception(() => rm.InvalidateNodeCache());
+
+        Assert.Null(ex);
     }
 
     // ── Node cache hit paths ───────────────────────────────────────────────────

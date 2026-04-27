@@ -464,3 +464,177 @@ class TestResponseTimeSLA:
         assert resp is not None
         data = resp.get("data", {})
         assert "exception" not in data, f"namespaces returned exception: {data}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. WebSocket connection lifecycle tests
+#
+# Verifies backend (index.py handler()) correctly handles:
+#   - Abrupt disconnect: browser tab closed/refreshed without 'terminate connection'
+#   - Invalid JSON: backend returns a structured error; connection stays alive
+#   - Multiple sequential connections: each session works independently
+#   - Two concurrent sessions: independent OPC UA state, no cross-talk
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.live_ws
+class TestWebSocketLifecycle:
+    """WebSocket connection lifecycle — disconnect handling, error recovery, concurrency.
+
+    Each test is self-contained: connections are opened and closed within the test
+    body so teardown cannot mask connection-state bugs.
+    """
+
+    async def test_abrupt_disconnect_backend_recovers(self):
+        """Close WS without 'terminate connection' — backend must clean up and accept a new session.
+
+        Simulates a browser tab being closed or refreshed mid-session.  The handler()
+        finally-block in index.py must disconnect the OPC UA client and remove the
+        handler from active_handlers regardless of how the WebSocket was closed.
+        """
+        import websockets
+
+        # First session: connect → get OPC UA connection response → close abruptly.
+        async with websockets.connect(WS_URL) as ws:
+            uid = 900
+            await ws.send(json.dumps({"command": "connect to", "endpoint": OPCUA_ENDPOINT, "uniqueid": uid}))
+            deadline = time.monotonic() + 30.0
+            while time.monotonic() < deadline:
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
+                    msg = json.loads(raw)
+                    if msg.get("uniqueid") == uid:
+                        break  # response received — now close without 'terminate connection'
+                except asyncio.TimeoutError:
+                    continue
+        # Exiting 'async with' closes the WS cleanly from the client side, which still
+        # exercises the handler() finally-block (OPC UA disconnect + active_handlers.discard).
+
+        # Give the backend finally-block a moment to complete cleanup.
+        await asyncio.sleep(1.5)
+
+        # New session — backend must still be alive and accepting connections.
+        async with websockets.connect(WS_URL) as ws2:
+            uid2 = 901
+            await ws2.send(json.dumps({"command": "connect to", "endpoint": OPCUA_ENDPOINT, "uniqueid": uid2}))
+            deadline2 = time.monotonic() + 30.0
+            reconnect_ok = False
+            while time.monotonic() < deadline2:
+                try:
+                    raw2 = await asyncio.wait_for(ws2.recv(), timeout=1.0)
+                    msg2 = json.loads(raw2)
+                    if msg2.get("uniqueid") == uid2:
+                        assert msg2.get("data", {}).get("exception") is None, (
+                            f"Reconnect after abrupt disconnect failed: {msg2.get('data')}"
+                        )
+                        reconnect_ok = True
+                        break
+                except asyncio.TimeoutError:
+                    continue
+            assert reconnect_ok, (
+                "No response to 'connect to' after abrupt disconnect — "
+                "backend may be stuck or handler finally-block did not complete"
+            )
+
+    async def test_invalid_json_returns_structured_error(self, ws_client):
+        """Sending invalid JSON must return a structured error; WS connection must remain usable.
+
+        index.py catches json.JSONDecodeError and returns:
+          {"command": "invalid request", "endpoint": "common",
+           "data": {"exception": "..."}, "error": {"code": "INVALID_JSON", ...}}
+        The 'continue' in the handler loop means the connection stays alive.
+        """
+        # Send garbage — do NOT use send_recv (it expects a uniqueid-matched response).
+        await ws_client.send("this { is [ not } valid JSON !!!")
+
+        # Read the error response directly.
+        raw = await asyncio.wait_for(ws_client.recv(), timeout=5.0)
+        msg = json.loads(raw)
+        assert msg.get("command") == "invalid request", (
+            f"Backend must return command='invalid request' for invalid JSON, got {msg.get('command')!r}"
+        )
+        assert "data" in msg, f"Error response must have 'data' field, got keys: {list(msg)}"
+        assert "exception" in msg.get("data", {}), (
+            f"Error response data must have 'exception' field, got: {msg.get('data')}"
+        )
+
+        # Connection must still be usable — issue a valid command and expect a response.
+        resp = await ws_client.send_recv("connect to", timeout=30)
+        assert resp.get("data", {}).get("exception") is None, (
+            f"Connection must still be alive after invalid JSON, but 'connect to' failed: {resp.get('data')}"
+        )
+
+    async def test_multiple_sequential_connections_all_succeed(self):
+        """Three sequential WS sessions each completing 'connect to' must all succeed.
+
+        Verifies that the backend correctly tears down each session and is ready
+        to accept the next one immediately after the previous session closes.
+        """
+        import websockets
+
+        for attempt in range(3):
+            uid = 910 + attempt
+            async with websockets.connect(WS_URL) as ws:
+                await ws.send(json.dumps({"command": "connect to", "endpoint": OPCUA_ENDPOINT, "uniqueid": uid}))
+                deadline = time.monotonic() + 30.0
+                success = False
+                while time.monotonic() < deadline:
+                    try:
+                        raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
+                        msg = json.loads(raw)
+                        if msg.get("uniqueid") == uid:
+                            assert msg.get("data", {}).get("exception") is None, (
+                                f"Attempt {attempt + 1}: 'connect to' failed: {msg.get('data')}"
+                            )
+                            success = True
+                            break
+                    except asyncio.TimeoutError:
+                        continue
+                assert success, f"Attempt {attempt + 1}: no response to 'connect to' within 30 s"
+            # Brief gap so backend cleanup completes before the next connection.
+            await asyncio.sleep(0.5)
+
+    async def test_two_concurrent_sessions_are_independent(self):
+        """Two simultaneous WS sessions must each receive their own OPC UA connection response.
+
+        Verifies: (a) both sessions connect successfully, (b) each gets its own
+        uniqueid-matched response (no cross-talk between active_handlers), (c) closing
+        one session does not affect the other.
+        """
+        import websockets
+
+        uid1, uid2 = 920, 921
+        got1 = got2 = False
+
+        async with websockets.connect(WS_URL) as ws1:
+            async with websockets.connect(WS_URL) as ws2:
+                await ws1.send(
+                    json.dumps({"command": "connect to", "endpoint": OPCUA_ENDPOINT, "uniqueid": uid1})
+                )
+                await ws2.send(
+                    json.dumps({"command": "connect to", "endpoint": OPCUA_ENDPOINT, "uniqueid": uid2})
+                )
+
+                deadline = time.monotonic() + 60.0
+                while (not got1 or not got2) and time.monotonic() < deadline:
+                    for ws, expected_uid, label in [(ws1, uid1, "ws1"), (ws2, uid2, "ws2")]:
+                        try:
+                            raw = await asyncio.wait_for(ws.recv(), timeout=0.5)
+                            msg = json.loads(raw)
+                            if msg.get("uniqueid") == uid1:
+                                assert msg.get("data", {}).get("exception") is None, (
+                                    f"ws1 connect failed: {msg.get('data')}"
+                                )
+                                got1 = True
+                            elif msg.get("uniqueid") == uid2:
+                                assert msg.get("data", {}).get("exception") is None, (
+                                    f"ws2 connect failed: {msg.get('data')}"
+                                )
+                                got2 = True
+                        except asyncio.TimeoutError:
+                            continue
+                        except Exception:
+                            break
+
+        assert got1, "ws1 never received a 'connect to' response — backend may have dropped session"
+        assert got2, "ws2 never received a 'connect to' response — sessions may have conflicted"

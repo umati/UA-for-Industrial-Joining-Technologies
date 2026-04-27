@@ -353,6 +353,32 @@ describe('ModelManager.createModelFromNode()', () => {
     expect(result).toBeInstanceOf(DefaultNode)
   })
 
+  it('DefaultNode stores node.value when truthy', () => {
+    const node = { typeDefinition: 'UnknownType', browseData: {}, relations: [], value: 'sensor-42' }
+    const result = mm.createModelFromNode(node)
+    expect(result).toBeInstanceOf(DefaultNode)
+    expect(result.value).toBe('sensor-42')
+  })
+
+  it('DefaultNode preserves falsey-but-valid OPC UA values (0, false, empty string)', () => {
+    const zero = mm.createModelFromNode({ typeDefinition: 'UnknownType', browseData: {}, relations: [], value: 0 })
+    expect(zero.value).toBe(0)
+
+    const bool = mm.createModelFromNode({ typeDefinition: 'UnknownType', browseData: {}, relations: [], value: false })
+    expect(bool.value).toBe(false)
+
+    const empty = mm.createModelFromNode({ typeDefinition: 'UnknownType', browseData: {}, relations: [], value: '' })
+    expect(empty.value).toBe('')
+  })
+
+  it('DefaultNode omits value when node.value is null or undefined', () => {
+    const nullNode = mm.createModelFromNode({ typeDefinition: 'UnknownType', browseData: {}, relations: [], value: null })
+    expect(nullNode.value).toBeUndefined()
+
+    const undefNode = mm.createModelFromNode({ typeDefinition: 'UnknownType', browseData: {}, relations: [] })
+    expect(undefNode.value).toBeUndefined()
+  })
+
   it('returns ResultDataModel for ns=4;i=2001 typeDefinition', () => {
     const node = {
       typeDefinition: 'ns=4;i=2001',

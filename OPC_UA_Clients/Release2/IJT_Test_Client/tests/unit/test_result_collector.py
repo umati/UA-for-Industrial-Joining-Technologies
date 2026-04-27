@@ -125,6 +125,15 @@ class TestIsPartial:
         data.ResultMetaData.IsPartial = False
         assert is_partial(data) is False
 
+    def test_returns_false_when_bool_raises(self):
+        class _Unboolean:
+            def __bool__(self) -> bool:
+                raise TypeError("not boolean-convertible")
+
+        data = MagicMock()
+        data.ResultMetaData.IsPartial = _Unboolean()
+        assert is_partial(data) is False
+
     def test_unwraps_variant_before_checking(self):
         data = MagicMock()
         data.ResultMetaData.IsPartial = ua.Variant(True, ua.VariantType.Boolean)
@@ -206,6 +215,12 @@ class TestResultCollectorExtract:
         event.Result.ResultMetaData.IsPartial = False
         result = rc._extract(event, None, False)
         assert result is not None
+
+    def test_returns_none_when_result_unwraps_to_none(self):
+        rc = self._make_rc()
+        event = MagicMock()
+        event.Result = ua.Variant(None, ua.VariantType.Null)
+        assert rc._extract(event, None, False) is None
 
 
 # ---------------------------------------------------------------------------

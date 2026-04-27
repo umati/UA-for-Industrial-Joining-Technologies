@@ -242,3 +242,27 @@ async def test_close_timeout_cancels_task():
         await h.close()  # must not raise
 
     assert h._queue_task.cancelled()
+
+
+# ── handle_queue — websocket.close() raises during error recovery (L117-118) ──
+
+
+@pytest.mark.asyncio
+async def test_handle_queue_websocket_close_raises_during_error_recovery():
+    """handle_queue catches exception when websocket.close() raises during error recovery (L117-118)."""
+    mock_ws = AsyncMock()
+    mock_ws.close = AsyncMock(side_effect=RuntimeError("close failed"))
+    h = _make_handler(websocket=mock_ws)
+    try:
+        with patch("event_handler.serialize_full_event", return_value={"event": "data"}):
+            with patch("event_handler.json.dumps", side_effect=RuntimeError("json boom")):
+                await h.queue.put({"event": "data"})
+                # json error triggers close() then break — task must exit within 2 s;
+                # shield prevents wait_for from cancelling the task on timeout so
+                # the finally block can still clean up.
+                await asyncio.wait_for(asyncio.shield(h._queue_task), timeout=2.0)
+    finally:
+        if not h._queue_task.done():
+            await _cleanup(h)
+
+    mock_ws.close.assert_awaited_once()

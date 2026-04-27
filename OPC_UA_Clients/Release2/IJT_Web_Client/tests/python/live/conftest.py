@@ -171,5 +171,5 @@ def pytest_collection_modifyitems(items):
             continue
         item.add_marker(pytest.mark.live)
         # WebSocket-specific classes also get live_ws
-        if "TestBackendWebSocket" in item.nodeid or "TestResponseTimeSLA" in item.nodeid:
+        if any(cls in item.nodeid for cls in ("TestBackendWebSocket", "TestResponseTimeSLA", "TestWebSocketLifecycle")):
             item.add_marker(pytest.mark.live_ws)
