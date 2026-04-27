@@ -187,7 +187,7 @@ jobs:
       - name: JS Unit Tests
         id: vitest
         continue-on-error: true
-        run: npx vitest run --reporter=verbose --reporter=junit --outputFile.junit=test-results/vitest.xml
+        run: npx vitest run --coverage --reporter=verbose --reporter=junit --outputFile.junit=test-results/vitest.xml
 
       - name: ESLint
         id: eslint
@@ -1192,6 +1192,7 @@ jobs:
           web_ban  = parse_bandit("all-results/results-web-client/bandit.json")
           web_npm  = parse_npm_audit("all-results/results-web-client/npm-audit.json")
           web_cov  = parse_coverage("all-results/results-web-client/coverage.xml")
+          web_js_cov = parse_coverage("all-results/results-web-client/coverage/cobertura-coverage.xml")
 
           con_py_t = parse_junit("all-results/results-console-client/pytest.xml")
           con_ban  = parse_bandit("all-results/results-console-client/bandit.json")
@@ -1222,6 +1223,7 @@ jobs:
                   )
           _warn(web_r,  web_py_t[0], "web-client",           "pytest.xml")
           _warn(web_r,  web_js_t[0], "web-client",           "vitest.xml")
+          _warn(web_r,  web_js_cov,  "web-client",           "coverage/cobertura-coverage.xml")
           _warn(con_r,  con_py_t[0], "console-client",       "pytest.xml")
           _warn(nod_r,  nod_js_t[0], "node-client",          "vitest.xml")
           _warn(cs_u_r, cs_unit_t[0],"csharp-unit",          "tests.xml")
@@ -1273,7 +1275,7 @@ jobs:
               "| Component | Platform | Tests | Skipped | Coverage |",
               "|:----------|:--------:|------:|--------:|:--------:|",
               f"| Web Client — Python      | Ubuntu  | {tests(*web_py_t)} | {skips(web_py_t[3])} | {cov(web_cov)} |",
-              f"| Web Client — JavaScript  | Ubuntu  | {tests(*web_js_t)} | {skips(web_js_t[3])} | Not Measured |",
+              f"| Web Client — JavaScript  | Ubuntu  | {tests(*web_js_t)} | {skips(web_js_t[3])} | {cov(web_js_cov)} |",
               f"| Console Client — Python  | Ubuntu  | {tests(*con_py_t)} | {skips(con_py_t[3])} | {cov(con_cov)} |",
               f"| Node Client — JavaScript | Ubuntu  | {tests(*nod_js_t)} | {skips(nod_js_t[3])} | {cov(nod_cov)} |",
               f"| C# Client — Unit (xUnit) | Windows | {tests(*cs_unit_t)} | {skips(cs_unit_t[3])} | {cov(cs_cov)} |",

@@ -272,7 +272,7 @@ def _meta(events, idx: int = -1):
     return events[idx].Result.ResultMetaData
 
 
-def _assert_meta(events, *, cls, ev, code, state=1, simulated=True, idx=-1):
+def _assert_meta(events, *, cls, ev, code, state=1, simulated: bool | None = True, idx=-1):
     m = _meta(events, idx)
     assert int(m.Classification) == cls, f"Classification {m.Classification}!={cls}"
     assert int(m.ResultEvaluation) == ev, f"ResultEvaluation {m.ResultEvaluation}!={ev}"
@@ -617,16 +617,27 @@ class TestSimulateEvents:
     async def test_bulk_events(self, ijt_session, etype, count):
         import time
 
+        from asyncua.ua.uaerrors import BadTooManyOperations
+
         c, _, system_h = ijt_session
         system_h.events.clear()
         timeout = max(8.0, count * 0.15 + 5)
-        await _call(
-            c,
-            _SIM_E,
-            f"{_SIM_E}/SimulateBulkEvents",
-            _v(etype, ua.VariantType.UInt32),
-            _v(count, ua.VariantType.UInt32),
-        )
+        # SimulateBulkEvents runs in a detached thread; retry on BadTooManyOperations
+        # (server rejects concurrent calls) using the same pattern as SimulateBulkResults.
+        for _ in range(5):
+            try:
+                await _call(
+                    c,
+                    _SIM_E,
+                    f"{_SIM_E}/SimulateBulkEvents",
+                    _v(etype, ua.VariantType.UInt32),
+                    _v(count, ua.VariantType.UInt32),
+                )
+                break
+            except BadTooManyOperations:
+                await asyncio.sleep(1.0)
+        else:
+            pytest.fail("SimulateBulkEvents still busy after 5 retries")
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if len(system_h.events) >= count:
@@ -804,12 +815,10 @@ class TestResultManagement:
         assert result is not None
 
     async def test_request_results_by_sequence(self, ijt_session):
-        from datetime import datetime, timezone
-
         c, *_ = ijt_session
         # Use real datetime values instead of None to avoid asyncua DateTime decode errors
-        epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
-        future = datetime(2099, 12, 31, tzinfo=timezone.utc)
+        epoch = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+        future = dt.datetime(2099, 12, 31, tzinfo=dt.timezone.utc)
         try:
             result = await _call(
                 c,

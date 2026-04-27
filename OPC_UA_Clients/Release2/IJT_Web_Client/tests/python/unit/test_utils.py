@@ -533,7 +533,7 @@ def test_millisecond_formatter_without_datefmt():
     from python.ijt_logger import MillisecondFormatter
 
     formatter = MillisecondFormatter("%(message)s")  # no datefmt
-    record = logging.LogRecord("test", logging.INFO, "", 0, "msg", [], None)
+    record = logging.LogRecord("test", logging.INFO, "", 0, "msg", (), None)
     result = formatter.formatTime(record)
     assert len(result) == 23  # "YYYY-MM-DD HH:MM:SS.mmm"
     assert result[10] == " " and result[19] == "."

@@ -1336,10 +1336,10 @@ class TestSetupLock:
     def test_acquire_and_release_posix_branch(self, tmp_path, monkeypatch):
         monkeypatch.setattr(sp, "IS_WINDOWS", False)
         fake_fcntl = types.ModuleType("fcntl")
-        fake_fcntl.LOCK_EX = 2
-        fake_fcntl.LOCK_NB = 4
-        fake_fcntl.LOCK_UN = 8
-        fake_fcntl.flock = lambda *a: None
+        setattr(fake_fcntl, "LOCK_EX", 2)
+        setattr(fake_fcntl, "LOCK_NB", 4)
+        setattr(fake_fcntl, "LOCK_UN", 8)
+        setattr(fake_fcntl, "flock", lambda *a: None)
         monkeypatch.setitem(sys.modules, "fcntl", fake_fcntl)
         lock = sp._SetupLock(tmp_path / "test.lock")
         assert lock.acquire() is True
@@ -1350,14 +1350,14 @@ class TestSetupLock:
     def test_acquire_returns_false_when_flock_raises(self, tmp_path, monkeypatch):
         monkeypatch.setattr(sp, "IS_WINDOWS", False)
         fake_fcntl = types.ModuleType("fcntl")
-        fake_fcntl.LOCK_EX = 2
-        fake_fcntl.LOCK_NB = 4
-        fake_fcntl.LOCK_UN = 8
+        setattr(fake_fcntl, "LOCK_EX", 2)
+        setattr(fake_fcntl, "LOCK_NB", 4)
+        setattr(fake_fcntl, "LOCK_UN", 8)
 
         def _raise_blocking(*a):
             raise BlockingIOError("lock held")
 
-        fake_fcntl.flock = _raise_blocking
+        setattr(fake_fcntl, "flock", _raise_blocking)
         monkeypatch.setitem(sys.modules, "fcntl", fake_fcntl)
         lock = sp._SetupLock(tmp_path / "test.lock")
         assert lock.acquire() is False
@@ -2060,7 +2060,7 @@ class TestLoadDotenvIfAvailable:
     def test_calls_load_dotenv_when_available(self, monkeypatch):
         calls = []
         fake_mod = types.ModuleType("dotenv")
-        fake_mod.load_dotenv = lambda: calls.append("loaded")
+        setattr(fake_mod, "load_dotenv", lambda: calls.append("loaded"))
         monkeypatch.setitem(sys.modules, "dotenv", fake_mod)
         sp._load_dotenv_if_available()
         assert "loaded" in calls

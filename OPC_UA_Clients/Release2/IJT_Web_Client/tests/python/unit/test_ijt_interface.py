@@ -458,7 +458,7 @@ async def test_call_connection_returns_exception_on_attribute_error():
 
     interface = IJTInterface()
     ep = "opc.tcp://host:4840"
-    interface.connection_list[ep] = _NoMethods()
+    interface.connection_list[ep] = _NoMethods()  # type: ignore[arg-type]
 
     with patch.object(interface, "ensure_connection_open", new=AsyncMock(return_value=True)):
         result = await interface.call_connection({"endpoint": ep}, "read")
