@@ -288,3 +288,47 @@ async def test_handle_queue_breaks_and_closes_ws_on_exception():
         await asyncio.wait_for(handler._queue_task, timeout=2.0)
 
     ws.close.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_handle_queue_ws_close_also_raises_is_silenced():
+    """Both ws.send and ws.close raise — inner except logs and breaks (lines 150-151)."""
+    ws = AsyncMock()
+    ws.send = AsyncMock(side_effect=RuntimeError("broken pipe"))
+    ws.close = AsyncMock(side_effect=RuntimeError("close also broken"))
+
+    with (
+        patch("python.event_handler.log_joining_system_event"),
+        patch("python.event_handler.serialize_full_event", return_value={"x": 1}),
+    ):
+        handler = EventHandler(ws, "opc.tcp://localhost:40451")
+        await handler.event_notification(_fake_raw_event())
+        await asyncio.wait_for(handler._queue_task, timeout=2.0)
+
+    ws.close.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_process_event_queue_put_exception_is_logged():
+    """queue.put raising is caught and logged — does not propagate (lines 98-100)."""
+    ws = AsyncMock()
+    handler = EventHandler(ws, "opc.tcp://localhost:40451")
+    handler.queue.put = AsyncMock(side_effect=RuntimeError("queue full"))
+
+    short = Short(_fake_raw_event())
+    await handler.process_event(short)  # must not raise
+
+    handler.queue.put = AsyncMock()  # restore for clean shutdown
+    await handler.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_event_notification_short_constructor_exception_is_logged():
+    """Short() raising is caught and logged — does not propagate (lines 118-120)."""
+    ws = AsyncMock()
+    handler = EventHandler(ws, "opc.tcp://localhost:40451")
+
+    with patch("python.event_handler.Short", side_effect=RuntimeError("bad event")):
+        await handler.event_notification(_fake_raw_event())  # must not raise
+
+    await handler.shutdown()

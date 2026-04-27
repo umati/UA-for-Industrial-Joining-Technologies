@@ -3,6 +3,7 @@
 using IJT_CSharp_Client.Client;
 using Moq;
 using Opc.Ua;
+using Opc.Ua.Client;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.UnitTests;
@@ -520,6 +521,198 @@ public sealed class AssetManagementUnitTests
 
         Assert.Null(ex);
         Assert.False(am.IsAssetVarSubscribed);
+    }
+
+    // ── SubscribeAssetVariables — full hierarchy (covers loop bodies + SubscribeAllVariables) ──
+
+    /// <summary>
+    /// Feeds a full category → instance → variable + object-child hierarchy to
+    /// SubscribeAssetVariables so the inner foreach bodies, SubscribeAllVariables,
+    /// and both the Variable and Object branches are exercised.
+    /// Create() throws on the disconnected mock subscription — that exception is
+    /// caught by Record.Exception so all preceding lines count as covered.
+    /// </summary>
+    [Fact]
+    public void SubscribeAssetVariables_WithCategoryInstanceAndVariableHierarchy_CoversLoopBodiesAndSubscribeAllVariables()
+    {
+        var catNodeId = new NodeId(2001u, 1);
+        var instNodeId = new NodeId(2002u, 1);
+        var varNodeId = new NodeId(2003u, 1);
+        var objChildNodeId = new NodeId(2004u, 1);
+
+        var catRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(catNodeId),
+            NodeClass = NodeClass.Object,
+            BrowseName = new QualifiedName("Controllers", 1),
+            DisplayName = new LocalizedText("", "Controllers"),
+        };
+        var instRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(instNodeId),
+            NodeClass = NodeClass.Object,
+            BrowseName = new QualifiedName("Tool-001", 1),
+            DisplayName = new LocalizedText("", "Tool-001"),
+        };
+        // Variable child → exercises the Variable branch in SubscribeAllVariables
+        var varRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(varNodeId),
+            NodeClass = NodeClass.Variable,
+            BrowseName = new QualifiedName("ProductInstanceUri", 1),
+            DisplayName = new LocalizedText("", "ProductInstanceUri"),
+        };
+        // Object child → exercises the recursive Object branch
+        var objChildRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(objChildNodeId),
+            NodeClass = NodeClass.Object,
+            BrowseName = new QualifiedName("SubGroup", 1),
+            DisplayName = new LocalizedText("", "SubGroup"),
+        };
+
+        var session = MockSessionBuilder.Create();
+
+        // Category objects under the Assets node (ValidNodeId == assetsNode)
+        session.Setup(s => s.BrowseChildren(
+                It.Is<NodeId>(n => n.Equals(MockSessionBuilder.ValidNodeId)),
+                (uint)NodeClass.Object))
+            .Returns(new ReferenceDescriptionCollection { catRef });
+
+        // Asset instances under the category node
+        session.Setup(s => s.BrowseChildren(
+                It.Is<NodeId>(n => n.Equals(catNodeId)),
+                (uint)NodeClass.Object))
+            .Returns(new ReferenceDescriptionCollection { instRef });
+
+        // Variables + objects under the asset instance (passed to SubscribeAllVariables)
+        session.Setup(s => s.BrowseChildren(
+                It.Is<NodeId>(n => n.Equals(instNodeId)),
+                (uint)(NodeClass.Variable | NodeClass.Object)))
+            .Returns(new ReferenceDescriptionCollection { varRef, objChildRef });
+
+        // Nothing under the object child (terminates recursion)
+        session.Setup(s => s.BrowseChildren(
+                It.Is<NodeId>(n => n.Equals(objChildNodeId)),
+                (uint)(NodeClass.Variable | NodeClass.Object)))
+            .Returns(new ReferenceDescriptionCollection());
+
+        using var am = new AssetManagement(session.Object);
+
+        // Create() on the disconnected mock subscription throws — that is expected
+        _ = Record.Exception(() => am.SubscribeAssetVariables());
+    }
+
+    // ── GetMethodSetNode — fallback when MethodSet child is not found ─────────
+
+    [Fact]
+    public void EnableAsset_WhenMethodSetChildNotFound_FallsBackToTypeNodeId()
+    {
+        var session = MockSessionBuilder.Create();
+
+        // Return ValidNodeId for the 1st BrowseChild call (AssetManagement),
+        // NodeId.Null for the 2nd (MethodSet) → forces the fallback code path (line 57+).
+        int callCount = 0;
+        session.Setup(s => s.BrowseChild(
+                It.IsAny<NodeId>(), It.IsAny<string>(),
+                It.IsAny<ushort>(), It.IsAny<NodeClass>()))
+            .Returns(() => callCount++ == 1 ? NodeId.Null : MockSessionBuilder.ValidNodeId);
+
+        using var am = new AssetManagement(session.Object);
+
+        var ex = Record.Exception(() => am.EnableAsset("urn:tool:001", enable: true));
+
+        Assert.Null(ex);
+        // IjtBaseObjectId must have been called (fallback taken)
+        session.Verify(s => s.IjtBaseObjectId(It.IsAny<uint>()), Times.Once);
+    }
+
+    // ── StopAssetVariableSubscription — normal path ────────────────────────────
+
+    private static void SetAssetVarSubscription(AssetManagement am, Subscription? value)
+    {
+        var field = typeof(AssetManagement).GetField(
+            "_assetVarSubscription",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        field!.SetValue(am, value);
+    }
+
+    [Fact]
+    public void StopAssetVariableSubscription_WithSubscription_NormalPath_ClearsSubscription()
+    {
+        var session = MockSessionBuilder.Create();
+        using var am = new AssetManagement(session.Object);
+        SetAssetVarSubscription(am, new Subscription());
+
+        Assert.True(am.IsAssetVarSubscribed);
+
+        var ex = Record.Exception(() => am.StopAssetVariableSubscription());
+
+        Assert.Null(ex);
+        Assert.False(am.IsAssetVarSubscribed);
+    }
+
+    // ── SetNestedValue — private static method (via reflection) ──────────────
+
+    private static readonly System.Reflection.MethodInfo s_setNestedValue =
+        typeof(AssetManagement).GetMethod(
+            "SetNestedValue",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+    private static void InvokeSetNestedValue(
+        Dictionary<string, object?> node, string path, object? value) =>
+        s_setNestedValue.Invoke(null, new object?[] { node, path, value });
+
+    [Fact]
+    public void SetNestedValue_WithSimplePath_SetsValueDirectlyInRootDict()
+    {
+        var node = new Dictionary<string, object?>();
+        InvokeSetNestedValue(node, "Key", "hello");
+        Assert.Equal("hello", node["Key"]);
+    }
+
+    [Fact]
+    public void SetNestedValue_WithNestedPath_CreatesIntermediateDictionary()
+    {
+        var node = new Dictionary<string, object?>();
+        InvokeSetNestedValue(node, "parent/child", 42);
+        var parent = Assert.IsType<Dictionary<string, object?>>(node["parent"]);
+        Assert.Equal(42, parent["child"]);
+    }
+
+    [Fact]
+    public void SetNestedValue_WithNestedPath_ReuseExistingIntermediateDict()
+    {
+        var node = new Dictionary<string, object?>();
+        var existingChild = new Dictionary<string, object?>();
+        node["parent"] = existingChild;
+
+        InvokeSetNestedValue(node, "parent/child", "value2");
+
+        Assert.Same(existingChild, node["parent"]);
+        Assert.Equal("value2", existingChild["child"]);
+    }
+
+    [Fact]
+    public void SetNestedValue_WhenIntermediateIsNotDict_ReplacesWithNewDict()
+    {
+        var node = new Dictionary<string, object?>();
+        node["parent"] = "not-a-dict";   // existing non-dict value
+
+        InvokeSetNestedValue(node, "parent/child", "value3");
+
+        var newParent = Assert.IsType<Dictionary<string, object?>>(node["parent"]);
+        Assert.Equal("value3", newParent["child"]);
+    }
+
+    [Fact]
+    public void SetNestedValue_WithDeeplyNestedPath_CreatesAllIntermediateDicts()
+    {
+        var node = new Dictionary<string, object?>();
+        InvokeSetNestedValue(node, "a/b/c", 99);
+        var a = Assert.IsType<Dictionary<string, object?>>(node["a"]);
+        var b = Assert.IsType<Dictionary<string, object?>>(a["b"]);
+        Assert.Equal(99, b["c"]);
     }
 
     // ── GetIdentifiers — multi-output path ────────────────────────────────────

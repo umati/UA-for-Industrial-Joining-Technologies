@@ -360,3 +360,486 @@ async def test_handle_missing_endpoint_returns_exception(fake_websocket, decode_
     payload = decode_last_message(fake_websocket)
     assert "exception" in payload["data"]
     assert payload["error"]["code"] == "OPCUA_REQUEST_FAILED"
+
+
+# ===========================================================================
+# _resource_path — lines 52-56
+# ===========================================================================
+
+
+def test_resource_path_returns_path_in_existing_directory():
+    """_resource_path returns a path inside the first candidate dir that exists."""
+    result = IJTInterface._resource_path("settings.json")
+    assert result.name == "settings.json"
+    assert result.parent.exists()
+
+
+def test_resource_path_fallback_when_no_candidate_directory():
+    """_resource_path falls back to first candidate name when no dir exists (line 56)."""
+    from pathlib import Path
+    from unittest.mock import patch
+
+    with patch.object(IJTInterface, "_SOURCE_ROOT", Path("/nonexistent/xyz_root")):
+        with patch.object(IJTInterface, "_RESOURCE_DIR_CANDIDATES", ("no_such_dir",)):
+            result = IJTInterface._resource_path("test.json")
+
+    assert result.name == "test.json"
+    assert "no_such_dir" in str(result)
+
+
+# ===========================================================================
+# _normalize_json_keys_lower — list input (line 64)
+# ===========================================================================
+
+
+def test_normalize_json_keys_lower_handles_list():
+    """_normalize_json_keys_lower normalizes keys inside dicts nested in lists."""
+    payload = [{"KEY": "val"}, {"Another": 2}]
+    result = IJTInterface._normalize_json_keys_lower(payload)
+    assert result == [{"key": "val"}, {"another": 2}]
+
+
+# ===========================================================================
+# call_connection — ensure_connection_open returns False (lines 110-111)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_call_connection_returns_exception_when_ensure_open_fails():
+    """call_connection returns exception when ensure_connection_open returns False."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+    mock_conn = AsyncMock()
+    ep = "opc.tcp://host:4840"
+    interface.connection_list[ep] = mock_conn
+
+    with patch.object(interface, "ensure_connection_open", new=AsyncMock(return_value=False)):
+        result = await interface.call_connection({"endpoint": ep}, "read")
+
+    assert "exception" in result
+    assert "open" in result["exception"].lower() or "ensure" in result["exception"].lower()
+
+
+# ===========================================================================
+# call_connection — disallowed method (lines 113-115)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_call_connection_returns_exception_for_disallowed_method():
+    """call_connection returns exception when method is not in _ALLOWED_METHODS."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+    mock_conn = AsyncMock()
+    ep = "opc.tcp://host:4840"
+    interface.connection_list[ep] = mock_conn
+
+    with patch.object(interface, "ensure_connection_open", new=AsyncMock(return_value=True)):
+        result = await interface.call_connection({"endpoint": ep}, "delete_all_nodes")
+
+    assert "exception" in result
+    assert "not allowed" in result["exception"]
+
+
+# ===========================================================================
+# call_connection — getattr raises AttributeError (lines 117-121)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_call_connection_returns_exception_on_attribute_error():
+    """call_connection returns exception when the connection has no matching method."""
+    from unittest.mock import AsyncMock, patch
+
+    class _NoMethods:
+        pass
+
+    interface = IJTInterface()
+    ep = "opc.tcp://host:4840"
+    interface.connection_list[ep] = _NoMethods()
+
+    with patch.object(interface, "ensure_connection_open", new=AsyncMock(return_value=True)):
+        result = await interface.call_connection({"endpoint": ep}, "read")
+
+    assert "exception" in result
+    assert "not found" in result["exception"]
+
+
+# ===========================================================================
+# call_connection — method call raises Exception (lines 123-127)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_call_connection_returns_exception_on_method_exception():
+    """call_connection wraps an exception raised by the dispatched method."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+    mock_conn = AsyncMock()
+    mock_conn.read = AsyncMock(side_effect=RuntimeError("opc ua read error"))
+    ep = "opc.tcp://host:4840"
+    interface.connection_list[ep] = mock_conn
+
+    with patch.object(interface, "ensure_connection_open", new=AsyncMock(return_value=True)):
+        result = await interface.call_connection({"endpoint": ep}, "read")
+
+    assert "exception" in result
+    assert "opc ua read error" in result["exception"]
+
+
+# ===========================================================================
+# handle_get_connection_points — exception path (lines 136-142)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_get_connection_points_returns_exception_on_read_error():
+    """handle_get_connection_points returns exception dict when file read fails."""
+    from pathlib import Path
+    from unittest.mock import MagicMock
+
+    interface = IJTInterface()
+    bad_path = MagicMock(spec=Path)
+    bad_path.read_text.side_effect = PermissionError("permission denied")
+    interface._resource_path = lambda _: bad_path  # type: ignore[method-assign]
+
+    result = await interface.handle_get_connection_points()
+
+    assert "exception" in result
+
+
+# ===========================================================================
+# handle_set_connection_points — exception path (lines 151-156)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_set_connection_points_logs_on_write_error():
+    """handle_set_connection_points swallows write exceptions (no raise)."""
+    from pathlib import Path
+
+    interface = IJTInterface()
+    interface._resource_path = lambda _: Path("/nonexistent/xyz/file.json")  # type: ignore[method-assign]
+
+    await interface.handle_set_connection_points({"connectionpoints": []})
+
+
+# ===========================================================================
+# handle_get_settings — generic Exception path (lines 169-173)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_get_settings_returns_exception_on_generic_error():
+    """handle_get_settings returns exception dict for non-FileNotFoundError errors."""
+    from pathlib import Path
+    from unittest.mock import MagicMock
+
+    interface = IJTInterface()
+    bad_path = MagicMock(spec=Path)
+    bad_path.read_text.side_effect = PermissionError("no access")
+    interface._resource_path = lambda _: bad_path  # type: ignore[method-assign]
+
+    result = await interface.handle_get_settings()
+
+    assert "exception" in result
+    assert "no access" in result["exception"]
+
+
+# ===========================================================================
+# handle_set_settings — exception path (lines 186-187)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_set_settings_logs_on_write_error():
+    """handle_set_settings swallows write exceptions (no raise)."""
+    from pathlib import Path
+
+    interface = IJTInterface()
+    interface._resource_path = lambda _: Path("/nonexistent/xyz/settings.json")  # type: ignore[method-assign]
+
+    await interface.handle_set_settings({"initialviewlevel": 1})
+
+
+# ===========================================================================
+# handle_connect_to — endpoint already in list, terminate old conn (lines 203-211)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_connect_to_terminates_existing_connection(fake_websocket):
+    """handle_connect_to terminates an existing connection before creating a new one."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+    ep = "opc.tcp://host:4840"
+
+    old_conn = AsyncMock()
+    old_conn.terminate = AsyncMock(return_value=None)
+    interface.connection_list[ep] = old_conn
+
+    new_conn = AsyncMock()
+    new_conn.connect = AsyncMock(return_value={"command": "connection established", "endpoint": ep})
+
+    with patch("python.ijt_interface.Connection", return_value=new_conn):
+        result = await interface.handle_connect_to(ep, fake_websocket)
+
+    old_conn.terminate.assert_awaited_once()
+    assert result.get("command") == "connection established"
+    assert interface.connection_list[ep] is new_conn
+
+
+@pytest.mark.asyncio
+async def test_handle_connect_to_terminates_existing_connection_even_on_terminate_error(fake_websocket):
+    """handle_connect_to sets old conn to None even when terminate() raises."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+    ep = "opc.tcp://host:4840"
+
+    old_conn = AsyncMock()
+    old_conn.terminate = AsyncMock(side_effect=RuntimeError("already gone"))
+    interface.connection_list[ep] = old_conn
+
+    new_conn = AsyncMock()
+    new_conn.connect = AsyncMock(return_value={"command": "connection established", "endpoint": ep})
+
+    with patch("python.ijt_interface.Connection", return_value=new_conn):
+        result = await interface.handle_connect_to(ep, fake_websocket)
+
+    assert result.get("command") == "connection established"
+
+
+# ===========================================================================
+# handle_connect_to — new connection (lines 213-219)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_connect_to_creates_new_connection(fake_websocket):
+    """handle_connect_to creates a new Connection and calls connect()."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+    ep = "opc.tcp://new-host:4840"
+
+    mock_conn = AsyncMock()
+    mock_conn.connect = AsyncMock(return_value={"command": "connection established", "endpoint": ep})
+
+    with patch("python.ijt_interface.Connection", return_value=mock_conn):
+        result = await interface.handle_connect_to(ep, fake_websocket)
+
+    assert result.get("command") == "connection established"
+    assert interface.connection_list[ep] is mock_conn
+
+
+# ===========================================================================
+# handle() — "get connectionpoints" command (line 278)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_get_connectionpoints_command(fake_websocket, decode_last_message):
+    """handle() routes 'get connectionpoints' to handle_get_connection_points."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+
+    with patch.object(
+        interface,
+        "handle_get_connection_points",
+        new=AsyncMock(return_value={"connectionpoints": []}),
+    ):
+        await interface.handle(fake_websocket, {"command": "get connectionpoints", "endpoint": ""})
+
+    payload = decode_last_message(fake_websocket)
+    assert payload["data"] == {"connectionpoints": []}
+
+
+# ===========================================================================
+# handle() — "set connectionpoints" returns early, no send (lines 280-281)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_set_connectionpoints_returns_early_no_websocket_send(fake_websocket):
+    """handle() returns early after 'set connectionpoints' — no websocket.send call."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+
+    with patch.object(
+        interface,
+        "handle_set_connection_points",
+        new=AsyncMock(return_value=None),
+    ):
+        await interface.handle(fake_websocket, {"command": "set connectionpoints", "endpoint": ""})
+
+    assert fake_websocket.sent_messages == []
+
+
+# ===========================================================================
+# handle() — "read product instance uri" command (line 288)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_read_product_instance_uri_command(fake_websocket, decode_last_message):
+    """handle() routes 'read product instance uri' to call_connection."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+    ep = "opc.tcp://host:4840"
+
+    with patch.object(
+        interface,
+        "call_connection",
+        new=AsyncMock(return_value={"uri": "urn:example:product"}),
+    ):
+        await interface.handle(
+            fake_websocket,
+            {"command": "read product instance uri", "endpoint": ep},
+        )
+
+    payload = decode_last_message(fake_websocket)
+    assert payload["data"] == {"uri": "urn:example:product"}
+
+
+# ===========================================================================
+# handle() — "connect to" command (line 290)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_connect_to_command(fake_websocket, decode_last_message):
+    """handle() routes 'connect to' to handle_connect_to."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+    ep = "opc.tcp://host:4840"
+
+    with patch.object(
+        interface,
+        "handle_connect_to",
+        new=AsyncMock(return_value={"command": "connection established", "endpoint": ep}),
+    ):
+        await interface.handle(fake_websocket, {"command": "connect to", "endpoint": ep})
+
+    payload = decode_last_message(fake_websocket)
+    assert payload["data"]["command"] == "connection established"
+
+
+# ===========================================================================
+# handle() — inner exception sets return_values (lines 295-297)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_inner_exception_sets_return_values(fake_websocket, decode_last_message):
+    """When a handler raises, handle() catches it and sends exception in response."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+
+    with patch.object(
+        interface,
+        "handle_get_connection_points",
+        new=AsyncMock(side_effect=RuntimeError("unexpected boom")),
+    ):
+        await interface.handle(fake_websocket, {"command": "get connectionpoints", "endpoint": ""})
+
+    payload = decode_last_message(fake_websocket)
+    assert "exception" in payload["data"]
+    assert payload["error"]["code"] == "OPCUA_REQUEST_FAILED"
+
+
+# ===========================================================================
+# __del__ (pass in __del__)
+# ===========================================================================
+
+
+def test_ijt_interface_del_is_callable():
+    """IJTInterface.__del__() is a no-op and must not raise."""
+    interface = IJTInterface()
+    interface.__del__()
+
+
+# ===========================================================================
+# handle_get_connection_points — success path (line 139)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_get_connection_points_returns_data_when_file_exists(tmp_path):
+    """handle_get_connection_points reads and normalises JSON via a patched hermetic path."""
+    cp_data = {"ConnectionPoint1": {"Url": "opc.tcp://localhost:4840", "Name": "Test"}}
+    cp_file = tmp_path / "connectionpoints.json"
+    cp_file.write_text(json.dumps(cp_data), encoding="utf-8")
+
+    interface = IJTInterface()
+    interface._resource_path = lambda _: cp_file  # type: ignore[method-assign]
+
+    result = await interface.handle_get_connection_points()
+
+    assert "exception" not in result
+    assert "connectionpoint1" in result  # key normalised to lower-case
+    assert result["connectionpoint1"]["url"] == "opc.tcp://localhost:4840"
+    assert result["connectionpoint1"]["name"] == "Test"
+
+
+# ===========================================================================
+# handle_get_settings — FileNotFoundError path (line 170)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_get_settings_returns_exception_on_file_not_found():
+    """handle_get_settings returns structured exception when file is missing."""
+    from pathlib import Path
+
+    interface = IJTInterface()
+    interface._resource_path = lambda _: Path("/no/such/path/settings.json")  # type: ignore[method-assign]
+
+    result = await interface.handle_get_settings()
+
+    assert "exception" in result
+    assert "File not found" in result["exception"]
+
+
+# ===========================================================================
+# handle_connect_to — Connection.connect() raises (lines 217-219)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_connect_to_returns_exception_when_connect_raises(fake_websocket):
+    """handle_connect_to wraps exceptions from connection.connect() in exception dict."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+    ep = "opc.tcp://broken:4840"
+
+    mock_conn = AsyncMock()
+    mock_conn.connect = AsyncMock(side_effect=RuntimeError("OPCUA handshake failed"))
+
+    with patch("python.ijt_interface.Connection", return_value=mock_conn):
+        result = await interface.handle_connect_to(ep, fake_websocket)
+
+    assert "exception" in result
+    assert "OPCUA handshake failed" in result["exception"]
+
+
+# ===========================================================================
+# _safe_terminate — early return when connection is None (line 333)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_safe_terminate_is_noop_when_connection_is_none():
+    """_safe_terminate returns immediately when called with None connection."""
+    interface = IJTInterface()
+    await interface._safe_terminate("opc.tcp://host:4840", None)

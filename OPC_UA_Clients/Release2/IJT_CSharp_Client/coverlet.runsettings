@@ -4,9 +4,9 @@
     <DataCollectors>
       <DataCollector friendlyName="XPlat code coverage">
         <Configuration>
-          <!-- Exclude auto-generated OPC UA type bindings and entry point -->
-          <ExcludeByNamespace>UAModel,Program</ExcludeByNamespace>
-          <!-- Also exclude any class decorated with [GeneratedCode] -->
+          <!-- Only measure the IJT client assembly; UAModel.* are generated OPC UA type assemblies -->
+          <Include>[IJT_CSharp_Client]*</Include>
+          <!-- Exclude any class decorated with [GeneratedCode] within the client assembly -->
           <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
         </Configuration>
       </DataCollector>

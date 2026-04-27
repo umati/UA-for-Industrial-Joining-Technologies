@@ -239,8 +239,22 @@ async def test_handle_queue_breaks_on_exception():
     await asyncio.wait_for(handler._queue_task, timeout=2.0)
 
 
-# ---------------------------------------------------------------------------
-# Regression tests: SimulateJobResult concurrent-event race condition
+@pytest.mark.asyncio
+async def test_handle_queue_ws_close_also_raises_is_silenced():
+    """Both ws.send and ws.close raise — inner except logs and breaks (lines 135-136)."""
+    ws = AsyncMock()
+    ws.send = AsyncMock(side_effect=RuntimeError("connection reset"))
+    ws.close = AsyncMock(side_effect=RuntimeError("close also broken"))
+    handler = ResultEventHandler(ws, "opc.tcp://localhost:40451")
+
+    short = Short(ua.NodeId(0, 0), {}, ua.LocalizedText("msg", "en"), "id-close-err")  # type: ignore[arg-type]
+    with patch("python.result_event_handler.serialize_full_event", return_value={}):
+        await handler.process_event(short)
+    await asyncio.wait_for(handler._queue_task, timeout=2.0)
+
+    ws.close.assert_awaited()
+
+
 # (fix: log_result_event_details must NOT do OPC UA reads inside event callbacks)
 # ---------------------------------------------------------------------------
 

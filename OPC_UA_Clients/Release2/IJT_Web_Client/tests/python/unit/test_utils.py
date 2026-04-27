@@ -381,6 +381,164 @@ async def test_log_result_event_details_with_full_mock():
     assert event_id == "evt-id-001"
 
 
+# ---------------------------------------------------------------------------
+# nodeid_to_str / localizedtext_to_str — exception fallback branches
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua not installed")
+def test_nodeid_to_str_exception_falls_back_to_str():
+    """When NodeIdType access raises, nodeid_to_str falls back to str() (lines 302-303).
+    Uses raise-once pattern so str(nodeid) in the fallback path succeeds even if
+    ua.NodeId.__str__ also reads NodeIdType internally."""
+    from unittest.mock import PropertyMock
+
+    node = ua.NodeId(0, 0)  # type: ignore[arg-type]
+    actual_type = node.NodeIdType  # stash before patching
+    raised = False
+
+    def _raise_once() -> object:
+        nonlocal raised
+        if not raised:
+            raised = True
+            raise RuntimeError("deliberate test failure")
+        return actual_type  # subsequent reads (e.g. from __str__) return the real value
+
+    with patch.object(type(node), "NodeIdType", new_callable=PropertyMock, side_effect=_raise_once):
+        result = nodeid_to_str(node)
+    assert isinstance(result, str)
+
+
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua not installed")
+def test_localizedtext_to_str_exception_falls_back_to_str():
+    """When lt.Text access raises, localizedtext_to_str falls back to str() (lines 322-323)."""
+    from unittest.mock import PropertyMock
+
+    lt = ua.LocalizedText("hello", "en")  # type: ignore[union-attr]
+    actual_text = lt.Text  # stash before patching
+    raised = False
+
+    def _raise_once() -> object:
+        nonlocal raised
+        if not raised:
+            raised = True
+            raise RuntimeError("deliberate test failure")
+        return actual_text  # subsequent reads succeed
+
+    with patch.object(type(lt), "Text", new_callable=PropertyMock, side_effect=_raise_once):
+        result = localizedtext_to_str(lt)
+    assert isinstance(result, str)
+
+
+# ---------------------------------------------------------------------------
+# log_joining_system_event — entity and reported-value error paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
+def test_log_joining_system_event_entity_raises_is_caught():
+    """TypeError from formatting entity field is caught and logged at lines 216-217.
+    log_entity and log_reported_value are nested functions so cannot be patched directly;
+    instead a __format__-raising value is used to trigger TypeError inside log_field."""
+    import types
+
+    class _BadFormat:
+        """Value whose f-string formatting raises TypeError."""
+
+        def __format__(self, spec: str) -> str:
+            raise TypeError("deliberate format failure")
+
+    entity = types.SimpleNamespace(
+        Name=_BadFormat(),  # triggers TypeError in log_field inside log_entity
+        Description="",
+        EntityId="",
+        EntityType="",
+        IsExternal="",
+    )
+    event = types.SimpleNamespace(
+        Message=types.SimpleNamespace(Text="E"),
+        EventType=ua.NodeId(2041, 0),  # type: ignore[arg-type]
+        EventId=b"\x00",
+        SourceName="",
+        SourceNode=ua.NodeId(0, 0),  # type: ignore[arg-type]
+        Severity=0,
+        Time=None,
+        ReceiveTime=None,
+        LocalTime=None,
+        ConditionClassId=ua.NodeId(0, 0),  # type: ignore[arg-type]
+        ConditionClassName=ua.LocalizedText("", ""),  # type: ignore[union-attr]
+        ConditionSubClassId=[],
+        ConditionSubClassName=[],
+        EventCode="",
+        EventText="",
+        JoiningTechnology="",
+        AssociatedEntities=[entity],
+        ReportedValues=[],
+    )
+
+    log_joining_system_event(event)  # must not raise
+
+
+@pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
+def test_log_joining_system_event_reported_value_raises_is_caught():
+    """TypeError from formatting rv field is caught and logged at lines 227-228."""
+    import types
+
+    class _BadFormat:
+        def __format__(self, spec: str) -> str:
+            raise TypeError("deliberate format failure")
+
+    rv = types.SimpleNamespace(
+        Name=_BadFormat(),  # triggers TypeError in log_field inside log_reported_value
+        CurrentValue=None,
+        PreviousValue=None,
+        PhysicalQuantity="",
+        LowLimit="",
+        HighLimit="",
+        EngineeringUnits=None,
+    )
+    event = types.SimpleNamespace(
+        Message=types.SimpleNamespace(Text="E"),
+        EventType=ua.NodeId(2041, 0),  # type: ignore[arg-type]
+        EventId=b"\x00",
+        SourceName="",
+        SourceNode=ua.NodeId(0, 0),  # type: ignore[arg-type]
+        Severity=0,
+        Time=None,
+        ReceiveTime=None,
+        LocalTime=None,
+        ConditionClassId=ua.NodeId(0, 0),  # type: ignore[arg-type]
+        ConditionClassName=ua.LocalizedText("", ""),  # type: ignore[union-attr]
+        ConditionSubClassId=[],
+        ConditionSubClassName=[],
+        EventCode="",
+        EventText="",
+        JoiningTechnology="",
+        AssociatedEntities=[],
+        ReportedValues=[rv],
+    )
+
+    log_joining_system_event(event)  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# MillisecondFormatter.formatTime — no-datefmt branch (ijt_logger.py line 34)
+# ---------------------------------------------------------------------------
+
+
+def test_millisecond_formatter_without_datefmt():
+    """formatTime without datefmt hits the else branch (ijt_logger.py line 34)."""
+    import logging
+
+    from python.ijt_logger import MillisecondFormatter
+
+    formatter = MillisecondFormatter("%(message)s")  # no datefmt
+    record = logging.LogRecord("test", logging.INFO, "", 0, "msg", [], None)
+    result = formatter.formatTime(record)
+    assert len(result) == 23  # "YYYY-MM-DD HH:MM:SS.mmm"
+    assert result[10] == " " and result[19] == "."
+
+
 @pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 @pytest.mark.asyncio
 async def test_log_result_event_details_no_end_time():

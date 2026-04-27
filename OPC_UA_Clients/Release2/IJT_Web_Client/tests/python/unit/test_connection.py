@@ -544,3 +544,366 @@ def test_id_object_to_string_fallback_on_none():
 def test_id_object_to_string_fallback_on_list():
     result = id_object_to_string([1, 2, 3])
     assert result == "[1, 2, 3]"
+
+
+# ---------------------------------------------------------------------------
+# connect — early return when already open (line 121)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_connect_returns_immediately_when_already_open():
+    """connect() returns success immediately if is_connection_open() is True."""
+    conn = _make_connection(server_url="opc.tcp://localhost:4840")
+    with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+        result = await conn.connect()
+    assert result == {"command": "connection established", "endpoint": "opc.tcp://localhost:4840"}
+
+
+# ---------------------------------------------------------------------------
+# connect — set_security_string returns awaitable that raises UaError (lines 142-148)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_connect_security_string_awaitable_raises_ua_error_is_caught(monkeypatch):
+    """When set_security_string returns a coroutine that raises UaError, the
+    except block is hit and connect() continues (single-session fallback test)."""
+    from asyncua import ua
+
+    monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "1")
+    monkeypatch.setenv("OPCUA_CONNECT_DELAY_SEC", "0.01")
+    monkeypatch.setenv("OPCUA_CONNECT_MAX_DELAY_SEC", "0.01")
+
+    async def _raise_ua_error():
+        raise ua.UaError("security policy not supported")
+
+    mock_client = MagicMock()
+    mock_client.set_security_string = MagicMock(return_value=_raise_ua_error())
+    mock_client.connect = AsyncMock(side_effect=ConnectionRefusedError("refused"))
+
+    with patch("python.connection.Client", return_value=mock_client):
+        conn = _make_connection()
+        result = await conn.connect()
+
+    assert "exception" in result
+
+
+# ---------------------------------------------------------------------------
+# connect — subscription_client.connect() fails → single-session fallback (lines 199-206)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_connect_subscription_client_fails_falls_back_to_single_session(monkeypatch):
+    """When subscription_client.connect() raises, connect() still returns success
+    and sets self.subscription_client = None (single-session fallback)."""
+    monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "1")
+
+    main_mock = MagicMock()
+    main_mock.connect = AsyncMock(return_value=None)
+    main_mock.load_type_definitions = AsyncMock(return_value=None)
+    main_mock.get_root_node = MagicMock(return_value=MagicMock())
+    main_mock.set_security_string = MagicMock(return_value=None)
+
+    sub_mock = MagicMock()
+    sub_mock.connect = AsyncMock(side_effect=RuntimeError("sub connection refused"))
+    sub_mock.set_security_string = MagicMock(return_value=None)
+    sub_mock.load_type_definitions = AsyncMock(side_effect=RuntimeError("not reached"))
+
+    ws = AsyncMock()
+    with patch("python.connection.Client", side_effect=[main_mock, sub_mock]):
+        conn = _make_connection(server_url="opc.tcp://localhost:4840", websocket=ws)
+        result = await conn.connect()
+
+    assert result.get("command") == "connection established"
+    assert conn.subscription_client is None
+
+
+# ---------------------------------------------------------------------------
+# connect — asyncio.sleep between retries (line 222)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_connect_sleeps_between_retries(monkeypatch):
+    """With 2 retries, asyncio.sleep is awaited between attempt 0 and attempt 1."""
+    monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "2")
+    monkeypatch.setenv("OPCUA_CONNECT_DELAY_SEC", "0.01")
+    monkeypatch.setenv("OPCUA_CONNECT_MAX_DELAY_SEC", "0.01")
+
+    mock_client = MagicMock()
+    mock_client.connect = AsyncMock(side_effect=ConnectionRefusedError("refused"))
+    mock_client.set_security_string = MagicMock(return_value=None)
+
+    sleep_calls: list = []
+
+    async def _fake_sleep(delay):
+        sleep_calls.append(delay)
+
+    with patch("python.connection.Client", return_value=mock_client):
+        with patch("asyncio.sleep", side_effect=_fake_sleep):
+            conn = _make_connection()
+            result = await conn.connect()
+
+    assert "exception" in result
+    assert len(sleep_calls) >= 1
+
+
+# ---------------------------------------------------------------------------
+# terminate — client.disconnect() raises asyncio.TimeoutError (lines 256-257)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_terminate_client_disconnect_timeout(monkeypatch):
+    """asyncio.TimeoutError from client.disconnect() is caught and logged."""
+    import asyncio as _asyncio
+
+    conn = _make_connection()
+    conn.client = MagicMock()
+    conn.client.disconnect = AsyncMock(side_effect=_asyncio.TimeoutError())
+    conn.subscription_client = None
+
+    with patch.object(conn, "_unsubscribe_and_cleanup", new=AsyncMock(return_value=None)):
+        with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+            await conn.terminate()
+
+    assert conn.terminated is True
+
+
+# ---------------------------------------------------------------------------
+# terminate — client.disconnect() raises generic Exception (lines 258-259)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_terminate_client_disconnect_generic_exception(monkeypatch):
+    """Generic Exception from client.disconnect() is caught and logged."""
+    conn = _make_connection()
+    conn.client = MagicMock()
+    conn.client.disconnect = AsyncMock(side_effect=RuntimeError("connection reset"))
+    conn.subscription_client = None
+
+    with patch.object(conn, "_unsubscribe_and_cleanup", new=AsyncMock(return_value=None)):
+        with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+            await conn.terminate()
+
+    assert conn.terminated is True
+
+
+# ---------------------------------------------------------------------------
+# terminate — subscription_client.disconnect() raises asyncio.TimeoutError (lines 266-267)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_terminate_subscription_client_disconnect_timeout():
+    """asyncio.TimeoutError from subscription_client.disconnect() is caught and logged."""
+    import asyncio as _asyncio
+
+    conn = _make_connection()
+    conn.client = MagicMock()
+    conn.client.disconnect = AsyncMock(return_value=None)
+
+    sub_client = MagicMock()
+    sub_client.disconnect = AsyncMock(side_effect=_asyncio.TimeoutError())
+    conn.subscription_client = sub_client
+
+    with patch.object(conn, "_unsubscribe_and_cleanup", new=AsyncMock(return_value=None)):
+        with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+            await conn.terminate()
+
+    assert conn.subscription_client is None
+    assert conn.terminated is True
+
+
+# ---------------------------------------------------------------------------
+# terminate — subscription_client.disconnect() raises generic Exception (lines 268-269)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_terminate_subscription_client_disconnect_generic_exception():
+    """Generic Exception from subscription_client.disconnect() is caught and logged."""
+    conn = _make_connection()
+    conn.client = MagicMock()
+    conn.client.disconnect = AsyncMock(return_value=None)
+
+    sub_client = MagicMock()
+    sub_client.disconnect = AsyncMock(side_effect=OSError("broken pipe"))
+    conn.subscription_client = sub_client
+
+    with patch.object(conn, "_unsubscribe_and_cleanup", new=AsyncMock(return_value=None)):
+        with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+            await conn.terminate()
+
+    assert conn.subscription_client is None
+    assert conn.terminated is True
+
+
+# ---------------------------------------------------------------------------
+# terminate — _unsubscribe_and_cleanup raises → outer except (lines 280-281)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_terminate_outer_except_when_unsubscribe_raises():
+    """If _unsubscribe_and_cleanup raises, the outer except in terminate() catches it."""
+    conn = _make_connection()
+    conn.client = MagicMock()
+    conn.client.disconnect = AsyncMock(return_value=None)
+    conn.subscription_client = None
+
+    with patch.object(
+        conn,
+        "_unsubscribe_and_cleanup",
+        new=AsyncMock(side_effect=RuntimeError("unexpected failure")),
+    ):
+        with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+            await conn.terminate()
+
+    assert conn.terminated is True
+
+
+# ---------------------------------------------------------------------------
+# _unsubscribe_and_cleanup — result subscription delete raises (lines 313-314)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_unsubscribe_result_subscription_delete_raises():
+    """delete_subscriptions raising for result event is caught, sub reset to 'sub'."""
+    conn = _make_connection()
+
+    mock_sub = MagicMock()
+    mock_sub.subscription_id = 42
+    conn.sub_result_event = mock_sub
+
+    mock_client = MagicMock()
+    mock_client.delete_subscriptions = AsyncMock(side_effect=RuntimeError("server rejected delete"))
+    conn.client = mock_client
+
+    with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+        await conn._unsubscribe_and_cleanup()
+
+    assert conn.sub_result_event == "sub"
+
+
+# ---------------------------------------------------------------------------
+# _unsubscribe_and_cleanup — joining event subscription delete succeeds (lines 319-325, 328)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_unsubscribe_deletes_joining_subscription():
+    """Joining event subscription with subscription_id is deleted via delete_subscriptions."""
+    conn = _make_connection()
+
+    mock_sub = MagicMock()
+    mock_sub.subscription_id = 99
+    conn.sub_joining_event = mock_sub
+
+    mock_client = MagicMock()
+    mock_client.delete_subscriptions = AsyncMock(return_value=None)
+    conn.client = mock_client
+
+    with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+        await conn._unsubscribe_and_cleanup()
+
+    mock_client.delete_subscriptions.assert_awaited_once_with([99])
+    assert conn.sub_joining_event == "sub"
+
+
+# ---------------------------------------------------------------------------
+# _unsubscribe_and_cleanup — joining event subscription delete raises (lines 326-328)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_unsubscribe_joining_subscription_delete_raises():
+    """delete_subscriptions raising for joining event is caught, sub reset to 'sub'."""
+    conn = _make_connection()
+
+    mock_sub = MagicMock()
+    mock_sub.subscription_id = 77
+    conn.sub_joining_event = mock_sub
+
+    mock_client = MagicMock()
+    mock_client.delete_subscriptions = AsyncMock(side_effect=RuntimeError("join delete failed"))
+    conn.client = mock_client
+
+    with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+        await conn._unsubscribe_and_cleanup()
+
+    assert conn.sub_joining_event == "sub"
+
+
+# ---------------------------------------------------------------------------
+# namespaces — success and exception paths (lines 537-543)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_namespaces_returns_namespace_list_when_connected():
+    """namespaces() returns {'namespaces': [...]} on successful call."""
+    conn = _make_connection()
+    conn.client = MagicMock()
+    conn.client.get_namespace_array = AsyncMock(return_value=["urn:ns0", "urn:ns1"])
+
+    result = await conn.namespaces({})
+
+    assert result == {"namespaces": ["urn:ns0", "urn:ns1"]}
+
+
+@pytest.mark.asyncio
+async def test_namespaces_returns_exception_on_error():
+    """namespaces() returns exception dict when get_namespace_array raises."""
+    conn = _make_connection()
+    conn.client = MagicMock()
+    conn.client.get_namespace_array = AsyncMock(side_effect=RuntimeError("server unavailable"))
+
+    result = await conn.namespaces({})
+
+    assert "exception" in result
+    assert "server unavailable" in result["exception"]
+
+
+# ---------------------------------------------------------------------------
+# subscribe — exception path (lines 346-413)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_subscribe_returns_exception_when_namespace_lookup_fails():
+    """subscribe() catches and returns exception dict when namespace index lookup raises."""
+    conn = _make_connection()
+
+    conn.handler_joining_event = MagicMock()
+    conn.handler_result_event = MagicMock()
+    conn.subscription_client = None
+
+    conn.client = AsyncMock()
+    conn.client.get_namespace_index = AsyncMock(side_effect=RuntimeError("namespace not found"))
+
+    result = await conn.subscribe({})
+
+    assert "exception" in result
+    assert "Subscribe exception" in result["exception"]
+
+
+# ---------------------------------------------------------------------------
+# read_product_instance_uri — paths not accessible (lines 620-653)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_read_product_instance_uri_returns_empty_when_paths_not_accessible():
+    """read_product_instance_uri returns {'tools': []} when all tool paths raise."""
+    conn = _make_connection()
+    conn.client = MagicMock()
+    conn.client.get_node = MagicMock(side_effect=RuntimeError("node not found"))
+
+    result = await conn.read_product_instance_uri({})
+
+    assert result == {"tools": []}

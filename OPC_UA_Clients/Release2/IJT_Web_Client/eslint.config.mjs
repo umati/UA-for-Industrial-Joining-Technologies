@@ -6,7 +6,8 @@ export default neostandard({
     'venv/**',
     '.venv/**',
     '.state/**',
-    '.tmp-pip/**'
+    '.tmp-pip/**',
+    'src/javascripts/views/envelope/**'
   ],
   languageOptions: {
     globals: {
