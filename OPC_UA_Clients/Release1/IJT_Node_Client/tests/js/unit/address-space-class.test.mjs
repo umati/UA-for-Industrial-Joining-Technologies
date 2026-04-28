@@ -402,9 +402,15 @@ describe('AddressSpace.read()', () => {
     })
     const cm = makeConnectionManager(sh)
     const as = new AddressSpace(cm)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const result = await as.read('ns=1;i=99', 'Value')
-    expect(result).toBeNull()
+    try {
+      const result = await as.read('ns=1;i=99', 'Value')
+      expect(result).toBeNull()
+      expect(errorSpy).toHaveBeenCalledWith('read failed:', expect.any(Error))
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 })
 

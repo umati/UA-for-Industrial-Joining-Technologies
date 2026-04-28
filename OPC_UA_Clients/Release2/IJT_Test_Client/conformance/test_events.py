@@ -407,7 +407,7 @@ async def test_result_ready_event_carries_result_data(subscription_client, opcua
     event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
-        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered:
             pytest.skip(outcome.skip_reason or "Result trigger not available")
         events = await collector.collect(count=1, timeout_s=45.0)

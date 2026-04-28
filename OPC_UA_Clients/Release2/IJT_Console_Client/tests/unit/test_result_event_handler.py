@@ -269,7 +269,14 @@ async def test_event_notification_calls_log_without_client():
     event.Message = ua.LocalizedText("Pass", "en")
     event.EventId = b"reg-test-bytes"
 
-    with patch("result_event_handler.log_result_event_details", side_effect=_capture_log):
+    def _close_scheduled_coroutine(coro):
+        coro.close()
+        return MagicMock()
+
+    with (
+        patch("result_event_handler.log_result_event_details", side_effect=_capture_log),
+        patch("result_event_handler.asyncio.create_task", side_effect=_close_scheduled_coroutine),
+    ):
         await handler.event_notification(event)
 
     assert len(call_args_list) == 1

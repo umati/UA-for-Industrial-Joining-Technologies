@@ -133,7 +133,7 @@ async def _call_get_latest_result(rm, ns_mr, timeout_ms=_OPCUA_TIMEOUT_MS, wall_
 
 
 async def _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices):
-    """Trigger ONE_STEP_OK_RESULT and call GetLatestResult.
+    """Trigger MULTI_STEP_OK_RESULT and call GetLatestResult.
 
     Returns (rm, handle, result_data). Skips when the trigger is unavailable
     or when GetLatestResult returns no data.
@@ -143,7 +143,7 @@ async def _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indice
         pytest.skip("Machinery/Result namespace not registered on server")
 
     outcome = await result_trigger.trigger_single(
-        result_type=ResultType.ONE_STEP_OK_RESULT,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
         include_traces=False,
     )
     if not outcome.triggered:
@@ -499,7 +499,7 @@ async def test_last_result_metadata_updated_after_trigger(opcua_client, result_t
         before_id = str(getattr(bm, "ResultId", None) or "")
 
     outcome = await result_trigger.trigger_single(
-        result_type=ResultType.ONE_STEP_OK_RESULT,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
         include_traces=False,
     )
     if not outcome.triggered:
@@ -548,7 +548,7 @@ async def test_request_results_method_is_present_and_callable(opcua_client, resu
         pytest.skip("Machinery/Result namespace not registered on server")
 
     outcome = await result_trigger.trigger_single(
-        result_type=ResultType.ONE_STEP_OK_RESULT,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
         include_traces=False,
     )
     if not outcome.triggered:
@@ -610,7 +610,7 @@ async def test_request_results_populates_requested_result_variable(opcua_client,
         pytest.skip("Machinery/Result namespace not registered on server")
 
     outcome = await result_trigger.trigger_single(
-        result_type=ResultType.ONE_STEP_OK_RESULT,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
         include_traces=False,
     )
     if not outcome.triggered:
@@ -778,7 +778,7 @@ async def test_request_unacknowledged_results_is_callable(opcua_client, result_t
         pytest.skip("Machinery/Result namespace not registered on server")
 
     outcome = await result_trigger.trigger_single(
-        result_type=ResultType.ONE_STEP_OK_RESULT,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
         include_traces=False,
     )
     if not outcome.triggered:
@@ -898,7 +898,7 @@ async def test_get_latest_result_returns_new_result_after_second_trigger(opcua_c
     result_id_first = str(getattr(meta_first, "ResultId", None) or "") if meta_first else ""
 
     outcome = await result_trigger.trigger_single(
-        result_type=ResultType.ONE_STEP_OK_RESULT,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
         include_traces=False,
     )
     if not outcome.triggered:
@@ -1318,7 +1318,7 @@ async def test_result_variable_contains_valid_result_meta_data_after_trigger(opc
         pytest.skip("Machinery/Result namespace not registered on server")
 
     outcome = await result_trigger.trigger_single(
-        result_type=ResultType.ONE_STEP_OK_RESULT,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
         include_traces=False,
     )
     if not outcome.triggered:

@@ -17,6 +17,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    silent: true,
     include: ['tests/js/unit/**/*.test.mjs'],
     coverage: {
       reportsDirectory: 'test-results/coverage',

@@ -60,7 +60,7 @@ async def _rediscover_result_management(client, ns_mr):
     return rm
 
 
-async def _trigger_and_get_latest(result_trigger, rm, ns_mr, result_type=ResultType.ONE_STEP_OK_RESULT):
+async def _trigger_and_get_latest(result_trigger, rm, ns_mr, result_type=ResultType.MULTI_STEP_OK_RESULT):
     """Trigger a result and call GetLatestResult.  Returns (result_data, result_meta)."""
     outcome = await result_trigger.trigger_single(result_type, include_traces=False)
     if not outcome.triggered and result_trigger.is_simulator:
@@ -372,7 +372,7 @@ async def test_result_management_result_ready_event_fired_on_simulate(
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
 
-        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered:
             pytest.skip(f"Simulator trigger failed: {outcome.skip_reason}")
 

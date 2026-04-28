@@ -29,9 +29,28 @@ import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
+from helpers.identifier_utils import (
+    contains_identifier as _contains_identifier,
+)
+from helpers.identifier_utils import (
+    is_unsupported_identifier_error as _is_unsupported_identifier_error,
+)
+from helpers.identifier_utils import (
+    make_external_entity as _make_external_entity,
+)
+from helpers.identifier_utils import (
+    make_test_vin as _make_test_vin,
+)
+from helpers.identifier_utils import (
+    read_required_product_instance_uri as _read_required_product_instance_uri,
+)
 from helpers.method_caller import find_and_call_method
 from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, ResultType
-from helpers.node_discovery import find_child_by_browse_name, find_joining_system, find_method_set
+from helpers.node_discovery import (
+    find_child_by_browse_name,
+    find_joining_system,
+    find_method_set,
+)
 from helpers.result_collector import ResultCollector
 
 logger = logging.getLogger(__name__)
@@ -244,9 +263,9 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
 
     Sequence:
       1. ResetIdentifiers — clear any previous state.
-      2. SendIdentifiers with an empty ExtensionObject array (widest compatibility).
+      2. SendIdentifiers with a unique structured EntityDataType entry.
       3. Trigger a result.
-      4. Collect result via events — assert at least one entity has IsExternal=True.
+      4. Collect result via events and assert that exact entity has IsExternal=True.
 
     Skips when encoding is not supported by the asyncua version in use.
     """
@@ -255,40 +274,42 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
     if ns_di is None or ns_ijt is None:
         pytest.skip("Required namespaces not registered on server")
 
-    _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
+    ns_app = ns_indices.get(NS_APP)
+    _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_app)
+    product_instance_uri = await _read_required_product_instance_uri(opcua_client, ns_ijt, ns_di, ns_app)
 
     await find_and_call_method(
         ms,
         BN.RESET_IDENTIFIERS,
         ns_ijt,
-        ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
-        ua.Variant([], ua.VariantType.ExtensionObject),  # IdentifierList (clear all)
+        ua.Variant(product_instance_uri, ua.VariantType.String),
+        ua.Variant([], ua.VariantType.String),  # IdentifierList (clear all)
         ua.Variant(True, ua.VariantType.Boolean),
         ua.Variant(False, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
     )
 
-    empty_arg = ua.Variant([], ua.VariantType.ExtensionObject)
+    test_id = _make_test_vin()
     try:
         send_result = await find_and_call_method(
             ms,
             BN.SEND_IDENTIFIERS,
             ns_ijt,
-            ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
-            empty_arg,  # Identifiers (empty array)
+            ua.Variant(product_instance_uri, ua.VariantType.String),
+            ua.Variant([_make_external_entity(test_id)], ua.VariantType.ExtensionObject),  # EntityList
             timeout=_METHOD_TIMEOUT,
         )
     except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"Cannot encode SendIdentifiers input: {exc}")
+        pytest.skip(f"Cannot encode SendIdentifiers EntityDataType input: {exc}")
 
     if not send_result.success:
         err_str = str(send_result.error) if send_result.error else "unknown error"
-        if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid")):
+        if _is_unsupported_identifier_error(err_str):
             pytest.skip(f"SendIdentifiers method not supported on this server: {err_str}")
-        pytest.skip(f"SendIdentifiers call failed: {err_str}")
+        pytest.fail(f"SendIdentifiers rejected structured identifier {test_id!r}: {err_str}")
 
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
-        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered and result_trigger.is_simulator:
             pytest.skip(f"Simulator trigger failed: {getattr(outcome, 'skip_reason', 'unknown')}")
         result_data = await rc.collect_single()
@@ -305,9 +326,11 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
             "AssociatedEntities is empty after SendIdentifiers — server may not propagate identifiers to results"
         )
 
-    external_found = any(getattr(e, "IsExternal", False) is True for e in associated)
+    external_found = any(
+        getattr(e, "IsExternal", False) is True and _contains_identifier(e, test_id) for e in associated
+    )
     assert external_found, (
-        "No entity with IsExternal=True found in AssociatedEntities after calling SendIdentifiers. "
+        f"No entity with IsExternal=True and identifier {test_id!r} found in AssociatedEntities after SendIdentifiers. "
         f"Entities present: {[getattr(e, 'EntityId', repr(e)) for e in associated]}"
     )
 

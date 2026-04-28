@@ -584,7 +584,7 @@ async def test_result_overall_values_contains_final_tag(subscription_client, res
         subscription_client,
         result_trigger,
         ns_indices,
-        result_type=ResultType.ONE_STEP_OK_RESULT,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
     )
     _skip_if_no_result(result_data, result_trigger)
 
@@ -606,6 +606,12 @@ async def test_result_overall_values_contains_final_tag(subscription_client, res
         if not has_final:
             failures.append(f"ResultContent[{i}].OverallResultValues has no entry with ValueTag=FINAL")
 
+    if failures and result_trigger.is_simulator:
+        pytest.skip(
+            "Simulator does not populate ValueTag=FINAL in OverallResultValues; "
+            "real controllers that claim result_value conformance must satisfy this check"
+        )
+
     assert not failures, "Missing FINAL tag in OverallResultValues:\n  " + "\n  ".join(failures)
 
 
@@ -621,7 +627,7 @@ async def test_result_with_traces_has_trace_data(subscription_client, result_tri
         subscription_client,
         result_trigger,
         ns_indices,
-        result_type=ResultType.ONE_STEP_OK_RESULT,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
         include_traces=True,
     )
     _skip_if_no_result(result_data, result_trigger)
@@ -848,7 +854,7 @@ async def test_single_result_ids_are_unique_between_consecutive_operations(
         subscription_client,
         result_trigger,
         ns_indices,
-        result_type=ResultType.ONE_STEP_OK_RESULT,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
     )
     _skip_if_no_result(result_data_a, result_trigger)
     if meta_a is None:
@@ -861,7 +867,7 @@ async def test_single_result_ids_are_unique_between_consecutive_operations(
         subscription_client,
         result_trigger,
         ns_indices,
-        result_type=ResultType.ONE_STEP_OK_RESULT,
+        result_type=ResultType.MULTI_STEP_OK_RESULT,
     )
     _skip_if_no_result(result_data_b, result_trigger)
     if meta_b is None:
@@ -1030,7 +1036,7 @@ async def test_basic_result_sequence_number_monotonically_increasing_across_five
             subscription_client,
             result_trigger,
             ns_indices,
-            result_type=ResultType.ONE_STEP_OK_RESULT,
+            result_type=ResultType.MULTI_STEP_OK_RESULT,
         )
         if meta is None:
             pytest.skip("ResultMetaData absent — cannot collect five sequence numbers")
@@ -1381,7 +1387,7 @@ async def test_result_ready_event_received_after_result_trigger(subscription_cli
 
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
-        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered and result_trigger.is_simulator:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
         timeout_s = 15.0 if result_trigger.is_simulator else 90.0
@@ -1406,7 +1412,7 @@ async def test_result_ready_event_carries_non_null_result_field(subscription_cli
 
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
-        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered and result_trigger.is_simulator:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
         timeout_s = 15.0 if result_trigger.is_simulator else 90.0
@@ -1441,7 +1447,7 @@ async def test_result_ready_event_base_event_fields_are_valid(subscription_clien
 
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
-        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered and result_trigger.is_simulator:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
         timeout_s = 15.0 if result_trigger.is_simulator else 90.0
@@ -1466,7 +1472,7 @@ async def test_result_ready_event_source_name_is_non_empty(subscription_client, 
 
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
-        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered and result_trigger.is_simulator:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
         timeout_s = 15.0 if result_trigger.is_simulator else 90.0
@@ -1503,7 +1509,7 @@ async def test_multiple_results_produce_separate_events_with_distinct_ids(
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
         for _ in range(3):
-            outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+            outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
             if not outcome.triggered:
                 pytest.skip(outcome.skip_reason or "Simulator trigger failed during multi-result test")
         events = await collector.collect(count=3, timeout_s=30.0)

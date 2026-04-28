@@ -41,6 +41,10 @@ _VALID_PHYSICAL_QUANTITIES: set[int] = set(range(29))
 # ViolationTypeEnumeration: 0=UNDEFINED, 1=HIGH, 2=LOW, 3=OTHER
 _VALID_VIOLATION_TYPES: set[int] = {0, 1, 2, 3}
 
+# ErrorTypeEnumeration: 0=UNDEFINED, 1=OTHER, 2=HARDWARE, 3=PROCESS,
+# 4=OPERATOR, 5=SYSTEM, 6=SAFETY
+_VALID_ERROR_TYPES: set[int] = set(range(7))
+
 # EntityTypeEnumeration per OPC 40450-1 v100 §10.10 — values 0–42 defined in the spec.
 # 0=UNDEFINED, 1=OTHER, 2=ASSET, 3=CONTROLLER, 4=TOOL, 5=SERVO, 6=MEMORY_DEVICE,
 # 7=SENSOR, 8=CABLE, 9=BATTERY, 10=POWER_SUPPLY, 11=FEEDER, 12=ACCESSORY,
@@ -298,30 +302,22 @@ class ErrorInformationValidator:
     ) -> None:
         """
         Check:
-        - ``ErrorCode`` is a non-empty string (required).
-        - ``FailureReason`` is in {0,1,2,3} if present.
+        - ``ErrorType`` is in {0..6} (required).
+        - ``ErrorId``, ``LegacyError``, and ``ErrorMessage`` are optional.
         """
-        # ErrorCode — required, non-empty string
-        error_code = getattr(error, "ErrorCode", _MISSING)
-        if error_code is _MISSING:
-            vr.add(ctx.child("ErrorCode"), "required field is absent")
-        elif not isinstance(error_code, str) or not error_code.strip():
-            vr.add(
-                ctx.child("ErrorCode"),
-                f"expected non-empty string, got {error_code!r}",
-            )
-
-        # FailureReason — optional, must be in valid range
-        failure_reason = getattr(error, "FailureReason", None)
-        if failure_reason is not None:
+        # ErrorType — required by ErrorInformationDataType
+        error_type = getattr(error, "ErrorType", _MISSING)
+        if error_type is _MISSING:
+            vr.add(ctx.child("ErrorType"), "required field is absent")
+        else:
             try:
-                reason_int = int(failure_reason)
+                type_int = int(error_type)
             except (TypeError, ValueError):
-                reason_int = None
-            if reason_int is None or reason_int not in _VALID_FAILURE_REASONS:
+                type_int = None
+            if type_int is None or type_int not in _VALID_ERROR_TYPES:
                 vr.add(
-                    ctx.child("FailureReason"),
-                    f"expected int in {{0,1,2,3}}, got {failure_reason!r}",
+                    ctx.child("ErrorType"),
+                    f"expected int in {{0..6}}, got {error_type!r}",
                 )
 
 
@@ -514,6 +510,19 @@ class JoiningResultDataValidator:
                 ctx.child("ResultId"),
                 f"expected non-empty string, got {result_id!r}",
             )
+
+        # FailureReason — optional on JoiningResultDataType, must be in valid range
+        failure_reason = getattr(joining_result, "FailureReason", None)
+        if failure_reason is not None:
+            try:
+                reason_int = int(failure_reason)
+            except (TypeError, ValueError):
+                reason_int = None
+            if reason_int is None or reason_int not in _VALID_FAILURE_REASONS:
+                vr.add(
+                    ctx.child("FailureReason"),
+                    f"expected int in {{0,1,2,3}}, got {failure_reason!r}",
+                )
 
         # OverallResultValues — optional list; validate each entry
         overall_values = getattr(joining_result, "OverallResultValues", None)

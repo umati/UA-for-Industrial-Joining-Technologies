@@ -141,6 +141,7 @@ IJT_Test_Client/
 ├── pyproject.toml                ← asyncio_mode=auto, timeout=120, mypy check_untyped_defs=true (+ ruff, coverage, bandit); OPC UA test dirs have [[tool.mypy.overrides]] suppressing asyncua stub false-positives
 ├── helpers/
 │   ├── namespaces.py             ← ALL type IDs and BrowseName constants
+│   ├── identifier_utils.py       ← shared identifier conformance helpers
 │   ├── node_discovery.py         ← async browse helpers (_browse_refs, find_child_by_browse_name)
 │   ├── event_collector.py        ← EventCollector for subscription tests
 │   └── server_manager.py         ← auto-start simulator if not running
@@ -472,6 +473,36 @@ on the `Variant` wrapper object. Apply this pattern at **every** nesting level.
 
 asyncua's `EUInformation` type exposes `UnitId` (Int32), NOT `Identifier`.
 All EU validation code must use `eu.UnitId` or `getattr(eu, "UnitId", None)`.
+
+### Identifier Methods — Prefer `SendIdentifiers`
+
+`SendIdentifiers` is the primary/recommended identifier method. It takes:
+
+```
+SendIdentifiers(ProductInstanceUri: String, EntityList: EntityDataType[])
+```
+
+Use structured `EntityDataType` entries for new positive coverage. Test IDs should be unique
+and asserted exactly through `GetIdentifiers` or result `AssociatedEntities`. For persistence
+checks, read and pass a real Tool `ProductInstanceUri` with `read_tool_product_instance_uri()`;
+an empty PIU is accepted by the simulator but intentionally stores nothing, so it must not be
+used when asserting identifier propagation.
+
+Default structured identifier test data should model a VIN, the common joining-domain
+external identifier: `Name="VIN"`, `Description="Vehicle Identification Number"`,
+`EntityType=VEHICLE (20)`, `IsExternal=True`, `EntityId=<actual VIN value>`, and an empty
+`EntityOriginId`. Use `helpers.identifier_utils.make_test_vin()` for unique VIN-like values.
+
+`SendTextIdentifiers` is the legacy compatibility path. Keep coverage for it, but do not replace
+`SendIdentifiers` coverage with text-only tests.
+
+`ResetIdentifiers` has a required 4-argument signature:
+
+```
+ResetIdentifiers(ProductInstanceUri: String, IdentifierList: String[], ResetAll: Boolean, ResetLatest: Boolean)
+```
+
+Pass `IdentifierList` as a string array, not an `ExtensionObject` array.
 
 ### ResultManagement → Results Folder Structure
 

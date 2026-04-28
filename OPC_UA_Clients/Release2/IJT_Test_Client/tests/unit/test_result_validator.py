@@ -246,13 +246,13 @@ class TestResultValueValidator:
         vr = self._validate(obj)
         assert not vr.ok
 
-    def test_engineering_units_with_identifier_ok(self):
-        eu = types.SimpleNamespace(Identifier=4753)
+    def test_engineering_units_with_unit_id_ok(self):
+        eu = types.SimpleNamespace(UnitId=4753)
         obj = types.SimpleNamespace(MeasuredValue=1.0, EngineeringUnits=eu)
         assert self._validate(obj).ok
 
-    def test_engineering_units_without_identifier_fails(self):
-        eu = types.SimpleNamespace()  # no Identifier
+    def test_engineering_units_without_unit_id_fails(self):
+        eu = types.SimpleNamespace()  # no UnitId
         obj = types.SimpleNamespace(MeasuredValue=1.0, EngineeringUnits=eu)
         vr = self._validate(obj)
         assert not vr.ok
@@ -262,7 +262,7 @@ class TestResultValueValidator:
         assert self._validate(obj).ok
 
     def test_all_optional_fields_valid(self):
-        eu = types.SimpleNamespace(Identifier=100)
+        eu = types.SimpleNamespace(UnitId=100)
         obj = types.SimpleNamespace(
             MeasuredValue=9.5,
             ValueTag=1,
@@ -347,46 +347,36 @@ class TestErrorInformationValidator:
         return vr
 
     def test_valid_minimal(self):
-        obj = types.SimpleNamespace(ErrorCode="ERR-001")
+        obj = types.SimpleNamespace(ErrorType=4)
         assert self._validate(obj).ok
 
-    def test_error_code_absent(self):
+    def test_error_type_absent(self):
         obj = types.SimpleNamespace()
         vr = self._validate(obj)
         assert not vr.ok
 
-    def test_error_code_empty_string(self):
-        obj = types.SimpleNamespace(ErrorCode="")
+    def test_error_type_invalid_high(self):
+        obj = types.SimpleNamespace(ErrorType=7)
         vr = self._validate(obj)
         assert not vr.ok
 
-    def test_error_code_whitespace_only(self):
-        obj = types.SimpleNamespace(ErrorCode="  ")
+    def test_error_type_negative(self):
+        obj = types.SimpleNamespace(ErrorType=-1)
         vr = self._validate(obj)
         assert not vr.ok
 
-    def test_error_code_non_string(self):
-        obj = types.SimpleNamespace(ErrorCode=42)
+    def test_error_type_invalid_type(self):
+        obj = types.SimpleNamespace(ErrorType="bad")
         vr = self._validate(obj)
         assert not vr.ok
 
-    def test_failure_reason_valid(self):
-        for reason in [0, 1, 2, 3]:
-            obj = types.SimpleNamespace(ErrorCode="E", FailureReason=reason)
+    def test_all_valid_error_types(self):
+        for error_type in range(7):
+            obj = types.SimpleNamespace(ErrorType=error_type)
             assert self._validate(obj).ok
 
-    def test_failure_reason_invalid(self):
-        obj = types.SimpleNamespace(ErrorCode="E", FailureReason=4)
-        vr = self._validate(obj)
-        assert not vr.ok
-
-    def test_failure_reason_invalid_type(self):
-        obj = types.SimpleNamespace(ErrorCode="E", FailureReason="bad")
-        vr = self._validate(obj)
-        assert not vr.ok
-
-    def test_failure_reason_none_skipped(self):
-        obj = types.SimpleNamespace(ErrorCode="E", FailureReason=None)
+    def test_optional_legacy_error_fields_do_not_fail(self):
+        obj = types.SimpleNamespace(ErrorType=4, ErrorId="ERR-001", LegacyError="42", ErrorMessage=object())
         assert self._validate(obj).ok
 
 
@@ -580,8 +570,23 @@ class TestJoiningResultDataValidator:
         assert not vr.ok
 
     def test_errors_validated(self):
-        bad_err = types.SimpleNamespace()  # missing ErrorCode
+        bad_err = types.SimpleNamespace()  # missing ErrorType
         obj = types.SimpleNamespace(ResultId="r", Errors=[bad_err])
+        vr = self._validate(obj)
+        assert not vr.ok
+
+    def test_failure_reason_validated_on_joining_result(self):
+        for reason in [0, 1, 2, 3]:
+            obj = types.SimpleNamespace(ResultId="r", FailureReason=reason)
+            assert self._validate(obj).ok
+
+    def test_failure_reason_invalid_on_joining_result(self):
+        obj = types.SimpleNamespace(ResultId="r", FailureReason=4)
+        vr = self._validate(obj)
+        assert not vr.ok
+
+    def test_failure_reason_invalid_type_on_joining_result(self):
+        obj = types.SimpleNamespace(ResultId="r", FailureReason="bad")
         vr = self._validate(obj)
         assert not vr.ok
 

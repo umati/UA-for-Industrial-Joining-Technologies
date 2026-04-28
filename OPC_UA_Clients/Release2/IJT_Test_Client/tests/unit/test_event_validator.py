@@ -223,13 +223,13 @@ class TestReportedValueValidator:
         vr = self._validate(obj)
         assert not vr.ok
 
-    def test_engineering_units_with_identifier_ok(self):
-        eu = types.SimpleNamespace(Identifier=4753)
+    def test_engineering_units_with_unit_id_ok(self):
+        eu = types.SimpleNamespace(UnitId=4753)
         obj = types.SimpleNamespace(CurrentValue=1.0, EngineeringUnits=eu)
         assert self._validate(obj).ok
 
-    def test_engineering_units_without_identifier_fails(self):
-        eu = types.SimpleNamespace()  # no Identifier
+    def test_engineering_units_without_unit_id_fails(self):
+        eu = types.SimpleNamespace()  # no UnitId
         obj = types.SimpleNamespace(CurrentValue=1.0, EngineeringUnits=eu)
         vr = self._validate(obj)
         assert not vr.ok
@@ -239,7 +239,7 @@ class TestReportedValueValidator:
         assert self._validate(obj).ok
 
     def test_all_optional_fields(self):
-        eu = types.SimpleNamespace(Identifier=100)
+        eu = types.SimpleNamespace(UnitId=100)
         obj = types.SimpleNamespace(
             CurrentValue=9.5,
             PhysicalQuantity=5,

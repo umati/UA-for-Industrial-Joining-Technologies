@@ -37,12 +37,12 @@ _PHYSICAL_QUANTITY_ANGLE: int = 3  # angle physical quantity
 # EUInformation UnitIds for tightening-relevant physical quantities.
 # Source: OPC UA Part 8 Annex C (EUInformation); values are signed Int32
 # derived from the four-character UNECE unit codes.
-_NEWTON_METRE_EU_IDENTIFIER: int = 4477133  # newton-metre (N·m)
+_NEWTON_METRE_EU_IDENTIFIER: int = 20053  # newton-metre (N·m), UNECE code "NU"
 _POUND_FORCE_FOOT_EU_IDENTIFIER: int = 4609340  # pound-force foot (lbf·ft)
 _NEWTON_CENTIMETRE_EU_IDENTIFIER: int = 4740940  # newton-centimetre (N·cm)
 _NEWTON_MILLIMETRE_EU_IDENTIFIER: int = 4477132  # newton-millimetre (N·mm)
 
-_DEGREE_OF_ARC_EU_IDENTIFIER: int = 4476740  # degree of arc (°)
+_DEGREE_OF_ARC_EU_IDENTIFIER: int = 17476  # degree of arc (°), UNECE code "DD"
 _RADIAN_EU_IDENTIFIER: int = 4405297  # radian (rad)
 _MILLIRADIAN_EU_IDENTIFIER: int = 4870725  # milliradian (mrad)
 

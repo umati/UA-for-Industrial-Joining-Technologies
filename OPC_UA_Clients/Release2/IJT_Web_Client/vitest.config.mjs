@@ -15,6 +15,7 @@ export default defineConfig({
   test: {
     include: ['tests/js/unit/**/*.test.mjs'],
     environment: 'node',
+    silent: true,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'cobertura'],

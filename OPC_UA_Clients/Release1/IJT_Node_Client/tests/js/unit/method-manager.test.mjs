@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MethodManager } from '../../../javascripts/ijt-support/methods/method-manager.mjs'
+import { ijtLog } from '../../../javascripts/ijt-support/ijt-support.mjs'
 
 function makeAddressSpace () {
   return {
@@ -55,15 +56,21 @@ describe('MethodManager', () => {
 
   it('call() catches and logs errors from methodCall rejection', async () => {
     addressSpace.methodCall.mockRejectedValueOnce(new Error('OPC UA error'))
+    const errorSpy = vi.spyOn(ijtLog, 'error').mockImplementation(() => {})
     const methodData = {
       parentNode: { nodeId: 'ns=1;i=10' },
       methodNode: { nodeId: 'ns=1;i=20', displayName: 'TestMethod' },
       arguments: []
     }
-    // Should not throw — error is caught internally
-    expect(() => mm.call(methodData, [])).not.toThrow()
-    // Allow microtask queue to flush so the .catch() runs
-    await Promise.resolve()
+    try {
+      // Should not throw — error is caught internally
+      expect(() => mm.call(methodData, [])).not.toThrow()
+      // Allow chained .then().catch() handlers to flush.
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(errorSpy).toHaveBeenCalled()
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 })
 

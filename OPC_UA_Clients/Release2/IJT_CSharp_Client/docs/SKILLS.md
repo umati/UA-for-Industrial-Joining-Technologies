@@ -63,7 +63,7 @@ IJT_CSharp_Client/
 ├── Client/
 │   ├── IJoiningSystem.cs        # Interface: OPC UA helpers + IJT domain properties
 │   ├── JoiningSystem.cs         # IJT domain root — ISession direct owner, ConnectAsync, BrowseMethod 3-tier
-│   ├── AssetManagement.cs       # EnableAsset, SendIdentifiers, GetIdentifiers, ResetIdentifiers, SubscribeAssetVariables
+│   ├── AssetManagement.cs       # EnableAsset, SendIdentifiers, SendTextIdentifiers, GetIdentifiers, ResetIdentifiers, SubscribeAssetVariables
 │   ├── ResultManagement.cs      # GetLatestResult, GetResultById, SubscribeResultVariable
 │   ├── JoiningProcessManagement.cs  # GetJoiningProcessList, SelectJoiningProcess, GetSelectedJoiningProgram
 │   ├── JointManagement.cs       # GetJointList, GetJoint, SelectJoint, DeleteJoint, SendJoint
@@ -184,6 +184,8 @@ var bad = new EntityDataType { EntityId = "ENT-001", Name = "Batch-A", EntityTyp
 1. `SendIdentifiers`: `EntityType=0` (UNDEFINED) + no mask → server rejected
 2. `GetIdentifiers` mismatch after `SendTextIdentifiers`: no regression in library, operator confusion
 3. `SelectJoiningProcess` → `BadArgumentsMissing`: `JoiningProcessIdentificationDataType` constructed without mask → empty struct sent to server
+
+**Identifier method policy:** `SendIdentifiers` is the recommended primary method and should get the strongest positive coverage. `SendTextIdentifiers` is the legacy text-list compatibility method; keep it working and tested, but do not use it as a substitute for structured `SendIdentifiers` coverage.
 
 ---
 

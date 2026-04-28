@@ -282,9 +282,10 @@ def test_main_handles_keyboard_interrupt():
         with patch("asyncio.set_event_loop"):
             with patch("asyncio.all_tasks", return_value=[]):
                 with patch("asyncio.gather", return_value=None):
-                    argv = ["prog", "--url", "opc.tcp://localhost:4840"]
-                    with patch("sys.argv", argv):
-                        main()  # must not raise
+                    with patch("main.run_client", new=lambda _server_url: object()):
+                        argv = ["prog", "--url", "opc.tcp://localhost:4840"]
+                        with patch("sys.argv", argv):
+                            main()  # must not raise
 
 
 def test_main_handles_unhandled_exception():
@@ -311,8 +312,9 @@ def test_main_handles_unhandled_exception():
     with patch("asyncio.new_event_loop", return_value=mock_loop):
         with patch("asyncio.set_event_loop"):
             with patch("asyncio.all_tasks", return_value=[]):
-                argv = ["prog", "--url", "opc.tcp://localhost:4840"]
-                with patch("sys.argv", argv):
-                    with patch("main.ijt_log") as mock_log:
-                        main()  # must not raise
-                        mock_log.error.assert_called()
+                with patch("main.run_client", new=lambda _server_url: object()):
+                    argv = ["prog", "--url", "opc.tcp://localhost:4840"]
+                    with patch("sys.argv", argv):
+                        with patch("main.ijt_log") as mock_log:
+                            main()  # must not raise
+                            mock_log.error.assert_called()
