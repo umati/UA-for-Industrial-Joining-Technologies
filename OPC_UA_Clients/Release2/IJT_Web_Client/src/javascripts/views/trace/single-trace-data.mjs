@@ -85,6 +85,12 @@ export default class SingleTraceData {
     this.owner.update()
   }
 
+  setTransparency (fractionTransparency) {
+    for (const traceStep of this.steps) {
+      traceStep.setTransparency(fractionTransparency)
+    }
+  }
+
   refreshTraceData () {
     for (const traceStep of this.steps) {
       traceStep.refresh(this.displayOffset)

@@ -79,6 +79,10 @@ export default class Step {
     this.graphic.fade(fractionFade)
   }
 
+  setTransparency (fractionTransparency) {
+    this.graphic.setTransparency(fractionTransparency)
+  }
+
   /**
    * This function changes the angle values in the graph if offset
    * is set to some other point than the start value.

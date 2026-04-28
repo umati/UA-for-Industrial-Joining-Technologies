@@ -16,6 +16,8 @@ import JobDataModel from '../models/results/job-data-model.mjs'
 
 const DEFAULT_MAX_STORED_RESULTS = 200
 const MIN_MAX_STORED_RESULTS = 1
+const RESULT_TOPIC_NEW = 'results'
+const RESULT_TOPIC_EVICTED = 'results:evicted'
 
 export class ResultManager extends ObservableManagerBase {
   constructor (eventManager, settingsProvider = null) {
@@ -311,6 +313,7 @@ export class ResultManager extends ObservableManagerBase {
     const toRemove = chronological.slice(0, removeCount)
     for (const result of toRemove) {
       this.removeStoredResult(result)
+      this.notifyEvictedResult(result, 'storage-limit')
     }
 
     const refreshed = this.getAllResultsChronological()
@@ -323,7 +326,23 @@ export class ResultManager extends ObservableManagerBase {
    * @param {*} func the callback to call when new results occur
    */
   subscribe (func) {
-    return this._subscribeTopic('results', func)
+    return this._subscribeTopic(RESULT_TOPIC_NEW, func)
+  }
+
+  /**
+   * Subscribe to results that were removed by manager retention policies.
+   * @param {*} func callback receiving eviction payload
+   */
+  subscribeEvicted (func) {
+    return this._subscribeTopic(RESULT_TOPIC_EVICTED, func)
+  }
+
+  /**
+   * Alias for subscribeEvicted.
+   * @param {*} func callback receiving eviction payload
+   */
+  subscribeRemoved (func) {
+    return this.subscribeEvicted(func)
   }
 
   /**
@@ -394,6 +413,19 @@ export class ResultManager extends ObservableManagerBase {
     this.enforceStorageLimit()
 
     this._notifyTopic('results', result)
+  }
+
+  notifyEvictedResult (result, reason = 'storage-limit') {
+    if (!result) {
+      return
+    }
+    this._notifyTopic(RESULT_TOPIC_EVICTED, {
+      reason,
+      resultId: this.getResultId(result),
+      classification: result?.ResultMetaData?.Classification ?? result?.classification ?? null,
+      uniqueCounter: Number.isFinite(result?.uniqueCounter) ? result.uniqueCounter : null,
+      result
+    })
   }
 
   /**

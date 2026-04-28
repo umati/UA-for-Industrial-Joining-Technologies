@@ -32,6 +32,7 @@ export default class TraceDisplay {
         annotations: {},
       },
     }
+    this.evictedSubscriptionAttached = false
 
     this.canvasCoverLayer = document.createElement('div')
     this.canvasCoverLayer.classList.add('traceArea')
@@ -100,6 +101,77 @@ export default class TraceDisplay {
     this.resultManager.subscribe((result) => {
       this.createNewTrace(result)
     })
+    this.attachEvictedResultsSubscription()
+  }
+
+  attachEvictedResultsSubscription () {
+    if (this.evictedSubscriptionAttached) {
+      return
+    }
+    const subscribeEvicted = this.resultManager?.subscribeEvicted
+    const subscribeRemoved = this.resultManager?.subscribeRemoved
+    const subscribeFn = typeof subscribeEvicted === 'function'
+      ? subscribeEvicted.bind(this.resultManager)
+      : (typeof subscribeRemoved === 'function' ? subscribeRemoved.bind(this.resultManager) : null)
+    if (!subscribeFn) {
+      return
+    }
+    subscribeFn((evt) => {
+      this.handleEvictedResult(evt)
+    })
+    this.evictedSubscriptionAttached = true
+  }
+
+  resolveResultIdFromEvent (evt) {
+    const fromPayload = evt?.resultId
+    if (typeof fromPayload === 'string' || typeof fromPayload === 'number') {
+      return String(fromPayload)
+    }
+    const fromResult = evt?.result?.id ?? evt?.result?.ResultMetaData?.ResultId
+    if (typeof fromResult === 'string' || typeof fromResult === 'number') {
+      return String(fromResult)
+    }
+    if (typeof evt === 'string' || typeof evt === 'number') {
+      return String(evt)
+    }
+    return null
+  }
+
+  handleEvictedResult (evt) {
+    const resultId = this.resolveResultIdFromEvent(evt)
+    if (!resultId) {
+      return
+    }
+    this.removeTracesByResultId(resultId)
+  }
+
+  removeTracesByResultId (resultId) {
+    const keep = []
+    let removed = 0
+    for (const trace of this.allTraces) {
+      if (String(trace?.resultId) === String(resultId)) {
+        trace?.delete?.()
+        removed++
+        continue
+      }
+      keep.push(trace)
+    }
+    if (removed === 0) {
+      return
+    }
+    this.allTraces = keep
+    if (this.selectedTrace && String(this.selectedTrace?.resultId) === String(resultId)) {
+      this.selectedTrace = null
+      this.selectedStep = null
+      this.traceInterface?.clearSteps?.()
+    }
+    if (this.traceInterface) {
+      this.traceInterface.updateTracesInGUI(this.allTraces)
+    }
+    if (!this.selectedTrace && this.allTraces.length > 0) {
+      this.selectTrace(this.allTraces[this.allTraces.length - 1])
+    }
+    this.update()
   }
 
   update () {

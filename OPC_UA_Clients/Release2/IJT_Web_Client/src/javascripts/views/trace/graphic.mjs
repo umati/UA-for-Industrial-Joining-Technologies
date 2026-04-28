@@ -67,6 +67,10 @@ export default class Graphic {
     // }
   }
 
+  setTransparency (fractionTransparency) {
+    this.mainDataset.setTransparency(fractionTransparency)
+  }
+
   clearPoints () {
     this.mainDataset.clearPoints()
     // this.highlightDataset.clearPoints()
@@ -136,6 +140,8 @@ export class Dataset {
     this.label = name
     this.radius = 0
     this.borderWidth = 1
+    this._baseBackgroundColor = null
+    this._baseBorderColor = null
   }
 
   display (value) {
@@ -144,6 +150,7 @@ export class Dataset {
 
   setBackgroundColor (color) {
     this.backgroundColor = color
+    this._baseBackgroundColor = color
   }
 
   setRadius (radius) {
@@ -152,6 +159,7 @@ export class Dataset {
 
   setBorderColor (color) {
     this.borderColor = color
+    this._baseBorderColor = color
   }
 
   setBorderWidth (width) {
@@ -183,6 +191,17 @@ export class Dataset {
     this.borderColor = this.fadeSupport(fractionFade, this.borderColor)
   }
 
+  setTransparency (fractionTransparency) {
+    const transparency = Number.isFinite(fractionTransparency) ? Math.max(0, Math.min(1, fractionTransparency)) : 0
+    const alphaMultiplier = 1 - transparency
+    if (typeof this._baseBackgroundColor === 'string') {
+      this.backgroundColor = this.applyAlphaMultiplier(this._baseBackgroundColor, alphaMultiplier)
+    }
+    if (typeof this._baseBorderColor === 'string') {
+      this.borderColor = this.applyAlphaMultiplier(this._baseBorderColor, alphaMultiplier)
+    }
+  }
+
   fadeSupport (fractionFade, color) {
     const colorList = color.split(',')
     const a = colorList.pop()
@@ -194,5 +213,24 @@ export class Dataset {
     c = 100 * (c - fractionFade) / 100
 
     return `${h},${s},${l},${c})`
+  }
+
+  applyAlphaMultiplier (color, multiplier) {
+    const colorText = String(color || '')
+    const hslaMatch = colorText.match(/^hsla\(\s*([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)$/i)
+    if (hslaMatch) {
+      const alpha = Number.parseFloat(hslaMatch[4])
+      const safeAlpha = Number.isFinite(alpha) ? alpha : 1
+      const nextAlpha = Math.max(0, Math.min(1, safeAlpha * multiplier))
+      return `hsla(${hslaMatch[1]}, ${hslaMatch[2]}, ${hslaMatch[3]}, ${nextAlpha})`
+    }
+    const rgbaMatch = colorText.match(/^rgba\(\s*([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)$/i)
+    if (rgbaMatch) {
+      const alpha = Number.parseFloat(rgbaMatch[4])
+      const safeAlpha = Number.isFinite(alpha) ? alpha : 1
+      const nextAlpha = Math.max(0, Math.min(1, safeAlpha * multiplier))
+      return `rgba(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]}, ${nextAlpha})`
+    }
+    return colorText
   }
 }

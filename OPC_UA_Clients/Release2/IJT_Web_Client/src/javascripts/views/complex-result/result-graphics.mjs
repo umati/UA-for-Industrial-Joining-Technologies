@@ -41,6 +41,7 @@ export default class ResultGraphics extends BasicScreen {
       this.setStatusBanner('results', 'success', `Updated result: ${result.id}`)
       this.scheduleSessionPersist()
     })
+    this.attachEvictedResultsSubscription()
 
     this.header = document.createElement('div')
     this.header.classList.add('resultHeader', 'resultheader')
@@ -464,6 +465,50 @@ export default class ResultGraphics extends BasicScreen {
       return this.normalizeBooleanSetting(this.settingsProvider.getResultSessionAutoRestore(), DEFAULT_RESULT_SESSION_AUTO_RESTORE)
     }
     return this.normalizeBooleanSetting(this.settingsProvider?.settings?.resultsessionautorestore, DEFAULT_RESULT_SESSION_AUTO_RESTORE)
+  }
+
+  attachEvictedResultsSubscription () {
+    const subscribeEvicted = this.resultManager?.subscribeEvicted
+    const subscribeRemoved = this.resultManager?.subscribeRemoved
+    const subscribeFn = typeof subscribeEvicted === 'function'
+      ? subscribeEvicted.bind(this.resultManager)
+      : (typeof subscribeRemoved === 'function' ? subscribeRemoved.bind(this.resultManager) : null)
+    if (!subscribeFn) {
+      return
+    }
+    subscribeFn((evt) => {
+      this.handleEvictedResult(evt)
+    })
+  }
+
+  resolveResultIdFromEvent (evt) {
+    const fromPayload = evt?.resultId
+    if (typeof fromPayload === 'string' || typeof fromPayload === 'number') {
+      return String(fromPayload)
+    }
+    const fromResult = evt?.result?.id ?? evt?.result?.ResultMetaData?.ResultId
+    if (typeof fromResult === 'string' || typeof fromResult === 'number') {
+      return String(fromResult)
+    }
+    if (typeof evt === 'string' || typeof evt === 'number') {
+      return String(evt)
+    }
+    return null
+  }
+
+  handleEvictedResult (evt) {
+    const resultId = this.resolveResultIdFromEvent(evt)
+    if (!resultId) {
+      return
+    }
+    const nextSelected = new Set()
+    for (const id of this.selectedExportResultIds) {
+      if (String(id) === resultId) {
+        continue
+      }
+      nextSelected.add(id)
+    }
+    this.selectedExportResultIds = nextSelected
   }
 
   activate () {
