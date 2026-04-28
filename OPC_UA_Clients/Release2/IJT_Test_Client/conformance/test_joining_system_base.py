@@ -547,7 +547,8 @@ async def test_joining_system_variable_data_types_match_type_definition(joining_
             data_type_nid = dt.Value.Value if hasattr(dt, "Value") else dt
             if data_type_nid.Identifier == 0:
                 untyped.append(str(ref.BrowseName.Name))
-        except Exception:  # nosec B112 — deliberate continue to try next child node on OPC UA read error
+        except Exception:  # nosec B112
+            # Deliberately continue to try the next child node on OPC UA read error.
             continue
     assert not untyped, (
         f"Variables with unset DataType (Identifier=0) found under JoiningSystem: {untyped}. "
@@ -610,7 +611,8 @@ async def test_joining_system_type_has_no_unexpected_mandatory_instance_declarat
                 ),
                 timeout=5.0,
             )
-        except Exception:  # nosec B112 — deliberate continue to try next child on OPC UA browse error
+        except Exception:  # nosec B112
+            # Deliberately continue to try the next child on OPC UA browse error.
             continue
         for mr_ref in mr_refs:
             if mr_ref.NodeId.NamespaceIndex == 0 and mr_ref.NodeId.Identifier == _mandatory_modelling_rule_id:

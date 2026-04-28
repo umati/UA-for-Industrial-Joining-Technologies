@@ -947,9 +947,8 @@ async def test_asset_health_has_device_health_property(request, ns_indices, inst
             break
     if not found:
         pytest.skip(
-            f"No Health.DeviceHealth found on {instance_fixture_name} — "
-            "direct Health under Asset was deprecated in IJT 1.01 (superseded by Monitoring.Health); "
-            "skip is expected for IJT 1.01-compliant servers"
+            f"Deprecated direct Asset.Health.DeviceHealth absent on {instance_fixture_name} — "
+            "IJT 1.01 supersedes this path with Machinery Monitoring.Health.DeviceHealth"
         )
 
 
@@ -1897,8 +1896,8 @@ async def test_asset_health_device_health_value_is_valid_enumeration(request, ns
         break
     if not found:
         pytest.skip(
-            f"No Health.DeviceHealth with a readable value found on {instance_fixture_name} — "
-            "direct Health under Asset deprecated in IJT 1.01; skip expected for 1.01-compliant servers"
+            f"Deprecated direct Asset.Health.DeviceHealth readable value absent on {instance_fixture_name} — "
+            "IJT 1.01 supersedes this path with Machinery Monitoring.Health.DeviceHealth"
         )
 
 
@@ -1929,8 +1928,8 @@ async def test_asset_health_device_health_is_normal_when_no_faults(request, ns_i
         break
     if not found:
         pytest.skip(
-            f"No Health.DeviceHealth found on {instance_fixture_name} — "
-            "direct Health under Asset deprecated in IJT 1.01; skip expected for 1.01-compliant servers"
+            f"Deprecated direct Asset.Health.DeviceHealth absent on {instance_fixture_name} — "
+            "IJT 1.01 supersedes this path with Machinery Monitoring.Health.DeviceHealth"
         )
 
 

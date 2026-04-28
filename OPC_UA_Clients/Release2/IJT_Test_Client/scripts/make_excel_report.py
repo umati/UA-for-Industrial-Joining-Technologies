@@ -22,10 +22,12 @@ from __future__ import annotations
 
 import argparse
 import sys
-import xml.etree.ElementTree as ET  # nosec B405 — parses trusted JUnit XML from our own test runner
+import xml.etree.ElementTree as ET  # nosec B405
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+
+# Bandit B405/B314 suppressions are limited to trusted JUnit XML from pytest.
 
 try:
     import openpyxl
@@ -94,7 +96,7 @@ def _text(elem: ET.Element | None) -> str:
 
 
 def parse_junit_xml(path: Path) -> list[TestCase]:
-    tree = ET.parse(path)  # nosec B314 — source is trusted JUnit XML written by pytest
+    tree = ET.parse(path)  # nosec B314
     root = tree.getroot()
 
     # Handle both <testsuites><testsuite>... and bare <testsuite>...

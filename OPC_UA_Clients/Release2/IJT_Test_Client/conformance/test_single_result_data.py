@@ -335,7 +335,7 @@ async def test_result_value_measured_value_is_numeric(subscription_client, resul
     result_data, meta = await _get_result(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
-    all_values = []
+    all_values: list[Any] = []
     if meta is not None:
         ovr = getattr(meta, "OverallResultValues", None)
         if ovr:
@@ -370,7 +370,7 @@ async def test_result_value_physical_quantity_in_valid_range(subscription_client
     _skip_if_no_result(result_data, result_trigger)
 
     valid_range = set(range(29))
-    all_values = []
+    all_values: list[Any] = []
     if meta is not None:
         ovr = getattr(meta, "OverallResultValues", None)
         if ovr:
@@ -407,7 +407,7 @@ async def test_result_value_tag_in_valid_range(subscription_client, result_trigg
     _skip_if_no_result(result_data, result_trigger)
 
     valid_range = set(range(21))
-    all_values = []
+    all_values: list[Any] = []
     if meta is not None:
         ovr = getattr(meta, "OverallResultValues", None)
         if ovr:
@@ -445,7 +445,7 @@ async def test_result_value_engineering_units_if_present_has_identifier(
     result_data, meta = await _get_result(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
-    all_values = []
+    all_values: list[Any] = []
     if meta is not None:
         ovr = getattr(meta, "OverallResultValues", None)
         if ovr:

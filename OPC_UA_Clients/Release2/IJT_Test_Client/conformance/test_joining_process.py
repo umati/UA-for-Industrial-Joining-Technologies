@@ -1367,7 +1367,10 @@ async def test_start_selected_joining_after_select_returns_good(opcua_client, ns
     )
     if not select_result.success:
         err_str = str(select_result.error) if select_result.error else "unknown"
-        pytest.skip(f"SelectJoiningProcess failed ({err_str}) — cannot test StartSelectedJoining after select")
+        pytest.skip(
+            f"SelectJoiningProcess precondition failed ({err_str}) — "
+            "current server listed a process but did not allow selecting it"
+        )
     start_node = await _find_method_node(jpm, BN.START_SELECTED_JOINING, ns_ijt)
     assert start_node is not None, f"Required method '{BN.START_SELECTED_JOINING}' not found after SelectJoiningProcess"
     start_result = await call_method(jpm, start_node, timeout=15.0, method_name=BN.START_SELECTED_JOINING)
@@ -1781,7 +1784,10 @@ async def test_get_selected_joining_program_result_has_valid_fields(opcua_client
     )
     if not select_result.success:
         err_str = str(select_result.error) if select_result.error else "unknown"
-        pytest.skip(f"SelectJoiningProcess failed ({err_str}) — cannot verify GetSelectedJoiningProgram result fields")
+        pytest.skip(
+            f"SelectJoiningProcess precondition failed ({err_str}) — "
+            "cannot verify GetSelectedJoiningProgram result fields"
+        )
     get_result = await find_and_call_method(jpm, BN.GET_SELECTED_JOINING_PROGRAM, ns_ijt, timeout=15.0)
     if not get_result.success:
         err_str = str(get_result.error) if get_result.error else "unknown"

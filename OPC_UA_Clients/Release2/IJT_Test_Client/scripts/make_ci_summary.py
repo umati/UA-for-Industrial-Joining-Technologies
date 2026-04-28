@@ -15,15 +15,17 @@ import argparse
 import os
 import re
 import sys
-import xml.etree.ElementTree as ET  # nosec B405 — xml source is trusted JUnit XML written by pytest
+import xml.etree.ElementTree as ET  # nosec B405
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Bandit B405/B314 suppressions are limited to trusted JUnit XML from pytest.
 
 # ── Parse JUnit XML ───────────────────────────────────────────────────────────
 
 
 def _parse(xml_path: Path):
-    tree = ET.parse(xml_path)  # nosec B314 — source is trusted JUnit XML written by pytest
+    tree = ET.parse(xml_path)  # nosec B314
     root = tree.getroot()
     suites = root.findall(".//testsuite") if root.tag == "testsuites" else [root]
 

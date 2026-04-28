@@ -1567,8 +1567,8 @@ async def test_request_results_updates_result_variable_or_raises_event(opcua_cli
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        pytest.skip("RequestResults raised ua.UaError — cannot check variable")
+    except ua.UaError as exc:
+        pytest.skip(f"RequestResults call failed with OPC UA status ({exc}) — cannot check RequestedResult variable")
     except asyncio.TimeoutError:
         pytest.skip("RequestResults timed out")
 
@@ -1734,8 +1734,8 @@ async def test_requested_result_variable_source_timestamp_is_set_after_request(
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        pytest.skip("RequestResults raised ua.UaError — cannot check timestamp")
+    except ua.UaError as exc:
+        pytest.skip(f"RequestResults call failed with OPC UA status ({exc}) — cannot check RequestedResult timestamp")
     except asyncio.TimeoutError:
         pytest.skip("RequestResults timed out")
 
@@ -1793,8 +1793,8 @@ async def test_request_results_event_received_with_required_fields(opcua_client,
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        pytest.skip("RequestResults raised ua.UaError — cannot verify event/variable update")
+    except ua.UaError as exc:
+        pytest.skip(f"RequestResults call failed with OPC UA status ({exc}) — cannot verify event/variable update")
     except asyncio.TimeoutError:
         pytest.skip("RequestResults timed out")
 

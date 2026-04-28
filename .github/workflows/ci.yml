@@ -1039,14 +1039,19 @@ jobs:
         run: |
           python3 - << 'PYEOF'
           import xml.etree.ElementTree as ET, json, os, glob
+          from collections import Counter
 
           # ── Parsers ──────────────────────────────────────────────────────────
+
+          def iter_suites(root):
+              """Return all testsuite nodes for both bare and nested JUnit XML."""
+              return [root] if root.tag == "testsuite" else root.findall(".//testsuite")
 
           def parse_junit(pattern):
               for path in glob.glob(pattern, recursive=True):
                   try:
                       root   = ET.parse(path).getroot()
-                      suites = root.findall("testsuite") if root.tag == "testsuites" else [root]
+                      suites = iter_suites(root)
                       t  = sum(int(s.get("tests",    0)) for s in suites)
                       f  = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
                       sk = sum(int(s.get("skipped",  0)) for s in suites)
@@ -1054,6 +1059,49 @@ jobs:
                   except Exception as exc:
                       print(f"[WARN] parse_junit({path}): {exc}")
               return None, None, None, None
+
+          def collect_skips(pattern):
+              """Extract skipped test names and reasons from JUnit XML."""
+              skips_list = []
+              for path in glob.glob(pattern, recursive=True):
+                  try:
+                      root = ET.parse(path).getroot()
+                      for tc in root.findall(".//testcase"):
+                          el = tc.find("skipped")
+                          if el is not None:
+                              name = tc.get("name", "unknown")
+                              msg = (el.get("message") or el.text or "").split("\n")[0][:200]
+                              skips_list.append((name, msg or "no reason given"))
+                  except Exception as exc:
+                      print(f"[WARN] collect_skips({path}): {exc}")
+              return skips_list
+
+          def md_cell(value):
+              """Escape text for a GitHub markdown table cell."""
+              text = str(value or "").replace("\r", " ").replace("\n", " ")
+              return text.replace("|", "\\|").replace("<", "&lt;").replace(">", "&gt;")
+
+          def format_skip_section(label, skips_list, skip_count=None):
+              """Collapsible markdown section with skip reasons grouped by count."""
+              reported_count = skip_count if skip_count is not None else len(skips_list)
+              if reported_count is not None:
+                  reported_count = max(reported_count, len(skips_list))
+              if not skips_list and (reported_count is None or reported_count <= 0):
+                  return []
+              reasons = Counter(msg for _, msg in skips_list)
+              if reported_count is not None and reported_count > len(skips_list):
+                  reasons["Skip details unavailable in JUnit XML"] += reported_count - len(skips_list)
+              lines = [
+                  "",
+                  f"<details><summary>⏭️ <b>{label}</b> — {reported_count} skipped</summary>",
+                  "",
+                  "| Reason | Count |",
+                  "|:-------|------:|",
+              ]
+              for reason, count in reasons.most_common():
+                  lines.append(f"| {md_cell(reason)} | {count} |")
+              lines += ["", "</details>"]
+              return lines
 
           def parse_coverage(pattern):
               for path in glob.glob(pattern, recursive=True):
@@ -1213,6 +1261,16 @@ jobs:
 
           ss_smoke = parse_junit("all-results/results-server-smoke/smoke.xml")
 
+          # ── Collect skip details from JUnit XML ──────────────────────────
+
+          web_py_skips = collect_skips("all-results/results-web-client/pytest.xml")
+          web_js_skips = collect_skips("all-results/results-web-client/vitest.xml")
+          con_py_skips = collect_skips("all-results/results-console-client/pytest.xml")
+          nod_js_skips = collect_skips("all-results/results-node-client/vitest.xml")
+          cs_unit_skips = collect_skips("all-results/results-csharp-unit/tests.xml")
+          tc_py_skips  = collect_skips("all-results/results-test-client/pytest.xml")
+          ss_smoke_skips = collect_skips("all-results/results-server-smoke/smoke.xml")
+
           # ── Artifact sanity gate ─────────────────────────────────────────────
 
           artifact_warnings = []
@@ -1306,14 +1364,30 @@ jobs:
               "",
               "---",
               "",
-              "> 📋 **Checks** tab — per-test drill-down &nbsp;·&nbsp; 📦 **Artifacts** — JUnit XML · Coverage XML · ESLint JSON · Bandit JSON",
+              "> 📦 **Artifacts** — JUnit XML · Coverage XML · ESLint JSON · Bandit JSON &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down",
               "> Coverage key: ✅ ≥ 90% &nbsp;·&nbsp; ⚠️ 70–89% (improvement needed) &nbsp;·&nbsp; ❌ < 70% (critical) &nbsp;·&nbsp; Per-component thresholds in `pyproject.toml` / `vitest.config.mjs`",
           ]
+
+          # ── Inline skip details (collapsible) ─────────────────────────────
+
+          skip_sections = []
+          skip_sections += format_skip_section("Web Client — Python", web_py_skips, web_py_t[3])
+          skip_sections += format_skip_section("Web Client — JavaScript", web_js_skips, web_js_t[3])
+          skip_sections += format_skip_section("Console Client — Python", con_py_skips, con_py_t[3])
+          skip_sections += format_skip_section("Node Client — JavaScript", nod_js_skips, nod_js_t[3])
+          skip_sections += format_skip_section("C# Client — Unit", cs_unit_skips, cs_unit_t[3])
+          skip_sections += format_skip_section("Test Client — Python", tc_py_skips, tc_py_t[3])
+          skip_sections += format_skip_section("OPC UA Server — Smoke", ss_smoke_skips, ss_smoke[3])
+
+          if skip_sections:
+              out += ["", "---", "", "### ⏭️ Skip Details"]
+              out += skip_sections
 
           # ── Skip budget check ─────────────────────────────────────────────────
           # Known expected skips per TEST_TIERS.md; any extra skip is a warning.
           skip_budget = {
               "web-client (Python)":      0,
+              "web-client (JS)":          0,
               "console-client (Python)":  0,
               "node-client (JS)":         1,  # git unavailable in CI (vitest)
               "csharp-unit":             15,  # IJT_PHASE1_ONLY filter
@@ -1322,6 +1396,7 @@ jobs:
           }
           actual_skips = {
               "web-client (Python)":      web_py_t[3],
+              "web-client (JS)":          web_js_t[3],
               "console-client (Python)":  con_py_t[3],
               "node-client (JS)":         nod_js_t[3],
               "csharp-unit":              cs_unit_t[3],

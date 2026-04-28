@@ -618,7 +618,7 @@ async def test_set_offline_timer_with_zero_duration_disables_timer(opcua_client,
 
     method_node = await find_child_by_browse_name(ms, _BN_SET_OFFLINE_TIMER, ns_ijt)
     if method_node is None:
-        pytest.skip("SetOfflineTimer not found — skipping zero-duration test")
+        pytest.skip("SetOfflineTimer method absent from MethodSet — optional offline-timer capability unavailable")
 
     zero_duration = ua.Variant(0, ua.VariantType.UInt32)
     result = await find_and_call_method(ms, _BN_SET_OFFLINE_TIMER, ns_ijt, zero_duration, timeout=_METHOD_TIMEOUT)
@@ -646,7 +646,7 @@ async def test_set_offline_timer_invalid_piu_returns_bad_status(opcua_client, ns
 
     method_node = await find_child_by_browse_name(ms, _BN_SET_OFFLINE_TIMER, ns_ijt)
     if method_node is None:
-        pytest.skip("SetOfflineTimer not found — cannot test invalid PIU")
+        pytest.skip("SetOfflineTimer method absent from MethodSet — cannot test invalid ProductInstanceUri handling")
 
     invalid_piu = ua.Variant(_INVALID_PIU, ua.VariantType.String)
     result = await find_and_call_method(ms, _BN_SET_OFFLINE_TIMER, ns_ijt, invalid_piu, timeout=_METHOD_TIMEOUT)

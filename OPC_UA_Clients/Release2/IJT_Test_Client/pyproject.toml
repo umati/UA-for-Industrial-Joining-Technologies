@@ -131,8 +131,8 @@ ignore_missing_imports = true
 # Check bodies of untyped functions — this removes [annotation-unchecked] notes
 # from CI annotations and gives mypy full coverage of conformance test logic.
 check_untyped_defs = true
-# Exclude pytest bookkeeping dirs that may be locked on Windows.
-exclude = ["pytest-cache-files-.*"]
+# Exclude generated test/tool output that may be locked on Windows.
+exclude = ["(?:^|.*[/\\\\])tmp[/\\\\]", "pytest-cache-files-.*"]
 # Keep mypy's incremental cache inside tmp/ for CWD-independent operation.
 # Note: mypy resolves cache_dir relative to CWD (not config file location), so
 # this config only works when mypy runs from the project root (CI / runner).

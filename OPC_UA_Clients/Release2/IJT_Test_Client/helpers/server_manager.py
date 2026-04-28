@@ -11,11 +11,13 @@ import asyncio
 import logging
 import os
 import socket
-import subprocess  # nosec B404 - intentional: launches OPC UA simulator binary
+import subprocess  # nosec B404
 import sys
 import time
 from pathlib import Path
 from typing import Optional
+
+# Bandit B404/B603 suppressions are limited to controlled simulator process launch paths.
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +157,8 @@ class ServerManager:
             return False
         logger.info("Launching OPC UA simulator: %s", exe_path)
         try:
-            self._process = subprocess.Popen(  # nosec B603 - exe_path is validated above, not user input
+            # exe_path is validated above and is not user input.
+            self._process = subprocess.Popen(  # nosec B603
                 [exe_path],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,

@@ -64,6 +64,8 @@ from the IJT specification.
 | **include_traces = True** | All SimulateSingleResult calls should pass `True` for include_traces |
 | **send_as_refs = True** | SimulateBatch_Or_Sync_Result and SimulateJobResult booleans should be `True` |
 | **node.session not node.server** | asyncua 1.2+ renamed the attribute — use `node.session` |
+| **Annotate empty accumulators** | `check_untyped_defs = true`; dynamic OPC UA lists such as `all_values = []` need explicit types, usually `list[Any]` |
+| **Bandit `nosec` IDs only** | Keep `# nosec Bxxx` comments to valid Bandit IDs only; put explanations on a separate comment line to avoid `Test in comment` warnings |
 
 ---
 
@@ -270,6 +272,10 @@ assert len(events) >= 1
 | Method returns `OpcUa_Uncertain` (IJT §7.4 business-logic response) | `pytest.skip(...)` — Uncertain is a valid domain-level response; output args are readable |
 | Timing race — GetLatestResult returns stale result (retry exhausted, real server) | `pytest.fail(...)` — real server must store triggered result within retry window |
 | Timing race — retry exhausted on simulator (known limitation) | `return None` from helper → caller does `pytest.skip(...)` |
+
+Skip reasons must name the actual missing capability or precondition. Avoid generic text like
+`No condition event received` or `RequestResults raised ua.UaError`; include the event source,
+method name, and actual exception/status so CI skip summaries are diagnostic.
 
 ### GetLatestResult Return Convention
 `GetLatestResult` returns **three** output arguments: `[ResultHandle: UInt32, Result: ResultDataType, Error: Int32]`.

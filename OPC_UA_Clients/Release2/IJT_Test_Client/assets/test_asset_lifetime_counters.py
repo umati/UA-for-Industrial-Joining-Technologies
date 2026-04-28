@@ -21,10 +21,10 @@ from helpers.node_discovery import find_child_by_browse_name
 pytestmark = [pytest.mark.live, pytest.mark.structure]
 
 _SKIP_REASON = (
-    "LifetimeCounters AddIn intentionally absent: MachineryLifetimeCounterType requires "
-    "at least one <LifetimeVariable> (MandatoryPlaceholder, i=11510). Per Machinery spec "
-    "§15, the AddIn shall not be provided on instances when no lifetime variable data is "
-    "available. Re-enable when real counter data is populated on the server."
+    "LifetimeCounters AddIn omitted because no real lifetime-variable data is available; "
+    "MachineryLifetimeCounterType requires at least one <LifetimeVariable> "
+    "(MandatoryPlaceholder, i=11510), and Machinery §15 says the AddIn shall not be provided "
+    "when no lifetime variable data exists."
 )
 
 
