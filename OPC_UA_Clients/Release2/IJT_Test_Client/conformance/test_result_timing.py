@@ -20,70 +20,31 @@ import datetime
 import logging
 
 import pytest
-from asyncua import ua
 
 from helpers.cu_registry import CU
-from helpers.method_caller import call_method
-from helpers.namespaces import BN, NS_MACH_RESULT, ResultType
-from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.namespaces import ResultType
+from helpers.result_collector import ResultCollector
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
 
-_SIMULATOR_TIMEOUT_MS = 5000
-_EXTERNAL_TIMEOUT_MS = 60000
-_METHOD_CALL_TIMEOUT_S = 30.0
-_EXTERNAL_CALL_TIMEOUT_S = 90.0
-
 
 async def _get_result_with_meta(
-    opcua_client,
+    subscription_client,
     result_trigger,
     ns_indices,
     result_type: int = ResultType.MULTI_STEP_OK_RESULT,
     include_traces: bool = False,
 ):
-    """Trigger a result and return (result_data, meta).
-
-    Returns (None, None) when the namespace is absent, the simulator trigger
-    fails, or GetLatestResult returns no data.
-    For an external (real controller) trigger, continues with a longer timeout
-    so an operator can fire a result within the allotted window.
-    """
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
+    """Trigger a result and return (result_data, meta) via IJTResultEventType events."""
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
+        outcome = await result_trigger.trigger_single(result_type, include_traces=include_traces)
+        if not outcome.triggered and result_trigger.is_simulator:
+            return None, None
+        result_data = await rc.collect_single()
+    if result_data is None:
         return None, None
-
-    outcome = await result_trigger.trigger_single(result_type, include_traces=include_traces)
-    if not outcome.triggered and result_trigger.is_simulator:
-        return None, None
-
-    js = await find_joining_system(opcua_client)
-    if js is None:
-        return None, None
-    rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
-    if rm is None:
-        return None, None
-    glr = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
-    if glr is None:
-        return None, None
-
-    wait_ms = _SIMULATOR_TIMEOUT_MS if result_trigger.is_simulator else _EXTERNAL_TIMEOUT_MS
-    call_timeout_s = _METHOD_CALL_TIMEOUT_S if result_trigger.is_simulator else _EXTERNAL_CALL_TIMEOUT_S
-
-    result = await call_method(
-        rm,
-        glr.nodeid,
-        ua.Variant(wait_ms, ua.VariantType.Int32),
-        timeout=call_timeout_s,
-        method_name="GetLatestResult",
-    )
-    if not result.success:
-        return None, None
-
-    outputs = result.output_list
-    result_data = outputs[1] if len(outputs) > 1 else (outputs[0] if outputs else None)
-    meta = getattr(result_data, "ResultMetaData", None) if result_data else None
+    meta = getattr(result_data, "ResultMetaData", None)
     return result_data, meta
 
 
@@ -91,7 +52,7 @@ def _skip_if_no_result(result_data, result_trigger) -> None:
     """Call pytest.skip() when result_data is None, with an appropriate message."""
     if result_data is None:
         if result_trigger.is_simulator:
-            pytest.skip("Simulator trigger failed or GetLatestResult returned no data")
+            pytest.skip("Simulator trigger failed or no result received via events")
         else:
             pytest.skip("No result received from external trigger within timeout")
 
@@ -102,10 +63,12 @@ def _skip_if_no_result(result_data, result_trigger) -> None:
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES)
-async def test_result_meta_data_has_processing_times_start_and_end_time(opcua_client, result_trigger, ns_indices):
+async def test_result_meta_data_has_processing_times_start_and_end_time(
+    subscription_client, result_trigger, ns_indices
+):
     """ResultMetaData.ProcessingTimes must be present with non-null StartTime and EndTime
     where EndTime >= StartTime."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices)
+    result_data, meta = await _get_result_with_meta(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip("ResultMetaData absent — covered by basic result structure tests")
@@ -127,9 +90,11 @@ async def test_result_meta_data_has_processing_times_start_and_end_time(opcua_cl
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES)
-async def test_processing_times_start_time_is_before_result_creation_time(opcua_client, result_trigger, ns_indices):
+async def test_processing_times_start_time_is_before_result_creation_time(
+    subscription_client, result_trigger, ns_indices
+):
     """ProcessingTimes.StartTime must be <= ResultMetaData.CreationTime."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices)
+    result_data, meta = await _get_result_with_meta(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip("ResultMetaData absent — covered by basic result structure tests")
@@ -157,9 +122,9 @@ async def test_processing_times_start_time_is_before_result_creation_time(opcua_
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES_DURATIONS)
-async def test_result_meta_data_has_acquisition_duration(opcua_client, result_trigger, ns_indices):
+async def test_result_meta_data_has_acquisition_duration(subscription_client, result_trigger, ns_indices):
     """ProcessingTimes.AcquisitionDuration must be present and have a numeric or timedelta value."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices)
+    result_data, meta = await _get_result_with_meta(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip("ResultMetaData absent — covered by basic result structure tests")
@@ -178,9 +143,9 @@ async def test_result_meta_data_has_acquisition_duration(opcua_client, result_tr
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES_DURATIONS)
-async def test_result_meta_data_has_processing_duration(opcua_client, result_trigger, ns_indices):
+async def test_result_meta_data_has_processing_duration(subscription_client, result_trigger, ns_indices):
     """ProcessingTimes.ProcessingDuration must be present."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices)
+    result_data, meta = await _get_result_with_meta(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip("ResultMetaData absent — covered by basic result structure tests")
@@ -196,9 +161,9 @@ async def test_result_meta_data_has_processing_duration(opcua_client, result_tri
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES_DURATIONS)
-async def test_processing_durations_are_non_negative(opcua_client, result_trigger, ns_indices):
+async def test_processing_durations_are_non_negative(subscription_client, result_trigger, ns_indices):
     """AcquisitionDuration and ProcessingDuration must both be non-negative."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices)
+    result_data, meta = await _get_result_with_meta(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip("ResultMetaData absent — covered by basic result structure tests")
@@ -239,10 +204,14 @@ async def test_processing_durations_are_non_negative(opcua_client, result_trigge
         pytest.param(ResultType.ONE_STEP_OK_RESULT, id="one_step_ok"),
     ],
 )
-async def test_all_timing_fields_consistent_across_result_types(opcua_client, result_trigger, ns_indices, result_type):
+async def test_all_timing_fields_consistent_across_result_types(
+    subscription_client, result_trigger, ns_indices, result_type
+):
     """ProcessingTimes with StartTime and EndTime must be present for both
     ONE_STEP_OK_RESULT and MULTI_STEP_OK_RESULT result types."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices, result_type=result_type)
+    result_data, meta = await _get_result_with_meta(
+        subscription_client, result_trigger, ns_indices, result_type=result_type
+    )
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip(f"ResultMetaData absent for result_type={result_type!r}")
@@ -263,10 +232,10 @@ async def test_all_timing_fields_consistent_across_result_types(opcua_client, re
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES)
-async def test_processing_times_start_time_is_plausible(opcua_client, result_trigger, ns_indices):
+async def test_processing_times_start_time_is_plausible(subscription_client, result_trigger, ns_indices):
     """ProcessingTimes.StartTime must be a non-epoch datetime (not year 1601, not in the
     far future); verifies the server populates it with a real wall-clock time."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices)
+    result_data, meta = await _get_result_with_meta(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip("ResultMetaData absent — covered by start/end time test")
@@ -290,10 +259,10 @@ async def test_processing_times_start_time_is_plausible(opcua_client, result_tri
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES)
-async def test_operation_duration_is_positive(opcua_client, result_trigger, ns_indices):
+async def test_operation_duration_is_positive(subscription_client, result_trigger, ns_indices):
     """EndTime − StartTime must be a positive duration (i.e. EndTime > StartTime,
     not just >=), confirming the operation took measurable time."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices)
+    result_data, meta = await _get_result_with_meta(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip("ResultMetaData absent — covered by start/end time test")
@@ -315,10 +284,10 @@ async def test_operation_duration_is_positive(opcua_client, result_trigger, ns_i
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES)
-async def test_creation_time_not_before_processing_end_time(opcua_client, result_trigger, ns_indices):
+async def test_creation_time_not_before_processing_end_time(subscription_client, result_trigger, ns_indices):
     """ResultMetaData.CreationTime must be >= ProcessingTimes.EndTime for every result;
     the result is always created after the operation finishes."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices)
+    result_data, meta = await _get_result_with_meta(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip("ResultMetaData absent — covered by start/end time test")
@@ -382,10 +351,12 @@ async def test_processing_times_fields_are_not_writable(opcua_client, ns_indices
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES_DURATIONS)
-async def test_acquisition_duration_does_not_exceed_total_operation_window(opcua_client, result_trigger, ns_indices):
+async def test_acquisition_duration_does_not_exceed_total_operation_window(
+    subscription_client, result_trigger, ns_indices
+):
     """AcquisitionDuration must not exceed (EndTime − StartTime) expressed in milliseconds;
     the data-capture window cannot be larger than the total operation duration."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices)
+    result_data, meta = await _get_result_with_meta(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip("ResultMetaData absent — covered by basic tests")
@@ -414,10 +385,12 @@ async def test_acquisition_duration_does_not_exceed_total_operation_window(opcua
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES_DURATIONS)
-async def test_processing_duration_does_not_exceed_total_operation_window(opcua_client, result_trigger, ns_indices):
+async def test_processing_duration_does_not_exceed_total_operation_window(
+    subscription_client, result_trigger, ns_indices
+):
     """ProcessingDuration must not exceed (EndTime − StartTime) in milliseconds;
     the evaluation window cannot exceed the full operation duration."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices)
+    result_data, meta = await _get_result_with_meta(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip("ResultMetaData absent — covered by basic tests")
@@ -446,10 +419,10 @@ async def test_processing_duration_does_not_exceed_total_operation_window(opcua_
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES_DURATIONS)
-async def test_sum_of_durations_does_not_exceed_total_operation_window(opcua_client, result_trigger, ns_indices):
+async def test_sum_of_durations_does_not_exceed_total_operation_window(subscription_client, result_trigger, ns_indices):
     """AcquisitionDuration + ProcessingDuration must not together exceed the total
     operation window (EndTime − StartTime) when both fields are populated."""
-    result_data, meta = await _get_result_with_meta(opcua_client, result_trigger, ns_indices)
+    result_data, meta = await _get_result_with_meta(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     if meta is None:
         pytest.skip("ResultMetaData absent — covered by basic tests")
@@ -480,11 +453,11 @@ async def test_sum_of_durations_does_not_exceed_total_operation_window(opcua_cli
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES_DURATIONS)
-async def test_result_is_valid_when_duration_fields_are_absent(opcua_client, result_trigger, ns_indices):
+async def test_result_is_valid_when_duration_fields_are_absent(subscription_client, result_trigger, ns_indices):
     """A result must be accepted as structurally valid when AcquisitionDuration and
     ProcessingDuration are not populated; both are optional per the spec."""
     result_data, meta = await _get_result_with_meta(
-        opcua_client,
+        subscription_client,
         result_trigger,
         ns_indices,
         result_type=ResultType.SIMPLE_OK_RESULT,
@@ -519,13 +492,13 @@ async def test_result_is_valid_when_duration_fields_are_absent(opcua_client, res
 
 
 @pytest.mark.requires_cu(CU.RESULT_PROCESSING_TIMES_DURATIONS)
-async def test_duration_values_are_consistent_across_result_types(opcua_client, result_trigger, ns_indices):
+async def test_duration_values_are_consistent_across_result_types(subscription_client, result_trigger, ns_indices):
     """AcquisitionDuration and ProcessingDuration, when present, must consistently be
     non-negative for both one-step and multi-step result types."""
     failures = []
     for result_type in (ResultType.ONE_STEP_OK_RESULT, ResultType.MULTI_STEP_OK_RESULT):
         result_data, meta = await _get_result_with_meta(
-            opcua_client, result_trigger, ns_indices, result_type=result_type
+            subscription_client, result_trigger, ns_indices, result_type=result_type
         )
         if result_data is None or meta is None:
             continue

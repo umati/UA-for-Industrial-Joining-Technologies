@@ -411,7 +411,7 @@ async def test_select_joint_with_non_empty_joint_origin_id(opcua_client, ns_indi
 
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — cannot create a joint with JointOriginId for this test")
+        pytest.skip("SendJoint: Not Supported — cannot create a joint with JointOriginId for this test")
 
     test_origin_id = "conformance-test-origin-id"
     test_joint_id = "conformance-test-joint-with-origin"
@@ -831,7 +831,7 @@ async def test_joint_method_presence_and_accessibility(joint_management, ns_indi
     if required:
         assert node is not None, f"Required JointManagement method '{method_name}' not found (ns={ns_ijt})"
     elif node is None:
-        pytest.skip(f"Optional JointManagement method '{method_name}' not present")
+        pytest.skip(f"Optional JointManagement method '{method_name}': Not Supported")
     try:
         node_class = await node.read_node_class()
         assert node_class == ua.NodeClass.Method, f"'{method_name}' has NodeClass {node_class}, expected Method"
@@ -853,7 +853,7 @@ async def test_send_joint_design_method_present_if_exists(joint_management, ns_i
     ns_ijt = _require_ns_ijt(ns_indices)
     node = await find_child_by_browse_name(joint_management, "SendJointDesign", ns_ijt)
     if node is None:
-        pytest.skip("Optional method 'SendJointDesign' not present on this server")
+        pytest.skip("Optional method 'SendJointDesign': Not Supported")
 
 
 # ---------------------------------------------------------------------------
@@ -869,7 +869,7 @@ async def test_get_joint_design_list_method_present_if_exists(joint_management, 
     ns_ijt = _require_ns_ijt(ns_indices)
     node = await find_child_by_browse_name(joint_management, "GetJointDesignList", ns_ijt)
     if node is None:
-        pytest.skip("Optional method 'GetJointDesignList' not present on this server")
+        pytest.skip("Optional method 'GetJointDesignList': Not Supported")
 
 
 # ---------------------------------------------------------------------------
@@ -885,7 +885,7 @@ async def test_get_joint_design_method_present_if_exists(joint_management, ns_in
     ns_ijt = _require_ns_ijt(ns_indices)
     node = await find_child_by_browse_name(joint_management, "GetJointDesign", ns_ijt)
     if node is None:
-        pytest.skip("Optional method 'GetJointDesign' not present on this server")
+        pytest.skip("Optional method 'GetJointDesign': Not Supported")
 
 
 # ---------------------------------------------------------------------------
@@ -919,7 +919,7 @@ async def test_delete_joint_design_method_present_if_exists(joint_management, ns
     ns_ijt = _require_ns_ijt(ns_indices)
     node = await find_child_by_browse_name(joint_management, "DeleteJointDesign", ns_ijt)
     if node is None:
-        pytest.skip("Optional method 'DeleteJointDesign' not present on this server")
+        pytest.skip("Optional method 'DeleteJointDesign': Not Supported")
 
 
 # ---------------------------------------------------------------------------
@@ -935,7 +935,7 @@ async def test_send_joint_component_method_present_if_exists(joint_management, n
     ns_ijt = _require_ns_ijt(ns_indices)
     node = await find_child_by_browse_name(joint_management, "SendJointComponent", ns_ijt)
     if node is None:
-        pytest.skip("Optional method 'SendJointComponent' not present on this server")
+        pytest.skip("Optional method 'SendJointComponent': Not Supported")
 
 
 # ---------------------------------------------------------------------------
@@ -951,7 +951,7 @@ async def test_get_joint_component_list_method_present_if_exists(joint_managemen
     ns_ijt = _require_ns_ijt(ns_indices)
     node = await find_child_by_browse_name(joint_management, "GetJointComponentList", ns_ijt)
     if node is None:
-        pytest.skip("Optional method 'GetJointComponentList' not present on this server")
+        pytest.skip("Optional method 'GetJointComponentList': Not Supported")
 
 
 # ---------------------------------------------------------------------------
@@ -967,7 +967,7 @@ async def test_get_joint_component_method_present_if_exists(joint_management, ns
     ns_ijt = _require_ns_ijt(ns_indices)
     node = await find_child_by_browse_name(joint_management, "GetJointComponent", ns_ijt)
     if node is None:
-        pytest.skip("Optional method 'GetJointComponent' not present on this server")
+        pytest.skip("Optional method 'GetJointComponent': Not Supported")
 
 
 # ---------------------------------------------------------------------------
@@ -1001,7 +1001,7 @@ async def test_delete_joint_component_method_present_if_exists(joint_management,
     ns_ijt = _require_ns_ijt(ns_indices)
     node = await find_child_by_browse_name(joint_management, "DeleteJointComponent", ns_ijt)
     if node is None:
-        pytest.skip("Optional method 'DeleteJointComponent' not present on this server")
+        pytest.skip("Optional method 'DeleteJointComponent': Not Supported")
 
 
 # ---------------------------------------------------------------------------
@@ -1017,7 +1017,7 @@ async def test_get_joint_revision_list_method_present_if_exists(joint_management
     ns_ijt = _require_ns_ijt(ns_indices)
     node = await find_child_by_browse_name(joint_management, "GetJointRevisionList", ns_ijt)
     if node is None:
-        pytest.skip("Optional method 'GetJointRevisionList' not present on this server")
+        pytest.skip("Optional method 'GetJointRevisionList': Not Supported")
 
 
 # ---------------------------------------------------------------------------
@@ -1029,7 +1029,7 @@ async def _send_test_joint_design(jm, ns_ijt, design_id, content="conformance-te
     """Send a joint design via SendJointDesign; skip if unavailable or not encodable."""
     send_node = await find_child_by_browse_name(jm, "SendJointDesign", ns_ijt)
     if send_node is None:
-        pytest.skip("SendJointDesign not present — skipping")
+        pytest.skip("SendJointDesign: Not Supported — skipping")
     design_type = getattr(ua, "JointDesignDataType", None)
     if design_type is not None:
         try:
@@ -1070,7 +1070,7 @@ async def _send_test_joint_component(jm, ns_ijt, component_id, manufacturer="Con
     """Send a joint component via SendJointComponent; skip if unavailable or not encodable."""
     send_node = await find_child_by_browse_name(jm, "SendJointComponent", ns_ijt)
     if send_node is None:
-        pytest.skip("SendJointComponent not present — skipping")
+        pytest.skip("SendJointComponent: Not Supported — skipping")
     comp_type = getattr(ua, "JointComponentDataType", None)
     if comp_type is not None:
         try:
@@ -1222,7 +1222,7 @@ async def test_send_joint_appears_in_get_joint_list_after_send(opcua_client, ns_
         pytest.skip("JointDataType not available — cannot test SendJoint→GetJointList")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — skipping")
+        pytest.skip("SendJoint: Not Supported — skipping")
     joint_data = joint_type()
     if hasattr(joint_data, "JointId"):
         joint_data.JointId = joint_id
@@ -1235,7 +1235,7 @@ async def test_send_joint_appears_in_get_joint_list_after_send(opcua_client, ns_
             raise
         list_node = await find_child_by_browse_name(jm, BN.GET_JOINT_LIST, ns_ijt)
         if list_node is None:
-            pytest.skip("GetJointList not present — cannot verify")
+            pytest.skip("GetJointList: Not Supported — cannot verify")
         joint_list = await _call_get_joint_list(jm, list_node)
         if joint_list is None:
             pytest.skip("GetJointList returned None — cannot verify")
@@ -1267,7 +1267,7 @@ async def test_send_joint_update_replaces_stored_joint_data(opcua_client, ns_ind
         pytest.skip("JointDataType not available — cannot test SendJoint update")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — skipping")
+        pytest.skip("SendJoint: Not Supported — skipping")
     try:
         for name_val in ("OriginalJointName", "UpdatedJointName"):
             joint_data = joint_type()
@@ -1320,7 +1320,7 @@ async def test_send_joint_with_empty_joint_id_returns_bad_invalid_argument(opcua
         pytest.skip("JointDataType not available — cannot test empty JointId rejection")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — skipping negative test")
+        pytest.skip("SendJoint: Not Supported — skipping negative test")
     joint_data = joint_type()
     if hasattr(joint_data, "JointId"):
         joint_data.JointId = ""
@@ -1344,13 +1344,18 @@ async def test_send_joint_with_null_joining_process_id_returns_bad_invalid_argum
         pytest.skip("JointDataType not available — cannot test null JoiningProcessId rejection")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — skipping negative test")
+        pytest.skip("SendJoint: Not Supported — skipping negative test")
     joint_data = joint_type()
-    if not hasattr(joint_data, "JoiningProcessId"):
-        pytest.skip("JointDataType has no JoiningProcessId field — skipping")
     if hasattr(joint_data, "JointId"):
         joint_data.JointId = "conformance-test-joint-null-proc-id"
-    joint_data.JoiningProcessId = ""
+    # JoiningProcessId lives in AssociatedEntities (EntityType=27=PROGRAM — joints link to a Joining Program).
+    # Test: send a joint with an empty EntityId for the PROGRAM entity to check server validation.
+    entity_type = getattr(ua, "EntityDataType", None)
+    if entity_type is not None and hasattr(joint_data, "AssociatedEntities"):
+        proc_entity = entity_type()
+        proc_entity.EntityType = 27  # PROGRAM (joints associate with a Joining Program)
+        proc_entity.EntityId = ""  # empty — testing server validation
+        joint_data.AssociatedEntities = [proc_entity]
     try:
         result = await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
         logger.warning("Expected ua.UaError for empty JoiningProcessId but returned %r", result)
@@ -1372,7 +1377,7 @@ async def test_get_joint_list_returns_string_array_elements(opcua_client, ns_ind
     jm = await _get_joint_management(opcua_client, ns_ijt)
     list_node = await find_child_by_browse_name(jm, BN.GET_JOINT_LIST, ns_ijt)
     if list_node is None:
-        pytest.skip("GetJointList not present — skipping")
+        pytest.skip("GetJointList: Not Supported — skipping")
     try:
         joint_list = await _call_get_joint_list(jm, list_node)
     except ua.UaError as exc:
@@ -1384,9 +1389,9 @@ async def test_get_joint_list_returns_string_array_elements(opcua_client, ns_ind
     items = list(joint_list) if isinstance(joint_list, (list, tuple)) else [joint_list]
     failures = []
     for idx, item in enumerate(items):
-        item_str = str(item) if item is not None else None
+        item_str = _joint_id_str(item) if item is not None else None
         if not item_str or not item_str.strip():
-            failures.append(f"Element[{idx}] is empty or None: {item!r}")
+            failures.append(f"Element[{idx}] has empty or missing JointId: {item!r}")
     assert not failures, f"GetJointList contains invalid elements: {failures}"
     logger.info("GetJointList returned %d valid string elements", len(items))
 
@@ -1402,7 +1407,7 @@ async def test_get_joint_list_reflects_newly_sent_joint(opcua_client, ns_indices
         pytest.skip("JointDataType not available — cannot test GetJointList reflection")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — cannot send test joint")
+        pytest.skip("SendJoint: Not Supported — cannot send test joint")
     joint_data = joint_type()
     if hasattr(joint_data, "JointId"):
         joint_data.JointId = joint_id
@@ -1415,7 +1420,7 @@ async def test_get_joint_list_reflects_newly_sent_joint(opcua_client, ns_indices
             raise
         list_node = await find_child_by_browse_name(jm, BN.GET_JOINT_LIST, ns_ijt)
         if list_node is None:
-            pytest.skip("GetJointList not present — cannot verify")
+            pytest.skip("GetJointList: Not Supported — cannot verify")
         joint_list = await _call_get_joint_list(jm, list_node)
         ids = (
             [_joint_id_str(x) for x in joint_list]
@@ -1446,7 +1451,7 @@ async def test_get_joint_list_returns_good_with_empty_array_when_no_joints(opcua
     jm = await _get_joint_management(opcua_client, ns_ijt)
     list_node = await find_child_by_browse_name(jm, BN.GET_JOINT_LIST, ns_ijt)
     if list_node is None:
-        pytest.skip("GetJointList not present — skipping")
+        pytest.skip("GetJointList: Not Supported — skipping")
     try:
         joint_list = await _call_get_joint_list(jm, list_node)
     except ua.UaError as exc:
@@ -1476,7 +1481,7 @@ async def test_select_joint_with_nonexistent_id_returns_bad_status(opcua_client,
     jm = await _get_joint_management(opcua_client, ns_ijt)
     sel_node = await find_child_by_browse_name(jm, BN.SELECT_JOINT, ns_ijt)
     if sel_node is None:
-        pytest.skip("SelectJoint not present — skipping negative test")
+        pytest.skip("SelectJoint: Not Supported — skipping negative test")
     try:
         result = await jm.call_method(
             sel_node.nodeid,
@@ -1510,7 +1515,7 @@ async def test_get_joint_round_trip_data_matches_sent_data(opcua_client, ns_indi
         pytest.skip("JointDataType not available — cannot test GetJoint round-trip")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — cannot create test joint")
+        pytest.skip("SendJoint: Not Supported — cannot create test joint")
     joint_data = joint_type()
     if hasattr(joint_data, "JointId"):
         joint_data.JointId = joint_id
@@ -1523,7 +1528,7 @@ async def test_get_joint_round_trip_data_matches_sent_data(opcua_client, ns_indi
             raise
         get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
         if get_node is None:
-            pytest.skip("GetJoint not present — cannot verify round-trip")
+            pytest.skip("GetJoint: Not Supported — cannot verify round-trip")
         try:
             result = await jm.call_method(
                 get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
@@ -1562,12 +1567,18 @@ async def test_get_joint_result_has_joint_id_and_required_fields(opcua_client, n
         pytest.skip("JointDataType not available — cannot test GetJoint fields")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — cannot create test joint")
+        pytest.skip("SendJoint: Not Supported — cannot create test joint")
     joint_data = joint_type()
     if hasattr(joint_data, "JointId"):
         joint_data.JointId = joint_id
-    if hasattr(joint_data, "JoiningProcessId"):
-        joint_data.JoiningProcessId = "conformance-test-jprocess-ref"
+    # JoiningProcessId is stored in AssociatedEntities (EntityType=27=PROGRAM — joints link to a Joining Program)
+    _proc_ref_id = "conformance-test-jprocess-ref"
+    _entity_type = getattr(ua, "EntityDataType", None)
+    if _entity_type is not None and hasattr(joint_data, "AssociatedEntities"):
+        _entity = _entity_type()
+        _entity.EntityType = 27  # PROGRAM (joints associate with a Joining Program)
+        _entity.EntityId = _proc_ref_id
+        joint_data.AssociatedEntities = [_entity]
     try:
         try:
             await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
@@ -1577,7 +1588,7 @@ async def test_get_joint_result_has_joint_id_and_required_fields(opcua_client, n
             raise
         get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
         if get_node is None:
-            pytest.skip("GetJoint not present — cannot verify fields")
+            pytest.skip("GetJoint: Not Supported — cannot verify fields")
         try:
             result = await jm.call_method(
                 get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
@@ -1587,16 +1598,23 @@ async def test_get_joint_result_has_joint_id_and_required_fields(opcua_client, n
                 pytest.skip(f"GetJoint not callable: {exc}")
             raise
         assert result is not None, "GetJoint returned None"
-        if not isinstance(result, (list, tuple)):
-            jid = getattr(result, "JointId", None) or getattr(result, "Id", None)
-            assert jid is not None, (
-                f"GetJoint result missing JointId. Attributes: {[a for a in dir(result) if not a.startswith('_')]}"
-            )
-            logger.info(
-                "JointId='%s', JoiningProcessId=%r",
-                jid,
-                getattr(result, "JoiningProcessId", None),
-            )
+        # GetJoint always returns (JointDataType, Status, StatusMessage) as a list/tuple.
+        joint_obj = result[0] if isinstance(result, (list, tuple)) and result else result
+        assert joint_obj is not None, "GetJoint result[0] (JointDataType) is None"
+        jid = getattr(joint_obj, "JointId", None) or getattr(joint_obj, "Id", None)
+        assert jid is not None, (
+            f"GetJoint result missing JointId. Attributes: {[a for a in dir(joint_obj) if not a.startswith('_')]}"
+        )
+        # Check AssociatedEntities for JoiningProcessId (EntityType 26=JOINING_PROCESS,
+        # 27=PROGRAM, 28=JOB, 29=BATCH — depends on result/process type)
+        assoc = getattr(joint_obj, "AssociatedEntities", None) or []
+        proc_entry = next((e for e in assoc if getattr(e, "EntityType", None) in {26, 27, 28, 29}), None)
+        proc_id_found = getattr(proc_entry, "EntityId", None) if proc_entry else None
+        logger.info(
+            "JointId=%r, JoiningProcessId from AssociatedEntities=%r",
+            jid,
+            proc_id_found,
+        )
     finally:
         del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
         if del_node is not None:
@@ -1622,7 +1640,7 @@ async def test_get_joint_returns_updated_data_after_resend(opcua_client, ns_indi
         pytest.skip("JointDataType not available — cannot test GetJoint update")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — skipping")
+        pytest.skip("SendJoint: Not Supported — skipping")
     try:
         for name_val in ("InitialName", "ResentName"):
             joint_data = joint_type()
@@ -1638,12 +1656,14 @@ async def test_get_joint_returns_updated_data_after_resend(opcua_client, ns_indi
                 raise
         get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
         if get_node is None:
-            pytest.skip("GetJoint not present — cannot verify updated data")
+            pytest.skip("GetJoint: Not Supported — cannot verify updated data")
         try:
             result = await jm.call_method(
                 get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
             )
-            name_returned = getattr(result, "Name", None) if result else None
+            # GetJoint returns (JointDataType, Status, StatusMessage) as a list.
+            joint_obj = result[0] if isinstance(result, (list, tuple)) and result else result
+            name_returned = getattr(joint_obj, "Name", None) if joint_obj else None
             if name_returned is not None:
                 assert str(name_returned) == "ResentName", f"Expected 'ResentName' after resend, got {name_returned!r}"
                 logger.info("GetJoint correctly reflects updated Name after resend")
@@ -1673,11 +1693,12 @@ async def test_get_joint_with_nonexistent_id_returns_bad_node_id_unknown(opcua_c
     jm = await _get_joint_management(opcua_client, ns_ijt)
     get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
     if get_node is None:
-        pytest.skip("GetJoint not present — skipping negative test")
+        pytest.skip("GetJoint: Not Supported — skipping negative test")
     try:
         result = await jm.call_method(
             get_node.nodeid,
-            ua.Variant("conformance-test-nonexistent-joint-xyz", ua.VariantType.String),
+            ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
+            ua.Variant("conformance-test-nonexistent-joint-xyz", ua.VariantType.String),  # JointId
         )
         logger.warning("Expected ua.UaError for non-existent joint but returned %r", result)
     except ua.UaError as exc:
@@ -1701,12 +1722,17 @@ async def test_joint_data_round_trip_preserves_joint_id_and_joining_process_id(o
         pytest.skip("JointDataType not available — cannot test data round-trip")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — cannot create test joint")
+        pytest.skip("SendJoint: Not Supported — cannot create test joint")
     joint_data = joint_type()
     if hasattr(joint_data, "JointId"):
         joint_data.JointId = joint_id
-    if hasattr(joint_data, "JoiningProcessId"):
-        joint_data.JoiningProcessId = proc_id
+    # JoiningProcessId is stored in AssociatedEntities (EntityType=27=PROGRAM — joints link to a Joining Program)
+    _rt_entity_type = getattr(ua, "EntityDataType", None)
+    if _rt_entity_type is not None and hasattr(joint_data, "AssociatedEntities"):
+        _rt_entity = _rt_entity_type()
+        _rt_entity.EntityType = 27  # PROGRAM (joints associate with a Joining Program)
+        _rt_entity.EntityId = proc_id
+        joint_data.AssociatedEntities = [_rt_entity]
     try:
         try:
             await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
@@ -1716,7 +1742,7 @@ async def test_joint_data_round_trip_preserves_joint_id_and_joining_process_id(o
             raise
         get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
         if get_node is None:
-            pytest.skip("GetJoint not present — cannot verify round-trip")
+            pytest.skip("GetJoint: Not Supported — cannot verify round-trip")
         try:
             result = await jm.call_method(
                 get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
@@ -1726,16 +1752,22 @@ async def test_joint_data_round_trip_preserves_joint_id_and_joining_process_id(o
                 pytest.skip(f"GetJoint not callable: {exc}")
             raise
         assert result is not None, "GetJoint returned None"
-        if not isinstance(result, (list, tuple)):
-            ret_jid = getattr(result, "JointId", None) or getattr(result, "Id", None)
-            if ret_jid is not None:
-                assert str(ret_jid) == joint_id, f"JointId round-trip mismatch: expected {joint_id!r}, got {ret_jid!r}"
-            ret_proc = getattr(result, "JoiningProcessId", None)
-            if ret_proc is not None:
-                assert str(ret_proc) == proc_id, (
-                    f"JoiningProcessId round-trip mismatch: expected {proc_id!r}, got {ret_proc!r}"
-                )
-            logger.info("JointData round-trip OK: JointId=%r JoiningProcessId=%r", ret_jid, ret_proc)
+        # GetJoint always returns (JointDataType, Status, StatusMessage) as a list/tuple.
+        joint_obj = result[0] if isinstance(result, (list, tuple)) and result else result
+        assert joint_obj is not None, "GetJoint result[0] (JointDataType) is None"
+        ret_jid = getattr(joint_obj, "JointId", None) or getattr(joint_obj, "Id", None)
+        if ret_jid is not None:
+            assert str(ret_jid) == joint_id, f"JointId round-trip mismatch: expected {joint_id!r}, got {ret_jid!r}"
+        # Search AssociatedEntities for a JoiningProcess reference.
+        # EntityType: 27=PROGRAM (primary for joints), 28=JOB, 29=BATCH; 26=JOINING_PROCESS is generic fallback.
+        assoc = getattr(joint_obj, "AssociatedEntities", None) or []
+        proc_entry = next((e for e in assoc if getattr(e, "EntityType", None) in {26, 27, 28, 29}), None)
+        ret_proc = getattr(proc_entry, "EntityId", None) if proc_entry else None
+        if ret_proc is not None:
+            assert str(ret_proc) == proc_id, (
+                f"JoiningProcessId round-trip mismatch: expected {proc_id!r}, got {ret_proc!r}"
+            )
+        logger.info("JointData round-trip OK: JointId=%r JoiningProcessId=%r", ret_jid, ret_proc)
     finally:
         del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
         if del_node is not None:
@@ -1757,7 +1789,7 @@ async def test_joint_data_joint_ids_are_unique_across_get_joint_list(opcua_clien
     jm = await _get_joint_management(opcua_client, ns_ijt)
     list_node = await find_child_by_browse_name(jm, BN.GET_JOINT_LIST, ns_ijt)
     if list_node is None:
-        pytest.skip("GetJointList not present — skipping uniqueness check")
+        pytest.skip("GetJointList: Not Supported — skipping uniqueness check")
     try:
         joint_list = await _call_get_joint_list(jm, list_node)
     except ua.UaError as exc:
@@ -1783,14 +1815,20 @@ async def test_joint_data_joining_process_id_cross_references_process_list(opcua
         pytest.skip("No joints configured — cannot cross-reference JoiningProcessId")
     get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
     if get_node is None:
-        pytest.skip("GetJoint not present — skipping cross-reference test")
+        pytest.skip("GetJoint: Not Supported — skipping cross-reference test")
     try:
         result = await jm.call_method(
             get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
         )
     except ua.UaError as exc:
         pytest.skip(f"GetJoint not callable: {exc}")
-    proc_id = getattr(result, "JoiningProcessId", None) if result and not isinstance(result, (list, tuple)) else None
+    # GetJoint returns (JointDataType, Status, StatusMessage); unwrap result[0].
+    joint_obj = result[0] if isinstance(result, (list, tuple)) and result else result
+    # JoiningProcessId lives in AssociatedEntities.
+    # EntityType: 27=PROGRAM (primary for joints), 28=JOB, 29=BATCH; 26=JOINING_PROCESS is generic spec fallback.
+    assoc = getattr(joint_obj, "AssociatedEntities", None) or [] if joint_obj else []
+    proc_entry = next((e for e in assoc if getattr(e, "EntityType", None) in {26, 27, 28, 29}), None)
+    proc_id = getattr(proc_entry, "EntityId", None) if proc_entry else None
     if proc_id is None:
         pytest.skip("JoiningProcessId field not present in result — skipping cross-reference")
     js = await find_joining_system(opcua_client)
@@ -1805,7 +1843,7 @@ async def test_joint_data_joining_process_id_cross_references_process_list(opcua
         logger.info("GetJoiningProcessList not found — skipping cross-reference check")
         return
     try:
-        proc_list = await jpm.call_method(gpl_node.nodeid)
+        proc_list = await jpm.call_method(gpl_node.nodeid, ua.Variant("", ua.VariantType.String))
     except ua.UaError:
         logger.info("GetJoiningProcessList not callable — skipping cross-reference check")
         return
@@ -1835,14 +1873,19 @@ async def test_joint_data_resend_with_different_joining_process_id_accepted_or_e
         pytest.skip("JointDataType not available — cannot test resend with different process ID")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — skipping")
+        pytest.skip("SendJoint: Not Supported — skipping")
     try:
         for proc_id in ("conformance-test-proc-A", "conformance-test-proc-B"):
             joint_data = joint_type()
             if hasattr(joint_data, "JointId"):
                 joint_data.JointId = joint_id
-            if hasattr(joint_data, "JoiningProcessId"):
-                joint_data.JoiningProcessId = proc_id
+            # JoiningProcessId is stored in AssociatedEntities (EntityType=27=PROGRAM — joints link to a Joining Program)
+            _repid_entity_type = getattr(ua, "EntityDataType", None)
+            if _repid_entity_type is not None and hasattr(joint_data, "AssociatedEntities"):
+                _repid_entity = _repid_entity_type()
+                _repid_entity.EntityType = 27  # PROGRAM (joints associate with a Joining Program)
+                _repid_entity.EntityId = proc_id
+                joint_data.AssociatedEntities = [_repid_entity]
             try:
                 await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
                 logger.info("SendJoint with JoiningProcessId='%s' accepted", proc_id)
@@ -1899,7 +1942,7 @@ async def test_send_joint_design_appears_in_joint_design_list(opcua_client, ns_i
         await _send_test_joint_design(jm, ns_ijt, design_id)
         list_node = await find_child_by_browse_name(jm, "GetJointDesignList", ns_ijt)
         if list_node is None:
-            pytest.skip("GetJointDesignList not present — cannot verify")
+            pytest.skip("GetJointDesignList: Not Supported — cannot verify")
         try:
             design_list = await _call_get_joint_design_list(jm, list_node)
         except ua.UaError as exc:
@@ -1945,7 +1988,7 @@ async def test_send_joint_design_with_empty_id_returns_error(opcua_client, ns_in
     jm = await _get_joint_management(opcua_client, ns_ijt)
     send_node = await find_child_by_browse_name(jm, "SendJointDesign", ns_ijt)
     if send_node is None:
-        pytest.skip("SendJointDesign not present — skipping negative test")
+        pytest.skip("SendJointDesign: Not Supported — skipping negative test")
     design_type = getattr(ua, "JointDesignDataType", None)
     if design_type is None:
         pytest.skip("JointDesignDataType not available — cannot construct empty-ID object")
@@ -1969,7 +2012,7 @@ async def test_send_joint_design_with_null_content_returns_error(opcua_client, n
     jm = await _get_joint_management(opcua_client, ns_ijt)
     send_node = await find_child_by_browse_name(jm, "SendJointDesign", ns_ijt)
     if send_node is None:
-        pytest.skip("SendJointDesign not present — skipping negative test")
+        pytest.skip("SendJointDesign: Not Supported — skipping negative test")
     try:
         result = await jm.call_method(send_node.nodeid, ua.Variant(None, ua.VariantType.Null))
         logger.warning("Expected ua.UaError for null content but returned %r", result)
@@ -1991,7 +2034,7 @@ async def test_get_joint_design_list_returns_string_elements(opcua_client, ns_in
     jm = await _get_joint_management(opcua_client, ns_ijt)
     list_node = await find_child_by_browse_name(jm, "GetJointDesignList", ns_ijt)
     if list_node is None:
-        pytest.skip("GetJointDesignList not present — skipping")
+        pytest.skip("GetJointDesignList: Not Supported — skipping")
     try:
         design_list = await _call_get_joint_design_list(jm, list_node)
     except ua.UaError as exc:
@@ -2020,7 +2063,7 @@ async def test_get_joint_design_list_reflects_newly_sent_design(opcua_client, ns
         await _send_test_joint_design(jm, ns_ijt, design_id)
         list_node = await find_child_by_browse_name(jm, "GetJointDesignList", ns_ijt)
         if list_node is None:
-            pytest.skip("GetJointDesignList not present — cannot verify")
+            pytest.skip("GetJointDesignList: Not Supported — cannot verify")
         design_list = await _call_get_joint_design_list(jm, list_node)
         ids = (
             [str(x) for x in design_list]
@@ -2041,7 +2084,7 @@ async def test_get_joint_design_list_returns_good_for_empty_list(opcua_client, n
     jm = await _get_joint_management(opcua_client, ns_ijt)
     list_node = await find_child_by_browse_name(jm, "GetJointDesignList", ns_ijt)
     if list_node is None:
-        pytest.skip("GetJointDesignList not present — skipping")
+        pytest.skip("GetJointDesignList: Not Supported — skipping")
     try:
         design_list = await _call_get_joint_design_list(jm, list_node)
     except ua.UaError as exc:
@@ -2073,7 +2116,7 @@ async def test_get_joint_design_round_trip_data_matches_sent_data(opcua_client, 
         await _send_test_joint_design(jm, ns_ijt, design_id)
         get_node = await find_child_by_browse_name(jm, "GetJointDesign", ns_ijt)
         if get_node is None:
-            pytest.skip("GetJointDesign not present — cannot verify round-trip")
+            pytest.skip("GetJointDesign: Not Supported — cannot verify round-trip")
         try:
             result = await jm.call_method(get_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
         except ua.UaError as exc:
@@ -2096,7 +2139,7 @@ async def test_get_joint_design_result_has_required_fields(opcua_client, ns_indi
         await _send_test_joint_design(jm, ns_ijt, design_id)
         get_node = await find_child_by_browse_name(jm, "GetJointDesign", ns_ijt)
         if get_node is None:
-            pytest.skip("GetJointDesign not present — cannot verify fields")
+            pytest.skip("GetJointDesign: Not Supported — cannot verify fields")
         try:
             result = await jm.call_method(get_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
         except ua.UaError as exc:
@@ -2104,8 +2147,9 @@ async def test_get_joint_design_result_has_required_fields(opcua_client, ns_indi
                 pytest.skip(f"GetJointDesign not callable: {exc}")
             raise
         assert result is not None, "GetJointDesign returned None"
-        if not isinstance(result, (list, tuple)):
-            did = getattr(result, "JointDesignId", None) or getattr(result, "Id", None)
+        design_data = result[0] if isinstance(result, (list, tuple)) and result else result
+        if design_data is not None:
+            did = getattr(design_data, "JointDesignId", None) or getattr(design_data, "Id", None)
             if did is not None:
                 assert str(did).strip() != "", "JointDesignId must not be empty"
                 logger.info("JointDesignId field present: '%s'", did)
@@ -2124,7 +2168,7 @@ async def test_get_joint_design_returns_updated_content_after_resend(opcua_clien
         await _send_test_joint_design(jm, ns_ijt, design_id, content="ContentV2")
         get_node = await find_child_by_browse_name(jm, "GetJointDesign", ns_ijt)
         if get_node is None:
-            pytest.skip("GetJointDesign not present — cannot verify updated content")
+            pytest.skip("GetJointDesign: Not Supported — cannot verify updated content")
         try:
             result = await jm.call_method(get_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
             assert result is not None, "GetJointDesign returned None after resend"
@@ -2145,7 +2189,7 @@ async def test_get_joint_design_with_nonexistent_id_returns_error(opcua_client, 
     jm = await _get_joint_management(opcua_client, ns_ijt)
     get_node = await find_child_by_browse_name(jm, "GetJointDesign", ns_ijt)
     if get_node is None:
-        pytest.skip("GetJointDesign not present — skipping negative test")
+        pytest.skip("GetJointDesign: Not Supported — skipping negative test")
     try:
         result = await jm.call_method(
             get_node.nodeid,
@@ -2168,7 +2212,7 @@ async def test_joint_design_data_id_is_non_empty_and_unique(opcua_client, ns_ind
     jm = await _get_joint_management(opcua_client, ns_ijt)
     list_node = await find_child_by_browse_name(jm, "GetJointDesignList", ns_ijt)
     if list_node is None:
-        pytest.skip("GetJointDesignList not present — skipping")
+        pytest.skip("GetJointDesignList: Not Supported — skipping")
     try:
         design_list = await _call_get_joint_design_list(jm, list_node)
     except ua.UaError as exc:
@@ -2196,7 +2240,7 @@ async def test_joint_design_data_content_is_non_null_for_stored_design(opcua_cli
         await _send_test_joint_design(jm, ns_ijt, design_id, content="conformance-content-value")
         get_node = await find_child_by_browse_name(jm, "GetJointDesign", ns_ijt)
         if get_node is None:
-            pytest.skip("GetJointDesign not present — cannot verify content")
+            pytest.skip("GetJointDesign: Not Supported — cannot verify content")
         try:
             result = await jm.call_method(get_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
         except ua.UaError as exc:
@@ -2220,7 +2264,7 @@ async def test_joint_design_data_resend_with_same_id_accepted_or_error(opcua_cli
         await _send_test_joint_design(jm, ns_ijt, design_id, content="FirstContent")
         send_node = await find_child_by_browse_name(jm, "SendJointDesign", ns_ijt)
         if send_node is None:
-            pytest.skip("SendJointDesign not present — skipping")
+            pytest.skip("SendJointDesign: Not Supported — skipping")
         design_type = getattr(ua, "JointDesignDataType", None)
         if design_type is not None:
             design_data = design_type()
@@ -2272,7 +2316,7 @@ async def test_send_joint_component_appears_in_component_list(opcua_client, ns_i
         await _send_test_joint_component(jm, ns_ijt, comp_id)
         list_node = await find_child_by_browse_name(jm, "GetJointComponentList", ns_ijt)
         if list_node is None:
-            pytest.skip("GetJointComponentList not present — cannot verify")
+            pytest.skip("GetJointComponentList: Not Supported — cannot verify")
         try:
             comp_list = await _call_get_joint_component_list(jm, list_node)
         except ua.UaError as exc:
@@ -2321,7 +2365,7 @@ async def test_send_joint_component_with_empty_id_returns_error(opcua_client, ns
     jm = await _get_joint_management(opcua_client, ns_ijt)
     send_node = await find_child_by_browse_name(jm, "SendJointComponent", ns_ijt)
     if send_node is None:
-        pytest.skip("SendJointComponent not present — skipping negative test")
+        pytest.skip("SendJointComponent: Not Supported — skipping negative test")
     comp_type = getattr(ua, "JointComponentDataType", None)
     if comp_type is None:
         pytest.skip("JointComponentDataType not available — cannot construct empty-ID object")
@@ -2345,7 +2389,7 @@ async def test_send_joint_component_with_empty_manufacturer_returns_error(opcua_
     jm = await _get_joint_management(opcua_client, ns_ijt)
     send_node = await find_child_by_browse_name(jm, "SendJointComponent", ns_ijt)
     if send_node is None:
-        pytest.skip("SendJointComponent not present — skipping negative test")
+        pytest.skip("SendJointComponent: Not Supported — skipping negative test")
     comp_type = getattr(ua, "JointComponentDataType", None)
     if comp_type is None:
         pytest.skip("JointComponentDataType not available — cannot test empty Manufacturer")
@@ -2375,7 +2419,7 @@ async def test_get_joint_component_list_returns_string_elements(opcua_client, ns
     jm = await _get_joint_management(opcua_client, ns_ijt)
     list_node = await find_child_by_browse_name(jm, "GetJointComponentList", ns_ijt)
     if list_node is None:
-        pytest.skip("GetJointComponentList not present — skipping")
+        pytest.skip("GetJointComponentList: Not Supported — skipping")
     try:
         comp_list = await _call_get_joint_component_list(jm, list_node)
     except ua.UaError as exc:
@@ -2404,7 +2448,7 @@ async def test_get_joint_component_list_reflects_newly_sent_component(opcua_clie
         await _send_test_joint_component(jm, ns_ijt, comp_id)
         list_node = await find_child_by_browse_name(jm, "GetJointComponentList", ns_ijt)
         if list_node is None:
-            pytest.skip("GetJointComponentList not present — cannot verify")
+            pytest.skip("GetJointComponentList: Not Supported — cannot verify")
         comp_list = await _call_get_joint_component_list(jm, list_node)
         ids = (
             [str(x) for x in comp_list]
@@ -2425,7 +2469,7 @@ async def test_get_joint_component_list_returns_good_for_empty_list(opcua_client
     jm = await _get_joint_management(opcua_client, ns_ijt)
     list_node = await find_child_by_browse_name(jm, "GetJointComponentList", ns_ijt)
     if list_node is None:
-        pytest.skip("GetJointComponentList not present — skipping")
+        pytest.skip("GetJointComponentList: Not Supported — skipping")
     try:
         comp_list = await _call_get_joint_component_list(jm, list_node)
     except ua.UaError as exc:
@@ -2457,7 +2501,7 @@ async def test_get_joint_component_round_trip_data_matches_sent_data(opcua_clien
         await _send_test_joint_component(jm, ns_ijt, comp_id)
         get_node = await find_child_by_browse_name(jm, "GetJointComponent", ns_ijt)
         if get_node is None:
-            pytest.skip("GetJointComponent not present — cannot verify round-trip")
+            pytest.skip("GetJointComponent: Not Supported — cannot verify round-trip")
         try:
             result = await jm.call_method(get_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
         except ua.UaError as exc:
@@ -2480,7 +2524,7 @@ async def test_get_joint_component_result_has_required_fields(opcua_client, ns_i
         await _send_test_joint_component(jm, ns_ijt, comp_id, manufacturer="RequiredMfg")
         get_node = await find_child_by_browse_name(jm, "GetJointComponent", ns_ijt)
         if get_node is None:
-            pytest.skip("GetJointComponent not present — cannot verify fields")
+            pytest.skip("GetJointComponent: Not Supported — cannot verify fields")
         try:
             result = await jm.call_method(get_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
         except ua.UaError as exc:
@@ -2488,11 +2532,12 @@ async def test_get_joint_component_result_has_required_fields(opcua_client, ns_i
                 pytest.skip(f"GetJointComponent not callable: {exc}")
             raise
         assert result is not None, "GetJointComponent returned None"
-        if not isinstance(result, (list, tuple)):
-            cid = getattr(result, "JointComponentId", None) or getattr(result, "Id", None)
+        comp_data = result[0] if isinstance(result, (list, tuple)) and result else result
+        if comp_data is not None:
+            cid = getattr(comp_data, "JointComponentId", None) or getattr(comp_data, "Id", None)
             if cid is not None:
                 assert str(cid).strip() != "", "JointComponentId must not be empty"
-                logger.info("JointComponentId='%s', Manufacturer=%r", cid, getattr(result, "Manufacturer", None))
+                logger.info("JointComponentId='%s', Manufacturer=%r", cid, getattr(comp_data, "Manufacturer", None))
     finally:
         await _delete_test_joint_component(jm, ns_ijt, comp_id)
 
@@ -2508,10 +2553,11 @@ async def test_get_joint_component_returns_updated_data_after_resend(opcua_clien
         await _send_test_joint_component(jm, ns_ijt, comp_id, manufacturer="MfgV2")
         get_node = await find_child_by_browse_name(jm, "GetJointComponent", ns_ijt)
         if get_node is None:
-            pytest.skip("GetJointComponent not present — cannot verify update")
+            pytest.skip("GetJointComponent: Not Supported — cannot verify update")
         try:
             result = await jm.call_method(get_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
-            mfg = getattr(result, "Manufacturer", None) if result else None
+            comp_data = result[0] if isinstance(result, (list, tuple)) and result else result
+            mfg = getattr(comp_data, "Manufacturer", None) if comp_data else None
             if mfg is not None:
                 assert str(mfg) == "MfgV2", f"Expected 'MfgV2' after resend, got {mfg!r}"
                 logger.info("GetJointComponent correctly reflects updated Manufacturer")
@@ -2531,7 +2577,7 @@ async def test_get_joint_component_with_nonexistent_id_returns_error(opcua_clien
     jm = await _get_joint_management(opcua_client, ns_ijt)
     get_node = await find_child_by_browse_name(jm, "GetJointComponent", ns_ijt)
     if get_node is None:
-        pytest.skip("GetJointComponent not present — skipping negative test")
+        pytest.skip("GetJointComponent: Not Supported — skipping negative test")
     try:
         result = await jm.call_method(
             get_node.nodeid,
@@ -2554,7 +2600,7 @@ async def test_joint_component_data_ids_are_non_empty_and_unique(opcua_client, n
     jm = await _get_joint_management(opcua_client, ns_ijt)
     list_node = await find_child_by_browse_name(jm, "GetJointComponentList", ns_ijt)
     if list_node is None:
-        pytest.skip("GetJointComponentList not present — skipping")
+        pytest.skip("GetJointComponentList: Not Supported — skipping")
     try:
         comp_list = await _call_get_joint_component_list(jm, list_node)
     except ua.UaError as exc:
@@ -2582,7 +2628,7 @@ async def test_joint_component_data_manufacturer_is_non_empty(opcua_client, ns_i
         await _send_test_joint_component(jm, ns_ijt, comp_id, manufacturer="ValidManufacturer")
         get_node = await find_child_by_browse_name(jm, "GetJointComponent", ns_ijt)
         if get_node is None:
-            pytest.skip("GetJointComponent not present — cannot verify Manufacturer")
+            pytest.skip("GetJointComponent: Not Supported — cannot verify Manufacturer")
         try:
             result = await jm.call_method(get_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
         except ua.UaError as exc:
@@ -2590,8 +2636,9 @@ async def test_joint_component_data_manufacturer_is_non_empty(opcua_client, ns_i
                 pytest.skip(f"GetJointComponent not callable: {exc}")
             raise
         assert result is not None, "GetJointComponent returned None"
-        if not isinstance(result, (list, tuple)):
-            mfg = getattr(result, "Manufacturer", None)
+        comp_data = result[0] if isinstance(result, (list, tuple)) and result else result
+        if comp_data is not None:
+            mfg = getattr(comp_data, "Manufacturer", None)
             if mfg is not None:
                 assert str(mfg).strip() != "", "Manufacturer must not be empty"
                 logger.info("Manufacturer field non-empty: '%s'", mfg)
@@ -2609,16 +2656,17 @@ async def test_joint_component_data_manufacturer_uri_follows_uri_format(opcua_cl
         await _send_test_joint_component(jm, ns_ijt, comp_id)
         get_node = await find_child_by_browse_name(jm, "GetJointComponent", ns_ijt)
         if get_node is None:
-            pytest.skip("GetJointComponent not present — cannot verify ManufacturerUri")
+            pytest.skip("GetJointComponent: Not Supported — cannot verify ManufacturerUri")
         try:
             result = await jm.call_method(get_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJointComponent not callable: {exc}")
             raise
-        if result is None or isinstance(result, (list, tuple)):
-            pytest.skip("GetJointComponent returned list/None — cannot inspect ManufacturerUri")
-        uri = getattr(result, "ManufacturerUri", None)
+        if result is None:
+            pytest.skip("GetJointComponent returned None — cannot inspect ManufacturerUri")
+        comp_data = result[0] if isinstance(result, (list, tuple)) and result else result
+        uri = getattr(comp_data, "ManufacturerUri", None)
         if uri is None or not str(uri).strip():
             logger.info("ManufacturerUri is absent or empty — field is optional")
             return
@@ -2637,7 +2685,7 @@ async def test_joint_component_data_empty_manufacturer_uri_rejected(opcua_client
     jm = await _get_joint_management(opcua_client, ns_ijt)
     send_node = await find_child_by_browse_name(jm, "SendJointComponent", ns_ijt)
     if send_node is None:
-        pytest.skip("SendJointComponent not present — skipping negative test")
+        pytest.skip("SendJointComponent: Not Supported — skipping negative test")
     comp_type = getattr(ua, "JointComponentDataType", None)
     if comp_type is None:
         pytest.skip("JointComponentDataType not available — cannot test ManufacturerUri rejection")
@@ -2674,7 +2722,7 @@ async def test_delete_joint_with_nonexistent_id_returns_bad_node_id_unknown(opcu
     jm = await _get_joint_management(opcua_client, ns_ijt)
     del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
     if del_node is None:
-        pytest.skip("DeleteJoint not present — skipping negative test")
+        pytest.skip("DeleteJoint: Not Supported — skipping negative test")
     try:
         result = await jm.call_method(
             del_node.nodeid,
@@ -2697,7 +2745,7 @@ async def test_delete_joint_of_selected_joint_returns_error_or_deselects(opcua_c
     joint_id = "conformance-test-joint-del-selected"
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — cannot create test joint")
+        pytest.skip("SendJoint: Not Supported — cannot create test joint")
     joint_data = joint_type()
     if hasattr(joint_data, "JointId"):
         joint_data.JointId = joint_id
@@ -2721,7 +2769,7 @@ async def test_delete_joint_of_selected_joint_returns_error_or_deselects(opcua_c
                 pass
         del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
         if del_node is None:
-            pytest.skip("DeleteJoint not present — skipping")
+            pytest.skip("DeleteJoint: Not Supported — skipping")
         try:
             await jm.call_method(
                 del_node.nodeid,
@@ -2763,7 +2811,7 @@ async def test_delete_joint_design_send_then_delete_removes_from_list(opcua_clie
     await _send_test_joint_design(jm, ns_ijt, design_id)
     del_node = await find_child_by_browse_name(jm, "DeleteJointDesign", ns_ijt)
     if del_node is None:
-        pytest.skip("DeleteJointDesign not present — skipping")
+        pytest.skip("DeleteJointDesign: Not Supported — skipping")
     try:
         await jm.call_method(del_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
     except ua.UaError as exc:
@@ -2792,7 +2840,7 @@ async def test_delete_joint_design_with_nonexistent_id_returns_error(opcua_clien
     jm = await _get_joint_management(opcua_client, ns_ijt)
     del_node = await find_child_by_browse_name(jm, "DeleteJointDesign", ns_ijt)
     if del_node is None:
-        pytest.skip("DeleteJointDesign not present — skipping negative test")
+        pytest.skip("DeleteJointDesign: Not Supported — skipping negative test")
     try:
         result = await jm.call_method(
             del_node.nodeid,
@@ -2817,7 +2865,7 @@ async def test_delete_joint_component_send_then_delete_removes_from_list(opcua_c
     await _send_test_joint_component(jm, ns_ijt, comp_id)
     del_node = await find_child_by_browse_name(jm, "DeleteJointComponent", ns_ijt)
     if del_node is None:
-        pytest.skip("DeleteJointComponent not present — skipping")
+        pytest.skip("DeleteJointComponent: Not Supported — skipping")
     try:
         await jm.call_method(del_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
     except ua.UaError as exc:
@@ -2848,7 +2896,7 @@ async def test_delete_joint_component_with_nonexistent_id_returns_error(opcua_cl
     jm = await _get_joint_management(opcua_client, ns_ijt)
     del_node = await find_child_by_browse_name(jm, "DeleteJointComponent", ns_ijt)
     if del_node is None:
-        pytest.skip("DeleteJointComponent not present — skipping negative test")
+        pytest.skip("DeleteJointComponent: Not Supported — skipping negative test")
     try:
         result = await jm.call_method(
             del_node.nodeid,
@@ -2875,7 +2923,7 @@ async def test_get_joint_revision_list_returns_list_for_stored_joint(opcua_clien
         pytest.skip("JointDataType not available — cannot test GetJointRevisionList")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — cannot create test joint")
+        pytest.skip("SendJoint: Not Supported — cannot create test joint")
     try:
         for name_val in ("RevisionOne", "RevisionTwo"):
             joint_data = joint_type()
@@ -2891,7 +2939,7 @@ async def test_get_joint_revision_list_returns_list_for_stored_joint(opcua_clien
                 raise
         rl_node = await find_child_by_browse_name(jm, "GetJointRevisionList", ns_ijt)
         if rl_node is None:
-            pytest.skip("GetJointRevisionList not present — skipping")
+            pytest.skip("GetJointRevisionList: Not Supported — skipping")
         try:
             result = await jm.call_method(rl_node.nodeid, ua.Variant(joint_id, ua.VariantType.String))
         except ua.UaError as exc:
@@ -2928,7 +2976,7 @@ async def test_get_joint_revision_list_each_entry_has_required_fields(opcua_clie
         pytest.skip("JointDataType not available — cannot test revision list fields")
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
-        pytest.skip("SendJoint not present — cannot create test joint")
+        pytest.skip("SendJoint: Not Supported — cannot create test joint")
     try:
         joint_data = joint_type()
         if hasattr(joint_data, "JointId"):
@@ -2941,7 +2989,7 @@ async def test_get_joint_revision_list_each_entry_has_required_fields(opcua_clie
             raise
         rl_node = await find_child_by_browse_name(jm, "GetJointRevisionList", ns_ijt)
         if rl_node is None:
-            pytest.skip("GetJointRevisionList not present — skipping")
+            pytest.skip("GetJointRevisionList: Not Supported — skipping")
         try:
             result = await jm.call_method(rl_node.nodeid, ua.Variant(joint_id, ua.VariantType.String))
         except ua.UaError as exc:
@@ -2977,7 +3025,7 @@ async def test_get_joint_revision_list_with_nonexistent_id_returns_empty_or_erro
     jm = await _get_joint_management(opcua_client, ns_ijt)
     rl_node = await find_child_by_browse_name(jm, "GetJointRevisionList", ns_ijt)
     if rl_node is None:
-        pytest.skip("GetJointRevisionList not present — skipping negative test")
+        pytest.skip("GetJointRevisionList: Not Supported — skipping negative test")
     try:
         result = await jm.call_method(
             rl_node.nodeid,
@@ -3004,7 +3052,7 @@ async def test_get_joint_revision_list_with_empty_id_returns_bad_invalid_argumen
     jm = await _get_joint_management(opcua_client, ns_ijt)
     rl_node = await find_child_by_browse_name(jm, "GetJointRevisionList", ns_ijt)
     if rl_node is None:
-        pytest.skip("GetJointRevisionList not present — skipping negative test")
+        pytest.skip("GetJointRevisionList: Not Supported — skipping negative test")
     try:
         result = await jm.call_method(rl_node.nodeid, ua.Variant("", ua.VariantType.String))
         logger.warning("Expected ua.UaError for empty ID in GetJointRevisionList but returned %r", result)

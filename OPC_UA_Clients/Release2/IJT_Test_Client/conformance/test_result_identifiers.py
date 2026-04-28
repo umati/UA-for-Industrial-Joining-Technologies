@@ -18,9 +18,9 @@ Spec (result_external_identifiers):
   following identifiers based on EntityType: VEHICLE, PRODUCT, PART, JOINT, ORDER, MODEL
   in Result.ResultMetaData.AssociatedEntities[]."
 
-Design: validates AssociatedEntities on real results.
+Design: validates AssociatedEntities on real results via ResultCollector events.
 External identifiers require SendIdentifiers to be called first,
-then a result triggered, then GetLatestResult checked for IsExternal=True entities.
+then a result triggered, then the result event checked for IsExternal=True entities.
 """
 
 import logging
@@ -29,9 +29,10 @@ import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
-from helpers.method_caller import call_method, find_and_call_method
-from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, NS_MACH_RESULT, ResultType
+from helpers.method_caller import find_and_call_method
+from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system, find_method_set
+from helpers.result_collector import ResultCollector
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -44,81 +45,60 @@ _METHOD_TIMEOUT = 15.0
 
 
 class _EntityType:
-    """EntityTypeEnumeration values from IJT Base spec.
+    """EntityTypeEnumeration values from OPC 40450-1 v100 §10.10.
 
-    Used to identify the kind of entity referenced in AssociatedEntities.
+    Full range: 0=UNDEFINED, 1=OTHER, 2=ASSET, 3=CONTROLLER, 4=TOOL,
+    5=SERVO, 6=MEMORY_DEVICE, 7=SENSOR, 8=CABLE, 9=BATTERY, 10=POWER_SUPPLY,
+    11=FEEDER, 12=ACCESSORY, 13=SUB_COMPONENT, 14=SOFTWARE, 15=RESULT,
+    16=EVENT, 17=ERROR, 18=SYSTEM, 19=LOG, 20=VEHICLE, 21=PRODUCT, 22=PART,
+    23=JOINT, 24=MODEL, 25=ORDER, 26=JOINING_PROCESS, 27=PROGRAM, 28=JOB,
+    29=BATCH, 30=RECIPE, 31=TASK, 32=PROCESS, 33=CONFIGURATION, 34=SOCKET,
+    35=CHANNEL, 36=STATION, 37=PRODUCTION_LINE, 38=LOCATION, 39=USER,
+    40=PARENT, 41=VIRTUAL_STATION, 42=JOINT_COMPONENT
     """
 
-    OTHER = 0
-    PROGRAM = 1
-    JOINT = 2
-    PART = 3
+    UNDEFINED = 0
+    OTHER = 1
+    ASSET = 2
+    CONTROLLER = 3
     TOOL = 4
-    CONTROLLER = 5
-    JOB = 6
-    VEHICLE = 7
-    PRODUCT = 8
-    ORDER = 9
-    MODEL = 10
+    SERVO = 5
+    MEMORY_DEVICE = 6
+    SENSOR = 7
+    VEHICLE = 20
+    PRODUCT = 21
+    PART = 22
+    JOINT = 23
+    MODEL = 24
+    ORDER = 25
+    JOINING_PROCESS = 26
+    PROGRAM = 27
+    JOB = 28
+    BATCH = 29
 
-    VALID_EXTERNAL_TYPES: frozenset = frozenset(
-        {
-            VEHICLE,
-            PRODUCT,
-            PART,
-            JOINT,
-            ORDER,
-            MODEL,
-        }
-    )
-    # Highest EntityType value currently defined in OPC 40450-1 v1.01.
-    # Servers may use vendor-extended values beyond this; those are treated as advisory.
-    MAX_DEFINED_VALUE: int = 10
+    # External identifier types (supplied via SendIdentifiers)
+    VALID_EXTERNAL_TYPES: frozenset = frozenset({VEHICLE, PRODUCT, PART, JOINT, ORDER, MODEL})
+    # Joining process reference types (JoiningProcessId in AssociatedEntities)
+    JOINING_PROCESS_TYPES: frozenset = frozenset({JOINING_PROCESS, PROGRAM, JOB, BATCH})
+    # Maximum defined value in v100 spec
+    MAX_DEFINED_VALUE: int = 42
 
 
 _MAX_DEFINED_ENTITY_TYPE = _EntityType.MAX_DEFINED_VALUE
 
 
-async def _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices):
-    """Trigger a result and return (result_data, associated_entities_list).
+async def _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices):
+    """Trigger a result and return (result_data, associated_entities_list) via events.
 
-    associated_entities_list is the AssociatedEntities from ResultMetaData,
-    or an empty list when the field is absent.
-    Returns (None, None) on trigger or retrieval failure.
+    Subscribes BEFORE triggering to eliminate race conditions.
+    Returns (None, None) on trigger or collection failure.
     """
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        return None, None
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
+        outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
+        if not outcome.triggered and result_trigger.is_simulator:
+            return None, None
+        result_data = await rc.collect_single()
 
-    outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-    if not outcome.triggered and result_trigger.is_simulator:
-        return None, None
-
-    js = await find_joining_system(opcua_client)
-    if js is None:
-        return None, None
-    rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
-    if rm is None:
-        return None, None
-    glr = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
-    if glr is None:
-        return None, None
-
-    wait_ms = _SIMULATOR_TIMEOUT_MS if result_trigger.is_simulator else _EXTERNAL_TIMEOUT_MS
-    call_timeout_s = _METHOD_CALL_TIMEOUT_S if result_trigger.is_simulator else _EXTERNAL_CALL_TIMEOUT_S
-
-    result = await call_method(
-        rm,
-        glr.nodeid,
-        ua.Variant(wait_ms, ua.VariantType.Int32),
-        timeout=call_timeout_s,
-        method_name="GetLatestResult",
-    )
-    if not result.success:
-        return None, None
-
-    outputs = result.output_list
-    result_data = outputs[1] if len(outputs) > 1 else (outputs[0] if outputs else None)
     if result_data is None:
         return None, None
 
@@ -134,7 +114,7 @@ def _skip_if_no_result(result_data, result_trigger) -> None:
     """Call pytest.skip() when result_data is None, with an appropriate message."""
     if result_data is None:
         if result_trigger.is_simulator:
-            pytest.skip("Simulator trigger failed or GetLatestResult returned no data")
+            pytest.skip("Simulator trigger failed or no result event received")
         else:
             pytest.skip("No result received from external trigger within timeout")
 
@@ -161,9 +141,11 @@ async def _get_asset_management_method_set(client, ns_ijt: int, ns_di: int, ns_a
 
 
 @pytest.mark.requires_cu(CU.RESULT_INTERNAL_IDENTIFIERS)
-async def test_result_associated_entities_contains_controller_identifier(opcua_client, result_trigger, ns_indices):
+async def test_result_associated_entities_contains_controller_identifier(
+    subscription_client, result_trigger, ns_indices
+):
     """AssociatedEntities must contain an entity with EntityType=CONTROLLER and non-empty EntityId."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:
@@ -183,9 +165,9 @@ async def test_result_associated_entities_contains_controller_identifier(opcua_c
 
 
 @pytest.mark.requires_cu(CU.RESULT_INTERNAL_IDENTIFIERS)
-async def test_result_associated_entities_contains_tool_identifier(opcua_client, result_trigger, ns_indices):
+async def test_result_associated_entities_contains_tool_identifier(subscription_client, result_trigger, ns_indices):
     """AssociatedEntities must contain an entity with EntityType=TOOL."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:
@@ -199,29 +181,34 @@ async def test_result_associated_entities_contains_tool_identifier(opcua_client,
 
 
 @pytest.mark.requires_cu(CU.RESULT_INTERNAL_IDENTIFIERS)
-async def test_result_associated_entities_contains_joining_process_identifier(opcua_client, result_trigger, ns_indices):
-    """AssociatedEntities must contain an entity with EntityType=PROGRAM or JOB,
+async def test_result_associated_entities_contains_joining_process_identifier(
+    subscription_client, result_trigger, ns_indices
+):
+    """AssociatedEntities must contain an entity with EntityType=JOINING_PROCESS, PROGRAM, JOB, or BATCH,
     corresponding to the joining process classification."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:
         pytest.skip("AssociatedEntities is empty — server may not populate process identifiers")
 
-    process_type_values = frozenset({_EntityType.PROGRAM, _EntityType.JOB})
+    process_type_values = _EntityType.JOINING_PROCESS_TYPES
     process_entities = [e for e in entities if _entity_type_int(e) in process_type_values]
     assert process_entities, (
-        f"No PROGRAM (EntityType={_EntityType.PROGRAM}) or JOB (EntityType={_EntityType.JOB}) "
+        f"No JOINING_PROCESS (EntityType={_EntityType.JOINING_PROCESS}), "
+        f"PROGRAM (EntityType={_EntityType.PROGRAM}), "
+        f"JOB (EntityType={_EntityType.JOB}), or "
+        f"BATCH (EntityType={_EntityType.BATCH}) "
         f"entity found in AssociatedEntities. "
         f"Present entity types: {[_entity_type_int(e) for e in entities]}"
     )
 
 
 @pytest.mark.requires_cu(CU.RESULT_INTERNAL_IDENTIFIERS)
-async def test_internal_identifier_entities_have_is_external_false(opcua_client, result_trigger, ns_indices):
+async def test_internal_identifier_entities_have_is_external_false(subscription_client, result_trigger, ns_indices):
     """Asset identifier entities (CONTROLLER, TOOL) must have IsExternal=False,
     because they originate from the server itself, not from an external system."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:
@@ -250,7 +237,7 @@ async def test_internal_identifier_entities_have_is_external_false(opcua_client,
 
 @pytest.mark.requires_cu(CU.RESULT_EXTERNAL_IDENTIFIERS)
 async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
-    opcua_client, result_trigger, ns_indices
+    opcua_client, subscription_client, result_trigger, ns_indices
 ):
     """Entities registered via SendIdentifiers must appear as IsExternal=True in the
     next result's AssociatedEntities.
@@ -259,23 +246,38 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
       1. ResetIdentifiers — clear any previous state.
       2. SendIdentifiers with an empty ExtensionObject array (widest compatibility).
       3. Trigger a result.
-      4. GetLatestResult — assert at least one entity has IsExternal=True.
+      4. Collect result via events — assert at least one entity has IsExternal=True.
 
     Skips when encoding is not supported by the asyncua version in use.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_di is None or ns_ijt is None or ns_mr is None:
+    if ns_di is None or ns_ijt is None:
         pytest.skip("Required namespaces not registered on server")
 
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
 
-    await find_and_call_method(ms, BN.RESET_IDENTIFIERS, ns_ijt, timeout=_METHOD_TIMEOUT)
+    await find_and_call_method(
+        ms,
+        BN.RESET_IDENTIFIERS,
+        ns_ijt,
+        ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
+        ua.Variant([], ua.VariantType.ExtensionObject),  # IdentifierList (clear all)
+        ua.Variant(True, ua.VariantType.Boolean),  # ResetAll
+        ua.Variant(False, ua.VariantType.Boolean),  # ResetLatest
+        timeout=_METHOD_TIMEOUT,
+    )
 
     empty_arg = ua.Variant([], ua.VariantType.ExtensionObject)
     try:
-        send_result = await find_and_call_method(ms, BN.SEND_IDENTIFIERS, ns_ijt, empty_arg, timeout=_METHOD_TIMEOUT)
+        send_result = await find_and_call_method(
+            ms,
+            BN.SEND_IDENTIFIERS,
+            ns_ijt,
+            ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
+            empty_arg,  # Identifiers (empty array)
+            timeout=_METHOD_TIMEOUT,
+        )
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"Cannot encode SendIdentifiers input: {exc}")
 
@@ -285,37 +287,13 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
             pytest.skip(f"SendIdentifiers method not supported on this server: {err_str}")
         pytest.skip(f"SendIdentifiers call failed: {err_str}")
 
-    outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
-    if not outcome.triggered and result_trigger.is_simulator:
-        pytest.skip(f"Simulator trigger failed: {outcome.skip_reason}")
-
-    js = await find_joining_system(opcua_client)
-    if js is None:
-        pytest.skip("JoiningSystem not found for result retrieval")
-    rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
-    if rm is None:
-        pytest.skip("ResultManagement not found for result retrieval")
-    glr = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
-    if glr is None:
-        pytest.skip("GetLatestResult method not found")
-
-    wait_ms = _SIMULATOR_TIMEOUT_MS if result_trigger.is_simulator else _EXTERNAL_TIMEOUT_MS
-    call_timeout_s = _METHOD_CALL_TIMEOUT_S if result_trigger.is_simulator else _EXTERNAL_CALL_TIMEOUT_S
-
-    result = await call_method(
-        rm,
-        glr.nodeid,
-        ua.Variant(wait_ms, ua.VariantType.Int32),
-        timeout=call_timeout_s,
-        method_name="GetLatestResult",
-    )
-    if not result.success:
-        pytest.skip("GetLatestResult failed after SendIdentifiers")
-
-    outputs = result.output_list
-    result_data = outputs[1] if len(outputs) > 1 else (outputs[0] if outputs else None)
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
+        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        if not outcome.triggered and result_trigger.is_simulator:
+            pytest.skip(f"Simulator trigger failed: {getattr(outcome, 'skip_reason', 'unknown')}")
+        result_data = await rc.collect_single()
     if result_data is None:
-        pytest.skip("GetLatestResult returned no result data")
+        pytest.skip("No result event received after SendIdentifiers + trigger")
 
     meta = getattr(result_data, "ResultMetaData", None)
     associated = getattr(meta, "AssociatedEntities", None) if meta else None
@@ -335,11 +313,11 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
 
 
 @pytest.mark.requires_cu(CU.RESULT_EXTERNAL_IDENTIFIERS)
-async def test_external_identifier_entity_type_is_valid_external_type(opcua_client, result_trigger, ns_indices):
+async def test_external_identifier_entity_type_is_valid_external_type(subscription_client, result_trigger, ns_indices):
     """Every entity in AssociatedEntities where IsExternal=True must have an EntityType
     that corresponds to a recognised external entity kind (VEHICLE, PRODUCT, PART, JOINT,
     ORDER, MODEL, or OTHER)."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:
@@ -384,14 +362,14 @@ async def test_external_identifier_entity_type_is_valid_external_type(opcua_clie
 
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.RESULT_INTERNAL_IDENTIFIERS)
-async def test_result_associated_entities_is_always_a_list(opcua_client, result_trigger, ns_indices):
+async def test_result_associated_entities_is_always_a_list(subscription_client, result_trigger, ns_indices):
     """AssociatedEntities must be a list (never None) even on simple results.
 
     A None AssociatedEntities breaks callers that iterate over the field.
     An absent field (attribute not set at all) is acceptable — only a non-None
     non-list value is a fault.
     """
-    result_data, _ = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, _ = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     meta = getattr(result_data, "ResultMetaData", None) if result_data else None
@@ -427,10 +405,10 @@ def _entity_type_int(entity) -> int:
 
 
 @pytest.mark.requires_cu(CU.RESULT_INTERNAL_IDENTIFIERS)
-async def test_result_associated_entities_field_is_accessible(opcua_client, result_trigger, ns_indices):
+async def test_result_associated_entities_field_is_accessible(subscription_client, result_trigger, ns_indices):
     """ResultMetaData.AssociatedEntities must be accessible on a real result — the
     field may be empty but must not raise an error when accessed."""
-    result_data, _ = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, _ = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     meta = getattr(result_data, "ResultMetaData", None) if result_data else None
@@ -444,18 +422,18 @@ async def test_result_associated_entities_field_is_accessible(opcua_client, resu
 
 
 @pytest.mark.requires_cu(CU.RESULT_INTERNAL_IDENTIFIERS)
-async def test_controller_entity_id_is_stable_across_consecutive_results(opcua_client, result_trigger, ns_indices):
+async def test_controller_entity_id_is_stable_across_consecutive_results(
+    subscription_client, result_trigger, ns_indices
+):
     """The EntityId of the CONTROLLER entity must be the same value across consecutive
     results from the same device session — the controller identity does not change
     between operations."""
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered on server")
-
     controller_ids: list[str] = []
 
     for _ in range(2):
-        result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+        result_data, entities = await _get_result_and_associated_entities(
+            subscription_client, result_trigger, ns_indices
+        )
         if result_data is None:
             break
         controller_entities = [e for e in entities if _entity_type_int(e) == _EntityType.CONTROLLER]
@@ -480,10 +458,12 @@ async def test_controller_entity_id_is_stable_across_consecutive_results(opcua_c
 
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.RESULT_INTERNAL_IDENTIFIERS)
-async def test_associated_entities_with_no_entries_is_accepted_gracefully(opcua_client, result_trigger, ns_indices):
+async def test_associated_entities_with_no_entries_is_accepted_gracefully(
+    subscription_client, result_trigger, ns_indices
+):
     """A result whose AssociatedEntities field is empty or absent must not cause a
     service-level error — absence of optional entities is a valid server state."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     # If entities IS empty, verify we can still read the rest of ResultMetaData
@@ -500,14 +480,11 @@ async def test_associated_entities_with_no_entries_is_accepted_gracefully(opcua_
 
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.RESULT_INTERNAL_IDENTIFIERS)
-async def test_entity_type_values_are_within_defined_spec_range(opcua_client, result_trigger, ns_indices):
+async def test_entity_type_values_are_within_defined_spec_range(subscription_client, result_trigger, ns_indices):
     """All EntityType values in AssociatedEntities must be within the range defined
     by the spec — no value above the maximum defined type is permitted (vendor-specific
     values below zero are allowed as extensions)."""
-    # Maximum EntityType value defined in the current spec revision
-    _MAX_DEFINED_ENTITY_TYPE = 42
-
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:
@@ -534,11 +511,11 @@ async def test_entity_type_values_are_within_defined_spec_range(opcua_client, re
 
 
 @pytest.mark.requires_cu(CU.RESULT_EXTERNAL_IDENTIFIERS)
-async def test_external_entity_types_have_is_external_flag_true(opcua_client, result_trigger, ns_indices):
+async def test_external_entity_types_have_is_external_flag_true(subscription_client, result_trigger, ns_indices):
     """Entities in AssociatedEntities that carry external product / part / vehicle
     identifiers must have IsExternal = True — their identity originates from an
     external system such as a MES, WMS, or ERP."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:
@@ -585,10 +562,10 @@ async def test_external_entity_types_have_is_external_flag_true(opcua_client, re
 
 
 @pytest.mark.requires_cu(CU.RESULT_EXTERNAL_IDENTIFIERS)
-async def test_multiple_external_entity_types_can_coexist(opcua_client, result_trigger, ns_indices):
+async def test_multiple_external_entity_types_can_coexist(subscription_client, result_trigger, ns_indices):
     """A single result may carry both a PRODUCT and a PART external entity in
     AssociatedEntities — the spec permits multiple external entity types simultaneously."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:
@@ -619,10 +596,10 @@ async def test_multiple_external_entity_types_can_coexist(opcua_client, result_t
 
 
 @pytest.mark.requires_cu(CU.RESULT_EXTERNAL_IDENTIFIERS)
-async def test_external_entity_id_is_non_empty_trimmed_string(opcua_client, result_trigger, ns_indices):
+async def test_external_entity_id_is_non_empty_trimmed_string(subscription_client, result_trigger, ns_indices):
     """Every external entity in AssociatedEntities must have a non-empty EntityId with
     no leading or trailing whitespace — the spec defines EntityId as a TrimmedString."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     external_entities = [e for e in entities if getattr(e, "IsExternal", False) is True]
@@ -649,10 +626,10 @@ async def test_external_entity_id_is_non_empty_trimmed_string(opcua_client, resu
 
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.RESULT_EXTERNAL_IDENTIFIERS)
-async def test_result_without_external_entities_is_accepted(opcua_client, result_trigger, ns_indices):
+async def test_result_without_external_entities_is_accepted(subscription_client, result_trigger, ns_indices):
     """A result that has no external entity types in AssociatedEntities must still be
     returned without error — all AssociatedEntities fields are optional per the spec."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     # Verify the result itself is structurally valid regardless of external entities
@@ -679,12 +656,12 @@ async def test_result_without_external_entities_is_accepted(opcua_client, result
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.RESULT_EXTERNAL_IDENTIFIERS)
 async def test_external_entity_type_and_id_combination_is_unique_within_result(
-    opcua_client, result_trigger, ns_indices
+    subscription_client, result_trigger, ns_indices
 ):
     """No two entries in AssociatedEntities must have the same (EntityType, EntityId)
     combination — duplicate registrations are not meaningful and indicate a server
     data quality problem."""
-    result_data, entities = await _get_result_and_associated_entities(opcua_client, result_trigger, ns_indices)
+    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:

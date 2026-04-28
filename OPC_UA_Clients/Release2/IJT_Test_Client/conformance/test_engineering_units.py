@@ -9,15 +9,15 @@ Covered conformance unit:
         DisplayName and Description describe the physical unit.
 """
 
-import asyncio
 import logging
 
 import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
-from helpers.namespaces import BN, NS_MACH_RESULT, ResultType
+from helpers.namespaces import ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.result_collector import ResultCollector
 from helpers.result_validator import (
     ResultValueValidator,
     ValidationContext,
@@ -26,12 +26,6 @@ from helpers.result_validator import (
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
-
-# OPC UA method timeout in milliseconds
-_OPCUA_TIMEOUT_MS = 5000
-
-# Wall-clock timeout for GetLatestResult calls
-_METHOD_WALL_TIMEOUT = 20.0
 
 # UNECE namespace URI mandated by OPC UA Part 8
 _UNECE_NAMESPACE_URI = "http://www.opcfoundation.org/UA/units/un/cefact"
@@ -75,71 +69,29 @@ _KNOWN_ANGLE_EU_IDENTIFIERS: frozenset[int] = frozenset(
 # ---------------------------------------------------------------------------
 
 
-async def _get_result_management(client, ns_mr):
-    """Re-discover ResultManagement on a fresh client connection."""
-    js = await find_joining_system(client)
-    if js is None:
-        pytest.skip("JoiningSystem not found — server may not be running")
-    rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
-    if rm is None:
-        pytest.skip("ResultManagement node not found on JoiningSystem")
-    return rm
-
-
-async def _trigger_and_get_result(opcua_client, result_trigger, ns_indices, result_type):
-    """Trigger a single result of the given type and return result_data, or None.
-
-    Returns None when the trigger is unavailable (simulator limitation) or when
-    GetLatestResult fails.  Callers must skip when None is returned.
-    """
-    outcome = await result_trigger.trigger_single(
-        result_type=result_type,
-        include_traces=False,
-    )
-    if not outcome.triggered and result_trigger.is_simulator:
-        return None
-
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        return None
-
-    rm = await _get_result_management(opcua_client, ns_mr)
-    glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
-    if glr_node is None:
-        return None
-
-    timeout_ms = 60000 if not outcome.triggered else _OPCUA_TIMEOUT_MS
-    wall_timeout = 65.0 if not outcome.triggered else _METHOD_WALL_TIMEOUT
-
-    try:
-        raw = await asyncio.wait_for(
-            rm.call_method(
-                glr_node.nodeid,
-                ua.Variant(timeout_ms, ua.VariantType.Int32),
-            ),
-            timeout=wall_timeout,
-        )
-    except (ua.UaError, asyncio.TimeoutError) as exc:
-        logger.debug("GetLatestResult failed: %s", exc)
-        return None
-
-    if isinstance(raw, (list, tuple)):
-        # GetLatestResult returns [ResultHandle, ResultDataType] — index 1 is the result
-        return raw[1] if len(raw) > 1 else (raw[0] if raw else None)
-    return raw
+async def _trigger_and_get_result(subscription_client, result_trigger, ns_indices, result_type):
+    """Trigger a result and collect it via IJTResultEventType events."""
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
+        outcome = await result_trigger.trigger_single(result_type, include_traces=False)
+        if not outcome.triggered and result_trigger.is_simulator:
+            return None
+        return await rc.collect_single()
 
 
 def _collect_all_result_values(result_data) -> list:
     """Return every ResultValueDataType from a result and its sub-results.
 
-    Collects from (per OPC 40450-1 JoiningResultDataType structure):
-    - result_data.OverallResultValues             (top-level overall values)
-    - result_data.StepResults[j].StepResultValues (top-level step values)
-    - ResultContent[i].OverallResultValues        (sub-result overall values)
-    - ResultContent[i].StepResults[j].StepResultValues (sub-result step values)
+    ResultDataType structure:
+      - ResultContent: list of Variant, each wrapping a JoiningResultDataType
+      - ResultMetaData
 
-    Note: OverallResultValues lives on JoiningResultDataType directly, NOT on
-    ResultMetaData — ResultMetaDataType has no OverallResultValues field.
+    Each JoiningResultDataType (inside Variant.Value) has:
+      - OverallResultValues: list[ResultValueDataType]
+      - StepResults: list[StepResultDataType]
+        - StepResultValues: list[ResultValueDataType]
+
+    The top-level checks (lines 147-157) handle the defensive case where result_data
+    itself is already a JoiningResultDataType (e.g. passed directly from a sub-result).
     """
     values: list = []
 
@@ -157,14 +109,16 @@ def _collect_all_result_values(result_data) -> list:
                 values.extend(step_vals)
 
     # Sub-results in ResultContent (batch/sync/job combined results carry sub-results here)
+    # Each item is a Variant wrapping a JoiningResultDataType — unwrap via .Value first.
     content = getattr(result_data, "ResultContent", None)
     if isinstance(content, (list, tuple)):
         for item in content:
-            item_ovr = getattr(item, "OverallResultValues", None)
+            inner = getattr(item, "Value", item)  # unwrap Variant → JoiningResultDataType
+            item_ovr = getattr(inner, "OverallResultValues", None)
             if isinstance(item_ovr, (list, tuple)):
                 values.extend(item_ovr)
 
-            item_steps = getattr(item, "StepResults", None)
+            item_steps = getattr(inner, "StepResults", None)
             if isinstance(item_steps, (list, tuple)):
                 for step in item_steps:
                     step_vals = getattr(step, "StepResultValues", None)
@@ -198,10 +152,10 @@ def _values_for_quantity(all_values: list, physical_quantity_int: int) -> list:
 
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
-async def test_result_values_engineering_units_use_eu_information_type(opcua_client, result_trigger, ns_indices):
+async def test_result_values_engineering_units_use_eu_information_type(subscription_client, result_trigger, ns_indices):
     """The Server uses EUInformation type for ResultValueDataType.EngineeringUnits as defined in OPC UA Part 8. The Identifier maps to UNECE codes. DisplayName and Description describe the physical unit."""
     result_data = await _trigger_and_get_result(
-        opcua_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
+        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve multi-step result for EU type check")
@@ -233,10 +187,12 @@ async def test_result_values_engineering_units_use_eu_information_type(opcua_cli
 
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
-async def test_torque_values_have_expected_engineering_units_identifier(opcua_client, result_trigger, ns_indices):
+async def test_torque_values_have_expected_engineering_units_identifier(
+    subscription_client, result_trigger, ns_indices
+):
     """Torque ResultValues must use a known UNECE torque EU identifier (newton-metre, pound-force foot, etc.)."""
     result_data = await _trigger_and_get_result(
-        opcua_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
+        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve multi-step result for torque EU check")
@@ -274,10 +230,10 @@ async def test_torque_values_have_expected_engineering_units_identifier(opcua_cl
 
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
-async def test_angle_values_have_expected_engineering_units_identifier(opcua_client, result_trigger, ns_indices):
+async def test_angle_values_have_expected_engineering_units_identifier(subscription_client, result_trigger, ns_indices):
     """Angle ResultValues must use a known UNECE angle EU identifier (degree, radian, milliradian)."""
     result_data = await _trigger_and_get_result(
-        opcua_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
+        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve multi-step result for angle EU check")
@@ -315,10 +271,10 @@ async def test_angle_values_have_expected_engineering_units_identifier(opcua_cli
 
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
-async def test_engineering_units_identifier_is_a_positive_integer(opcua_client, result_trigger, ns_indices):
+async def test_engineering_units_identifier_is_a_positive_integer(subscription_client, result_trigger, ns_indices):
     """EngineeringUnits.Identifier must be a positive integer — all UNECE codes are positive."""
     result_data = await _trigger_and_get_result(
-        opcua_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
+        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve multi-step result for EU identifier type check")
@@ -349,7 +305,7 @@ async def test_engineering_units_identifier_is_a_positive_integer(opcua_client, 
 
     if checked == 0:
         pytest.skip(
-            "No ResultValues with EngineeringUnits found — "
+            "CU.ENGINEERING_UNITS declared but EU field absent in ResultValues — "
             "server declared CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
             "verify server populates EU on result values"
         )
@@ -358,10 +314,12 @@ async def test_engineering_units_identifier_is_a_positive_integer(opcua_client, 
 
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
-async def test_all_result_value_eu_identifiers_pass_result_value_validator(opcua_client, result_trigger, ns_indices):
+async def test_all_result_value_eu_identifiers_pass_result_value_validator(
+    subscription_client, result_trigger, ns_indices
+):
     """Every ResultValueDataType in a multi-step result must pass the ResultValueValidator EU check."""
     result_data = await _trigger_and_get_result(
-        opcua_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
+        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve multi-step result for comprehensive EU check")
@@ -370,7 +328,7 @@ async def test_all_result_value_eu_identifiers_pass_result_value_validator(opcua
     values_with_eu = _values_with_eu(all_values)
     if not values_with_eu:
         pytest.skip(
-            "No ResultValues with EngineeringUnits found — "
+            "CU.ENGINEERING_UNITS declared but EU field absent in ResultValues — "
             "server declared CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
             "verify server populates EU on result values"
         )
@@ -392,43 +350,20 @@ async def test_all_result_value_eu_identifiers_pass_result_value_validator(opcua
     ],
 )
 async def test_engineering_units_are_consistent_within_same_physical_quantity(
-    opcua_client,
+    subscription_client,
     result_trigger,
     ns_indices,
     result_type,
     description,
 ):
     """For the same PhysicalQuantity within a single result, EU identifiers must be consistent."""
-    outcome = await result_trigger.trigger_single(
-        result_type=result_type,
-        include_traces=False,
-    )
-    if not outcome.triggered:
-        pytest.skip(outcome.skip_reason)
-
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered on server")
-
-    rm = await _get_result_management(opcua_client, ns_mr)
-    glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
-    if glr_node is None:
-        pytest.skip("GetLatestResult method not found")
-
-    try:
-        raw = await asyncio.wait_for(
-            rm.call_method(
-                glr_node.nodeid,
-                ua.Variant(_OPCUA_TIMEOUT_MS, ua.VariantType.Int32),
-            ),
-            timeout=_METHOD_WALL_TIMEOUT,
-        )
-    except (ua.UaError, asyncio.TimeoutError) as exc:
-        pytest.skip(f"GetLatestResult failed for {description} result: {exc}")
-
-    result_data = raw[1] if isinstance(raw, (list, tuple)) and len(raw) > 1 else raw
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
+        outcome = await result_trigger.trigger_single(result_type=result_type, include_traces=False)
+        if not outcome.triggered and result_trigger.is_simulator:
+            pytest.skip(outcome.skip_reason if hasattr(outcome, "skip_reason") else "Trigger failed")
+        result_data = await rc.collect_single()
     if result_data is None:
-        pytest.skip(f"GetLatestResult returned no data for {description} result")
+        pytest.skip(f"No result received for {description} result type")
 
     all_values = _collect_all_result_values(result_data)
 
@@ -472,10 +407,10 @@ async def test_engineering_units_are_consistent_within_same_physical_quantity(
 
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
-async def test_trace_content_data_type_has_engineering_units(opcua_client, result_trigger, ns_indices):
+async def test_trace_content_data_type_has_engineering_units(subscription_client, result_trigger, ns_indices):
     """Every TraceContentDataType in a multi-step result must carry EngineeringUnits with Identifier and NamespaceUri."""
     result_data = await _trigger_and_get_result(
-        opcua_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
+        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve multi-step result for trace content EU check")
@@ -486,6 +421,7 @@ async def test_trace_content_data_type_has_engineering_units(opcua_client, resul
 
     trace_values: list = []
     for item in content:
+        item = getattr(item, "Value", item)  # unwrap asyncua Variant
         step_results = getattr(item, "StepResults", None)
         if not isinstance(step_results, (list, tuple)):
             continue
@@ -522,10 +458,10 @@ async def test_trace_content_data_type_has_engineering_units(opcua_client, resul
 
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
-async def test_reported_value_data_type_in_event_has_engineering_units(opcua_client, result_trigger, ns_indices):
+async def test_reported_value_data_type_in_event_has_engineering_units(subscription_client, result_trigger, ns_indices):
     """Every ReportedValueDataType in a result must carry EngineeringUnits with a valid Identifier."""
     result_data = await _trigger_and_get_result(
-        opcua_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
+        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve multi-step result for reported value EU check")
@@ -546,6 +482,7 @@ async def test_reported_value_data_type_in_event_has_engineering_units(opcua_cli
     content = getattr(result_data, "ResultContent", None)
     if isinstance(content, (list, tuple)):
         for item in content:
+            item = getattr(item, "Value", item)  # unwrap asyncua Variant
             for attr in ("ReportedValues",):
                 vals = getattr(item, attr, None)
                 if isinstance(vals, (list, tuple)):
@@ -587,7 +524,7 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
 
     list_node = await find_child_by_browse_name(jm, "GetJointDesignList", ns_ijt)
     if list_node is None:
-        pytest.skip("GetJointDesignList not present — cannot retrieve designs")
+        pytest.skip("GetJointDesignList: Not Supported — cannot retrieve designs")
 
     try:
         design_list = await jm.call_method(list_node.nodeid)
@@ -600,7 +537,7 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
     first_id = str(design_list[0] if isinstance(design_list, (list, tuple)) else design_list)
     get_node = await find_child_by_browse_name(jm, "GetJointDesign", ns_ijt)
     if get_node is None:
-        pytest.skip("GetJointDesign not present — cannot retrieve design data")
+        pytest.skip("GetJointDesign: Not Supported — cannot retrieve design data")
 
     try:
         design_data = await jm.call_method(get_node.nodeid, ua.Variant(first_id, ua.VariantType.String))
@@ -701,10 +638,12 @@ async def test_joining_data_variable_type_variables_have_engineering_units_prope
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
 @pytest.mark.negative
-async def test_result_values_with_absent_eu_information_are_non_conformant(opcua_client, result_trigger, ns_indices):
+async def test_result_values_with_absent_eu_information_are_non_conformant(
+    subscription_client, result_trigger, ns_indices
+):
     """Any ResultValue with EngineeringUnits present must have non-None Identifier — null Identifier is non-conformant."""
     result_data = await _trigger_and_get_result(
-        opcua_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
+        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
     if result_data is None:
         pytest.skip("Could not retrieve multi-step result for negative EU conformance check")
@@ -714,7 +653,7 @@ async def test_result_values_with_absent_eu_information_are_non_conformant(opcua
 
     if not values_with_eu:
         pytest.skip(
-            "No ResultValues with EngineeringUnits found — "
+            "CU.ENGINEERING_UNITS declared but EU field absent in ResultValues — "
             "server declared CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
             "negative check not applicable"
         )

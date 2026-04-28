@@ -1,6 +1,6 @@
 """
 Tests for the structured data types returned inside JoiningResult objects.
-Each test simulates a result, retrieves it via GetResultById, then inspects
+Each test simulates a result, collects it via ResultReady events, then inspects
 the resulting structured object hierarchy.
 """
 
@@ -10,10 +10,10 @@ from asyncua import ua
 from helpers.namespaces import (
     BN,
     NS_APP,
-    NS_MACH_RESULT,
     ResultType,
 )
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.result_collector import ResultCollector
 
 pytestmark = [pytest.mark.live, pytest.mark.methods]
 
@@ -21,16 +21,12 @@ pytestmark = [pytest.mark.live, pytest.mark.methods]
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-async def _get_result(client, ns_indices, result_type=ResultType.SIMPLE_OK_RESULT):
-    """Simulate a result and return the structured result object via GetLatestResult."""
-    ns_mr = ns_indices[NS_MACH_RESULT]
+async def _get_result(subscription_client, client, ns_indices, result_type=ResultType.SIMPLE_OK_RESULT):
+    """Simulate a result via direct API and collect it via IJTResultEventType events."""
     ns_app = ns_indices[NS_APP]
     js = await find_joining_system(client)
     if js is None:
         pytest.skip("JoiningSystem not found")
-    rm = await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
-    if rm is None:
-        pytest.skip("ResultManagement not found")
     # Simulate via Simulations/SimulateResults/ (App ns)
     sim_node = await find_child_by_browse_name(js, BN.SIMULATIONS, ns_app)
     if sim_node is None:
@@ -41,22 +37,17 @@ async def _get_result(client, ns_indices, result_type=ResultType.SIMPLE_OK_RESUL
     sim_method = await find_child_by_browse_name(sf, BN.SIMULATE_SINGLE_RESULT, ns_app)
     if sim_method is None:
         pytest.skip(f"Method '{BN.SIMULATE_SINGLE_RESULT}' not found")
-    await sf.call_method(
-        sim_method.nodeid,
-        ua.Variant(result_type, ua.VariantType.UInt32),
-        ua.Variant(True, ua.VariantType.Boolean),  # include_traces=True
-    )
-    get_latest = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
-    if get_latest is None:
-        pytest.skip(f"Method '{BN.GET_LATEST_RESULT}' not found")
-    raw = await rm.call_method(
-        get_latest.nodeid,
-        ua.Variant(5000, ua.VariantType.Int32),  # Timeout ms
-    )
-    if raw is None:
-        pytest.skip("GetLatestResult returned None — no result available")
-    # raw = [ResultHandle, Result, Error]
-    result_data = raw[1] if isinstance(raw, (list, tuple)) and len(raw) > 1 else raw
+
+    async with ResultCollector(subscription_client, ns_indices) as rc:
+        await sf.call_method(
+            sim_method.nodeid,
+            ua.Variant(result_type, ua.VariantType.UInt32),
+            ua.Variant(True, ua.VariantType.Boolean),  # include_traces=True
+        )
+        result_data = await rc.collect_single()
+
+    if result_data is None:
+        pytest.skip("No result event received after simulation trigger")
     return result_data
 
 
@@ -77,14 +68,14 @@ def _require_attr(obj, attr_name, context=""):
 # ---------------------------------------------------------------------------
 # JoiningResultDataType top-level fields
 # ---------------------------------------------------------------------------
-async def test_result_data_type_has_result_meta_data(opcua_client, ns_indices):
-    result = await _get_result(opcua_client, ns_indices)
+async def test_result_data_type_has_result_meta_data(subscription_client, opcua_client, ns_indices):
+    result = await _get_result(subscription_client, opcua_client, ns_indices)
     meta = _require_attr(result, "ResultMetaData", "JoiningResultDataType")
     assert meta is not None, "JoiningResultDataType.ResultMetaData must not be None"
 
 
-async def test_result_data_type_has_result_content(opcua_client, ns_indices):
-    result = await _get_result(opcua_client, ns_indices)
+async def test_result_data_type_has_result_content(subscription_client, opcua_client, ns_indices):
+    result = await _get_result(subscription_client, opcua_client, ns_indices)
     # ResultContent may be an empty list for a simple OK result — that is valid
     _require_attr(result, "ResultContent", "JoiningResultDataType")
 
@@ -92,8 +83,8 @@ async def test_result_data_type_has_result_content(opcua_client, ns_indices):
 # ---------------------------------------------------------------------------
 # ResultMetaDataType fields
 # ---------------------------------------------------------------------------
-async def test_result_meta_data_type_fields(opcua_client, ns_indices):
-    result = await _get_result(opcua_client, ns_indices)
+async def test_result_meta_data_type_fields(subscription_client, opcua_client, ns_indices):
+    result = await _get_result(subscription_client, opcua_client, ns_indices)
     meta = _require_attr(result, "ResultMetaData", "JoiningResultDataType")
     result_id = _require_attr(meta, "ResultId", "ResultMetaDataType")
     assert result_id is not None, "ResultMetaDataType.ResultId must not be None"
@@ -109,8 +100,8 @@ async def test_result_meta_data_type_fields(opcua_client, ns_indices):
 # ---------------------------------------------------------------------------
 # StepResultDataType — requires a multi-step result
 # ---------------------------------------------------------------------------
-async def test_step_result_data_type_structure(opcua_client, ns_indices):
-    result = await _get_result(opcua_client, ns_indices, ResultType.MULTI_STEP_OK_RESULT)
+async def test_step_result_data_type_structure(subscription_client, opcua_client, ns_indices):
+    result = await _get_result(subscription_client, opcua_client, ns_indices, ResultType.MULTI_STEP_OK_RESULT)
     content = _require_attr(result, "ResultContent", "JoiningResultDataType")
     if not content:
         pytest.skip("ResultContent is empty for MULTI_STEP_OK_RESULT — cannot validate StepResultDataType")
@@ -131,8 +122,8 @@ async def test_step_result_data_type_structure(opcua_client, ns_indices):
 # ---------------------------------------------------------------------------
 # ResultValueDataType — digs into step → first value
 # ---------------------------------------------------------------------------
-async def test_result_value_data_type_structure(opcua_client, ns_indices):
-    result = await _get_result(opcua_client, ns_indices, ResultType.MULTI_STEP_OK_RESULT)
+async def test_result_value_data_type_structure(subscription_client, opcua_client, ns_indices):
+    result = await _get_result(subscription_client, opcua_client, ns_indices, ResultType.MULTI_STEP_OK_RESULT)
     content = _require_attr(result, "ResultContent", "JoiningResultDataType")
     if not content:
         pytest.skip("ResultContent is empty for MULTI_STEP_OK_RESULT — cannot validate ResultValueDataType")

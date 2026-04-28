@@ -42,6 +42,7 @@ Covered conformance units:
 """
 
 import asyncio
+import datetime
 import logging
 
 import pytest
@@ -69,6 +70,14 @@ _LIVE_VARIABLE_SETTLE_SECS = 1.0
 
 # A result identifier that is guaranteed not to exist on any real server
 _NONEXISTENT_RESULT_ID = "nonexistent-result-identifier-for-negative-test"
+
+# Default arguments for RequestResults: request all stored results with no time/sequence filter.
+# ToSequenceNumber=0 disables the sequence filter and uses the time range instead.
+_RR_FROM_SEQ = ua.Variant(0, ua.VariantType.UInt64)
+_RR_TO_SEQ = ua.Variant(0, ua.VariantType.UInt64)
+_RR_FROM_TIME = ua.Variant(datetime.datetime(2000, 1, 1), ua.VariantType.DateTime)
+_RR_TO_TIME = ua.Variant(datetime.datetime(9999, 1, 1), ua.VariantType.DateTime)
+_RR_MIN_DURATION = ua.Variant(0.0, ua.VariantType.Double)
 
 
 # ---------------------------------------------------------------------------
@@ -186,10 +195,10 @@ def _handle_missing_requested_result_variable(ns_indices):
     """Skip known simulator gap; fail on non-simulator servers."""
     if ns_indices.get(NS_APP) is not None:
         pytest.skip(
-            "RequestedResult variable not found (tried ns_ijt, ns_mr, ns_app) — simulator does not expose this variable; verify against a spec-compliant server"
+            "RequestedResult variable: not exposed by simulator — tried ns_ijt, ns_mr, ns_app; verify against a spec-compliant server"
         )
     pytest.fail(
-        "RequestedResult variable not found (tried ns_ijt, ns_mr, ns_app) — "
+        "RequestedResult variable: not found (tried ns_ijt, ns_mr, ns_app) — "
         "required for this conformance unit on non-simulator servers"
     )
 
@@ -348,18 +357,22 @@ async def test_get_result_by_id_with_nonexistent_id_returns_error(opcua_client, 
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-        # R08/R09: server returns OpcUa_Good + bad methodStatusCode in output[0]
-        # Check output[0] — non-zero status means server correctly reported "not found"
+        # Signature: GetResultById → [ResultHandle: UInt32, Result: ResultDataType, Error: Int32]
+        # output[2] is the Error code; a non-zero value means "not found".
+        # output[1] being None/empty also signals the result was not found.
         output = list(result) if isinstance(result, (list, tuple)) else ([] if result is None else [result])
-        if output:
+        if len(output) >= 3:
             try:
-                if int(output[0]) != 0:
-                    return  # PASS: server correctly signals not-found via output methodStatusCode
+                if int(output[2]) != 0:
+                    return  # PASS: server correctly signals not-found via Error output
             except (TypeError, ValueError):
                 pass
+        # Fallback: even without Error field, a null Result is acceptable
+        if len(output) >= 2 and output[1] is None:
+            return  # PASS: server returned null Result for nonexistent id
         pytest.skip(
-            "GetResultById with nonexistent identifier returned Success with no bad output status — "
-            "expected non-zero methodStatusCode in output[0] (OPC 40450-1 compliance gap)"
+            "GetResultById with nonexistent identifier returned Success with no error indicator — "
+            "expected non-zero Error in output[2] or null Result in output[1]"
         )
     except ua.UaError:
         pass  # Expected: server correctly rejected the unknown identifier
@@ -373,18 +386,13 @@ async def test_get_result_by_id_with_nonexistent_id_returns_error(opcua_client, 
 
 
 @pytest.mark.requires_cu(CU.GET_RESULT_WITH_FILTER_CRITERIA)
-@pytest.mark.negative
-async def test_get_result_id_list_filtered_is_not_supported_by_ijt(opcua_client, ns_indices):
-    """GetResultIdListFiltered is NOT part of the IJT Base Companion Specification.
-    A conformant IJT server must either omit the method node entirely (preferred)
-    or, if exposed by the underlying Machinery/Result layer, return
-    BadNotSupported / BadNotImplemented when called.
+async def test_get_result_id_list_filtered_presence_or_not_implemented(opcua_client, ns_indices):
+    """GetResultIdListFiltered is an optional CU in the IJT Base specification
+    (CU: 'IJT Get Result with Filter Criteria').  A server may implement it or
+    expose the node but return BadNotSupported — both are conformant.
+    Omitting the node entirely is also conformant for this optional CU.
 
-    This test PASSES when the method node is absent.
-    This test PASSES when the method node is present but the server returns
-    BadNotSupported or BadNotImplemented.
-    This test FAILS only if the method is present AND returns Good — that would
-    indicate a spec violation (the server is advertising unsupported behaviour).
+    This test skips when the node is absent and passes (with a log) otherwise.
     """
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -394,25 +402,19 @@ async def test_get_result_id_list_filtered_is_not_supported_by_ijt(opcua_client,
     filter_node = await find_child_by_browse_name(rm, BN.GET_RESULT_ID_LIST_FILTERED, ns_mr)
 
     if filter_node is None:
-        # Correct IJT behaviour — method is absent
-        return
+        pytest.skip("GetResultIdListFiltered: Not Supported — method node absent (optional CU)")
 
-    # Method node exists in the address space. Attempt to call it with no
-    # arguments to provoke a server-side rejection.
+    # Pure presence test — verify the node exists and is callable.
+    # We do NOT invoke call_method because the corrected signature requires
+    # 4 inputs (Filter, OrderedBy, MaxResults, Timeout) and zero-arg calls
+    # would produce misleading BadTooFewArguments results.
     try:
-        await asyncio.wait_for(
-            rm.call_method(filter_node.nodeid),
-            timeout=_METHOD_WALL_TIMEOUT,
-        )
-    except ua.UaError:
-        # Any OPC UA error (BadNotSupported, BadNotImplemented,
-        # BadArgumentsMissing, etc.) is acceptable — the server refused the call.
-        return
+        executable = await filter_node.read_attribute(ua.AttributeIds.Executable)
+    except ua.UaError as exc:
+        pytest.skip(f"GetResultIdListFiltered Executable attribute unreadable: {exc}")
 
-    pytest.fail(
-        "GetResultIdListFiltered is NOT part of the IJT spec but the server returned "
-        "Good status — this suggests a spec violation or an unexpectedly permissive server."
-    )
+    assert executable.Value.Value is True, "GetResultIdListFiltered Executable attribute must be True"
+    logger.debug("GetResultIdListFiltered node is present and Executable=True")
 
 
 # ─── result_variable_access ───
@@ -542,7 +544,14 @@ async def test_request_results_method_is_present_and_callable(opcua_client, resu
 
     try:
         await asyncio.wait_for(
-            rm.call_method(rr_node.nodeid),
+            rm.call_method(
+                rr_node.nodeid,
+                _RR_FROM_SEQ,
+                _RR_TO_SEQ,
+                _RR_FROM_TIME,
+                _RR_TO_TIME,
+                _RR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError as exc:
@@ -602,7 +611,14 @@ async def test_request_results_populates_requested_result_variable(opcua_client,
 
     try:
         await asyncio.wait_for(
-            rm.call_method(rr_node.nodeid),
+            rm.call_method(
+                rr_node.nodeid,
+                _RR_FROM_SEQ,
+                _RR_TO_SEQ,
+                _RR_FROM_TIME,
+                _RR_TO_TIME,
+                _RR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError as exc:
@@ -936,7 +952,7 @@ async def test_get_latest_result_result_id_is_non_empty(opcua_client, result_tri
 
     meta = getattr(result_data, "ResultMetaData", None)
     if meta is None:
-        pytest.skip("ResultMetaData not present — covered by basic_result tests")
+        pytest.skip("ResultMetaData: Not Supported — covered by basic_result tests")
 
     result_id = str(getattr(meta, "ResultId", None) or "")
     assert result_id.strip(), f"GetLatestResult ResultMetaData.ResultId must be a non-empty string; got {result_id!r}"
@@ -952,7 +968,7 @@ async def test_get_latest_result_classification_is_valid(opcua_client, result_tr
 
     meta = getattr(result_data, "ResultMetaData", None)
     if meta is None:
-        pytest.skip("ResultMetaData not present — covered by basic_result tests")
+        pytest.skip("ResultMetaData: Not Supported — covered by basic_result tests")
 
     classification = getattr(meta, "Classification", None)
     if classification is None:
@@ -967,10 +983,12 @@ async def test_get_latest_result_classification_is_valid(opcua_client, result_tr
 
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
-async def test_get_latest_result_with_invalid_product_instance_uri_does_not_crash(opcua_client, ns_indices):
-    """GetLatestResult called with an unrecognised ProductInstanceUri must not crash
-    the server — it must either return a Bad operation status or a null result,
-    but the service call itself must complete."""
+async def test_get_latest_result_with_negative_timeout_returns_error(opcua_client, ns_indices):
+    """GetLatestResult called with a negative Timeout value must not crash the
+    server — it must either raise a Bad status code or return promptly.
+
+    Signature: GetLatestResult(Timeout: Int32) → [ResultHandle, Result, Error].
+    A negative timeout is out-of-domain and exercises server input validation."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -981,27 +999,30 @@ async def test_get_latest_result_with_invalid_product_instance_uri_does_not_cras
         pytest.skip("GetLatestResult method not found")
 
     try:
-        await asyncio.wait_for(
+        result = await asyncio.wait_for(
             rm.call_method(
                 glr_node.nodeid,
-                ua.Variant(
-                    "urn:invalid:nonexistent-asset-for-negative-test",
-                    ua.VariantType.String,
-                ),
-                ua.Variant(_OPCUA_ZERO_TIMEOUT_MS, ua.VariantType.Int32),
+                ua.Variant(-1, ua.VariantType.Int32),
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-        # Call succeeded — server either ignored the invalid URI or returned empty result
-        logger.info(
-            "GetLatestResult with invalid ProductInstanceUri returned without error; "
-            "server treats unknown URI as a 'no result available' response"
+        # Server returned without UaError — check output Error field
+        output = list(result) if isinstance(result, (list, tuple)) else ([] if result is None else [result])
+        if len(output) >= 3:
+            try:
+                if int(output[2]) != 0:
+                    return  # PASS: server signalled error via output[2]
+            except (TypeError, ValueError):
+                pass
+        pytest.fail(
+            "GetLatestResult with negative timeout returned Success with no error indicator — "
+            "expected ua.UaError or non-zero Error in output[2]"
         )
     except ua.UaError:
-        pass  # Expected: server correctly rejected the unknown ProductInstanceUri
+        pass  # Expected: server correctly rejected the invalid timeout
     except asyncio.TimeoutError:
         pytest.fail(
-            "GetLatestResult with invalid ProductInstanceUri blocked indefinitely — "
+            "GetLatestResult with negative timeout blocked indefinitely — "
             "server must respond promptly even for invalid input"
         )
 
@@ -1207,14 +1228,16 @@ async def test_get_result_by_id_with_empty_result_id_returns_error(opcua_client,
 
 
 # ---------------------------------------------------------------------------
-# get_result_with_filter_criteria — IJT does NOT support this method
+# get_result_with_filter_criteria — optional CU
 # ---------------------------------------------------------------------------
-# GetResultIdListFiltered is NOT defined in the IJT Base Companion Specification.
-# The method may be present in the underlying OPC UA Machinery/Result layer but
-# IJT-compliant servers must NOT expose it as a callable, working method.
-# The single authoritative test is already in the early section of this file
-# (test_get_result_id_list_filtered_is_not_supported_by_ijt).  No additional
-# behaviour tests are needed or valid here.
+# GetResultIdListFiltered is defined in OPC UA Machinery/Result (OPC 40001-101)
+# and is an OPTIONAL conformance unit in the IJT Base Companion Specification.
+# A server may implement it, expose it but return BadNotSupported, or omit the
+# node entirely — all three are conformant.  The test earlier in this file
+# (test_get_result_id_list_filtered_presence_or_not_implemented) validates the
+# optional-presence contract.  No additional behavioural tests are required
+# unless the CU_GET_RESULT_WITH_FILTER_CRITERIA is mandatory for the profile
+# under test.
 
 
 # ---------------------------------------------------------------------------
@@ -1409,8 +1432,10 @@ _INVALID_PRODUCT_INSTANCE_URI = "urn:nonexistent:asset:for:negative:test:001"
 
 
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
-async def test_request_results_with_empty_product_instance_uri_returns_good(opcua_client, result_trigger, ns_indices):
-    """RR-2: RequestResults with empty ProductInstanceUri must not crash — Good response expected."""
+async def test_request_results_with_default_range_completes_without_crash(opcua_client, result_trigger, ns_indices):
+    """RR-2: RequestResults with default sequence/time range must not crash the server.
+    Accepts Good (results delivered via event) or UaError (not implemented).
+    """
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -1429,11 +1454,18 @@ async def test_request_results_with_empty_product_instance_uri_returns_good(opcu
 
     try:
         await asyncio.wait_for(
-            rm.call_method(rr_node.nodeid, ua.Variant("", ua.VariantType.String)),
+            rm.call_method(
+                rr_node.nodeid,
+                _RR_FROM_SEQ,
+                _RR_TO_SEQ,
+                _RR_FROM_TIME,
+                _RR_TO_TIME,
+                _RR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError:
-        pytest.skip("Server rejected empty ProductInstanceUri — acceptable per spec")
+        pytest.skip("Server rejected RequestResults — method may not be implemented")
     except asyncio.TimeoutError:
         pytest.skip("RequestResults timed out with empty URI")
 
@@ -1458,7 +1490,14 @@ async def test_request_results_consecutive_calls_handled_gracefully(opcua_client
     for call_index in range(2):
         try:
             await asyncio.wait_for(
-                rm.call_method(rr_node.nodeid),
+                rm.call_method(
+                    rr_node.nodeid,
+                    _RR_FROM_SEQ,
+                    _RR_TO_SEQ,
+                    _RR_FROM_TIME,
+                    _RR_TO_TIME,
+                    _RR_MIN_DURATION,
+                ),
                 timeout=_METHOD_WALL_TIMEOUT,
             )
         except ua.UaError as exc:
@@ -1490,7 +1529,14 @@ async def test_request_results_updates_result_variable_or_raises_event(opcua_cli
 
     try:
         await asyncio.wait_for(
-            rm.call_method(rr_node.nodeid),
+            rm.call_method(
+                rr_node.nodeid,
+                _RR_FROM_SEQ,
+                _RR_TO_SEQ,
+                _RR_FROM_TIME,
+                _RR_TO_TIME,
+                _RR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError:
@@ -1510,8 +1556,12 @@ async def test_request_results_updates_result_variable_or_raises_event(opcua_cli
 
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
 @pytest.mark.negative
-async def test_request_results_with_invalid_uri_returns_error(opcua_client, result_trigger, ns_indices):
-    """Error RR-4: RequestResults with an unknown ProductInstanceUri must return ua.UaError."""
+async def test_request_results_with_inverted_sequence_range_handled_gracefully(
+    opcua_client, result_trigger, ns_indices
+):
+    """Error RR-4: RequestResults with FromSequenceNumber > ToSequenceNumber (inverted range)
+    must either be rejected by the server (UaError) or return a non-zero Status output.
+    Server must not crash."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -1529,19 +1579,31 @@ async def test_request_results_with_invalid_uri_returns_error(opcua_client, resu
         pytest.skip("RequestResults method not found — optional per spec")
 
     try:
-        await asyncio.wait_for(
+        result = await asyncio.wait_for(
             rm.call_method(
                 rr_node.nodeid,
-                ua.Variant(_INVALID_PRODUCT_INSTANCE_URI, ua.VariantType.String),
+                ua.Variant(100, ua.VariantType.UInt64),  # FromSequenceNumber
+                ua.Variant(1, ua.VariantType.UInt64),  # ToSequenceNumber — inverted (100 > 1)
+                _RR_FROM_TIME,
+                _RR_TO_TIME,
+                _RR_MIN_DURATION,
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
+        # Server accepted the call — check Status output (index 1) for NOT_OK
+        outputs = list(result) if isinstance(result, (list, tuple)) else [result]
+        if len(outputs) > 1:
+            status_val = int(outputs[1]) if outputs[1] is not None else 0
+            if status_val != 0:
+                logger.debug("Server correctly returned non-zero Status=%d for inverted range", status_val)
+            else:
+                pytest.skip("Server accepted inverted sequence range with Status=0 — lenient implementation")
+        else:
+            pytest.skip("Server returned unexpected output shape for inverted range test")
     except ua.UaError:
-        pass  # Expected — server should reject unknown asset URI
+        pass  # Server rejected with OPC UA error — also acceptable
     except asyncio.TimeoutError:
-        pytest.skip("RequestResults timed out during negative URI test")
-    else:
-        pytest.skip("Server accepted unknown ProductInstanceUri without error — may be a lenient implementation")
+        pytest.skip("RequestResults timed out during negative inverted-range test")
 
 
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
@@ -1566,7 +1628,14 @@ async def test_request_results_with_no_pending_results_does_not_crash(opcua_clie
 
     try:
         await asyncio.wait_for(
-            rm.call_method(rr_node.nodeid),
+            rm.call_method(
+                rr_node.nodeid,
+                _RR_FROM_SEQ,
+                _RR_TO_SEQ,
+                _RR_FROM_TIME,
+                _RR_TO_TIME,
+                _RR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError:
@@ -1627,7 +1696,14 @@ async def test_requested_result_variable_source_timestamp_is_set_after_request(
 
     try:
         await asyncio.wait_for(
-            rm.call_method(rr_node.nodeid),
+            rm.call_method(
+                rr_node.nodeid,
+                _RR_FROM_SEQ,
+                _RR_TO_SEQ,
+                _RR_FROM_TIME,
+                _RR_TO_TIME,
+                _RR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError:
@@ -1679,7 +1755,14 @@ async def test_request_results_event_received_with_required_fields(opcua_client,
 
     try:
         await asyncio.wait_for(
-            rm.call_method(rr_node.nodeid),
+            rm.call_method(
+                rr_node.nodeid,
+                _RR_FROM_SEQ,
+                _RR_TO_SEQ,
+                _RR_FROM_TIME,
+                _RR_TO_TIME,
+                _RR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError:
@@ -1738,7 +1821,14 @@ async def test_request_results_no_data_does_not_crash_server(opcua_client, ns_in
 
     try:
         await asyncio.wait_for(
-            rm.call_method(rr_node.nodeid),
+            rm.call_method(
+                rr_node.nodeid,
+                _RR_FROM_SEQ,
+                _RR_TO_SEQ,
+                _RR_FROM_TIME,
+                _RR_TO_TIME,
+                _RR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError:

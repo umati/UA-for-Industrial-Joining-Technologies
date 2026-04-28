@@ -28,8 +28,9 @@ from asyncua import ua
 
 from helpers.cu_registry import CU
 from helpers.method_caller import find_and_call_method
-from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, NS_MACH_RESULT, ResultType
+from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system, find_method_set
+from helpers.result_collector import ResultCollector
 from helpers.trigger import make_result_trigger
 
 logger = logging.getLogger(__name__)
@@ -55,38 +56,6 @@ async def _get_asset_management_method_set(client, ns_ijt: int, ns_di: int, ns_a
             "IJT spec (OPC 40450-1) requires a MethodSet child under AssetManagement — this server omits it (non-conformant)"
         )
     return am, ms
-
-
-async def _get_result_management(client, ns_mr: int):
-    """Re-discover ResultManagement on a fresh client connection."""
-    js = await find_joining_system(client)
-    if js is None:
-        return None
-    return await find_child_by_browse_name(js, BN.RESULT_MANAGEMENT, ns_mr)
-
-
-async def _call_get_latest_result(result_management_node, ns_mr: int):
-    """Call GetLatestResult and return (handle, result_data) or (None, None)."""
-    glr_node = await find_child_by_browse_name(result_management_node, BN.GET_LATEST_RESULT, ns_mr)
-    if glr_node is None:
-        return None, None
-    try:
-        raw = await asyncio.wait_for(
-            result_management_node.call_method(
-                glr_node.nodeid,
-                ua.Variant(5000, ua.VariantType.Int32),
-            ),
-            timeout=_METHOD_TIMEOUT,
-        )
-    except (ua.UaError, asyncio.TimeoutError) as exc:
-        logger.debug("GetLatestResult failed: %s", exc)
-        return None, None
-    if isinstance(raw, (list, tuple)):
-        handle = raw[0] if len(raw) > 0 else None
-        result_data = raw[1] if len(raw) > 1 else None
-    else:
-        handle, result_data = raw, None
-    return handle, result_data
 
 
 # ─── function-scoped result trigger ──────────────────────────────────────────
@@ -220,7 +189,14 @@ async def test_send_identifiers_accepts_entity_data_type_array(opcua_client, ns_
 
     empty_arg = ua.Variant([], ua.VariantType.ExtensionObject)
     try:
-        result = await find_and_call_method(ms, BN.SEND_IDENTIFIERS, ns_ijt, empty_arg, timeout=_METHOD_TIMEOUT)
+        result = await find_and_call_method(
+            ms,
+            BN.SEND_IDENTIFIERS,
+            ns_ijt,
+            ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
+            empty_arg,  # Identifiers (empty array)
+            timeout=_METHOD_TIMEOUT,
+        )
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"Cannot encode SendIdentifiers input with this asyncua version: {exc}")
 
@@ -230,8 +206,7 @@ async def test_send_identifiers_accepts_entity_data_type_array(opcua_client, ns_
             pytest.skip(f"SendIdentifiers returned '{err_str}' — not supported on this server")
         if "BadInvalidArgument" in err_str or "BadArgumentsMissing" in err_str:
             pytest.skip(
-                f"SendIdentifiers rejected encoding with '{err_str}' — "
-                "asyncua cannot encode EntityDataType on this configuration"
+                f"SendIdentifiers rejected with '{err_str}' — server rejected the call; verify argument encoding"
             )
         pytest.fail(f"SendIdentifiers failed unexpectedly: {err_str}")
 
@@ -251,9 +226,15 @@ async def test_send_text_identifiers_accepts_string_key_value_pairs(opcua_client
 
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
 
-    empty_arg = ua.Variant([], ua.VariantType.ExtensionObject)
     try:
-        result = await find_and_call_method(ms, BN.SEND_TEXT_IDENTIFIERS, ns_ijt, empty_arg, timeout=_METHOD_TIMEOUT)
+        result = await find_and_call_method(
+            ms,
+            BN.SEND_TEXT_IDENTIFIERS,
+            ns_ijt,
+            ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
+            ua.Variant([], ua.VariantType.String),  # TextIdentifiers (empty string array)
+            timeout=_METHOD_TIMEOUT,
+        )
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"Cannot encode SendTextIdentifiers input with this asyncua version: {exc}")
 
@@ -263,8 +244,7 @@ async def test_send_text_identifiers_accepts_string_key_value_pairs(opcua_client
             pytest.skip(f"SendTextIdentifiers returned '{err_str}' — not supported on this server")
         if "BadInvalidArgument" in err_str or "BadArgumentsMissing" in err_str:
             pytest.skip(
-                f"SendTextIdentifiers rejected encoding with '{err_str}' — "
-                "asyncua cannot encode KeyValuePair on this configuration"
+                f"SendTextIdentifiers rejected with '{err_str}' — server rejected the call; verify argument encoding"
             )
         pytest.fail(f"SendTextIdentifiers failed unexpectedly: {err_str}")
 
@@ -285,7 +265,14 @@ async def test_send_identifiers_with_empty_array_does_not_crash(opcua_client, ns
 
     empty_arg = ua.Variant([], ua.VariantType.ExtensionObject)
     try:
-        result = await find_and_call_method(ms, BN.SEND_IDENTIFIERS, ns_ijt, empty_arg, timeout=_METHOD_TIMEOUT)
+        result = await find_and_call_method(
+            ms,
+            BN.SEND_IDENTIFIERS,
+            ns_ijt,
+            ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
+            empty_arg,  # Identifiers (empty array)
+            timeout=_METHOD_TIMEOUT,
+        )
     except asyncio.TimeoutError:
         pytest.fail(
             "SendIdentifiers with empty array hung (TimeoutError) — server must handle empty input without hanging"
@@ -380,15 +367,29 @@ async def test_send_identifiers_then_get_identifiers_round_trip(opcua_client, ns
 
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
 
-    empty_arg = ua.Variant([], ua.VariantType.ExtensionObject)
     try:
-        send_result = await find_and_call_method(ms, BN.SEND_IDENTIFIERS, ns_ijt, empty_arg, timeout=_METHOD_TIMEOUT)
+        send_result = await find_and_call_method(
+            ms,
+            BN.SEND_IDENTIFIERS,
+            ns_ijt,
+            ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
+            ua.Variant([], ua.VariantType.ExtensionObject),  # Identifiers (empty array)
+            timeout=_METHOD_TIMEOUT,
+        )
         if not send_result.success:
-            pytest.skip("SendIdentifiers not available — skipping round-trip test")
+            err_str = str(send_result.error) if send_result.error else "unknown error"
+            pytest.skip(f"SendIdentifiers rejected — skipping round-trip test: {err_str}")
     except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"Cannot encode SendIdentifiers — skipping round-trip test: {exc}")
+        pytest.skip(f"SendIdentifiers raised unexpected exception — skipping round-trip test: {exc}")
 
-    get_result = await find_and_call_method(ms, BN.GET_IDENTIFIERS, ns_ijt, timeout=_METHOD_TIMEOUT)
+    get_result = await find_and_call_method(
+        ms,
+        BN.GET_IDENTIFIERS,
+        ns_ijt,
+        ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
+        ua.Variant([], ua.VariantType.String),  # IdentifierNames (empty = return all)
+        timeout=_METHOD_TIMEOUT,
+    )
     if not get_result.success:
         err_str = str(get_result.error) if get_result.error else "unknown error"
         if "BadNotSupported" in err_str or "BadMethodInvalid" in err_str:
@@ -400,14 +401,16 @@ async def test_send_identifiers_then_get_identifiers_round_trip(opcua_client, ns
 
 
 @pytest.mark.requires_cu(CU.SEND_IDENTIFIERS)
-async def test_after_send_identifiers_result_has_is_external_true(opcua_client, result_trigger, ns_indices):
+async def test_after_send_identifiers_result_has_is_external_true(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
     """Entities sent via SendIdentifiers must appear as IsExternal=True in results.
 
     Sequence:
       1. ResetIdentifiers — clear any previous identifiers.
       2. SendIdentifiers with an empty array to register the send call.
-      3. Trigger one tightening result via SimulateSingleResult.
-      4. GetLatestResult → inspect AssociatedEntities for entries with IsExternal=True.
+      3. Trigger one tightening result and collect via ResultReady event.
+      4. Inspect AssociatedEntities for entries with IsExternal=True.
 
     The test is skipped when:
       - SendIdentifiers encoding fails (asyncua limitation).
@@ -416,8 +419,7 @@ async def test_after_send_identifiers_result_has_is_external_true(opcua_client, 
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_di is None or ns_ijt is None or ns_mr is None:
+    if ns_di is None or ns_ijt is None:
         pytest.skip("Required namespaces not registered on server")
 
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
@@ -435,25 +437,29 @@ async def test_after_send_identifiers_result_has_is_external_true(opcua_client, 
 
     empty_arg = ua.Variant([], ua.VariantType.ExtensionObject)
     try:
-        send_result = await find_and_call_method(ms, BN.SEND_IDENTIFIERS, ns_ijt, empty_arg, timeout=_METHOD_TIMEOUT)
+        send_result = await find_and_call_method(
+            ms,
+            BN.SEND_IDENTIFIERS,
+            ns_ijt,
+            ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
+            empty_arg,  # Identifiers (empty array)
+            timeout=_METHOD_TIMEOUT,
+        )
     except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"Cannot encode SendIdentifiers — skipping functional test: {exc}")
+        pytest.skip(f"SendIdentifiers raised unexpected exception — skipping functional test: {exc}")
 
     if not send_result.success:
         err_str = str(send_result.error) if send_result.error else "unknown error"
-        pytest.skip(f"SendIdentifiers not available on this server ('{err_str}') — skipping result correlation test")
+        pytest.skip(f"SendIdentifiers rejected ('{err_str}') — skipping result correlation test")
 
-    outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
-    if not outcome.triggered:
-        pytest.skip(f"Result trigger not available: {outcome.skip_reason}")
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
+        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        if not outcome.triggered:
+            pytest.skip(f"Result trigger not available: {outcome.skip_reason}")
+        result_data = await rc.collect_single()
 
-    rm = await _get_result_management(opcua_client, ns_mr)
-    if rm is None:
-        pytest.skip("ResultManagement not found — cannot verify AssociatedEntities")
-
-    _handle, result_data = await _call_get_latest_result(rm, ns_mr)
     if result_data is None:
-        pytest.skip("GetLatestResult returned no data — cannot verify IsExternal flag")
+        pytest.skip("No ResultReady event received — cannot verify IsExternal flag")
 
     associated = getattr(result_data, "AssociatedEntities", None)
     if associated is None and hasattr(result_data, "ResultMetaData"):
@@ -470,30 +476,38 @@ async def test_after_send_identifiers_result_has_is_external_true(opcua_client, 
 
 
 @pytest.mark.requires_cu(CU.RESET_IDENTIFIERS)
-async def test_reset_identifiers_clears_all_sent_identifiers(opcua_client, result_trigger, ns_indices):
+async def test_reset_identifiers_clears_all_sent_identifiers(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
     """ResetIdentifiers must clear all previously sent identifiers.
 
     Sequence:
       1. SendIdentifiers (or SendTextIdentifiers) to register an entity.
       2. ResetIdentifiers.
-      3. Trigger a result.
-      4. GetLatestResult → assert no external entity appears in AssociatedEntities.
+      3. Trigger a result and collect via ResultReady event.
+      4. Assert no external entity appears in AssociatedEntities.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_di is None or ns_ijt is None or ns_mr is None:
+    if ns_di is None or ns_ijt is None:
         pytest.skip("Required namespaces not registered on server")
 
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
 
-    empty_arg = ua.Variant([], ua.VariantType.ExtensionObject)
     try:
-        send_result = await find_and_call_method(ms, BN.SEND_IDENTIFIERS, ns_ijt, empty_arg, timeout=_METHOD_TIMEOUT)
+        send_result = await find_and_call_method(
+            ms,
+            BN.SEND_IDENTIFIERS,
+            ns_ijt,
+            ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
+            ua.Variant([], ua.VariantType.ExtensionObject),  # Identifiers (empty array)
+            timeout=_METHOD_TIMEOUT,
+        )
         if not send_result.success:
-            pytest.skip("SendIdentifiers not available — skipping reset-clears test")
+            err_str = str(send_result.error) if send_result.error else "unknown error"
+            pytest.skip(f"SendIdentifiers rejected — skipping reset-clears test: {err_str}")
     except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"Cannot encode SendIdentifiers — skipping reset-clears test: {exc}")
+        pytest.skip(f"SendIdentifiers raised unexpected exception — skipping reset-clears test: {exc}")
 
     reset_result = await find_and_call_method(
         ms,
@@ -508,17 +522,14 @@ async def test_reset_identifiers_clears_all_sent_identifiers(opcua_client, resul
     if not reset_result.success:
         pytest.skip("ResetIdentifiers failed — cannot verify clear behaviour")
 
-    outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
-    if not outcome.triggered:
-        pytest.skip(f"Result trigger not available: {outcome.skip_reason}")
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
+        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        if not outcome.triggered:
+            pytest.skip(f"Result trigger not available: {outcome.skip_reason}")
+        result_data = await rc.collect_single()
 
-    rm = await _get_result_management(opcua_client, ns_mr)
-    if rm is None:
-        pytest.skip("ResultManagement not found — cannot verify identifier clearing")
-
-    _handle, result_data = await _call_get_latest_result(rm, ns_mr)
     if result_data is None:
-        pytest.skip("GetLatestResult returned no data — cannot verify clearing")
+        pytest.skip("No ResultReady event received — cannot verify identifier clearing")
 
     associated = getattr(result_data, "AssociatedEntities", None)
     if associated is None and hasattr(result_data, "ResultMetaData"):
@@ -552,7 +563,7 @@ async def test_send_identifiers_invalid_piu_returns_bad_node_id_unknown(opcua_cl
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.SEND_IDENTIFIERS, ns_ijt)
     if method_node is None:
-        pytest.skip("SendIdentifiers not present — cannot test invalid PIU behaviour")
+        pytest.skip("SendIdentifiers: Not Supported — cannot test invalid PIU behaviour")
 
     piu_arg = ua.Variant(_INVALID_PIU, ua.VariantType.String)
     empty_entities = ua.Variant([], ua.VariantType.ExtensionObject)
@@ -597,7 +608,7 @@ async def test_send_identifiers_malformed_data_returns_bad_invalid_argument(opcu
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.SEND_IDENTIFIERS, ns_ijt)
     if method_node is None:
-        pytest.skip("SendIdentifiers not present — cannot test malformed data")
+        pytest.skip("SendIdentifiers: Not Supported — cannot test malformed data")
 
     malformed_arg = ua.Variant("not-a-valid-entity-array", ua.VariantType.String)
     try:
@@ -605,7 +616,8 @@ async def test_send_identifiers_malformed_data_returns_bad_invalid_argument(opcu
             ms,
             BN.SEND_IDENTIFIERS,
             ns_ijt,
-            malformed_arg,
+            ua.Variant("", ua.VariantType.String),  # ProductInstanceUri (valid)
+            malformed_arg,  # Identifiers (wrong type — String not EntityDataType[])
             timeout=_METHOD_TIMEOUT,
         )
     except Exception as exc:  # noqa: BLE001
@@ -695,7 +707,7 @@ async def test_get_identifiers_invalid_piu_returns_bad_node_id_unknown(opcua_cli
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.GET_IDENTIFIERS, ns_ijt)
     if method_node is None:
-        pytest.skip("GetIdentifiers not present — cannot test invalid PIU behaviour")
+        pytest.skip("GetIdentifiers: Not Supported — cannot test invalid PIU behaviour")
 
     result = await find_and_call_method(
         ms,
@@ -785,7 +797,7 @@ async def test_reset_identifiers_invalid_piu_returns_bad_node_id_unknown(opcua_c
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.RESET_IDENTIFIERS, ns_ijt)
     if method_node is None:
-        pytest.skip("ResetIdentifiers not present — cannot test invalid PIU behaviour")
+        pytest.skip("ResetIdentifiers: Not Supported — cannot test invalid PIU behaviour")
 
     result = await find_and_call_method(
         ms,

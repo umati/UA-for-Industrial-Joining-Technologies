@@ -179,7 +179,7 @@ IJT_Test_Client/
 | `simulate_results_folder` | session | `Simulations/SimulateResults/` node |
 | `simulate_events_folder` | session | `Simulations/SimulateEventsAndConditions/` node |
 | `opcua_client` | **module** | One connection shared across all tests in a file — avoids per-test OPC UA handshake overhead |
-| `subscription_client` | **function** | Separate client for event subscriptions (function-scoped for event isolation) |
+| `subscription_client` | **module** | Separate client for event subscriptions (module-scoped — one per file for result/event tests) |
 
 > **Note**: `tests/unit/` fixtures use `SimpleNamespace` — no OPC UA connection required. All unit tests run offline and collect instantly.
 
@@ -271,10 +271,11 @@ assert len(events) >= 1
 | Timing race — retry exhausted on simulator (known limitation) | `return None` from helper → caller does `pytest.skip(...)` |
 
 ### GetLatestResult Return Convention
-`GetLatestResult` returns **two** output arguments: `[ResultHandle (UInt64), ResultDataType]`.
+`GetLatestResult` returns **three** output arguments: `[ResultHandle: UInt32, Result: ResultDataType, Error: Int32]`.
 
 - **Always use index 1**: `raw[1]` for the actual result data
 - `raw[0]` is the integer handle — useless for data inspection
+- `raw[2]` is the Error code (0 = success)
 - Applies everywhere: `_trigger_and_get_result`, `_trigger_and_get_combined_result`, `_get_result_with_traces`
 
 ### Timing Race Retry Pattern
@@ -302,7 +303,7 @@ return result_data
 
 All callers must guard: `if result_data is None: pytest.skip(...)`.
 
-Files using this pattern: `test_consolidated_results.py`, `test_result_trace_data.py`.
+Files using this pattern: **now deprecated in result tests** — all result conformance files migrated to ResultCollector (2026-04-28). GetLatestResult retry remains only in standalone GetLatestResult-specific tests in `test_result_access.py`.
 
 ---
 
@@ -396,3 +397,58 @@ result = await call_method(jpm, method_node, ua.Variant(pi_uri, ua.VariantType.S
 ```
 
 Methods that require this: `IncrementJoiningProcessCounter`, `DecrementJoiningProcessCounter`, `SetJoiningProcessCounter`.
+
+### EntityType Enum — v100 Values (CRITICAL)
+
+The `EntityType` field in `AssociatedEntityDataType` uses **v100 values (0–42)**. Old v1.01 values (PROGRAM=1, BATCH=3) are completely wrong.
+
+| Value | Constant | Used for |
+|-------|----------|---------|
+| 26 | JOINING_PROCESS | Generic fallback — spec allows if no specific classification; **current OPC UA server does NOT use this value** |
+| 27 | PROGRAM | Single Result JoiningProcessId (links to a Joining Program) |
+| 28 | JOB | Job Result JoiningProcessId (links to a Joining Job) |
+| 29 | BATCH | Batch Result JoiningProcessId (links to a Joining Batch) |
+
+```python
+_JOINING_PROCESS_ENTITY_TYPES = frozenset({26, 27, 28, 29})
+_VALID_ENTITY_TYPES = set(range(43))  # 0..42 inclusive
+```
+
+### JoiningProcessId — Not a Direct Field
+
+`JoiningProcessId` does **NOT** exist as a direct field on `JointDataType` or `ResultMetaDataType`.
+It lives in `AssociatedEntities[i].EntityId` where `EntityType in {26, 27, 28, 29}`:
+
+```python
+joining_process_id = None
+for ent in getattr(result_meta, "AssociatedEntities", []) or []:
+    if getattr(ent, "EntityType", -1) in _JOINING_PROCESS_ENTITY_TYPES:
+        joining_process_id = ent.EntityId
+        break
+```
+
+### Variant Unwrap — ResultContent Items
+
+`ResultDataType.ResultContent` is a `List[ua.Variant]`. Each element must be unwrapped before
+accessing fields like `OverallResultValues`, `StepResults`, `Trace`:
+
+```python
+for jr in result_data.ResultContent or []:
+    jr = getattr(jr, "Value", jr)   # unwrap ua.Variant wrapper
+    # Now jr is JoiningResultDataType — access fields directly
+    overall = getattr(jr, "OverallResultValues", []) or []
+    trace = getattr(jr, "Trace", None)
+```
+
+Skipping this unwrap means all field accesses return `None` — the test silently passes but validates nothing.
+
+### GetResult Method Signatures (Machinery/Result spec — NO ProductInstanceUri)
+
+```
+GetLatestResult(Timeout: Int32) → [ResultHandle: UInt32, Result: ResultDataType, Error: Int32]
+GetResultById(ResultId: NormalizedString, Timeout: Int32) → [ResultHandle: UInt32, Result: ResultDataType, Error: Int32]
+GetResultIdListFiltered(Filter: Structure, OrderedBy: Enumeration[], MaxResults: UInt32, Timeout: Int32) → [ResultHandle, ResultIdList[], Error]
+```
+
+These come from **Machinery/Result** (NS_MACH_RESULT), NOT from IJT Base. They have **no ProductInstanceUri argument**.
+`RequestResults` and `RequestUnacknowledgedResults` come from IJT Base (NS_IJT_BASE) — 5 inputs each.

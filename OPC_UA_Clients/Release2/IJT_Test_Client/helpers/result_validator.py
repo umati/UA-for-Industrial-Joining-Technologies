@@ -41,13 +41,25 @@ _VALID_PHYSICAL_QUANTITIES: set[int] = set(range(29))
 # ViolationTypeEnumeration: 0=UNDEFINED, 1=HIGH, 2=LOW, 3=OTHER
 _VALID_VIOLATION_TYPES: set[int] = {0, 1, 2, 3}
 
-# EntityTypeEnumeration per OPC 40450-1:
-# 0=OTHER, 1=PROGRAM, 2=JOINT, 3=PART, 4=TOOL, 5=CONTROLLER,
-# 6=VIRTUAL_STATION, 7=VEHICLE, 8=PRODUCT, 9=JOB, 10=ORDER,
-# 11=MODEL, 12=BATCH — range is open-ended per spec for vendor extensions.
-# Values beyond the currently defined maximum are recorded as advisory warnings only.
-_VALID_ENTITY_TYPES: set[int] = set(range(13))  # 0–12 per OPC 40450-1 v1.01
-_ENTITY_TYPE_STRICT_MAX: int = 12  # warn but do not fail above this; spec may extend it
+# EntityTypeEnumeration per OPC 40450-1 v100 §10.10 — values 0–42 defined in the spec.
+# 0=UNDEFINED, 1=OTHER, 2=ASSET, 3=CONTROLLER, 4=TOOL, 5=SERVO, 6=MEMORY_DEVICE,
+# 7=SENSOR, 8=CABLE, 9=BATTERY, 10=POWER_SUPPLY, 11=FEEDER, 12=ACCESSORY,
+# 13=SUB_COMPONENT, 14=SOFTWARE, 15=RESULT, 16=EVENT, 17=ERROR, 18=SYSTEM,
+# 19=LOG, 20=VEHICLE, 21=PRODUCT, 22=PART, 23=JOINT, 24=MODEL, 25=ORDER,
+# 26=JOINING_PROCESS, 27=PROGRAM, 28=JOB, 29=BATCH, 30=RECIPE, 31=TASK,
+# 32=PROCESS, 33=CONFIGURATION, 34=SOCKET, 35=CHANNEL, 36=STATION,
+# 37=PRODUCTION_LINE, 38=LOCATION, 39=USER, 40=PARENT, 41=VIRTUAL_STATION,
+# 42=JOINT_COMPONENT
+_VALID_ENTITY_TYPES: set[int] = set(range(43))  # 0–42 per OPC 40450-1 v100 spec
+_ENTITY_TYPE_STRICT_MAX: int = 42  # warn but do not fail above this; spec may extend it
+
+# EntityTypes that represent a JoiningProcess reference in AssociatedEntities.
+# JoiningProcessId is stored as AssociatedEntities[].EntityId where EntityType is one of:
+#   27=PROGRAM  → Single Result links to a Joining Program
+#   29=BATCH    → Batch Result links to a Joining Batch
+#   28=JOB      → Job Result links to a Joining Job
+#   26=JOINING_PROCESS → generic / sync / when no finer classification is available
+_JOINING_PROCESS_ENTITY_TYPES: frozenset[int] = frozenset({26, 27, 28, 29})
 
 # FailureReasonEnumeration: 0=NOT_OK_UNDEFINED, 1=PROGRAM, 2=STEP, 3=ERROR
 _VALID_FAILURE_REASONS: set[int] = {0, 1, 2, 3}

@@ -162,7 +162,7 @@ async def test_disable_asset_then_enable_asset_restores_state(opcua_client, tool
 
     disable_node = await find_child_by_browse_name(ms, BN.DISABLE_ASSET, ns_ijt)
     if disable_node is None:
-        pytest.skip("DisableAsset not present in MethodSet — skipping round-trip test")
+        pytest.skip("DisableAsset: Not Supported — skipping round-trip test")
 
     disable_result = await find_and_call_method(ms, BN.DISABLE_ASSET, ns_ijt, piu_arg, timeout=_METHOD_TIMEOUT)
     if not disable_result.success:
@@ -311,7 +311,7 @@ async def test_set_calibration_callable(opcua_client, ns_indices):
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.SET_CALIBRATION, ns_ijt)
     if method_node is None:
-        pytest.skip("SetCalibration not present in MethodSet — cannot verify callability")
+        pytest.skip("SetCalibration: Not Supported — cannot verify callability")
 
     result = await find_and_call_method(ms, BN.SET_CALIBRATION, ns_ijt, timeout=_METHOD_TIMEOUT)
     if not result.success:
@@ -354,7 +354,7 @@ async def test_reboot_asset_callable_with_tool_product_instance_uri(opcua_client
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.REBOOT_ASSET, ns_ijt)
     if method_node is None:
-        pytest.skip("RebootAsset not present in MethodSet — cannot verify callability")
+        pytest.skip("RebootAsset: Not Supported — cannot verify callability")
 
     _name, tool_node = tools_instances[0]
     piu = await _read_product_instance_uri(tool_node, ns_di)
@@ -406,7 +406,7 @@ async def test_get_error_information_callable_with_tool_product_instance_uri(opc
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.GET_ERROR_INFORMATION, ns_ijt)
     if method_node is None:
-        pytest.skip("GetErrorInformation not present in MethodSet — cannot verify callability")
+        pytest.skip("GetErrorInformation: Not Supported — cannot verify callability")
 
     _name, tool_node = tools_instances[0]
     piu = await _read_product_instance_uri(tool_node, ns_di)
@@ -458,7 +458,7 @@ async def test_execute_operation_callable_with_tool_product_instance_uri(opcua_c
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.EXECUTE_OPERATION, ns_ijt)
     if method_node is None:
-        pytest.skip("ExecuteOperation not present in MethodSet — cannot verify callability")
+        pytest.skip("ExecuteOperation: Not Supported — cannot verify callability")
 
     _name, tool_node = tools_instances[0]
     piu = await _read_product_instance_uri(tool_node, ns_di)
@@ -630,7 +630,7 @@ async def test_method_input_argument_unknown_piu_returns_bad_status(opcua_client
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.ENABLE_ASSET, ns_ijt)
     if method_node is None:
-        pytest.skip("EnableAsset not present — cannot test unknown-PIU behaviour")
+        pytest.skip("EnableAsset: Not Supported — cannot test unknown-PIU behaviour")
 
     result = await find_and_call_method(
         ms,
@@ -675,7 +675,7 @@ async def test_disconnect_asset_callable_with_valid_piu(opcua_client, tools_inst
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.DISCONNECT_ASSET, ns_ijt)
     if method_node is None:
-        pytest.skip("DisconnectAsset not present in MethodSet — skipping functional test")
+        pytest.skip("DisconnectAsset: Not Supported — skipping functional test")
 
     _name, tool_node = tools_instances[0]
     piu = await _read_product_instance_uri(tool_node, ns_di)
@@ -716,7 +716,7 @@ async def test_disconnect_asset_invalid_piu_returns_bad_status(opcua_client, ns_
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.DISCONNECT_ASSET, ns_ijt)
     if method_node is None:
-        pytest.skip("DisconnectAsset not present — cannot test negative path")
+        pytest.skip("DisconnectAsset: Not Supported — cannot test negative path")
 
     result = await find_and_call_method(
         ms,
@@ -762,7 +762,7 @@ async def test_enable_asset_with_false_disables_tool(opcua_client, tools_instanc
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.ENABLE_ASSET, ns_ijt)
     if method_node is None:
-        pytest.skip("EnableAsset not present in MethodSet — skipping disable test")
+        pytest.skip("EnableAsset: Not Supported — skipping disable test")
 
     _name, tool_node = tools_instances[0]
     piu = await _read_product_instance_uri(tool_node, ns_di)
@@ -807,7 +807,7 @@ async def test_enable_asset_invalid_piu_returns_bad_node_id_unknown(opcua_client
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.ENABLE_ASSET, ns_ijt)
     if method_node is None:
-        pytest.skip("EnableAsset not present — cannot test invalid PIU behaviour")
+        pytest.skip("EnableAsset: Not Supported — cannot test invalid PIU behaviour")
 
     result = await find_and_call_method(
         ms,
@@ -852,7 +852,7 @@ async def test_set_calibration_unknown_piu_returns_bad_status(opcua_client, ns_i
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.SET_CALIBRATION, ns_ijt)
     if method_node is None:
-        pytest.skip("SetCalibration not present — cannot test unknown PIU behaviour")
+        pytest.skip("SetCalibration: Not Supported — cannot test unknown PIU behaviour")
 
     result = await find_and_call_method(
         ms,
@@ -898,7 +898,7 @@ async def test_set_calibration_invalid_calibration_data_type_returns_bad_status(
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.SET_CALIBRATION, ns_ijt)
     if method_node is None:
-        pytest.skip("SetCalibration not present — cannot test invalid calibration data")
+        pytest.skip("SetCalibration: Not Supported — cannot test invalid calibration data")
 
     bogus_calibration = ua.Variant("not-calibration-data", ua.VariantType.String)
     result = await find_and_call_method(
@@ -941,7 +941,7 @@ async def test_reboot_asset_empty_piu_uses_server_default_asset(opcua_client, ns
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.REBOOT_ASSET, ns_ijt)
     if method_node is None:
-        pytest.skip("RebootAsset not present — cannot test empty PIU semantics")
+        pytest.skip("RebootAsset: Not Supported — cannot test empty PIU semantics")
 
     result = await find_and_call_method(
         ms,
@@ -976,7 +976,7 @@ async def test_reboot_asset_unknown_piu_returns_bad_status(opcua_client, ns_indi
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.REBOOT_ASSET, ns_ijt)
     if method_node is None:
-        pytest.skip("RebootAsset not present — cannot test unknown PIU behaviour")
+        pytest.skip("RebootAsset: Not Supported — cannot test unknown PIU behaviour")
 
     result = await find_and_call_method(
         ms,
@@ -1022,7 +1022,7 @@ async def test_get_error_information_returns_empty_array_when_no_active_errors(o
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.GET_ERROR_INFORMATION, ns_ijt)
     if method_node is None:
-        pytest.skip("GetErrorInformation not present — cannot verify empty-error behaviour")
+        pytest.skip("GetErrorInformation: Not Supported — cannot verify empty-error behaviour")
 
     result = await find_and_call_method(ms, BN.GET_ERROR_INFORMATION, ns_ijt, timeout=_METHOD_TIMEOUT)
     if not result.success:
@@ -1056,7 +1056,7 @@ async def test_get_error_information_unknown_piu_returns_bad_status(opcua_client
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.GET_ERROR_INFORMATION, ns_ijt)
     if method_node is None:
-        pytest.skip("GetErrorInformation not present — cannot test unknown PIU")
+        pytest.skip("GetErrorInformation: Not Supported — cannot test unknown PIU")
 
     result = await find_and_call_method(
         ms,
@@ -1102,7 +1102,7 @@ async def test_execute_operation_empty_piu_uses_server_default_asset(opcua_clien
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.EXECUTE_OPERATION, ns_ijt)
     if method_node is None:
-        pytest.skip("ExecuteOperation not present — cannot test empty PIU semantics")
+        pytest.skip("ExecuteOperation: Not Supported — cannot test empty PIU semantics")
 
     result = await find_and_call_method(
         ms,
@@ -1135,7 +1135,7 @@ async def test_execute_operation_invalid_operation_id_returns_bad_invalid_argume
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.EXECUTE_OPERATION, ns_ijt)
     if method_node is None:
-        pytest.skip("ExecuteOperation not present — cannot test invalid OperationId")
+        pytest.skip("ExecuteOperation: Not Supported — cannot test invalid OperationId")
 
     invalid_op_id = ua.Variant("INVALID_OP_XYZ999", ua.VariantType.String)
     result = await find_and_call_method(
