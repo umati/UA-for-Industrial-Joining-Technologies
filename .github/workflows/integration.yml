@@ -641,17 +641,21 @@ jobs:
             $results = Select-Xml -Xml $x -XPath "//t:UnitTestResult" -Namespace $ns | Select-Object -ExpandProperty Node
             $passed  = ($results | Where-Object { $_.outcome -eq "Passed"  }).Count
             $failed  = ($results | Where-Object { $_.outcome -eq "Failed"  }).Count
+            $skipped = ($results | Where-Object { $_.outcome -eq "NotExecuted" }).Count
             $total   = $results.Count
             $xml  = '<?xml version="1.0" encoding="UTF-8"?>' + "`n"
-            $xml += "<testsuites tests=`"$total`" failures=`"$failed`">`n"
-            $xml += "  <testsuite name=`"IJT_CSharp_Client.Tests.Live`" tests=`"$total`" failures=`"$failed`">`n"
+            $xml += "<testsuites tests=`"$total`" failures=`"$failed`" skipped=`"$skipped`">`n"
+            $xml += "  <testsuite name=`"IJT_CSharp_Client.Tests.Live`" tests=`"$total`" failures=`"$failed`" skipped=`"$skipped`">`n"
             foreach ($r in $results) {
               $name = [System.Security.SecurityElement]::Escape($r.testName)
               $outcome = $r.outcome
               if ($outcome -eq "Passed") {
                 $xml += "    <testcase name=`"$name`" classname=`"IJT`" />`n"
               } elseif ($outcome -eq "NotExecuted") {
-                $xml += "    <testcase name=`"$name`" classname=`"IJT`"><skipped/></testcase>`n"
+                $msgRaw = ([string]$r.Output.ErrorInfo.Message).Trim()
+                if ([string]::IsNullOrWhiteSpace($msgRaw)) { $msgRaw = "Test skipped by xUnit" }
+                $msg = [System.Security.SecurityElement]::Escape($msgRaw)
+                $xml += "    <testcase name=`"$name`" classname=`"IJT`"><skipped message=`"$msg`">$msg</skipped></testcase>`n"
               } else {
                 $msg = [System.Security.SecurityElement]::Escape($r.Output.ErrorInfo.Message)
                 $xml += "    <testcase name=`"$name`" classname=`"IJT`"><failure>$msg</failure></testcase>`n"
@@ -659,7 +663,7 @@ jobs:
             }
             $xml += "  </testsuite>`n</testsuites>"
             $xml | Out-File $junit -Encoding UTF8
-            Write-Host "Converted TRX → JUnit: $total tests, $failed failures"
+            Write-Host "Converted TRX → JUnit: $total tests, $failed failures, $skipped skipped"
           } else {
             Write-Host "No TRX file found — creating empty JUnit"
             '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests.Live" tests="0"/></testsuites>' | Out-File $junit -Encoding UTF8
