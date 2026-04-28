@@ -5,7 +5,7 @@ Covered conformance unit:
 
     engineering_units
         The Server uses EUInformation type for ResultValueDataType.EngineeringUnits
-        as defined in OPC UA Part 8. The Identifier maps to UNECE codes.
+        as defined in OPC UA Part 8. The UnitId maps to UNECE codes.
         DisplayName and Description describe the physical unit.
 """
 
@@ -34,7 +34,7 @@ _UNECE_NAMESPACE_URI = "http://www.opcfoundation.org/UA/units/un/cefact"
 _PHYSICAL_QUANTITY_TORQUE: int = 2  # torque physical quantity
 _PHYSICAL_QUANTITY_ANGLE: int = 3  # angle physical quantity
 
-# EUInformation Identifiers for tightening-relevant physical quantities.
+# EUInformation UnitIds for tightening-relevant physical quantities.
 # Source: OPC UA Part 8 Annex C (EUInformation); values are signed Int32
 # derived from the four-character UNECE unit codes.
 _NEWTON_METRE_EU_IDENTIFIER: int = 4477133  # newton-metre (N·m)
@@ -78,6 +78,11 @@ async def _trigger_and_get_result(subscription_client, result_trigger, ns_indice
         return await rc.collect_single()
 
 
+def _unwrap_variant(value):
+    """Unwrap asyncua Variant containers used for nested ExtensionObjects."""
+    return getattr(value, "Value", value)
+
+
 def _collect_all_result_values(result_data) -> list:
     """Return every ResultValueDataType from a result and its sub-results.
 
@@ -98,15 +103,16 @@ def _collect_all_result_values(result_data) -> list:
     # Top-level OverallResultValues (on JoiningResultDataType, not on ResultMetaData)
     ovr = getattr(result_data, "OverallResultValues", None)
     if isinstance(ovr, (list, tuple)):
-        values.extend(ovr)
+        values.extend(_unwrap_variant(v) for v in ovr)
 
     # Top-level StepResults → StepResultValues
     steps = getattr(result_data, "StepResults", None)
     if isinstance(steps, (list, tuple)):
         for step in steps:
+            step = _unwrap_variant(step)
             step_vals = getattr(step, "StepResultValues", None)
             if isinstance(step_vals, (list, tuple)):
-                values.extend(step_vals)
+                values.extend(_unwrap_variant(v) for v in step_vals)
 
     # Sub-results in ResultContent (batch/sync/job combined results carry sub-results here)
     # Each item is a Variant wrapping a JoiningResultDataType — unwrap via .Value first.
@@ -116,27 +122,29 @@ def _collect_all_result_values(result_data) -> list:
             inner = getattr(item, "Value", item)  # unwrap Variant → JoiningResultDataType
             item_ovr = getattr(inner, "OverallResultValues", None)
             if isinstance(item_ovr, (list, tuple)):
-                values.extend(item_ovr)
+                values.extend(_unwrap_variant(v) for v in item_ovr)
 
             item_steps = getattr(inner, "StepResults", None)
             if isinstance(item_steps, (list, tuple)):
                 for step in item_steps:
+                    step = _unwrap_variant(step)
                     step_vals = getattr(step, "StepResultValues", None)
                     if isinstance(step_vals, (list, tuple)):
-                        values.extend(step_vals)
+                        values.extend(_unwrap_variant(v) for v in step_vals)
 
     return values
 
 
 def _values_with_eu(all_values: list) -> list:
     """Filter to only ResultValueDataType entries that carry EngineeringUnits."""
-    return [v for v in all_values if getattr(v, "EngineeringUnits", None) is not None]
+    return [v for v in (_unwrap_variant(v) for v in all_values) if getattr(v, "EngineeringUnits", None) is not None]
 
 
 def _values_for_quantity(all_values: list, physical_quantity_int: int) -> list:
     """Filter to values whose PhysicalQuantity matches the given integer."""
     result = []
     for v in all_values:
+        v = _unwrap_variant(v)
         pq = getattr(v, "PhysicalQuantity", None)
         if pq is None:
             continue
@@ -153,7 +161,7 @@ def _values_for_quantity(all_values: list, physical_quantity_int: int) -> list:
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
 async def test_result_values_engineering_units_use_eu_information_type(subscription_client, result_trigger, ns_indices):
-    """The Server uses EUInformation type for ResultValueDataType.EngineeringUnits as defined in OPC UA Part 8. The Identifier maps to UNECE codes. DisplayName and Description describe the physical unit."""
+    """The Server uses EUInformation type for ResultValueDataType.EngineeringUnits as defined in OPC UA Part 8. The UnitId maps to UNECE codes. DisplayName and Description describe the physical unit."""
     result_data = await _trigger_and_get_result(
         subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
@@ -169,10 +177,11 @@ async def test_result_values_engineering_units_use_eu_information_type(subscript
         eu = getattr(value, "EngineeringUnits", None)
         if eu is None:
             continue
+        eu = getattr(eu, "Value", eu)  # unwrap nested Variant
 
-        if not hasattr(eu, "Identifier"):
+        if not hasattr(eu, "UnitId"):
             failures.append(
-                f"value[{idx}].EngineeringUnits has no .Identifier attribute "
+                f"value[{idx}].EngineeringUnits has no .UnitId attribute "
                 f"(expected EUInformation, got {type(eu).__name__!r})"
             )
 
@@ -211,18 +220,19 @@ async def test_torque_values_have_expected_engineering_units_identifier(
     failures: list[str] = []
     for idx, value in enumerate(torque_with_eu):
         eu = value.EngineeringUnits
-        identifier = getattr(eu, "Identifier", None)
+        eu = getattr(eu, "Value", eu)  # unwrap nested Variant
+        identifier = getattr(eu, "UnitId", None)
         if identifier is None:
-            failures.append(f"torque_value[{idx}].EngineeringUnits.Identifier is None")
+            failures.append(f"torque_value[{idx}].EngineeringUnits.UnitId is None")
             continue
         try:
             id_int = int(identifier)
         except (TypeError, ValueError):
-            failures.append(f"torque_value[{idx}].EngineeringUnits.Identifier={identifier!r} is not an integer")
+            failures.append(f"torque_value[{idx}].EngineeringUnits.UnitId={identifier!r} is not an integer")
             continue
         if id_int not in _KNOWN_TORQUE_EU_IDENTIFIERS:
             failures.append(
-                f"torque_value[{idx}].EngineeringUnits.Identifier={id_int!r} not in "
+                f"torque_value[{idx}].EngineeringUnits.UnitId={id_int!r} not in "
                 f"known torque set {sorted(_KNOWN_TORQUE_EU_IDENTIFIERS)}"
             )
 
@@ -252,18 +262,19 @@ async def test_angle_values_have_expected_engineering_units_identifier(subscript
     failures: list[str] = []
     for idx, value in enumerate(angle_with_eu):
         eu = value.EngineeringUnits
-        identifier = getattr(eu, "Identifier", None)
+        eu = getattr(eu, "Value", eu)  # unwrap Variant → EUInformation
+        identifier = getattr(eu, "UnitId", None)
         if identifier is None:
-            failures.append(f"angle_value[{idx}].EngineeringUnits.Identifier is None")
+            failures.append(f"angle_value[{idx}].EngineeringUnits.UnitId is None")
             continue
         try:
             id_int = int(identifier)
         except (TypeError, ValueError):
-            failures.append(f"angle_value[{idx}].EngineeringUnits.Identifier={identifier!r} is not an integer")
+            failures.append(f"angle_value[{idx}].EngineeringUnits.UnitId={identifier!r} is not an integer")
             continue
         if id_int not in _KNOWN_ANGLE_EU_IDENTIFIERS:
             failures.append(
-                f"angle_value[{idx}].EngineeringUnits.Identifier={id_int!r} not in "
+                f"angle_value[{idx}].EngineeringUnits.UnitId={id_int!r} not in "
                 f"known angle set {sorted(_KNOWN_ANGLE_EU_IDENTIFIERS)}"
             )
 
@@ -272,7 +283,7 @@ async def test_angle_values_have_expected_engineering_units_identifier(subscript
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
 async def test_engineering_units_identifier_is_a_positive_integer(subscription_client, result_trigger, ns_indices):
-    """EngineeringUnits.Identifier must be a positive integer — all UNECE codes are positive."""
+    """EngineeringUnits.UnitId must be a positive integer — all UNECE codes are positive."""
     result_data = await _trigger_and_get_result(
         subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
@@ -287,18 +298,19 @@ async def test_engineering_units_identifier_is_a_positive_integer(subscription_c
         eu = getattr(value, "EngineeringUnits", None)
         if eu is None:
             continue
-        identifier = getattr(eu, "Identifier", None)
+        eu = getattr(eu, "Value", eu)  # unwrap nested Variant
+        identifier = getattr(eu, "UnitId", None)
         if identifier is None:
-            failures.append(f"value[{idx}].EngineeringUnits.Identifier is None")
+            failures.append(f"value[{idx}].EngineeringUnits.UnitId is None")
             continue
         try:
             id_int = int(identifier)
         except (TypeError, ValueError):
-            failures.append(f"value[{idx}].EngineeringUnits.Identifier={identifier!r} cannot be converted to int")
+            failures.append(f"value[{idx}].EngineeringUnits.UnitId={identifier!r} cannot be converted to int")
             continue
         if id_int <= 0:
             failures.append(
-                f"value[{idx}].EngineeringUnits.Identifier={id_int!r} is not positive "
+                f"value[{idx}].EngineeringUnits.UnitId={id_int!r} is not positive "
                 f"(all UNECE codes must be greater than zero)"
             )
         checked += 1
@@ -310,7 +322,7 @@ async def test_engineering_units_identifier_is_a_positive_integer(subscription_c
             "verify server populates EU on result values"
         )
 
-    assert not failures, "EU Identifier type failures:\n  " + "\n  ".join(failures)
+    assert not failures, "EU UnitId type failures:\n  " + "\n  ".join(failures)
 
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
@@ -372,10 +384,11 @@ async def test_engineering_units_are_consistent_within_same_physical_quantity(
         eu = getattr(value, "EngineeringUnits", None)
         if eu is None:
             continue
+        eu = getattr(eu, "Value", eu)  # unwrap nested Variant
         pq = getattr(value, "PhysicalQuantity", None)
         if pq is None:
             continue
-        identifier = getattr(eu, "Identifier", None)
+        identifier = getattr(eu, "UnitId", None)
         if identifier is None:
             continue
         try:
@@ -408,7 +421,7 @@ async def test_engineering_units_are_consistent_within_same_physical_quantity(
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
 async def test_trace_content_data_type_has_engineering_units(subscription_client, result_trigger, ns_indices):
-    """Every TraceContentDataType in a multi-step result must carry EngineeringUnits with Identifier and NamespaceUri."""
+    """Every TraceContentDataType in a multi-step result must carry EngineeringUnits with UnitId and NamespaceUri."""
     result_data = await _trigger_and_get_result(
         subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
@@ -426,13 +439,15 @@ async def test_trace_content_data_type_has_engineering_units(subscription_client
         if not isinstance(step_results, (list, tuple)):
             continue
         for step in step_results:
+            step = _unwrap_variant(step)
             step_traces = getattr(step, "StepTraces", None)
             if not isinstance(step_traces, (list, tuple)):
                 continue
             for trace in step_traces:
+                trace = _unwrap_variant(trace)
                 trace_content = getattr(trace, "StepTraceContent", None)
                 if isinstance(trace_content, (list, tuple)):
-                    trace_values.extend(trace_content)
+                    trace_values.extend(_unwrap_variant(tc) for tc in trace_content)
 
     if not trace_values:
         pytest.skip("No StepTraceContent entries found in result — trace EU check skipped")
@@ -442,14 +457,15 @@ async def test_trace_content_data_type_has_engineering_units(subscription_client
         eu = getattr(tc, "EngineeringUnits", None)
         if eu is None:
             continue
-        if not hasattr(eu, "Identifier"):
+        eu = getattr(eu, "Value", eu)  # unwrap nested Variant
+        if not hasattr(eu, "UnitId"):
             failures.append(
-                f"TraceContent[{idx}].EngineeringUnits has no Identifier attribute (type: {type(eu).__name__!r})"
+                f"TraceContent[{idx}].EngineeringUnits has no UnitId attribute (type: {type(eu).__name__!r})"
             )
             continue
-        identifier = getattr(eu, "Identifier", None)
+        identifier = getattr(eu, "UnitId", None)
         if identifier is None:
-            failures.append(f"TraceContent[{idx}].EngineeringUnits.Identifier is None")
+            failures.append(f"TraceContent[{idx}].EngineeringUnits.UnitId is None")
         ns_uri = getattr(eu, "NamespaceUri", None)
         if ns_uri is None:
             logger.info("TraceContent[%d].EngineeringUnits.NamespaceUri absent — optional", idx)
@@ -459,7 +475,7 @@ async def test_trace_content_data_type_has_engineering_units(subscription_client
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
 async def test_reported_value_data_type_in_event_has_engineering_units(subscription_client, result_trigger, ns_indices):
-    """Every ReportedValueDataType in a result must carry EngineeringUnits with a valid Identifier."""
+    """Every ReportedValueDataType in a result must carry EngineeringUnits with a valid UnitId."""
     result_data = await _trigger_and_get_result(
         subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
@@ -470,14 +486,14 @@ async def test_reported_value_data_type_in_event_has_engineering_units(subscript
     for attr in ("ReportedValues", "OverallReportedValues"):
         vals = getattr(result_data, attr, None)
         if isinstance(vals, (list, tuple)):
-            reported_values.extend(vals)
+            reported_values.extend(_unwrap_variant(v) for v in vals)
 
     meta = getattr(result_data, "ResultMetaData", None)
     if meta is not None:
         for attr in ("ReportedValues", "OverallReportedValues"):
             vals = getattr(meta, attr, None)
             if isinstance(vals, (list, tuple)):
-                reported_values.extend(vals)
+                reported_values.extend(_unwrap_variant(v) for v in vals)
 
     content = getattr(result_data, "ResultContent", None)
     if isinstance(content, (list, tuple)):
@@ -486,7 +502,7 @@ async def test_reported_value_data_type_in_event_has_engineering_units(subscript
             for attr in ("ReportedValues",):
                 vals = getattr(item, attr, None)
                 if isinstance(vals, (list, tuple)):
-                    reported_values.extend(vals)
+                    reported_values.extend(_unwrap_variant(v) for v in vals)
 
     if not reported_values:
         pytest.skip("No ReportedValueDataType entries found in result — EU check skipped")
@@ -496,16 +512,17 @@ async def test_reported_value_data_type_in_event_has_engineering_units(subscript
         eu = getattr(rv, "EngineeringUnits", None)
         if eu is None:
             continue
-        identifier = getattr(eu, "Identifier", None)
+        eu = getattr(eu, "Value", eu)  # unwrap nested Variant
+        identifier = getattr(eu, "UnitId", None)
         if identifier is None:
-            failures.append(f"ReportedValue[{idx}].EngineeringUnits.Identifier is None")
+            failures.append(f"ReportedValue[{idx}].EngineeringUnits.UnitId is None")
 
     assert not failures, "ReportedValue EngineeringUnits failures:\n  " + "\n  ".join(failures)
 
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
 async def test_design_value_data_type_has_engineering_units(opcua_client, ns_indices):
-    """Every DesignValueDataType in a joint design must carry EngineeringUnits with a valid Identifier."""
+    """Every DesignValueDataType in a joint design must carry EngineeringUnits with a valid UnitId."""
     ns_ijt = None
     for key, val in ns_indices.items():
         if "IJT" in str(key) or "ijt" in str(key).lower():
@@ -561,9 +578,10 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
         eu = getattr(dv, "EngineeringUnits", None)
         if eu is None:
             continue
-        identifier = getattr(eu, "Identifier", None)
+        eu = getattr(eu, "Value", eu)  # unwrap nested Variant
+        identifier = getattr(eu, "UnitId", None)
         if identifier is None:
-            failures.append(f"DesignValue[{idx}].EngineeringUnits.Identifier is None")
+            failures.append(f"DesignValue[{idx}].EngineeringUnits.UnitId is None")
 
     assert not failures, "DesignValue EngineeringUnits failures:\n  " + "\n  ".join(failures)
 
@@ -641,7 +659,7 @@ async def test_joining_data_variable_type_variables_have_engineering_units_prope
 async def test_result_values_with_absent_eu_information_are_non_conformant(
     subscription_client, result_trigger, ns_indices
 ):
-    """Any ResultValue with EngineeringUnits present must have non-None Identifier — null Identifier is non-conformant."""
+    """Any ResultValue with EngineeringUnits present must have non-None UnitId — null UnitId is non-conformant."""
     result_data = await _trigger_and_get_result(
         subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
     )
@@ -661,13 +679,14 @@ async def test_result_values_with_absent_eu_information_are_non_conformant(
     violations: list[str] = []
     for idx, value in enumerate(values_with_eu):
         eu = value.EngineeringUnits
-        identifier = getattr(eu, "Identifier", None)
+        eu = getattr(eu, "Value", eu)  # unwrap Variant → EUInformation
+        identifier = getattr(eu, "UnitId", None)
         if identifier is None:
             violations.append(
-                f"value[{idx}].EngineeringUnits.Identifier is None — "
-                "EngineeringUnits present but Identifier field is null (non-conformant)"
+                f"value[{idx}].EngineeringUnits.UnitId is None — "
+                "EngineeringUnits present but UnitId field is null (non-conformant)"
             )
 
     assert not violations, (
-        "ResultValues have EngineeringUnits with null Identifier (conformance violation):\n  " + "\n  ".join(violations)
+        "ResultValues have EngineeringUnits with null UnitId (conformance violation):\n  " + "\n  ".join(violations)
     )

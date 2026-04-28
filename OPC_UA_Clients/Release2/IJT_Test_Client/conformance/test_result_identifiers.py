@@ -263,8 +263,8 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
         ns_ijt,
         ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
         ua.Variant([], ua.VariantType.ExtensionObject),  # IdentifierList (clear all)
-        ua.Variant(True, ua.VariantType.Boolean),  # ResetAll
-        ua.Variant(False, ua.VariantType.Boolean),  # ResetLatest
+        ua.Variant(True, ua.VariantType.Boolean),
+        ua.Variant(False, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
     )
 

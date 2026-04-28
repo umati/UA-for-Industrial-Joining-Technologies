@@ -78,6 +78,16 @@ _RR_TO_SEQ = ua.Variant(0, ua.VariantType.UInt64)
 _RR_FROM_TIME = ua.Variant(datetime.datetime(2000, 1, 1), ua.VariantType.DateTime)
 _RR_TO_TIME = ua.Variant(datetime.datetime(9999, 1, 1), ua.VariantType.DateTime)
 _RR_MIN_DURATION = ua.Variant(0.0, ua.VariantType.Double)
+_RUR_MAX_RESULTS = ua.Variant(1, ua.VariantType.UInt32)
+_RUR_MIN_DURATION = ua.Variant(0.0, ua.VariantType.Double)
+
+
+def _fail_if_rur_bad_arguments_missing(exc):
+    if "BadArgumentsMissing" in str(exc):
+        pytest.fail(
+            "RequestUnacknowledgedResults returned BadArgumentsMissing despite valid "
+            "MaxResults and RequestedMinimumDurationBetweenResults arguments"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -162,19 +172,27 @@ async def _find_result_var(results_folder, ns_mr, ns_ijt, ns_indices=None):
 
 
 async def _find_requested_result_var(rm, ns_indices, ns_mr):
-    """Locate the RequestedResult variable on ResultManagement.
+    """Locate the RequestedResult variable inside the Results folder.
 
-    Per IJT Base spec the BrowseName uses NS_IJT_BASE; ns_mr and the vendor-specific
-    NS_APP namespace are tried as fallbacks for non-standard server implementations.
+    Like Result, the RequestedResult variable lives under
+    ResultManagement → Results folder. Both carry the same
+    ResultDataType payload; RequestedResult is updated only when
+    RequestResults is called (stored/historical result), while
+    Result is updated for live results.
     """
+    # First locate the Results folder
+    results_folder = await find_child_by_browse_name(rm, BN.RESULTS, ns_mr)
+    if results_folder is None:
+        return None
+
     ns_ijt = ns_indices.get(NS_IJT_BASE)
-    node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_ijt) if ns_ijt else None
+    node = await find_child_by_browse_name(results_folder, BN.REQUESTED_RESULT, ns_ijt) if ns_ijt else None
     if node is None:
-        node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_mr)
+        node = await find_child_by_browse_name(results_folder, BN.REQUESTED_RESULT, ns_mr)
     if node is None:
         ns_app = ns_indices.get(NS_APP)
         if ns_app is not None:
-            node = await find_child_by_browse_name(rm, BN.REQUESTED_RESULT, ns_app)
+            node = await find_child_by_browse_name(results_folder, BN.REQUESTED_RESULT, ns_app)
     return node
 
 
@@ -192,14 +210,14 @@ def _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt):
 
 
 def _handle_missing_requested_result_variable(ns_indices):
-    """Skip known simulator gap; fail on non-simulator servers."""
-    if ns_indices.get(NS_APP) is not None:
-        pytest.skip(
-            "RequestedResult variable: not exposed by simulator — tried ns_ijt, ns_mr, ns_app; verify against a spec-compliant server"
-        )
+    """Fail when RequestedResult variable is not found — it is required for this CU."""
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    ns_app = ns_indices.get(NS_APP)
     pytest.fail(
-        "RequestedResult variable: not found (tried ns_ijt, ns_mr, ns_app) — "
-        "required for this conformance unit on non-simulator servers"
+        f"RequestedResult variable not found under ResultManagement/Results "
+        f"(tried ns_ijt={ns_ijt}, ns_mr={ns_mr}, ns_app={ns_app}) — "
+        "required for this conformance unit"
     )
 
 
@@ -370,10 +388,13 @@ async def test_get_result_by_id_with_nonexistent_id_returns_error(opcua_client, 
         # Fallback: even without Error field, a null Result is acceptable
         if len(output) >= 2 and output[1] is None:
             return  # PASS: server returned null Result for nonexistent id
-        pytest.skip(
+        message = (
             "GetResultById with nonexistent identifier returned Success with no error indicator — "
             "expected non-zero Error in output[2] or null Result in output[1]"
         )
+        if ns_indices.get(NS_APP) is not None:
+            pytest.skip(f"{message}; known simulator gap")
+        pytest.fail(message)
     except ua.UaError:
         pass  # Expected: server correctly rejected the unknown identifier
     except asyncio.TimeoutError:
@@ -736,10 +757,15 @@ async def test_request_unacknowledged_results_method_is_present(result_managemen
         return
     try:
         await asyncio.wait_for(
-            result_management.call_method(rur_node.nodeid),
+            result_management.call_method(
+                rur_node.nodeid,
+                _RUR_MAX_RESULTS,
+                _RUR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
+    except ua.UaError as exc:
+        _fail_if_rur_bad_arguments_missing(exc)
         return
     pytest.fail("RequestUnacknowledgedResults unexpectedly returned Good on unsupported profile")
 
@@ -769,10 +795,15 @@ async def test_request_unacknowledged_results_is_callable(opcua_client, result_t
 
     try:
         await asyncio.wait_for(
-            rm.call_method(rur_node.nodeid),
+            rm.call_method(
+                rur_node.nodeid,
+                _RUR_MAX_RESULTS,
+                _RUR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
+    except ua.UaError as exc:
+        _fail_if_rur_bad_arguments_missing(exc)
         return
     pytest.fail("RequestUnacknowledgedResults unexpectedly returned Good on unsupported profile")
 
@@ -983,9 +1014,9 @@ async def test_get_latest_result_classification_is_valid(opcua_client, result_tr
 
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.GET_LATEST_RESULT)
-async def test_get_latest_result_with_negative_timeout_returns_error(opcua_client, ns_indices):
-    """GetLatestResult called with a negative Timeout value must not crash the
-    server — it must either raise a Bad status code or return promptly.
+async def test_get_latest_result_with_negative_timeout_does_not_crash(opcua_client, ns_indices):
+    """GetLatestResult called with a negative Timeout value must not crash or
+    hang the server — it must either raise a Bad status code or return promptly.
 
     Signature: GetLatestResult(Timeout: Int32) → [ResultHandle, Result, Error].
     A negative timeout is out-of-domain and exercises server input validation."""
@@ -1006,17 +1037,18 @@ async def test_get_latest_result_with_negative_timeout_returns_error(opcua_clien
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-        # Server returned without UaError — check output Error field
+        # Server returned without UaError — this is acceptable for a negative
+        # timeout; the purpose of this test is to confirm the server does not
+        # crash or hang.  Some servers may also signal an error in output[2].
         output = list(result) if isinstance(result, (list, tuple)) else ([] if result is None else [result])
         if len(output) >= 3:
             try:
-                if int(output[2]) != 0:
-                    return  # PASS: server signalled error via output[2]
+                err = int(output[2])
+                logger.info("GetLatestResult with negative timeout: output Error=%d", err)
             except (TypeError, ValueError):
                 pass
-        pytest.fail(
-            "GetLatestResult with negative timeout returned Success with no error indicator — "
-            "expected ua.UaError or non-zero Error in output[2]"
+        logger.info(
+            "GetLatestResult with negative timeout returned without UaError; server handles invalid timeout gracefully"
         )
     except ua.UaError:
         pass  # Expected: server correctly rejected the invalid timeout
@@ -1421,10 +1453,6 @@ async def test_read_fabricated_node_id_returns_bad_status(opcua_client, ns_indic
 
 # Event subscription timeout — maximum seconds to wait for a RequestedResultEventType event
 _EVENT_SUBSCRIPTION_WAIT_SECS = 30.0
-
-# A fabricated invalid ProductInstanceUri guaranteed not to match any known asset
-_INVALID_PRODUCT_INSTANCE_URI = "urn:nonexistent:asset:for:negative:test:001"
-
 
 # ---------------------------------------------------------------------------
 # CU37 — REQUEST_RESULTS additional tests
@@ -1908,10 +1936,15 @@ async def test_acknowledged_result_not_in_unacknowledged_list(opcua_client, resu
     rur_rejected = False
     try:
         await asyncio.wait_for(
-            rm.call_method(rur_node.nodeid),
+            rm.call_method(
+                rur_node.nodeid,
+                _RUR_MAX_RESULTS,
+                _RUR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
+    except ua.UaError as exc:
+        _fail_if_rur_bad_arguments_missing(exc)
         rur_rejected = True
     except asyncio.TimeoutError:
         pytest.fail("RequestUnacknowledgedResults timed out")
@@ -1977,10 +2010,15 @@ async def test_request_unacknowledged_results_returns_list_of_result_ids(opcua_c
 
     try:
         await asyncio.wait_for(
-            rm.call_method(rur_node.nodeid),
+            rm.call_method(
+                rur_node.nodeid,
+                _RUR_MAX_RESULTS,
+                _RUR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
+    except ua.UaError as exc:
+        _fail_if_rur_bad_arguments_missing(exc)
         return
     except asyncio.TimeoutError:
         pytest.fail("RequestUnacknowledgedResults timed out")
@@ -2006,10 +2044,15 @@ async def test_unacknowledged_result_appears_after_trigger(opcua_client, result_
 
     try:
         await asyncio.wait_for(
-            rm.call_method(rur_node.nodeid),
+            rm.call_method(
+                rur_node.nodeid,
+                _RUR_MAX_RESULTS,
+                _RUR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
+    except ua.UaError as exc:
+        _fail_if_rur_bad_arguments_missing(exc)
         return
     except asyncio.TimeoutError:
         pytest.fail("RequestUnacknowledgedResults timed out")
@@ -2055,10 +2098,15 @@ async def test_acknowledged_result_absent_from_subsequent_unacknowledged_list(op
     rur_rejected = False
     try:
         await asyncio.wait_for(
-            rm.call_method(rur_node.nodeid),
+            rm.call_method(
+                rur_node.nodeid,
+                _RUR_MAX_RESULTS,
+                _RUR_MIN_DURATION,
+            ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
+    except ua.UaError as exc:
+        _fail_if_rur_bad_arguments_missing(exc)
         rur_rejected = True
     except asyncio.TimeoutError:
         pytest.fail("RequestUnacknowledgedResults timed out after acknowledge")
@@ -2070,8 +2118,8 @@ async def test_acknowledged_result_absent_from_subsequent_unacknowledged_list(op
 
 @pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
 @pytest.mark.negative
-async def test_request_unacknowledged_results_invalid_uri_returns_error(opcua_client, ns_indices):
-    """Error RUR-4: RequestUnacknowledgedResults with invalid URI must return ua.UaError."""
+async def test_request_unacknowledged_results_valid_signature_returns_bad_status(opcua_client, ns_indices):
+    """RUR-4 profile policy: valid RequestUnacknowledgedResults call must be absent or rejected."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -2092,13 +2140,15 @@ async def test_request_unacknowledged_results_invalid_uri_returns_error(opcua_cl
         await asyncio.wait_for(
             rm.call_method(
                 rur_node.nodeid,
-                ua.Variant(_INVALID_PRODUCT_INSTANCE_URI, ua.VariantType.String),
+                _RUR_MAX_RESULTS,
+                _RUR_MIN_DURATION,
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        pass  # Expected — server should reject unknown asset URI
+    except ua.UaError as exc:
+        _fail_if_rur_bad_arguments_missing(exc)
+        pass  # Expected — this server profile does not implement RequestUnacknowledgedResults
     except asyncio.TimeoutError:
-        pytest.fail("RequestUnacknowledgedResults timed out during negative URI test")
+        pytest.fail("RequestUnacknowledgedResults timed out during valid-signature policy test")
     else:
-        pytest.fail("RequestUnacknowledgedResults unexpectedly accepted unknown ProductInstanceUri")
+        pytest.fail("RequestUnacknowledgedResults unexpectedly returned Good on unsupported profile")

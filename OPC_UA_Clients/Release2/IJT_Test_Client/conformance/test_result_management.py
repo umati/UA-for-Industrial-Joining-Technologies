@@ -40,6 +40,8 @@ _SIMULATOR_WAIT_MS = 5000
 _EXTERNAL_WAIT_MS = 60000
 _CALL_TIMEOUT_S = 30.0
 _EXTERNAL_CALL_TIMEOUT_S = 90.0
+_RUR_MAX_RESULTS = ua.Variant(1, ua.VariantType.UInt32)
+_RUR_MIN_DURATION = ua.Variant(0.0, ua.VariantType.Double)
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +83,36 @@ async def _trigger_and_get_latest(result_trigger, rm, ns_mr, result_type=ResultT
     result_data = outputs[1] if len(outputs) > 1 else (outputs[0] if outputs else None)
     meta = getattr(result_data, "ResultMetaData", None) if result_data else None
     return result_data, meta
+
+
+async def _find_requested_result_var(result_management, ns_indices):
+    """Locate RequestedResult under ResultManagement/Results, with legacy fallbacks."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_app = ns_indices.get(NS_APP)
+
+    roots = []
+    if ns_mr is not None:
+        results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
+        if results_folder is None and ns_ijt is not None:
+            results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_ijt)
+        if results_folder is not None:
+            roots.append(results_folder)
+
+    # Legacy simulator builds exposed RequestedResult directly under ResultManagement.
+    roots.append(result_management)
+
+    for root in roots:
+        for ns_idx in (ns_ijt, ns_mr, ns_app):
+            if ns_idx is None:
+                continue
+            node = await find_child_by_browse_name(root, BN.REQUESTED_RESULT, ns_idx)
+            if node is not None:
+                return node
+
+    if ns_app is not None:
+        return await find_child_by_browse_name(result_management, BN.RESULT_TRANSFER, ns_app)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -262,17 +294,14 @@ async def test_result_management_get_result_id_list_filtered_presence_or_not_imp
     if grilf is None:
         pytest.skip("GetResultIdListFiltered: Not Supported — method node absent (optional CU)")
 
-    # Method node present; attempt a call with no args to probe reachability.
-    # BadArgumentsMissing / BadNotSupported are both acceptable (not implemented).
-    # Any Good/Uncertain result is also acceptable (method implemented).
+    # Method node present — check Executable attribute to confirm reachability
     try:
-        await asyncio.wait_for(
-            result_management.call_method(grilf.nodeid),
-            timeout=_CALL_TIMEOUT_S,
+        executable = await grilf.read_attribute(ua.AttributeIds.Executable)
+        assert executable.Value.Value is True, (
+            f"GetResultIdListFiltered Executable={executable.Value.Value} — expected True"
         )
-        logger.debug("GetResultIdListFiltered returned Good — method is implemented")
     except ua.UaError as exc:
-        logger.debug("GetResultIdListFiltered returned UaError (not implemented or wrong args): %s", exc)
+        pytest.skip(f"GetResultIdListFiltered: could not read Executable attribute: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -544,10 +573,17 @@ async def test_result_management_request_unacknowledged_results_method_present_i
     result = await call_method(
         result_management,
         rur_node.nodeid,
+        _RUR_MAX_RESULTS,
+        _RUR_MIN_DURATION,
         timeout=_CALL_TIMEOUT_S,
         method_name="RequestUnacknowledgedResults",
     )
     assert result is not None, "RequestUnacknowledgedResults returned None — expected MethodCallResult"
+    if not result.success and result.error is not None and "BadArgumentsMissing" in str(result.error):
+        pytest.fail(
+            "RequestUnacknowledgedResults returned BadArgumentsMissing despite valid "
+            "MaxResults and RequestedMinimumDurationBetweenResults arguments"
+        )
     assert not result.success, (
         "RequestUnacknowledgedResults succeeded, but this server profile defines this method as unsupported/not implemented"
     )
@@ -564,19 +600,18 @@ async def test_result_management_requested_result_variable_accessible_if_present
     generated upon the successful execution of RequestResults or
     RequestUnacknowledgedResults method.
 
-    Optional variable: skipped when not present. When present, the node must be browsable.
+    When this CU is enabled, RequestedResult must be browsable.
     """
-    ns_app = ns_indices.get(NS_APP)
-    if ns_app is None:
-        pytest.skip("Application namespace not registered on server")
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is None:
+        pytest.skip("Machinery/Result namespace not registered on server")
 
-    # "RequestedResult" is registered in the server's application namespace (NS_APP),
-    # confirmed from result_management_t.cpp: NAMESPACE_INDEX_TIGHTENING_SERVER.
-    requested_var_node = await find_child_by_browse_name(result_management, "RequestedResult", ns_app)
+    requested_var_node = await _find_requested_result_var(result_management, ns_indices)
     if requested_var_node is None:
-        requested_var_node = await find_child_by_browse_name(result_management, BN.RESULT_TRANSFER, ns_app)
-    if requested_var_node is None:
-        pytest.skip("RequestedResultVariable not found on ResultManagement — optional per spec")
+        pytest.fail(
+            "RequestedResultVariable not found under ResultManagement/Results "
+            f"(tried ns_ijt={ns_indices.get(NS_IJT_BASE)}, ns_mr={ns_mr}, ns_app={ns_indices.get(NS_APP)})"
+        )
 
     logger.info("RequestedResultVariable node found: %s", requested_var_node.nodeid)
     assert requested_var_node is not None
@@ -638,19 +673,25 @@ async def test_result_management_get_result_by_id_with_invalid_id_returns_error(
         method_name="GetResultById(invalid)",
     )
     if result.success:
-        # R08/R09: server returns OpcUa_Good + bad methodStatusCode in output[0]
-        # This is the correct IDS-style response for "not found" — check and pass
+        # Corrected signature: [ResultHandle, Result, Error]
+        # For an invalid ResultId, output[1] (Result) should be null/empty
+        # and output[2] (Error) should indicate not-found
         output = result.output_list
-        if output:
+        if output and len(output) >= 3:
             try:
-                if int(output[0]) != 0:
-                    return  # PASS: server correctly reports not-found via output methodStatusCode
+                if int(output[2]) != 0:
+                    return  # PASS: server reports not-found via Error output
             except (TypeError, ValueError):
                 pass
-        pytest.skip(
-            "GetResultById with invalid ResultId returned Success with no bad output status — "
-            "server must report not-found via output methodStatusCode (OPC 40450-1 §GetResultById)"
+            if output[1] is None:
+                return  # PASS: null Result indicates not-found
+        message = (
+            "GetResultById with invalid ResultId returned Success with no error indicator — "
+            "expected non-zero output[2] Error or null output[1] Result"
         )
+        if ns_indices.get(NS_APP) is not None:
+            pytest.skip(f"{message}; known simulator gap")
+        pytest.fail(message)
 
 
 # ─── result_management — TypeSystem checks ────────────────────────────────────

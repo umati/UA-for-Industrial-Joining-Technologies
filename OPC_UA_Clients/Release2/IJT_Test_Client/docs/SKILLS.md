@@ -108,8 +108,8 @@ Objects/
     ├── ResultManagement        (Machinery/Result ns)
     │   ├── Results/
     │   ├── GetLatestResult(Timeout: Int32)        ← Timeout is REQUIRED
-    │   ├── GetResultById(ResultId: String)
-    │   ├── GetResultIdListFiltered(...)            ← unsupported in this profile
+    │   ├── GetResultById(ResultId: NormalizedString, Timeout: Int32)
+    │   ├── GetResultIdListFiltered(...)            ← optional/profile-dependent; presence checked by Executable
     │   ├── ReleaseResultHandle(...)                ← unsupported in this profile
     │   ├── AcknowledgeResults(...)                 ← unsupported in this profile
     │   ├── RequestUnacknowledgedResults(...)       ← unsupported in this profile
@@ -442,6 +442,55 @@ for jr in result_data.ResultContent or []:
 
 Skipping this unwrap means all field accesses return `None` — the test silently passes but validates nothing.
 
+**Nested Variant unwrap** — `asyncua` also wraps nested structures inside `ua.Variant`.
+`EngineeringUnits` and all nested ExtensionObject list elements need the same treatment,
+including `OverallResultValues`, `StepResults`, `StepResultValues`, `StepTraces`,
+`StepTraceContent`, `ReportedValues`, `Errors`, `AssociatedEntities`, and `References`:
+
+```python
+eu = getattr(jr, "EngineeringUnits", None)
+eu = getattr(eu, "Value", eu)          # unwrap nested Variant
+unit_id = getattr(eu, "UnitId", None)
+
+for v in getattr(jr, "OverallResultValues", []) or []:
+    v = getattr(v, "Value", v)         # unwrap nested Variant
+    tag = getattr(v, "ValueTag", None)
+
+for step in getattr(jr, "StepResults", []) or []:
+    step = getattr(step, "Value", step)  # unwrap nested Variant
+    for sv in getattr(step, "StepResultValues", []) or []:
+        sv = getattr(sv, "Value", sv)    # unwrap nested Variant
+
+for error in getattr(jr, "Errors", []) or []:
+    error = getattr(error, "Value", error)
+```
+
+Missing the nested unwrap causes field access to fail with `AttributeError`
+on the `Variant` wrapper object. Apply this pattern at **every** nesting level.
+
+### EUInformation Field Name — `.UnitId` not `.Identifier`
+
+asyncua's `EUInformation` type exposes `UnitId` (Int32), NOT `Identifier`.
+All EU validation code must use `eu.UnitId` or `getattr(eu, "UnitId", None)`.
+
+### ResultManagement → Results Folder Structure
+
+```
+ResultManagement
+├── Results/              (folder)
+│   ├── Result            (variable — live/latest result, updated on every tightening)
+│   └── RequestedResult   (variable — stored/historical, updated only by RequestResults)
+├── GetLatestResult       (method)
+├── GetResultById         (method)
+├── RequestResults        (method — IJT Base)
+└── ...
+```
+
+Both `Result` and `RequestedResult` carry the same `ResultDataType` payload.
+The difference: `Result` reflects the live tightening outcome; `RequestedResult`
+is populated only when `RequestResults` or `RequestUnacknowledgedResults` is called
+(stored/historical lookup). The corresponding event is `RequestedResultEventType`.
+
 ### GetResult Method Signatures (Machinery/Result spec — NO ProductInstanceUri)
 
 ```
@@ -451,4 +500,19 @@ GetResultIdListFiltered(Filter: Structure, OrderedBy: Enumeration[], MaxResults:
 ```
 
 These come from **Machinery/Result** (NS_MACH_RESULT), NOT from IJT Base. They have **no ProductInstanceUri argument**.
-`RequestResults` and `RequestUnacknowledgedResults` come from IJT Base (NS_IJT_BASE) — 5 inputs each.
+`RequestResults` and `RequestUnacknowledgedResults` come from IJT Base (NS_IJT_BASE) and have different signatures:
+
+```
+RequestResults(
+  FromSequenceNumber: UInt64,
+  ToSequenceNumber: UInt64,
+  FromTime: DateTime,
+  ToTime: DateTime,
+  RequestedMinimumDurationBetweenResults: Duration,
+) → [RevisedMinimumDurationBetweenResults: Duration, Status: Int64, StatusMessage: LocalizedText]
+
+RequestUnacknowledgedResults(
+  MaxResults: UInt32,
+  RequestedMinimumDurationBetweenResults: Duration,
+) → [RevisedMinimumDurationBetweenResults: Duration, UnacknowledgedResultCount: UInt32, Status: Int64, StatusMessage: LocalizedText]
+```

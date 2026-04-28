@@ -73,6 +73,7 @@ from asyncua import ua
 from helpers.cu_registry import CU
 from helpers.namespaces import (
     BN,
+    NS_APP,
     NS_MACH_RESULT,
     ResultClassification,
     ResultEvaluation,
@@ -256,7 +257,9 @@ def _collect_counter_names(counters: list) -> set[str]:
 
 def _has_final_tag_in_result(sub_result) -> bool:
     """Return True when any value in the sub-result carries ValueTag equal to FINAL."""
+    sub_result = _unwrap_sub_result(sub_result)
     for ovr in getattr(sub_result, "OverallResultValues", None) or []:
+        ovr = _unwrap_sub_result(ovr)
         vt = getattr(ovr, "ValueTag", None)
         if vt is not None:
             try:
@@ -265,7 +268,9 @@ def _has_final_tag_in_result(sub_result) -> bool:
             except (TypeError, ValueError):
                 pass
     for step in getattr(sub_result, "StepResults", None) or []:
+        step = _unwrap_sub_result(step)
         for sv in getattr(step, "StepResultValues", None) or []:
+            sv = _unwrap_sub_result(sv)
             vt = getattr(sv, "ValueTag", None)
             if vt is not None:
                 try:
@@ -896,14 +901,9 @@ async def test_sync_result_get_result_by_id_returns_parent(
 
     Note: This test validates the GetResultById METHOD behaviour, not result structure.
     Result structure/content is validated via events (the primary delivery path).
-    GetResultById is supplementary context-based access — requires a real controller
-    with persistent result storage; the simulator generates a fresh result regardless of ID.
+    GetResultById is supplementary context-based access — requires that the server
+    stores results persistently (e.g., in a result cache).
     """
-    if result_trigger.is_simulator:
-        pytest.skip(
-            "Simulator has no persistent result storage — GetResultById cannot return "
-            "a previously triggered combined result; verify on a real controller"
-        )
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
@@ -1066,31 +1066,6 @@ async def test_batch_result_sub_results_each_have_result_id(subscription_client,
                 "simulator does not populate sub-result ResultId in asyncua-deserialized data"
             )
         assert result_id, f"Sub-result[{idx}] in BATCH_RESULT has empty ResultId"
-
-
-@pytest.mark.requires_cu(CU.BATCH_RESULT)
-@pytest.mark.negative
-async def test_batch_result_get_result_id_list_filtered_is_not_supported(opcua_client, ns_indices):
-    """GetResultIdListFiltered is NOT part of the IJT spec.
-    If present on the server, it must reject calls rather than return Good status."""
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered")
-
-    rm = await _get_result_management(opcua_client, ns_mr)
-    grilf_node = await find_child_by_browse_name(rm, BN.GET_RESULT_ID_LIST_FILTERED, ns_mr)
-    if grilf_node is None:
-        return  # Absent — correct IJT behaviour
-
-    try:
-        await asyncio.wait_for(
-            rm.call_method(grilf_node.nodeid),
-            timeout=_COMBINED_WALL_TIMEOUT,
-        )
-    except ua.UaError:
-        return  # Server returned an OPC UA error — any rejection is acceptable
-
-    pytest.fail("GetResultIdListFiltered returned Good — not part of IJT spec, server should reject or omit it")
 
 
 @pytest.mark.requires_cu(CU.BATCH_RESULT)
@@ -1345,14 +1320,9 @@ async def test_job_result_get_result_by_id_returns_job_result(
 
     Note: This test validates the GetResultById METHOD behaviour, not result structure.
     Result structure/content is validated via events (the primary delivery path).
-    GetResultById is supplementary context-based access — requires a real controller
-    with persistent result storage; the simulator generates a fresh result regardless of ID.
+    GetResultById is supplementary context-based access — requires that the server
+    stores results persistently (e.g., in a result cache).
     """
-    if result_trigger.is_simulator:
-        pytest.skip(
-            "Simulator has no persistent result storage — GetResultById cannot return "
-            "a previously triggered job result; verify on a real controller"
-        )
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
@@ -1387,31 +1357,6 @@ async def test_job_result_get_result_by_id_returns_job_result(
     _check_classification_or_skip(returned, ResultClassification.JOB_RESULT, "GetResultById(JOB)")
 
 
-@pytest.mark.requires_cu(CU.JOB_RESULT)
-@pytest.mark.negative
-async def test_job_result_get_result_id_list_filtered_is_not_supported(opcua_client, ns_indices):
-    """GetResultIdListFiltered is NOT part of the IJT spec.
-    If present on the server, it must reject calls rather than return Good status."""
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered")
-
-    rm = await _get_result_management(opcua_client, ns_mr)
-    grilf_node = await find_child_by_browse_name(rm, BN.GET_RESULT_ID_LIST_FILTERED, ns_mr)
-    if grilf_node is None:
-        return  # Absent — correct IJT behaviour
-
-    try:
-        await asyncio.wait_for(
-            rm.call_method(grilf_node.nodeid),
-            timeout=_COMBINED_WALL_TIMEOUT,
-        )
-    except ua.UaError:
-        return  # Server returned an OPC UA error — any rejection is acceptable
-
-    pytest.fail("GetResultIdListFiltered returned Good — not part of IJT spec, server should reject or omit it")
-
-
 @pytest.mark.requires_cu(CU.RESULT_VALUE_FINAL_TAG)
 async def test_single_result_has_final_tagged_torque_or_angle_value(subscription_client, result_trigger, ns_indices):
     """At least one sub-result in a BATCH_RESULT must have a FINAL-tagged Torque or Angle value."""
@@ -1427,7 +1372,9 @@ async def test_single_result_has_final_tagged_torque_or_angle_value(subscription
 
     found_final_torque_or_angle = False
     for sub in rc:
+        sub = _unwrap_sub_result(sub)
         for ovr in getattr(sub, "OverallResultValues", None) or []:
+            ovr = _unwrap_sub_result(ovr)
             vt = getattr(ovr, "ValueTag", None)
             pq = getattr(ovr, "PhysicalQuantity", None)
             if vt is None or pq is None:
@@ -1441,7 +1388,9 @@ async def test_single_result_has_final_tagged_torque_or_angle_value(subscription
         if found_final_torque_or_angle:
             break
         for step in getattr(sub, "StepResults", None) or []:
+            step = _unwrap_sub_result(step)
             for sv in getattr(step, "StepResultValues", None) or []:
+                sv = _unwrap_sub_result(sv)
                 vt = getattr(sv, "ValueTag", None)
                 pq = getattr(sv, "PhysicalQuantity", None)
                 if vt is None or pq is None:
@@ -1476,9 +1425,12 @@ async def test_each_step_has_at_most_one_final_per_physical_quantity(subscriptio
 
     checked_any_step = False
     for sub_idx, sub in enumerate(rc):
+        sub = _unwrap_sub_result(sub)
         for step_idx, step in enumerate(getattr(sub, "StepResults", None) or []):
+            step = _unwrap_sub_result(step)
             final_pqs: set[int] = set()
             for sv in getattr(step, "StepResultValues", None) or []:
+                sv = _unwrap_sub_result(sv)
                 vt = getattr(sv, "ValueTag", None)
                 pq = getattr(sv, "PhysicalQuantity", None)
                 if vt is None or pq is None:
@@ -1763,7 +1715,7 @@ async def test_references_mode_is_partial_false_for_completed(subscription_clien
 @pytest.mark.requires_cu(CU.CONSOLIDATED_RESULT_WITH_REFERENCES)
 @pytest.mark.negative
 async def test_references_mode_get_result_by_id_invalid_id_returns_error(opcua_client, result_trigger, ns_indices):
-    """GetResultById with a non-existent ResultId must raise ua.UaError."""
+    """GetResultById with a non-existent ResultId must report not-found."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered")
@@ -1774,9 +1726,8 @@ async def test_references_mode_get_result_by_id_invalid_id_returns_error(opcua_c
         pytest.skip("GetResultById method not found")
 
     bogus_id = "nonexistent-result-id-00000000-0000-0000-0000-000000000000"
-    error_raised = False
     try:
-        await asyncio.wait_for(
+        raw = await asyncio.wait_for(
             rm.call_method(
                 grbi_node.nodeid,
                 ua.Variant(bogus_id, ua.VariantType.String),
@@ -1785,16 +1736,27 @@ async def test_references_mode_get_result_by_id_invalid_id_returns_error(opcua_c
             timeout=_COMBINED_WALL_TIMEOUT,
         )
     except ua.UaError:
-        error_raised = True
+        return
     except asyncio.TimeoutError:
         pytest.skip("GetResultById timed out for invalid ID — cannot verify error behaviour")
 
-    if not error_raised:
-        pytest.skip(
-            "GetResultById with a non-existent ResultId returned Success instead of ua.UaError — "
-            "known simulator compliance gap; server does not reject unknown IDs. "
-            "Verify against a spec-compliant server."
-        )
+    output = list(raw) if isinstance(raw, (list, tuple)) else ([] if raw is None else [raw])
+    if len(output) >= 3:
+        try:
+            if int(output[2]) != 0:
+                return  # PASS: server reports not-found via Error output
+        except (TypeError, ValueError):
+            pass
+        if output[1] is None:
+            return  # PASS: null Result indicates not-found
+
+    message = (
+        "GetResultById with a non-existent ResultId returned Success with no error indicator — "
+        "expected ua.UaError, non-zero output[2] Error, or null output[1] Result"
+    )
+    if ns_indices.get(NS_APP) is not None:
+        pytest.skip(f"{message}; known simulator gap")
+    pytest.fail(message)
 
 
 # ─── partial_consolidated_result (additional) ───

@@ -78,6 +78,18 @@ def _unwrap_sub_result(item):
     return item
 
 
+def _unwrap_sequence(items):
+    """Return a list with asyncua Variant wrappers removed from sequence entries."""
+    if not isinstance(items, (list, tuple)):
+        return []
+    unwrapped = []
+    for item in items:
+        value = _unwrap_sub_result(item)
+        if value is not None:
+            unwrapped.append(value)
+    return unwrapped
+
+
 def _collect_trace_data(content):
     """Return a list of (joining_result_index, trace_data) pairs from ResultContent.
 
@@ -91,6 +103,7 @@ def _collect_trace_data(content):
         if jr is None:
             continue
         td = getattr(jr, "Trace", None)
+        td = _unwrap_sub_result(td)
         if td is not None:
             traces.append((i, td))
     return traces
@@ -109,8 +122,8 @@ async def _get_single_result_with_traces(subscription_client, result_trigger, ns
         result_data = await rc.collect_single()
     if result_data is None:
         return None, None
-    content = getattr(result_data, "ResultContent", None) or []
-    return result_data, list(content)
+    content = _unwrap_sequence(getattr(result_data, "ResultContent", None) or [])
+    return result_data, content
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +265,7 @@ async def test_step_trace_has_required_fields(subscription_client, result_trigge
 
     failures = []
     for result_idx, td in traces:
-        step_traces = getattr(td, "StepTraces", None) or []
+        step_traces = _unwrap_sequence(getattr(td, "StepTraces", None) or [])
         if not step_traces:
             continue
         first_step = step_traces[0]
@@ -288,9 +301,9 @@ async def test_step_trace_content_has_values_and_physical_quantity(subscription_
 
     failures = []
     for result_idx, td in traces:
-        step_traces = getattr(td, "StepTraces", None) or []
+        step_traces = _unwrap_sequence(getattr(td, "StepTraces", None) or [])
         for step_idx, step in enumerate(step_traces):
-            step_content = getattr(step, "StepTraceContent", None) or []
+            step_content = _unwrap_sequence(getattr(step, "StepTraceContent", None) or [])
             for content_idx, tc_element in enumerate(step_content):
                 location = f"ResultContent[{result_idx}].Trace.StepTraces[{step_idx}].StepTraceContent[{content_idx}]"
 
@@ -338,13 +351,13 @@ async def test_step_result_values_with_trace_have_start_time_offset(subscription
     found_trace_point_offset = False
 
     for jr in content:
-        step_results = getattr(jr, "StepResults", None) or []
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
         for step in step_results:
             sto = getattr(step, "StartTimeOffset", None)
             if sto is not None:
                 found_start_time_offset = True
 
-            step_values = getattr(step, "StepResultValues", None) or []
+            step_values = _unwrap_sequence(getattr(step, "StepResultValues", None) or [])
             for val in step_values:
                 tpi = getattr(val, "TracePointIndex", None)
                 tpo = getattr(val, "TracePointOffset", None)
@@ -383,8 +396,8 @@ async def test_step_result_values_trace_point_index_points_to_valid_sample(
 
     for result_idx, td in traces:
         jr = content[result_idx]
-        step_traces = getattr(td, "StepTraces", None) or []
-        step_results = getattr(jr, "StepResults", None) or []
+        step_traces = _unwrap_sequence(getattr(td, "StepTraces", None) or [])
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
 
         for step_trace_idx, step_trace in enumerate(step_traces):
             num_points = getattr(step_trace, "NumberOfTracePoints", None)
@@ -405,7 +418,7 @@ async def test_step_result_values_trace_point_index_points_to_valid_sample(
             if matching_step is None:
                 continue
 
-            step_values = getattr(matching_step, "StepResultValues", None) or []
+            step_values = _unwrap_sequence(getattr(matching_step, "StepResultValues", None) or [])
             for val_idx, val in enumerate(step_values):
                 tpi = getattr(val, "TracePointIndex", None)
                 if tpi is not None:
@@ -458,7 +471,7 @@ async def test_step_trace_content_values_length_matches_number_of_trace_points(
 
     failures = []
     for result_idx, td in traces:
-        step_traces = getattr(td, "StepTraces", None) or []
+        step_traces = _unwrap_sequence(getattr(td, "StepTraces", None) or [])
         for step_idx, step in enumerate(step_traces):
             num_points = getattr(step, "NumberOfTracePoints", None)
             if num_points is None:
@@ -472,7 +485,7 @@ async def test_step_trace_content_values_length_matches_number_of_trace_points(
                 )
                 continue
 
-            step_content = getattr(step, "StepTraceContent", None) or []
+            step_content = _unwrap_sequence(getattr(step, "StepTraceContent", None) or [])
             for content_idx, tc_element in enumerate(step_content):
                 values = getattr(tc_element, "Values", None)
                 if values is None:
@@ -505,7 +518,7 @@ async def test_step_trace_has_timing_information(subscription_client, result_tri
 
     failures = []
     for result_idx, td in traces:
-        step_traces = getattr(td, "StepTraces", None) or []
+        step_traces = _unwrap_sequence(getattr(td, "StepTraces", None) or [])
         for step_idx, step in enumerate(step_traces):
             sampling_interval = getattr(step, "SamplingInterval", None)
             start_time_offset = getattr(step, "StartTimeOffset", None)
@@ -576,7 +589,7 @@ async def test_step_trace_content_array_lengths_are_consistent_across_results(
             td = getattr(jr, "Trace", None)
             if td is None:
                 continue
-            step_traces = getattr(td, "StepTraces", None) or []
+            step_traces = _unwrap_sequence(getattr(td, "StepTraces", None) or [])
             for step_idx, step in enumerate(step_traces):
                 num_points = getattr(step, "NumberOfTracePoints", None)
                 if num_points is None:
@@ -585,7 +598,7 @@ async def test_step_trace_content_array_lengths_are_consistent_across_results(
                     num_points_int = int(num_points)
                 except (TypeError, ValueError):
                     continue
-                step_content = getattr(step, "StepTraceContent", None) or []
+                step_content = _unwrap_sequence(getattr(step, "StepTraceContent", None) or [])
                 for tc_idx, tc_element in enumerate(step_content):
                     values = getattr(tc_element, "Values", None)
                     if values is None:
@@ -632,9 +645,9 @@ async def test_trace_point_time_offset_present_when_trace_point_index_absent(
 
     failures: list[Any] = []
     for jr in content:
-        step_results = getattr(jr, "StepResults", None) or []
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
         for _, step in enumerate(step_results):
-            step_values = getattr(step, "StepResultValues", None) or []
+            step_values = _unwrap_sequence(getattr(step, "StepResultValues", None) or [])
             for _, val in enumerate(step_values):
                 tpi = getattr(val, "TracePointIndex", None)
                 tpo = getattr(val, "TracePointOffset", None)
@@ -649,9 +662,9 @@ async def test_trace_point_time_offset_present_when_trace_point_index_absent(
     # At least verify: no value claims both tpi AND tpo as None when it has a link
     # The real check is: if tpi is absent, tpo must be present (and vice versa)
     for jr in content:
-        step_results = getattr(jr, "StepResults", None) or []
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
         for step_idx, step in enumerate(step_results):
-            step_values = getattr(step, "StepResultValues", None) or []
+            step_values = _unwrap_sequence(getattr(step, "StepResultValues", None) or [])
             for val_idx, val in enumerate(step_values):
                 tpi = getattr(val, "TracePointIndex", None)
                 tpo = getattr(val, "TracePointOffset", None)
@@ -684,9 +697,9 @@ async def test_trace_point_time_offset_is_non_negative(subscription_client, resu
     found_offset = False
     failures = []
     for jr in content:
-        step_results = getattr(jr, "StepResults", None) or []
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
         for step_idx, step in enumerate(step_results):
-            step_values = getattr(step, "StepResultValues", None) or []
+            step_values = _unwrap_sequence(getattr(step, "StepResultValues", None) or [])
             for val_idx, val in enumerate(step_values):
                 tpo = getattr(val, "TracePointOffset", None)
                 if tpo is None:
@@ -732,7 +745,7 @@ async def test_overall_result_values_may_have_trace_point_time_offset(subscripti
     overall_offset_found = False
     failures = []
     for jr in content:
-        overall_values = getattr(jr, "OverallResultValues", None) or []
+        overall_values = _unwrap_sequence(getattr(jr, "OverallResultValues", None) or [])
         for val_idx, val in enumerate(overall_values):
             tpo = getattr(val, "TracePointOffset", None)
             if tpo is None:
@@ -800,7 +813,7 @@ async def test_result_without_trace_has_no_trace_point_time_offset(opcua_client,
     if result_data is None:
         pytest.skip("GetLatestResult returned no result data")
 
-    content = list(getattr(result_data, "ResultContent", None) or [])
+    content = _unwrap_sequence(getattr(result_data, "ResultContent", None) or [])
     traces = _collect_trace_data(content)
 
     # Only assert if this result genuinely has no trace data
@@ -812,9 +825,9 @@ async def test_result_without_trace_has_no_trace_point_time_offset(opcua_client,
 
     dangling_offsets = []
     for jr in content:
-        step_results = getattr(jr, "StepResults", None) or []
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
         for step_idx, step in enumerate(step_results):
-            step_values = getattr(step, "StepResultValues", None) or []
+            step_values = _unwrap_sequence(getattr(step, "StepResultValues", None) or [])
             for val_idx, val in enumerate(step_values):
                 tpo = getattr(val, "TracePointOffset", None)
                 if tpo is not None:
@@ -846,9 +859,9 @@ async def test_trace_point_time_offset_is_never_negative(subscription_client, re
 
     failures = []
     for jr in content:
-        step_results = getattr(jr, "StepResults", None) or []
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
         for step_idx, step in enumerate(step_results):
-            step_values = getattr(step, "StepResultValues", None) or []
+            step_values = _unwrap_sequence(getattr(step, "StepResultValues", None) or [])
             for val_idx, val in enumerate(step_values):
                 tpo = getattr(val, "TracePointOffset", None)
                 if tpo is None:
@@ -888,9 +901,9 @@ async def test_step_result_values_has_at_least_one_trace_point_index(subscriptio
 
     found = False
     for jr in content:
-        step_results = getattr(jr, "StepResults", None) or []
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
         for step in step_results:
-            step_values = getattr(step, "StepResultValues", None) or []
+            step_values = _unwrap_sequence(getattr(step, "StepResultValues", None) or [])
             for val in step_values:
                 if getattr(val, "TracePointIndex", None) is not None:
                     found = True
@@ -928,8 +941,8 @@ async def test_trace_point_index_references_correct_sample_value(subscription_cl
 
     for result_idx, td in traces:
         jr = content[result_idx]
-        step_traces = getattr(td, "StepTraces", None) or []
-        step_results = getattr(jr, "StepResults", None) or []
+        step_traces = _unwrap_sequence(getattr(td, "StepTraces", None) or [])
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
 
         for step_trace_idx, step_trace in enumerate(step_traces):
             step_result_id = getattr(step_trace, "StepResultId", None)
@@ -942,8 +955,8 @@ async def test_trace_point_index_references_correct_sample_value(subscription_cl
             if matching_step is None:
                 continue
 
-            step_content = getattr(step_trace, "StepTraceContent", None) or []
-            step_values = getattr(matching_step, "StepResultValues", None) or []
+            step_content = _unwrap_sequence(getattr(step_trace, "StepTraceContent", None) or [])
+            step_values = _unwrap_sequence(getattr(matching_step, "StepResultValues", None) or [])
 
             for val_idx, val in enumerate(step_values):
                 tpi = getattr(val, "TracePointIndex", None)
@@ -1034,9 +1047,9 @@ async def test_trace_point_index_is_non_negative_integer(subscription_client, re
     found_index = False
     failures = []
     for jr in content:
-        step_results = getattr(jr, "StepResults", None) or []
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
         for step_idx, step in enumerate(step_results):
-            step_values = getattr(step, "StepResultValues", None) or []
+            step_values = _unwrap_sequence(getattr(step, "StepResultValues", None) or [])
             for val_idx, val in enumerate(step_values):
                 tpi = getattr(val, "TracePointIndex", None)
                 if tpi is None:
@@ -1082,7 +1095,7 @@ async def test_overall_result_values_may_have_trace_point_index(subscription_cli
     failures = []
     overall_index_found = False
     for jr in content:
-        overall_values = getattr(jr, "OverallResultValues", None) or []
+        overall_values = _unwrap_sequence(getattr(jr, "OverallResultValues", None) or [])
         for val_idx, val in enumerate(overall_values):
             tpi = getattr(val, "TracePointIndex", None)
             if tpi is None:
@@ -1148,7 +1161,7 @@ async def test_result_without_trace_has_no_trace_point_index(opcua_client, resul
     if result_data is None:
         pytest.skip("GetLatestResult returned no result data")
 
-    content = list(getattr(result_data, "ResultContent", None) or [])
+    content = _unwrap_sequence(getattr(result_data, "ResultContent", None) or [])
     traces = _collect_trace_data(content)
 
     if traces:
@@ -1159,9 +1172,9 @@ async def test_result_without_trace_has_no_trace_point_index(opcua_client, resul
 
     dangling_indices = []
     for jr in content:
-        step_results = getattr(jr, "StepResults", None) or []
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
         for step_idx, step in enumerate(step_results):
-            step_values = getattr(step, "StepResultValues", None) or []
+            step_values = _unwrap_sequence(getattr(step, "StepResultValues", None) or [])
             for val_idx, val in enumerate(step_values):
                 tpi = getattr(val, "TracePointIndex", None)
                 if tpi is not None:
@@ -1169,7 +1182,7 @@ async def test_result_without_trace_has_no_trace_point_index(opcua_client, resul
                         f"StepResults[{step_idx}].StepResultValues[{val_idx}]"
                         f".TracePointIndex={tpi!r} present but no Trace field in result"
                     )
-        overall_values = getattr(jr, "OverallResultValues", None) or []
+        overall_values = _unwrap_sequence(getattr(jr, "OverallResultValues", None) or [])
         for val_idx, val in enumerate(overall_values):
             tpi = getattr(val, "TracePointIndex", None)
             if tpi is not None:
@@ -1199,9 +1212,9 @@ async def test_trace_point_index_is_never_negative(subscription_client, result_t
 
     failures = []
     for jr in content:
-        step_results = getattr(jr, "StepResults", None) or []
+        step_results = _unwrap_sequence(getattr(jr, "StepResults", None) or [])
         for step_idx, step in enumerate(step_results):
-            step_values = getattr(step, "StepResultValues", None) or []
+            step_values = _unwrap_sequence(getattr(step, "StepResultValues", None) or [])
             for val_idx, val in enumerate(step_values):
                 tpi = getattr(val, "TracePointIndex", None)
                 if tpi is None:

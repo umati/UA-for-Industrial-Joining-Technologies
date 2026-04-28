@@ -252,10 +252,7 @@ async def test_set_offline_timer_method_present(asset_management, ns_indices):
 
     method = await find_child_by_browse_name(ms, _BN_SET_OFFLINE_TIMER, ns_ijt)
     if method is None:
-        pytest.skip(
-            "SetOfflineTimer not found in AssetManagement MethodSet — "
-            "optional per set_offline_timer CU; not implemented by this server"
-        )
+        pytest.skip("SetOfflineTimer: Not Supported — optional per set_offline_timer CU")
 
 
 # ---------------------------------------------------------------------------

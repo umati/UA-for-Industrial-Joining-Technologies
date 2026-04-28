@@ -67,7 +67,7 @@ fails with `pytest.fail()` (loud, never silent). This applies to:
 | Test | Status | Reason |
 |------|--------|--------|
 | Console `TestMethods` × 7 | `xfail` | `ProductInstanceUri` is NULL on demo server — tool identity not configured. Uses `pytest.xfail()` so the test runs and is reported as expected-failure, not silently skipped. |
-| Test Client conformance (unsupported-result APIs) | skip/fail-by-design checks | Server profile intentionally does not implement `GetResultIdListFiltered`, `ReleaseResultHandle`, `AcknowledgeResults`, `RequestUnacknowledgedResults`; tests assert absence or Bad-status rejection |
+| Test Client conformance (optional/supplementary result APIs) | presence or skip/fail-by-design checks | `GetResultIdListFiltered` is optional/profile-dependent and is checked by node presence/Executable; `ReleaseResultHandle`, `AcknowledgeResults`, and `RequestUnacknowledgedResults` may be absent or return Bad-status in the simulator profile |
 | Test Client asset sub-type folders (controllers, tools, etc.) | pass | All asset category folders are required in the current server configuration; tests assert presence and fail on missing nodes |
 | `zizmor` job | promoted to ci | SARIF upload to Code Scanning (Security → Code scanning alerts). Skipped on fork PRs. Now **blocking** in ci. |
 

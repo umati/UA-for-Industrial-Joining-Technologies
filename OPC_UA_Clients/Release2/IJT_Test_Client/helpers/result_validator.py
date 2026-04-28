@@ -173,7 +173,7 @@ class ResultValueValidator:
         - ``ValueTag`` is in {0..20} if present.
         - ``PhysicalQuantity`` is in {0..28} if present.
         - ``ViolationType`` is in {0,1,2,3} if present.
-        - ``EngineeringUnits`` has an ``.Identifier`` attribute if present.
+        - ``EngineeringUnits`` has a ``.UnitId`` attribute if present.
         """
         # MeasuredValue — required, must be numeric
         measured = getattr(value, "MeasuredValue", _MISSING)
@@ -224,12 +224,13 @@ class ResultValueValidator:
                     f"expected int in {{0,1,2,3}}, got {violation!r}",
                 )
 
-        # EngineeringUnits — optional, but if present must expose .Identifier
+        # EngineeringUnits — optional, but if present must expose .UnitId
         eu = getattr(value, "EngineeringUnits", None)
-        if eu is not None and not hasattr(eu, "Identifier"):
+        eu = getattr(eu, "Value", eu) if eu is not None else None  # unwrap Variant → EUInformation
+        if eu is not None and not hasattr(eu, "UnitId"):
             vr.add(
                 ctx.child("EngineeringUnits"),
-                "present but has no .Identifier attribute (expected EUInformation)",
+                "present but has no .UnitId attribute (expected EUInformation)",
             )
 
 
@@ -277,6 +278,7 @@ class StepResultValidator:
             else:
                 values_ctx = ctx.child("StepResultValues")
                 for i, v in enumerate(values):
+                    v = getattr(v, "Value", v)
                     self._value_validator.validate(v, values_ctx.index(i), vr)
 
 
@@ -433,6 +435,7 @@ class ResultMetaDataValidator:
         if overall_values is not None and isinstance(overall_values, (list, tuple)):
             ov_ctx = ctx.child("OverallResultValues")
             for i, v in enumerate(overall_values):
+                v = getattr(v, "Value", v)
                 self._value_validator.validate(v, ov_ctx.index(i), vr)
 
         # AssociatedEntities — optional list; validate EntityId and EntityType per entry
@@ -440,6 +443,7 @@ class ResultMetaDataValidator:
         if entities is not None and isinstance(entities, (list, tuple)):
             ent_ctx = ctx.child("AssociatedEntities")
             for i, entity in enumerate(entities):
+                entity = getattr(entity, "Value", entity)
                 e_ctx = ent_ctx.index(i)
                 entity_id = getattr(entity, "EntityId", _MISSING)
                 if entity_id is _MISSING:
@@ -517,6 +521,7 @@ class JoiningResultDataValidator:
         if overall_values is not None and isinstance(overall_values, (list, tuple)):
             ov_ctx = ctx.child("OverallResultValues")
             for i, v in enumerate(overall_values):
+                v = getattr(v, "Value", v)
                 self._value_validator.validate(v, ov_ctx.index(i), vr)
                 vt = getattr(v, "ValueTag", None)
                 if vt is not None:
@@ -540,6 +545,7 @@ class JoiningResultDataValidator:
         if step_results is not None and isinstance(step_results, (list, tuple)):
             sr_ctx = ctx.child("StepResults")
             for i, step in enumerate(step_results):
+                step = getattr(step, "Value", step)
                 self._step_validator.validate(step, sr_ctx.index(i), vr)
 
         # Errors — optional list; validate each entry
@@ -547,6 +553,7 @@ class JoiningResultDataValidator:
         if errors is not None and isinstance(errors, (list, tuple)):
             err_ctx = ctx.child("Errors")
             for i, error in enumerate(errors):
+                error = getattr(error, "Value", error)
                 self._error_validator.validate(error, err_ctx.index(i), vr)
 
 
@@ -592,6 +599,7 @@ class ResultDataValidator:
         if content is not None and isinstance(content, (list, tuple)):
             rc_ctx = ctx.child("ResultContent")
             for i, joining_result in enumerate(content):
+                joining_result = getattr(joining_result, "Value", joining_result)
                 self._joining_validator.validate(joining_result, rc_ctx.index(i), vr)
 
         return vr
@@ -661,6 +669,7 @@ class ConsolidatedResultValidator:
         if content_list:
             rc_ctx = ctx.child("ResultContent")
             for i, joining_result in enumerate(content_list):
+                joining_result = getattr(joining_result, "Value", joining_result)
                 self._joining_validator.validate(joining_result, rc_ctx.index(i), vr)
 
         # References — optional reference-only sub-results
@@ -669,6 +678,7 @@ class ConsolidatedResultValidator:
         if ref_list:
             ref_ctx = ctx.child("References")
             for i, ref in enumerate(ref_list):
+                ref = getattr(ref, "Value", ref)
                 ref_id = getattr(ref, "ResultId", _MISSING)
                 if ref_id is _MISSING:
                     vr.add(ref_ctx.index(i).child("ResultId"), "required field is absent")

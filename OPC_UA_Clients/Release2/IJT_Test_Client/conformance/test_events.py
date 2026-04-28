@@ -158,28 +158,33 @@ def _event_payload_field(event, field_name: str):
       - event.EventContent.<Field>
       - event.__dict__['JoiningSystemEventContent/<Field>']
     """
-    value = getattr(event, field_name, None)
+    value = _unwrap_variant(getattr(event, field_name, None))
     if value is not None:
         return value
 
-    content = getattr(event, "EventContent", None)
+    content = _unwrap_variant(getattr(event, "EventContent", None))
     if content is not None:
-        cval = getattr(content, field_name, None)
+        cval = _unwrap_variant(getattr(content, field_name, None))
         if cval is not None:
             return cval
 
     edict = getattr(event, "__dict__", {})
     slash_key = f"JoiningSystemEventContent/{field_name}"
     if slash_key in edict:
-        return edict.get(slash_key)
+        return _unwrap_variant(edict.get(slash_key))
 
-    nested = edict.get("JoiningSystemEventContent")
+    nested = _unwrap_variant(edict.get("JoiningSystemEventContent"))
     if nested is not None:
-        nval = getattr(nested, field_name, None)
+        nval = _unwrap_variant(getattr(nested, field_name, None))
         if nval is not None:
             return nval
 
     return None
+
+
+def _unwrap_variant(value):
+    """Unwrap asyncua Variant containers used for nested ExtensionObjects."""
+    return getattr(value, "Value", value)
 
 
 def _joining_technology_to_int_or_none(value):
@@ -799,6 +804,7 @@ async def test_general_event_reported_values_are_valid_when_present(
         f"ReportedValues must be a list, got {type(reported_values).__name__}"
     )
     for entry in reported_values:
+        entry = _unwrap_variant(entry)
         assert entry is not None, "Each ReportedValues entry must not be None"
 
 
@@ -1241,6 +1247,7 @@ async def test_associated_entity_has_entity_type_and_id(subscription_client, opc
     if entities is None or len(entities) == 0:
         pytest.skip("AssociatedEntities absent or empty — cannot validate structure")
     for i, entity in enumerate(entities):
+        entity = _unwrap_variant(entity)
         entity_type = getattr(entity, "EntityType", None)
         entity_id = getattr(entity, "EntityId", None)
         assert entity_type is not None, f"AssociatedEntities[{i}].EntityType must not be None"
@@ -1269,6 +1276,7 @@ async def test_associated_entity_type_is_valid_non_negative(
     if entities is None or len(entities) == 0:
         pytest.skip("AssociatedEntities absent or empty — cannot validate EntityType")
     for i, entity in enumerate(entities):
+        entity = _unwrap_variant(entity)
         entity_type = getattr(entity, "EntityType", None)
         if entity_type is None:
             continue
@@ -1298,6 +1306,7 @@ async def test_associated_entity_id_is_non_empty(subscription_client, opcua_clie
     if entities is None or len(entities) == 0:
         pytest.skip("AssociatedEntities absent or empty — cannot validate EntityId")
     for i, entity in enumerate(entities):
+        entity = _unwrap_variant(entity)
         entity_id = getattr(entity, "EntityId", None)
         assert entity_id is not None, f"AssociatedEntities[{i}].EntityId is None — must be a non-empty string"
         assert isinstance(entity_id, str), (
@@ -1332,6 +1341,7 @@ async def test_reported_value_has_mandatory_fields(subscription_client, opcua_cl
     if reported_values is None or len(reported_values) == 0:
         pytest.skip("ReportedValues absent or empty in TOOL_OVERHEATED event")
     for i, entry in enumerate(reported_values):
+        entry = _unwrap_variant(entry)
         val = getattr(entry, "CurrentValue", None)
         assert val is not None, f"ReportedValues[{i}].CurrentValue must not be None (mandatory field)"
 
@@ -1357,6 +1367,7 @@ async def test_reported_value_current_value_is_numeric(subscription_client, opcu
     if reported_values is None or len(reported_values) == 0:
         pytest.skip("ReportedValues absent or empty")
     for i, entry in enumerate(reported_values):
+        entry = _unwrap_variant(entry)
         current = getattr(entry, "CurrentValue", None)
         if current is None:
             continue
@@ -1388,7 +1399,9 @@ async def test_reported_value_engineering_units_present(subscription_client, opc
     if reported_values is None or len(reported_values) == 0:
         pytest.skip("ReportedValues absent or empty")
     for i, entry in enumerate(reported_values):
+        entry = _unwrap_variant(entry)
         eu = getattr(entry, "EngineeringUnits", None)
+        eu = _unwrap_variant(eu) if eu is not None else None
         if eu is None:
             pytest.skip(f"ReportedValues[{i}].EngineeringUnits absent — server may not populate it for this trigger")
         unit_id = getattr(eu, "UnitId", None)

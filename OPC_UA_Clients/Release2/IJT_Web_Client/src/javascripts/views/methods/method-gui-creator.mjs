@@ -101,15 +101,16 @@ export default class MethodGUICreator {
     if (defaultValue !== '' && typeof defaultValue !== 'undefined') return defaultValue
     const name = arg?.Name ?? ''
     // Simulation — result type & traces
-    if (name === 'Result Type') return 1
+    if (name === 'Result Type') return 2
     if (name === 'Include Traces') return true
     if (name === 'Include Traces For Child Results') return true
-    // Batch/Sync/Job — references
+    // Batch/Sync/Job — child count & references
+    if (name === 'Number Of Child Results') return 3
     if (name === 'Send Child Results as References (Recommended)') return true
     if (name === 'Send Child Results as References') return true
     // Bulk results defaults
-    if (name === 'From Sequence Number') return 1
-    if (name === 'To Sequence Number') return 10
+    if (name === 'From Sequence Number') return 100
+    if (name === 'To Sequence Number') return 150
     if (name === 'Duration Between Results') return 100
     if (name === 'Number Of Results') return 3
     if (name === 'Update Result Variables') return true
@@ -287,7 +288,7 @@ export default class MethodGUICreator {
           for (const [label, val] of RESULT_TYPE_OPTIONS) {
             drop.addOption(label, val)
           }
-          drop.select.value = String(defaultValue ?? 1)
+          drop.select.value = String(defaultValue ?? 2)
           area.appendChild(drop)
           return function () {
             return { value: parseInt(drop.select.value, 10), type: arg.DataType }

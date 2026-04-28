@@ -25,6 +25,12 @@ from helpers.result_validator import (
 
 logger = logging.getLogger(__name__)
 
+
+def _unwrap_variant(value):
+    """Unwrap asyncua Variant containers used for nested ExtensionObjects."""
+    return getattr(value, "Value", value)
+
+
 # ---------------------------------------------------------------------------
 # Sentinel for missing required attributes (mirrors result_validator pattern)
 # ---------------------------------------------------------------------------
@@ -178,6 +184,7 @@ class AssociatedEntitiesValidator:
             return
 
         for i, entity in enumerate(entities_list):
+            entity = _unwrap_variant(entity)
             self._entity_validator.validate(entity, ctx.index(i), vr)
 
 
@@ -212,7 +219,7 @@ class ReportedValueValidator:
         Check:
         - ``CurrentValue`` is numeric (required per spec).
         - ``PhysicalQuantity`` is in {0..28} if present.
-        - ``EngineeringUnits`` has an ``.Identifier`` attribute if present.
+        - ``EngineeringUnits`` has a ``.UnitId`` attribute if present.
         """
         # CurrentValue — required, must be numeric (Double per spec)
         current = getattr(value, "CurrentValue", _MISSING)
@@ -237,12 +244,13 @@ class ReportedValueValidator:
                     f"expected int in {{0..28}}, got {phys_qty!r}",
                 )
 
-        # EngineeringUnits — optional, but must expose .Identifier if present
+        # EngineeringUnits — optional, but must expose .UnitId if present
         eu = getattr(value, "EngineeringUnits", None)
-        if eu is not None and not hasattr(eu, "Identifier"):
+        eu = _unwrap_variant(eu) if eu is not None else None
+        if eu is not None and not hasattr(eu, "UnitId"):
             vr.add(
                 ctx.child("EngineeringUnits"),
-                "present but has no .Identifier attribute (expected EUInformation)",
+                "present but has no .UnitId attribute (expected EUInformation)",
             )
 
 
@@ -283,6 +291,7 @@ class ReportedValuesValidator:
             return
 
         for i, value in enumerate(values_list):
+            value = _unwrap_variant(value)
             self._value_validator.validate(value, ctx.index(i), vr)
 
 

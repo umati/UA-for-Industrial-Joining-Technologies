@@ -77,9 +77,11 @@ Objects/
     │
     ├── ResultManagement                [Machinery/Result ns — HasAddIn]
     │   ├── Results/
-    │   ├── GetLatestResult(Timeout: Int32) → Result     ← Timeout REQUIRED
-    │   ├── GetResultById(ResultId: String) → Result
-    │   ├── GetResultIdListFiltered(...)    ← NOT IMPLEMENTED (expected reject/absent)
+    │   │   ├── Result            (live/latest, updated on every tightening)
+    │   │   └── RequestedResult   (stored/historical, updated only by RequestResults)
+    │   ├── GetLatestResult(Timeout: Int32) → [ResultHandle, Result, Error]     ← Timeout REQUIRED
+    │   ├── GetResultById(ResultId: NormalizedString, Timeout: Int32) → [ResultHandle, Result, Error]
+    │   ├── GetResultIdListFiltered(...)    ← optional/profile-dependent; returns BadNotImplemented on this server
     │   ├── ReleaseResultHandle(...)        ← NOT IMPLEMENTED (expected reject/absent)
     │   ├── AcknowledgeResults(...)         ← NOT IMPLEMENTED (expected reject/absent)
     │   ├── RequestUnacknowledgedResults(...) ← NOT IMPLEMENTED (expected reject/absent)
@@ -219,11 +221,11 @@ Full list (1–60): see `helpers/namespaces.py` `SimulateEventType` class.
 
 | ID | Area | Behaviour |
 |----|------|-----------|
-| STUB-001 | GetResultIdListFiltered | Not implemented; compliant behavior is method absence or Bad status (BadNotImplemented/BadNotSupported) |
+| STUB-001 | GetResultIdListFiltered | Optional/profile-dependent per Machinery/Result spec; compliant behavior is method absence or Bad status (BadNotImplemented/BadNotSupported) |
 | STUB-002 | ReleaseResultHandle | Not implemented; compliant behavior is method absence or Bad status (BadNotImplemented/BadNotSupported) |
 | STUB-003 | AcknowledgeResults | Not implemented near-term; compliant behavior is method absence or Bad status |
 | STUB-004 | RequestUnacknowledgedResults | Not implemented near-term; compliant behavior is method absence or Bad status |
 | GAP-001 | HasInterface references | Not emitted on asset instance nodes — 17 Test Client tests xfailed as a result |
 | GAP-002 | AssociatedWith references | Not exposed on controller/tool asset nodes |
 | GAP-003 | ProductInstanceUri | The `TighteningTool/Identification/ProductInstanceUri` variable is empty in the simulator. Methods that require a valid ProductInstanceUri (EnableAsset, SelectJoint, StartSelectedJoining) return None from the client; live tests skip gracefully. |
-| GAP-004 | GetIdentifiers / ResetIdentifiers | Server requires additional input arguments beyond ProductInstanceUri. Calling with only ProductInstanceUri returns BadArgumentsMissing. Client tests catch this as an acceptable server-side response. |
+| GAP-004 | GetIdentifiers / ResetIdentifiers | `ResetIdentifiers(ProductInstanceUri: String, IdentifierList: NormalizedString[] (NodeSet DataType i=31918), ResetAll: Boolean, ResetLatest: Boolean)` — all 4 arguments required. Calling with fewer returns BadArgumentsMissing. Client tests pass all 4 args. Empty arrays may be encoded as `ExtensionObject[]` in asyncua only as a client-side workaround, not as the method signature. |

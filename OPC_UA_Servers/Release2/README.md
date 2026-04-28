@@ -122,8 +122,8 @@ OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](htt
 **2025-10-06:**
 1. The new versions of OPC **40450-1** CS (Joining **1.01.0**) and OPC **40451-1** CS (Tightening **2.00.1**) are **published**.
 2. **Updated** the IJT Server Simulator with the **Released** **NodeSet** files.
-3. **Removed** the DRAFT **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** since the **primary simulator** is **updated** with the **released** version.
-4. The **latest** simulator **consists** of **multiple features and enhancements** as given below:
+3. **Removed** the pre-release **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** since the **primary simulator** is **updated** with the **released** version.
+4. The **released** simulator **consists** of **multiple features and enhancements** as given below:
 	- **Added** **50+ event simulations** in the existing **SimulateEvents** method.
 	- **Added** simulation logic for **GetResultById, GetLatestResult and RequestResults** methods.
  	- **RequestResults** method is useful for **getting Historical Results** using **Subscription** instead of **polling** each Result.
@@ -133,7 +133,7 @@ OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](htt
 5. **Updated** **Usage_IJT_OPC_UA_Server_Simulator.pdf** based on the latest changes.
 
 **2025-09-09:**
-1. Added **DRAFT** simulation logic for **GetResultById, GetLatestResult and RequestResults** methods. **RequestResults** is **visible only when new 1.01 NodeSet** files are available.
+1. Added pre-release simulation logic for **GetResultById, GetLatestResult and RequestResults** methods. Historical note: this was before the 1.01 NodeSet was released; the released simulator now uses the published NodeSet files.
 2. Multiple bugs and optimizations.
 
 **2025-08-05:**
@@ -170,7 +170,7 @@ OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](htt
 
 **2025-02-24:**
 1. Fixed a crash issue which occurs in rare scenarios due to Result variable updates.
-2. Removed GetLatestResult method implementation as it was a temporary implementation. It is NOT implemented in the Simulator. A new mechanism defined in the upcoming IJT Joining Specification will be implemented after the specification version is published.
+2. Historical note: removed an earlier temporary GetLatestResult implementation. This was superseded by the released 1.01 simulator, which includes the current Machinery/Result GetLatestResult method.
 3. Added some minor log lines and minor bugs and optimizations.
 
 **2025-02-13:**
@@ -184,7 +184,7 @@ OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](htt
 
 **2024-11-14:**
 1. Correction of CounterType in JobResult from TOTAL_JOINING_PROCESS_SIZE to OTHER.
-2. Test Logic for GetLatestResult
+2. Added early test logic for GetLatestResult.
 3. Logging the input arguments received from SendIdentifiers Method
 
 **2024-10-31:**

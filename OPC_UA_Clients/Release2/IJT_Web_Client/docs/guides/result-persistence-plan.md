@@ -1,11 +1,12 @@
-# Result Persistence Plan (Serialize -> File -> Reload)
+# Result Persistence Design and Status
 
 ## Goal
 
-Enable users to:
+Document the implemented Web Client result persistence path:
 - serialize results currently in memory,
-- store them as files,
-- reload them later into the app with the same behavior as live-received results.
+- store them as JSON files,
+- reload them later into the app through the same `ResultManager.addResult(...)` flow used by live-received results,
+- optionally preserve the latest browser session through capped `localStorage` auto-save/auto-restore.
 
 Primary scope is the JS frontend result pipeline (`ResultManager` + result views).
 
@@ -44,7 +45,7 @@ Primary scope is the JS frontend result pipeline (`ResultManager` + result views
    - Import: file picker (`<input type="file">`).
    - Optional future enhancement: File System Access API when available.
 
-## Proposed File Format (v1)
+## File Format (v1)
 
 ```json
 {
@@ -68,60 +69,24 @@ Notes:
 - `results[]` items should be canonical result payload objects compatible with current model constructors.
 - Do not persist volatile runtime fields (`ClientData`, `uniqueCounter`, runtime links, DOM-derived fields).
 
-## Implementation Plan
+## Current Implementation
 
-## Phase 1: Serialization Core
+- Serialization lives in [result-serialization.mjs](../../src/javascripts/ijt-support/results/result-serialization.mjs).
+- Storage constants live in [result-storage-constants.mjs](../../src/javascripts/ijt-support/results/result-storage-constants.mjs).
+- `ResultManager` exposes `exportBundle(...)`, `importBundleFromText(...)`, `collectResultClosure(...)`, capped storage retention, and runtime model reconstruction.
+- The consolidated result view exposes `Export`, `Import`, import mode, and strict-mode controls in [result-graphics.mjs](../../src/javascripts/views/complex-result/result-graphics.mjs).
+- The result view auto-saves a compact bundle to `localStorage` when enabled and restores it on startup when no live results are already loaded.
+- Existing unit coverage is in `tests/js/unit/result-serialization.test.mjs` and `tests/js/unit/result-manager-extended.test.mjs`.
 
-- Add `src/javascripts/ijt-support/results/result-serialization.mjs`:
-  - `serializeResultForStorage(resultModel)`
-  - `serializeResultBundle(results, options?)`
-  - `parseResultBundle(rawText)`
-  - `validateResultBundle(bundle)` (shape + required keys + safe limits)
-- Include defensive limits:
-  - max file size (configurable),
-  - max result count (configurable),
-  - strict `type/version` check.
+## Current Behavior
 
-Deliverable:
-- Pure utility module with unit tests (no UI wiring yet).
-
-## Phase 2: ResultManager Integration
-
-- Extend `ResultManager` with explicit persistence APIs:
-  - `exportBundle({ typeFilter, includeUnresolved })`
-  - `importBundle(bundle, { mode })` where `mode` is `skip-duplicates` or `replace`.
-  - `clearAll()` (optional, for “replace all” workflows).
-- Duplicate policy (v1 recommendation):
-  - default: `replace` by `ResultMetaData.ResultId` via existing `handlePartial`/replace logic.
-- Ensure `lastResult`, `results`, `unresolved`, and subscriber notifications remain consistent.
-- Runtime-only manager state is not persisted directly:
-  - `lastResult`, `unresolved`, `ClientData.rebuildState`, and UI-only fields are rebuilt/recomputed during import via normal `addResult(...)` flow.
-
-Deliverable:
-- Persistence-aware manager methods + tests for add/import/duplicate semantics.
-
-## Phase 3: UI Controls
-
-- In consolidated result view ([result-graphics.mjs](../../src/javascripts/views/complex-result/result-graphics.mjs)):
-  - Add `Export Results` button.
-  - Add `Import Results` button.
-  - Add status messages for success/failure and counts imported/skipped/replaced.
-- UX defaults:
-  - Export current filter type by default (or all results if no filter selected).
-  - Import appends/merges (safe default), with optional “replace existing IDs” toggle.
-
-Deliverable:
-- End-to-end manual flow: export file -> reload page -> import file -> results visible in tabs.
-
-## Phase 4: Persistence to Local Browser Storage (Optional v1.5)
-
-- Add session persistence:
-  - On each `addResult`, debounce-save a compact bundle to `localStorage`.
-  - On startup, prompt user to restore last session results.
-- Use capped retention to avoid oversized storage (e.g., last N results).
-
-Deliverable:
-- Crash/reload resilience without file roundtrip.
+- Export roots are selected result boxes when any checkboxes are set.
+- If nothing is selected, export falls back to the latest visible box, then the latest full global result, then the latest stored result.
+- Export includes hierarchical closure for nested job/batch/sync result structures and records warnings for missing referenced descendants.
+- Import supports `replace` and `skip-duplicates` modes.
+- Strict import fails the full import on the first invalid result; non-strict import imports valid results and reports skipped entries.
+- Runtime-only fields and shortcut links are removed from stored payloads and rebuilt during import/model reconstruction.
+- Session persistence uses the same bundle parser/import path as file import.
 
 ## Data Integrity + Safety
 
@@ -162,16 +127,16 @@ The implementation must satisfy all items below before release:
 ## Compatibility Strategy
 
 - Keep `version` in file envelope from day one.
-- Implement a small reader switch:
-  - `if version===1 -> parseV1`
-  - else -> explicit unsupported-version error.
-- Future versions can add optional fields while preserving `results[]` payload compatibility.
+- Current parser accepts v1 envelopes plus legacy array/object bundles normalized to the v1 envelope shape.
+- Unknown non-legacy `type` or `version` values fail with an explicit unsupported/invalid bundle error.
+- Future versions should add per-version readers while preserving `results[]` payload compatibility where feasible.
 
 ## Backward Compatibility Policy
 
-- Goal: load old result files when feasible, even after model evolution.
+- Goal: load older result files when feasible, even after model evolution.
 - Approach:
-  - Keep per-version readers/mappers (`parseV1`, `parseV2`, ...).
+  - Keep the v1 reader stable.
+  - Add per-version readers/mappers (`parseV2`, `parseV3`, ...) only when a new envelope version is introduced.
   - Prefer tolerant parsing for additive model changes (missing optional fields get defaults).
   - Preserve stable core identifiers (`ResultMetaData.ResultId`, classification, timestamps) across versions.
 - If a result item cannot be safely mapped to current model:
@@ -195,27 +160,22 @@ The implementation must satisfy all items below before release:
 - Do not expose stack traces in UI.
 - Log detailed diagnostics only to developer console/log channel.
 
-## Testing Plan
+## Coverage Expectations
 
-- Unit tests (new):
-  - serialize single result,
-  - serialize bundle metadata,
-  - parse/validate malformed files,
-  - parse older supported versions via versioned readers,
-  - best-effort import skips invalid items and imports valid items,
-  - strict import fails on first invalid item,
-  - skip-reason aggregation is deterministic,
-  - reject prototype-pollution payloads,
-  - reject unknown `type`/unsupported `version`,
-  - reject over-limit file payloads/counts,
-  - duplicate ID import behavior (`skip`/`replace`),
-  - large bundle guardrails.
-- Integration tests:
-  - import bundle triggers existing subscribers,
-  - imported tightening results still render in trace and consolidated views.
-- E2E smoke (Playwright):
-  - export file exists,
-  - import file restores result list and latest selection behavior.
+- Unit coverage should keep protecting:
+  - single-result serialization,
+  - bundle metadata,
+  - malformed file rejection,
+  - legacy array/object bundle normalization,
+  - best-effort import skip accounting,
+  - strict import failure behavior,
+  - prototype-pollution key filtering,
+  - unknown `type`/unsupported `version` rejection,
+  - over-limit file payload/count rejection,
+  - duplicate-ID import behavior (`skip-duplicates`/`replace`),
+  - circular reference and depth guardrails,
+  - hierarchical closure and missing descendant warnings.
+- Manual or E2E coverage should verify export/import from the consolidated result UI after a page reload.
 
 ## Resolved Decisions
 
@@ -229,39 +189,35 @@ The implementation must satisfy all items below before release:
    - max file size and max result count are validated,
    - depth limit and circular reference checks prevent runaway recursion.
 
-## Suggested Task Breakdown (Ticket-sized)
+## Remaining Follow-ups
 
-1. Create serialization module + unit tests.
-2. Add `ResultManager.exportBundle/importBundle`.
-3. Add UI buttons in consolidated result view.
-4. Add import/export status and error handling.
-5. Add optional localStorage auto-restore.
-6. Add E2E flow test for roundtrip.
+1. Add Playwright roundtrip coverage if UI-level export/import regression protection is needed.
+2. Add a `clearAll()` manager API only if a future UX needs explicit “replace all existing results” behavior.
+3. Add File System Access API support only as an optional convenience; Blob download/upload remains the supported baseline.
 
-## Acceptance Criteria (Definition of Done)
+## Implemented Acceptance Criteria
 
 - User can export current results to `.json`.
 - User can import same file after reload and see equivalent results in UI.
 - Trace and consolidated result screens work with imported data.
 - Duplicate handling is deterministic and documented.
 - Validation rejects malformed/unsupported bundles gracefully.
-- Cybersecurity requirements in this plan are implemented and tested.
-- Backward-compatible import path exists for supported older versions.
+- Cybersecurity requirements in this design are implemented in the parser/serializer path.
+- Backward-compatible import path exists for v1 plus legacy array/object bundles.
 - Unsupported/unacceptable result entries are skipped in best-effort mode with explicit user notice.
 - Unit tests cover serialization and import core paths.
 
-## Hierarchical Export Requirement (Job/Batch/Fixtured-Sync Closure)
+## Hierarchical Export Behavior (Job/Batch/Fixtured-Sync Closure)
 
-- Export must support hierarchical closure.
+- Export supports hierarchical closure.
 - When user exports a parent result (for example Job, Batch, or fixtured/sync result container), the exported bundle must include all internal sub-results recursively.
-- Export should resolve reference children by `ResultMetaData.ResultId` from the current `ResultManager` cache.
+- Export resolves reference children by `ResultMetaData.ResultId` from the current `ResultManager` cache.
 - Export must deduplicate by ResultId so shared descendants appear once.
 - If some referenced descendants are not present in cache, export continues but records warnings.
 
 ### Implementation Notes
 
-- Add closure collector in ResultManager persistence path, for example:
-  - `collectResultClosure(rootResults, options?)`
+- Closure collection is implemented in `ResultManager.collectResultClosure(rootResults)`.
 - Traversal contract:
   - walk `ResultContent` recursively,
   - detect result references,
@@ -278,7 +234,7 @@ The implementation must satisfy all items below before release:
 - Missing descendants should not hard-fail export in default mode.
 - Import summary should still show skipped counts/reasons when content is incomplete.
 
-### Additional Tests
+### Additional Coverage Expectations
 
 - Exporting a Job includes all nested Batch/Tightening descendants.
 - Exporting a Batch includes all nested Tightening descendants.
@@ -287,17 +243,17 @@ The implementation must satisfy all items below before release:
 - Missing referenced descendants are reported in warnings with stable reason key:
   - `missing_referenced_subresult`.
 
-### Acceptance Additions
+### Closure Acceptance
 
 - Exporting a Job/Batch/fixtured-sync parent produces a self-contained bundle including recursive sub-results (as available in cache).
 - If some descendants are unavailable, export completes with explicit user warning.
 
 ## UI Selection Behavior for Export
 
-- In the consolidated result view, each top-level result row/card must have a selection checkbox in the upper-right corner.
+- In the consolidated result view, each top-level result row/card has a selection checkbox.
 - Export target selection rules:
   - If one or more rows are checked, export only those selected roots (with hierarchical closure rules applied).
-  - If no rows are checked, default export target is the latest full result box.
+  - If no rows are checked, default export target is the latest visible result box, then latest full global result, then latest stored result.
 - Selection state is UI-only and must not mutate the underlying result model objects.
 - Import/export status text should include whether export was selection-based or fallback-based.
 

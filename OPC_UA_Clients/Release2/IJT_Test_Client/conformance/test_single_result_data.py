@@ -66,6 +66,11 @@ _VALID_RESULT_STATE_VALUES: frozenset = frozenset({0, 1, 2})
 # ---------------------------------------------------------------------------
 
 
+def _unwrap_variant(value):
+    """Unwrap asyncua Variant containers used for nested ExtensionObjects."""
+    return getattr(value, "Value", value)
+
+
 async def _get_result(
     subscription_client,
     result_trigger,
@@ -334,17 +339,18 @@ async def test_result_value_measured_value_is_numeric(subscription_client, resul
     if meta is not None:
         ovr = getattr(meta, "OverallResultValues", None)
         if ovr:
-            all_values.extend(ovr)
+            all_values.extend(getattr(v, "Value", v) for v in ovr)
     content = getattr(result_data, "ResultContent", None) or []
     for jr in content:
         jr = getattr(jr, "Value", jr)  # unwrap asyncua Variant
         ovr = getattr(jr, "OverallResultValues", None)
         if ovr:
-            all_values.extend(ovr)
+            all_values.extend(getattr(v, "Value", v) for v in ovr)
         step_results = getattr(jr, "StepResults", None) or []
         for step in step_results:
+            step = _unwrap_variant(step)
             svs = getattr(step, "StepResultValues", None) or []
-            all_values.extend(svs)
+            all_values.extend(_unwrap_variant(v) for v in svs)
 
     if not all_values:
         pytest.skip("No result values found in result — cannot verify")
@@ -368,13 +374,13 @@ async def test_result_value_physical_quantity_in_valid_range(subscription_client
     if meta is not None:
         ovr = getattr(meta, "OverallResultValues", None)
         if ovr:
-            all_values.extend(ovr)
+            all_values.extend(getattr(v, "Value", v) for v in ovr)
     content = getattr(result_data, "ResultContent", None) or []
     for jr in content:
         jr = getattr(jr, "Value", jr)  # unwrap asyncua Variant
         ovr = getattr(jr, "OverallResultValues", None)
         if ovr:
-            all_values.extend(ovr)
+            all_values.extend(getattr(v, "Value", v) for v in ovr)
 
     checked = 0
     failures = []
@@ -405,13 +411,13 @@ async def test_result_value_tag_in_valid_range(subscription_client, result_trigg
     if meta is not None:
         ovr = getattr(meta, "OverallResultValues", None)
         if ovr:
-            all_values.extend(ovr)
+            all_values.extend(_unwrap_variant(v) for v in ovr)
     content = getattr(result_data, "ResultContent", None) or []
     for jr in content:
         jr = getattr(jr, "Value", jr)  # unwrap asyncua Variant
         ovr = getattr(jr, "OverallResultValues", None)
         if ovr:
-            all_values.extend(ovr)
+            all_values.extend(_unwrap_variant(v) for v in ovr)
 
     checked = 0
     failures = []
@@ -435,7 +441,7 @@ async def test_result_value_tag_in_valid_range(subscription_client, result_trigg
 async def test_result_value_engineering_units_if_present_has_identifier(
     subscription_client, result_trigger, ns_indices
 ):
-    """If EngineeringUnits is present on a result value, it must have a valid Identifier."""
+    """If EngineeringUnits is present on a result value, it must have a valid UnitId."""
     result_data, meta = await _get_result(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
@@ -443,29 +449,31 @@ async def test_result_value_engineering_units_if_present_has_identifier(
     if meta is not None:
         ovr = getattr(meta, "OverallResultValues", None)
         if ovr:
-            all_values.extend(ovr)
+            all_values.extend(_unwrap_variant(v) for v in ovr)
     content = getattr(result_data, "ResultContent", None) or []
     for jr in content:
         jr = getattr(jr, "Value", jr)  # unwrap asyncua Variant
         for src in (getattr(jr, "OverallResultValues", None) or [],):
-            all_values.extend(src)
+            all_values.extend(_unwrap_variant(v) for v in src)
         for step in getattr(jr, "StepResults", None) or []:
-            all_values.extend(getattr(step, "StepResultValues", None) or [])
+            step = _unwrap_variant(step)
+            all_values.extend(_unwrap_variant(v) for v in (getattr(step, "StepResultValues", None) or []))
 
     checked = 0
     failures = []
     for i, v in enumerate(all_values):
         eu = getattr(v, "EngineeringUnits", None)
+        eu = getattr(eu, "Value", eu) if eu is not None else None  # unwrap Variant → EUInformation
         if eu is not None:
             checked += 1
-            if not hasattr(eu, "Identifier"):
+            if not hasattr(eu, "UnitId"):
                 failures.append(
-                    f"value[{i}].EngineeringUnits has no .Identifier attribute (got type {type(eu).__name__!r})"
+                    f"value[{i}].EngineeringUnits has no .UnitId attribute (got type {type(eu).__name__!r})"
                 )
 
     if checked == 0:
         pytest.skip("No result values carry EngineeringUnits — optional field per spec")
-    assert not failures, "EngineeringUnits present but missing .Identifier:\n  " + "\n  ".join(failures)
+    assert not failures, "EngineeringUnits present but missing .UnitId:\n  " + "\n  ".join(failures)
 
 
 # ---------------------------------------------------------------------------
@@ -494,7 +502,7 @@ async def test_nok_result_error_information_has_error_code(subscription_client, 
     for jr in content:
         jr = getattr(jr, "Value", jr)  # unwrap asyncua Variant
         errors = getattr(jr, "Errors", None) or []
-        all_errors.extend(errors)
+        all_errors.extend(_unwrap_variant(err) for err in errors)
 
     if not all_errors:
         pytest.skip(
@@ -535,7 +543,7 @@ async def test_nok_result_failure_reason_in_valid_range(subscription_client, res
     all_errors: list[Any] = []
     for jr in content:
         jr = getattr(jr, "Value", jr)  # unwrap asyncua Variant
-        all_errors.extend(getattr(jr, "Errors", None) or [])
+        all_errors.extend(_unwrap_variant(err) for err in (getattr(jr, "Errors", None) or []))
 
     if not all_errors:
         pytest.skip("NOK result contains no Errors entries — cannot verify")
@@ -591,9 +599,9 @@ async def test_result_overall_values_contains_final_tag(subscription_client, res
         if not overall_values:
             continue
         has_final = any(
-            int(getattr(v, "ValueTag", -1)) == _FINAL_VALUE_TAG
+            int(getattr(getattr(v, "Value", v), "ValueTag", -1)) == _FINAL_VALUE_TAG
             for v in overall_values
-            if getattr(v, "ValueTag", None) is not None
+            if getattr(getattr(v, "Value", v), "ValueTag", None) is not None
         )
         if not has_final:
             failures.append(f"ResultContent[{i}].OverallResultValues has no entry with ValueTag=FINAL")
@@ -626,7 +634,7 @@ async def test_result_with_traces_has_trace_data(subscription_client, result_tri
     failures = []
     for i, jr in enumerate(content):
         jr = getattr(jr, "Value", jr)  # unwrap asyncua Variant
-        trace_data = getattr(jr, "Trace", None)  # field is Trace, not TraceData
+        trace_data = _unwrap_variant(getattr(jr, "Trace", None))  # field is Trace, not TraceData
         if trace_data is not None:
             found_trace = True
             trace_id = getattr(trace_data, "TraceId", None)
