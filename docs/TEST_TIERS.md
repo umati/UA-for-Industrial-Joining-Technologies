@@ -32,6 +32,7 @@ Every skip in this tier must have:
 
 | Test | Reason | Condition to unskip |
 |------|--------|---------------------|
+| Web Client Python `_SetupLock.test_acquire_windows_succeeds` | Windows-only lock-acquire path is skipped on Ubuntu CI; POSIX lock behavior is covered separately in the same class | Run the Web Client Python unit job on Windows, or replace the platform guard with a fully mocked Windows locking test |
 | C# `LiveIntegrationTests` × 15 | `IJT_PHASE1_ONLY=true` suppresses server auto-launch in the unit-test CI phase (`csharp-unit`) | These same tests **pass** in the `csharp-live` CI job where the server is launched on port 40464 |
 | Vitest `source-coverage` git check | `git` unavailable in bare zip-export environments | Not applicable in CI — git is always present; this protects zip-distribution consumers |
 
