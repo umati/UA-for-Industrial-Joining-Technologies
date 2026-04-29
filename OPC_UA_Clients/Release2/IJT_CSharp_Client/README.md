@@ -1,5 +1,11 @@
 # IJT C# Client
 
+## Contact
+
+**Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+
+## Overview
+
 C#/.NET reference client for the [OPC UA Industrial Joining Technologies (IJT) Companion Specification](https://github.com/umati/UA-for-Industrial-Joining-Technologies), built with the [OPC Foundation .NET Standard SDK](https://github.com/OPCFoundation/UA-.NETStandard).
 
 ## Quick Start
@@ -24,20 +30,6 @@ The client launches an interactive menu covering the full IJT address space:
 
 Large responses are saved to log files. The console shows a concise summary and the file location.
 
-## Testing
-
-Run the full suite (builds, unit tests, coverage, static analysis):
-
-```bash
-python run_all_tests.py
-```
-
-Or run the .NET tests directly (requires .NET 10 SDK):
-
-```bash
-dotnet test IJT_CSharp_Client.sln
-```
-
 ## Reusing the Type Libraries
 
 `Types/` contains auto-generated C# bindings for all IJT OPC UA data types. They can be used independently of this client in any .NET project.
@@ -53,6 +45,17 @@ dotnet restore Types\UAModel.IJTTightening -p:OpcUaClientOnly=true --configfile 
 dotnet build   Types\UAModel.IJTTightening -p:OpcUaClientOnly=true --no-restore
 ```
 
-## Contact
+## Testing
 
-**Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+Run the full suite (builds, unit tests, coverage, static analysis):
+
+```bash
+python run_all_tests.py
+```
+
+Or run the .NET tests directly (requires .NET 10 SDK):
+
+```bash
+dotnet test IJT_CSharp_Client.sln
+```
+
