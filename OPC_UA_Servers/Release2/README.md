@@ -1,40 +1,44 @@
 # OPC UA IJT Server Simulator
 
-OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](https://github.com/umati/UA-for-Industrial-Joining-Technologies) specification (OPC 40450-1 Joining Base and OPC 40451-1 Tightening).
+OPC UA IJT Server Simulator for the Industrial Joining Technologies (IJT) companion specifications.
 
 ## Contact
-- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+
+- **Author:** Mohit Agarwal - mohit.agarwal@atlascopco.com
 
 ---
 
 ## Getting Started
 
-### Common Steps
+### Available Packages
 
-- The ZIP files are included in this repository. Clone the repo or download the file directly from GitHub, then extract:
+- The simulator packages are included in this directory.
 
-  | Platform | ZIP file | Extract to |
-  |----------|----------|------------|
+  | Platform | Package | Extract To |
+  |----------|---------|------------|
   | Windows  | `OPC_UA_IJT_Server_Simulator.zip` | `OPC_UA_IJT_Server_Simulator/` |
   | Linux    | `OPC_UA_IJT_Server_Simulator_Linux.zip` | `OPC_UA_IJT_Server_Simulator_Linux/` |
-  | Docker   | Uses the Linux binary automatically — no download needed | — |
+  | Docker   | Uses the Linux binary automatically | Not applicable |
 
-- **Server Endpoint:** `opc.tcp://localhost:40451` — for remote connections, replace `localhost` with the hostname or IP address.
+- **Default Endpoint:** `opc.tcp://localhost:40451`
+  - For remote connections, replace `localhost` with the hostname or IP address.
 
 ### Windows
 
-- Install the [Visual C++ Runtime (VC-Redist)](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-180) if not already installed.
-- Launch `opcua_ijt_demo_application.exe`. Ensure it has **Read/Write** access to its directory (run as **Administrator** if needed).
+- Start the server: `opcua_ijt_demo_application.exe`
+  - Install the [Visual C++ Runtime (VC-Redist)](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-180) if it is not already installed.
+  - Ensure the server has read/write access to its directory. Run as Administrator if needed.
 
 ### Linux
 
-- Make the binary runnable (first time only): `chmod +x opcua_ijt_demo_application`
 - Start the server: `./opcua_ijt_demo_application`
+  - If needed, make the server binary executable first: `chmod +x opcua_ijt_demo_application`
 
 ### Docker
 
-- Start from the `Release2/` directory: `docker compose up`
-- To allow connections from **other machines**, pass the host IP: `docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=192.168.1.10 opcua-ijt-server`
+- Start the simulator from this `Release2/` directory: `docker compose up`
+  - For access from another machine, replace `<host-or-ip>` with the machine name or IP address:
+    `docker run --rm -p 40451:40451 -e OPCUA_HOSTNAME=<host-or-ip> opcua-ijt-server`
 
 ### Testing
 
@@ -42,233 +46,8 @@ OPC UA IJT Server Simulator for the [OPC UA Industrial Joining Technologies](htt
 
 ### User Guide
 
-- Detailed usage instructions: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/OPC_UA_Servers/Release2/Usage_IJT_OPC_UA_Server_Simulator.pdf)
+- Detailed usage instructions: [**Usage_IJT_OPC_UA_Server_Simulator.pdf**](Usage_IJT_OPC_UA_Server_Simulator.pdf)
 
----
+### Change Log
 
-# Change Log
-
-**2026-04-23:**
-1. **Fixed** delays in result variable updates — when results arrive in quick succession, the server now waits only the minimum necessary time between updates instead of always waiting the full interval. Connected clients will see result data appear more promptly.
-2. **Fixed** server startup and shutdown responsiveness — the server now becomes ready faster after launch and stops more cleanly on shutdown, reducing the time clients need to wait.
-3. **Fixed** a rare issue where a simulation start or stop command could appear unresponsive due to a timing gap in state change handling.
-4. **Multiple** internal bug fixes and improvements.
-
-**2026-04-21:**
-1. **Added** a result cache so that recent results remain accessible for retrieval even after the result variables have been overwritten by newer results.
-2. **Updated** simulation methods to run asynchronously — method calls return immediately and simulation runs in the background so that clients are not blocked for the full duration.
-3. **Added** missing `OutputSpecification` node to **PowerSupply** asset that was missing.
-4. **Fixed** linked assets not being correctly updated in the address space after unlinking.
-5. **Fixed** `JoiningTraceDataType.ResultId` not matching the result's `ResultId`.
-6. **Fixed** `StepResult.StartTimeOffset` missing or incorrect in result trace data.
-7. **Fixed** `TracePointIndex` values in result trace data being reported incorrectly.
-8. **Fixed** incorrect ordering of trace data for NOK results.
-9. **Fixed** `FailingStepResultId` being reported incorrectly in step results.
-10. **Multiple** bug fixes, stability improvements and optimizations.
-
-**2026-04-20:**
-1. **Added** dynamic simulation to`OperationCycleCounter` for Tool assets based on new single result simulation.
-2. **Fixed** reference type from `HasProperty` to `HasComponent` for the **PhysicalQuantity** of `JoiningDataVariableType` in multiple asset properties.
-3. **Fixed** Sensor **MeasuredValue** node path that was incorrect and unreachable via address space browsing.
-4. **Fixed** Battery **Capacity** engineering units that was incorrectly using current unit instead of Capacity Unit.
-5. **Multiple** bug fixes and optimizations.
-
-**2026-04-17:**
-1. **Updated** joining process and joint selection to be **scoped per product** so different clients no longer overwrite each other's active selection.
-2. **Updated** asset simulation with **consistent identifiers** across server restarts and included them in result output.
-3. **Fixed** multiple result simulation bugs around concurrency, missing callbacks, and incorrect associated entity data.
-4. **Multiple** bug fixes and optimizations.
-
-**2026-04-02:**
-1. **Moved** `Dockerfile` and added `docker-compose.yml` to the `Release2/` directory (previously was inside the binary subfolder).
-2. **Embedded** the Docker entrypoint script inline in the Dockerfile — single-file Docker configuration, no extra scripts to manage.
-3. **Added** `tests/smoke_test.py` — 10-check OPC UA sanity test (TCP, session, namespaces, TighteningSystem, Simulations, ResultManagement, AssetManagement, JoiningProcessManagement, JointManagement).
-4. **Added** `.dockerignore` to keep Docker image lean (excludes zip archives, PDFs, docs).
-5. **Added** missing interface for Asset.Identification IJoiningAdditionalInformationType.
-6. **Added** native Linux binary package (`OPC_UA_IJT_Server_Simulator_Linux.zip`) — runs on any glibc 2.17+ Linux distro without Wine or additional runtime dependencies.
-7. **Simplified** Docker image from Wine-based (40s startup) to native Linux binary (~3s startup).
-8. **Multiple** bugs, refactoring and optimizations.
-
-**2026-02-06:**
-1. **Added** appropriate logs when the binary path is too long on Windows.
-
-**2025-12-05:**
-1. **Updated** event simulation to support multiple events with different combinations.
-2. **Multiple** refactoring and **optimizations**.
-
-**2025-10-28:**
-1. **Added** support for **Joint Management MVP**.
-	- **Added** the following methods: **SendJoint, GetJoint, GetJointList, SelectJoint, DeleteJoint**.
-2. **Fixed** a few issues in the simulation of Job Results.
-3. **Multiple** refactoring and **optimizations**.
-
-**2025-10-25:**
-1. **Updated** Result Simulation to include **Final values** in **JoiningResult.OverallResultValues**
-2. **Added** additional entities in **ResultMetaData.AssociatedEntities**.
-3. **Updated** Asset Simulation to set the **ProductInstanceUri as ManufacturerUri/GUID**.
-4. **Multiple** refactoring and **optimizations**.
-
-**2025-10-15:**
-1. **Updated** '**SimulateSingleResult**' Method with input **"0 - SIMPLE RESULT"** to send **empty ResultContent instead of NULL**.
-
-**2025-10-10:**
-1. **Added** '**SendSimulatedBulkResults**' Method to **send** bulk results **without** **recreating**.
-2. **Added** '**SimulateBulkEvents**' method for **additional** scenarios related to bulk events reported.
-3. **Added** '**UpdateResultVariables**' flag in the '**SimulateBulkResults**' method to allow users to **only** generate Result Events in bulk simulation.
-4. **Added** additional logging and **enabled two-way references** for **Combined Results sent as references**.
-5. **Updated** **Usage_IJT_OPC_UA_Server_Simulator.pdf** based on the latest changes.
-6. **Multiple** refactoring and **optimizations**.
-
-**2025-10-06:**
-1. The new versions of OPC **40450-1** CS (Joining **1.01.0**) and OPC **40451-1** CS (Tightening **2.00.1**) are **published**.
-2. **Updated** the IJT Server Simulator with the **Released** **NodeSet** files.
-3. **Removed** the pre-release **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** since the **primary simulator** is **updated** with the **released** version.
-4. The **released** simulator **consists** of **multiple features and enhancements** as given below:
-	- **Added** **50+ event simulations** in the existing **SimulateEvents** method.
-	- **Added** simulation logic for **GetResultById, GetLatestResult and RequestResults** methods.
- 	- **RequestResults** method is useful for **getting Historical Results** using **Subscription** instead of **polling** each Result.
-	- **Added** Engineering Units for relevant data with valid values.
-	- **Updated** simulation of **SYNC** Result to be reported as **parallel** operation when sent as references compared to **BATCH** Result where partial results are sent **sequentially**.
-	- Multiple bugs and optimizations.
-5. **Updated** **Usage_IJT_OPC_UA_Server_Simulator.pdf** based on the latest changes.
-
-**2025-09-09:**
-1. Added pre-release simulation logic for **GetResultById, GetLatestResult and RequestResults** methods. Historical note: this was before the 1.01 NodeSet was released; the released simulator now uses the published NodeSet files.
-2. Multiple bugs and optimizations.
-
-**2025-08-05:**
-1. Uploaded **OPC_UA_IJT_Server_Simulator_New_RC_1.01.0.zip** based on OPC 40450-1 **v1.01.0** (pre-release). Will be merged with **OPC_UA_IJT_Server_Simulator.zip** once the specification is published.
-
-**2025-07-04:**
-1. Created a default Single Result on start-up for easier testing.
-2. Updated Docker logic to log the correct EndpointUrl while running in Docker.
-3. Minor optimizations.
-
-**2025-06-09:**
-1. Added option to run the IJT Simulator as a Docker image.
-2. Updated the steps in Sections 3 and 4 of the following document: Usage_IJT_OPC_UA_Server_Simulator.pdf
-
-**2025-05-28:**
-1. Renamed the SimulatedData.json to simulated_data.json.
-2. Updated the logic of simulation to include JoiningSystem.Identification properties also from simulated_data.json.
-3. Added server_configuration.json to change default values for the Server Configuration data.
-4. Updated the version of the Simulator to 1.5.0 and relevant RC file.
-5. Minor bugs and optimizations.
-
-**2025-05-21:**
-1. Added option to Simulate Asset Identification Data from the following JSON file SimulatedData.json. This change is useful for changing the values for demonstrations.
-2. Minor bugs and optimizations.
-
-**2025-04-09:**
-1. Minor update to the BrowseName of the Tightening System object.
-2. Minor bugs and optimizations.
-
-**2025-03-16:**
-1. Corrected the TighteningSystem.Identification.Description value data type.
-2. Corrected the Access Level of TighteningSystem.Identification.Location and Asset.Identification.Location from RO to RW.
-3. Minor bugs and optimizations.
-
-**2025-02-24:**
-1. Fixed a crash issue which occurs in rare scenarios due to Result variable updates.
-2. Historical note: removed an earlier temporary GetLatestResult implementation. This was superseded by the released 1.01 simulator, which includes the current Machinery/Result GetLatestResult method.
-3. Added some minor log lines and minor bugs and optimizations.
-
-**2025-02-13:**
-1. Corrected the NamespaceIndex of the BrowseName for Results Folder.
-2. Corrected the TypeDefinition of MachineryBuildingBlocks Folder Node from FunctionalGroupType to FolderType. Similar corrections for some other Folder nodes.
-3. Minor bugs and optimizations.
-
-**2024-11-28:**
-1. When Combined Results are sent, the data change elapsed time was faster than the minimum sampling interval. Due to this, the Result Variable in the address space was not receiving all the changes. Fixed this issue by checking the elapsed time is greater than minimum sampling interval supported by the server. This does not have any impact on the Result Events.
-2. Minor bugs and optimizations.
-
-**2024-11-14:**
-1. Correction of CounterType in JobResult from TOTAL_JOINING_PROCESS_SIZE to OTHER.
-2. Added early test logic for GetLatestResult.
-3. Logging the input arguments received from SendIdentifiers Method
-
-**2024-10-31:**
-1. Added simulated data for GetJoiningProcessList method.
-2. Minor update while loading the NodeSet file where it takes the path relative to application.exe instead of ./
-3. Minor bugs and optimizations.
-
-**2024-10-25:**
-1. The SequenceNumber is incremented ONLY for a SINGLE Result for easier demonstration. The Batch/Job/Sync result will have the sequence number of the last tightening result.
-2. In SimulateBulkResults method, added an additional parameter to provide the time interval between each result.
-3. The Result Event Message will CONTAIN Classification:AssemblyType:Result:SequenceNumber information for quick readability and testing.
-4. Added the versioning in the Simulator for traceability. Updated the version of the Simulator to 1.2.0.
-5. Minor bugs and optimizations.
-
-**2024-10-18:**
-1. Added version information for the simulator.
-2. Corrected the content of Quality and Vision Results which are now sent as ResultReadyEvent instead of JoiningSystemResultReadyEvent.
-3. Minor bugs and optimizations.
-
-**2024-10-05:**
-1. Fixed an issue in the order of Job Result when the child results are sent as references.
-
-**2024-10-04:**
-1. Added an option to Simulate Results as References in both SimulateBatch_or_Sync_Result and SimulateJobResult Methods. This option will send each child result separately.
-2. Refactored Result Simulation Code.
-3. Minor issues and optimizations.
-
-**2024-09-09:**
-1. Added SimulateBulkResults method to simulate multiple single results.
-2. Fixed multiple warnings and errors.
-3. Minor bugs and optimizations.
-
-**2024-05-21:**
-1. Corrected the TypeDefinition of few Asset Variables from BaseDataVariableType to JoiningDataVariableType.
-2. Added PhysicalQuantity and EngineeringUnits property to CalibrationValue and SensorScale.
-
-**2024-05-20:** Minor issue fix related to duplicate asset references.
-
-**2024-04-29:** Set the value to NULL for the following ResultMetaData properties.
-1. The below properties are recommended to be used from ResultMetaData.AssociatedEntities which is the standardized encapsulation for all the identifiers.
-	StepId, PartId, ExternalRecipeId, InternalRecipeId, ProductId, ExternalConfigurationId, InternalConfigurationId, JobId.
-2. HasTransferableDataOnFile, ResultUri, FileFormat are NOT applicable for a Result generated from a joining system since Results are NOT reported as Files.
-
-**2024-04-19:**
-1. Formally released version of OPC UA SDK with new fixes.
-2. Added logic for 12 commands which will Log the input arguments on invocation as a test simulation.
-3. Minor bugs and optimizations.
-
-**2024-03-10:**
-1. Updated the formally released NodeSets.
-2. Correction in the NamespaceIndex of JoiningSystem->Identification.
-3. Minor bugs and optimizations.
-
-**2024-02-27:**
-1. Updated the latest NodeSet based on all the fixes for Release Candidate Comments.
-2. Added newer version of the OPC UA SDK received.
-3. Fixed issue related to method call where TrimmedString was not getting converted internally when passed as an input argument.
-
-**2024-02-16:**
-1. Updated the latest NodeSet based on the all the fixes for Release Candidate Comments.
-2. Added latest version of the OPC UA SDK UA 1.05 Concrete SubTypes.
-3. Few minor bugs and optimizations.
-
-**2024-02-07:**
-1.	Integrated MachineryLifetimeCounterType as part of the IJoiningSystemAssetType.
-2.	Added ExtendedMetaData in JoiningResultMetaDataType
-3.	Added AssociatedEntities in JoiningProcessMetaDataType
-4.	Updated ResultCounter, SequenceNumber from Integer to Unsigned Integers.
-5.	Enabled RetransmissionQueue for auto-recovery
-6.	Few other bug fixes and optimizations.
-
-**2024-01-10:**
-1. Added Over Temperature Event Simulation.
-2. Few minor fixes and optimizations.
-
-**2023-12-19:**
-1. Added some missing OPC UA References to Asset->Health object.
-2. Correction of NodeIds for Simulation methods.
-
-**2023-12-08:**
-1. Removed the workarounds done to IJT NodeSets, Code, after the issue resolutions in the OPC UA SDK.
-2. Updated the latest NodeSet files with the fixes done for few of the RC comments.
-
-**2023-12-05:** Initial Version
-1. The OPC UA Reference Server supports few use cases of Results, Assets, Events, EnableAsset method.
-2. **Note:** It is an initial version based on the **OPC 40450-1** and **OPC 40451-1 Release Candidate** Versions.
-3. Few local changes are done to the NodeSet files to enable custom structures which would be upgraded soon.
+- Simulator changes and fixes: [**CHANGELOG.md**](CHANGELOG.md)

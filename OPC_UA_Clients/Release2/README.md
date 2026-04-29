@@ -1,32 +1,22 @@
 # IJT Reference Clients
 
+Release 2 reference clients for the OPC UA Industrial Joining Technologies (IJT) companion
+specifications.
+
 ## Contact
-- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
 
-## Overview
-Reference clients for the **OPC UA Industrial Joining Technologies (IJT) Companion Specification**.
+- **Author:** Mohit Agarwal - mohit.agarwal@atlascopco.com
 
-## IJT Web Client
-- GUI client for visualization of IJT data and traces. Python (`asyncua`) backend and Node.js frontend.
+## Available Clients
 
-## IJT Console Client
-- Command-line client for core IJT operations, including subscriptions, method calls, and result parsing.
+| Client | Description | Technology |
+|--------|-------------|------------|
+| [IJT Web Client](IJT_Web_Client) | GUI reference client for visualizing OPC UA IJT server data, events, traces, assets, and results in a web browser | Python, WebSockets, Node.js |
+| [IJT Console Client](IJT_Console_Client) | Command-line reference client for connecting to an OPC UA IJT server, subscribing to events, calling methods, and reading results | Python |
+| [IJT C# Client](IJT_CSharp_Client) | C#/.NET reference client with an interactive client and reusable generated type libraries for the IJT companion specifications | C#/.NET |
+| [IJT Test Client](IJT_Test_Client) | Conformance test client for validating OPC UA IJT servers against the Industrial Joining Technologies (IJT) companion specifications | Python, pytest |
 
-## IJT Test Client
-- Conformance test suite for the IJT Companion Specification, built with Python `pytest`.
+## OPC UA Server
 
-## IJT C# Client
-- C#/.NET reference client based on the OPC Foundation .NET Standard SDK.
-
-## Running Tests
-
-Each client project contains a `run_all_tests.py` that can be used independently — the OPC UA server is launched automatically if needed:
-
-```bash
-python run_all_tests.py
-```
-
-The root `run_all_tests.py` orchestrates all suites in one command.
-
-## OPC UA Reference Server
-- Use the following [**OPC UA IJT Server Simulator**](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2) to connect from the **IJT Reference Clients**.
+- Use the [IJT Server Simulator](../../OPC_UA_Servers/Release2) for local testing.
+  - Default OPC UA endpoint: `opc.tcp://localhost:40451`

@@ -1,38 +1,30 @@
 # IJT Console Client
 
-## Contact
-- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+Command-line reference client for connecting to an OPC UA IJT server, subscribing to events, calling
+methods, and reading results.
 
-## Overview
-- Command-line reference client for the **OPC UA Industrial Joining Technologies (IJT) Companion Specification**.
-- Supports core operations such as connecting to a live server, event subscriptions, method calls, and result reading.
+## Contact
+
+- **Author:** Mohit Agarwal - mohit.agarwal@atlascopco.com
 
 ## Prerequisites
-- **Internet Connection**
-- **Download** the project directory `IJT_Console_Client` and open a terminal there.
-- Install **Python 3.14+** from the [official website](https://www.python.org/downloads/) and add it to `PATH`.
-- A running **OPC UA IJT Server** — see [OPC UA IJT Server Simulator](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/main/OPC_UA_Servers/Release2).
 
-## Run
-- **Note:** On Linux use `python3` instead of `python`.
-### Option 1 — pass endpoint on command line
-- `python setup_client.py --url="opc.tcp://<ip>:<port>"`
-### Option 2 — edit config file
-- Update `SERVER_URL` in `client_config.py` to the OPC UA server endpoint URL, then: `python setup_client.py`
+- Python 3.14+
+  - On Linux, use `python3` if `python` is not available.
+- Internet connection for first-time dependency installation
+- A running OPC UA IJT server, such as the [IJT Server Simulator](../../../OPC_UA_Servers/Release2)
+  - Default OPC UA endpoint: `opc.tcp://localhost:40451`
+
+## Option 1 - Command Line
+
+- **Run with endpoint:** `python setup_client.py --url="opc.tcp://localhost:40451"`
+  - Use `opc.tcp://<host-or-ip>:<port>` when connecting to another OPC UA IJT server.
+
+## Option 2 - Configuration File
+
+- **Set endpoint:** update `SERVER_URL` in `client_config.py`.
+- **Run:** `python setup_client.py`
 
 ## Testing
-- Run all tests: `python run_all_tests.py`
 
-## Project Structure
-```
-IJT_Console_Client/
-├── setup_client.py          # Entry point — installs deps + connects
-├── client_config.py         # Server URL and connection settings
-├── opcua_client.py          # Core OPC UA connection management
-├── event_handler.py         # OPC UA event subscription and parsing
-├── result_event_handler.py  # Tightening result processing
-├── utils.py                 # Shared utilities
-├── requirements.txt         # Python dependencies
-├── pyproject.toml           # Test configuration (pytest, ruff, coverage, bandit)
-└── tests/                   # Unit and integration tests
-```
+- **Run tests:** `python run_all_tests.py`

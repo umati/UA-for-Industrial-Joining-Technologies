@@ -1,49 +1,32 @@
 # IJT Node Client (Release 1)
 
-A reference OPC UA IJT client for Release 1, built with Node.js, Express, Socket.io, and node-opcua.
+Release 1 reference OPC UA IJT client built with Node.js, Express, Socket.io, and node-opcua.
+
+## Contact
+
+- **Author:** Joakim Gustafsson - joakim.h.gustafsson@atlascopco.com
+- **Coordinator:** Mohit Agarwal - mohit.agarwal@atlascopco.com
 
 ## Prerequisites
 
 - Node.js 24+
-- The Release 1 OPC UA server: `OPC_UA_Servers/Release1/IJT_OPC_UA_Server_Simulator/opcua_ijt_demo_application.exe`
-
-> **Note:** The Release 1 server runs on `opc.tcp://localhost:40451`. It cannot run simultaneously with a Release 2 server.
+- A running Release 1 OPC UA server, such as the [Release 1 Server Simulator](../../../OPC_UA_Servers/Release1)
+  - Default OPC UA endpoint: `opc.tcp://localhost:40451`
+  - The Release 1 and Release 2 server simulators cannot run at the same time on the default port.
 
 ## Quick Start
 
-```bash
-npm install
-node index.js
-```
+- Install dependencies: `npm install`
+- Start the client: `node index.js`
+  - Access: `http://localhost:3000`
 
-The client is then available at `http://localhost:3000`.
+## Connect to a Server
 
-## Connect to OPC UA Server
+- Start the Release 1 OPC UA server.
+- Open `http://localhost:3000`.
+  - Endpoint: `opc.tcp://localhost:40451`
+- Select **Connect**.
 
-1. Start the Release 1 OPC UA server (`opcua_ijt_demo_application.exe`)
-2. Open `http://localhost:3000` in a browser
-3. Enter endpoint `opc.tcp://localhost:40451` and click Connect
+## Testing
 
-## Test Commands
-
-```bash
-python run_all_tests.py         # preferred: lint + unit tests + smoke test
-npm test                        # lint + unit tests
-npx vitest run                  # JS unit tests only
-npx vitest run --coverage       # with coverage report
-node ./scripts/smoke-test.mjs   # smoke test (starts server)
-```
-
-## Project Structure
-
-```
-IJT_Node_Client/
-├── index.js                 Express server entry point
-├── index.html               Single-page frontend
-├── javascripts/
-│   ├── ijt-support/         Core OPC UA logic (no browser deps)
-│   └── views/               DOM/HTML rendering components
-├── resources/               Static config (connectionpoints.json)
-├── scripts/                 Smoke & regression test runners
-└── tests/                   Vitest unit tests & Playwright E2E tests
-```
+- **Run tests:** `python run_all_tests.py`

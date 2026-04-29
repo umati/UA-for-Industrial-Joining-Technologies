@@ -1,20 +1,22 @@
-# IJT OPC UA Server Simulator — Release 1 (Legacy)
+# IJT Server Simulator (Release 1)
 
-> **Legacy.** New projects should use the [Release 2 server](../Release2/README.md).
+Pre-built Windows server simulator for testing Release 1 OPC UA IJT clients.
 
-Pre-built Windows binary simulating an IJT OPC UA server for the Release 1 specification.
+## Contact
 
-## Quick start
+- **Author:** Mohit Agarwal - mohit.agarwal@atlascopco.com
 
-```
-cd IJT_OPC_UA_Server_Simulator
-opcua_ijt_demo_application.exe
-```
+## Quick Start
 
-Default endpoint: `opc.tcp://localhost:40451`
+- Open `IJT_OPC_UA_Server_Simulator`.
+- Start the server: `opcua_ijt_demo_application.exe`
+  - Default OPC UA endpoint: `opc.tcp://localhost:40451`
+  - Configuration details: `Usage_IJT_OPC_UA_Server_Simulator.pdf`
 
-See `Usage_IJT_OPC_UA_Server_Simulator.pdf` for configuration details.
+## Tested With
 
-## Tested with
+- [Release 1 Node.js client](../../OPC_UA_Clients/Release1/IJT_Node_Client)
 
-[Release 1 Node.js client](../../OPC_UA_Clients/Release1/IJT_Node_Client/README.md)
+## Notes
+
+- **Recommended:** Use the [Release 2 server](../Release2).
