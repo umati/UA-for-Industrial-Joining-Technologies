@@ -26,7 +26,7 @@ To report a security vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Specifications & References
 
-- [IJT Documents](IJT_Documents)
+- [OPC UA IJT Group Presentation](https://github.com/umati/UA-for-Industrial-Joining-Technologies/blob/main/IJT_Documents/OPC_UA_IJT_Group_Presentation.pdf)
 - [OPC 40450-1 Joining — Online Reference](https://reference.opcfoundation.org/IJT/Base/v100/docs/)
 - [OPC 40451-1 Tightening — Online Reference](https://reference.opcfoundation.org/IJT/Tightening/v200/docs/)
 - [OPC Foundation IJT Page](https://opcfoundation.org/markets-collaboration/IJT/)
