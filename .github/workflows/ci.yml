@@ -541,9 +541,9 @@ jobs:
     name: "Release2 / IJT C# Client — Unit Tests"
     runs-on: windows-latest
     needs: [changes]
-    # Always run on push to main (fast, no server needed; catches regressions from any change).
-    # Also runs when CSharp files changed (PR), on workflow_dispatch, and via path-filter.
-    if: needs.changes.outputs.csharp == 'true' || github.event_name == 'push'
+    # Runs when C# client paths or ci.yml changed (push or PR), or on manual dispatch.
+    # Nightly integration covers cross-component regressions.
+    if: needs.changes.outputs.csharp == 'true' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 20
     permissions:
       contents: read
