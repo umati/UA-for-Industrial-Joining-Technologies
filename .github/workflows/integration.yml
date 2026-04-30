@@ -544,7 +544,7 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Release2 / IJT C# Client — Live Tests (nightly, port 40464)
-  #   Mirrors ci.yml/csharp-live for nightly drift detection.
+  #   Nightly drift detection for live C# behavior outside fast CI.
   #   Non-blocking: failures are visible but do not gate merges.
   #   Port 40464 is the C# client's dedicated port — see docs/TEST_TIERS.md.
   # ───────────────────────────────────────────────────────────────────────────
@@ -603,6 +603,21 @@ jobs:
           } else {
             Write-Host "No lock files yet — using normal restore."
             dotnet restore $target
+          }
+
+      - name: Scan for Vulnerable NuGet Packages
+        shell: pwsh
+        run: |
+          $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+          $output = dotnet list $target package --vulnerable --include-transitive --no-restore 2>&1
+          $scanExit = $LASTEXITCODE
+          Write-Host $output
+          if ($output -match "has the following vulnerable packages") {
+            Write-Host "##[warning]Vulnerable NuGet packages detected (nightly scan)."
+            exit 0
+          }
+          if ($scanExit -ne 0) {
+            exit $scanExit
           }
 
       - name: Build

@@ -12,7 +12,8 @@
 #   docker-smoke         Release2 / IJT Web Client    Docker build + HTTP/WS readiness
 #   test-client          Release2 / IJT Test Client   pytest unit (tests/unit/) · Bandit · Ruff · mypy
 #   server-smoke-windows Release2 / OPC UA Server     Windows native smoke (10 checks)
-#   csharp-unit          Release2 / IJT C# Client     dotnet build · xUnit (Category!=Live) · format · vuln
+#   csharp-unit          Release2 / IJT C# Client     dotnet build · xUnit (Category!=Live) · format
+#   csharp-vuln          Release2 / IJT C# Client     NuGet vulnerability scan
 #   actionlint           GHA workflow lint             actionlint (all .github/workflows/*.yml)
 #   zizmor               GHA security audit            zizmor → SARIF upload (skipped on fork PRs)
 #   report               Combined summary (always runs after all jobs)
@@ -531,11 +532,11 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Release2 / IJT C# Client
-  #   dotnet build (warnaserror) + dotnet test (xUnit) + format check + vuln scan
+  #   dotnet build (warnaserror) + dotnet test (xUnit) + format check
   # ───────────────────────────────────────────────────────────────────────────
   # ───────────────────────────────────────────────────────────────────────────
   # Release2 / IJT C# Client — Unit Tests (no server required)
-  #   dotnet build + xUnit (Category!=Live) + format check + vuln scan
+  #   dotnet build + xUnit (Category!=Live) + format check
   # ───────────────────────────────────────────────────────────────────────────
   csharp-unit:
     name: "Release2 / IJT C# Client — Unit Tests"
@@ -551,7 +552,6 @@ jobs:
     outputs:
       build_result:  ${{ steps.build.outcome }}     # zizmor: ignore[template-injection]
       format_result: ${{ steps.format.outcome }}    # zizmor: ignore[template-injection]
-      vuln_result:   ${{ steps.vuln_scan.outcome }} # zizmor: ignore[template-injection]
       coverage_pct:  ${{ steps.coverage.outputs.pct }} # zizmor: ignore[template-injection]
     defaults:
       run:
@@ -571,7 +571,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path test-results | Out-Null
           '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests.Unit" tests="0"/></testsuites>' | Out-File test-results\tests.xml -Encoding UTF8
-          New-Item -ItemType File -Force -Path test-results\vuln-scan.txt | Out-Null
 
       - name: Cache NuGet Packages
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
@@ -591,18 +590,6 @@ jobs:
           } else {
             Write-Host "No lock files yet — using normal restore."
             dotnet restore $target
-          }
-
-      - name: Vulnerable Package Scan
-        id: vuln_scan
-        continue-on-error: true
-        run: |
-          $output = dotnet list Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj package --vulnerable --include-transitive 2>&1
-          $output | Out-File test-results\vuln-scan.txt
-          Write-Host $output
-          if ($output -match "has the following vulnerable packages") {
-            Write-Host "##[error]Vulnerable NuGet packages detected — see vuln-scan.txt"
-            exit 1
           }
 
       - name: Build (zero warnings)
@@ -709,19 +696,16 @@ jobs:
         if: always() && (
           steps.build.outcome     == 'failure' ||
           steps.tests.outcome     == 'failure' ||
-          steps.format.outcome    == 'failure' ||
-          steps.vuln_scan.outcome == 'failure')
+          steps.format.outcome    == 'failure')
         env:
           BUILD_OUTCOME:     ${{ steps.build.outcome }}
           TESTS_OUTCOME:     ${{ steps.tests.outcome }}
           FORMAT_OUTCOME:    ${{ steps.format.outcome }}
-          VULN_SCAN_OUTCOME: ${{ steps.vuln_scan.outcome }}
         run: |
           echo "One or more C# unit checks failed:"
           echo "  build     -> $BUILD_OUTCOME"
           echo "  tests     -> $TESTS_OUTCOME"
           echo "  format    -> $FORMAT_OUTCOME"
-          echo "  vuln scan -> $VULN_SCAN_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -914,7 +898,7 @@ jobs:
     name: "📋 Test Report"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [changes, web-client, console-client, node-client, docker-smoke, csharp-unit, test-client, server-smoke-windows, actionlint, zizmor]
+    needs: [changes, web-client, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor]
     if: always()
     permissions:
       contents: read
@@ -1019,6 +1003,7 @@ jobs:
           NODE_RESULT:     ${{ needs.node-client.result }}
           DOCKER_RESULT:   ${{ needs.docker-smoke.result }}
           CS_UNIT_RESULT:  ${{ needs.csharp-unit.result }}
+          CS_VULN_RESULT:  ${{ needs.csharp-vuln.result }}
           TC_RESULT:       ${{ needs.test-client.result }}
           SS_WIN_RESULT:   ${{ needs.server-smoke-windows.result }}
           AL_RESULT:       ${{ needs.actionlint.result }}
@@ -1032,7 +1017,7 @@ jobs:
           NODE_ESLINT:     ${{ needs.node-client.outputs.eslint_result }}
           CS_BUILD:        ${{ needs.csharp-unit.outputs.build_result }}
           CS_FORMAT:       ${{ needs.csharp-unit.outputs.format_result }}
-          CS_VULN:         ${{ needs.csharp-unit.outputs.vuln_result }}
+          CS_VULN:         ${{ needs.csharp-vuln.result }}
           TC_RUFF:         ${{ needs.test-client.outputs.ruff_result }}
           TC_MYPY:         ${{ needs.test-client.outputs.mypy_result }}
           # ── Commit context ─────────────────────────────────────
@@ -1214,6 +1199,7 @@ jobs:
           nod_r    = E("NODE_RESULT",    "unknown")
           dck_r    = E("DOCKER_RESULT",  "unknown")
           cs_u_r   = E("CS_UNIT_RESULT", "unknown")
+          cs_v_r   = E("CS_VULN_RESULT", "unknown")
           tc_r     = E("TC_RESULT",      "unknown")
           ss_r     = E("SS_WIN_RESULT",  "unknown")
           al_r     = E("AL_RESULT",      "unknown")
@@ -1297,7 +1283,7 @@ jobs:
 
           # ── Overall status ────────────────────────────────────────────────────
 
-          all_jobs = [web_r, con_r, nod_r, dck_r, cs_u_r, tc_r, ss_r, al_r, zz_r]
+          all_jobs = [web_r, con_r, nod_r, dck_r, cs_u_r, cs_v_r, tc_r, ss_r, al_r, zz_r]
           n_pass  = sum(1 for r in all_jobs if r == "success")
           n_fail  = sum(1 for r in all_jobs if r == "failure")
           n_total = len(all_jobs)
@@ -1480,6 +1466,58 @@ jobs:
           inputs: .github/workflows/
 
   # ───────────────────────────────────────────────────────────────────────────
+  # C# NuGet Vulnerability Scan — lightweight path-filtered gate.
+  #   Runs when C# paths change (catches vuln deps introduced in PRs),
+  #   or on manual dispatch. Nightly drift is covered by integration.yml.
+  #   No build needed — just restore + scan.
+  # ───────────────────────────────────────────────────────────────────────────
+  csharp-vuln:
+    name: "Release2 / IJT C# Client — NuGet Vuln Scan"
+    runs-on: windows-latest
+    needs: [changes]
+    if: needs.changes.outputs.csharp == 'true' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7  # v5
+        with:
+          dotnet-version: "10.x"
+
+      - name: Cache NuGet Packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore NuGet Packages
+        shell: pwsh
+        run: |
+          $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+          dotnet restore $target --locked-mode
+
+      - name: Scan for Vulnerable Packages
+        shell: pwsh
+        run: |
+          $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+          $output = dotnet list $target package --vulnerable --include-transitive --no-restore 2>&1
+          Write-Host $output
+          if ($output -match "has the following vulnerable packages") {
+            Write-Host "##[error]Vulnerable NuGet packages detected."
+            exit 1
+          }
+
+  # ───────────────────────────────────────────────────────────────────────────
   # CodeQL Analysis — handled by the dedicated .github/workflows/codeql.yml
   # workflow (Advanced Setup). GitHub Default Setup was disabled in repo
   # Settings → Security → Code scanning to avoid duplicate SARIF uploads.
@@ -1488,7 +1526,7 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   # Branch-protection aggregator — converts path-filtered "skipped" jobs to
   # "success" so the branch protection rule can check a single status name
-  # instead of tracking all 9 individual jobs.
+  # instead of tracking all 10 individual jobs.
   #
   # Rule: configure branch protection to require only "All checks passed".
   # "skipped" is treated as success (path filter didn't touch that component).
@@ -1496,7 +1534,7 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   all-required:
     name: "All checks passed"
-    needs: [web-client, console-client, node-client, docker-smoke, csharp-unit, test-client, server-smoke-windows, actionlint, zizmor]
+    needs: [web-client, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -1508,6 +1546,7 @@ jobs:
             ${{ needs.node-client.result }}
             ${{ needs.docker-smoke.result }}
             ${{ needs.csharp-unit.result }}
+            ${{ needs.csharp-vuln.result }}
             ${{ needs.test-client.result }}
             ${{ needs.server-smoke-windows.result }}
             ${{ needs.actionlint.result }}

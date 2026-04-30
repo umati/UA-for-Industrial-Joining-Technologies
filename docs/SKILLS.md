@@ -341,8 +341,8 @@ UA-for-Industrial-Joining-Technologies/
 | `console-client` | Python unit tests (`tests/unit/`), Bandit, Ruff, mypy |
 | `node-client` | JS unit tests, ESLint, npm audit |
 | `test-client` | pytest unit tests (`tests/unit/`) + Bandit, Ruff, mypy |
-| `csharp-unit` | dotnet restore (locked mode) + build (`-warnaserror`) + NuGet CVE scan + xUnit unit tests (`Category!=Live`, `--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
-| `csharp-live` | xUnit live tests (`Category=Live`, 110 tests) against server on port 40464 via `scripts/start_server_on_port.py` |
+| `csharp-unit` | dotnet restore (locked mode) + build (`-warnaserror`) + xUnit unit tests (`Category!=Live`, `--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
+| `csharp-vuln` | NuGet vulnerability scan (`--vulnerable --include-transitive`); fails on known CVEs |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
 | `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |
 
@@ -363,7 +363,7 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | Job | Workflow | Port | Protocol |
 |-----|----------|------|----------|
 | `csharp-unit` | `ci.yml` | — | No server (unit tests only) |
-| `csharp-live` | `ci.yml` | **40464** | Windows native EXE |
+| `csharp-vuln` | `ci.yml` | — | No server (NuGet scan only) |
 | `server-smoke-windows` | `ci.yml` | 40451 | Windows native EXE (server self-test) |
 | `server-smoke-docker` | `integration.yml` | 40451 | Docker Linux (server self-test) |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
