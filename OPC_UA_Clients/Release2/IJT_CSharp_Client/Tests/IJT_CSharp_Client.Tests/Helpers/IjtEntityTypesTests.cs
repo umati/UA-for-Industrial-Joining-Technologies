@@ -6,30 +6,30 @@ using Xunit;
 namespace IJT_CSharp_Client.Tests.Helpers;
 
 /// <summary>
-/// Unit tests for <see cref="IjtEntityTypes"/> — authoritative 42-value EntityType lookup.
-/// Source: OPC 40450-1 Table 211, verified against server common_system_data_t.h.
+/// Unit tests for <see cref="IjtEntityTypes"/> — authoritative EntityType lookup.
+/// Source: OPC 40450-1 Section 10.10 / Table 226.
 /// </summary>
 public class IjtEntityTypesTests
 {
     // ── Names dictionary ──────────────────────────────────────────────────────
 
     [Fact]
-    public void Names_Contains42Entries()
+    public void Names_Contains43Entries()
     {
-        Assert.Equal(42, IjtEntityTypes.Names.Count);
+        Assert.Equal(43, IjtEntityTypes.Names.Count);
     }
 
     [Fact]
-    public void Names_StartsAt0_EndsAt41()
+    public void Names_StartsAt0_EndsAt42()
     {
         Assert.True(IjtEntityTypes.Names.ContainsKey(0));
-        Assert.True(IjtEntityTypes.Names.ContainsKey(41));
+        Assert.True(IjtEntityTypes.Names.ContainsKey(42));
     }
 
     [Fact]
-    public void Names_AllKeysAreContiguous_0Through41()
+    public void Names_AllKeysAreContiguous_0Through42()
     {
-        for (short i = 0; i <= 41; i++)
+        for (short i = 0; i <= 42; i++)
             Assert.True(IjtEntityTypes.Names.ContainsKey(i), $"Missing EntityType key: {i}");
     }
 
@@ -41,7 +41,7 @@ public class IjtEntityTypesTests
                 $"EntityType {kv.Key} has null/empty name");
     }
 
-    // ── Spec-mandated values (OPC 40450-1 Table 211) ─────────────────────────
+    // ── Spec-mandated values (OPC 40450-1 Section 10.10 / Table 226) ─────────
 
     [Theory]
     [InlineData(0, "UNDEFINED")]
@@ -86,6 +86,7 @@ public class IjtEntityTypesTests
     [InlineData(39, "USER_TYPE")]
     [InlineData(40, "PARENT_TYPE")]
     [InlineData(41, "VIRTUAL_STATION")]
+    [InlineData(42, "JOINT_COMPONENT")]
     public void Names_SpecMandatedValue_IsCorrect(short value, string expectedName)
     {
         Assert.Equal(expectedName, IjtEntityTypes.Names[value]);
@@ -98,6 +99,7 @@ public class IjtEntityTypesTests
     [InlineData(1, "OTHER")]
     [InlineData(20, "VEHICLE")]
     [InlineData(41, "VIRTUAL_STATION")]
+    [InlineData(42, "JOINT_COMPONENT")]
     public void Resolve_KnownValue_ReturnsExpectedName(short value, string expectedName)
     {
         Assert.Equal(expectedName, IjtEntityTypes.Resolve(value));
@@ -105,7 +107,6 @@ public class IjtEntityTypesTests
 
     [Theory]
     [InlineData(-1)]
-    [InlineData(42)]
     [InlineData(100)]
     [InlineData(short.MaxValue)]
     [InlineData(short.MinValue)]
@@ -119,7 +120,7 @@ public class IjtEntityTypesTests
     [Fact]
     public void Resolve_AllSpecValues_NeverReturnsVendorSpecific()
     {
-        for (short i = 0; i <= 41; i++)
+        for (short i = 0; i <= 42; i++)
         {
             var result = IjtEntityTypes.Resolve(i);
             Assert.DoesNotContain("VENDOR_SPECIFIC", result);
@@ -165,6 +166,7 @@ public class IjtEntityTypesTests
         Assert.Contains("UNDEFINED", output);
         Assert.Contains("VEHICLE", output);
         Assert.Contains("VIRTUAL_STATION", output);
+        Assert.Contains("JOINT_COMPONENT", output);
         Assert.Contains("JOINING_PROCESS", output);
     }
 }

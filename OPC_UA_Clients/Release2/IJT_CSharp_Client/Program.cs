@@ -699,7 +699,7 @@ static void PrintCommandUsage(string cmd)
                 "SendIdentifiers",
                 "Calls AssetManagement/MethodSet/SendIdentifiers. " +
                 "Sends structured EntityDataType identifiers. " +
-                "Prompts per entity: EntityId, EntityType (0-41), Name, Description, EntityOriginId, IsExternal.",
+                "Prompts per entity: EntityId, EntityType (0-42 spec-defined), Name, Description, EntityOriginId, IsExternal.",
                 ["ProductInstanceUri: String", "EntityList: EntityDataType[] (1-10 entries)"],
                 ["Status", "StatusMessage"]);
             break;

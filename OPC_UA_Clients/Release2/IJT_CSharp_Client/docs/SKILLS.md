@@ -73,7 +73,7 @@ IJT_CSharp_Client/
 │   ├── IjtMenuHelper.cs         # Prompt helpers, max-length enforcement
 │   ├── IjtStatusHelper.cs       # OPC UA status code → hex + human-readable text
 │   ├── IjtJsonSerializer.cs     # Method output pretty-printer
-│   ├── IjtEntityTypes.cs        # EntityType 42-value lookup (0=UNDEFINED..41=VIRTUAL_STATION) + PrintTable()
+│   ├── IjtEntityTypes.cs        # EntityType lookup; spec-defined values include 0..42 (42=JOINT_COMPONENT) + PrintTable()
 │   ├── IjtResultFormatter.cs    # Result payload formatter (decodes JoiningResultDataType from ResultContent)
 │   ├── IjtEventFormatter.cs     # Event payload formatter (uses CurrentValue for ReportedValues)
 │   ├── IjtFileLogger.cs         # Log file writer (results, events, joining process, joints, entity list, io signals, assets)
@@ -168,14 +168,14 @@ All auto-generated IJT data types (`EntityDataType`, `JoiningProcessIdentificati
 
 ```csharp
 // CORRECT — factory sets EncodingMask automatically
-var entity = EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false);
+var entity = EntityDataType.Create("ENT-001", entityType: 29, name: "Batch-A", isExternal: false);
 
 var jpId = JoiningProcessIdentificationDataType.Create(joiningProcessId: "JP-007");
 
 var joint = JointDataType.Create(jointId: "JNT-001", jointDesignId: "DESIGN-42", name: "Flange bolt");
 
 // WRONG — Name and IsExternal silently omitted; server gets null/default
-var bad = new EntityDataType { EntityId = "ENT-001", Name = "Batch-A", EntityType = 1 };
+var bad = new EntityDataType { EntityId = "ENT-001", Name = "Batch-A", EntityType = 29 };
 ```
 
 **Factories**: `EntityDataType.Create(entityId, entityType, name?, description?, entityOriginId?, isExternal?)` — null/absent parameters excluded from mask.

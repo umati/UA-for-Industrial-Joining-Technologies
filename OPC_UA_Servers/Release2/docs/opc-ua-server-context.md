@@ -80,8 +80,10 @@ Objects/
     │   │   ├── Result            (live/latest, updated on every tightening)
     │   │   └── RequestedResult   (stored/historical, updated only by RequestResults)
     │   ├── GetLatestResult(Timeout: Int32) → [ResultHandle, Result, Error]     ← Timeout REQUIRED
-    │   ├── GetResultById(ResultId: NormalizedString, Timeout: Int32) → [ResultHandle, Result, Error]
-    │   ├── GetResultIdListFiltered(...)    ← optional/profile-dependent; returns BadNotImplemented on this server
+    │   ├── GetResultById(ResultId: TrimmedString, Timeout: Int32) → [ResultHandle, Result, Error]
+    │   ├── GetResultIdListFiltered(Filter: ContentFilter, OrderedBy: RelativePath[],
+    │   │   MaxResults: UInt32, Timeout: Int32) → [ResultHandle, ResultIdList, Error]
+    │   │   ← optional/profile-dependent; returns BadNotImplemented on this server
     │   ├── ReleaseResultHandle(...)        ← NOT IMPLEMENTED (expected reject/absent)
     │   ├── AcknowledgeResults(...)         ← NOT IMPLEMENTED (expected reject/absent)
     │   ├── RequestUnacknowledgedResults(...) ← NOT IMPLEMENTED (expected reject/absent)

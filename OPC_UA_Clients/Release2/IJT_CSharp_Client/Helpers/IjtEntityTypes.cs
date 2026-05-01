@@ -3,9 +3,8 @@
 namespace IJT_CSharp_Client.Helpers;
 
 /// <summary>
-/// EntityType values defined in the IJT Base specification (OPC 40450-1, Table 211).
-/// Source: common_system_data_t.h (server) and entity-data-type.mjs (web client).
-/// Values are Int16 - 0 to 41 are spec-defined; negative values are vendor-specific.
+/// EntityType values defined in the IJT Base specification (OPC 40450-1, Section 10.10 / Table 226).
+/// Values are Int16 - 0 to 42 are spec-defined; negative values are vendor-specific.
 /// </summary>
 public static class IjtEntityTypes
 {
@@ -55,6 +54,7 @@ public static class IjtEntityTypes
             [39] = "USER_TYPE",
             [40] = "PARENT_TYPE",
             [41] = "VIRTUAL_STATION",
+            [42] = "JOINT_COMPONENT",
         };
 
     /// <summary>Returns the name for a given EntityType value, or the numeric string if unknown.</summary>
@@ -84,6 +84,6 @@ public static class IjtEntityTypes
             }
             Console.WriteLine();
         }
-        Console.WriteLine("  (negative values = vendor-specific)");
+        Console.WriteLine("  (values outside 0..42 = vendor-specific/reserved)");
     }
 }

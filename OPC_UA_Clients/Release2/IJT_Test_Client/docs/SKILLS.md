@@ -110,7 +110,7 @@ Objects/
     ├── ResultManagement        (Machinery/Result ns)
     │   ├── Results/
     │   ├── GetLatestResult(Timeout: Int32)        ← Timeout is REQUIRED
-    │   ├── GetResultById(ResultId: NormalizedString, Timeout: Int32)
+    │   ├── GetResultById(ResultId: TrimmedString, Timeout: Int32)
     │   ├── GetResultIdListFiltered(...)            ← optional/profile-dependent; presence checked by Executable
     │   ├── ReleaseResultHandle(...)                ← unsupported in this profile
     │   ├── AcknowledgeResults(...)                 ← unsupported in this profile
@@ -407,7 +407,7 @@ Methods that require this: `IncrementJoiningProcessCounter`, `DecrementJoiningPr
 
 ### EntityType Enum — v100 Values (CRITICAL)
 
-The `EntityType` field in `AssociatedEntityDataType` uses **v100 values (0–42)**. Old v1.01 values (PROGRAM=1, BATCH=3) are completely wrong.
+The `EntityType` field in `EntityDataType` entries inside `AssociatedEntities[]` uses **v100 values (0–42)**. Old v1.01 values (PROGRAM=1, BATCH=3) are completely wrong.
 
 | Value | Constant | Used for |
 |-------|----------|---------|
@@ -532,8 +532,8 @@ is populated only when `RequestResults` or `RequestUnacknowledgedResults` is cal
 
 ```
 GetLatestResult(Timeout: Int32) → [ResultHandle: UInt32, Result: ResultDataType, Error: Int32]
-GetResultById(ResultId: NormalizedString, Timeout: Int32) → [ResultHandle: UInt32, Result: ResultDataType, Error: Int32]
-GetResultIdListFiltered(Filter: Structure, OrderedBy: Enumeration[], MaxResults: UInt32, Timeout: Int32) → [ResultHandle, ResultIdList[], Error]
+GetResultById(ResultId: TrimmedString, Timeout: Int32) → [ResultHandle: UInt32, Result: ResultDataType, Error: Int32]
+GetResultIdListFiltered(Filter: ContentFilter, OrderedBy: RelativePath[], MaxResults: UInt32, Timeout: Int32) → [ResultHandle: UInt32, ResultIdList: TrimmedString[], Error: Int32]
 ```
 
 These come from **Machinery/Result** (NS_MACH_RESULT), NOT from IJT Base. They have **no ProductInstanceUri argument**.
