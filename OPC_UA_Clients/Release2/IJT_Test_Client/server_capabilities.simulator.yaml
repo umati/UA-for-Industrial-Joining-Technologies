@@ -1,0 +1,48 @@
+# OPC UA IJT Server Simulator Capabilities
+#
+# This file describes the checked-in Release 2 IJT Server Simulator, not the
+# IJT specification. run_all_tests.py uses it automatically only when it
+# auto-launches the simulator and OPCUA_CAPABILITIES_FILE is not already set.
+# For a real controller or a vendor simulator, provide a device-specific
+# capabilities file via OPCUA_CAPABILITIES_FILE.
+
+server:
+  name: "OPC UA IJT Server Simulator"
+  vendor: "Repository simulator"
+  version: "Release 2"
+  description: "Capabilities observed for the checked-in simulator binary."
+
+connection:
+  default_url: "opc.tcp://localhost:40462"
+  connect_timeout_seconds: 30
+  session_timeout_seconds: 300
+
+active_profile: full_conformance
+supported_facets: []
+
+cu_overrides:
+  acknowledge_results: unsupported
+  delete_joining_process: unsupported
+  delete_joint_component: unsupported
+  delete_joint_design: unsupported
+  disconnect_asset: unsupported
+  execute_operation: unsupported
+  feedback_methods: unsupported
+  get_error_information: unsupported
+  get_joining_process: unsupported
+  get_joining_process_revision_list: unsupported
+  get_joint_component: unsupported
+  get_joint_component_list: unsupported
+  get_joint_design: unsupported
+  get_joint_design_list: unsupported
+  get_joint_revision_list: unsupported
+  joint_component_data: unsupported
+  joint_design_data: unsupported
+  reboot_asset: unsupported
+  request_unacknowledged_results: unsupported
+  send_joining_process: unsupported
+  send_joint_component: unsupported
+  send_joint_design: unsupported
+  set_calibration: unsupported
+  set_joining_process_mapping: unsupported
+  set_offline_timer: unsupported

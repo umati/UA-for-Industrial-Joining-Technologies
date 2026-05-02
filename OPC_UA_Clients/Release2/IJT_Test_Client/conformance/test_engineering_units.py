@@ -15,8 +15,10 @@ import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
-from helpers.namespaces import ResultType
-from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.method_caller import call_method
+from helpers.method_signature import JOINT_METHOD_INPUTS, assert_input_argument_names
+from helpers.namespaces import NS_APP, NS_DI, NS_IJT_BASE, ResultType
+from helpers.node_discovery import find_child_by_browse_name, find_joining_system, read_tool_product_instance_uri
 from helpers.result_collector import ResultCollector
 from helpers.result_validator import (
     ResultValueValidator,
@@ -69,10 +71,10 @@ _KNOWN_ANGLE_EU_IDENTIFIERS: frozenset[int] = frozenset(
 # ---------------------------------------------------------------------------
 
 
-async def _trigger_and_get_result(subscription_client, result_trigger, ns_indices, result_type):
+async def _trigger_and_get_result(subscription_client, result_trigger, ns_indices, result_type, include_traces=False):
     """Trigger a result and collect it via IJTResultEventType events."""
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
-        outcome = await result_trigger.trigger_single(result_type, include_traces=False)
+        outcome = await result_trigger.trigger_single(result_type, include_traces=include_traces)
         if not outcome.triggered and result_trigger.is_simulator:
             return None
         return await rc.collect_single()
@@ -423,7 +425,11 @@ async def test_engineering_units_are_consistent_within_same_physical_quantity(
 async def test_trace_content_data_type_has_engineering_units(subscription_client, result_trigger, ns_indices):
     """Every TraceContentDataType in a multi-step result must carry EngineeringUnits with UnitId and NamespaceUri."""
     result_data = await _trigger_and_get_result(
-        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
+        subscription_client,
+        result_trigger,
+        ns_indices,
+        ResultType.MULTI_STEP_OK_RESULT,
+        include_traces=True,
     )
     if result_data is None:
         pytest.skip("Could not retrieve multi-step result for trace content EU check")
@@ -505,7 +511,8 @@ async def test_reported_value_data_type_in_event_has_engineering_units(subscript
                     reported_values.extend(_unwrap_variant(v) for v in vals)
 
     if not reported_values:
-        pytest.skip("No ReportedValueDataType entries found in result — EU check skipped")
+        logger.info("No ReportedValueDataType entries found in result — optional field absent")
+        return
 
     failures: list[str] = []
     for idx, rv in enumerate(reported_values):
@@ -523,11 +530,10 @@ async def test_reported_value_data_type_in_event_has_engineering_units(subscript
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
 async def test_design_value_data_type_has_engineering_units(opcua_client, ns_indices):
     """Every DesignValueDataType in a joint design must carry EngineeringUnits with a valid UnitId."""
-    ns_ijt = None
-    for key, val in ns_indices.items():
-        if "IJT" in str(key) or "ijt" in str(key).lower():
-            ns_ijt = val
-            break
+    ns_di = ns_indices.get(NS_DI)
+    if ns_di is None:
+        pytest.skip("DI namespace not registered on server")
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
 
@@ -542,11 +548,25 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
     list_node = await find_child_by_browse_name(jm, "GetJointDesignList", ns_ijt)
     if list_node is None:
         pytest.skip("GetJointDesignList: Not Supported — cannot retrieve designs")
+    await assert_input_argument_names(
+        list_node,
+        JOINT_METHOD_INPUTS["GetJointDesignList"],
+        method_name="GetJointDesignList",
+    )
 
-    try:
-        design_list = await jm.call_method(list_node.nodeid)
-    except ua.UaError as exc:
-        pytest.skip(f"GetJointDesignList not callable: {exc}")
+    piu = await read_tool_product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
+    list_result = await call_method(
+        jm,
+        list_node,
+        ua.Variant(piu or "", ua.VariantType.String),
+        timeout=15.0,
+        method_name="GetJointDesignList",
+    )
+    if not list_result.success:
+        pytest.skip(f"GetJointDesignList not callable: {list_result.error}")
+
+    outputs = list_result.output_list
+    design_list = outputs[0] if outputs and isinstance(outputs[0], (list, tuple)) else outputs
 
     if not design_list:
         pytest.skip("No joint designs on server — design value EU check skipped")
@@ -555,11 +575,23 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
     get_node = await find_child_by_browse_name(jm, "GetJointDesign", ns_ijt)
     if get_node is None:
         pytest.skip("GetJointDesign: Not Supported — cannot retrieve design data")
+    await assert_input_argument_names(
+        get_node,
+        JOINT_METHOD_INPUTS["GetJointDesign"],
+        method_name="GetJointDesign",
+    )
 
-    try:
-        design_data = await jm.call_method(get_node.nodeid, ua.Variant(first_id, ua.VariantType.String))
-    except ua.UaError as exc:
-        pytest.skip(f"GetJointDesign not callable: {exc}")
+    get_result = await call_method(
+        jm,
+        get_node,
+        ua.Variant(piu or "", ua.VariantType.String),
+        ua.Variant(first_id, ua.VariantType.String),
+        timeout=15.0,
+        method_name="GetJointDesign",
+    )
+    if not get_result.success:
+        pytest.skip(f"GetJointDesign not callable: {get_result.error}")
+    design_data = get_result.output_list[0] if get_result.output_list else None
 
     if design_data is None:
         pytest.skip("GetJointDesign returned None — skipping design value EU check")
@@ -584,74 +616,6 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
             failures.append(f"DesignValue[{idx}].EngineeringUnits.UnitId is None")
 
     assert not failures, "DesignValue EngineeringUnits failures:\n  " + "\n  ".join(failures)
-
-
-@pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
-async def test_joining_data_variable_type_variables_have_engineering_units_property(opcua_client, ns_indices):
-    """Variables with JoiningDataVariableType must expose an EngineeringUnits Property child."""
-    ns_ijt = None
-    for key, val in ns_indices.items():
-        if "IJT" in str(key) or "ijt" in str(key).lower():
-            ns_ijt = val
-            break
-    if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered on server")
-
-    js = await find_joining_system(opcua_client)
-    if js is None:
-        pytest.skip("JoiningSystem not found — server may not be running")
-
-    try:
-        children = await js.get_children()
-    except ua.UaError as exc:
-        pytest.skip(f"Cannot browse JoiningSystem children: {exc}")
-
-    variables_checked = 0
-    variables_with_eu = 0
-    failures: list[str] = []
-
-    for child in children:
-        try:
-            node_class = await child.read_node_class()
-        except ua.UaError:
-            continue
-        if node_class != ua.NodeClass.Variable:
-            continue
-
-        try:
-            refs = await child.get_references(refs=ua.ObjectIds.HasTypeDefinition)
-        except ua.UaError:
-            continue
-
-        is_joining_data_var = any(
-            "JoiningDataVariable" in str(ref.BrowseName) or ref.NodeId.NamespaceIndex == ns_ijt for ref in refs
-        )
-        if not is_joining_data_var:
-            continue
-
-        variables_checked += 1
-        try:
-            eu_node = await find_child_by_browse_name(child, "EngineeringUnits", ns_ijt)
-            if eu_node is None:
-                eu_node = await find_child_by_browse_name(child, "EngineeringUnits", 0)
-        except ua.UaError:
-            eu_node = None
-
-        if eu_node is not None:
-            variables_with_eu += 1
-            logger.info("JoiningDataVariableType variable has EngineeringUnits Property")
-        else:
-            logger.info("JoiningDataVariableType variable has no EngineeringUnits Property (optional)")
-
-    if variables_checked == 0:
-        pytest.skip("No JoiningDataVariableType variables found on JoiningSystem — structural EU check skipped")
-
-    assert not failures, "JoiningDataVariableType EU Property failures:\n  " + "\n  ".join(failures)
-    logger.info(
-        "Checked %d JoiningDataVariableType variable(s); %d have EngineeringUnits Property",
-        variables_checked,
-        variables_with_eu,
-    )
 
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)

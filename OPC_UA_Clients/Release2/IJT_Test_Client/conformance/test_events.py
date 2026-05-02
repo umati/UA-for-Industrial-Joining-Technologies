@@ -187,20 +187,13 @@ def _unwrap_variant(value):
     return getattr(value, "Value", value)
 
 
-def _joining_technology_to_int_or_none(value):
-    """Best-effort conversion of JoiningTechnology payload to enum int when possible."""
+def _joining_technology_text_or_none(value):
+    """Return JoiningTechnology text when the payload is LocalizedText/string."""
     if value is None:
         return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        pass
-
-    # Some servers expose JoiningTechnology as LocalizedText/Text (e.g. "Tightening")
-    text = getattr(value, "Text", None)
-    if text is not None:
-        return None
-
+    text = getattr(value, "Text", value)
+    if isinstance(text, str) and text.strip():
+        return text.strip()
     return None
 
 
@@ -318,7 +311,7 @@ async def test_joining_system_event_has_joining_technology(
 ):
     """
     JoiningSystemEventType events must carry a JoiningTechnology field whose
-    value is in the valid JoiningTechnologyEnumeration range.
+    value is LocalizedText/string per the current IJT Base NodeSet.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_events_after_trigger(
@@ -333,15 +326,8 @@ async def test_joining_system_event_has_joining_technology(
     tech = _event_payload_field(event, "JoiningTechnology")
     if tech is None:
         pytest.skip("JoiningTechnology field absent — server may not populate it for this event type")
-    tech_int = _joining_technology_to_int_or_none(tech)
-    if tech_int is not None:
-        assert 0 <= tech_int <= 7, f"JoiningTechnology must be in the valid enum range, got {tech_int}"
-        return
-
-    tech_text = getattr(tech, "Text", tech)
-    assert isinstance(tech_text, str) and tech_text.strip(), (
-        f"JoiningTechnology must be either valid enum int or non-empty text, got {tech!r}"
-    )
+    tech_text = _joining_technology_text_or_none(tech)
+    assert tech_text is not None, f"JoiningTechnology must be non-empty LocalizedText/string, got {tech!r}"
 
 
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD)
@@ -809,7 +795,8 @@ async def test_general_event_reported_values_are_valid_when_present(
     event = events[0]
     reported_values = _event_payload_field(event, "ReportedValues")
     if reported_values is None:
-        pytest.skip("ReportedValues not present in this event — nothing to validate")
+        logger.info("ReportedValues not present in this event — optional payload absent")
+        return
     assert isinstance(reported_values, (list, tuple)), (
         f"ReportedValues must be a list, got {type(reported_values).__name__}"
     )
@@ -1094,8 +1081,8 @@ async def test_asset_connection_event_joining_technology_is_nonzero(
     subscription_client, opcua_client, event_trigger, ns_indices
 ):
     """
-    JoiningTechnology in an asset connection event must be non-zero; the value
-    UNDEFINED (0) is invalid for a real connected asset.
+    JoiningTechnology in an asset connection event must be non-empty
+    LocalizedText/string.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_events_after_trigger(
@@ -1111,15 +1098,8 @@ async def test_asset_connection_event_joining_technology_is_nonzero(
     if joining_tech is None:
         pytest.skip("JoiningTechnology absent in TOOL_CONNECTED event — may be nested inside JoiningSystemEventContent")
 
-    jt_int = _joining_technology_to_int_or_none(joining_tech)
-    if jt_int is not None:
-        assert jt_int != 0, f"JoiningTechnology must be non-zero (UNDEFINED=0 is invalid), got {jt_int}"
-        return
-
-    jt_text = getattr(joining_tech, "Text", joining_tech)
-    assert isinstance(jt_text, str) and jt_text.strip(), (
-        f"JoiningTechnology text must be non-empty when provided as LocalizedText/string, got {joining_tech!r}"
-    )
+    jt_text = _joining_technology_text_or_none(joining_tech)
+    assert jt_text is not None, f"JoiningTechnology must be non-empty LocalizedText/string, got {joining_tech!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -1272,8 +1252,8 @@ async def test_associated_entity_type_is_valid_non_negative(
     subscription_client, opcua_client, event_trigger, ns_indices
 ):
     """
-    EntityType in each AssociatedEntityDataType must be a non-negative integer
-    matching a valid EntityTypeEnumeration value.
+    EntityType in each AssociatedEntityDataType must be an integer matching the
+    current EntityTypeEnumeration range {0..42}.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_events_after_trigger(
@@ -1296,7 +1276,7 @@ async def test_associated_entity_type_is_valid_non_negative(
         assert isinstance(entity_type, int), (
             f"AssociatedEntities[{i}].EntityType must be an integer (enum), got {type(entity_type).__name__}"
         )
-        assert entity_type >= 0, f"AssociatedEntities[{i}].EntityType must be non-negative, got {entity_type}"
+        assert 0 <= entity_type <= 42, f"AssociatedEntities[{i}].EntityType must be in range 0..42, got {entity_type}"
 
 
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD_ASSOCIATED_ENTITIES)
@@ -1360,11 +1340,12 @@ async def test_reported_value_has_mandatory_fields(subscription_client, opcua_cl
 
 
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD_REPORTED_VALUES)
-async def test_reported_value_current_value_is_numeric(subscription_client, opcua_client, event_trigger, ns_indices):
+async def test_reported_value_current_value_is_present_variant(
+    subscription_client, opcua_client, event_trigger, ns_indices
+):
     """
-    CurrentValue in each ReportedValueDataType should be a numeric Python type
-    (float or int) when the entry has a PhysicalQuantity (representing Double on
-    the OPC UA wire). Entries without a numeric CurrentValue are skipped.
+    CurrentValue in each ReportedValueDataType is a mandatory Variant. It may
+    contain any scalar value, but it must be present and non-None.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_events_after_trigger(
@@ -1382,13 +1363,7 @@ async def test_reported_value_current_value_is_numeric(subscription_client, opcu
     for i, entry in enumerate(reported_values):
         entry = _unwrap_variant(entry)
         current = getattr(entry, "CurrentValue", None)
-        if current is None:
-            continue
-        if not isinstance(current, (int, float)):
-            continue  # CurrentValue can be any type (String, DateTime, etc.) per spec
-        assert isinstance(current, (int, float)), (
-            f"ReportedValues[{i}].CurrentValue must be numeric (Double/Float), got {type(current).__name__}"
-        )
+        assert current is not None, f"ReportedValues[{i}].CurrentValue must not be None"
 
 
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD_REPORTED_VALUES)

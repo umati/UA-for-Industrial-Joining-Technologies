@@ -43,6 +43,7 @@ from helpers.identifier_utils import (
     read_required_product_instance_uri as _read_required_product_instance_uri,
 )
 from helpers.method_caller import find_and_call_method
+from helpers.method_signature import ASSET_MANAGEMENT_METHOD_INPUTS, assert_input_argument_names
 from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, ResultType
 from helpers.node_discovery import (
     find_child_by_browse_name,
@@ -56,6 +57,11 @@ logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
 
 _METHOD_TIMEOUT = 15
+
+
+def _is_domain_rejection(err_str: str) -> bool:
+    """Return True for IJT Section 7.4 domain rejection responses."""
+    return "Uncertain" in err_str
 
 
 def _identifier_list_arg(*identifiers: str) -> ua.Variant:
@@ -157,6 +163,11 @@ async def test_send_identifiers_method_present_and_browsable(asset_management, n
         )
     method = await find_child_by_browse_name(ms, BN.SEND_IDENTIFIERS, ns_ijt)
     assert method is not None, f"SendIdentifiers method (ns_ijt={ns_ijt}) not found in AssetManagement MethodSet"
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.SEND_IDENTIFIERS],
+        method_name=BN.SEND_IDENTIFIERS,
+    )
 
 
 @pytest.mark.requires_cu(CU.SEND_IDENTIFIERS)
@@ -173,6 +184,11 @@ async def test_send_text_identifiers_method_present_and_browsable(asset_manageme
         )
     method = await find_child_by_browse_name(ms, BN.SEND_TEXT_IDENTIFIERS, ns_ijt)
     assert method is not None, f"SendTextIdentifiers method (ns_ijt={ns_ijt}) not found in AssetManagement MethodSet"
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.SEND_TEXT_IDENTIFIERS],
+        method_name=BN.SEND_TEXT_IDENTIFIERS,
+    )
 
 
 # ─── get_identifiers — structure ──────────────────────────────────────────────
@@ -192,6 +208,11 @@ async def test_get_identifiers_method_present(asset_management, ns_indices):
         )
     method = await find_child_by_browse_name(ms, BN.GET_IDENTIFIERS, ns_ijt)
     assert method is not None, f"GetIdentifiers method (ns_ijt={ns_ijt}) not found in AssetManagement MethodSet"
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.GET_IDENTIFIERS],
+        method_name=BN.GET_IDENTIFIERS,
+    )
 
 
 # ─── reset_identifiers — structure ────────────────────────────────────────────
@@ -211,6 +232,11 @@ async def test_reset_identifiers_method_present(asset_management, ns_indices):
         )
     method = await find_child_by_browse_name(ms, BN.RESET_IDENTIFIERS, ns_ijt)
     assert method is not None, f"ResetIdentifiers method (ns_ijt={ns_ijt}) not found in AssetManagement MethodSet"
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.RESET_IDENTIFIERS],
+        method_name=BN.RESET_IDENTIFIERS,
+    )
 
 
 # ─── send_identifiers — functional ────────────────────────────────────────────
@@ -627,11 +653,12 @@ _INVALID_PIU = "urn:conformance:test:nonexistent:asset:xyz999"
 
 
 @pytest.mark.requires_cu(CU.SEND_IDENTIFIERS)
-async def test_send_identifiers_invalid_piu_returns_bad_node_id_unknown(opcua_client, ns_indices):
-    """SendIdentifiers with an unknown ProductInstanceUri must return Bad_NodeIdUnknown.
+async def test_send_identifiers_invalid_piu_returns_rejection(opcua_client, ns_indices):
+    """SendIdentifiers with an unknown ProductInstanceUri must be rejected.
 
-    Per spec: Bad_NodeIdUnknown (0x80340000). No identifier must be stored when the
-    target asset cannot be found.
+    IJT domain rejection may be reported as Uncertain with output Status=2.
+    Service-level Bad statuses are also accepted for malformed/older servers.
+    No identifier must be stored when the target asset cannot be found.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -665,8 +692,10 @@ async def test_send_identifiers_invalid_piu_returns_bad_node_id_unknown(opcua_cl
     err_str = str(result.error) if result.error else "unknown error"
     if _is_unsupported_identifier_error(err_str):
         pytest.skip(f"SendIdentifiers not supported on this server: {err_str}")
+    if _is_domain_rejection(err_str):
+        return
     assert any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")), (
-        f"Unexpected status for unknown PIU — expected Bad_NodeIdUnknown, got: {err_str}"
+        f"Unexpected status for unknown PIU — expected IJT domain rejection or service Bad, got: {err_str}"
     )
 
 
@@ -776,10 +805,12 @@ async def test_get_identifiers_after_reset_returns_empty_list(opcua_client, ns_i
 
 
 @pytest.mark.requires_cu(CU.GET_IDENTIFIERS)
-async def test_get_identifiers_invalid_piu_returns_bad_node_id_unknown(opcua_client, ns_indices):
-    """GetIdentifiers with an unknown ProductInstanceUri must return Bad_NodeIdUnknown.
+async def test_get_identifiers_invalid_piu_returns_rejection(opcua_client, ns_indices):
+    """GetIdentifiers with an unknown ProductInstanceUri must be rejected.
 
-    Per spec: Bad_NodeIdUnknown (0x80340000). No identifier data must be returned.
+    IJT domain rejection may be reported as Uncertain with output Status=2.
+    Service-level Bad statuses are also accepted for malformed/older servers.
+    No identifier data must be returned.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -807,8 +838,10 @@ async def test_get_identifiers_invalid_piu_returns_bad_node_id_unknown(opcua_cli
     err_str = str(result.error) if result.error else "unknown error"
     if _is_unsupported_identifier_error(err_str):
         pytest.skip(f"GetIdentifiers not supported on this server: {err_str}")
+    if _is_domain_rejection(err_str):
+        return
     assert any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")), (
-        f"Unexpected status for unknown PIU — expected Bad_NodeIdUnknown, got: {err_str}"
+        f"Unexpected status for unknown PIU — expected IJT domain rejection or service Bad, got: {err_str}"
     )
 
 
@@ -868,10 +901,12 @@ async def test_reset_identifiers_idempotent_on_empty_state(opcua_client, ns_indi
 
 
 @pytest.mark.requires_cu(CU.RESET_IDENTIFIERS)
-async def test_reset_identifiers_invalid_piu_returns_bad_node_id_unknown(opcua_client, ns_indices):
-    """ResetIdentifiers with an unknown ProductInstanceUri must return Bad_NodeIdUnknown.
+async def test_reset_identifiers_invalid_piu_returns_rejection(opcua_client, ns_indices):
+    """ResetIdentifiers with an unknown ProductInstanceUri must be rejected.
 
-    Per spec: Bad_NodeIdUnknown (0x80340000). No identifier state must be modified.
+    IJT domain rejection may be reported as Uncertain with output Status=2.
+    Service-level Bad statuses are also accepted for malformed/older servers.
+    No identifier state must be modified.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -901,6 +936,8 @@ async def test_reset_identifiers_invalid_piu_returns_bad_node_id_unknown(opcua_c
     err_str = str(result.error) if result.error else "unknown error"
     if _is_unsupported_identifier_error(err_str):
         pytest.skip(f"ResetIdentifiers not supported on this server: {err_str}")
+    if _is_domain_rejection(err_str):
+        return
     assert any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")), (
-        f"Unexpected status for unknown PIU — expected Bad_NodeIdUnknown, got: {err_str}"
+        f"Unexpected status for unknown PIU — expected IJT domain rejection or service Bad, got: {err_str}"
     )

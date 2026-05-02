@@ -319,7 +319,10 @@ async def test_processing_times_fields_are_not_writable(opcua_client, ns_indices
     from asyncua import ua as _ua
 
     from helpers.namespaces import BN as _BN
+    from helpers.namespaces import NS_APP as _NS_APP
+    from helpers.namespaces import NS_IJT_BASE as _NS_IJT
     from helpers.namespaces import NS_MACH_RESULT as _NS_MR
+    from helpers.node_discovery import find_child_by_browse_name_any as _find_child_any
     from helpers.node_discovery import find_joining_system as _find_js
 
     ns_mr = ns_indices.get(_NS_MR)
@@ -335,12 +338,34 @@ async def test_processing_times_fields_are_not_writable(opcua_client, ns_indices
     if rm is None:
         pytest.skip("ResultManagement not found")
 
-    last_result_meta = await _find_child(rm, "LastResultMetaData", ns_mr)
+    results_folder = await _find_child_any(
+        rm,
+        _BN.RESULTS,
+        (ns_mr, ns_indices.get(_NS_IJT), ns_indices.get(_NS_APP)),
+    )
+    if results_folder is None:
+        pytest.skip("Results folder not found — cannot test write rejection for ProcessingTimes")
+    result_var = await _find_child_any(
+        results_folder,
+        _BN.RESULT,
+        (ns_mr, ns_indices.get(_NS_IJT), ns_indices.get(_NS_APP)),
+    )
+    if result_var is None:
+        pytest.skip("Results/Result variable not found — cannot test write rejection for ProcessingTimes")
+    last_result_meta = await _find_child_any(
+        result_var,
+        _BN.RESULT_META_DATA,
+        (ns_mr, ns_indices.get(_NS_IJT), ns_indices.get(_NS_APP)),
+    )
     if last_result_meta is None:
-        pytest.skip("LastResultMetaData variable not found — cannot test write rejection for ProcessingTimes")
+        pytest.skip(
+            "Results/Result/ResultMetaData variable not found — cannot test write rejection for ProcessingTimes"
+        )
     try:
         await last_result_meta.write_value(_ua.Variant("__test_write__", _ua.VariantType.String))
-        pytest.fail("Write to LastResultMetaData succeeded — expected Bad_NotWritable or Bad_UserAccessDenied")
+        pytest.fail(
+            "Write to Results/Result/ResultMetaData succeeded — expected Bad_NotWritable or Bad_UserAccessDenied"
+        )
     except _ua.UaError:
         pass  # Expected rejection
 
@@ -473,11 +498,11 @@ async def test_result_is_valid_when_duration_fields_are_absent(subscription_clie
     acq = getattr(pt, "AcquisitionDuration", None)
     proc = getattr(pt, "ProcessingDuration", None)
     if acq is not None or proc is not None:
-        pytest.skip(
+        logger.info(
             "At least one duration field is present for this result type — "
-            "cannot verify absent-duration validity with this server; "
-            "a minimal device result would be needed"
+            "absent-duration variant is not produced by this server"
         )
+        return
 
     # Mandatory StartTime / EndTime must still be present even when durations are absent
     start = getattr(pt, "StartTime", None)

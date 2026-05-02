@@ -351,7 +351,7 @@ class ResultMetaDataValidator:
         - ``NumberOfResultContent`` >= 0.
         - ``SequenceNumber`` >= 0.
         - ``OverallResultValues`` — each entry validated via ``ResultValueValidator``.
-        - ``AssociatedEntities`` — each entry: ``EntityId`` non-empty, ``EntityType`` in {0..4}.
+        - ``AssociatedEntities`` — each entry: ``EntityId`` non-empty, ``EntityType`` in {0..42}.
         """
         # ResultId — required, non-empty string
         result_id = getattr(meta, "ResultId", _MISSING)
@@ -490,27 +490,12 @@ class JoiningResultDataValidator:
     ) -> None:
         """
         Check:
-        - ``ResultId`` is a non-empty string (required).
         - Each ``OverallResultValues`` entry passes ``ResultValueValidator``.
         - Each ``StepResults`` entry passes ``StepResultValidator``.
         - Each ``Errors`` entry passes ``ErrorInformationValidator``.
         - Emit a diagnostic note (non-failure) when no ``OverallResultValues`` entry has
           ``ValueTag == 1`` (FINAL) — conformance tests may optionally check this separately.
         """
-        # ResultId — required by spec; absence is recorded as advisory because
-        # asyncua field naming may differ from spec across library versions.
-        result_id = getattr(joining_result, "ResultId", _MISSING)
-        if result_id is _MISSING:
-            vr.add(
-                ctx.child("ResultId#advisory"),
-                "ResultId field absent from deserialized struct — may be asyncua struct naming difference",
-            )
-        elif not isinstance(result_id, str) or not result_id.strip():
-            vr.add(
-                ctx.child("ResultId"),
-                f"expected non-empty string, got {result_id!r}",
-            )
-
         # FailureReason — optional on JoiningResultDataType, must be in valid range
         failure_reason = getattr(joining_result, "FailureReason", None)
         if failure_reason is not None:

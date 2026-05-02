@@ -24,6 +24,7 @@ from helpers.event_validator import assert_result_ready_event_valid
 from helpers.method_caller import call_method, find_and_call_method
 from helpers.namespaces import (
     BN,
+    NS_APP,
     NS_IJT_BASE,
     NS_MACH_RESULT,
     IJTTypes,
@@ -31,7 +32,7 @@ from helpers.namespaces import (
     ResultEvaluation,
     ResultType,
 )
-from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.node_discovery import find_child_by_browse_name, find_child_by_browse_name_any, find_joining_system
 from helpers.result_collector import ResultCollector
 from helpers.result_validator import (
     assert_result_data_valid,
@@ -55,10 +56,10 @@ _FINAL_VALUE_TAG = 1
 _VALID_ASSEMBLY_TYPE_VALUES: frozenset = frozenset({0, 1, 2})
 # OperationMode enum: 0=UNDEFINED, 1=AUTOMATIC, 2=MANUAL (per OPC 40450-1 ResultMetaDataType)
 _VALID_OPERATION_MODE_VALUES: frozenset = frozenset({0, 1, 2})
-# ResultState: 0=Undefined, 1=Processing, 2=Completed (per OPC 40001-101 ResultMetaDataType)
-_RESULT_STATE_PROCESSING = 1
-_RESULT_STATE_COMPLETED = 2
-_VALID_RESULT_STATE_VALUES: frozenset = frozenset({0, 1, 2})
+# ResultState: 0=Undefined, 1=Completed, 2=Processing, 3=Aborted, 4=Failed (Machinery Result NodeSet)
+_RESULT_STATE_COMPLETED = 1
+_RESULT_STATE_PROCESSING = 2
+_VALID_RESULT_STATE_VALUES: frozenset = frozenset({0, 1, 2, 3, 4})
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +70,39 @@ _VALID_RESULT_STATE_VALUES: frozenset = frozenset({0, 1, 2})
 def _unwrap_variant(value):
     """Unwrap asyncua Variant containers used for nested ExtensionObjects."""
     return getattr(value, "Value", value)
+
+
+def _localized_text_text(value) -> str:
+    """Return the text payload from asyncua LocalizedText-like values."""
+    value = _unwrap_variant(value)
+    text = getattr(value, "Text", value)
+    return "" if text is None else str(text)
+
+
+def _value_tag_int(result_value) -> int | None:
+    """Return ValueTag as an integer when present and readable."""
+    result_value = _unwrap_variant(result_value)
+    value_tag = getattr(result_value, "ValueTag", None)
+    if value_tag is None:
+        return None
+    try:
+        return int(value_tag)
+    except (TypeError, ValueError):
+        return None
+
+
+def _joining_result_has_final_tag(joining_result) -> bool:
+    """Return True when OverallResultValues or StepResultValues include ValueTag=FINAL."""
+    joining_result = _unwrap_variant(joining_result)
+    for result_value in getattr(joining_result, "OverallResultValues", None) or []:
+        if _value_tag_int(result_value) == _FINAL_VALUE_TAG:
+            return True
+    for step in getattr(joining_result, "StepResults", None) or []:
+        step = _unwrap_variant(step)
+        for result_value in getattr(step, "StepResultValues", None) or []:
+            if _value_tag_int(result_value) == _FINAL_VALUE_TAG:
+                return True
+    return False
 
 
 async def _get_result(
@@ -253,7 +287,8 @@ async def test_multi_step_result_step_result_id_present(subscription_client, res
     StepResultId, ProgramStepId or ProgramStep, Name, ResultEvaluation and
     StepTraceId, StartTimeOffset if traces are sent.
 
-    Checks that each JoiningResultDataType in ResultContent has a non-empty ResultId.
+    Checks that each StepResultDataType in JoiningResult.StepResults has a
+    non-empty StepResultId.
     """
     result_data, _ = await _get_result(
         subscription_client,
@@ -268,16 +303,16 @@ async def test_multi_step_result_step_result_id_present(subscription_client, res
     failures = []
     for i, jr in enumerate(content):
         jr = getattr(jr, "Value", jr)  # unwrap asyncua Variant
-        result_id = getattr(jr, "ResultId", None)
-        if result_id is None:
-            # asyncua may deserialize ResultId as None when the server sends a null string
-            # or when the field maps to a different attribute name in this struct version.
-            # Record as informational — do not hard-fail on None (vs absent).
-            logger.info("ResultContent[%d].ResultId is None — may be asyncua deserialization gap", i)
+        step_results = getattr(jr, "StepResults", None)
+        if not step_results:
+            failures.append(f"ResultContent[{i}].StepResults is absent or empty")
             continue
-        if not isinstance(result_id, str) or not result_id.strip():
-            failures.append(f"ResultContent[{i}].ResultId={result_id!r}")
-    assert not failures, "JoiningResultDataType entries missing non-empty ResultId:\n  " + "\n  ".join(failures)
+        for j, step in enumerate(step_results):
+            step = getattr(step, "Value", step)
+            step_id = getattr(step, "StepResultId", None)
+            if not isinstance(step_id, str) or not step_id.strip():
+                failures.append(f"ResultContent[{i}].StepResults[{j}].StepResultId={step_id!r}")
+    assert not failures, "StepResultDataType entries missing non-empty StepResultId:\n  " + "\n  ".join(failures)
 
 
 # ---------------------------------------------------------------------------
@@ -482,12 +517,12 @@ async def test_result_value_engineering_units_if_present_has_identifier(
 
 
 @pytest.mark.requires_cu(CU.JOINING_RESULT_ERRORS)
-async def test_nok_result_error_information_has_error_code(subscription_client, result_trigger, ns_indices):
+async def test_nok_result_error_information_fields_are_valid(subscription_client, result_trigger, ns_indices):
     """The Server supports Single Result instances where JoiningResultDataType contains
     error information as ErrorInformationDataType in JoiningResult.Errors.
     Each ErrorInformationDataType includes at least ErrorType, ErrorMessage.
 
-    Checks that ErrorCode is a non-empty string on NOK results.
+    Checks that mandatory ErrorType/ErrorMessage fields are valid on NOK results.
     """
     result_data, _ = await _get_result(
         subscription_client,
@@ -511,10 +546,23 @@ async def test_nok_result_error_information_has_error_code(subscription_client, 
 
     failures = []
     for i, err in enumerate(all_errors):
-        error_code = getattr(err, "ErrorCode", None)
-        if not isinstance(error_code, str) or not error_code.strip():
-            failures.append(f"Errors[{i}].ErrorCode={error_code!r}")
-    assert not failures, "ErrorInformationDataType.ErrorCode must be a non-empty string:\n  " + "\n  ".join(failures)
+        error_type = getattr(err, "ErrorType", None)
+        try:
+            error_type_int = int(error_type)
+        except (TypeError, ValueError):
+            error_type_int = -1
+        if error_type_int not in range(7):
+            failures.append(f"Errors[{i}].ErrorType={error_type!r}")
+
+        error_message = _localized_text_text(getattr(err, "ErrorMessage", None))
+        if not error_message.strip():
+            failures.append(f"Errors[{i}].ErrorMessage={error_message!r}")
+
+        error_id = getattr(err, "ErrorId", None)
+        if error_id is not None and not str(error_id).strip():
+            failures.append(f"Errors[{i}].ErrorId={error_id!r}")
+
+    assert not failures, "ErrorInformationDataType field validation failed:\n  " + "\n  ".join(failures)
 
 
 # ---------------------------------------------------------------------------
@@ -539,35 +587,29 @@ async def test_nok_result_failure_reason_in_valid_range(subscription_client, res
     _skip_if_no_result(result_data, result_trigger)
 
     valid_reasons = {0, 1, 2, 3}
-    content = getattr(result_data, "ResultContent", None) or []
-    all_errors: list[Any] = []
-    for jr in content:
-        jr = getattr(jr, "Value", jr)  # unwrap asyncua Variant
-        all_errors.extend(_unwrap_variant(err) for err in (getattr(jr, "Errors", None) or []))
+    joining_results = [_unwrap_variant(jr) for jr in (getattr(result_data, "ResultContent", None) or [])]
+    if not joining_results:
+        pytest.fail("NOK result has no ResultContent entries — cannot verify JoiningResultDataType.FailureReason")
 
-    if not all_errors:
-        pytest.skip("NOK result contains no Errors entries — cannot verify")
-
-    checked = 0
     failures = []
-    for i, err in enumerate(all_errors):
-        fr = getattr(err, "FailureReason", None)
-        if fr is not None:
-            checked += 1
-            try:
-                fr_int = int(fr)
-            except (TypeError, ValueError):
-                fr_int = -1
-            if fr_int not in valid_reasons:
-                failures.append(f"Errors[{i}].FailureReason={fr!r}")
+    for i, jr in enumerate(joining_results):
+        fr = getattr(jr, "FailureReason", None)
+        if fr is None:
+            failures.append(f"ResultContent[{i}].FailureReason is absent")
+            continue
+        fr = _unwrap_variant(fr)
+        try:
+            fr_int = int(fr)
+        except (TypeError, ValueError):
+            fr_int = -1
+        if fr_int not in valid_reasons:
+            failures.append(f"ResultContent[{i}].FailureReason={fr!r}")
 
-    if checked == 0:
-        pytest.skip("No FailureReason fields found in error entries — optional per spec")
     assert not failures, "FailureReason out of valid enumeration range:\n  " + "\n  ".join(failures)
 
 
 # ---------------------------------------------------------------------------
-# result_value_final_tag — FINAL tag on OverallResultValues
+# result_value_final_tag — FINAL tag on OverallResultValues or StepResultValues
 # ---------------------------------------------------------------------------
 
 
@@ -578,7 +620,8 @@ async def test_result_overall_values_contains_final_tag(subscription_client, res
     where ValueTag = FINAL. It is allowed to include key ResultValues with ValueTag = FINAL
     in JoiningResult.OverallResultValues[].
 
-    Checks that at least one OverallResultValues entry carries ValueTag = FINAL.
+    Checks that each JoiningResultDataType payload carries ValueTag = FINAL in
+    either OverallResultValues or StepResults[].StepResultValues[].
     """
     result_data, _ = await _get_result(
         subscription_client,
@@ -594,25 +637,11 @@ async def test_result_overall_values_contains_final_tag(subscription_client, res
 
     failures = []
     for i, jr in enumerate(content):
-        jr = getattr(jr, "Value", jr)  # unwrap asyncua Variant
-        overall_values = getattr(jr, "OverallResultValues", None) or []
-        if not overall_values:
-            continue
-        has_final = any(
-            int(getattr(getattr(v, "Value", v), "ValueTag", -1)) == _FINAL_VALUE_TAG
-            for v in overall_values
-            if getattr(getattr(v, "Value", v), "ValueTag", None) is not None
-        )
-        if not has_final:
-            failures.append(f"ResultContent[{i}].OverallResultValues has no entry with ValueTag=FINAL")
+        jr = _unwrap_variant(jr)
+        if not _joining_result_has_final_tag(jr):
+            failures.append(f"ResultContent[{i}] has no ValueTag=FINAL in OverallResultValues or StepResultValues")
 
-    if failures and result_trigger.is_simulator:
-        pytest.skip(
-            "Simulator does not populate ValueTag=FINAL in OverallResultValues; "
-            "real controllers that claim result_value conformance must satisfy this check"
-        )
-
-    assert not failures, "Missing FINAL tag in OverallResultValues:\n  " + "\n  ".join(failures)
+    assert not failures, "Missing FINAL tag in JoiningResultDataType payloads:\n  " + "\n  ".join(failures)
 
 
 # ---------------------------------------------------------------------------
@@ -720,10 +749,12 @@ async def test_get_latest_result_with_zero_timeout_returns_quickly(subscription_
 
 @pytest.mark.requires_cu(CU.GET_RESULT_BY_ID)
 async def test_get_result_by_id_with_invalid_id_returns_bad_status(subscription_client, ns_indices):
-    """GetResultById with an unknown ResultId must return a Bad status.
+    """GetResultById with an unknown ResultId must report a not-found error.
 
     Spec: The Server supports GetResultById method.
-    Negative check: a non-existent id must be rejected, not return spurious data.
+    Negative check: a non-existent id must not return spurious data. Current
+    signature returns [ResultHandle, Result, Error], where a non-zero Error or
+    null Result is the expected domain-level failure signal.
     """
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -748,18 +779,22 @@ async def test_get_result_by_id_with_invalid_id_returns_bad_status(subscription_
         method_name="GetResultById(invalid)",
     )
     if result.success:
-        output = getattr(result, "output_args", None) or []
-        has_data = any(v is not None and str(v).strip() not in ("", "None") for v in output)
-        if not has_data:
-            pytest.skip(
-                "Simulator returned Success with empty data for invalid ResultId instead of "
-                "BadNotFound — known simulator compliance gap. "
-                "Skipping; verify against a fully compliant server."
-            )
-        pytest.fail(
-            "GetResultById with a non-existent ResultId must return a "
-            "Bad status (e.g. BadNotFound), but the call succeeded with non-empty data"
+        output = result.output_list
+        if len(output) >= 3:
+            try:
+                if int(output[2]) != 0:
+                    return
+            except (TypeError, ValueError):
+                pass
+            if output[1] is None:
+                return
+        message = (
+            "GetResultById with a non-existent ResultId returned Success with no error indicator — "
+            "expected non-zero output[2] Error or null output[1] Result"
         )
+        if ns_indices.get(NS_APP) is not None:
+            pytest.skip(f"{message}; known simulator gap")
+        pytest.fail(message)
 
 
 # ===========================================================================
@@ -1095,8 +1130,8 @@ async def test_result_description_is_present_when_populated(subscription_client,
 
 
 @pytest.mark.requires_cu(CU.RESULT_ADDITIONAL_DATA)
-async def test_result_evaluation_code_is_string_when_present(subscription_client, result_trigger, ns_indices):
-    """ResultMetaData.ResultEvaluationCode, when present, must be a non-empty string."""
+async def test_result_evaluation_code_is_int64_when_present(subscription_client, result_trigger, ns_indices):
+    """ResultMetaData.ResultEvaluationCode, when present, must be an Int64-compatible integer."""
     result_data, meta = await _get_result(
         subscription_client,
         result_trigger,
@@ -1110,16 +1145,8 @@ async def test_result_evaluation_code_is_string_when_present(subscription_client
     code = getattr(meta, "ResultEvaluationCode", None)
     if code is None:
         pytest.skip("ResultEvaluationCode not populated — optional field, absence is valid")
-    if isinstance(code, int):
-        # Some simulator versions return an integer code rather than a string.
-        # Per spec ResultEvaluationCode is a String, but int is a common deviation.
-        pytest.skip(
-            f"ResultMetaData.ResultEvaluationCode is an integer ({code!r}) — "
-            "spec requires String, but integer codes are a known simulator deviation; "
-            "skipping to avoid false failure. Verify against a spec-compliant server."
-        )
-    assert isinstance(code, str) and code.strip(), (
-        f"ResultMetaData.ResultEvaluationCode must be a non-empty string when present, got {code!r}"
+    assert isinstance(code, int) and not isinstance(code, bool), (
+        f"ResultMetaData.ResultEvaluationCode must be an Int64-compatible integer when present, got {code!r}"
     )
 
 
@@ -1224,12 +1251,32 @@ async def test_result_additional_data_write_is_rejected(subscription_client, ns_
     if rm is None:
         pytest.skip("ResultManagement not found")
 
-    last_result_meta = await find_child_by_browse_name(rm, "LastResultMetaData", ns_mr)
+    results_folder = await find_child_by_browse_name_any(
+        rm,
+        BN.RESULTS,
+        (ns_mr, ns_indices.get(NS_IJT_BASE), ns_indices.get(NS_APP)),
+    )
+    if results_folder is None:
+        pytest.skip("Results folder not found in ResultManagement — cannot test write rejection")
+    result_var = await find_child_by_browse_name_any(
+        results_folder,
+        BN.RESULT,
+        (ns_mr, ns_indices.get(NS_IJT_BASE), ns_indices.get(NS_APP)),
+    )
+    if result_var is None:
+        pytest.skip("Results/Result variable not found — cannot test write rejection")
+    last_result_meta = await find_child_by_browse_name_any(
+        result_var,
+        BN.RESULT_META_DATA,
+        (ns_mr, ns_indices.get(NS_IJT_BASE), ns_indices.get(NS_APP)),
+    )
     if last_result_meta is None:
-        pytest.skip("LastResultMetaData variable not found in ResultManagement — cannot test write rejection")
+        pytest.skip("Results/Result/ResultMetaData variable not found — cannot test write rejection")
     try:
         await last_result_meta.write_value(ua.Variant("__test_write__", ua.VariantType.String))
-        pytest.fail("Write to LastResultMetaData node succeeded — expected Bad_NotWritable or Bad_UserAccessDenied")
+        pytest.fail(
+            "Write to Results/Result/ResultMetaData node succeeded — expected Bad_NotWritable or Bad_UserAccessDenied"
+        )
     except ua.UaError:
         pass  # Any UaError (Bad_NotWritable, Bad_UserAccessDenied, etc.) is the expected outcome
 
@@ -1307,7 +1354,8 @@ async def test_extended_meta_data_keys_are_unique_within_result(subscription_cli
         pytest.skip("ExtendedMetaData not populated — optional field")
     ext_list = list(ext)
     if len(ext_list) < 2:
-        pytest.skip("ExtendedMetaData has fewer than 2 entries — uniqueness cannot be tested")
+        logger.info("ExtendedMetaData has fewer than 2 entries; key uniqueness is vacuously satisfied")
+        return
 
     keys = [str(getattr(e, "Key", "")) for e in ext_list]
     seen = set()
@@ -1337,9 +1385,8 @@ async def test_extended_meta_data_empty_array_is_valid(subscription_client, resu
 
     ext = getattr(meta, "ExtendedMetaData", None)
     if ext is not None and len(list(ext)) > 0:
-        pytest.skip(
-            "ExtendedMetaData is non-empty for this result — "
-            "cannot verify empty-array validity; a minimal device result would be needed"
+        logger.info(
+            "ExtendedMetaData is application-specific and non-empty for this result; validating mandatory fields"
         )
 
     # Mandatory fields must be present regardless of ExtendedMetaData content

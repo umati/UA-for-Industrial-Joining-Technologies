@@ -306,7 +306,7 @@ class TestResultEvaluation:
         assert isinstance(ResultEvaluation.VALID_VALUES, set)
 
     def test_valid_values_contains_expected(self):
-        assert ResultEvaluation.VALID_VALUES == {0, 1, 2}
+        assert ResultEvaluation.VALID_VALUES == {0, 1, 2, 3}
 
     def test_undefined_is_zero(self):
         assert ResultEvaluation.UNDEFINED == 0
@@ -317,10 +317,14 @@ class TestResultEvaluation:
     def test_nok_is_two(self):
         assert ResultEvaluation.NOK == 2
 
+    def test_not_decidable_is_three(self):
+        assert ResultEvaluation.NOT_DECIDABLE == 3
+
     def test_named_constants_in_valid_values(self):
         assert ResultEvaluation.UNDEFINED in ResultEvaluation.VALID_VALUES
         assert ResultEvaluation.OK in ResultEvaluation.VALID_VALUES
         assert ResultEvaluation.NOK in ResultEvaluation.VALID_VALUES
+        assert ResultEvaluation.NOT_DECIDABLE in ResultEvaluation.VALID_VALUES
 
 
 # ---------------------------------------------------------------------------

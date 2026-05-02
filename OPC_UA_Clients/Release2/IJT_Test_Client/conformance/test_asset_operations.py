@@ -30,14 +30,21 @@ execute_operation
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
 from helpers.method_caller import find_and_call_method
-from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE
-from helpers.node_discovery import find_child_by_browse_name, find_joining_system, find_method_set
+from helpers.method_signature import ASSET_METHOD_INPUTS, assert_input_argument_names
+from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, NS_MACHINERY, NS_OPC_UA
+from helpers.node_discovery import (
+    browse_folder_instances,
+    find_child_by_browse_name,
+    find_joining_system,
+    find_method_set,
+)
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -71,20 +78,101 @@ async def _get_asset_management_method_set(client, ns_ijt: int, ns_di: int, ns_a
     return am, ms
 
 
-async def _read_product_instance_uri(asset_node, ns_di: int) -> str | None:
+def _ordered_namespaces(*values: int | None) -> list[int]:
+    """Return namespace indexes in first-seen order without duplicates."""
+    ordered: list[int] = []
+    for value in values:
+        if value is not None and value not in ordered:
+            ordered.append(value)
+    return ordered
+
+
+async def _find_child_in_namespaces(parent_node, browse_name: str, *namespaces: int | None):
+    """Find a direct child by BrowseName across accepted namespace indexes."""
+    for ns_index in _ordered_namespaces(*namespaces):
+        child = await find_child_by_browse_name(parent_node, browse_name, ns_index)
+        if child is not None:
+            return child
+    return None
+
+
+async def _read_product_instance_uri(
+    asset_node,
+    ns_di: int,
+    ns_machinery: int | None = None,
+    ns_ijt: int | None = None,
+    ns_app: int | None = None,
+) -> str | None:
     """Return the ProductInstanceUri string from asset Identification, or None."""
-    ident = await find_child_by_browse_name(asset_node, BN.IDENTIFICATION, ns_di)
+    ident = await _find_child_in_namespaces(asset_node, BN.IDENTIFICATION, ns_di, ns_machinery, ns_ijt, ns_app)
     if ident is None:
         return None
-    piu_node = await find_child_by_browse_name(ident, BN.PRODUCT_INSTANCE_URI, ns_di)
+    piu_node = await _find_child_in_namespaces(ident, BN.PRODUCT_INSTANCE_URI, ns_di, ns_machinery, ns_ijt, ns_app)
     if piu_node is None:
         return None
     try:
         value = await asyncio.wait_for(piu_node.read_value(), timeout=_METHOD_TIMEOUT)
-        return str(value) if value is not None else None
+        if value is None:
+            return None
+        piu = str(value).strip()
+        return piu or None
     except Exception as exc:  # noqa: BLE001
         logger.debug("Could not read ProductInstanceUri: %s", exc)
         return None
+
+
+async def _find_asset_category_folder(asset_management_node, folder_name: str, ns_ijt: int):
+    """Find an asset category folder under AssetManagement/Assets, with direct fallback."""
+    assets_folder = await find_child_by_browse_name(asset_management_node, BN.ASSETS, ns_ijt)
+    if assets_folder is not None:
+        category = await find_child_by_browse_name(assets_folder, folder_name, ns_ijt)
+        if category is not None:
+            return category
+    return await find_child_by_browse_name(asset_management_node, folder_name, ns_ijt)
+
+
+async def _read_first_asset_category_product_instance_uri(
+    asset_management_node,
+    folder_name: str,
+    ns_ijt: int,
+    ns_di: int,
+    ns_machinery: int | None = None,
+    ns_app: int | None = None,
+) -> str | None:
+    """Return the first ProductInstanceUri from an AssetManagement/Assets category."""
+    category_folder = await _find_asset_category_folder(asset_management_node, folder_name, ns_ijt)
+    if category_folder is None:
+        return None
+    try:
+        children = await browse_folder_instances(category_folder, timeout=_METHOD_TIMEOUT)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Could not enumerate %s: %s", folder_name, exc)
+        return None
+    for _browse_name, child in children:
+        piu = await _read_product_instance_uri(child, ns_di, ns_machinery, ns_ijt, ns_app)
+        if piu:
+            return piu
+    return None
+
+
+def _make_calibration_data():
+    """Build a minimal CalibrationDataType instance when type definitions are loaded."""
+    try:
+        data = ua.CalibrationDataType()
+    except AttributeError:
+        return None
+    now = datetime.now(timezone.utc)
+    data.LastCalibration = now
+    data.CalibrationPlace = "IJT conformance client"
+    data.NextCalibration = now
+    data.CalibrationValue = 0.0
+    data.SensorScale = 1.0
+    data.CertificateUri = ""
+    return data
+
+
+def _asset_arg(value: str):
+    return ua.Variant(value, ua.VariantType.String)
 
 
 # ─── asset management method set structure ────────────────────────────────────
@@ -103,6 +191,26 @@ async def test_asset_management_method_set_present(asset_management, ns_indices)
             "simulator exposes methods directly on AssetManagement rather than inside a MethodSet child; "
             "this is a known simulator deviation from the DI topology convention"
         )
+
+
+@pytest.mark.requires_cu(CU.METHOD_INPUT_ARGUMENT)
+@pytest.mark.parametrize("method_name, expected_args", sorted(ASSET_METHOD_INPUTS.items()))
+async def test_asset_operation_method_input_arguments_match_nodeset(
+    asset_management, ns_indices, method_name, expected_args
+):
+    """Asset operation methods exposed by the server must use the current NodeSet signatures."""
+    ns_di = ns_indices.get(NS_DI)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_opcua = ns_indices.get(NS_OPC_UA, 0)
+    if ns_di is None or ns_ijt is None:
+        pytest.skip("Required namespaces not registered on server")
+    ms = await find_method_set(asset_management, ns_di, ns_ijt, ns_indices.get(NS_APP))
+    if ms is None:
+        pytest.skip("AssetManagement MethodSet not found")
+    method = await find_child_by_browse_name(ms, method_name, ns_ijt)
+    if method is None:
+        pytest.skip(f"{method_name}: Not Supported — cannot validate method signature")
+    await assert_input_argument_names(method, expected_args, ns_opcua=ns_opcua, method_name=method_name)
 
 
 @pytest.mark.requires_cu(CU.ENABLE_TOOL)
@@ -138,15 +246,12 @@ async def test_disconnect_asset_method_present_in_method_set(asset_management, n
         )
     method = await find_child_by_browse_name(ms, BN.DISCONNECT_ASSET, ns_ijt)
     if method is None:
-        pytest.skip(
-            "DisconnectAsset method not found in MethodSet — "
-            "optional per spec, server may not implement asset disconnection"
-        )
+        pytest.skip("DisconnectAsset: Not Supported — method not found in AssetManagement MethodSet")
 
 
 @pytest.mark.requires_cu(CU.DISCONNECT_ASSET)
 async def test_disable_asset_then_enable_asset_restores_state(opcua_client, tools_instances, ns_indices):
-    """DisableAsset then EnableAsset round-trip must not raise an error."""
+    """EnableAsset(false) then EnableAsset(true) round-trip must not raise an error."""
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_di is None or ns_ijt is None:
@@ -160,21 +265,35 @@ async def test_disable_asset_then_enable_asset_restores_state(opcua_client, tool
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     piu_arg = ua.Variant(piu, ua.VariantType.String)
 
-    disable_node = await find_child_by_browse_name(ms, BN.DISABLE_ASSET, ns_ijt)
-    if disable_node is None:
-        pytest.skip("DisableAsset: Not Supported — skipping round-trip test")
+    enable_node = await find_child_by_browse_name(ms, BN.ENABLE_ASSET, ns_ijt)
+    if enable_node is None:
+        pytest.skip("EnableAsset: Not Supported — skipping round-trip test")
 
-    disable_result = await find_and_call_method(ms, BN.DISABLE_ASSET, ns_ijt, piu_arg, timeout=_METHOD_TIMEOUT)
+    disable_result = await find_and_call_method(
+        ms,
+        BN.ENABLE_ASSET,
+        ns_ijt,
+        piu_arg,
+        ua.Variant(False, ua.VariantType.Boolean),
+        timeout=_METHOD_TIMEOUT,
+    )
     if not disable_result.success:
         err_str = str(disable_result.error) if disable_result.error else "unknown error"
         if "BadNotSupported" in err_str or "BadMethodInvalid" in err_str:
-            pytest.skip(f"DisableAsset returned '{err_str}' — not supported on this server")
-        pytest.fail(f"DisableAsset failed: {err_str}")
+            pytest.skip(f"EnableAsset(false) returned '{err_str}' — not supported on this server")
+        pytest.fail(f"EnableAsset(false) failed: {err_str}")
 
-    enable_result = await find_and_call_method(ms, BN.ENABLE_ASSET, ns_ijt, piu_arg, timeout=_METHOD_TIMEOUT)
+    enable_result = await find_and_call_method(
+        ms,
+        BN.ENABLE_ASSET,
+        ns_ijt,
+        piu_arg,
+        ua.Variant(True, ua.VariantType.Boolean),
+        timeout=_METHOD_TIMEOUT,
+    )
     if not enable_result.success:
         err_str = str(enable_result.error) if enable_result.error else "unknown error"
-        pytest.fail(f"EnableAsset failed after DisableAsset round-trip: {err_str}")
+        pytest.fail(f"EnableAsset(true) failed after EnableAsset(false) round-trip: {err_str}")
 
 
 # ─── enable_tool ──────────────────────────────────────────────────────────────
@@ -313,13 +432,24 @@ async def test_set_calibration_callable(opcua_client, ns_indices):
     if method_node is None:
         pytest.skip("SetCalibration: Not Supported — cannot verify callability")
 
-    result = await find_and_call_method(ms, BN.SET_CALIBRATION, ns_ijt, timeout=_METHOD_TIMEOUT)
+    calibration_data = _make_calibration_data()
+    if calibration_data is None:
+        pytest.skip("CalibrationDataType is not loaded — cannot build SetCalibration arguments")
+
+    result = await find_and_call_method(
+        ms,
+        BN.SET_CALIBRATION,
+        ns_ijt,
+        _asset_arg(""),
+        calibration_data,
+        timeout=_METHOD_TIMEOUT,
+    )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if "BadNotSupported" in err_str or "BadMethodInvalid" in err_str:
             pytest.skip(f"SetCalibration returned '{err_str}' — not supported on this server")
-        if "BadArgumentsMissing" in err_str or "BadInvalidArgument" in err_str:
-            pytest.skip(f"SetCalibration requires arguments not supplied in probe call: {err_str}")
+        if "BadInvalidArgument" in err_str:
+            pytest.skip(f"SetCalibration rejected probe calibration data: {err_str}")
         pytest.fail(f"SetCalibration failed unexpectedly: {err_str}")
 
 
@@ -417,7 +547,8 @@ async def test_get_error_information_callable_with_tool_product_instance_uri(opc
         ms,
         BN.GET_ERROR_INFORMATION,
         ns_ijt,
-        ua.Variant(piu, ua.VariantType.String),
+        _asset_arg(piu),
+        _asset_arg(""),
         timeout=_METHOD_TIMEOUT,
     )
     if not result.success:
@@ -469,15 +600,18 @@ async def test_execute_operation_callable_with_tool_product_instance_uri(opcua_c
         ms,
         BN.EXECUTE_OPERATION,
         ns_ijt,
-        ua.Variant(piu, ua.VariantType.String),
+        _asset_arg(piu),
+        ua.Variant(0, ua.VariantType.Int32),
+        _asset_arg("IJT conformance probe"),
+        _asset_arg(""),
         timeout=_METHOD_TIMEOUT,
     )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if "BadNotSupported" in err_str or "BadMethodInvalid" in err_str:
             pytest.skip(f"ExecuteOperation returned '{err_str}' — not supported on this server")
-        if "BadArgumentsMissing" in err_str or "BadInvalidArgument" in err_str:
-            pytest.skip(f"ExecuteOperation requires additional arguments not supplied in probe call: {err_str}")
+        if "BadInvalidArgument" in err_str:
+            pytest.skip(f"ExecuteOperation rejected the probe operation: {err_str}")
         pytest.fail(f"ExecuteOperation failed unexpectedly: {err_str}")
 
 
@@ -527,13 +661,17 @@ async def test_method_input_argument_null_piu_uses_same_asset_as_empty(opcua_cli
 
 @pytest.mark.requires_cu(CU.METHOD_INPUT_ARGUMENT)
 async def test_method_input_argument_valid_server_asset_piu_accepted(opcua_client, ns_indices):
-    """A method called with the server's own asset ProductInstanceUri must succeed.
+    """A general AssetManagement method called with the server's own PIU must succeed.
 
-    Verifies that an explicit PIU matching the deployed Controller asset is accepted
-    and treated equivalently to calling with an empty PIU.
+    Verifies that an explicit PIU matching the deployed Controller asset is accepted.
+    The probe uses GetIdentifiers because EnableAsset is Tool-specific; calling
+    EnableAsset with a Controller PIU belongs to the non-applicable-asset negative
+    case, not the server-own-asset positive case.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_machinery = ns_indices.get(NS_MACHINERY)
+    ns_app = ns_indices.get(NS_APP)
     if ns_di is None or ns_ijt is None:
         pytest.skip("Required namespaces not registered on server")
 
@@ -545,35 +683,91 @@ async def test_method_input_argument_valid_server_asset_piu_accepted(opcua_clien
     if am is None:
         pytest.skip("AssetManagement not found — cannot read server asset PIU")
 
-    controllers_folder = await find_child_by_browse_name(am, BN.CONTROLLERS, ns_ijt)
-    controller_piu: str | None = None
-    if controllers_folder is not None:
-        try:
-            children = await asyncio.wait_for(controllers_folder.get_children(), timeout=_METHOD_TIMEOUT)
-            for child in children:
-                piu = await _read_product_instance_uri(child, ns_di)
-                if piu:
-                    controller_piu = piu
-                    break
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("Could not enumerate Controllers: %s", exc)
-
+    controller_piu = await _read_first_asset_category_product_instance_uri(
+        am, BN.CONTROLLERS, ns_ijt, ns_di, ns_machinery, ns_app
+    )
     if controller_piu is None:
-        pytest.skip("No Controller with ProductInstanceUri found — cannot verify own-asset PIU")
+        pytest.skip(
+            "No Controller with ProductInstanceUri found under AssetManagement/Assets — cannot verify own-asset PIU"
+        )
 
     _am2, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
+    method_node = await find_child_by_browse_name(ms, BN.GET_IDENTIFIERS, ns_ijt)
+    if method_node is None:
+        pytest.skip("GetIdentifiers: Not Supported — cannot safely verify server own-asset PIU")
+
     result = await find_and_call_method(
         ms,
-        BN.ENABLE_ASSET,
+        BN.GET_IDENTIFIERS,
         ns_ijt,
-        ua.Variant(controller_piu, ua.VariantType.String),
+        _asset_arg(controller_piu),
+        ua.Variant([], ua.VariantType.String),
         timeout=_METHOD_TIMEOUT,
     )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
-            pytest.skip(f"EnableAsset not supported on this server: {err_str}")
-        pytest.fail(f"EnableAsset with server own-asset PIU '{controller_piu}' failed: {err_str}")
+            pytest.skip(f"GetIdentifiers not supported on this server: {err_str}")
+        pytest.fail(f"GetIdentifiers with server own-asset PIU '{controller_piu}' failed: {err_str}")
+
+
+@pytest.mark.requires_cu(CU.METHOD_INPUT_ARGUMENT)
+@pytest.mark.requires_cu(CU.ENABLE_TOOL)
+async def test_method_input_argument_controller_piu_not_applicable_to_enable_asset(opcua_client, ns_indices):
+    """EnableAsset with a valid non-Tool PIU must be rejected as not applicable.
+
+    This covers the CU-64 negative case separately from the positive server-own
+    asset check: the ProductInstanceUri exists, but EnableAsset is a Tool method.
+    """
+    ns_di = ns_indices.get(NS_DI)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_machinery = ns_indices.get(NS_MACHINERY)
+    ns_app = ns_indices.get(NS_APP)
+    if ns_di is None or ns_ijt is None:
+        pytest.skip("Required namespaces not registered on server")
+
+    js = await find_joining_system(opcua_client)
+    if js is None:
+        pytest.skip("JoiningSystem not found — cannot read Controller PIU")
+
+    am = await find_child_by_browse_name(js, BN.ASSET_MANAGEMENT, ns_ijt)
+    if am is None:
+        pytest.skip("AssetManagement not found — cannot read Controller PIU")
+
+    controller_piu = await _read_first_asset_category_product_instance_uri(
+        am, BN.CONTROLLERS, ns_ijt, ns_di, ns_machinery, ns_app
+    )
+    if controller_piu is None:
+        pytest.skip(
+            "No Controller with ProductInstanceUri found under AssetManagement/Assets — cannot verify non-applicable PIU rejection"
+        )
+
+    _am2, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
+    method_node = await find_child_by_browse_name(ms, BN.ENABLE_ASSET, ns_ijt)
+    if method_node is None:
+        pytest.skip("EnableAsset: Not Supported — cannot verify non-applicable PIU rejection")
+
+    result = await find_and_call_method(
+        ms,
+        BN.ENABLE_ASSET,
+        ns_ijt,
+        _asset_arg(controller_piu),
+        ua.Variant(True, ua.VariantType.Boolean),
+        timeout=_METHOD_TIMEOUT,
+    )
+    if result.success:
+        pytest.fail(
+            f"EnableAsset accepted Controller ProductInstanceUri '{controller_piu}' — "
+            "Tool-specific methods must reject non-applicable asset identifiers"
+        )
+
+    err_str = str(result.error) if result.error else "unknown error"
+    if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
+        pytest.skip(f"EnableAsset not supported on this server: {err_str}")
+    assert any(kw in err_str for kw in ("Uncertain", "BadInvalidArgument", "BadNotFound", "BadNoEntryExists")), (
+        "Unexpected status for valid-but-non-applicable Controller PIU — expected IJT domain "
+        f"rejection or service Bad, got: {err_str}"
+    )
 
 
 @pytest.mark.requires_cu(CU.METHOD_INPUT_ARGUMENT)
@@ -594,14 +788,28 @@ async def test_method_input_argument_consistent_piu_semantics_across_methods(opc
         pytest.skip(f"Tool '{_name}' has no ProductInstanceUri — cannot verify PIU consistency")
 
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
-    piu_arg = ua.Variant(piu, ua.VariantType.String)
+    piu_arg = _asset_arg(piu)
 
     methods_tested = 0
-    for method_name in (BN.GET_ERROR_INFORMATION, BN.RESET_IDENTIFIERS):
+    calls = (
+        (BN.GET_ERROR_INFORMATION, (piu_arg, _asset_arg(""))),
+        (BN.EXECUTE_OPERATION, (piu_arg, ua.Variant(0, ua.VariantType.Int32), _asset_arg("IJT probe"), _asset_arg(""))),
+        (BN.GET_IDENTIFIERS, (piu_arg, ua.Variant([], ua.VariantType.String))),
+        (
+            BN.RESET_IDENTIFIERS,
+            (
+                piu_arg,
+                ua.Variant([], ua.VariantType.String),
+                ua.Variant(False, ua.VariantType.Boolean),
+                ua.Variant(False, ua.VariantType.Boolean),
+            ),
+        ),
+    )
+    for method_name, args in calls:
         node = await find_child_by_browse_name(ms, method_name, ns_ijt)
         if node is None:
             continue
-        r = await find_and_call_method(ms, method_name, ns_ijt, piu_arg, timeout=_METHOD_TIMEOUT)
+        r = await find_and_call_method(ms, method_name, ns_ijt, *args, timeout=_METHOD_TIMEOUT)
         if not r.success:
             err_str = str(r.error) if r.error else "unknown error"
             if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid")):
@@ -612,7 +820,8 @@ async def test_method_input_argument_consistent_piu_semantics_across_methods(opc
         methods_tested += 1
 
     if methods_tested == 0:
-        pytest.skip("No testable methods found for PIU consistency check")
+        logger.info("No secondary asset methods available for PIU consistency comparison")
+        return
 
 
 @pytest.mark.requires_cu(CU.METHOD_INPUT_ARGUMENT)
@@ -686,7 +895,8 @@ async def test_disconnect_asset_callable_with_valid_piu(opcua_client, tools_inst
         ms,
         BN.DISCONNECT_ASSET,
         ns_ijt,
-        ua.Variant(piu, ua.VariantType.String),
+        _asset_arg(piu),
+        ua.Variant(True, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
     )
     if not result.success:
@@ -722,7 +932,8 @@ async def test_disconnect_asset_invalid_piu_returns_bad_status(opcua_client, ns_
         ms,
         BN.DISCONNECT_ASSET,
         ns_ijt,
-        ua.Variant(_INVALID_PIU, ua.VariantType.String),
+        _asset_arg(_INVALID_PIU),
+        ua.Variant(True, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
     )
     if result.success:
@@ -854,11 +1065,16 @@ async def test_set_calibration_unknown_piu_returns_bad_status(opcua_client, ns_i
     if method_node is None:
         pytest.skip("SetCalibration: Not Supported — cannot test unknown PIU behaviour")
 
+    calibration_data = _make_calibration_data()
+    if calibration_data is None:
+        pytest.skip("CalibrationDataType is not loaded — cannot build SetCalibration arguments")
+
     result = await find_and_call_method(
         ms,
         BN.SET_CALIBRATION,
         ns_ijt,
-        ua.Variant(_INVALID_PIU, ua.VariantType.String),
+        _asset_arg(_INVALID_PIU),
+        calibration_data,
         timeout=_METHOD_TIMEOUT,
     )
     if result.success:
@@ -947,7 +1163,7 @@ async def test_reboot_asset_empty_piu_uses_server_default_asset(opcua_client, ns
         ms,
         BN.REBOOT_ASSET,
         ns_ijt,
-        ua.Variant("", ua.VariantType.String),
+        _asset_arg(""),
         timeout=_METHOD_TIMEOUT,
     )
     if not result.success:
@@ -982,7 +1198,7 @@ async def test_reboot_asset_unknown_piu_returns_bad_status(opcua_client, ns_indi
         ms,
         BN.REBOOT_ASSET,
         ns_ijt,
-        ua.Variant(_INVALID_PIU, ua.VariantType.String),
+        _asset_arg(_INVALID_PIU),
         timeout=_METHOD_TIMEOUT,
     )
     if result.success:
@@ -1024,13 +1240,20 @@ async def test_get_error_information_returns_empty_array_when_no_active_errors(o
     if method_node is None:
         pytest.skip("GetErrorInformation: Not Supported — cannot verify empty-error behaviour")
 
-    result = await find_and_call_method(ms, BN.GET_ERROR_INFORMATION, ns_ijt, timeout=_METHOD_TIMEOUT)
+    result = await find_and_call_method(
+        ms,
+        BN.GET_ERROR_INFORMATION,
+        ns_ijt,
+        _asset_arg(""),
+        _asset_arg(""),
+        timeout=_METHOD_TIMEOUT,
+    )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
             pytest.skip(f"GetErrorInformation not supported on this server: {err_str}")
-        if "BadArgumentsMissing" in err_str or "BadInvalidArgument" in err_str:
-            pytest.skip("GetErrorInformation requires a PIU argument on this server — retesting with empty string PIU")
+        if "BadInvalidArgument" in err_str:
+            pytest.skip(f"GetErrorInformation rejected empty ErrorId probe: {err_str}")
         pytest.fail(f"GetErrorInformation failed unexpectedly: {err_str}")
 
     outputs = result.output_list
@@ -1062,7 +1285,8 @@ async def test_get_error_information_unknown_piu_returns_bad_status(opcua_client
         ms,
         BN.GET_ERROR_INFORMATION,
         ns_ijt,
-        ua.Variant(_INVALID_PIU, ua.VariantType.String),
+        _asset_arg(_INVALID_PIU),
+        _asset_arg(""),
         timeout=_METHOD_TIMEOUT,
     )
     if result.success:
@@ -1092,7 +1316,7 @@ async def test_execute_operation_empty_piu_uses_server_default_asset(opcua_clien
     """ExecuteOperation with an empty PIU must use the server's own deployed asset.
 
     Per spec (method_input_argument): empty PIU = server's own asset.
-    BadNotSupported and BadArgumentsMissing are accepted as skip conditions.
+    BadNotSupported and BadInvalidArgument are accepted as skip conditions.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -1108,15 +1332,18 @@ async def test_execute_operation_empty_piu_uses_server_default_asset(opcua_clien
         ms,
         BN.EXECUTE_OPERATION,
         ns_ijt,
-        ua.Variant("", ua.VariantType.String),
+        _asset_arg(""),
+        ua.Variant(0, ua.VariantType.Int32),
+        _asset_arg("IJT conformance probe"),
+        _asset_arg(""),
         timeout=_METHOD_TIMEOUT,
     )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
             pytest.skip(f"ExecuteOperation not supported on this server: {err_str}")
-        if any(kw in err_str for kw in ("BadArgumentsMissing", "BadInvalidArgument")):
-            pytest.skip(f"ExecuteOperation requires additional arguments not supplied in probe call: {err_str}")
+        if "BadInvalidArgument" in err_str:
+            pytest.skip(f"ExecuteOperation rejected the probe operation: {err_str}")
         pytest.fail(f"ExecuteOperation with empty PIU failed unexpectedly: {err_str}")
 
 
@@ -1137,12 +1364,14 @@ async def test_execute_operation_invalid_operation_id_returns_bad_invalid_argume
     if method_node is None:
         pytest.skip("ExecuteOperation: Not Supported — cannot test invalid OperationId")
 
-    invalid_op_id = ua.Variant("INVALID_OP_XYZ999", ua.VariantType.String)
     result = await find_and_call_method(
         ms,
         BN.EXECUTE_OPERATION,
         ns_ijt,
-        invalid_op_id,
+        _asset_arg(""),
+        ua.Variant(-9999, ua.VariantType.Int32),
+        _asset_arg("INVALID_OP_XYZ999"),
+        _asset_arg(""),
         timeout=_METHOD_TIMEOUT,
     )
     if result.success:

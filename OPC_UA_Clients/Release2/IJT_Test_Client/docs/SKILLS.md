@@ -18,9 +18,20 @@ Note: `run_tests.py` was merged into `run_all_tests.py` and deleted. Use `run_al
 
 See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail explanations, and Excel output details.
 
+`python run_all_tests.py` is the full orchestrator. Phase 1 runs static,
+security, unit, type, and formatting checks. Phase 2 runs the live
+server-facing compliance/conformance suite and defaults to `conformance` so
+unit tests are not duplicated after Phase 1. Phase 2 appends helper coverage
+diagnostics to `test-results/coverage-combined.xml` and disables only the live
+coverage fail-under gate; the hard helper coverage gate belongs to the Phase 1
+unit stage.
+
 ### Report Output Behavior
 
 - `run_all_tests.py` writes JUnit XML to `test-results/pytest-live.xml` by default (or `--junit-xml FILE`).
+- Live CU compliance output is `test-results/cu-compliance-report.json`; unit-stage plugin output is redirected to `test-results/cu-compliance-report-unit.json` when CU-marked tests are collected.
+- The live CU compliance report includes workbook traceability for the checked-in Test Cases workbook: 1,122 expected TC header rows grouped by official CU, positive/negative classification, CTT/review/spec-link metadata, and optional exact row links from `@pytest.mark.workbook_ref("Sheet", [row])`.
+- Unit-only and collect-only pytest sessions must not write or overwrite the live CU compliance report.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
 - Local default is `on-success`; CI default is `always`.
 - Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
@@ -31,8 +42,9 @@ See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail exp
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | OPC UA server endpoint URL |
+| `OPCUA_SERVER_URL` | raw pytest: `opc.tcp://localhost:40451`; runner auto-launch: `opc.tcp://localhost:40462` | OPC UA server endpoint URL |
 | `OPCUA_SIMULATOR_EXE` | (none) | Path to simulator binary for auto-launch |
+| `OPCUA_CAPABILITIES_FILE` | `server_capabilities.yaml` | Capability declaration for the server under test; auto-launched checked-in simulator uses `server_capabilities.simulator.yaml` when this is unset |
 | `OPCUA_STARTUP_TIMEOUT_SEC` | `30` | Seconds to wait for server OPC UA readiness |
 | `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install |
 
@@ -40,6 +52,7 @@ See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail exp
 
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
 `semgrep` (static analysis), `pyright` (strict type checking — **advisory, non-blocking**), `detect-secrets` (secrets).
+Pyright is configured in `pyproject.toml` to use `.venv_test` so installed project dependencies are resolved consistently during local runner checks.
 
 A **Python pytest suite** that validates an OPC UA server implementing the
 [OPC UA Industrial Joining Technologies (IJT)](https://reference.opcfoundation.org/IJT/Base/v100/)
@@ -63,6 +76,7 @@ from the IJT specification.
 | **GetLatestResult needs Timeout** | Signature is `GetLatestResult(Timeout: Int32)` — pass `ua.Variant(5000, ua.VariantType.Int32)` |
 | **include_traces = True** | All SimulateSingleResult calls should pass `True` for include_traces |
 | **send_as_refs = True** | SimulateBatch_Or_Sync_Result and SimulateJobResult booleans should be `True` |
+| **ResultState values** | Machinery Result NodeSet uses `1=Completed`, `2=Processing`, `3=Aborted`, `4=Failed`; do not use stale `1=Processing`, `2=Completed` mappings |
 | **node.session not node.server** | asyncua 1.2+ renamed the attribute — use `node.session` |
 | **Annotate empty accumulators** | `check_untyped_defs = true`; dynamic OPC UA lists such as `all_values = []` need explicit types, usually `list[Any]` |
 | **Bandit `nosec` IDs only** | Keep `# nosec Bxxx` comments to valid Bandit IDs only; put explanations on a separate comment line to avoid `Test in comment` warnings |
@@ -112,9 +126,9 @@ Objects/
     │   ├── GetLatestResult(Timeout: Int32)        ← Timeout is REQUIRED
     │   ├── GetResultById(ResultId: TrimmedString, Timeout: Int32)
     │   ├── GetResultIdListFiltered(...)            ← optional/profile-dependent; presence checked by Executable
-    │   ├── ReleaseResultHandle(...)                ← unsupported in this profile
-    │   ├── AcknowledgeResults(...)                 ← unsupported in this profile
-    │   ├── RequestUnacknowledgedResults(...)       ← unsupported in this profile
+    │   ├── ReleaseResultHandle(...)                ← optional/profile-dependent
+    │   ├── AcknowledgeResults(...)                 ← optional/profile-dependent
+    │   ├── RequestUnacknowledgedResults(...)       ← optional/profile-dependent
     │   └── RequestResults(...)
     ├── JoiningProcessManagement (IJT Base ns)
     ├── JointManagement          (IJT Base ns)
@@ -143,6 +157,9 @@ IJT_Test_Client/
 ├── pyproject.toml                ← asyncio_mode=auto, timeout=120, mypy check_untyped_defs=true (+ ruff, coverage, bandit); OPC UA test dirs have [[tool.mypy.overrides]] suppressing asyncua stub false-positives
 ├── helpers/
 │   ├── namespaces.py             ← ALL type IDs and BrowseName constants
+│   ├── cu_compliance_report.py   ← pytest plugin for CU/workbook compliance JSON
+│   ├── method_signature.py       ← NodeSet-derived method InputArguments guards
+│   ├── workbook_traceability.py  ← checked-in Test Cases workbook row metadata
 │   ├── identifier_utils.py       ← shared identifier conformance helpers
 │   ├── node_discovery.py         ← async browse helpers (_browse_refs, find_child_by_browse_name)
 │   ├── event_collector.py        ← EventCollector for subscription tests
@@ -167,6 +184,9 @@ IJT_Test_Client/
         ├── test_trigger.py
         ├── test_cu_registry.py
         ├── test_namespaces.py
+        ├── test_cu_compliance_report.py
+        ├── test_method_signature.py
+        ├── test_workbook_traceability.py
         ├── test_profile_loader.py
         └── test_ruff_format_guard.py ← canary: ruff format must not corrupt except (A, B): clauses
 ```
@@ -403,7 +423,23 @@ pi_uri = await read_tool_product_instance_uri(opcua_client, ns_ijt, ns_di or 0, 
 result = await call_method(jpm, method_node, ua.Variant(pi_uri, ua.VariantType.String), ...)
 ```
 
-Methods that require this: `IncrementJoiningProcessCounter`, `DecrementJoiningProcessCounter`, `SetJoiningProcessCounter`.
+Do not reject a `ProductInstanceUri` only because it lacks an `urn:`, `http://`,
+or `https://` scheme. Some conforming deployments use a manufacturer URI plus
+an implementation-specific suffix. Test the value as a non-empty String when the
+property is present, then pass the server's actual value to methods that require
+it.
+
+Methods that require PIU include Asset operation methods, Identifier methods,
+I/O methods, JoiningProcess methods, and JointManagement methods. Result access
+methods under Machinery/Result do not take PIU.
+
+For Method Input Argument tests, keep the asset category applicable to the
+method. Use a general AssetManagement method such as `GetIdentifiers` when
+checking that the server's own Controller `ProductInstanceUri` is accepted.
+Use Tool-specific methods such as `EnableAsset` only with a Tool PIU for
+positive tests; calling `EnableAsset` with a valid Controller PIU belongs to
+the non-applicable-asset negative case and must not be treated as a positive
+server-own-asset check.
 
 ### EntityType Enum — v100 Values (CRITICAL)
 
@@ -528,7 +564,7 @@ The difference: `Result` reflects the live tightening outcome; `RequestedResult`
 is populated only when `RequestResults` or `RequestUnacknowledgedResults` is called
 (stored/historical lookup). The corresponding event is `RequestedResultEventType`.
 
-### GetResult Method Signatures (Machinery/Result spec — NO ProductInstanceUri)
+### Result Access Method Signatures (Machinery/Result spec — NO ProductInstanceUri)
 
 ```
 GetLatestResult(Timeout: Int32) → [ResultHandle: UInt32, Result: ResultDataType, Error: Int32]
@@ -536,7 +572,9 @@ GetResultById(ResultId: TrimmedString, Timeout: Int32) → [ResultHandle: UInt32
 GetResultIdListFiltered(Filter: ContentFilter, OrderedBy: RelativePath[], MaxResults: UInt32, Timeout: Int32) → [ResultHandle: UInt32, ResultIdList: TrimmedString[], Error: Int32]
 ```
 
-These come from **Machinery/Result** (NS_MACH_RESULT), NOT from IJT Base. They have **no ProductInstanceUri argument**.
+There is no generic `GetResult` method in the current model. These result access
+methods come from **Machinery/Result** (NS_MACH_RESULT), NOT from IJT Base. They
+have **no ProductInstanceUri argument**.
 `RequestResults` and `RequestUnacknowledgedResults` come from IJT Base (NS_IJT_BASE) and have different signatures:
 
 ```

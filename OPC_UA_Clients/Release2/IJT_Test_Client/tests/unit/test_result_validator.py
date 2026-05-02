@@ -445,7 +445,7 @@ class TestResultMetaDataValidator:
         assert not vr.ok
 
     def test_all_valid_evaluations(self):
-        for ev in [0, 1, 2]:
+        for ev in [0, 1, 2, 3]:
             assert self._validate(self._good_meta(ResultEvaluation=ev)).ok
 
     def test_creation_time_absent(self):
@@ -530,77 +530,65 @@ class TestJoiningResultDataValidator:
         return vr
 
     def test_valid_minimal(self):
-        obj = types.SimpleNamespace(ResultId="jr-001")
+        obj = types.SimpleNamespace()
         assert self._validate(obj).ok
-
-    def test_result_id_absent_is_advisory(self):
-        obj = types.SimpleNamespace()  # no ResultId
-        vr = self._validate(obj)
-        # Advisory — ok should still be True
-        assert vr.ok
-        assert any("#advisory" in str(f.path) for f in vr.failures)
-
-    def test_result_id_empty_string_is_hard_failure(self):
-        obj = types.SimpleNamespace(ResultId="")
-        vr = self._validate(obj)
-        assert not vr.ok
 
     def test_overall_result_values_valid(self):
         val = types.SimpleNamespace(MeasuredValue=5.0, ValueTag=1)  # FINAL
-        obj = types.SimpleNamespace(ResultId="r", OverallResultValues=[val])
+        obj = types.SimpleNamespace(OverallResultValues=[val])
         assert self._validate(obj).ok
 
     def test_overall_result_values_no_final_tag_advisory(self):
         val = types.SimpleNamespace(MeasuredValue=5.0, ValueTag=0)  # not FINAL
-        obj = types.SimpleNamespace(ResultId="r", OverallResultValues=[val])
+        obj = types.SimpleNamespace(OverallResultValues=[val])
         vr = self._validate(obj)
         assert vr.ok
         assert any("#advisory" in str(f.path) for f in vr.failures)
 
     def test_overall_result_values_invalid_entry(self):
         val = types.SimpleNamespace()  # missing MeasuredValue
-        obj = types.SimpleNamespace(ResultId="r", OverallResultValues=[val])
+        obj = types.SimpleNamespace(OverallResultValues=[val])
         vr = self._validate(obj)
         assert not vr.ok
 
     def test_step_results_validated(self):
         bad_step = types.SimpleNamespace()  # missing StepResultId
-        obj = types.SimpleNamespace(ResultId="r", StepResults=[bad_step])
+        obj = types.SimpleNamespace(StepResults=[bad_step])
         vr = self._validate(obj)
         assert not vr.ok
 
     def test_errors_validated(self):
         bad_err = types.SimpleNamespace()  # missing ErrorType
-        obj = types.SimpleNamespace(ResultId="r", Errors=[bad_err])
+        obj = types.SimpleNamespace(Errors=[bad_err])
         vr = self._validate(obj)
         assert not vr.ok
 
     def test_failure_reason_validated_on_joining_result(self):
         for reason in [0, 1, 2, 3]:
-            obj = types.SimpleNamespace(ResultId="r", FailureReason=reason)
+            obj = types.SimpleNamespace(FailureReason=reason)
             assert self._validate(obj).ok
 
     def test_failure_reason_invalid_on_joining_result(self):
-        obj = types.SimpleNamespace(ResultId="r", FailureReason=4)
+        obj = types.SimpleNamespace(FailureReason=4)
         vr = self._validate(obj)
         assert not vr.ok
 
     def test_failure_reason_invalid_type_on_joining_result(self):
-        obj = types.SimpleNamespace(ResultId="r", FailureReason="bad")
+        obj = types.SimpleNamespace(FailureReason="bad")
         vr = self._validate(obj)
         assert not vr.ok
 
     def test_value_tag_none_does_not_crash(self):
         # ValueTag=None in OverallResultValues should not cause exceptions
         val = types.SimpleNamespace(MeasuredValue=5.0, ValueTag=None)
-        obj = types.SimpleNamespace(ResultId="r", OverallResultValues=[val])
+        obj = types.SimpleNamespace(OverallResultValues=[val])
         vr = self._validate(obj)
         assert vr.ok
 
     def test_value_tag_invalid_int_in_overall_values(self):
         # ValueTag "abc" can't be converted; advisory still triggers
         val = types.SimpleNamespace(MeasuredValue=5.0, ValueTag="abc")
-        obj = types.SimpleNamespace(ResultId="r", OverallResultValues=[val])
+        obj = types.SimpleNamespace(OverallResultValues=[val])
         vr = self._validate(obj)
         # ValueTag invalid → hard failure from ResultValueValidator
         assert not vr.ok
@@ -636,13 +624,13 @@ class TestResultDataValidator:
         assert not vr.ok
 
     def test_result_content_validated(self):
-        jr = types.SimpleNamespace(ResultId="jr-001")
+        jr = types.SimpleNamespace()
         data = types.SimpleNamespace(ResultMetaData=self._good_meta(), ResultContent=[jr])
         vr = ResultDataValidator().validate(data)
         assert vr.ok
 
     def test_result_content_invalid_entry(self):
-        jr = types.SimpleNamespace(ResultId="")  # hard failure on empty ResultId
+        jr = types.SimpleNamespace(StepResults=[types.SimpleNamespace()])  # missing StepResultId
         data = types.SimpleNamespace(ResultMetaData=self._good_meta(), ResultContent=[jr])
         vr = ResultDataValidator().validate(data)
         assert not vr.ok

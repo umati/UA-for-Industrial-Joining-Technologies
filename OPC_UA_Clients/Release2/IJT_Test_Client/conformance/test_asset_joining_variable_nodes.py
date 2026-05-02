@@ -1,16 +1,15 @@
 """
 Conformance tests for JoiningDataVariableType node structure — OPC 40450-1.
 
-Covers conformance unit:
-    asset_joining_data_variable_structure
-        Every JoiningDataVariable parameter node (CableLength, FeedingSpeed, NominalVoltage,
-        Capacity, NominalPower, ActualPower, MeasuredValue, MaxTorque, MinTorque, MaxSpeed)
-        must expose its PhysicalQuantity child via a HasComponent reference — NOT HasProperty.
-        PhysicalQuantity (MultiStateDiscreteType) must in turn expose EnumStrings via
-        HasProperty so that conformance validators can discover its enum labels.
-        Battery Capacity must use engineering unit Ah (UNECE 4279624), not A (UNECE 4279632).
-        Sensor MeasuredValue must be navigable under the Sensor's Parameters node
-        (no doubled path in the NodeId).
+Covers official asset-management conformance units:
+    Every JoiningDataVariable parameter node (CableLength, FeedingSpeed, NominalVoltage,
+    Capacity, NominalPower, ActualPower, MeasuredValue, MaxTorque, MinTorque, MaxSpeed)
+    must expose its PhysicalQuantity child via a HasComponent reference — NOT HasProperty.
+    PhysicalQuantity (MultiStateDiscreteType) must in turn expose EnumStrings via
+    HasProperty so that conformance validators can discover its enum labels.
+    Battery Capacity must use engineering unit Ah (UNECE 4279624), not A (UNECE 4279632).
+    Sensor MeasuredValue must be navigable under the Sensor's Parameters node
+    (no doubled path in the NodeId).
 
 Background:
     The IJT Base NodeSet defines:
@@ -128,14 +127,14 @@ async def _assert_enum_strings_accessible(pq_node, variable_label):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_CABLE)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_CABLE)
 async def test_cable_length_physical_quantity_via_has_component(cables_folder, ns_indices):
     """Cable CableLength PhysicalQuantity must be reachable via HasComponent."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(cables_folder, BN.CABLE_LENGTH, ns_indices)
     await _assert_physical_quantity_via_has_component(var_node, f"Cable '{_name}' CableLength", ns_ijt)
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_CABLE)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_CABLE)
 async def test_cable_length_enum_strings_accessible(cables_folder, ns_indices):
     """Cable CableLength PhysicalQuantity must expose EnumStrings via HasProperty."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(cables_folder, BN.CABLE_LENGTH, ns_indices)
@@ -148,14 +147,14 @@ async def test_cable_length_enum_strings_accessible(cables_folder, ns_indices):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_FEEDER)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_FEEDER)
 async def test_feeder_feeding_speed_physical_quantity_via_has_component(feeders_folder, ns_indices):
     """Feeder FeedingSpeed PhysicalQuantity must be reachable via HasComponent."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(feeders_folder, BN.FEEDING_SPEED, ns_indices)
     await _assert_physical_quantity_via_has_component(var_node, f"Feeder '{_name}' FeedingSpeed", ns_ijt)
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_FEEDER)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_FEEDER)
 async def test_feeder_feeding_speed_enum_strings_accessible(feeders_folder, ns_indices):
     """Feeder FeedingSpeed PhysicalQuantity must expose EnumStrings via HasProperty."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(feeders_folder, BN.FEEDING_SPEED, ns_indices)
@@ -168,14 +167,14 @@ async def test_feeder_feeding_speed_enum_strings_accessible(feeders_folder, ns_i
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_BATTERY)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY)
 async def test_battery_nominal_voltage_physical_quantity_via_has_component(batteries_folder, ns_indices):
     """Battery NominalVoltage PhysicalQuantity must be reachable via HasComponent."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(batteries_folder, BN.NOMINAL_VOLTAGE, ns_indices)
     await _assert_physical_quantity_via_has_component(var_node, f"Battery '{_name}' NominalVoltage", ns_ijt)
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_BATTERY)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY)
 async def test_battery_nominal_voltage_enum_strings_accessible(batteries_folder, ns_indices):
     """Battery NominalVoltage PhysicalQuantity must expose EnumStrings via HasProperty."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(batteries_folder, BN.NOMINAL_VOLTAGE, ns_indices)
@@ -188,14 +187,14 @@ async def test_battery_nominal_voltage_enum_strings_accessible(batteries_folder,
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_BATTERY)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY)
 async def test_battery_capacity_physical_quantity_via_has_component(batteries_folder, ns_indices):
     """Battery Capacity PhysicalQuantity must be reachable via HasComponent."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(batteries_folder, BN.CAPACITY, ns_indices)
     await _assert_physical_quantity_via_has_component(var_node, f"Battery '{_name}' Capacity", ns_ijt)
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_BATTERY)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY)
 async def test_battery_capacity_enum_strings_accessible(batteries_folder, ns_indices):
     """Battery Capacity PhysicalQuantity must expose EnumStrings via HasProperty."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(batteries_folder, BN.CAPACITY, ns_indices)
@@ -203,7 +202,7 @@ async def test_battery_capacity_enum_strings_accessible(batteries_folder, ns_ind
     await _assert_enum_strings_accessible(pq, f"Battery '{_name}' Capacity")
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_BATTERY, CU.ENGINEERING_UNITS)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY, CU.ENGINEERING_UNITS)
 async def test_battery_capacity_engineering_unit_is_ampere_hour(batteries_folder, ns_indices):
     """
     Battery Capacity must use engineering unit Ah (UNECE 4279624), not A (UNECE 4279632).
@@ -264,14 +263,14 @@ async def test_battery_capacity_engineering_unit_is_ampere_hour(batteries_folder
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_POWER_SUPPLY)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_POWER_SUPPLY)
 async def test_power_supply_nominal_power_physical_quantity_via_has_component(power_supplies_folder, ns_indices):
     """PowerSupply NominalPower PhysicalQuantity must be reachable via HasComponent."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(power_supplies_folder, BN.NOMINAL_POWER, ns_indices)
     await _assert_physical_quantity_via_has_component(var_node, f"PowerSupply '{_name}' NominalPower", ns_ijt)
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_POWER_SUPPLY)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_POWER_SUPPLY)
 async def test_power_supply_nominal_power_enum_strings_accessible(power_supplies_folder, ns_indices):
     """PowerSupply NominalPower PhysicalQuantity must expose EnumStrings via HasProperty."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(power_supplies_folder, BN.NOMINAL_POWER, ns_indices)
@@ -279,14 +278,14 @@ async def test_power_supply_nominal_power_enum_strings_accessible(power_supplies
     await _assert_enum_strings_accessible(pq, f"PowerSupply '{_name}' NominalPower")
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_POWER_SUPPLY)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_POWER_SUPPLY)
 async def test_power_supply_actual_power_physical_quantity_via_has_component(power_supplies_folder, ns_indices):
     """PowerSupply ActualPower PhysicalQuantity must be reachable via HasComponent."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(power_supplies_folder, BN.ACTUAL_POWER, ns_indices)
     await _assert_physical_quantity_via_has_component(var_node, f"PowerSupply '{_name}' ActualPower", ns_ijt)
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_POWER_SUPPLY)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_POWER_SUPPLY)
 async def test_power_supply_actual_power_enum_strings_accessible(power_supplies_folder, ns_indices):
     """PowerSupply ActualPower PhysicalQuantity must expose EnumStrings via HasProperty."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(power_supplies_folder, BN.ACTUAL_POWER, ns_indices)
@@ -299,14 +298,14 @@ async def test_power_supply_actual_power_enum_strings_accessible(power_supplies_
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_SENSOR)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_SENSOR)
 async def test_sensor_measured_value_physical_quantity_via_has_component(sensors_folder, ns_indices):
     """Sensor MeasuredValue PhysicalQuantity must be reachable via HasComponent."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(sensors_folder, BN.MEASURED_VALUE, ns_indices)
     await _assert_physical_quantity_via_has_component(var_node, f"Sensor '{_name}' MeasuredValue", ns_ijt)
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_SENSOR)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_SENSOR)
 async def test_sensor_measured_value_enum_strings_accessible(sensors_folder, ns_indices):
     """Sensor MeasuredValue PhysicalQuantity must expose EnumStrings via HasProperty."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(sensors_folder, BN.MEASURED_VALUE, ns_indices)
@@ -314,7 +313,7 @@ async def test_sensor_measured_value_enum_strings_accessible(sensors_folder, ns_
     await _assert_enum_strings_accessible(pq, f"Sensor '{_name}' MeasuredValue")
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_SENSOR)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_SENSOR)
 async def test_sensor_measured_value_is_navigable(sensors_folder, ns_indices):
     """
     Sensor MeasuredValue must be a direct child of Parameters — not have a doubled path.
@@ -367,28 +366,28 @@ async def test_sensor_measured_value_is_navigable(sensors_folder, ns_indices):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_TOOL)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_TOOL)
 async def test_tool_max_torque_physical_quantity_via_has_component(tools_folder, ns_indices):
     """Tool MaxTorque PhysicalQuantity must be reachable via HasComponent."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(tools_folder, BN.MAX_TORQUE, ns_indices)
     await _assert_physical_quantity_via_has_component(var_node, f"Tool '{_name}' MaxTorque", ns_ijt)
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_TOOL)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_TOOL)
 async def test_tool_min_torque_physical_quantity_via_has_component(tools_folder, ns_indices):
     """Tool MinTorque PhysicalQuantity must be reachable via HasComponent."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(tools_folder, BN.MIN_TORQUE, ns_indices)
     await _assert_physical_quantity_via_has_component(var_node, f"Tool '{_name}' MinTorque", ns_ijt)
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_TOOL)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_TOOL)
 async def test_tool_max_speed_physical_quantity_via_has_component(tools_folder, ns_indices):
     """Tool MaxSpeed PhysicalQuantity must be reachable via HasComponent."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(tools_folder, BN.MAX_SPEED, ns_indices)
     await _assert_physical_quantity_via_has_component(var_node, f"Tool '{_name}' MaxSpeed", ns_ijt)
 
 
-@pytest.mark.requires_cu(CU.ASSET_JOINING_DATA_VARIABLE_STRUCTURE, CU.ASSET_MANAGEMENT_TOOL)
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_TOOL)
 async def test_tool_max_torque_enum_strings_accessible(tools_folder, ns_indices):
     """Tool MaxTorque PhysicalQuantity must expose EnumStrings via HasProperty."""
     _name, var_node, ns_ijt = await _get_joining_variable_and_ns(tools_folder, BN.MAX_TORQUE, ns_indices)

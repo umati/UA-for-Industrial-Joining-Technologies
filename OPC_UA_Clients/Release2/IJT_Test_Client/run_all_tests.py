@@ -21,6 +21,7 @@ Environment variables:
   OPCUA_SIMULATOR_EXE        Path to opcua_ijt_demo_application(.exe)
   OPCUA_STARTUP_TIMEOUT_SEC  Seconds to wait for simulator start (default: 30)
   SKIP_VENV_INSTALL          Set to "1" to skip pip install step (faster re-runs)
+  IJT_RUNNER_NO_DELETE       Set to "1" to preserve runner outputs/tmp/caches
 """
 
 from __future__ import annotations
@@ -62,9 +63,11 @@ _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest-live.xml"
 _DEFAULT_EXCEL_OUT = _RESULTS_DIR / "report.xlsx"
 _TMP_DIR = _HERE / "tmp"
+_SIMULATOR_CAPABILITIES = _HERE / "server_capabilities.simulator.yaml"
 _AUTO_INSTALL_TOOLS = False
 _AUTO_INSTALL_BLOCKED_REASON: str | None = None
 _RUN_START: float = 0.0  # set at main() entry; used to reject stale XML files
+_RUNNER_SET_CAPABILITIES_FILE = False
 
 # The OPC UA server port this client connects to.  Defined once here so every
 # reference below derives from it — change the port in one place only.
@@ -84,6 +87,27 @@ _WELL_KNOWN_SIMULATOR_PATHS = [
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _deletes_disabled() -> bool:
+    """Return True when the runner must preserve existing files and directories."""
+    return os.environ.get("IJT_RUNNER_NO_DELETE", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _safe_rmtree(path: Path) -> None:
+    """Remove a directory tree unless deletion is disabled for this run."""
+    if _deletes_disabled():
+        logger.info("[cleanup] Preserving directory because IJT_RUNNER_NO_DELETE=1: %s", path)
+        return
+    shutil.rmtree(path, ignore_errors=True)
+
+
+def _safe_unlink(path: Path) -> None:
+    """Remove a file unless deletion is disabled for this run."""
+    if _deletes_disabled():
+        logger.info("[cleanup] Preserving file because IJT_RUNNER_NO_DELETE=1: %s", path)
+        return
+    path.unlink(missing_ok=True)
 
 
 def _venv_python(venv_dir: Path) -> Path:
@@ -112,6 +136,9 @@ def _parse_opcua_endpoint(url: str) -> tuple[str, int]:
 def _prepare_tmp_dir() -> None:
     """Reset runner-managed tmp workspace and recreate tmp/pytest/."""
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
+    if _deletes_disabled():
+        (_TMP_DIR / "pytest").mkdir(parents=True, exist_ok=True)
+        return
     for child in _TMP_DIR.iterdir():
         name = child.name
         managed = name in {"pytest", "pytest_tmp", "pip-audit-cache", "ruff-cache"} or name.startswith(
@@ -121,9 +148,9 @@ def _prepare_tmp_dir() -> None:
             continue
         with contextlib.suppress(OSError):
             if child.is_dir():
-                _force_rmtree(child)
+                _safe_rmtree(child)
             else:
-                child.unlink(missing_ok=True)
+                _safe_unlink(child)
     pytest_tmp = _TMP_DIR / "pytest"
     pytest_tmp.mkdir(parents=True, exist_ok=True)
 
@@ -433,8 +460,8 @@ def _remove_stale_venvs() -> None:
     for name in _STALE_VENV_NAMES:
         stale = _HERE / name
         if stale.is_dir():
-            logger.info("[cleanup] Removing stale virtual environment: %s", stale)
-            shutil.rmtree(stale, ignore_errors=True)
+            logger.info("[cleanup] Stale virtual environment found: %s", stale)
+            _safe_rmtree(stale)
 
 
 def ensure_venv() -> None:
@@ -524,7 +551,42 @@ def _parse_server_url() -> tuple[str, int]:
     return _parse_opcua_endpoint(_get_server_url())
 
 
+def _startup_timeout_s() -> float:
+    """Return simulator startup timeout in seconds."""
+    try:
+        return float(os.environ.get("OPCUA_STARTUP_TIMEOUT_SEC", "30"))
+    except ValueError:
+        return 30.0
+
+
+def _is_opcua_ready(url: str, timeout_s: float) -> bool:
+    """Return True when the endpoint accepts a real OPC UA connection."""
+    try:
+        from helpers.server_manager import wait_for_opcua_ready
+
+        return wait_for_opcua_ready(url, timeout_s=timeout_s)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("OPC UA readiness probe failed: %s", exc)
+        return False
+
+
 _server_tmp_dir: Path | None = None  # set by _launch_simulator_on_port; cleared in finally
+
+
+def _sourcecontrol_root() -> Path:
+    """Return the SourceControl root when this checkout is below it."""
+    for parent in [_HERE, *_HERE.parents]:
+        if parent.name.lower() == "sourcecontrol":
+            return parent
+    return _TMP_DIR
+
+
+def _simulator_tmp_dir(port: int) -> Path:
+    """Return a short runner-managed simulator copy path for Windows MAX_PATH safety."""
+    suffix = f"_ijt_sim_{port}"
+    if _deletes_disabled():
+        suffix = f"{suffix}_{os.getpid()}_{int(time.time())}"
+    return _sourcecontrol_root() / suffix
 
 
 def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
@@ -534,7 +596,7 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
     finally block can remove it via ``shutil.rmtree(_server_tmp_dir, ignore_errors=True)``.
     Returns the Popen handle on success, None on failure (temp dir cleaned on failure).
     """
-    global _server_tmp_dir
+    global _RUNNER_SET_CAPABILITIES_FILE, _server_tmp_dir
 
     exe_path = Path(exe)
     if not exe_path.exists():
@@ -542,15 +604,15 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
         return None
 
     src_dir = exe_path.parent
-    tmp_dir = _TMP_DIR / f"server_instance_{port}"
+    tmp_dir = _simulator_tmp_dir(port)
     _log(f"  [server] Launching simulator on port {port} (copied to {tmp_dir})")
     try:
         if tmp_dir.exists():
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+            _safe_rmtree(tmp_dir)
         shutil.copytree(src_dir, tmp_dir)
     except OSError as exc:
         _log(f"  [server] Failed to copy binary dir: {exc}")
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        _safe_rmtree(tmp_dir)
         return None
 
     cfg_path = tmp_dir / "server_configuration.json"
@@ -563,7 +625,7 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
                 json.dump(cfg, fh, indent=2)
         except (OSError, ValueError) as exc:
             _log(f"  [server] Failed to patch server_configuration.json: {exc}")
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+            _safe_rmtree(tmp_dir)
             return None
 
     try:
@@ -575,20 +637,23 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
         )
     except OSError as exc:
         _log(f"  [server] Failed to launch binary: {exc}")
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        _safe_rmtree(tmp_dir)
         return None
 
-    for _ in range(30):
-        if _is_port_reachable("localhost", port):
-            _log(f"  [server] Ready on port {port}")
-            os.environ["OPCUA_SERVER_URL"] = f"opc.tcp://localhost:{port}"
-            _server_tmp_dir = tmp_dir
-            return proc
-        time.sleep(1)
+    server_url = f"opc.tcp://localhost:{port}"
+    if _is_opcua_ready(server_url, timeout_s=_startup_timeout_s()):
+        _log(f"  [server] Ready on port {port}")
+        os.environ["OPCUA_SERVER_URL"] = server_url
+        if "OPCUA_CAPABILITIES_FILE" not in os.environ and _SIMULATOR_CAPABILITIES.exists():
+            os.environ["OPCUA_CAPABILITIES_FILE"] = str(_SIMULATOR_CAPABILITIES)
+            _RUNNER_SET_CAPABILITIES_FILE = True
+            _log(f"  [server] Using simulator capabilities: {_SIMULATOR_CAPABILITIES.name}")
+        _server_tmp_dir = tmp_dir
+        return proc
 
     _log("  [server] Timed out waiting for simulator — terminating")
     proc.terminate()
-    shutil.rmtree(tmp_dir, ignore_errors=True)
+    _safe_rmtree(tmp_dir)
     return None
 
 
@@ -603,7 +668,11 @@ def _ensure_server(port: int = _OPCUA_SERVER_PORT) -> subprocess.Popen | None:
         _log("  [server] OPCUA_SERVER_URL already set — skipping auto-launch")
         return None
     if _is_port_reachable("localhost", port):
-        _log(f"  [server] Already running on port {port}")
+        server_url = f"opc.tcp://localhost:{port}"
+        if _is_opcua_ready(server_url, timeout_s=min(_startup_timeout_s(), 10.0)):
+            _log(f"  [server] Already running on port {port}")
+        else:
+            _log(f"  [server] Port {port} is open but OPC UA handshake failed")
         return None
     exe = os.environ.get("OPCUA_SIMULATOR_EXE")
     if not exe:
@@ -626,7 +695,10 @@ def _check_server(skip: bool) -> None:
     url = _get_server_url()
     logger.info("Checking OPC UA server at %s ...", url)
     if _is_port_reachable(host, port):
-        logger.info("OK Server is reachable - tests will connect normally.")
+        if _is_opcua_ready(url, timeout_s=min(_startup_timeout_s(), 10.0)):
+            logger.info("OK Server is reachable - tests will connect normally.")
+        else:
+            logger.warning("NO Server TCP port is open but OPC UA handshake failed.")
         return
     logger.warning("NO Server not reachable at %s:%s", host, port)
     sim_exe = os.environ.get("OPCUA_SIMULATOR_EXE")
@@ -645,11 +717,19 @@ def _check_server(skip: bool) -> None:
     logger.info("  Live tests will be skipped if the server cannot be reached.")
 
 
-def _print_test_count() -> None:
+def _print_test_count(pytest_args: list[str] | None = None) -> None:
     """Run pytest --collect-only and print a summary of found tests."""
     try:
         result = subprocess.run(
-            [str(_venv_python(VENV)), "-m", "pytest", "--collect-only", "-q", "--tb=no"],
+            [
+                str(_venv_python(VENV)),
+                "-m",
+                "pytest",
+                *(pytest_args or []),
+                "--collect-only",
+                "-q",
+                "--tb=no",
+            ],
             cwd=_HERE,
             capture_output=True,
             text=True,
@@ -930,17 +1010,14 @@ def _step_unit_tests() -> _StepResult:
         result.duration = time.monotonic() - t0
         return result
     unit_xml = str(_RESULTS_DIR / "pytest-unit.xml")
-    cmd: list[str] = [
-        sys.executable,
-        "-m",
-        "pytest",
+    pytest_args: list[str] = [
         str(unit_dir),
         "-q",
         "--tb=short",
         f"--junitxml={unit_xml}",
     ]
     if _tool_available("pytest_cov"):
-        cmd += [
+        pytest_args += [
             # Cover only helpers/ — the library actually tested by unit tests.
             # Using --cov=. would include live/conformance test files (0% coverage)
             # and pull the total far below the fail_under threshold.
@@ -950,7 +1027,11 @@ def _step_unit_tests() -> _StepResult:
             "--cov-report=term-missing",
             # fail_under threshold is in [tool.coverage.report] in pyproject.toml
         ]
-    rc, output = _run(cmd)
+    cmd: list[str] = [sys.executable, "-m", "pytest", *pytest_args]
+    rc, output = _run(
+        cmd,
+        extra_env={"IJT_CU_COMPLIANCE_REPORT_FILE": str(_RESULTS_DIR / "cu-compliance-report-unit.json")},
+    )
     result.duration = time.monotonic() - t0
     result.ok = rc == 0
     for line in reversed(output.splitlines()):
@@ -1088,6 +1169,7 @@ def _step_pyright() -> _StepResult:
         warns = summary.get("warningCount", 0)
         result.ok = True
         if errors:
+            result.warn = True
             result.note = f"advisory: {errors} error(s), {warns} warning(s)"
         else:
             result.note = f"advisory: 0 errors, {warns} warning(s)" if warns else "advisory: 0 errors, 0 warnings"
@@ -1102,6 +1184,57 @@ def _step_pyright() -> _StepResult:
 # ---------------------------------------------------------------------------
 
 
+_PYTEST_OPTIONS_WITH_VALUE = {
+    "--basetemp",
+    "--cov",
+    "--cov-report",
+    "--junit-xml",
+    "--junitxml",
+    "--maxfail",
+    "--rootdir",
+    "--tb",
+    "-k",
+    "-m",
+    "-n",
+}
+
+
+def _has_explicit_pytest_selection(args: list[str]) -> bool:
+    """Return True when forwarded pytest args include a positional test selector."""
+    skip_next = False
+    for arg in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == "--":
+            continue
+        if arg in _PYTEST_OPTIONS_WITH_VALUE:
+            skip_next = True
+            continue
+        if any(arg.startswith(f"{option}=") for option in _PYTEST_OPTIONS_WITH_VALUE if option.startswith("--")):
+            continue
+        if arg.startswith("-"):
+            continue
+        return True
+    return False
+
+
+def _has_explicit_coverage_option(args: list[str]) -> bool:
+    """Return True when forwarded pytest args explicitly request coverage behavior."""
+    return any(arg == "--no-cov" or arg == "--cov" or arg.startswith("--cov") for arg in args)
+
+
+def _default_live_coverage_args() -> list[str]:
+    """Return live-stage coverage args that collect diagnostics without blocking compliance."""
+    return [
+        "--cov=helpers",
+        "--cov-append",
+        f"--cov-report=xml:{_RESULTS_DIR / 'coverage-combined.xml'}",
+        "--cov-report=term-missing",
+        "--cov-fail-under=0",
+    ]
+
+
 def run_pytest(extra_args: list[str]) -> int:
     """Run pytest inside the virtual environment and return its exit code."""
     cmd = [str(_venv_python(VENV)), "-m", "pytest"] + extra_args
@@ -1111,7 +1244,13 @@ def run_pytest(extra_args: list[str]) -> int:
 
 
 def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _StepResult:
-    """Run the full live test suite via venv pytest with optional coverage."""
+    """Run the full live test suite via venv pytest.
+
+    The unit stage owns the hard coverage gate. Live conformance tests still
+    collect helper coverage diagnostics by default, but force fail-under to 0
+    so an otherwise passing server-facing compliance run is not failed by the
+    live coverage shape.
+    """
     result = _StepResult("[PHASE 2] pytest live")
     t0 = time.monotonic()
 
@@ -1123,22 +1262,17 @@ def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _
             result.duration = time.monotonic() - t0
             return result
 
-    _print_test_count()
+    live_selection_args = list(extra_pytest_args)
+    if not _has_explicit_pytest_selection(live_selection_args):
+        live_selection_args.append("conformance")
 
-    # Append coverage flags if pytest-cov is installed
+    _print_test_count(live_selection_args)
+
     cov_args: list[str] = []
-    if _tool_available("pytest_cov"):
-        cov_args = [
-            # Use --cov=helpers (library code only) — same as unit tests.
-            # --cov=. would include test files (1-3% self-coverage) and
-            # pull the total well below the fail_under threshold.
-            "--cov=helpers",
-            f"--cov-report=xml:{_RESULTS_DIR / 'coverage-live.xml'}",
-            "--cov-report=term-missing",
-            # fail_under threshold is in [tool.coverage.report] in pyproject.toml
-        ]
+    if _tool_available("pytest_cov") and not _has_explicit_coverage_option(live_selection_args):
+        cov_args = _default_live_coverage_args()
 
-    rc = run_pytest(extra_pytest_args + cov_args)
+    rc = run_pytest(live_selection_args + cov_args)
     result.duration = time.monotonic() - t0
     result.ok = rc == 0
     if not result.ok:
@@ -1328,8 +1462,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     """Entry point; returns 0 on success, 1 on any failure."""
-    global _RUN_START
+    global _RUNNER_SET_CAPABILITIES_FILE, _RUN_START
     _RUN_START = time.time()
+    _RUNNER_SET_CAPABILITIES_FILE = False
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     _cleanup_caches(_HERE)  # pre-run: clear stale caches from interrupted runs
     global _USE_COLOUR, _AUTO_INSTALL_TOOLS, _VERBOSE
@@ -1351,7 +1486,7 @@ def main() -> int:
     # Step 2: Re-exec under the venv Python so all tools use the same interpreter
     _relaunch_if_needed()
 
-    shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
+    _safe_rmtree(_RESULTS_DIR)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Build pytest arg list from CLI flags + any raw remainder args
@@ -1400,9 +1535,11 @@ def main() -> int:
                 server_proc.kill()
             # Clean up env var and temp dir we set
             os.environ.pop("OPCUA_SERVER_URL", None)
+            if _RUNNER_SET_CAPABILITIES_FILE:
+                os.environ.pop("OPCUA_CAPABILITIES_FILE", None)
             global _server_tmp_dir
             if _server_tmp_dir:
-                shutil.rmtree(_server_tmp_dir, ignore_errors=True)
+                _safe_rmtree(_server_tmp_dir)
             _server_tmp_dir = None
 
     _divider()
@@ -1443,6 +1580,9 @@ def main() -> int:
 
 def _force_rmtree(path: Path) -> None:
     """Remove a directory tree, handling Windows read-only / locked files."""
+    if _deletes_disabled():
+        logger.info("[cleanup] Preserving directory because IJT_RUNNER_NO_DELETE=1: %s", path)
+        return
     import stat as _stat
 
     def _on_exc(func, fpath, exc):
@@ -1459,6 +1599,9 @@ def _force_rmtree(path: Path) -> None:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
+    if _deletes_disabled():
+        logger.info("[cleanup] Preserving caches because IJT_RUNNER_NO_DELETE=1")
+        return
     _SKIP = {"node_modules", ".git", "test-results", "tmp"}  # tmp workspace is handled by _prepare_tmp_dir()
     _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "htmlcov"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
@@ -1470,7 +1613,7 @@ def _cleanup_caches(root: Path) -> None:
         for f in files:
             if f == ".coverage" or f.startswith(".coverage.") or f.endswith(".pyc"):
                 with contextlib.suppress(OSError):
-                    (Path(dirpath) / f).unlink(missing_ok=True)
+                    _safe_unlink(Path(dirpath) / f)
 
 
 if __name__ == "__main__":

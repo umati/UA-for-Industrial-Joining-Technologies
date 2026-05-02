@@ -128,8 +128,6 @@ class CU:
     ASSET_MANAGEMENT_MACHINERY_BUILDING_BLOCKS = "asset_management_machinery_building_blocks"
     # JoiningDataVariable internal structure — PhysicalQuantity reachable via HasComponent,
     # EnumStrings accessible, and per-asset parameter EU values correct.
-    ASSET_JOINING_DATA_VARIABLE_STRUCTURE = "asset_joining_data_variable_structure"
-
     # ── Asset operations / methods ────────────────────────────────────────────
     METHOD_INPUT_ARGUMENT = "method_input_argument"
     DISCONNECT_ASSET = "disconnect_asset"

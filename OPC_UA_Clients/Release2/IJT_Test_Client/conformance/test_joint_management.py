@@ -46,7 +46,8 @@ import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
-from helpers.namespaces import BN, NS_IJT_BASE
+from helpers.method_signature import JOINT_METHOD_INPUTS, assert_input_argument_names
+from helpers.namespaces import BN, NS_IJT_BASE, NS_OPC_UA
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,63 @@ _INVALID_JOINT_ID = "INVALID-JOINT-ID-NONEXISTENT"
 
 # Test joint ID used when creating a temporary joint for round-trip tests.
 _TEST_JOINT_ID = "conformance-test-joint"
+
+
+def _piu_arg(value: str = ""):
+    return ua.Variant(value, ua.VariantType.String)
+
+
+def _string_arg(value: str = ""):
+    return ua.Variant(value, ua.VariantType.String)
+
+
+def _arg_value(arg):
+    return arg.Value if isinstance(arg, ua.Variant) else arg
+
+
+def _is_empty_string_arg(arg) -> bool:
+    value = _arg_value(arg)
+    return isinstance(value, str) and value == ""
+
+
+class _JointManagementAdapter:
+    """Delegate node that upgrades legacy JointManagement calls to current signatures."""
+
+    def __init__(self, node, method_names_by_nodeid: dict[str, str]):
+        self._node = node
+        self._method_names_by_nodeid = method_names_by_nodeid
+
+    def __getattr__(self, name):
+        return getattr(self._node, name)
+
+    def _method_name(self, method_node_id) -> str | None:
+        nodeid = getattr(method_node_id, "nodeid", method_node_id)
+        return self._method_names_by_nodeid.get(str(nodeid))
+
+    def _normalize_args(self, method_name: str | None, args: tuple) -> tuple:
+        if method_name not in JOINT_METHOD_INPUTS:
+            return args
+        expected = JOINT_METHOD_INPUTS[method_name]
+        if expected == ("ProductInstanceUri",):
+            return args if len(args) == 1 else (_piu_arg(),)
+        if method_name in {"GetJoint", "GetJointDesign", "GetJointComponent", "GetJointRevisionList"}:
+            return args if len(args) == 2 else (_piu_arg(), *args)
+        if method_name in {"SendJoint", "SendJointDesign", "SendJointComponent"}:
+            return args if len(args) == 2 else (_piu_arg(), *args)
+        if method_name in {"DeleteJointDesign", "DeleteJointComponent"}:
+            return args if len(args) == 2 else (_piu_arg(), *args)
+        if method_name in {"SelectJoint", "DeleteJoint"}:
+            if len(args) == 3:
+                return args
+            if len(args) == 2:
+                return (_piu_arg(), *args)
+            if len(args) == 1:
+                return (_piu_arg(), args[0], _string_arg(""))
+        return args
+
+    async def call_method(self, method_node_id, *args):
+        method_name = self._method_name(method_node_id)
+        return await self._node.call_method(method_node_id, *self._normalize_args(method_name, args))
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +130,12 @@ async def _get_joint_management(client, ns_ijt):
     jm = await find_child_by_browse_name(js, BN.JOINT_MANAGEMENT, ns_ijt)
     if jm is None:
         pytest.skip("JointManagement node not found on JoiningSystem")
-    return jm
+    method_names_by_nodeid = {}
+    for method_name in JOINT_METHOD_INPUTS:
+        node = await find_child_by_browse_name(jm, method_name, ns_ijt)
+        if node is not None:
+            method_names_by_nodeid[str(node.nodeid)] = method_name
+    return _JointManagementAdapter(jm, method_names_by_nodeid)
 
 
 def _require_ns_ijt(ns_indices):
@@ -85,21 +148,11 @@ def _require_ns_ijt(ns_indices):
 
 async def _call_get_joint_list(jm_node, list_node):
     """
-    Call GetJointList, trying a no-argument call first.
-    Falls back to an empty-string argument if the server reports missing args.
+    Call GetJointList with the current ProductInstanceUri argument.
     Returns the JointList array (extracts index 0 when the server returns multiple
     output arguments: JointList, Status, StatusMessage).
     """
-    try:
-        raw = await jm_node.call_method(list_node.nodeid)
-    except ua.UaError as exc:
-        if any(s in str(exc) for s in ("BadArgumentsMissing", "BadInvalidArgument")):
-            raw = await jm_node.call_method(
-                list_node.nodeid,
-                ua.Variant("", ua.VariantType.String),
-            )
-        else:
-            raise
+    raw = await jm_node.call_method(list_node.nodeid, _piu_arg())
     # GetJointList returns (JointList: array, Status, StatusMessage).
     # When asyncua returns multiple outputs as a list, extract just the JointList.
     if isinstance(raw, (list, tuple)) and raw and isinstance(raw[0], (list, tuple)):
@@ -201,6 +254,18 @@ async def test_joint_management_addin_present(joint_management):
     JoiningSystem must expose a JointManagement AddIn node.
     """
     assert joint_management is not None, "JointManagement AddIn node must not be None"
+
+
+@pytest.mark.requires_cu(CU.JOINT_MANAGEMENT)
+@pytest.mark.parametrize("method_name, expected_args", sorted(JOINT_METHOD_INPUTS.items()))
+async def test_joint_method_input_arguments_match_nodeset(joint_management, ns_indices, method_name, expected_args):
+    """JointManagement methods exposed by the server must use current NodeSet signatures."""
+    ns_ijt = _require_ns_ijt(ns_indices)
+    ns_opcua = ns_indices.get(NS_OPC_UA, 0)
+    node = await find_child_by_browse_name(joint_management, method_name, ns_ijt)
+    if node is None:
+        pytest.skip(f"Optional method '{method_name}': Not Supported")
+    await assert_input_argument_names(node, expected_args, ns_opcua=ns_opcua, method_name=method_name)
 
 
 # ---------------------------------------------------------------------------
@@ -439,7 +504,7 @@ async def test_select_joint_with_non_empty_joint_origin_id(opcua_client, ns_indi
     try:
         await jm.call_method(
             sel_node.nodeid,
-            ua.Variant(test_origin_id, ua.VariantType.String),
+            _piu_arg(),
             ua.Variant(test_joint_id, ua.VariantType.String),
             ua.Variant(test_origin_id, ua.VariantType.String),
         )
@@ -510,7 +575,7 @@ async def test_send_joint_with_invalid_data_returns_error(opcua_client, ns_indic
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     assert send_node is not None, f"'{BN.SEND_JOINT}' not found in JointManagement"
     try:
-        result = await jm.call_method(send_node.nodeid, joint_type())
+        result = await jm.call_method(send_node.nodeid, _piu_arg(), joint_type())
         logger.warning(
             "SendJoint with empty JointDataType returned %r instead of raising ua.UaError",
             result,
@@ -707,7 +772,7 @@ async def test_delete_joint_with_non_empty_joint_origin_id(opcua_client, ns_indi
     try:
         await jm.call_method(
             del_node.nodeid,
-            ua.Variant(test_origin_id, ua.VariantType.String),
+            _piu_arg(),
             ua.Variant(test_joint_id, ua.VariantType.String),
             ua.Variant(test_origin_id, ua.VariantType.String),
         )
@@ -889,24 +954,6 @@ async def test_get_joint_design_method_present_if_exists(joint_management, ns_in
 
 
 # ---------------------------------------------------------------------------
-# ─── joint_design_data ───
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.requires_cu(CU.JOINT_DESIGN_DATA)
-async def test_joint_designs_folder_if_present(joint_management, ns_indices):
-    """
-    JointDesigns folder, if present, must be accessible under JointManagement per
-    the joint_design_data specification.
-    """
-    ns_ijt = _require_ns_ijt(ns_indices)
-    node = await find_child_by_browse_name(joint_management, "JointDesigns", ns_ijt)
-    if node is None:
-        pytest.skip("JointDesigns folder not present on this server (optional)")
-    assert node is not None
-
-
-# ---------------------------------------------------------------------------
 # ─── delete_joint_design ───
 # ---------------------------------------------------------------------------
 
@@ -971,24 +1018,6 @@ async def test_get_joint_component_method_present_if_exists(joint_management, ns
 
 
 # ---------------------------------------------------------------------------
-# ─── joint_component_data ───
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.requires_cu(CU.JOINT_COMPONENT_DATA)
-async def test_joint_components_folder_if_present(joint_management, ns_indices):
-    """
-    JointComponents folder, if present, must be accessible under JointManagement per
-    the joint_component_data specification.
-    """
-    ns_ijt = _require_ns_ijt(ns_indices)
-    node = await find_child_by_browse_name(joint_management, "JointComponents", ns_ijt)
-    if node is None:
-        pytest.skip("JointComponents folder not present on this server (optional)")
-    assert node is not None
-
-
-# ---------------------------------------------------------------------------
 # ─── delete_joint_component ───
 # ---------------------------------------------------------------------------
 
@@ -1031,28 +1060,22 @@ async def _send_test_joint_design(jm, ns_ijt, design_id, content="conformance-te
     if send_node is None:
         pytest.skip("SendJointDesign: Not Supported — skipping")
     design_type = getattr(ua, "JointDesignDataType", None)
-    if design_type is not None:
-        try:
-            design_data = design_type()
-            if hasattr(design_data, "JointDesignId"):
-                design_data.JointDesignId = design_id
-            if hasattr(design_data, "Content"):
-                design_data.Content = content
-            await jm.call_method(send_node.nodeid, design_data)
-            return True
-        except ua.UaError as exc:
-            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
-                pytest.skip(f"SendJointDesign not callable: {exc}")
-            raise
-        except (AttributeError, TypeError):
-            pass
+    if design_type is None:
+        pytest.skip("JointDesignDataType not available — cannot call SendJointDesign accurately")
     try:
-        await jm.call_method(send_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
+        design_data = design_type()
+        if hasattr(design_data, "JointDesignId"):
+            design_data.JointDesignId = design_id
+        if hasattr(design_data, "Name"):
+            design_data.Name = content
+        await jm.call_method(send_node.nodeid, _piu_arg(), design_data)
         return True
     except ua.UaError as exc:
         if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
             pytest.skip(f"SendJointDesign not callable: {exc}")
         raise
+    except (AttributeError, TypeError) as exc:
+        pytest.skip(f"JointDesignDataType not encodable for SendJointDesign: {exc}")
 
 
 async def _delete_test_joint_design(jm, ns_ijt, design_id):
@@ -1061,7 +1084,7 @@ async def _delete_test_joint_design(jm, ns_ijt, design_id):
     if del_node is None:
         return
     try:
-        await jm.call_method(del_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
+        await jm.call_method(del_node.nodeid, _piu_arg(), _string_arg(design_id))
     except ua.UaError:
         pass
 
@@ -1072,28 +1095,22 @@ async def _send_test_joint_component(jm, ns_ijt, component_id, manufacturer="Con
     if send_node is None:
         pytest.skip("SendJointComponent: Not Supported — skipping")
     comp_type = getattr(ua, "JointComponentDataType", None)
-    if comp_type is not None:
-        try:
-            comp_data = comp_type()
-            if hasattr(comp_data, "JointComponentId"):
-                comp_data.JointComponentId = component_id
-            if hasattr(comp_data, "Manufacturer"):
-                comp_data.Manufacturer = manufacturer
-            await jm.call_method(send_node.nodeid, comp_data)
-            return True
-        except ua.UaError as exc:
-            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
-                pytest.skip(f"SendJointComponent not callable: {exc}")
-            raise
-        except (AttributeError, TypeError):
-            pass
+    if comp_type is None:
+        pytest.skip("JointComponentDataType not available — cannot call SendJointComponent accurately")
     try:
-        await jm.call_method(send_node.nodeid, ua.Variant(component_id, ua.VariantType.String))
+        comp_data = comp_type()
+        if hasattr(comp_data, "JointComponentId"):
+            comp_data.JointComponentId = component_id
+        if hasattr(comp_data, "Manufacturer"):
+            comp_data.Manufacturer = manufacturer
+        await jm.call_method(send_node.nodeid, _piu_arg(), comp_data)
         return True
     except ua.UaError as exc:
         if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
             pytest.skip(f"SendJointComponent not callable: {exc}")
         raise
+    except (AttributeError, TypeError) as exc:
+        pytest.skip(f"JointComponentDataType not encodable for SendJointComponent: {exc}")
 
 
 async def _delete_test_joint_component(jm, ns_ijt, component_id):
@@ -1102,29 +1119,19 @@ async def _delete_test_joint_component(jm, ns_ijt, component_id):
     if del_node is None:
         return
     try:
-        await jm.call_method(del_node.nodeid, ua.Variant(component_id, ua.VariantType.String))
+        await jm.call_method(del_node.nodeid, _piu_arg(), _string_arg(component_id))
     except ua.UaError:
         pass
 
 
 async def _call_get_joint_design_list(jm, list_node):
-    """Call GetJointDesignList, trying no-arg first then empty-string fallback."""
-    try:
-        return await jm.call_method(list_node.nodeid)
-    except ua.UaError as exc:
-        if any(s in str(exc) for s in ("BadArgumentsMissing", "BadInvalidArgument")):
-            return await jm.call_method(list_node.nodeid, ua.Variant("", ua.VariantType.String))
-        raise
+    """Call GetJointDesignList with its current ProductInstanceUri input."""
+    return await jm.call_method(list_node.nodeid, _piu_arg())
 
 
 async def _call_get_joint_component_list(jm, list_node):
-    """Call GetJointComponentList, trying no-arg first then empty-string fallback."""
-    try:
-        return await jm.call_method(list_node.nodeid)
-    except ua.UaError as exc:
-        if any(s in str(exc) for s in ("BadArgumentsMissing", "BadInvalidArgument")):
-            return await jm.call_method(list_node.nodeid, ua.Variant("", ua.VariantType.String))
-        raise
+    """Call GetJointComponentList with its current ProductInstanceUri input."""
+    return await jm.call_method(list_node.nodeid, _piu_arg())
 
 
 # ---------------------------------------------------------------------------
@@ -1972,7 +1979,7 @@ async def test_send_joint_design_update_replaces_existing_design(opcua_client, n
         get_node = await find_child_by_browse_name(jm, "GetJointDesign", ns_ijt)
         if get_node is not None:
             try:
-                result = await jm.call_method(get_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
+                result = await jm.call_method(get_node.nodeid, _piu_arg(), _string_arg(design_id))
                 logger.info("GetJointDesign returned result after update: %r", type(result).__name__)
             except ua.UaError as exc:
                 logger.warning("GetJointDesign after update raised: %s", exc)
@@ -1996,7 +2003,7 @@ async def test_send_joint_design_with_empty_id_returns_error(opcua_client, ns_in
     if hasattr(design_data, "JointDesignId"):
         design_data.JointDesignId = ""
     try:
-        result = await jm.call_method(send_node.nodeid, design_data)
+        result = await jm.call_method(send_node.nodeid, _piu_arg(), design_data)
         logger.warning("Expected ua.UaError for empty JointDesignId but returned %r", result)
     except ua.UaError as exc:
         logger.info("Correctly raised ua.UaError for empty JointDesignId: %s", exc)
@@ -2014,7 +2021,7 @@ async def test_send_joint_design_with_null_content_returns_error(opcua_client, n
     if send_node is None:
         pytest.skip("SendJointDesign: Not Supported — skipping negative test")
     try:
-        result = await jm.call_method(send_node.nodeid, ua.Variant(None, ua.VariantType.Null))
+        result = await jm.call_method(send_node.nodeid, _piu_arg(), ua.Variant(None, ua.VariantType.Null))
         logger.warning("Expected ua.UaError for null content but returned %r", result)
     except ua.UaError as exc:
         logger.info("Correctly raised ua.UaError for null content: %s", exc)
@@ -2118,7 +2125,7 @@ async def test_get_joint_design_round_trip_data_matches_sent_data(opcua_client, 
         if get_node is None:
             pytest.skip("GetJointDesign: Not Supported — cannot verify round-trip")
         try:
-            result = await jm.call_method(get_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
+            result = await jm.call_method(get_node.nodeid, _piu_arg(), _string_arg(design_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJointDesign not callable: {exc}")
@@ -2141,7 +2148,7 @@ async def test_get_joint_design_result_has_required_fields(opcua_client, ns_indi
         if get_node is None:
             pytest.skip("GetJointDesign: Not Supported — cannot verify fields")
         try:
-            result = await jm.call_method(get_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
+            result = await jm.call_method(get_node.nodeid, _piu_arg(), _string_arg(design_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJointDesign not callable: {exc}")
@@ -2170,7 +2177,7 @@ async def test_get_joint_design_returns_updated_content_after_resend(opcua_clien
         if get_node is None:
             pytest.skip("GetJointDesign: Not Supported — cannot verify updated content")
         try:
-            result = await jm.call_method(get_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
+            result = await jm.call_method(get_node.nodeid, _piu_arg(), _string_arg(design_id))
             assert result is not None, "GetJointDesign returned None after resend"
             logger.info("GetJointDesign returns result after resend — update confirmed")
         except ua.UaError as exc:
@@ -2193,7 +2200,8 @@ async def test_get_joint_design_with_nonexistent_id_returns_error(opcua_client, 
     try:
         result = await jm.call_method(
             get_node.nodeid,
-            ua.Variant("conformance-test-nonexistent-design-xyz", ua.VariantType.String),
+            _piu_arg(),
+            _string_arg("conformance-test-nonexistent-design-xyz"),
         )
         logger.warning("Expected ua.UaError for non-existent design but returned %r", result)
     except ua.UaError as exc:
@@ -2242,7 +2250,7 @@ async def test_joint_design_data_content_is_non_null_for_stored_design(opcua_cli
         if get_node is None:
             pytest.skip("GetJointDesign: Not Supported — cannot verify content")
         try:
-            result = await jm.call_method(get_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
+            result = await jm.call_method(get_node.nodeid, _piu_arg(), _string_arg(design_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJointDesign not callable: {exc}")
@@ -2273,17 +2281,12 @@ async def test_joint_design_data_resend_with_same_id_accepted_or_error(opcua_cli
             if hasattr(design_data, "Content"):
                 design_data.Content = "SecondContent"
             try:
-                await jm.call_method(send_node.nodeid, design_data)
+                await jm.call_method(send_node.nodeid, _piu_arg(), design_data)
                 logger.info("Resend with same design ID accepted — update semantics confirmed")
             except ua.UaError as exc:
                 logger.info("Resend with same design ID raised error (acceptable): %s", exc)
         else:
-            logger.info("JointDesignDataType not available — resend tested via string arg")
-            try:
-                await jm.call_method(send_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
-                logger.info("Resend with same design ID (string arg) accepted")
-            except ua.UaError as exc:
-                logger.info("Resend raised error (acceptable): %s", exc)
+            pytest.skip("JointDesignDataType not available — cannot call SendJointDesign accurately")
     finally:
         await _delete_test_joint_design(jm, ns_ijt, design_id)
 
@@ -2346,7 +2349,7 @@ async def test_send_joint_component_update_replaces_existing_component(opcua_cli
         get_node = await find_child_by_browse_name(jm, "GetJointComponent", ns_ijt)
         if get_node is not None:
             try:
-                result = await jm.call_method(get_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
+                result = await jm.call_method(get_node.nodeid, _piu_arg(), _string_arg(comp_id))
                 mfg = getattr(result, "Manufacturer", None) if result else None
                 if mfg is not None:
                     assert str(mfg) == "ManufacturerV2", f"Expected 'ManufacturerV2' after update, got {mfg!r}"
@@ -2373,7 +2376,7 @@ async def test_send_joint_component_with_empty_id_returns_error(opcua_client, ns
     if hasattr(comp_data, "JointComponentId"):
         comp_data.JointComponentId = ""
     try:
-        result = await jm.call_method(send_node.nodeid, comp_data)
+        result = await jm.call_method(send_node.nodeid, _piu_arg(), comp_data)
         logger.warning("Expected ua.UaError for empty JointComponentId but returned %r", result)
     except ua.UaError as exc:
         logger.info("Correctly raised ua.UaError for empty JointComponentId: %s", exc)
@@ -2399,7 +2402,7 @@ async def test_send_joint_component_with_empty_manufacturer_returns_error(opcua_
     if hasattr(comp_data, "Manufacturer"):
         comp_data.Manufacturer = ""
     try:
-        result = await jm.call_method(send_node.nodeid, comp_data)
+        result = await jm.call_method(send_node.nodeid, _piu_arg(), comp_data)
         logger.warning("Expected ua.UaError for empty Manufacturer but returned %r", result)
     except ua.UaError as exc:
         logger.info("Correctly raised ua.UaError for empty Manufacturer: %s", exc)
@@ -2503,7 +2506,7 @@ async def test_get_joint_component_round_trip_data_matches_sent_data(opcua_clien
         if get_node is None:
             pytest.skip("GetJointComponent: Not Supported — cannot verify round-trip")
         try:
-            result = await jm.call_method(get_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
+            result = await jm.call_method(get_node.nodeid, _piu_arg(), _string_arg(comp_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJointComponent not callable: {exc}")
@@ -2526,7 +2529,7 @@ async def test_get_joint_component_result_has_required_fields(opcua_client, ns_i
         if get_node is None:
             pytest.skip("GetJointComponent: Not Supported — cannot verify fields")
         try:
-            result = await jm.call_method(get_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
+            result = await jm.call_method(get_node.nodeid, _piu_arg(), _string_arg(comp_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJointComponent not callable: {exc}")
@@ -2555,7 +2558,7 @@ async def test_get_joint_component_returns_updated_data_after_resend(opcua_clien
         if get_node is None:
             pytest.skip("GetJointComponent: Not Supported — cannot verify update")
         try:
-            result = await jm.call_method(get_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
+            result = await jm.call_method(get_node.nodeid, _piu_arg(), _string_arg(comp_id))
             comp_data = result[0] if isinstance(result, (list, tuple)) and result else result
             mfg = getattr(comp_data, "Manufacturer", None) if comp_data else None
             if mfg is not None:
@@ -2581,7 +2584,8 @@ async def test_get_joint_component_with_nonexistent_id_returns_error(opcua_clien
     try:
         result = await jm.call_method(
             get_node.nodeid,
-            ua.Variant("conformance-test-nonexistent-comp-xyz", ua.VariantType.String),
+            _piu_arg(),
+            _string_arg("conformance-test-nonexistent-comp-xyz"),
         )
         logger.warning("Expected ua.UaError for non-existent component but returned %r", result)
     except ua.UaError as exc:
@@ -2630,7 +2634,7 @@ async def test_joint_component_data_manufacturer_is_non_empty(opcua_client, ns_i
         if get_node is None:
             pytest.skip("GetJointComponent: Not Supported — cannot verify Manufacturer")
         try:
-            result = await jm.call_method(get_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
+            result = await jm.call_method(get_node.nodeid, _piu_arg(), _string_arg(comp_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJointComponent not callable: {exc}")
@@ -2658,7 +2662,7 @@ async def test_joint_component_data_manufacturer_uri_follows_uri_format(opcua_cl
         if get_node is None:
             pytest.skip("GetJointComponent: Not Supported — cannot verify ManufacturerUri")
         try:
-            result = await jm.call_method(get_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
+            result = await jm.call_method(get_node.nodeid, _piu_arg(), _string_arg(comp_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJointComponent not callable: {exc}")
@@ -2698,7 +2702,7 @@ async def test_joint_component_data_empty_manufacturer_uri_rejected(opcua_client
         comp_data.Manufacturer = "TestMfg"
     comp_data.ManufacturerUri = "not-a-valid-uri"
     try:
-        result = await jm.call_method(send_node.nodeid, comp_data)
+        result = await jm.call_method(send_node.nodeid, _piu_arg(), comp_data)
         logger.warning(
             "Expected ua.UaError for invalid ManufacturerUri but returned %r — server may not validate URI format",
             result,
@@ -2726,7 +2730,9 @@ async def test_delete_joint_with_nonexistent_id_returns_bad_node_id_unknown(opcu
     try:
         result = await jm.call_method(
             del_node.nodeid,
-            ua.Variant("conformance-test-nonexistent-del-xyz", ua.VariantType.String),
+            _piu_arg(),
+            _string_arg("conformance-test-nonexistent-del-xyz"),
+            _string_arg(""),
         )
         logger.warning("Expected ua.UaError for non-existent joint delete but returned %r", result)
     except ua.UaError as exc:
@@ -2813,7 +2819,7 @@ async def test_delete_joint_design_send_then_delete_removes_from_list(opcua_clie
     if del_node is None:
         pytest.skip("DeleteJointDesign: Not Supported — skipping")
     try:
-        await jm.call_method(del_node.nodeid, ua.Variant(design_id, ua.VariantType.String))
+        await jm.call_method(del_node.nodeid, _piu_arg(), _string_arg(design_id))
     except ua.UaError as exc:
         pytest.fail(f"DeleteJointDesign failed for design '{design_id}': {exc}")
     list_node = await find_child_by_browse_name(jm, "GetJointDesignList", ns_ijt)
@@ -2844,7 +2850,8 @@ async def test_delete_joint_design_with_nonexistent_id_returns_error(opcua_clien
     try:
         result = await jm.call_method(
             del_node.nodeid,
-            ua.Variant("conformance-test-nonexistent-design-del-xyz", ua.VariantType.String),
+            _piu_arg(),
+            _string_arg("conformance-test-nonexistent-design-del-xyz"),
         )
         logger.warning("Expected ua.UaError for non-existent design delete but returned %r", result)
     except ua.UaError as exc:
@@ -2867,7 +2874,7 @@ async def test_delete_joint_component_send_then_delete_removes_from_list(opcua_c
     if del_node is None:
         pytest.skip("DeleteJointComponent: Not Supported — skipping")
     try:
-        await jm.call_method(del_node.nodeid, ua.Variant(comp_id, ua.VariantType.String))
+        await jm.call_method(del_node.nodeid, _piu_arg(), _string_arg(comp_id))
     except ua.UaError as exc:
         pytest.fail(f"DeleteJointComponent failed for component '{comp_id}': {exc}")
     list_node = await find_child_by_browse_name(jm, "GetJointComponentList", ns_ijt)
@@ -2900,7 +2907,8 @@ async def test_delete_joint_component_with_nonexistent_id_returns_error(opcua_cl
     try:
         result = await jm.call_method(
             del_node.nodeid,
-            ua.Variant("conformance-test-nonexistent-comp-del-xyz", ua.VariantType.String),
+            _piu_arg(),
+            _string_arg("conformance-test-nonexistent-comp-del-xyz"),
         )
         logger.warning("Expected ua.UaError for non-existent component delete but returned %r", result)
     except ua.UaError as exc:
@@ -2941,7 +2949,7 @@ async def test_get_joint_revision_list_returns_list_for_stored_joint(opcua_clien
         if rl_node is None:
             pytest.skip("GetJointRevisionList: Not Supported — skipping")
         try:
-            result = await jm.call_method(rl_node.nodeid, ua.Variant(joint_id, ua.VariantType.String))
+            result = await jm.call_method(rl_node.nodeid, _piu_arg(), _string_arg(joint_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJointRevisionList not callable: {exc}")
@@ -2991,7 +2999,7 @@ async def test_get_joint_revision_list_each_entry_has_required_fields(opcua_clie
         if rl_node is None:
             pytest.skip("GetJointRevisionList: Not Supported — skipping")
         try:
-            result = await jm.call_method(rl_node.nodeid, ua.Variant(joint_id, ua.VariantType.String))
+            result = await jm.call_method(rl_node.nodeid, _piu_arg(), _string_arg(joint_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJointRevisionList not callable: {exc}")
@@ -3029,7 +3037,8 @@ async def test_get_joint_revision_list_with_nonexistent_id_returns_empty_or_erro
     try:
         result = await jm.call_method(
             rl_node.nodeid,
-            ua.Variant("conformance-test-nonexistent-jrl-xyz", ua.VariantType.String),
+            _piu_arg(),
+            _string_arg("conformance-test-nonexistent-jrl-xyz"),
         )
         items = list(result) if isinstance(result, (list, tuple)) else ([] if result is None else [result])
         if items:
@@ -3054,7 +3063,7 @@ async def test_get_joint_revision_list_with_empty_id_returns_bad_invalid_argumen
     if rl_node is None:
         pytest.skip("GetJointRevisionList: Not Supported — skipping negative test")
     try:
-        result = await jm.call_method(rl_node.nodeid, ua.Variant("", ua.VariantType.String))
+        result = await jm.call_method(rl_node.nodeid, _piu_arg(), _string_arg(""))
         logger.warning("Expected ua.UaError for empty ID in GetJointRevisionList but returned %r", result)
     except ua.UaError as exc:
         logger.info("Correctly raised ua.UaError for empty ID: %s", exc)

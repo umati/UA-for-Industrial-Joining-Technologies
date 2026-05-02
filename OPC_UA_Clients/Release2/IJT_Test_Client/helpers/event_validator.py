@@ -52,13 +52,8 @@ _MISSING = _MissingSentinel()
 # Valid enum ranges (OPC 40450-1 §8 and OPC UA Part 9)
 # ---------------------------------------------------------------------------
 
-# JoiningTechnologyEnumeration: 0=OTHER … 7=BOLTING
-_VALID_JOINING_TECHNOLOGIES: set[int] = set(range(8))
-
-# EntityTypeEnumeration (event scope, §8):
-# 0=OTHER, 1=PROGRAM, 2=JOINT, 3=PART, 4=TOOL,
-# 5=CONTROLLER, 6=VIRTUAL_STATION, 7=VEHICLE, 8=PRODUCT
-_VALID_EVENT_ENTITY_TYPES: set[int] = set(range(9))
+# EntityTypeEnumeration per OPC 40450-1 v100 §10.10.
+_VALID_EVENT_ENTITY_TYPES: set[int] = set(range(43))
 
 # OPC UA Severity: 1–1000 (OPC UA Part 4 §7.19)
 _SEVERITY_MIN = 1
@@ -76,11 +71,12 @@ _VALID_PHYSICAL_QUANTITIES: set[int] = set(range(29))
 
 class JoiningTechnologyValidator:
     """
-    Validates a JoiningTechnology enum value (Int32).
+    Validates a JoiningTechnology value.
 
-    Valid values per OPC 40450-1 §8:
-      0=OTHER, 1=TIGHTENING, 2=CLINCHING, 3=RIVETING,
-      4=STUD_WELDING, 5=FLOW_DRILL_SCREW, 6=SELF_PIERCE_RIVETING, 7=BOLTING
+    In the IJT Base NodeSet the field is LocalizedText, not a numeric enum.
+    asyncua test doubles often represent LocalizedText as an object with a
+    ``Text`` attribute; plain strings are also accepted for unit-test and
+    deserialization compatibility.
     """
 
     def validate(
@@ -89,18 +85,14 @@ class JoiningTechnologyValidator:
         ctx: ValidationContext,
         vr: ValidationResult,
     ) -> None:
-        """Check that *value* converts to an integer in {0..7}."""
-        try:
-            tech_int = int(value)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
-            vr.add(ctx, f"expected integer in {{0..7}}, got {value!r}")
+        """Check that *value* is a non-empty LocalizedText/string payload."""
+        if value is None:
+            vr.add(ctx, "expected LocalizedText/string, got None")
             return
 
-        if tech_int not in _VALID_JOINING_TECHNOLOGIES:
-            vr.add(
-                ctx,
-                f"expected int in {{0..7}} (JoiningTechnology enum), got {tech_int!r}",
-            )
+        text = getattr(value, "Text", value)
+        if not isinstance(text, str) or not text.strip():
+            vr.add(ctx, f"expected non-empty LocalizedText/string, got {value!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +112,7 @@ class EntityDataTypeValidator:
         """
         Check:
         - ``EntityId`` non-empty string (required).
-        - ``EntityType`` in {0..8} if present.
+        - ``EntityType`` in {0..42} if present.
         """
         # EntityId — required, non-empty string
         entity_id = getattr(entity, "EntityId", _MISSING)
@@ -142,7 +134,7 @@ class EntityDataTypeValidator:
             if et_int is None or et_int not in _VALID_EVENT_ENTITY_TYPES:
                 vr.add(
                     ctx.child("EntityType"),
-                    f"expected int in {{0..8}} (EntityType enum), got {entity_type!r}",
+                    f"expected int in {{0..42}} (EntityType enum), got {entity_type!r}",
                 )
 
 
@@ -197,7 +189,7 @@ class ReportedValueValidator:
     """Validates a single ``ReportedValueDataType`` object (OPC 40450-1 §8).
 
     ``ReportedValueDataType`` fields per NodeSet2 spec:
-      - ``CurrentValue``       — **mandatory** (Double)
+      - ``CurrentValue``       — **mandatory** (Variant)
       - ``PhysicalQuantity``   — optional (IJTPhysicalQuantityEnumeration 0..28)
       - ``Name``               — optional (String)
       - ``PreviousValue``      — optional (Double)
@@ -217,19 +209,16 @@ class ReportedValueValidator:
     ) -> None:
         """
         Check:
-        - ``CurrentValue`` is numeric (required per spec).
+        - ``CurrentValue`` is present and non-None (Variant, required per spec).
         - ``PhysicalQuantity`` is in {0..28} if present.
         - ``EngineeringUnits`` has a ``.UnitId`` attribute if present.
         """
-        # CurrentValue — required, must be numeric (Double per spec)
+        # CurrentValue — required Variant; may hold any scalar value.
         current = getattr(value, "CurrentValue", _MISSING)
         if current is _MISSING:
             vr.add(ctx.child("CurrentValue"), "required field is absent")
-        elif not isinstance(current, (int, float)):
-            vr.add(
-                ctx.child("CurrentValue"),
-                f"expected numeric type, got {type(current).__name__!r} (value={current!r})",
-            )
+        elif current is None:
+            vr.add(ctx.child("CurrentValue"), "must not be None")
 
         # PhysicalQuantity — optional, must be in valid range if present
         phys_qty = getattr(value, "PhysicalQuantity", None)
@@ -393,7 +382,7 @@ class JoiningSystemEventValidator:
 
         Validates:
         - All BaseEventType fields.
-        - ``JoiningTechnology`` in {0..7} if present (logs DEBUG if absent).
+        - ``JoiningTechnology`` is LocalizedText/string if present (logs DEBUG if absent).
         - ``EventCode`` is integer ≥ 0 if present.
         - ``AssociatedEntities`` list via ``AssociatedEntitiesValidator``.
         - ``ReportedValues`` list via ``ReportedValuesValidator``.
@@ -632,7 +621,7 @@ class JoiningSystemConditionValidator:
         - ``ConditionClassId`` non-null NodeId (required per IJT spec §8).
         - ``ConditionClassName`` non-null LocalizedText with non-empty ``.Text``.
         - ``ConditionSubClassId`` list: entries must be non-null if list is present.
-        - ``JoiningTechnology`` in {0..7} if present.
+        - ``JoiningTechnology`` is LocalizedText/string if present.
         - ``AssociatedEntities`` list via ``AssociatedEntitiesValidator``.
         - ``EventCode`` is integer ≥ 0 if present.
 

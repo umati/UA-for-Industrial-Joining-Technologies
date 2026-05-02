@@ -6,7 +6,10 @@ Tests with temporary YAML files — no OPC UA server required.
 
 import logging
 import textwrap
+import uuid
 from pathlib import Path
+
+import pytest
 
 import helpers.profile_loader as _pl_module
 from helpers.profile_loader import get_skip_reason, is_cu_supported, load_supported_cus
@@ -19,6 +22,14 @@ from helpers.profile_loader import get_skip_reason, is_cu_supported, load_suppor
 def _write_yaml(path: Path, content: str) -> None:
     """Write a YAML string to *path*."""
     path.write_text(textwrap.dedent(content), encoding="utf-8")
+
+
+@pytest.fixture
+def profile_tmp_path():
+    """Repo-local temp path for environments where pytest tmp_path ACLs are locked."""
+    path = Path(__file__).resolve().parents[2] / "tmp" / "profile_loader" / uuid.uuid4().hex
+    path.mkdir(parents=True, exist_ok=False)
+    yield path
 
 
 # ---------------------------------------------------------------------------
@@ -61,14 +72,14 @@ class TestGetSkipReason:
         reason = get_skip_reason("any_key")
         assert "server_capabilities.yaml" in reason or "yaml" in reason.lower()
 
-    def test_with_explicit_path(self, tmp_path):
-        caps_path = tmp_path / "caps.yaml"
+    def test_with_explicit_path(self, profile_tmp_path):
+        caps_path = profile_tmp_path / "caps.yaml"
         reason = get_skip_reason("my_cu", capabilities_path=caps_path)
         assert "my_cu" in reason
         assert "caps.yaml" in reason
 
-    def test_env_var_influences_path(self, tmp_path, monkeypatch):
-        caps_file = tmp_path / "custom_caps.yaml"
+    def test_env_var_influences_path(self, profile_tmp_path, monkeypatch):
+        caps_file = profile_tmp_path / "custom_caps.yaml"
         monkeypatch.setenv("OPCUA_CAPABILITIES_FILE", str(caps_file))
         reason = get_skip_reason("test_cu")
         assert "custom_caps.yaml" in reason
@@ -80,17 +91,17 @@ class TestGetSkipReason:
 
 
 class TestLoadSupportedCusMissingFile:
-    def test_missing_file_returns_all_facets_cus(self, tmp_path, monkeypatch):
+    def test_missing_file_returns_all_facets_cus(self, profile_tmp_path, monkeypatch):
         """When capabilities file is absent, all CUs from facets should be returned."""
-        caps_file = tmp_path / "nonexistent_caps.yaml"
+        caps_file = profile_tmp_path / "nonexistent_caps.yaml"
         monkeypatch.setenv("OPCUA_CAPABILITIES_FILE", str(caps_file))
         # The real profiles/facets.yaml is used — result should be a non-empty frozenset
         supported = load_supported_cus()
         assert isinstance(supported, frozenset)
         assert len(supported) > 0
 
-    def test_missing_file_explicit_path(self, tmp_path):
-        caps_file = tmp_path / "nonexistent.yaml"
+    def test_missing_file_explicit_path(self, profile_tmp_path):
+        caps_file = profile_tmp_path / "nonexistent.yaml"
         supported = load_supported_cus(capabilities_path=caps_file)
         assert isinstance(supported, frozenset)
         # Uses real facets.yaml → all CUs
@@ -103,23 +114,23 @@ class TestLoadSupportedCusMissingFile:
 
 
 class TestLoadSupportedCusFullConformance:
-    def test_full_conformance_returns_large_set(self, tmp_path):
-        caps_file = tmp_path / "caps.yaml"
+    def test_full_conformance_returns_large_set(self, profile_tmp_path):
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(caps_file, "active_profile: full_conformance\n")
         supported = load_supported_cus(capabilities_path=caps_file)
         # full_conformance claims 123 CUs
         assert len(supported) >= 100
 
-    def test_full_conformance_includes_basic_cus(self, tmp_path):
-        caps_file = tmp_path / "caps.yaml"
+    def test_full_conformance_includes_basic_cus(self, profile_tmp_path):
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(caps_file, "active_profile: full_conformance\n")
         supported = load_supported_cus(capabilities_path=caps_file)
         assert "single_result" in supported
         assert "basic_result" in supported
         assert "joining_system_base" in supported
 
-    def test_returns_frozenset(self, tmp_path):
-        caps_file = tmp_path / "caps.yaml"
+    def test_returns_frozenset(self, profile_tmp_path):
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(caps_file, "active_profile: full_conformance\n")
         supported = load_supported_cus(capabilities_path=caps_file)
         assert isinstance(supported, frozenset)
@@ -131,8 +142,8 @@ class TestLoadSupportedCusFullConformance:
 
 
 class TestLoadSupportedCusUnsupportedOverride:
-    def test_unsupported_override_removes_key(self, tmp_path):
-        caps_file = tmp_path / "caps.yaml"
+    def test_unsupported_override_removes_key(self, profile_tmp_path):
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(
             caps_file,
             """\
@@ -144,8 +155,8 @@ class TestLoadSupportedCusUnsupportedOverride:
         supported = load_supported_cus(capabilities_path=caps_file)
         assert "single_result" not in supported
 
-    def test_unsupported_override_leaves_other_keys(self, tmp_path):
-        caps_file = tmp_path / "caps.yaml"
+    def test_unsupported_override_leaves_other_keys(self, profile_tmp_path):
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(
             caps_file,
             """\
@@ -157,9 +168,9 @@ class TestLoadSupportedCusUnsupportedOverride:
         supported = load_supported_cus(capabilities_path=caps_file)
         assert "basic_result" in supported  # not overridden
 
-    def test_unsupported_nonexistent_key_no_error(self, tmp_path):
+    def test_unsupported_nonexistent_key_no_error(self, profile_tmp_path):
         """Discarding a key that doesn't exist should silently pass."""
-        caps_file = tmp_path / "caps.yaml"
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(
             caps_file,
             """\
@@ -178,8 +189,8 @@ class TestLoadSupportedCusUnsupportedOverride:
 
 
 class TestLoadSupportedCusSupportedOverride:
-    def test_supported_override_adds_key(self, tmp_path):
-        caps_file = tmp_path / "caps.yaml"
+    def test_supported_override_adds_key(self, profile_tmp_path):
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(
             caps_file,
             """\
@@ -191,9 +202,9 @@ class TestLoadSupportedCusSupportedOverride:
         supported = load_supported_cus(capabilities_path=caps_file)
         assert "custom_vendor_extension" in supported
 
-    def test_supported_override_adds_key_not_in_profile(self, tmp_path):
+    def test_supported_override_adds_key_not_in_profile(self, profile_tmp_path):
         """A key explicitly declared supported must appear even if not in the profile's facets."""
-        caps_file = tmp_path / "caps.yaml"
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(
             caps_file,
             """\
@@ -212,8 +223,8 @@ class TestLoadSupportedCusSupportedOverride:
 
 
 class TestLoadSupportedCusUnknownDisposition:
-    def test_unknown_disposition_logged_key_unchanged(self, tmp_path, caplog):
-        caps_file = tmp_path / "caps.yaml"
+    def test_unknown_disposition_logged_key_unchanged(self, profile_tmp_path, caplog):
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(
             caps_file,
             """\
@@ -237,8 +248,8 @@ class TestLoadSupportedCusUnknownDisposition:
 
 
 class TestLoadSupportedCusSupportedFacets:
-    def test_extra_facets_added(self, tmp_path):
-        caps_file = tmp_path / "caps.yaml"
+    def test_extra_facets_added(self, profile_tmp_path):
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(
             caps_file,
             """\
@@ -251,8 +262,8 @@ class TestLoadSupportedCusSupportedFacets:
         # result_management_server_facet includes sync_result, batch_result, etc.
         assert "sync_result" in supported
 
-    def test_unknown_extra_facet_does_not_crash(self, tmp_path, caplog):
-        caps_file = tmp_path / "caps.yaml"
+    def test_unknown_extra_facet_does_not_crash(self, profile_tmp_path, caplog):
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(
             caps_file,
             """\
@@ -274,8 +285,8 @@ class TestLoadSupportedCusSupportedFacets:
 
 
 class TestLoadSupportedCusMissingProfile:
-    def test_missing_profile_file_returns_overrides_only(self, tmp_path):
-        caps_file = tmp_path / "caps.yaml"
+    def test_missing_profile_file_returns_overrides_only(self, profile_tmp_path):
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(
             caps_file,
             """\
@@ -288,8 +299,8 @@ class TestLoadSupportedCusMissingProfile:
         # Profile not found → 0 facet keys, but override still applied
         assert "my_cu" in supported
 
-    def test_missing_profile_file_empty_without_overrides(self, tmp_path):
-        caps_file = tmp_path / "caps.yaml"
+    def test_missing_profile_file_empty_without_overrides(self, profile_tmp_path):
+        caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(caps_file, "active_profile: nonexistent_profile_xyz\n")
         supported = load_supported_cus(capabilities_path=caps_file)
         assert isinstance(supported, frozenset)
@@ -302,8 +313,8 @@ class TestLoadSupportedCusMissingProfile:
 
 
 class TestLoadSupportedCusEnvVar:
-    def test_env_var_overrides_default_path(self, tmp_path, monkeypatch):
-        caps_file = tmp_path / "custom_env_caps.yaml"
+    def test_env_var_overrides_default_path(self, profile_tmp_path, monkeypatch):
+        caps_file = profile_tmp_path / "custom_env_caps.yaml"
         _write_yaml(
             caps_file,
             """\
@@ -316,9 +327,9 @@ class TestLoadSupportedCusEnvVar:
         supported = load_supported_cus()
         assert "env_test_cu" in supported
 
-    def test_explicit_path_takes_precedence_over_env_var(self, tmp_path, monkeypatch):
-        env_caps = tmp_path / "env_caps.yaml"
-        explicit_caps = tmp_path / "explicit_caps.yaml"
+    def test_explicit_path_takes_precedence_over_env_var(self, profile_tmp_path, monkeypatch):
+        env_caps = profile_tmp_path / "env_caps.yaml"
+        explicit_caps = profile_tmp_path / "explicit_caps.yaml"
         _write_yaml(env_caps, "active_profile: full_conformance\n")
         _write_yaml(
             explicit_caps,
@@ -339,11 +350,11 @@ class TestLoadSupportedCusEnvVar:
 
 
 class TestLoadFacetsMissingFile:
-    def test_missing_facets_yaml_warns_and_returns_empty(self, tmp_path, monkeypatch, caplog):
+    def test_missing_facets_yaml_warns_and_returns_empty(self, profile_tmp_path, monkeypatch, caplog):
         """When profiles/facets.yaml is absent, a WARNING is logged and the result
         is an empty frozenset (no facets to populate from)."""
-        monkeypatch.setattr(_pl_module, "_PROFILES_DIR", tmp_path)
-        caps_file = tmp_path / "caps.yaml"
+        monkeypatch.setattr(_pl_module, "_PROFILES_DIR", profile_tmp_path)
+        caps_file = profile_tmp_path / "caps.yaml"
         caps_file.write_text("active_profile: full_conformance\n", encoding="utf-8")
         with caplog.at_level(logging.WARNING, logger="helpers.profile_loader"):
             supported = load_supported_cus(capabilities_path=caps_file)
@@ -358,9 +369,9 @@ class TestLoadFacetsMissingFile:
 
 
 class TestLoadSupportedCusUnknownFacetInProfile:
-    def test_unknown_facet_in_active_profile_logs_warning(self, monkeypatch, caplog, tmp_path):
+    def test_unknown_facet_in_active_profile_logs_warning(self, monkeypatch, caplog, profile_tmp_path):
         """Line 129: warning logged when profile resolves to a facet not in facets.yaml."""
-        caps_file = tmp_path / "caps.yaml"
+        caps_file = profile_tmp_path / "caps.yaml"
         caps_file.write_text("active_profile: some_profile\n", encoding="utf-8")
 
         # Force profile to list a facet that doesn't exist in the facets dict

@@ -6,11 +6,13 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 pythonpath = ["."]
-# Test Client has no tests/ dir — suites live at project root in named subdirs.
-testpaths = ["tests/unit", "conformance", "assets", "joining_process", "results", "joint", "events", "common"]
+# Default collection is limited to unit tests and CU-marked conformance tests.
+# Legacy root suites remain runnable by explicit path, but are not part of the
+# default compliance run because most do not carry requires_cu gating metadata.
+testpaths = ["tests/unit", "conformance"]
 python_files = ["test_*.py"]
 addopts = "-v -p no:cacheprovider"
-tmp_path_retention_policy = "failed"
+tmp_path_retention_policy = "all"
 tmp_path_retention_count = 1
 timeout = 120
 markers = [
@@ -59,8 +61,10 @@ ignore = ["E501", "E402", "E731"]
 
 [tool.coverage.run]
 # Unit stage runs against tests/unit/ with --cov=helpers (library code only).
-# Live conformance stage runs with --cov=. and covers helpers + conftest more broadly.
-# The omit list keeps venv and runner scaffolding out of both measurements.
+# Live conformance stage appends helper coverage diagnostics but overrides
+# fail-under to 0; Phase 1 remains the hard coverage quality gate.
+# Pass explicit --cov args to pytest for one-off custom live coverage runs.
+# The omit list keeps venv and runner scaffolding out of coverage measurements.
 omit = [
     "run_all_tests.py",
     ".venv/*",
@@ -69,9 +73,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-# Floor set at 65% — new integration-only helpers (result_validator, profile_loader,
-# server_manager) are covered by live tests but not unit tests, pulling total down.
-# Raise this floor as dedicated unit tests are added for those helpers.
+# Unit coverage floor for helpers/.
 fail_under = 90
 skip_empty = true
 exclude_lines = [
@@ -139,6 +141,8 @@ exclude = ["(?:^|.*[/\\\\])tmp[/\\\\]", "pytest-cache-files-.*"]
 cache_dir = "tmp/mypy-cache"
 
 [tool.pyright]
+venvPath = "."
+venv = ".venv_test"
 # asyncua 1.2b2 uses class-based OPC UA primitive types (Int32, UInt32, etc.)
 # that inherit from int/str/bytes. Plain int literals are not directly assignable
 # to these types in pyright's type system, but are equivalent at runtime. Remove

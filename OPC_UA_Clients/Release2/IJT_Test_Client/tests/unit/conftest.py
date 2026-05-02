@@ -39,7 +39,7 @@ def valid_step_result():
 @pytest.fixture()
 def valid_error_info():
     """Minimal valid ErrorInformationDataType mock."""
-    return types.SimpleNamespace(ErrorCode="ERR-001")
+    return types.SimpleNamespace(ErrorType=3, ErrorId="ERR-001", ErrorMessage=types.SimpleNamespace(Text="Step error"))
 
 
 @pytest.fixture()

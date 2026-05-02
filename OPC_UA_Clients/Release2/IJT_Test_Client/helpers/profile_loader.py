@@ -173,6 +173,11 @@ def _all_cus_from_facets() -> FrozenSet[str]:
     return frozenset(all_keys)
 
 
+def load_all_cus_from_facets() -> FrozenSet[str]:
+    """Return every CU key known to profiles/facets.yaml."""
+    return _all_cus_from_facets()
+
+
 def get_skip_reason(cu_key: str, capabilities_path: Path | None = None) -> str:
     """
     Return a human-readable skip reason for a CU that is not supported.

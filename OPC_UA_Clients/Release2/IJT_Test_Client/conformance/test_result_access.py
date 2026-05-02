@@ -33,12 +33,10 @@ Covered conformance units:
         RequestUnacknowledgedResults.
 
     acknowledge_results
-        Server profile policy: AcknowledgeResults is not implemented and must be
-        absent or return an OPC UA Bad status.
+        The Server supports AcknowledgeResults method.
 
     request_unacknowledged_results
-        Server profile policy: RequestUnacknowledgedResults is not implemented and
-        must be absent or return an OPC UA Bad status.
+        The Server supports RequestUnacknowledgedResults method.
 """
 
 import asyncio
@@ -88,6 +86,48 @@ def _fail_if_rur_bad_arguments_missing(exc):
             "RequestUnacknowledgedResults returned BadArgumentsMissing despite valid "
             "MaxResults and RequestedMinimumDurationBetweenResults arguments"
         )
+
+
+def _method_output_list(raw) -> list:
+    if raw is None:
+        return []
+    if isinstance(raw, (list, tuple)):
+        return list(raw)
+    return [raw]
+
+
+def _assert_acknowledge_output(raw, context: str) -> list:
+    output = _method_output_list(raw)
+    assert len(output) >= 2, f"{context} must return [ErrorPerResultId, Error], got {output!r}"
+    return output
+
+
+def _assert_acknowledge_reports_error(raw, context: str) -> None:
+    output = _assert_acknowledge_output(raw, context)
+    per_result = output[0] if output else None
+    if isinstance(per_result, (list, tuple)):
+        for status in per_result:
+            try:
+                if int(status) != 0:
+                    return
+            except (TypeError, ValueError):
+                continue
+    try:
+        if len(output) >= 2 and int(output[1]) != 0:
+            return
+    except (TypeError, ValueError):
+        pass
+    pytest.fail(f"{context} returned Good with no output-level error indicator: {output!r}")
+
+
+def _assert_request_unacknowledged_output(raw, context: str) -> list:
+    output = _method_output_list(raw)
+    assert len(output) >= 4, (
+        f"{context} must return "
+        "[RevisedMinimumDurationBetweenResults, UnacknowledgedResultCount, Status, StatusMessage], "
+        f"got {output!r}"
+    )
+    return output
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +396,11 @@ async def test_get_result_by_id_is_idempotent(opcua_client, result_trigger, ns_i
 
 @pytest.mark.requires_cu(CU.GET_RESULT_BY_ID)
 async def test_get_result_by_id_with_nonexistent_id_returns_error(opcua_client, ns_indices):
-    """GetResultById with a nonexistent identifier must raise ua.UaError (e.g. BadNotFound)."""
+    """GetResultById with a nonexistent identifier must report an error.
+
+    Servers may reject the call at service level or return Good with a nonzero
+    operation-level Error output and a null/empty Result.
+    """
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -462,15 +506,15 @@ async def test_result_management_exposes_last_result_metadata_variable(result_ma
     try:
         value = await last_meta_node.read_value()
     except ua.UaError as exc:
-        pytest.skip(f"Could not read LastResultMetaData: {exc}")
+        pytest.skip(f"Could not read Results/Result/ResultMetaData: {exc}")
 
     if value is not None:
-        logger.debug("LastResultMetaData is readable (value present)")
+        logger.debug("Results/Result/ResultMetaData is readable (value present)")
 
 
 @pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
 async def test_last_result_metadata_updated_after_trigger(opcua_client, result_trigger, ns_indices):
-    """ResultManagement.LastResultMetaData.ResultId must change after a new result is produced."""
+    """Results/Result/ResultMetaData.ResultId must change after a new result is produced."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -486,7 +530,7 @@ async def test_last_result_metadata_updated_after_trigger(opcua_client, result_t
         _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
-        pytest.skip("LastResultMetaData variable not found — optional per spec")
+        pytest.skip("Results/Result/ResultMetaData variable not found")
 
     try:
         before_value = await last_meta_node.read_value()
@@ -510,15 +554,16 @@ async def test_last_result_metadata_updated_after_trigger(opcua_client, result_t
     try:
         after_value = await last_meta_node.read_value()
     except ua.UaError as exc:
-        pytest.skip(f"Could not read LastResultMetaData after trigger: {exc}")
+        pytest.skip(f"Could not read Results/Result/ResultMetaData after trigger: {exc}")
 
-    assert after_value is not None, "LastResultMetaData must not be None after a result is produced"
+    assert after_value is not None, "Results/Result/ResultMetaData must not be None after a result is produced"
     am = getattr(after_value, "ResultMetaData", after_value)
     after_id = str(getattr(am, "ResultId", None) or "")
 
     if before_id is not None and before_id.strip():
         assert after_id != before_id, (
-            f"LastResultMetaData.ResultId did not change after trigger (before={before_id!r}, after={after_id!r})"
+            f"Results/Result/ResultMetaData.ResultId did not change after trigger "
+            f"(before={before_id!r}, after={after_id!r})"
         )
 
 
@@ -683,31 +728,31 @@ async def test_requested_result_event_type_node_exists(opcua_client, ns_indices)
 
 @pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
 async def test_acknowledge_results_method_is_present(result_management, ns_indices):
-    """AcknowledgeResults must be absent or rejected in this server profile."""
+    """AcknowledgeResults must be present and accept an empty ResultIds list when the CU is enabled."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
 
     ack_node = await find_child_by_browse_name(result_management, BN.ACKNOWLEDGE_RESULTS, ns_mr)
     if ack_node is None:
-        return
+        pytest.fail("AcknowledgeResults method is missing although the CU is enabled")
 
     try:
-        await asyncio.wait_for(
+        raw = await asyncio.wait_for(
             result_management.call_method(
                 ack_node.nodeid,
                 ua.Variant([], ua.VariantType.String),
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        return
-    pytest.fail("AcknowledgeResults unexpectedly returned Good; this profile requires not-implemented behavior")
+    except ua.UaError as exc:
+        pytest.fail(f"AcknowledgeResults with an empty ResultIds list failed unexpectedly: {exc}")
+    _assert_acknowledge_output(raw, "AcknowledgeResults(empty)")
 
 
 @pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
 async def test_acknowledge_results_accepts_valid_result_id_list(opcua_client, result_trigger, ns_indices):
-    """AcknowledgeResults must be absent or reject calls in this server profile."""
+    """AcknowledgeResults must accept a valid ResultId list when the CU is enabled."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -723,19 +768,19 @@ async def test_acknowledge_results_accepts_valid_result_id_list(opcua_client, re
 
     ack_node = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
     if ack_node is None:
-        return
+        pytest.fail("AcknowledgeResults method is missing although the CU is enabled")
 
     try:
-        await asyncio.wait_for(
+        raw = await asyncio.wait_for(
             rm.call_method(
                 ack_node.nodeid,
                 ua.Variant([result_id], ua.VariantType.String),
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        return
-    pytest.fail("AcknowledgeResults unexpectedly returned Good for valid ResultId on unsupported profile")
+    except ua.UaError as exc:
+        pytest.fail(f"AcknowledgeResults rejected valid ResultId {result_id!r}: {exc}")
+    _assert_acknowledge_output(raw, "AcknowledgeResults(valid ResultId)")
 
 
 # ─── request_unacknowledged_results ───
@@ -743,7 +788,7 @@ async def test_acknowledge_results_accepts_valid_result_id_list(opcua_client, re
 
 @pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
 async def test_request_unacknowledged_results_method_is_present(result_management, ns_indices):
-    """RequestUnacknowledgedResults must be absent or rejected in this server profile."""
+    """RequestUnacknowledgedResults must be present and callable when the CU is enabled."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -754,9 +799,9 @@ async def test_request_unacknowledged_results_method_is_present(result_managemen
         pytest.skip("IJT Base namespace not registered on server")
     rur_node = await find_child_by_browse_name(result_management, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
-        return
+        pytest.fail("RequestUnacknowledgedResults method is missing although the CU is enabled")
     try:
-        await asyncio.wait_for(
+        raw = await asyncio.wait_for(
             result_management.call_method(
                 rur_node.nodeid,
                 _RUR_MAX_RESULTS,
@@ -766,13 +811,13 @@ async def test_request_unacknowledged_results_method_is_present(result_managemen
         )
     except ua.UaError as exc:
         _fail_if_rur_bad_arguments_missing(exc)
-        return
-    pytest.fail("RequestUnacknowledgedResults unexpectedly returned Good on unsupported profile")
+        pytest.fail(f"RequestUnacknowledgedResults failed unexpectedly: {exc}")
+    _assert_request_unacknowledged_output(raw, "RequestUnacknowledgedResults")
 
 
 @pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
 async def test_request_unacknowledged_results_is_callable(opcua_client, result_trigger, ns_indices):
-    """RequestUnacknowledgedResults must be absent or reject calls in this server profile."""
+    """RequestUnacknowledgedResults must be callable after a result is generated."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -791,10 +836,10 @@ async def test_request_unacknowledged_results_is_callable(opcua_client, result_t
         pytest.skip("IJT Base namespace not registered on server")
     rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
-        return
+        pytest.fail("RequestUnacknowledgedResults method is missing although the CU is enabled")
 
     try:
-        await asyncio.wait_for(
+        raw = await asyncio.wait_for(
             rm.call_method(
                 rur_node.nodeid,
                 _RUR_MAX_RESULTS,
@@ -804,34 +849,8 @@ async def test_request_unacknowledged_results_is_callable(opcua_client, result_t
         )
     except ua.UaError as exc:
         _fail_if_rur_bad_arguments_missing(exc)
-        return
-    pytest.fail("RequestUnacknowledgedResults unexpectedly returned Good on unsupported profile")
-
-
-@pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
-async def test_get_result_using_handle_from_get_latest_result(opcua_client, result_trigger, ns_indices):
-    """Handle from GetLatestResult must be accepted by GetResult when that method exists."""
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered on server")
-
-    rm, handle, _result_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
-    if handle is None:
-        pytest.skip("GetLatestResult did not return a handle")
-
-    get_result_node = await find_child_by_browse_name(rm, "GetResult", ns_mr)
-    if get_result_node is None:
-        pytest.skip("GetResult method not found — optional per spec")
-
-    try:
-        raw = await asyncio.wait_for(
-            rm.call_method(get_result_node.nodeid, handle),
-            timeout=_METHOD_WALL_TIMEOUT,
-        )
-    except ua.UaError as exc:
-        pytest.skip(f"GetResult raised UaError with handle {handle!r}: {exc}")
-
-    assert raw is not None, "GetResult with a valid handle returned None"
+        pytest.fail(f"RequestUnacknowledgedResults failed unexpectedly after trigger: {exc}")
+    _assert_request_unacknowledged_output(raw, "RequestUnacknowledgedResults(after trigger)")
 
 
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
@@ -1279,7 +1298,7 @@ async def test_get_result_by_id_with_empty_result_id_returns_error(opcua_client,
 
 @pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
 async def test_result_variable_value_rank_is_scalar_or_any(result_management, ns_indices):
-    """The LastResultMetaData Variable must have ValueRank = Scalar or Any — it holds
+    """The Results/Result/ResultMetaData Variable must have ValueRank = Scalar or Any — it holds
     a single result structure, not an array."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -1295,7 +1314,7 @@ async def test_result_variable_value_rank_is_scalar_or_any(result_management, ns
         _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
-        pytest.skip("LastResultMetaData variable not found — optional per spec")
+        pytest.skip("Results/Result/ResultMetaData variable not found")
 
     try:
         value_rank = await last_meta_node.read_attribute(ua.AttributeIds.ValueRank)
@@ -1305,13 +1324,14 @@ async def test_result_variable_value_rank_is_scalar_or_any(result_management, ns
     vr_int = int(value_rank.Value.Value)
     # -3=ScalarOrOneDimension, -2=Any, -1=Scalar, 1=OneDimension (used for arrays of structs)
     assert vr_int in (-3, -2, -1, 1), (
-        f"LastResultMetaData ValueRank must indicate a scalar or compatible structure (Scalar=-1, Any=-2), got {vr_int}"
+        "Results/Result/ResultMetaData ValueRank must indicate a scalar or compatible structure "
+        f"(Scalar=-1, Any=-2), got {vr_int}"
     )
 
 
 @pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
 async def test_result_variable_contains_valid_result_meta_data_after_trigger(opcua_client, result_trigger, ns_indices):
-    """After a joining operation the LastResultMetaData variable must hold a valid
+    """After a joining operation the Results/Result/ResultMetaData variable must hold a valid
     result with a non-empty ResultId and a non-zero Classification."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -1337,19 +1357,19 @@ async def test_result_variable_contains_valid_result_meta_data_after_trigger(opc
         _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
-        pytest.skip("LastResultMetaData variable not found — optional per spec")
+        pytest.skip("Results/Result/ResultMetaData variable not found")
 
     try:
         value = await last_meta_node.read_value()
     except ua.UaError as exc:
-        pytest.skip(f"Could not read LastResultMetaData: {exc}")
+        pytest.skip(f"Could not read Results/Result/ResultMetaData: {exc}")
 
     if value is None:
-        pytest.skip("LastResultMetaData value is None — no result stored yet")
+        pytest.skip("Results/Result/ResultMetaData value is None — no result stored yet")
 
     meta = getattr(value, "ResultMetaData", value)
     result_id = str(getattr(meta, "ResultId", None) or "")
-    assert result_id.strip(), "LastResultMetaData.ResultId must be non-empty after a result is triggered"
+    assert result_id.strip(), "Results/Result/ResultMetaData.ResultId must be non-empty after a result is triggered"
 
     classification = getattr(meta, "Classification", None)
     if classification is not None:
@@ -1359,7 +1379,7 @@ async def test_result_variable_contains_valid_result_meta_data_after_trigger(opc
 
 @pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
 async def test_result_variable_access_level_allows_read_but_not_write(result_management, ns_indices):
-    """The LastResultMetaData Variable AccessLevel must have the Read bit set and must
+    """The Results/Result/ResultMetaData Variable AccessLevel must have the Read bit set and must
     not have the Write bit set — result variables are server-managed and read-only."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -1375,7 +1395,7 @@ async def test_result_variable_access_level_allows_read_but_not_write(result_man
         _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
-        pytest.skip("LastResultMetaData variable not found — optional per spec")
+        pytest.skip("Results/Result/ResultMetaData variable not found")
 
     try:
         access_level = await last_meta_node.read_attribute(ua.AttributeIds.AccessLevel)
@@ -1386,9 +1406,11 @@ async def test_result_variable_access_level_allows_read_but_not_write(result_man
     _READ_BIT = 0x01
     _WRITE_BIT = 0x02
 
-    assert al_int & _READ_BIT, f"LastResultMetaData AccessLevel must have the Read bit set (got 0x{al_int:02X})"
+    assert al_int & _READ_BIT, (
+        f"Results/Result/ResultMetaData AccessLevel must have the Read bit set (got 0x{al_int:02X})"
+    )
     assert not (al_int & _WRITE_BIT), (
-        f"LastResultMetaData AccessLevel must not have the Write bit set "
+        f"Results/Result/ResultMetaData AccessLevel must not have the Write bit set "
         f"(got 0x{al_int:02X}); result variables are server-managed"
     )
 
@@ -1396,7 +1418,7 @@ async def test_result_variable_access_level_allows_read_but_not_write(result_man
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.RESULT_VARIABLE_ACCESS)
 async def test_write_to_result_variable_is_rejected(result_management, ns_indices):
-    """Attempting to write to the LastResultMetaData result variable must be rejected
+    """Attempting to write to the Results/Result/ResultMetaData variable must be rejected
     by the server — result data is produced by the server and must not be overwritten
     by clients."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
@@ -1413,12 +1435,12 @@ async def test_write_to_result_variable_is_rejected(result_management, ns_indice
         _handle_missing_result_variable(ns_indices, ns_mr, ns_ijt)
     last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
     if last_meta_node is None:
-        pytest.skip("LastResultMetaData variable not found — optional per spec")
+        pytest.skip("Results/Result/ResultMetaData variable not found")
 
     try:
         await last_meta_node.write_value(ua.DataValue(ua.Variant(None, ua.VariantType.Null)))
         pytest.fail(
-            "Writing to LastResultMetaData should have raised ua.UaError "
+            "Writing to Results/Result/ResultMetaData should have raised ua.UaError "
             "(BadNotWritable or BadUserAccessDenied) but succeeded unexpectedly"
         )
     except ua.UaError:
@@ -1872,7 +1894,7 @@ async def test_request_results_no_data_does_not_crash_server(opcua_client, ns_in
 
 @pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
 async def test_acknowledge_results_with_empty_list_is_accepted(opcua_client, ns_indices):
-    """AR-2 profile policy: AcknowledgeResults must be absent or reject calls."""
+    """AR-2: AcknowledgeResults with an empty ResultIds list must be accepted."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -1883,23 +1905,23 @@ async def test_acknowledge_results_with_empty_list_is_accepted(opcua_client, ns_
 
     ack_node = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
     if ack_node is None:
-        return
+        pytest.fail("AcknowledgeResults method is missing although the CU is enabled")
 
     try:
-        await asyncio.wait_for(
+        raw = await asyncio.wait_for(
             rm.call_method(ack_node.nodeid, ua.Variant([], ua.VariantType.String)),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        return
+    except ua.UaError as exc:
+        pytest.fail(f"AcknowledgeResults(empty) failed unexpectedly: {exc}")
     except asyncio.TimeoutError:
         pytest.fail("AcknowledgeResults call timed out")
-    pytest.fail("AcknowledgeResults unexpectedly returned Good on unsupported profile")
+    _assert_acknowledge_output(raw, "AcknowledgeResults(empty)")
 
 
 @pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
 async def test_acknowledged_result_not_in_unacknowledged_list(opcua_client, result_trigger, ns_indices):
-    """AR-4 profile policy: AcknowledgeResults/RequestUnacknowledgedResults must be unsupported."""
+    """AR-4: AcknowledgeResults and RequestUnacknowledgedResults must both be callable."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -1910,7 +1932,7 @@ async def test_acknowledged_result_not_in_unacknowledged_list(opcua_client, resu
 
     ack_node = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
     if ack_node is None:
-        return
+        pytest.fail("AcknowledgeResults method is missing although the CU is enabled")
 
     # RequestUnacknowledgedResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -1918,24 +1940,23 @@ async def test_acknowledged_result_not_in_unacknowledged_list(opcua_client, resu
         pytest.skip("IJT Base namespace not registered on server")
     rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
-        return
+        pytest.fail("RequestUnacknowledgedResults method is missing although the CU is enabled")
 
     result_id = str(handle)
 
-    ack_rejected = False
     try:
-        await asyncio.wait_for(
+        ack_raw = await asyncio.wait_for(
             rm.call_method(ack_node.nodeid, ua.Variant([result_id], ua.VariantType.String)),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        ack_rejected = True
+    except ua.UaError as exc:
+        pytest.fail(f"AcknowledgeResults rejected ResultId {result_id!r}: {exc}")
     except asyncio.TimeoutError:
         pytest.fail("AcknowledgeResults timed out")
+    _assert_acknowledge_output(ack_raw, "AcknowledgeResults(valid ResultId)")
 
-    rur_rejected = False
     try:
-        await asyncio.wait_for(
+        rur_raw = await asyncio.wait_for(
             rm.call_method(
                 rur_node.nodeid,
                 _RUR_MAX_RESULTS,
@@ -1945,19 +1966,16 @@ async def test_acknowledged_result_not_in_unacknowledged_list(opcua_client, resu
         )
     except ua.UaError as exc:
         _fail_if_rur_bad_arguments_missing(exc)
-        rur_rejected = True
+        pytest.fail(f"RequestUnacknowledgedResults failed after AcknowledgeResults: {exc}")
     except asyncio.TimeoutError:
         pytest.fail("RequestUnacknowledgedResults timed out")
-
-    assert ack_rejected or rur_rejected, (
-        "AcknowledgeResults/RequestUnacknowledgedResults unexpectedly returned Good on unsupported profile"
-    )
+    _assert_request_unacknowledged_output(rur_raw, "RequestUnacknowledgedResults(after acknowledge)")
 
 
 @pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
 @pytest.mark.negative
 async def test_acknowledge_results_with_nonexistent_id_returns_error(opcua_client, ns_indices):
-    """Error AR-3: AcknowledgeResults with unknown ResultId must return ua.UaError."""
+    """Error AR-3: AcknowledgeResults with unknown ResultId must report an error."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -1968,10 +1986,10 @@ async def test_acknowledge_results_with_nonexistent_id_returns_error(opcua_clien
 
     ack_node = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
     if ack_node is None:
-        return
+        pytest.fail("AcknowledgeResults method is missing although the CU is enabled")
 
     try:
-        await asyncio.wait_for(
+        raw = await asyncio.wait_for(
             rm.call_method(
                 ack_node.nodeid,
                 ua.Variant([_NONEXISTENT_RESULT_ID], ua.VariantType.String),
@@ -1979,11 +1997,11 @@ async def test_acknowledge_results_with_nonexistent_id_returns_error(opcua_clien
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError:
-        pass  # Expected — server should reject unknown ResultId
+        pass  # Acceptable when the server reports the domain error as service-level Bad.
     except asyncio.TimeoutError:
         pytest.fail("AcknowledgeResults timed out during negative test")
     else:
-        pytest.fail("AcknowledgeResults unexpectedly accepted a nonexistent ResultId")
+        _assert_acknowledge_reports_error(raw, "AcknowledgeResults(nonexistent ResultId)")
 
 
 # ---------------------------------------------------------------------------
@@ -1993,7 +2011,7 @@ async def test_acknowledge_results_with_nonexistent_id_returns_error(opcua_clien
 
 @pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
 async def test_request_unacknowledged_results_returns_list_of_result_ids(opcua_client, result_trigger, ns_indices):
-    """RUR-1 profile policy: RequestUnacknowledgedResults must be absent or reject calls."""
+    """RUR-1: RequestUnacknowledgedResults must return its defined output tuple."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -2006,10 +2024,10 @@ async def test_request_unacknowledged_results_returns_list_of_result_ids(opcua_c
         pytest.skip("IJT Base namespace not registered on server")
     rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
-        return
+        pytest.fail("RequestUnacknowledgedResults method is missing although the CU is enabled")
 
     try:
-        await asyncio.wait_for(
+        raw = await asyncio.wait_for(
             rm.call_method(
                 rur_node.nodeid,
                 _RUR_MAX_RESULTS,
@@ -2019,15 +2037,15 @@ async def test_request_unacknowledged_results_returns_list_of_result_ids(opcua_c
         )
     except ua.UaError as exc:
         _fail_if_rur_bad_arguments_missing(exc)
-        return
+        pytest.fail(f"RequestUnacknowledgedResults failed unexpectedly: {exc}")
     except asyncio.TimeoutError:
         pytest.fail("RequestUnacknowledgedResults timed out")
-    pytest.fail("RequestUnacknowledgedResults unexpectedly returned Good on unsupported profile")
+    _assert_request_unacknowledged_output(raw, "RequestUnacknowledgedResults")
 
 
 @pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
 async def test_unacknowledged_result_appears_after_trigger(opcua_client, result_trigger, ns_indices):
-    """RUR-2 profile policy: RequestUnacknowledgedResults must be absent or reject calls."""
+    """RUR-2: RequestUnacknowledgedResults must be callable after a result trigger."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -2040,10 +2058,10 @@ async def test_unacknowledged_result_appears_after_trigger(opcua_client, result_
         pytest.skip("IJT Base namespace not registered on server")
     rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
-        return
+        pytest.fail("RequestUnacknowledgedResults method is missing although the CU is enabled")
 
     try:
-        await asyncio.wait_for(
+        raw = await asyncio.wait_for(
             rm.call_method(
                 rur_node.nodeid,
                 _RUR_MAX_RESULTS,
@@ -2053,15 +2071,15 @@ async def test_unacknowledged_result_appears_after_trigger(opcua_client, result_
         )
     except ua.UaError as exc:
         _fail_if_rur_bad_arguments_missing(exc)
-        return
+        pytest.fail(f"RequestUnacknowledgedResults failed unexpectedly after trigger: {exc}")
     except asyncio.TimeoutError:
         pytest.fail("RequestUnacknowledgedResults timed out")
-    pytest.fail("RequestUnacknowledgedResults unexpectedly returned Good on unsupported profile")
+    _assert_request_unacknowledged_output(raw, "RequestUnacknowledgedResults(after trigger)")
 
 
 @pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
 async def test_acknowledged_result_absent_from_subsequent_unacknowledged_list(opcua_client, result_trigger, ns_indices):
-    """RUR-3 profile policy: both methods must be absent or reject calls."""
+    """RUR-3: acknowledge a result, then request unacknowledged-result status."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -2072,7 +2090,7 @@ async def test_acknowledged_result_absent_from_subsequent_unacknowledged_list(op
 
     ack_node = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
     if ack_node is None:
-        return
+        pytest.fail("AcknowledgeResults method is missing although the CU is enabled")
 
     # RequestUnacknowledgedResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -2080,24 +2098,23 @@ async def test_acknowledged_result_absent_from_subsequent_unacknowledged_list(op
         pytest.skip("IJT Base namespace not registered on server")
     rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
-        return
+        pytest.fail("RequestUnacknowledgedResults method is missing although the CU is enabled")
 
     result_id = str(handle)
 
-    ack_rejected = False
     try:
-        await asyncio.wait_for(
+        ack_raw = await asyncio.wait_for(
             rm.call_method(ack_node.nodeid, ua.Variant([result_id], ua.VariantType.String)),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        ack_rejected = True
+    except ua.UaError as exc:
+        pytest.fail(f"AcknowledgeResults rejected ResultId {result_id!r}: {exc}")
     except asyncio.TimeoutError:
         pytest.fail("AcknowledgeResults timed out")
+    _assert_acknowledge_output(ack_raw, "AcknowledgeResults(valid ResultId)")
 
-    rur_rejected = False
     try:
-        await asyncio.wait_for(
+        rur_raw = await asyncio.wait_for(
             rm.call_method(
                 rur_node.nodeid,
                 _RUR_MAX_RESULTS,
@@ -2107,19 +2124,15 @@ async def test_acknowledged_result_absent_from_subsequent_unacknowledged_list(op
         )
     except ua.UaError as exc:
         _fail_if_rur_bad_arguments_missing(exc)
-        rur_rejected = True
+        pytest.fail(f"RequestUnacknowledgedResults failed after AcknowledgeResults: {exc}")
     except asyncio.TimeoutError:
         pytest.fail("RequestUnacknowledgedResults timed out after acknowledge")
-
-    assert ack_rejected or rur_rejected, (
-        "AcknowledgeResults/RequestUnacknowledgedResults unexpectedly returned Good on unsupported profile"
-    )
+    _assert_request_unacknowledged_output(rur_raw, "RequestUnacknowledgedResults(after acknowledge)")
 
 
 @pytest.mark.requires_cu(CU.REQUEST_UNACKNOWLEDGED_RESULTS)
-@pytest.mark.negative
-async def test_request_unacknowledged_results_valid_signature_returns_bad_status(opcua_client, ns_indices):
-    """RUR-4 profile policy: valid RequestUnacknowledgedResults call must be absent or rejected."""
+async def test_request_unacknowledged_results_valid_signature_is_accepted(opcua_client, ns_indices):
+    """RUR-4: a valid RequestUnacknowledgedResults call must be accepted."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -2134,10 +2147,10 @@ async def test_request_unacknowledged_results_valid_signature_returns_bad_status
         pytest.skip("IJT Base namespace not registered on server")
     rur_node = await find_child_by_browse_name(rm, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
-        return
+        pytest.fail("RequestUnacknowledgedResults method is missing although the CU is enabled")
 
     try:
-        await asyncio.wait_for(
+        raw = await asyncio.wait_for(
             rm.call_method(
                 rur_node.nodeid,
                 _RUR_MAX_RESULTS,
@@ -2147,8 +2160,7 @@ async def test_request_unacknowledged_results_valid_signature_returns_bad_status
         )
     except ua.UaError as exc:
         _fail_if_rur_bad_arguments_missing(exc)
-        pass  # Expected — this server profile does not implement RequestUnacknowledgedResults
+        pytest.fail(f"RequestUnacknowledgedResults rejected a valid signature: {exc}")
     except asyncio.TimeoutError:
         pytest.fail("RequestUnacknowledgedResults timed out during valid-signature policy test")
-    else:
-        pytest.fail("RequestUnacknowledgedResults unexpectedly returned Good on unsupported profile")
+    _assert_request_unacknowledged_output(raw, "RequestUnacknowledgedResults(valid signature)")

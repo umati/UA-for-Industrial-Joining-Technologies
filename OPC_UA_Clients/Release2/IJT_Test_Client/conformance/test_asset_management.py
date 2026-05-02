@@ -87,8 +87,8 @@ asset_management_battery_operation_cycle_counter
     MachineryOperationCounterType and includes OperationCycleCounter property.
 
 asset_management_health
-    The Server supports at least one asset instance which includes Health object with at
-    least DeviceHealth property.
+    The Server supports at least one asset instance which exposes DeviceHealth.
+    Machinery Monitoring.Health is the preferred long-term path.
 
 asset_management_monitoring_health
     The Server supports at least one asset instance which includes Monitoring.Health object
@@ -127,6 +127,42 @@ from helpers.node_discovery import (
 )
 
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
+
+
+async def _find_asset_parameter(asset_node, parameter_name: str, ns_ijt: int):
+    """Find an asset parameter either directly or under the asset Parameters folder."""
+    direct_node = await find_child_by_browse_name(asset_node, parameter_name, ns_ijt)
+    if direct_node is not None:
+        return direct_node
+
+    parameters = await find_child_by_browse_name(asset_node, BN.PARAMETERS, ns_ijt)
+    if parameters is None:
+        return None
+    return await find_child_by_browse_name(parameters, parameter_name, ns_ijt)
+
+
+async def _find_asset_device_health(asset_node, ns_ijt: int | None, ns_mach: int | None, ns_di: int | None):
+    """Find DeviceHealth through legacy Asset.Health or preferred Monitoring.Health."""
+    if ns_di is None:
+        return None
+
+    if ns_ijt is not None:
+        direct_health = await find_child_by_browse_name(asset_node, BN.HEALTH, ns_ijt)
+        if direct_health is not None:
+            node = await find_child_by_browse_name(direct_health, BN.DEVICE_HEALTH, ns_di)
+            if node is not None:
+                return node
+
+    if ns_mach is not None:
+        monitoring = await find_child_by_browse_name(asset_node, BN.MONITORING, ns_mach)
+        if monitoring is not None:
+            health = await find_child_by_browse_name(monitoring, BN.HEALTH, ns_mach)
+            if health is not None:
+                node = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_di)
+                if node is not None:
+                    return node
+
+    return None
 
 
 # ─── asset_management ────────────────────────────────────────────────────────
@@ -930,25 +966,22 @@ async def test_battery_operation_counters_has_operation_cycle_counter(batteries_
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_HEALTH)
 @pytest.mark.parametrize("instance_fixture_name", ["controllers_instances", "tools_instances"])
 async def test_asset_health_has_device_health_property(request, ns_indices, instance_fixture_name):
-    """At least one asset instance must include Health with DeviceHealth property."""
+    """At least one asset instance must include DeviceHealth via the current Machinery health path."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_mach = ns_indices.get(NS_MACHINERY)
     ns_di = ns_indices.get(NS_DI)
-    if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered on server")
+    if ns_di is None:
+        pytest.skip("DI namespace not registered on server")
     instances = request.getfixturevalue(instance_fixture_name)
     found = False
     for _name, asset_node in instances:
-        health = await find_child_by_browse_name(asset_node, BN.HEALTH, ns_ijt)
-        if health is None:
-            continue
-        device_health = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_di)
+        device_health = await _find_asset_device_health(asset_node, ns_ijt, ns_mach, ns_di)
         if device_health is not None:
             found = True
             break
     if not found:
-        pytest.skip(
-            f"Deprecated direct Asset.Health.DeviceHealth absent on {instance_fixture_name} — "
-            "IJT 1.01 supersedes this path with Machinery Monitoring.Health.DeviceHealth"
+        pytest.fail(
+            f"No DeviceHealth found on {instance_fixture_name} via legacy Asset.Health or Machinery Monitoring.Health"
         )
 
 
@@ -1155,10 +1188,7 @@ async def test_controller_product_instance_uri_unique_across_instances(controlle
         if val:
             uris.append(str(val))
     if len(uris) < 2:
-        pytest.skip(
-            "Fewer than two ProductInstanceUri values found on controllers — "
-            "uniqueness check requires at least two instances"
-        )
+        return
     assert len(uris) == len(set(uris)), f"Controller ProductInstanceUri values are not unique: {uris}"
 
 
@@ -1212,30 +1242,30 @@ async def test_tool_identification_has_device_class(tools_instances, ns_indices)
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_TOOL)
 async def test_tool_has_connected_property(tools_instances, ns_indices):
-    """Tool instances should expose a Connected (IsConnected) property."""
+    """Tool instances should expose a Connected property under Parameters."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     _name, tool_node = tools_instances[0]
-    connected = await find_child_by_browse_name(tool_node, BN.CONNECTED, ns_ijt)
+    connected = await _find_asset_parameter(tool_node, BN.CONNECTED, ns_ijt)
     if connected is None:
-        pytest.skip(
-            f"Tool '{_name}' does not expose Connected property — may be on Identification AddIn or optional per spec"
-        )
+        pytest.skip(f"Tool '{_name}' does not expose Connected under Parameters")
+    val = await connected.read_value()
+    assert isinstance(val, bool), f"Tool '{_name}' Connected = {val!r} — DataType must be Boolean"
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_TOOL)
 async def test_tool_has_enabled_property(tools_instances, ns_indices):
-    """Tool instances should expose an Enabled (IsEnabled) property."""
+    """Tool instances should expose an Enabled property under Parameters."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     _name, tool_node = tools_instances[0]
-    enabled = await find_child_by_browse_name(tool_node, BN.ENABLED, ns_ijt)
+    enabled = await _find_asset_parameter(tool_node, BN.ENABLED, ns_ijt)
     if enabled is None:
-        pytest.skip(
-            f"Tool '{_name}' does not expose Enabled property — may be on Identification AddIn or optional per spec"
-        )
+        pytest.skip(f"Tool '{_name}' does not expose Enabled under Parameters")
+    val = await enabled.read_value()
+    assert isinstance(val, bool), f"Tool '{_name}' Enabled = {val!r} — DataType must be Boolean"
 
 
 # ─── asset_management_servo (additional) ─────────────────────────────────────
@@ -1787,35 +1817,28 @@ async def test_tool_operation_cycle_counter_value_is_non_negative(tools_instance
         pytest.skip("No Tool OperationCycleCounter with a readable value found — optional per spec")
 
 
-@pytest.mark.negative
-@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_TOOL_OPERATION_CYCLE_COUNTER)
-async def test_non_tool_assets_lack_operation_cycle_counter(controllers_instances, ns_indices):
-    """OperationCycleCounter is Tool-specific; Controllers should not expose it.
-
-    Some simulators and early implementations expose OperationCycleCounter on
-    Controller instances. Per OPC 40450-1 the counter belongs in the
-    Tool-specific interface, but the spec does not strictly prohibit Controllers
-    from including it in their OperationCounters folder. When found on a
-    Controller we record an advisory warning and skip rather than fail, because
-    the simulator under test exhibits this behaviour.
-    """
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_OPERATION_COUNTERS)
+async def test_controller_operation_cycle_counter_is_valid_when_present(controllers_instances, ns_indices):
+    """Controller OperationCounters.OperationCycleCounter is valid when exposed."""
     ns_di = ns_indices.get(NS_DI)
     if ns_di is None:
         pytest.skip("DI namespace not registered on server")
-    advisory_violations: list[str] = []
+    found = False
     for _name, ctrl_node in controllers_instances:
         op_counters = await find_child_by_browse_name(ctrl_node, BN.OPERATION_COUNTERS, ns_di)
         if op_counters is None:
             continue
         cycle_counter = await find_child_by_browse_name(op_counters, BN.OPERATION_CYCLE_COUNTER, ns_di)
-        if cycle_counter is not None:
-            advisory_violations.append(_name)
-    if advisory_violations:
-        pytest.skip(
-            f"Controller(s) {advisory_violations} expose OperationCycleCounter — "
-            "spec recommends this as Tool-specific; simulator includes it on Controllers. "
-            "Recorded as advisory; skipping rather than failing."
+        if cycle_counter is None:
+            continue
+        val = await cycle_counter.read_value()
+        assert val is not None and int(val) >= 0, (
+            f"Controller '{_name}' OperationCycleCounter = {val!r} — must be a non-negative integer"
         )
+        found = True
+        break
+    if not found:
+        pytest.skip("No Controller OperationCycleCounter with a readable value found")
 
 
 # ─── asset_management_battery_operation_cycle_counter (additional) ───────────
@@ -1848,22 +1871,28 @@ async def test_battery_operation_cycle_counter_value_is_non_negative(batteries_f
         pytest.skip("No Battery OperationCycleCounter with a readable value found — optional per spec")
 
 
-@pytest.mark.negative
-@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY_OPERATION_CYCLE_COUNTER)
-async def test_non_battery_assets_lack_battery_operation_cycle_counter(tools_instances, ns_indices):
-    """Battery-specific OperationCycleCounter must not be present on non-Battery assets.
-
-    Tools have their own OperationCycleCounter governed by a different conformance unit,
-    so this test only verifies that the counter is absent when not governed by the battery CU.
-    If tools also expose OperationCycleCounter, the test skips rather than failing.
-    """
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_OPERATION_COUNTERS)
+async def test_tool_operation_cycle_counter_is_valid_under_common_operation_counters(tools_instances, ns_indices):
+    """Tool OperationCounters.OperationCycleCounter is valid under the common OperationCounters AddIn."""
     ns_di = ns_indices.get(NS_DI)
     if ns_di is None:
         pytest.skip("DI namespace not registered on server")
-    pytest.skip(
-        "Battery OperationCycleCounter absence on non-Battery assets requires live "
-        "knowledge of which CUs are claimed — static browse check is inconclusive"
-    )
+    found = False
+    for _name, tool_node in tools_instances:
+        op_counters = await find_child_by_browse_name(tool_node, BN.OPERATION_COUNTERS, ns_di)
+        if op_counters is None:
+            continue
+        cycle_counter = await find_child_by_browse_name(op_counters, BN.OPERATION_CYCLE_COUNTER, ns_di)
+        if cycle_counter is None:
+            continue
+        val = await cycle_counter.read_value()
+        assert val is not None and int(val) >= 0, (
+            f"Tool '{_name}' OperationCycleCounter = {val!r} — must be a non-negative integer"
+        )
+        found = True
+        break
+    if not found:
+        pytest.skip("No Tool OperationCycleCounter with a readable value found")
 
 
 # ─── asset_management_health (additional) ────────────────────────────────────
@@ -1872,65 +1901,54 @@ async def test_non_battery_assets_lack_battery_operation_cycle_counter(tools_ins
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_HEALTH)
 @pytest.mark.parametrize("instance_fixture_name", ["controllers_instances", "tools_instances"])
 async def test_asset_health_device_health_value_is_valid_enumeration(request, ns_indices, instance_fixture_name):
-    """Health.DeviceHealth must hold a value within the DeviceHealthEnumeration range."""
+    """DeviceHealth must hold a value within the DeviceHealthEnumeration range."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_mach = ns_indices.get(NS_MACHINERY)
     ns_di = ns_indices.get(NS_DI)
-    if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered on server")
+    if ns_di is None:
+        pytest.skip("DI namespace not registered on server")
     instances = request.getfixturevalue(instance_fixture_name)
     _VALID_DEVICE_HEALTH = frozenset({0, 1, 2, 3, 4})  # NORMAL, FAILURE, CHECK_FUNCTION, OFF_SPEC, MAINTENANCE_REQUIRED
     found = False
     for _name, asset_node in instances:
-        health = await find_child_by_browse_name(asset_node, BN.HEALTH, ns_ijt)
-        if health is None:
-            continue
-        device_health_node = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_di)
+        device_health_node = await _find_asset_device_health(asset_node, ns_ijt, ns_mach, ns_di)
         if device_health_node is None:
             continue
         val = await device_health_node.read_value()
         assert int(val) in _VALID_DEVICE_HEALTH, (
-            f"Asset '{_name}' Health.DeviceHealth = {val!r} — "
-            "value must be a valid DeviceHealthEnumeration member (0–4)"
+            f"Asset '{_name}' DeviceHealth = {val!r} — value must be a valid DeviceHealthEnumeration member (0–4)"
         )
         found = True
         break
     if not found:
-        pytest.skip(
-            f"Deprecated direct Asset.Health.DeviceHealth readable value absent on {instance_fixture_name} — "
-            "IJT 1.01 supersedes this path with Machinery Monitoring.Health.DeviceHealth"
-        )
+        pytest.fail(f"No readable DeviceHealth found on {instance_fixture_name}")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_HEALTH)
 @pytest.mark.parametrize("instance_fixture_name", ["controllers_instances", "tools_instances"])
 async def test_asset_health_device_health_is_normal_when_no_faults(request, ns_indices, instance_fixture_name):
-    """Health.DeviceHealth should be NORMAL (0) when no faults are active on a functioning asset."""
+    """DeviceHealth should be NORMAL (0) when no faults are active on a functioning asset."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_mach = ns_indices.get(NS_MACHINERY)
     ns_di = ns_indices.get(NS_DI)
-    if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered on server")
+    if ns_di is None:
+        pytest.skip("DI namespace not registered on server")
     instances = request.getfixturevalue(instance_fixture_name)
     found = False
     for _name, asset_node in instances:
-        health = await find_child_by_browse_name(asset_node, BN.HEALTH, ns_ijt)
-        if health is None:
-            continue
-        device_health_node = await find_child_by_browse_name(health, BN.DEVICE_HEALTH, ns_di)
+        device_health_node = await _find_asset_device_health(asset_node, ns_ijt, ns_mach, ns_di)
         if device_health_node is None:
             continue
         val = int(await device_health_node.read_value())
         if val != 0:
             pytest.skip(
-                f"Asset '{_name}' Health.DeviceHealth = {val} (not NORMAL) — "
+                f"Asset '{_name}' DeviceHealth = {val} (not NORMAL) — "
                 "asset may have active faults; skipping NORMAL-state check"
             )
         found = True
         break
     if not found:
-        pytest.skip(
-            f"Deprecated direct Asset.Health.DeviceHealth absent on {instance_fixture_name} — "
-            "IJT 1.01 supersedes this path with Machinery Monitoring.Health.DeviceHealth"
-        )
+        pytest.fail(f"No DeviceHealth found on {instance_fixture_name}")
 
 
 # ─── asset_management_monitoring_health (additional) ─────────────────────────
@@ -2088,51 +2106,46 @@ async def test_asset_maintenance_calibration_next_calibration_date_in_future(
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_ADDITIONAL_INFORMATION)
 @pytest.mark.parametrize("instance_fixture_name", ["controllers_instances", "tools_instances"])
 async def test_asset_has_connected_property(request, ns_indices, instance_fixture_name):
-    """Asset instances implementing IJoiningAdditionalInformationType must expose Connected."""
+    """Asset instances implementing IJoiningAdditionalInformationType must expose Parameters.Connected."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     instances = request.getfixturevalue(instance_fixture_name)
     found = False
     for _name, asset_node in instances:
-        connected = await find_child_by_browse_name(asset_node, BN.CONNECTED, ns_ijt)
+        connected = await _find_asset_parameter(asset_node, BN.CONNECTED, ns_ijt)
         if connected is not None:
             val = await connected.read_value()
             assert isinstance(val, bool), f"Asset '{_name}' Connected = {val!r} — DataType must be Boolean"
             found = True
             break
     if not found:
-        pytest.skip(
-            f"No Connected property found on {instance_fixture_name} — "
-            "may be optional or located on Identification AddIn"
-        )
+        pytest.skip(f"No Parameters.Connected property found on {instance_fixture_name}")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_ADDITIONAL_INFORMATION)
 @pytest.mark.parametrize("instance_fixture_name", ["controllers_instances", "tools_instances"])
 async def test_asset_has_enabled_property(request, ns_indices, instance_fixture_name):
-    """Asset instances implementing IJoiningAdditionalInformationType must expose Enabled."""
+    """Asset instances implementing IJoiningAdditionalInformationType must expose Parameters.Enabled."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     instances = request.getfixturevalue(instance_fixture_name)
     found = False
     for _name, asset_node in instances:
-        enabled = await find_child_by_browse_name(asset_node, BN.ENABLED, ns_ijt)
+        enabled = await _find_asset_parameter(asset_node, BN.ENABLED, ns_ijt)
         if enabled is not None:
             val = await enabled.read_value()
             assert isinstance(val, bool), f"Asset '{_name}' Enabled = {val!r} — DataType must be Boolean"
             found = True
             break
     if not found:
-        pytest.skip(
-            f"No Enabled property found on {instance_fixture_name} — may be optional or located on Identification AddIn"
-        )
+        pytest.skip(f"No Parameters.Enabled property found on {instance_fixture_name}")
 
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_ADDITIONAL_INFORMATION)
 async def test_tool_and_controller_joining_technology_is_non_zero(controllers_instances, tools_instances, ns_indices):
-    """JoiningTechnology on Controller and Tool instances must be non-zero (not Undefined)."""
+    """JoiningTechnology on Controller and Tool instances must be non-empty LocalizedText/string."""
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_di is None or ns_ijt is None:
@@ -2147,25 +2160,18 @@ async def test_tool_and_controller_joining_technology_is_non_zero(controllers_in
             if jt_node is None:
                 continue
             val = await jt_node.read_value()
-            # JoiningTechnology is an enumeration — asyncua may return it as
-            # an int, an ExtensionObject, or a LocalizedText depending on
-            # whether type definitions are loaded. Extract the numeric value safely.
-            try:
-                jt_int = int(val)
-            except (TypeError, ValueError):
-                # LocalizedText or named enum — non-zero text means a value was set
-                jt_int = 1 if str(val).strip() not in ("", "0", "Other") else 0
-            if jt_int == 0:
-                violations.append(f"{label} '{_name}' JoiningTechnology = 0 (Undefined)")
+            jt_text = getattr(val, "Text", val)
+            if not isinstance(jt_text, str) or not jt_text.strip():
+                violations.append(f"{label} '{_name}' JoiningTechnology is not non-empty LocalizedText/string: {val!r}")
     assert not violations, (
-        f"Controller and Tool instances must declare a specific joining technology (non-zero): {violations}"
+        f"Controller and Tool instances must declare a non-empty joining technology text: {violations}"
     )
 
 
 @pytest.mark.negative
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_ADDITIONAL_INFORMATION)
-async def test_joining_technology_out_of_range_write_rejected(controllers_instances, ns_indices, opcua_client):
-    """Writing an out-of-range integer to JoiningTechnology must return Bad_OutOfRange or Bad_TypeMismatch."""
+async def test_joining_technology_invalid_integer_write_rejected(controllers_instances, ns_indices, opcua_client):
+    """Writing an Int32 to LocalizedText JoiningTechnology must be rejected."""
     from asyncua import ua as _ua
 
     ns_di = ns_indices.get(NS_DI)
@@ -2179,24 +2185,28 @@ async def test_joining_technology_out_of_range_write_rejected(controllers_instan
     jt_node = await find_child_by_browse_name(ident, BN.JOINING_TECHNOLOGY, ns_ijt)
     if jt_node is None:
         pytest.skip(f"Controller '{_name}' has no JoiningTechnology property — skipping test")
+    original = await jt_node.read_value()
     try:
         await jt_node.write_attribute(
             _ua.AttributeIds.Value,
             _ua.DataValue(_ua.Variant(9999, _ua.VariantType.Int32)),
         )
-        pytest.skip(
-            f"Write of out-of-range JoiningTechnology (9999) was accepted by server '{_name}' — "
-            "server permits writes; subsequent behaviour is implementation-dependent"
+        try:
+            await jt_node.write_value(original)
+        except _ua.UaError:
+            pass
+        pytest.fail(
+            f"Write of Int32 JoiningTechnology (9999) was accepted by server '{_name}' — "
+            "JoiningTechnology is LocalizedText in the current NodeSet"
         )
     except _ua.UaStatusCodeError as exc:
         _ACCEPTABLE = (
-            _ua.StatusCodes.BadOutOfRange,
             _ua.StatusCodes.BadTypeMismatch,
             _ua.StatusCodes.BadNotWritable,
             _ua.StatusCodes.BadUserAccessDenied,
         )
         assert exc.code in _ACCEPTABLE, (
-            f"Expected Bad_OutOfRange / Bad_TypeMismatch / Bad_NotWritable; got {exc.code:#010x}"
+            f"Expected Bad_TypeMismatch / Bad_NotWritable / Bad_UserAccessDenied; got {exc.code:#010x}"
         )
 
 

@@ -33,13 +33,19 @@ import pytest
 import pytest_asyncio
 from asyncua import Client
 
-from helpers.profile_loader import get_skip_reason, load_supported_cus
+from helpers.cu_compliance_report import CuComplianceReportRecorder
+from helpers.profile_loader import get_skip_reason, load_all_cus_from_facets, load_supported_cus
 
 # Loaded once at collection time — all tests see the same supported-CU set.
 # None means "no capabilities file / no gating" — all tests run.
 # frozenset() means "file present but no CUs supported" — all CU-gated tests skip.
 # Override the config file path via OPCUA_CAPABILITIES_FILE env var.
 _SUPPORTED_CUS: frozenset[str] | None = None
+
+
+def _deletes_disabled() -> bool:
+    """Return True when the test session must preserve existing temp artifacts."""
+    return os.environ.get("IJT_RUNNER_NO_DELETE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def pytest_configure(config):
@@ -57,9 +63,14 @@ def pytest_configure(config):
         "requires_cu(cu_key, ...): skip this test if the given conformance unit "
         "key(s) are not supported per server_capabilities.yaml",
     )
+    config.addinivalue_line(
+        "markers",
+        "workbook_ref(sheet, rows): optional exact Test Cases workbook sheet/row traceability for a test",
+    )
     config.addinivalue_line("markers", "live: requires a live OPC UA server")
     config.addinivalue_line("markers", "conformance: IJT conformance unit test")
     config.addinivalue_line("markers", "negative: negative / error-path test")
+    config.addinivalue_line("markers", "opcua_core: OPC UA core service probe, not official IJT CU evidence")
     config.addinivalue_line("markers", "simulation: requires the OPC UA IJT Server Simulator")
     config.addinivalue_line(
         "markers",
@@ -78,11 +89,14 @@ def pytest_configure(config):
             _candidate_path = _tmp_root / _candidate
             try:
                 if _candidate_path.exists():
+                    if _deletes_disabled():
+                        continue
                     shutil.rmtree(_candidate_path)
                 _candidate_path.mkdir(parents=True)
                 _probe = _candidate_path / ".acl_probe"
                 _probe.write_text("ok")
-                _probe.unlink()
+                if not _deletes_disabled():
+                    _probe.unlink()
                 _ = list(_candidate_path.iterdir())
                 _basetemp_chosen = _candidate_path
                 break
@@ -110,6 +124,15 @@ def pytest_configure(config):
             exc,
         )
         _SUPPORTED_CUS = None  # None = no gating; run everything
+
+    config.pluginmanager.register(
+        CuComplianceReportRecorder(
+            root=_project_root,
+            all_cus=load_all_cus_from_facets(),
+            supported_cus=_SUPPORTED_CUS,
+        ),
+        "ijt-cu-compliance-report",
+    )
 
 
 def pytest_runtest_setup(item):
@@ -211,7 +234,8 @@ def managed_server():
     """
     from helpers.server_manager import ServerManager
 
-    manager = ServerManager()
+    host, port = _parse_opcua_endpoint(SERVER_URL)
+    manager = ServerManager(host=host, port=port)
     available = manager.ensure_running()
     if not available:
         pytest.fail("OPC UA server did not start. Start the server manually or set OPCUA_SIMULATOR_EXE env var.")
@@ -663,44 +687,6 @@ async def event_trigger(opcua_client, simulate_events_folder, ns_indices):
 
     ns_app = ns_indices.get(NS_APP)
     return make_event_trigger(opcua_client, simulate_events_folder, ns_app)
-
-
-# ─── JointManagement folder fixtures ─────────────────────────────────────────
-@pytest_asyncio.fixture(scope="session")
-async def joint_designs_folder(joint_management, ns_indices):
-    """JointDesigns folder under JointManagement (IJT Base ns)."""
-    ns_ijt = ns_indices.get(NS_IJT_BASE)
-    if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered")
-    node = await find_child_by_browse_name(joint_management, "JointDesigns", ns_ijt)
-    if node is None:
-        pytest.skip("JointDesigns folder not found under JointManagement")
-    return node
-
-
-@pytest_asyncio.fixture(scope="session")
-async def joint_components_folder(joint_management, ns_indices):
-    """JointComponents folder under JointManagement (IJT Base ns)."""
-    ns_ijt = ns_indices.get(NS_IJT_BASE)
-    if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered")
-    node = await find_child_by_browse_name(joint_management, "JointComponents", ns_ijt)
-    if node is None:
-        pytest.skip("JointComponents folder not found under JointManagement")
-    return node
-
-
-# ─── JoiningProcessManagement folder fixtures ────────────────────────────────
-@pytest_asyncio.fixture(scope="session")
-async def joining_process_list_folder(joining_process_management, ns_indices):
-    """JoiningProcesses folder under JoiningProcessManagement (IJT Base ns)."""
-    ns_ijt = ns_indices.get(NS_IJT_BASE)
-    if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered")
-    node = await find_child_by_browse_name(joining_process_management, "JoiningProcesses", ns_ijt)
-    if node is None:
-        pytest.skip("JoiningProcesses folder not found under JoiningProcessManagement")
-    return node
 
 
 # ─── Virtual stations instances ───────────────────────────────────────────────

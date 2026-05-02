@@ -131,6 +131,48 @@ def test_counter_mixed_suite_warn_does_not_cause_suite_fail():
 
 
 # ---------------------------------------------------------------------------
+# Phase 2 live pytest runner
+# ---------------------------------------------------------------------------
+
+
+def test_live_tests_collect_default_coverage_without_fail_gate():
+    """Live conformance tests collect coverage diagnostics without enforcing fail_under."""
+    with (
+        patch.object(_mod, "_tool_available", return_value=True),
+        patch.object(_mod, "_print_test_count"),
+        patch.object(_mod, "run_pytest", return_value=0) as run_pytest,
+    ):
+        result = _mod._step_live_tests([], skip_server_check=True)
+
+    assert result.ok
+    args = run_pytest.call_args.args[0]
+    assert "conformance" in args
+    assert "--cov=helpers" in args
+    assert "--cov-append" in args
+    assert "--cov-report=term-missing" in args
+    assert "--cov-fail-under=0" in args
+    assert any(arg.startswith("--cov-report=xml:") and "coverage-combined.xml" in arg for arg in args)
+    assert "--no-cov" not in args
+
+
+def test_live_tests_respect_explicit_coverage_args():
+    """Explicit forwarded coverage args are honored for one-off diagnostic runs."""
+    with (
+        patch.object(_mod, "_tool_available", return_value=True),
+        patch.object(_mod, "_print_test_count"),
+        patch.object(_mod, "run_pytest", return_value=0) as run_pytest,
+    ):
+        result = _mod._step_live_tests(["--cov=helpers", "conformance"], skip_server_check=True)
+
+    assert result.ok
+    args = run_pytest.call_args.args[0]
+    assert "--cov=helpers" in args
+    assert "--cov-append" not in args
+    assert "--cov-fail-under=0" not in args
+    assert "--no-cov" not in args
+
+
+# ---------------------------------------------------------------------------
 # Semgrep parse-failure path: non-blocking by contract
 # ---------------------------------------------------------------------------
 

@@ -110,6 +110,31 @@ async def find_child_by_browse_name(
     return None
 
 
+async def find_child_by_browse_name_any(
+    parent_node: UANode,
+    name: str,
+    ns_indexes: list[int | None] | tuple[int | None, ...],
+    timeout: float = _BROWSE_TIMEOUT,
+) -> UANode | None:
+    """
+    Find a direct child by BrowseName across multiple namespace indexes.
+
+    Some servers use the specification namespace for the BrowseName, while
+    generated simulator nodes can use an application namespace for the same
+    browse-name text. This helper keeps callers explicit about accepted
+    namespaces without duplicating fallback loops.
+    """
+    seen: set[int] = set()
+    for ns_index in ns_indexes:
+        if ns_index is None or ns_index in seen:
+            continue
+        seen.add(ns_index)
+        child = await find_child_by_browse_name(parent_node, name, ns_index, timeout=timeout)
+        if child is not None:
+            return child
+    return None
+
+
 async def browse_folder_instances(folder_node: UANode, timeout: float = _BROWSE_TIMEOUT) -> list:
     """
     Return a list of (browse_name_str, Node) tuples for all children of folder_node.

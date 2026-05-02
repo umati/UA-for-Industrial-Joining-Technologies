@@ -22,7 +22,12 @@
 #   basic_joining_system   — mandatory structure CUs only
 #   general_joining_system — adds result management and identifiers
 #   asset_management       — adds all asset type and operation CUs
-#   full_conformance       — all 123 CUs (use for simulator / full server)
+#   full_conformance       — all 123 CUs (use only for a server that claims all CUs)
+#
+# The checked-in Release 2 simulator has its own capability file:
+#   server_capabilities.simulator.yaml
+# run_all_tests.py selects that file automatically when it auto-launches the
+# simulator and OPCUA_CAPABILITIES_FILE is not already set.
 #
 # ─── Available facets (additive on top of profile) ────────────────────────────
 # See profiles/facets.yaml for the full list and each facet's CU membership.
@@ -56,10 +61,11 @@ supported_facets: []
 # "supported"   → test runs even if the active profile excludes it
 #
 # ─── OPC UA IJT Server Simulator known limitations ────────────────────────────
-# These overrides reflect known behaviours of the OPC UA IJT Server Simulator
-# (Release 2). They do NOT mean those CUs are unsupported
-# by the spec — only that this specific simulator diverges from the spec in
-# those areas. Remove or change entries when using a fully compliant server.
+# The checked-in Release 2 simulator uses server_capabilities.simulator.yaml.
+# Keep this default file for the server under test. If you intentionally want
+# simulator behaviour while setting OPCUA_CAPABILITIES_FILE manually, point that
+# variable at server_capabilities.simulator.yaml instead of copying partial
+# overrides here.
 #
 # Simulator behaviours that differ from OPC 40450-1:
 #   • GetResultById with an unknown ResultId → returns empty result instead

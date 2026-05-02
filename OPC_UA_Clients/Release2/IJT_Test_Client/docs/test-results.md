@@ -12,6 +12,8 @@ After a `run_all_tests.py` run the following files are produced:
 | `test-results/pytest-unit.xml` | JUnit XML | Unit test results from `run_all_tests.py` Phase 1 |
 | `test-results/report.xlsx` | Excel | Human-readable coloured summary by test area, full detail, filtered views |
 | `test-results/smoke-sanity.xml` | JUnit XML | Quick server reachability smoke test (CI only) |
+| `test-results/cu-compliance-report.json` | JSON | Machine-readable CU compliance report by test, conformance unit, support outcome, and workbook row traceability |
+| `test-results/cu-compliance-report-unit.json` | JSON | Unit-stage plugin output; kept separate so the main CU report name is reserved for live compliance/conformance runs |
 
 > `report.html` is **not** produced by `run_all_tests.py`. Use the manual `pytest --html=...` command below if you need an HTML report.
 
@@ -23,7 +25,7 @@ In CI, report files are uploaded as run artifacts.
 
 **Run tests and produce XML + HTML:**
 ```bash
-python -m pytest conformance/ assets/ joining_process/ results/ joint/ events/ common/ \
+python -m pytest conformance/ \
   -v --tb=short -rs --timeout=120 \
   --junitxml=test-results/pytest-live.xml \
   --html=test-results/report.html --self-contained-html
@@ -47,6 +49,71 @@ python run_all_tests.py --excel=always
 # custom Excel output path
 python run_all_tests.py --excel=always --excel-out test-results/my-report.xlsx
 ```
+
+**Write the CU compliance report to a custom location:**
+```bash
+IJT_CU_COMPLIANCE_REPORT_FILE=test-results/cu-compliance-report.json python -m pytest conformance -q
+```
+
+`cu-compliance-report.json` is written by the pytest plugin for live
+compliance/conformance runs. Unit-only runs can still load `conftest.py`, so
+`run_all_tests.py` redirects their plugin output to
+`cu-compliance-report-unit.json` when CU-marked tests are collected. Unit-only
+runs with no CU-marked tests and collect-only sessions do not write or
+overwrite the main live report; this keeps `cu-compliance-report.json` tied to
+executed compliance evidence.
+The live report records collected CU-marked tests, per-test outcomes, CU
+rollups, Not Supported skips, and official CUs with no collected test path.
+It also records workbook traceability from the checked-in Test Cases workbook:
+the `workbook` section contains the expected 1,122 test-case header rows,
+positive/negative classification, CTT/review/spec-link metadata, and the CU key
+each row belongs to. Rows are linked to tests by CU by default
+(`mapping_precision = "cu"`). Add `@pytest.mark.workbook_ref("Sheet", [row])`
+or multiple rows when a test provides exact evidence for specific workbook rows.
+The report summary exposes `workbook_case_count`,
+`workbook_expected_case_count`, `workbook_exact_case_count`, and
+`workbook_missing_case_cus`.
+
+The report keeps official IJT workbook CUs separate from extensions. The
+`official_cu_count` remains the 123 IJT CUs from `profiles/facets.yaml`; custom
+controller or vendor markers are reported under `extension_cus` and still get
+`by_cu` rollups without changing the official profile total. Controller-specific
+frameworks can extend coverage by adding their own `requires_cu` markers,
+capability overrides, and trigger implementation via `OPCUA_TRIGGER_CLASS`.
+
+`python run_all_tests.py` is the full orchestrator: Phase 1 runs static,
+security, unit, type, and formatting checks; Phase 2 runs the live
+server-facing compliance/conformance suite. Phase 2 selects `conformance` by
+default so unit tests are not duplicated after Phase 1. Phase 2 appends helper
+coverage diagnostics to `test-results/coverage-combined.xml` but sets live
+coverage fail-under to 0; helper coverage fail-under remains a Phase 1
+unit-stage quality gate, while Phase 2 is compliance evidence against a live
+server.
+Passing explicit pytest paths or explicit coverage arguments after the runner
+arguments remains supported for targeted diagnostic runs.
+
+Default raw pytest collection is `tests/unit` and `conformance`. Older root
+suites such as `assets`, `results`, `joint`, and `events` are still runnable by
+explicit path, but they are not part of the default compliance run because they
+do not all carry CU gating metadata.
+
+When `run_all_tests.py` auto-launches the checked-in Release 2 simulator and no
+`OPCUA_CAPABILITIES_FILE` is set, it uses `server_capabilities.simulator.yaml`.
+That file describes simulator-supported CUs only; real controllers and vendor
+simulators should provide their own capability file instead of reusing it.
+
+**Generate a strict CU triage summary after a live run:**
+```bash
+python scripts/triage_cu_compliance.py \
+  --cu-json test-results/cu-compliance-report.json \
+  --junit test-results/pytest-live.xml \
+  --out test-results/cu-compliance-triage.md
+```
+
+The triage summary is for review, not certification output. It highlights
+failed/error CUs, blocked and Not Supported reason buckets, CUs with mixed
+pass+blocked signals, missing official CU tests, and suspicious skip reasons
+that need manual classification.
 
 ---
 
@@ -74,6 +141,8 @@ Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠
 | **XFAILED** | Test was expected to fail and did — a known server limitation, not a bug |
 | **XPASSED** | Test was expected to fail but passed — server has improved; update the xfail mark |
 | **ERROR** | Test crashed before reaching assertions — likely a setup or connection issue |
+| **NOT_SUPPORTED** | JSON compliance-report classification for a skipped CU/optional method that the server profile or address space does not support |
+| **BLOCKED** | JSON compliance-report classification for a skipped test whose runtime precondition was unavailable |
 
 ---
 
@@ -83,7 +152,7 @@ Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠
 |---|---|---|
 | Optional method absent | `SetCalibration method not present — optional per spec` | Server does not implement an optional OPC UA method; skip is correct |
 | Optional/deprecated path absent | `Deprecated direct Asset.Health.DeviceHealth absent ...` | Server omits an older or optional address-space path; use the replacement path when applicable |
-| Simulator PIU not validated | `Server returned Good for unknown ProductInstanceUri` | Simulator accepts any PIU; real servers reject unknown ones |
+| Simulator default/null PIU gap | `Server returned Uncertain for null ProductInstanceUri` | The checked-in simulator does not resolve every default/null PIU case; real servers should implement the CU-64 default-asset semantics they claim |
 | Trace data absent | `No trace values in result` | Server/device did not populate `JoiningResultDataType.Trace` for this run; verify trigger settings (`includeTraces`) and server profile |
 | Missing prerequisite | `SetCalibration absent — cannot test downstream behaviour` | Cascading skip: an earlier optional feature was absent |
 | Namespace absent | `App namespace not registered` | Server does not expose the simulation namespace (expected for non-simulators) |

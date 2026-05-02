@@ -32,6 +32,7 @@ import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
+from helpers.method_signature import ASSET_MANAGEMENT_METHOD_INPUTS, assert_input_argument_names
 from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE
 from helpers.node_discovery import (
     find_child_by_browse_name,
@@ -115,6 +116,11 @@ async def test_send_identifier_methods_present_in_method_set(method_name, asset_
         pytest.skip("AssetManagement MethodSet not found")
     method = await _find_identifier_method(ms, method_name, ns_ijt)
     assert method is not None, f"Method '{method_name}' (IJT Base ns) not found in AssetManagement MethodSet"
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[method_name],
+        method_name=method_name,
+    )
 
 
 @pytest.mark.requires_cu(CU.GET_IDENTIFIERS)
@@ -129,6 +135,11 @@ async def test_get_identifiers_method_present_in_method_set(asset_management, ns
         pytest.skip("AssetManagement MethodSet not found")
     method = await _find_identifier_method(ms, BN.GET_IDENTIFIERS, ns_ijt)
     assert method is not None, "GetIdentifiers not found in AssetManagement MethodSet"
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.GET_IDENTIFIERS],
+        method_name=BN.GET_IDENTIFIERS,
+    )
 
 
 @pytest.mark.requires_cu(CU.RESET_IDENTIFIERS)
@@ -143,6 +154,11 @@ async def test_reset_identifiers_method_present_in_method_set(asset_management, 
         pytest.skip("AssetManagement MethodSet not found")
     method = await _find_identifier_method(ms, BN.RESET_IDENTIFIERS, ns_ijt)
     assert method is not None, "ResetIdentifiers not found in AssetManagement MethodSet"
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.RESET_IDENTIFIERS],
+        method_name=BN.RESET_IDENTIFIERS,
+    )
 
 
 # ─── GetIdentifiers ───────────────────────────────────────────────────────────

@@ -1,5 +1,14 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-05-02
+
+1. Corrected the `SetJoiningProcessSize` input argument name from `CounterSize` to `MaxCounterSize` to match the released IJT NodeSet.
+2. Improved validation and status reporting for asset methods such as `SetIOSignals`, `GetIOSignals`, identifier methods, and `SetTime`. Invalid product instance URIs, unknown signal IDs, and invalid argument values now return clearer method status information instead of generic unexpected errors.
+3. Corrected the AssetManagement `MethodSet` TypeDefinition to use the IJT asset method set type.
+4. Improved `RequestResults` behavior when a requested-results simulation is already active.
+5. Improved NOK result simulation with deterministic error information for failing-step scenarios.
+6. Multiple bug fixes and optimizations.
+
 ## 2026-04-23
 
 1. Fixed delays in result variable updates. When results arrive in quick succession, the server now waits only the minimum necessary time between updates instead of always waiting the full interval. Connected clients will see result data appear more promptly.

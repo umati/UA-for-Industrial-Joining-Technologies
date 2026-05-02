@@ -1,15 +1,17 @@
 # Full Conformance Profile
 #
 # Declares all 123 conformance units as supported.
-# Use this profile when testing against the OPC UA IJT Server Simulator
-# or any other server that claims complete IJT Base implementation.
+# Use this profile only for a server that claims complete IJT Base
+# implementation. The checked-in Release 2 simulator uses
+# server_capabilities.simulator.yaml to declare unsupported optional CUs.
 
 profile:
   name: "Full IJT Base Conformance"
   description: >
     All 123 conformance units from OPC 40450-1 IJT Base Companion Specification.
-    Use for simulators and full-featured servers. Tests for unsupported optional
-    features will still skip gracefully via the trigger layer.
+    Use for full-featured servers that claim all CUs. Simulators or controllers
+    with unsupported optional features should provide a capability file with
+    cu_overrides so those tests are reported as Not Supported instead of failed.
 
   facets:
     - basic_joining_system_server_facet

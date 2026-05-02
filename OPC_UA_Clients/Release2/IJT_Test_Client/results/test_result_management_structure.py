@@ -48,10 +48,10 @@ async def test_get_result_by_id_method_exists(result_management, ns_indices):
 
 
 async def test_get_result_id_list_filtered_method_absent(result_management, ns_indices):
-    """GetResultIdListFiltered is not part of the IJT Base spec.
+    """GetResultIdListFiltered is an optional Machinery/Result method.
 
-    A compliant server must either omit the method node (absent) or expose it as a stub
-    that rejects calls with a Bad OPC UA status.  Both are acceptable.
+    A server that does not support this optional CU may omit the method node or
+    expose it as a stub that rejects calls with a Bad OPC UA status.
     If the method is present, skip here — rejection behaviour is validated in
     conformance/test_result_management.py::test_result_management_get_result_id_list_filtered_is_not_supported.
     """

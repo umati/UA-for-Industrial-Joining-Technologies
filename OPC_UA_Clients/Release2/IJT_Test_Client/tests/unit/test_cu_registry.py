@@ -67,11 +67,11 @@ class TestCuStringConstants:
         duplicates = [v for v in values if values.count(v) > 1]
         assert not duplicates, f"Duplicate CU values found: {set(duplicates)}"
 
-    def test_constant_count_is_124(self):
-        """Exactly 124 CU string constants as documented in full_conformance.yaml."""
+    def test_constant_count_is_123(self):
+        """Exactly 123 CU string constants as documented in full_conformance.yaml."""
         constants = _get_string_cu_constants()
         count = len(constants)
-        assert count == 124, f"Expected 124 CU constants, got {count}"
+        assert count == 123, f"Expected 123 CU constants, got {count}"
 
     def test_no_spaces_in_values(self):
         for name, value in _get_string_cu_constants().items():

@@ -249,6 +249,12 @@ class BN:
     SEND_IDENTIFIERS = "SendIdentifiers"
     SEND_TEXT_IDENTIFIERS = "SendTextIdentifiers"
     GET_IDENTIFIERS = "GetIdentifiers"
+    GET_FEEDBACK_FILE_LIST = "GetFeedbackFileList"
+    SEND_FEEDBACK = "SendFeedback"
+    SET_TIME = "SetTime"
+    SET_OFFLINE_TIMER = "SetOfflineTimer"
+    GET_IO_SIGNALS = "GetIOSignals"
+    SET_IO_SIGNALS = "SetIOSignals"
     ALL_ASSET_MANAGEMENT_METHODS: list[str] = [
         "EnableAsset",
         "DisconnectAsset",
@@ -260,6 +266,12 @@ class BN:
         "SendIdentifiers",
         "SendTextIdentifiers",
         "GetIdentifiers",
+        "GetFeedbackFileList",
+        "SendFeedback",
+        "SetTime",
+        "SetOfflineTimer",
+        "GetIOSignals",
+        "SetIOSignals",
     ]
     # Maintenance sub-node properties (IJT Base ns)
     LAST_SERVICE = "LastService"
@@ -298,7 +310,7 @@ class BN:
     INTERVENTION_TYPE = "InterventionType"
     EXTENDED_META_DATA = "ExtendedMetaData"
     # ── IJT Base ResultManagement additions ──
-    RESULT = "Result"  # ResultVariable node BrowseName (IJT Base ns), child of Results folder
+    RESULT = "Result"  # ResultVariable node BrowseName text; namespace may be spec or application-specific
     REQUEST_RESULTS = "RequestResults"
     REQUEST_UNACKNOWLEDGED_RESULTS = "RequestUnacknowledgedResults"
     REQUESTED_RESULT = "RequestedResult"
@@ -327,21 +339,37 @@ class BN:
     GET_SELECTED_JOINING_PROGRAM = "GetSelectedJoiningProgram"
     SELECT_JOINING_PROCESS = "SelectJoiningProcess"
     START_SELECTED_JOINING = "StartSelectedJoining"
+    DESELECT_JOINING_PROCESS = "DeselectJoiningProcess"
+    START_JOINING_PROCESS = "StartJoiningProcess"
+    DELETE_JOINING_PROCESS = "DeleteJoiningProcess"
+    SEND_JOINING_PROCESS = "SendJoiningProcess"
+    GET_JOINING_PROCESS = "GetJoiningProcess"
     ABORT_JOINING_PROCESS = "AbortJoiningProcess"
     RESET_JOINING_PROCESS = "ResetJoiningProcess"
     SET_JOINING_PROCESS_SIZE = "SetJoiningProcessSize"
     INCREMENT_JOINING_PROCESS_COUNTER = "IncrementJoiningProcessCounter"
     DECREMENT_JOINING_PROCESS_COUNTER = "DecrementJoiningProcessCounter"
+    SET_JOINING_PROCESS_COUNTER = "SetJoiningProcessCounter"
+    SET_JOINING_PROCESS_MAPPING = "SetJoiningProcessMapping"
+    GET_JOINING_PROCESS_REVISION_LIST = "GetJoiningProcessRevisionList"
     ALL_JOINING_PROCESS_METHODS: list[str] = [
         "GetJoiningProcessList",
         "GetSelectedJoiningProgram",
         "SelectJoiningProcess",
         "StartSelectedJoining",
+        "DeselectJoiningProcess",
+        "StartJoiningProcess",
+        "DeleteJoiningProcess",
+        "SendJoiningProcess",
+        "GetJoiningProcess",
         "AbortJoiningProcess",
         "ResetJoiningProcess",
         "SetJoiningProcessSize",
         "IncrementJoiningProcessCounter",
         "DecrementJoiningProcessCounter",
+        "SetJoiningProcessCounter",
+        "SetJoiningProcessMapping",
+        "GetJoiningProcessRevisionList",
     ]
     # ── JointManagement method BrowseNames (IJT Base ns) ──
     GET_JOINT = "GetJoint"
@@ -349,12 +377,30 @@ class BN:
     SELECT_JOINT = "SelectJoint"
     SEND_JOINT = "SendJoint"
     DELETE_JOINT = "DeleteJoint"
+    SEND_JOINT_DESIGN = "SendJointDesign"
+    GET_JOINT_DESIGN_LIST = "GetJointDesignList"
+    GET_JOINT_DESIGN = "GetJointDesign"
+    DELETE_JOINT_DESIGN = "DeleteJointDesign"
+    SEND_JOINT_COMPONENT = "SendJointComponent"
+    GET_JOINT_COMPONENT_LIST = "GetJointComponentList"
+    GET_JOINT_COMPONENT = "GetJointComponent"
+    DELETE_JOINT_COMPONENT = "DeleteJointComponent"
+    GET_JOINT_REVISION_LIST = "GetJointRevisionList"
     ALL_JOINT_METHODS: list[str] = [
         "GetJoint",
         "GetJointList",
         "SelectJoint",
         "SendJoint",
         "DeleteJoint",
+        "SendJointDesign",
+        "GetJointDesignList",
+        "GetJointDesign",
+        "DeleteJointDesign",
+        "SendJointComponent",
+        "GetJointComponentList",
+        "GetJointComponent",
+        "DeleteJointComponent",
+        "GetJointRevisionList",
     ]
 
 
@@ -576,7 +622,8 @@ class ResultEvaluation:
     UNDEFINED = 0
     OK = 1
     NOK = 2
-    VALID_VALUES: set[int] = {0, 1, 2}
+    NOT_DECIDABLE = 3
+    VALID_VALUES: set[int] = {0, 1, 2, 3}
 
 
 # ---------------------------------------------------------------------------

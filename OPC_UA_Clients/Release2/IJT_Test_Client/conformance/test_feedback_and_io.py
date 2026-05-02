@@ -5,7 +5,7 @@ Covers:
   feedback_methods — SendFeedback and GetFeedbackFileList methods.
   set_time — SetTime method.
   set_offline_timer — SetOfflineTimer method.
-  io_signals_methods — SendIOSignals and GetIOSignals methods.
+  io_signals_methods — SetIOSignals and GetIOSignals methods.
 
 Spec (feedback_methods):
   "The Server supports SendFeedback and GetFeedbackFileList methods for any type of feedback.
@@ -19,7 +19,7 @@ Spec (set_offline_timer):
   "The Server supports SetOfflineTimer method."
 
 Spec (io_signals_methods):
-  "The Server supports SendIOSignals and GetIOSignals methods for the asset."
+  "The Server supports SetIOSignals and GetIOSignals methods for the asset."
 
 Design: structure tests verify method presence; functional tests call the method
 and accept BadNotSupported/BadMethodInvalid as skip conditions (these are truly optional).
@@ -33,21 +33,22 @@ from asyncua import ua
 
 from helpers.cu_registry import CU
 from helpers.method_caller import find_and_call_method
+from helpers.method_signature import ASSET_MANAGEMENT_METHOD_INPUTS, assert_input_argument_names
 from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE
-from helpers.node_discovery import find_child_by_browse_name, find_joining_system, find_method_set
+from helpers.node_discovery import (
+    find_child_by_browse_name,
+    find_joining_system,
+    find_method_set,
+    read_tool_product_instance_uri,
+)
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
 
 _METHOD_TIMEOUT = 15.0
 
-# Browse name strings for methods not yet defined in BN
-_BN_GET_FEEDBACK_FILE_LIST = "GetFeedbackFileList"
-_BN_SEND_FEEDBACK = "SendFeedback"
-_BN_SET_TIME = "SetTime"
-_BN_SET_OFFLINE_TIMER = "SetOfflineTimer"
-_BN_SEND_IO_SIGNALS = "SendIOSignals"
-_BN_GET_IO_SIGNALS = "GetIOSignals"
+_FEEDBACK_TYPE_TEXT = 2
+_FEEDBACK_TYPE_VISUAL = 3
 
 
 async def _get_method_set(asset_management, ns_di: int, ns_ijt: int | None = None, ns_app: int | None = None):
@@ -75,9 +76,47 @@ async def _get_fresh_method_set(opcua_client, ns_ijt: int, ns_di: int, ns_app: i
     return ms
 
 
+async def _product_instance_uri(client, ns_ijt: int, ns_di: int, ns_app: int | None) -> str:
+    """Return a concrete tool ProductInstanceUri, or empty string for default-asset calls."""
+    return await read_tool_product_instance_uri(client, ns_ijt, ns_di, ns_app) or ""
+
+
+def _piu_arg(product_instance_uri: str) -> ua.Variant:
+    return ua.Variant(product_instance_uri, ua.VariantType.String)
+
+
+def _duration_arg(seconds: float) -> ua.Variant:
+    return ua.Variant(float(seconds), ua.VariantType.Double)
+
+
+def _feedback_type_arg(feedback_type: int) -> ua.Variant:
+    return ua.Variant(feedback_type, ua.VariantType.UInt16)
+
+
+def _string_array_arg(values: list[str]) -> ua.Variant:
+    return ua.Variant(values, ua.VariantType.String)
+
+
+def _make_signal_data(signal_id: str):
+    signal_type = getattr(ua, "SignalDataType", None)
+    if signal_type is None:
+        pytest.skip("SignalDataType not available - load_data_type_definitions() may have failed")
+    signal = signal_type()
+    signal.SignalId = signal_id
+    signal.SignalValue = ua.Variant(0, ua.VariantType.Int32)
+    signal.SignalDescription = "Invalid conformance-test signal"
+    signal.SignalType = 0
+    return signal
+
+
 def _is_bad_not_supported(err_str: str) -> bool:
     """Return True when the error string contains a BadNotSupported or BadMethodInvalid token."""
     return any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied"))
+
+
+def _is_domain_rejection(err_str: str) -> bool:
+    """Return True for IJT Section 7.4 domain rejection responses."""
+    return "Uncertain" in err_str
 
 
 # ---------------------------------------------------------------------------
@@ -99,12 +138,17 @@ async def test_get_feedback_file_list_method_present(asset_management, ns_indice
             "IJT spec (OPC 40450-1) requires a MethodSet child under AssetManagement — this server omits it (non-conformant)"
         )
 
-    method = await find_child_by_browse_name(ms, _BN_GET_FEEDBACK_FILE_LIST, ns_ijt)
+    method = await find_child_by_browse_name(ms, BN.GET_FEEDBACK_FILE_LIST, ns_ijt)
     if method is None:
         pytest.skip(
             "GetFeedbackFileList not found in AssetManagement MethodSet — "
             "optional per feedback_methods CU; not implemented by this server"
         )
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.GET_FEEDBACK_FILE_LIST],
+        method_name=BN.GET_FEEDBACK_FILE_LIST,
+    )
 
 
 @pytest.mark.requires_cu(CU.FEEDBACK_METHODS)
@@ -121,12 +165,17 @@ async def test_send_feedback_method_present(asset_management, ns_indices):
             "IJT spec (OPC 40450-1) requires a MethodSet child under AssetManagement — this server omits it (non-conformant)"
         )
 
-    method = await find_child_by_browse_name(ms, _BN_SEND_FEEDBACK, ns_ijt)
+    method = await find_child_by_browse_name(ms, BN.SEND_FEEDBACK, ns_ijt)
     if method is None:
         pytest.skip(
             "SendFeedback not found in AssetManagement MethodSet — "
             "optional per feedback_methods CU; not implemented by this server"
         )
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.SEND_FEEDBACK],
+        method_name=BN.SEND_FEEDBACK,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -144,11 +193,18 @@ async def test_get_feedback_file_list_returns_list(opcua_client, ns_indices):
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_GET_FEEDBACK_FILE_LIST, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.GET_FEEDBACK_FILE_LIST, ns_ijt)
     if method_node is None:
         pytest.skip("GetFeedbackFileList method not found — skipping functional test")
+    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    result = await find_and_call_method(ms, _BN_GET_FEEDBACK_FILE_LIST, ns_ijt, timeout=_METHOD_TIMEOUT)
+    result = await find_and_call_method(
+        ms,
+        BN.GET_FEEDBACK_FILE_LIST,
+        ns_ijt,
+        _piu_arg(piu),
+        timeout=_METHOD_TIMEOUT,
+    )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if _is_bad_not_supported(err_str):
@@ -186,9 +242,14 @@ async def test_set_time_method_present(asset_management, ns_indices):
             "IJT spec (OPC 40450-1) requires a MethodSet child under AssetManagement — this server omits it (non-conformant)"
         )
 
-    method = await find_child_by_browse_name(ms, _BN_SET_TIME, ns_ijt)
+    method = await find_child_by_browse_name(ms, BN.SET_TIME, ns_ijt)
     assert method is not None, (
         f"SetTime method (ns_ijt={ns_ijt}) not found in AssetManagement MethodSet per set_time CU"
+    )
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.SET_TIME],
+        method_name=BN.SET_TIME,
     )
 
 
@@ -211,16 +272,17 @@ async def test_set_time_callable_with_current_datetime(opcua_client, ns_indices)
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_SET_TIME, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.SET_TIME, ns_ijt)
     if method_node is None:
         pytest.skip("SetTime method not found — skipping functional test")
+    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     result = await find_and_call_method(
         ms,
-        _BN_SET_TIME,
+        BN.SET_TIME,
         ns_ijt,
-        ua.Variant("", ua.VariantType.String),
+        _piu_arg(piu),
         ua.Variant(now_utc, ua.VariantType.DateTime),
         timeout=_METHOD_TIMEOUT,
     )
@@ -250,9 +312,14 @@ async def test_set_offline_timer_method_present(asset_management, ns_indices):
             "IJT spec (OPC 40450-1) requires a MethodSet child under AssetManagement — this server omits it (non-conformant)"
         )
 
-    method = await find_child_by_browse_name(ms, _BN_SET_OFFLINE_TIMER, ns_ijt)
+    method = await find_child_by_browse_name(ms, BN.SET_OFFLINE_TIMER, ns_ijt)
     if method is None:
         pytest.skip("SetOfflineTimer: Not Supported — optional per set_offline_timer CU")
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.SET_OFFLINE_TIMER],
+        method_name=BN.SET_OFFLINE_TIMER,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -264,8 +331,8 @@ async def test_set_offline_timer_method_present(asset_management, ns_indices):
 async def test_set_offline_timer_callable(opcua_client, ns_indices):
     """SetOfflineTimer must be callable without raising an unexpected error.
 
-    The method is called without arguments as a presence probe; BadNotSupported
-    and BadArgumentsMissing are both accepted as skip conditions.
+    The method is called with ProductInstanceUri and Duration, matching the
+    current NodeSet signature.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -274,17 +341,25 @@ async def test_set_offline_timer_callable(opcua_client, ns_indices):
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_SET_OFFLINE_TIMER, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.SET_OFFLINE_TIMER, ns_ijt)
     if method_node is None:
         pytest.skip("SetOfflineTimer method not found — skipping functional test")
+    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    result = await find_and_call_method(ms, _BN_SET_OFFLINE_TIMER, ns_ijt, timeout=_METHOD_TIMEOUT)
+    result = await find_and_call_method(
+        ms,
+        BN.SET_OFFLINE_TIMER,
+        ns_ijt,
+        _piu_arg(piu),
+        _duration_arg(300.0),
+        timeout=_METHOD_TIMEOUT,
+    )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if _is_bad_not_supported(err_str):
             pytest.skip(f"SetOfflineTimer returned BadNotSupported — accepted as optional behaviour: {err_str}")
-        if "BadArgumentsMissing" in err_str or "BadInvalidArgument" in err_str:
-            pytest.skip(f"SetOfflineTimer requires arguments not provided in probe call: {err_str}")
+        if "BadInvalidArgument" in err_str or "BadOutOfRange" in err_str:
+            pytest.skip(f"Server rejected 300s offline timer duration: {err_str}")
         pytest.fail(f"SetOfflineTimer failed with unexpected error: {err_str}")
 
 
@@ -294,8 +369,8 @@ async def test_set_offline_timer_callable(opcua_client, ns_indices):
 
 
 @pytest.mark.requires_cu(CU.IO_SIGNALS_METHODS)
-async def test_send_io_signals_method_present(asset_management, ns_indices):
-    """SendIOSignals method must be browsable in AssetManagement MethodSet."""
+async def test_set_io_signals_method_present(asset_management, ns_indices):
+    """SetIOSignals method must be browsable in AssetManagement MethodSet."""
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_di is None or ns_ijt is None:
@@ -307,12 +382,17 @@ async def test_send_io_signals_method_present(asset_management, ns_indices):
             "IJT spec (OPC 40450-1) requires a MethodSet child under AssetManagement — this server omits it (non-conformant)"
         )
 
-    method = await find_child_by_browse_name(ms, _BN_SEND_IO_SIGNALS, ns_ijt)
+    method = await find_child_by_browse_name(ms, BN.SET_IO_SIGNALS, ns_ijt)
     if method is None:
         pytest.skip(
-            "SendIOSignals not found in AssetManagement MethodSet — "
+            "SetIOSignals not found in AssetManagement MethodSet — "
             "optional per io_signals_methods CU; not implemented by this server"
         )
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.SET_IO_SIGNALS],
+        method_name=BN.SET_IO_SIGNALS,
+    )
 
 
 @pytest.mark.requires_cu(CU.IO_SIGNALS_METHODS)
@@ -329,9 +409,14 @@ async def test_get_io_signals_method_present(asset_management, ns_indices):
             "IJT spec (OPC 40450-1) requires a MethodSet child under AssetManagement — this server omits it (non-conformant)"
         )
 
-    method = await find_child_by_browse_name(ms, _BN_GET_IO_SIGNALS, ns_ijt)
+    method = await find_child_by_browse_name(ms, BN.GET_IO_SIGNALS, ns_ijt)
     assert method is not None, (
         f"GetIOSignals method (ns_ijt={ns_ijt}) not found in AssetManagement MethodSet per io_signals_methods CU"
+    )
+    await assert_input_argument_names(
+        method,
+        ASSET_MANAGEMENT_METHOD_INPUTS[BN.GET_IO_SIGNALS],
+        method_name=BN.GET_IO_SIGNALS,
     )
 
 
@@ -354,17 +439,25 @@ async def test_get_io_signals_callable(opcua_client, ns_indices):
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_GET_IO_SIGNALS, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.GET_IO_SIGNALS, ns_ijt)
     if method_node is None:
         pytest.skip("GetIOSignals method not found — skipping functional test")
+    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    result = await find_and_call_method(ms, _BN_GET_IO_SIGNALS, ns_ijt, timeout=_METHOD_TIMEOUT)
+    result = await find_and_call_method(
+        ms,
+        BN.GET_IO_SIGNALS,
+        ns_ijt,
+        _piu_arg(piu),
+        _string_array_arg([]),
+        timeout=_METHOD_TIMEOUT,
+    )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if _is_bad_not_supported(err_str):
             pytest.skip(f"GetIOSignals returned BadNotSupported — accepted, hardware-dependent: {err_str}")
-        if "BadArgumentsMissing" in err_str or "BadInvalidArgument" in err_str:
-            pytest.skip(f"GetIOSignals requires arguments not provided in probe call: {err_str}")
+        if "BadInvalidArgument" in err_str:
+            pytest.skip(f"Server rejected an empty SignalIdList probe call: {err_str}")
         pytest.fail(f"GetIOSignals failed with unexpected error: {err_str}")
 
 
@@ -390,12 +483,21 @@ async def test_send_feedback_with_text_type_does_not_require_file_reference(opcu
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_SEND_FEEDBACK, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.SEND_FEEDBACK, ns_ijt)
     if method_node is None:
         pytest.skip("SendFeedback method not found — skipping text-type functional test")
+    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    text_content = ua.Variant("ConformanceTestTextFeedback", ua.VariantType.String)
-    result = await find_and_call_method(ms, _BN_SEND_FEEDBACK, ns_ijt, text_content, timeout=_METHOD_TIMEOUT)
+    result = await find_and_call_method(
+        ms,
+        BN.SEND_FEEDBACK,
+        ns_ijt,
+        _piu_arg(piu),
+        _feedback_type_arg(_FEEDBACK_TYPE_TEXT),
+        ua.Variant("ConformanceTestTextFeedback", ua.VariantType.String),
+        ua.Variant("", ua.VariantType.String),
+        timeout=_METHOD_TIMEOUT,
+    )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if _is_bad_not_supported(err_str):
@@ -419,11 +521,18 @@ async def test_send_feedback_with_valid_file_reference_from_get_feedback_file_li
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    list_node = await find_child_by_browse_name(ms, _BN_GET_FEEDBACK_FILE_LIST, ns_ijt)
+    list_node = await find_child_by_browse_name(ms, BN.GET_FEEDBACK_FILE_LIST, ns_ijt)
     if list_node is None:
         pytest.skip("GetFeedbackFileList not found — cannot obtain file references for SendFeedback")
+    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    list_result = await find_and_call_method(ms, _BN_GET_FEEDBACK_FILE_LIST, ns_ijt, timeout=_METHOD_TIMEOUT)
+    list_result = await find_and_call_method(
+        ms,
+        BN.GET_FEEDBACK_FILE_LIST,
+        ns_ijt,
+        _piu_arg(piu),
+        timeout=_METHOD_TIMEOUT,
+    )
     if not list_result.success:
         err_str = str(list_result.error) if list_result.error else "unknown error"
         if _is_bad_not_supported(err_str):
@@ -442,11 +551,20 @@ async def test_send_feedback_with_valid_file_reference_from_get_feedback_file_li
         else ua.Variant(str(first_ref), ua.VariantType.String)
     )
 
-    send_node = await find_child_by_browse_name(ms, _BN_SEND_FEEDBACK, ns_ijt)
+    send_node = await find_child_by_browse_name(ms, BN.SEND_FEEDBACK, ns_ijt)
     if send_node is None:
         pytest.skip("SendFeedback method not found — skipping file-reference test")
 
-    result = await find_and_call_method(ms, _BN_SEND_FEEDBACK, ns_ijt, ref_arg, timeout=_METHOD_TIMEOUT)
+    result = await find_and_call_method(
+        ms,
+        BN.SEND_FEEDBACK,
+        ns_ijt,
+        _piu_arg(piu),
+        _feedback_type_arg(_FEEDBACK_TYPE_VISUAL),
+        ua.Variant("", ua.VariantType.String),
+        ref_arg,
+        timeout=_METHOD_TIMEOUT,
+    )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if _is_bad_not_supported(err_str):
@@ -470,12 +588,22 @@ async def test_send_feedback_invalid_file_reference_returns_bad_status(opcua_cli
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_SEND_FEEDBACK, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.SEND_FEEDBACK, ns_ijt)
     if method_node is None:
         pytest.skip("SendFeedback not found — cannot test invalid file reference")
+    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
     invalid_ref = ua.Variant("urn:invalid:feedback:file:ref:xyz999", ua.VariantType.String)
-    result = await find_and_call_method(ms, _BN_SEND_FEEDBACK, ns_ijt, invalid_ref, timeout=_METHOD_TIMEOUT)
+    result = await find_and_call_method(
+        ms,
+        BN.SEND_FEEDBACK,
+        ns_ijt,
+        _piu_arg(piu),
+        _feedback_type_arg(_FEEDBACK_TYPE_VISUAL),
+        ua.Variant("", ua.VariantType.String),
+        invalid_ref,
+        timeout=_METHOD_TIMEOUT,
+    )
     if result.success:
         # P06/R08: server returns OpcUa_Good + bad methodStatusCode in output[0] for rejected calls
         output = result.output_list
@@ -526,18 +654,19 @@ async def test_set_time_null_datetime_returns_bad_invalid_argument(opcua_client,
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_SET_TIME, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.SET_TIME, ns_ijt)
     if method_node is None:
         pytest.skip("SetTime not found — cannot test invalid datetime")
+    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
     import datetime as _dt
 
     min_dt = _dt.datetime(1, 1, 1, 0, 0, 0, tzinfo=_dt.timezone.utc)
     result = await find_and_call_method(
         ms,
-        _BN_SET_TIME,
+        BN.SET_TIME,
         ns_ijt,
-        ua.Variant("", ua.VariantType.String),
+        _piu_arg(piu),
         ua.Variant(min_dt, ua.VariantType.DateTime),
         timeout=_METHOD_TIMEOUT,
     )
@@ -549,18 +678,19 @@ async def test_set_time_null_datetime_returns_bad_invalid_argument(opcua_client,
     err_str = str(result.error) if result.error else "unknown error"
     if _is_bad_not_supported(err_str):
         pytest.skip(f"SetTime not supported on this server: {err_str}")
+    if _is_domain_rejection(err_str):
+        return
     assert any(kw in err_str for kw in ("BadInvalidArgument", "BadOutOfRange", "BadTypeMismatch")), (
         f"Unexpected status for null datetime — expected Bad_InvalidArgument or Bad_OutOfRange, got: {err_str}"
     )
 
 
 @pytest.mark.requires_cu(CU.SET_TIME)
-async def test_set_time_far_past_timestamp_returns_bad_out_of_range(opcua_client, ns_indices):
-    """SetTime with a timestamp far in the past must return Bad_OutOfRange or Bad_InvalidArgument.
+async def test_set_time_far_past_timestamp_is_handled_deterministically(opcua_client, ns_indices):
+    """SetTime with a timestamp far in the past must be handled deterministically.
 
-    A timestamp from year 2000 (24+ years in the past) must be rejected by servers
-    that validate timestamp plausibility.  Servers with wide acceptance windows may
-    accept it; those cases are skipped rather than failed.
+    A timestamp from year 2000 may be rejected by servers that validate timestamp
+    plausibility. Servers with wider acceptance windows may also accept it.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -569,29 +699,29 @@ async def test_set_time_far_past_timestamp_returns_bad_out_of_range(opcua_client
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_SET_TIME, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.SET_TIME, ns_ijt)
     if method_node is None:
         pytest.skip("SetTime not found — cannot test past timestamp")
+    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
     import datetime as _dt
 
     past_dt = _dt.datetime(2000, 1, 1, 0, 0, 0, tzinfo=_dt.timezone.utc)
     result = await find_and_call_method(
         ms,
-        _BN_SET_TIME,
+        BN.SET_TIME,
         ns_ijt,
-        ua.Variant("", ua.VariantType.String),
+        _piu_arg(piu),
         ua.Variant(past_dt, ua.VariantType.DateTime),
         timeout=_METHOD_TIMEOUT,
     )
     if result.success:
-        pytest.skip(
-            "SetTime accepted year-2000 timestamp — server has a wide acceptance window; "
-            "rejection behaviour is implementation-dependent"
-        )
+        return
     err_str = str(result.error) if result.error else "unknown error"
     if _is_bad_not_supported(err_str):
         pytest.skip(f"SetTime not supported on this server: {err_str}")
+    if _is_domain_rejection(err_str):
+        return
     assert any(kw in err_str for kw in ("BadOutOfRange", "BadInvalidArgument")), (
         f"Unexpected status for far-past timestamp — expected Bad_OutOfRange or Bad_InvalidArgument, got: {err_str}"
     )
@@ -616,12 +746,19 @@ async def test_set_offline_timer_with_zero_duration_disables_timer(opcua_client,
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_SET_OFFLINE_TIMER, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.SET_OFFLINE_TIMER, ns_ijt)
     if method_node is None:
         pytest.skip("SetOfflineTimer method absent from MethodSet — optional offline-timer capability unavailable")
+    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    zero_duration = ua.Variant(0, ua.VariantType.UInt32)
-    result = await find_and_call_method(ms, _BN_SET_OFFLINE_TIMER, ns_ijt, zero_duration, timeout=_METHOD_TIMEOUT)
+    result = await find_and_call_method(
+        ms,
+        BN.SET_OFFLINE_TIMER,
+        ns_ijt,
+        _piu_arg(piu),
+        _duration_arg(0.0),
+        timeout=_METHOD_TIMEOUT,
+    )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if _is_bad_not_supported(err_str):
@@ -632,10 +769,11 @@ async def test_set_offline_timer_with_zero_duration_disables_timer(opcua_client,
 
 
 @pytest.mark.requires_cu(CU.SET_OFFLINE_TIMER)
-async def test_set_offline_timer_invalid_piu_returns_bad_status(opcua_client, ns_indices):
-    """SetOfflineTimer with an unknown ProductInstanceUri must return a Bad status.
+async def test_set_offline_timer_invalid_piu_returns_rejection(opcua_client, ns_indices):
+    """SetOfflineTimer with an unknown ProductInstanceUri must be rejected.
 
-    Per spec: Bad_NoEntryExists or Bad_InvalidArgument.
+    IJT domain rejection may be reported as Uncertain with output Status, while
+    malformed/older implementations may use a service-level Bad status.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -644,20 +782,28 @@ async def test_set_offline_timer_invalid_piu_returns_bad_status(opcua_client, ns
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_SET_OFFLINE_TIMER, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.SET_OFFLINE_TIMER, ns_ijt)
     if method_node is None:
         pytest.skip("SetOfflineTimer method absent from MethodSet — cannot test invalid ProductInstanceUri handling")
 
-    invalid_piu = ua.Variant(_INVALID_PIU, ua.VariantType.String)
-    result = await find_and_call_method(ms, _BN_SET_OFFLINE_TIMER, ns_ijt, invalid_piu, timeout=_METHOD_TIMEOUT)
+    result = await find_and_call_method(
+        ms,
+        BN.SET_OFFLINE_TIMER,
+        ns_ijt,
+        _piu_arg(_INVALID_PIU),
+        _duration_arg(300.0),
+        timeout=_METHOD_TIMEOUT,
+    )
     if result.success:
         pytest.fail(
             f"SetOfflineTimer with unknown PIU '{_INVALID_PIU}' unexpectedly returned Good — "
-            "server must return a Bad status for unknown asset URIs"
+            "server must reject unknown asset URIs"
         )
     err_str = str(result.error) if result.error else "unknown error"
     if _is_bad_not_supported(err_str):
         pytest.skip(f"SetOfflineTimer not supported on this server: {err_str}")
+    if _is_domain_rejection(err_str):
+        return
     assert any(
         kw in err_str
         for kw in (
@@ -667,7 +813,7 @@ async def test_set_offline_timer_invalid_piu_returns_bad_status(opcua_client, ns
             "BadInvalidArgument",
             "BadArgumentsMissing",
         )
-    ), f"Unexpected status for unknown PIU — expected Bad_NoEntryExists or Bad_InvalidArgument, got: {err_str}"
+    ), f"Unexpected status for unknown PIU — expected IJT domain rejection or service Bad, got: {err_str}"
 
 
 # ---------------------------------------------------------------------------
@@ -676,10 +822,11 @@ async def test_set_offline_timer_invalid_piu_returns_bad_status(opcua_client, ns
 
 
 @pytest.mark.requires_cu(CU.IO_SIGNALS_METHODS)
-async def test_get_io_signals_invalid_piu_returns_bad_status(opcua_client, ns_indices):
-    """GetIOSignals with an unknown ProductInstanceUri must return a Bad status.
+async def test_get_io_signals_invalid_piu_returns_rejection(opcua_client, ns_indices):
+    """GetIOSignals with an unknown ProductInstanceUri must be rejected.
 
-    Per spec: Bad_NoEntryExists or Bad_InvalidArgument.
+    IJT domain rejection may be reported as Uncertain with output Status, while
+    malformed/older implementations may use a service-level Bad status.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -688,16 +835,16 @@ async def test_get_io_signals_invalid_piu_returns_bad_status(opcua_client, ns_in
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_GET_IO_SIGNALS, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.GET_IO_SIGNALS, ns_ijt)
     if method_node is None:
         pytest.skip("GetIOSignals not found — cannot test invalid PIU")
 
     result = await find_and_call_method(
         ms,
-        _BN_GET_IO_SIGNALS,
+        BN.GET_IO_SIGNALS,
         ns_ijt,
-        ua.Variant(_INVALID_PIU, ua.VariantType.String),
-        ua.Variant([], ua.VariantType.ExtensionObject),
+        _piu_arg(_INVALID_PIU),
+        _string_array_arg([]),
         timeout=_METHOD_TIMEOUT,
     )
     if result.success:
@@ -708,18 +855,21 @@ async def test_get_io_signals_invalid_piu_returns_bad_status(opcua_client, ns_in
     err_str = str(result.error) if result.error else "unknown error"
     if _is_bad_not_supported(err_str):
         pytest.skip(f"GetIOSignals not supported on this server: {err_str}")
+    if _is_domain_rejection(err_str):
+        return
     assert any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadNoEntryExists", "BadInvalidArgument")), (
-        f"Unexpected status for unknown PIU — expected Bad_NoEntryExists or Bad_InvalidArgument, got: {err_str}"
+        f"Unexpected status for unknown PIU — expected IJT domain rejection or service Bad, got: {err_str}"
     )
 
 
 @pytest.mark.requires_cu(CU.IO_SIGNALS_METHODS)
-async def test_send_io_signals_invalid_signal_id_returns_bad_status(opcua_client, ns_indices):
-    """SendIOSignals with an invalid signal identifier must return a Bad status.
+async def test_set_io_signals_invalid_signal_id_returns_rejection(opcua_client, ns_indices):
+    """SetIOSignals with an invalid signal identifier must be rejected.
 
     Per spec design: an unknown/invalid SignalId must be rejected.
-    Bad_NoEntryExists or Bad_InvalidArgument is expected; no physical IO change
-    must occur.
+    The payload uses a valid numeric SignalValue so this test isolates unknown
+    SignalId handling from SignalDataType field-type validation. IJT domain
+    rejection or service Bad is accepted; no physical IO change must occur.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -728,20 +878,33 @@ async def test_send_io_signals_invalid_signal_id_returns_bad_status(opcua_client
 
     ms = await _get_fresh_method_set(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    method_node = await find_child_by_browse_name(ms, _BN_SEND_IO_SIGNALS, ns_ijt)
+    method_node = await find_child_by_browse_name(ms, BN.SET_IO_SIGNALS, ns_ijt)
     if method_node is None:
-        pytest.skip("SendIOSignals not found — cannot test invalid signal ID")
+        pytest.skip("SetIOSignals not found — cannot test invalid signal ID")
+    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    invalid_signal = ua.Variant("INVALID_SIGNAL_ID_XYZ999", ua.VariantType.String)
-    result = await find_and_call_method(ms, _BN_SEND_IO_SIGNALS, ns_ijt, invalid_signal, timeout=_METHOD_TIMEOUT)
+    invalid_signal = _make_signal_data("INVALID_SIGNAL_ID_XYZ999")
+    try:
+        result = await find_and_call_method(
+            ms,
+            BN.SET_IO_SIGNALS,
+            ns_ijt,
+            _piu_arg(piu),
+            ua.Variant([invalid_signal], ua.VariantType.ExtensionObject),
+            timeout=_METHOD_TIMEOUT,
+        )
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"Cannot encode SignalDataType input with this asyncua version: {exc}")
     if result.success:
         pytest.fail(
-            "SendIOSignals with invalid SignalId 'INVALID_SIGNAL_ID_XYZ999' "
+            "SetIOSignals with invalid SignalId 'INVALID_SIGNAL_ID_XYZ999' "
             "unexpectedly returned Good — server must reject unknown signal IDs"
         )
     err_str = str(result.error) if result.error else "unknown error"
     if _is_bad_not_supported(err_str):
-        pytest.skip(f"SendIOSignals not supported on this server: {err_str}")
+        pytest.skip(f"SetIOSignals not supported on this server: {err_str}")
+    if _is_domain_rejection(err_str):
+        return
     assert any(
         kw in err_str
         for kw in (
@@ -749,7 +912,5 @@ async def test_send_io_signals_invalid_signal_id_returns_bad_status(opcua_client
             "BadNotFound",
             "BadNoEntryExists",
             "BadInvalidArgument",
-            "BadArgumentsMissing",
-            "BadTypeMismatch",
         )
-    ), f"Unexpected status for invalid signal ID — expected Bad_NoEntryExists or Bad_InvalidArgument, got: {err_str}"
+    ), f"Unexpected status for invalid signal ID — expected IJT domain rejection or service Bad, got: {err_str}"

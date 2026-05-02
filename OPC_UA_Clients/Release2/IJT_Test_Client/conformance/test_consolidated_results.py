@@ -98,10 +98,10 @@ _OPCUA_LONG_TIMEOUT_MS = 60000
 _VALUE_TAG_FINAL: int = 1
 
 # ResultCounterTypeEnumeration values (OPC 40450-1, ResultCounterDataType.CounterType)
-_COUNTER_TYPE_BATCH_SIZE: int = 1  # batch size counter
-_COUNTER_TYPE_BATCH_COUNT: int = 2  # completed batch count counter
-_COUNTER_TYPE_CHANNEL_NUMBER: int = 3  # channel number counter
-_COUNTER_TYPE_SPINDLE_NUMBER: int = 4  # spindle number counter
+_COUNTER_TYPE_BATCH_SIZE: int = 2  # batch size counter
+_COUNTER_TYPE_BATCH_COUNT: int = 3  # completed batch count counter
+_COUNTER_TYPE_CHANNEL_NUMBER: int = 6  # channel number counter
+_COUNTER_TYPE_SPINDLE_NUMBER: int = 7  # spindle number counter
 
 # Default number of sub-results requested in combined result triggers
 _DEFAULT_CHILD_COUNT: int = 3
@@ -210,15 +210,49 @@ def _sub_result_counts(result_data) -> tuple[int, int]:
     return inline, ref
 
 
+def _reference_mode_sub_results(result_data) -> list:
+    """Return reference-mode child summaries from References or metadata-only ResultContent."""
+    refs = getattr(result_data, "References", None)
+    if isinstance(refs, (list, tuple)) and refs:
+        return [_unwrap_sub_result(ref) for ref in refs if _unwrap_sub_result(ref) is not None]
+
+    content = getattr(result_data, "ResultContent", None)
+    if not isinstance(content, (list, tuple)):
+        return []
+
+    summaries: list = []
+    for child in content:
+        child = _unwrap_sub_result(child)
+        if child is None:
+            continue
+        meta = getattr(child, "ResultMetaData", None)
+        if meta is None:
+            continue
+        summaries.append(child)
+    return summaries
+
+
+def _result_id_from_result_or_reference(item) -> str:
+    item = _unwrap_sub_result(item)
+    raw = getattr(item, "ResultId", None)
+    if raw is None:
+        meta = getattr(item, "ResultMetaData", None)
+        raw = getattr(meta, "ResultId", None) if meta is not None else None
+    raw = _unwrap_sub_result(raw)
+    return "" if raw is None else str(raw).strip()
+
+
 def _get_result_counters(result_data) -> list:
     """Extract ResultCounters list from ResultMetaData, or empty list."""
+    result_data = _unwrap_sub_result(result_data)
     meta = getattr(result_data, "ResultMetaData", None)
+    meta = _unwrap_sub_result(meta) if meta is not None else None
     if meta is None:
         return []
     counters = getattr(meta, "ResultCounters", None)
     if not isinstance(counters, (list, tuple)):
         return []
-    return list(counters)
+    return [_unwrap_sub_result(counter) for counter in counters]
 
 
 def _get_result_classification_int(result_data) -> int | None:
@@ -235,49 +269,111 @@ def _collect_counter_types(counters: list) -> set[int]:
     """Return the set of integer CounterType values found in a counters list."""
     found: set[int] = set()
     for counter in counters:
-        ct = getattr(counter, "CounterType", None)
-        if ct is not None:
-            try:
-                found.add(int(ct))
-            except (TypeError, ValueError):
-                pass
+        ct_int = _counter_type(counter)
+        if ct_int is not None:
+            found.add(ct_int)
     return found
+
+
+def _counter_name(counter) -> str:
+    """Return a normalized counter name when the server provides one."""
+    counter = _unwrap_sub_result(counter)
+    raw = getattr(counter, "Name", None) or getattr(counter, "CounterName", None)
+    raw = _unwrap_sub_result(raw)
+    text = getattr(raw, "Text", raw)
+    if text is None:
+        return ""
+    return str(text).strip().lower().replace("_", " ").replace("-", " ")
 
 
 def _collect_counter_names(counters: list) -> set[str]:
     """Return normalised semantic names from counter objects when available."""
     names: set[str] = set()
     for counter in counters:
-        raw = getattr(counter, "Name", None) or getattr(counter, "CounterName", None)
-        if raw is None:
-            continue
-        names.add(str(raw).strip().lower())
+        name = _counter_name(counter)
+        if name:
+            names.add(name)
     return names
+
+
+def _counter_type(counter) -> int | None:
+    """Return CounterType as an integer, or None when absent/unreadable."""
+    counter = _unwrap_sub_result(counter)
+    ct = getattr(counter, "CounterType", None)
+    if ct is None:
+        return None
+    try:
+        return int(ct)
+    except (TypeError, ValueError):
+        return None
+
+
+def _counter_value(counter) -> int | None:
+    """Return CounterValue as an integer, or None when absent/unreadable."""
+    counter = _unwrap_sub_result(counter)
+    cv = getattr(counter, "CounterValue", None)
+    if cv is None:
+        return None
+    try:
+        return int(cv)
+    except (TypeError, ValueError):
+        return None
+
+
+def _counter_matches(counter, expected_types: set[int], expected_name_terms: tuple[str, ...]) -> bool:
+    """Return True when a counter matches by standard type id or semantic name."""
+    ct_int = _counter_type(counter)
+    if ct_int in expected_types:
+        return True
+    name = _counter_name(counter)
+    compact = name.replace(" ", "")
+    return any(term in name or term.replace(" ", "") in compact for term in expected_name_terms)
+
+
+def _find_counter(counters: list, expected_types: set[int], expected_name_terms: tuple[str, ...]):
+    """Return the first matching (index, counter), or (None, None)."""
+    for idx, counter in enumerate(counters):
+        if _counter_matches(counter, expected_types, expected_name_terms):
+            return idx, counter
+    return None, None
+
+
+def _iter_joining_result_payloads(item):
+    """Yield JoiningResultDataType-like payloads from a result or nested ResultContent."""
+    item = _unwrap_sub_result(item)
+    if item is None:
+        return
+    if hasattr(item, "OverallResultValues") or hasattr(item, "StepResults"):
+        yield item
+    content = getattr(item, "ResultContent", None)
+    if isinstance(content, (list, tuple)):
+        for child in content:
+            yield from _iter_joining_result_payloads(child)
 
 
 def _has_final_tag_in_result(sub_result) -> bool:
     """Return True when any value in the sub-result carries ValueTag equal to FINAL."""
-    sub_result = _unwrap_sub_result(sub_result)
-    for ovr in getattr(sub_result, "OverallResultValues", None) or []:
-        ovr = _unwrap_sub_result(ovr)
-        vt = getattr(ovr, "ValueTag", None)
-        if vt is not None:
-            try:
-                if int(vt) == _VALUE_TAG_FINAL:
-                    return True
-            except (TypeError, ValueError):
-                pass
-    for step in getattr(sub_result, "StepResults", None) or []:
-        step = _unwrap_sub_result(step)
-        for sv in getattr(step, "StepResultValues", None) or []:
-            sv = _unwrap_sub_result(sv)
-            vt = getattr(sv, "ValueTag", None)
+    for payload in _iter_joining_result_payloads(sub_result):
+        for ovr in getattr(payload, "OverallResultValues", None) or []:
+            ovr = _unwrap_sub_result(ovr)
+            vt = getattr(ovr, "ValueTag", None)
             if vt is not None:
                 try:
                     if int(vt) == _VALUE_TAG_FINAL:
                         return True
                 except (TypeError, ValueError):
                     pass
+        for step in getattr(payload, "StepResults", None) or []:
+            step = _unwrap_sub_result(step)
+            for sv in getattr(step, "StepResultValues", None) or []:
+                sv = _unwrap_sub_result(sv)
+                vt = getattr(sv, "ValueTag", None)
+                if vt is not None:
+                    try:
+                        if int(vt) == _VALUE_TAG_FINAL:
+                            return True
+                    except (TypeError, ValueError):
+                        pass
     return False
 
 
@@ -495,10 +591,14 @@ async def test_batch_result_counters_contains_batch_size_or_count(subscription_c
 
     expected_types = {_COUNTER_TYPE_BATCH_SIZE, _COUNTER_TYPE_BATCH_COUNT}
     found_types = _collect_counter_types(counters)
+    if found_types & expected_types:
+        return
 
-    assert found_types & expected_types, (
-        f"Batch ResultCounters must include BATCH_SIZE or BATCH_COUNT counter "
-        f"(expected types from set {sorted(expected_types)}), found {sorted(found_types)}"
+    names = _collect_counter_names(counters)
+    assert any(("batch size" in n) or ("batch count" in n) for n in names), (
+        "Batch ResultCounters must include batch size/count context by either standard "
+        f"CounterType ids {sorted(expected_types)} or semantic names; "
+        f"found types={sorted(found_types)}, names={sorted(names)}"
     )
 
 
@@ -649,7 +749,8 @@ async def test_combined_result_number_of_result_content_matches_actual_count(
         pytest.skip("ResultMetaData absent")
     num_content = getattr(meta, "NumberOfResultContent", None)
     if num_content is None:
-        pytest.skip("NumberOfResultContent not present in ResultMetaData — optional field")
+        logger.info("NumberOfResultContent not present in ResultMetaData — optional field absent")
+        return
 
     rc = getattr(result_data, "ResultContent", None)
     actual_count = len(rc) if isinstance(rc, (list, tuple)) else 0
@@ -702,17 +803,13 @@ async def test_references_mode_produces_non_empty_reference_list(subscription_cl
     if result_data is None:
         pytest.skip("Could not retrieve batch result in reference mode — may not be supported")
 
-    references = getattr(result_data, "References", None)
-    if references is None:
-        pytest.skip("References attribute absent — server may not support reference delivery mode")
-    if not isinstance(references, (list, tuple)) or len(references) == 0:
-        pytest.skip("References list is empty — reference delivery mode not active on this server")
+    references = _reference_mode_sub_results(result_data)
+    if not references:
+        pytest.skip("No reference-mode sub-result summaries found in References or ResultContent")
 
     for idx, ref in enumerate(references):
-        ref_id = getattr(ref, "ResultId", None)
-        assert ref_id is not None and str(ref_id).strip(), (
-            f"References[{idx}].ResultId must be a non-empty string, got {ref_id!r}"
-        )
+        ref_id = _result_id_from_result_or_reference(ref)
+        assert ref_id, f"References[{idx}].ResultId must be a non-empty string, got {ref_id!r}"
 
 
 # ─── partial_consolidated_result ───
@@ -970,12 +1067,8 @@ async def test_sync_result_counter_types_within_defined_range(subscription_clien
         )
 
     for idx, counter in enumerate(counters):
-        ct = getattr(counter, "CounterType", None)
-        if ct is None:
-            continue
-        try:
-            ct_int = int(ct)
-        except (TypeError, ValueError):
+        ct_int = _counter_type(counter)
+        if ct_int is None:
             continue
         assert ct_int < 0 or ct_int <= _COUNTER_TYPE_MAX_DEFINED, (
             f"SYNC_RESULT counter[{idx}] CounterType={ct_int} is out of the defined range "
@@ -997,25 +1090,20 @@ async def test_sync_result_channel_spindle_counter_value_is_positive(subscriptio
 
     checked = False
     for idx, counter in enumerate(counters):
-        ct = getattr(counter, "CounterType", None)
-        if ct is None:
+        if not _counter_matches(
+            counter,
+            {_COUNTER_TYPE_CHANNEL_NUMBER, _COUNTER_TYPE_SPINDLE_NUMBER},
+            ("channel number", "spindle number"),
+        ):
             continue
-        try:
-            ct_int = int(ct)
-        except (TypeError, ValueError):
+        cv_int = _counter_value(counter)
+        if cv_int is None:
             continue
-        if ct_int not in (_COUNTER_TYPE_CHANNEL_NUMBER, _COUNTER_TYPE_SPINDLE_NUMBER):
-            continue
-        cv = getattr(counter, "CounterValue", None)
-        if cv is None:
-            continue
-        try:
-            cv_int = int(cv)
-        except (TypeError, ValueError):
-            continue
+        ct_int = _counter_type(counter)
+        label = ct_int if ct_int is not None else _counter_name(counter)
         checked = True
         assert cv_int > 0, (
-            f"SYNC_RESULT counter[{idx}] type={ct_int} (CHANNEL/SPINDLE) must have CounterValue > 0, got {cv_int}"
+            f"SYNC_RESULT counter[{idx}] {label!r} (CHANNEL/SPINDLE) must have CounterValue > 0, got {cv_int}"
         )
 
     if not checked:
@@ -1243,18 +1331,12 @@ async def test_batch_count_not_greater_than_batch_size(subscription_client, resu
     batch_size_val = None
     batch_count_val = None
     for counter in counters:
-        ct = getattr(counter, "CounterType", None)
-        cv = getattr(counter, "CounterValue", None)
-        if ct is None or cv is None:
+        cv_int = _counter_value(counter)
+        if cv_int is None:
             continue
-        try:
-            ct_int = int(ct)
-            cv_int = int(cv)
-        except (TypeError, ValueError):
-            continue
-        if ct_int == _COUNTER_TYPE_BATCH_SIZE:
+        if _counter_matches(counter, {_COUNTER_TYPE_BATCH_SIZE}, ("batch size",)):
             batch_size_val = cv_int
-        elif ct_int == _COUNTER_TYPE_BATCH_COUNT:
+        elif _counter_matches(counter, {_COUNTER_TYPE_BATCH_COUNT}, ("batch count",)):
             batch_count_val = cv_int
 
     if batch_size_val is None or batch_count_val is None:
@@ -1280,22 +1362,11 @@ async def test_batch_size_counter_value_is_positive(subscription_client, result_
         pytest.skip("ResultCounters absent — server declared CU but field is not populated in this result")
 
     for idx, counter in enumerate(counters):
-        ct = getattr(counter, "CounterType", None)
-        if ct is None:
+        if not _counter_matches(counter, {_COUNTER_TYPE_BATCH_SIZE}, ("batch size",)):
             continue
-        try:
-            ct_int = int(ct)
-        except (TypeError, ValueError):
-            continue
-        if ct_int != _COUNTER_TYPE_BATCH_SIZE:
-            continue
-        cv = getattr(counter, "CounterValue", None)
-        if cv is None:
-            pytest.skip("BATCH_SIZE counter CounterValue absent")
-        try:
-            cv_int = int(cv)
-        except (TypeError, ValueError):
-            pytest.skip(f"BATCH_SIZE CounterValue could not be cast to int: {cv!r}")
+        cv_int = _counter_value(counter)
+        if cv_int is None:
+            pytest.skip("BATCH_SIZE counter CounterValue absent or unreadable")
         assert cv_int > 0, f"BATCH_RESULT BATCH_SIZE counter[{idx}] CounterValue must be > 0, got {cv_int}"
         return
 
@@ -1378,27 +1449,11 @@ async def test_single_result_has_final_tagged_torque_or_angle_value(subscription
 
     found_final_torque_or_angle = False
     for sub in rc:
-        sub = _unwrap_sub_result(sub)
-        for ovr in getattr(sub, "OverallResultValues", None) or []:
-            ovr = _unwrap_sub_result(ovr)
-            vt = getattr(ovr, "ValueTag", None)
-            pq = getattr(ovr, "PhysicalQuantity", None)
-            if vt is None or pq is None:
-                continue
-            try:
-                if int(vt) == _VALUE_TAG_FINAL and int(pq) in (_PHYSICAL_QUANTITY_TORQUE, _PHYSICAL_QUANTITY_ANGLE):
-                    found_final_torque_or_angle = True
-                    break
-            except (TypeError, ValueError):
-                continue
-        if found_final_torque_or_angle:
-            break
-        for step in getattr(sub, "StepResults", None) or []:
-            step = _unwrap_sub_result(step)
-            for sv in getattr(step, "StepResultValues", None) or []:
-                sv = _unwrap_sub_result(sv)
-                vt = getattr(sv, "ValueTag", None)
-                pq = getattr(sv, "PhysicalQuantity", None)
+        for payload in _iter_joining_result_payloads(sub):
+            for ovr in getattr(payload, "OverallResultValues", None) or []:
+                ovr = _unwrap_sub_result(ovr)
+                vt = getattr(ovr, "ValueTag", None)
+                pq = getattr(ovr, "PhysicalQuantity", None)
                 if vt is None or pq is None:
                     continue
                 try:
@@ -1409,11 +1464,32 @@ async def test_single_result_has_final_tagged_torque_or_angle_value(subscription
                     continue
             if found_final_torque_or_angle:
                 break
+            for step in getattr(payload, "StepResults", None) or []:
+                step = _unwrap_sub_result(step)
+                for sv in getattr(step, "StepResultValues", None) or []:
+                    sv = _unwrap_sub_result(sv)
+                    vt = getattr(sv, "ValueTag", None)
+                    pq = getattr(sv, "PhysicalQuantity", None)
+                    if vt is None or pq is None:
+                        continue
+                    try:
+                        if int(vt) == _VALUE_TAG_FINAL and int(pq) in (
+                            _PHYSICAL_QUANTITY_TORQUE,
+                            _PHYSICAL_QUANTITY_ANGLE,
+                        ):
+                            found_final_torque_or_angle = True
+                            break
+                    except (TypeError, ValueError):
+                        continue
+                if found_final_torque_or_angle:
+                    break
+        if found_final_torque_or_angle:
+            break
 
-    if not found_final_torque_or_angle:
-        pytest.skip(
-            "No FINAL-tagged Torque or Angle value found in sub-results — server may not populate PhysicalQuantity"
-        )
+    assert found_final_torque_or_angle, (
+        "No FINAL-tagged Torque or Angle value found in sub-results; "
+        "servers claiming result_value_final_tag must populate ValueTag=FINAL on relevant result values"
+    )
 
 
 @pytest.mark.requires_cu(CU.RESULT_VALUE_FINAL_TAG)
@@ -1431,29 +1507,29 @@ async def test_each_step_has_at_most_one_final_per_physical_quantity(subscriptio
 
     checked_any_step = False
     for sub_idx, sub in enumerate(rc):
-        sub = _unwrap_sub_result(sub)
-        for step_idx, step in enumerate(getattr(sub, "StepResults", None) or []):
-            step = _unwrap_sub_result(step)
-            final_pqs: set[int] = set()
-            for sv in getattr(step, "StepResultValues", None) or []:
-                sv = _unwrap_sub_result(sv)
-                vt = getattr(sv, "ValueTag", None)
-                pq = getattr(sv, "PhysicalQuantity", None)
-                if vt is None or pq is None:
-                    continue
-                try:
-                    vt_int = int(vt)
-                    pq_int = int(pq)
-                except (TypeError, ValueError):
-                    continue
-                if vt_int != _VALUE_TAG_FINAL:
-                    continue
-                assert pq_int not in final_pqs, (
-                    f"Sub-result[{sub_idx}] step[{step_idx}]: PhysicalQuantity={pq_int} "
-                    f"appears more than once with ValueTag=FINAL"
-                )
-                final_pqs.add(pq_int)
-            checked_any_step = True
+        for payload in _iter_joining_result_payloads(sub):
+            for step_idx, step in enumerate(getattr(payload, "StepResults", None) or []):
+                step = _unwrap_sub_result(step)
+                final_pqs: set[int] = set()
+                for sv in getattr(step, "StepResultValues", None) or []:
+                    sv = _unwrap_sub_result(sv)
+                    vt = getattr(sv, "ValueTag", None)
+                    pq = getattr(sv, "PhysicalQuantity", None)
+                    if vt is None or pq is None:
+                        continue
+                    try:
+                        vt_int = int(vt)
+                        pq_int = int(pq)
+                    except (TypeError, ValueError):
+                        continue
+                    if vt_int != _VALUE_TAG_FINAL:
+                        continue
+                    assert pq_int not in final_pqs, (
+                        f"Sub-result[{sub_idx}] step[{step_idx}]: PhysicalQuantity={pq_int} "
+                        f"appears more than once with ValueTag=FINAL"
+                    )
+                    final_pqs.add(pq_int)
+                checked_any_step = True
 
     if not checked_any_step:
         pytest.skip("No stepped sub-results available — cannot verify per-step FINAL uniqueness")
@@ -1479,8 +1555,7 @@ async def test_final_tag_present_in_consecutive_results(subscription_client, res
         pytest.skip("No inline sub-results available")
 
     any_final = any(_has_final_tag_in_result(sub) for sub in rc)
-    if not any_final:
-        pytest.skip("No FINAL-tagged values found in any sub-result — skipping (not a conformance failure)")
+    assert any_final, "No FINAL-tagged values found in any sub-result"
 
     for idx, sub in enumerate(rc):
         assert _has_final_tag_in_result(sub), f"Sub-result[{idx}] in consecutive BATCH_RESULT has no FINAL-tagged value"
@@ -1686,9 +1761,9 @@ async def test_references_mode_sub_result_classification_not_same_as_parent(
         pytest.skip("Could not retrieve reference-mode batch result")
 
     parent_cls = _get_classification(result_data)
-    refs = getattr(result_data, "References", None)
-    if not isinstance(refs, (list, tuple)) or len(refs) == 0:
-        pytest.skip("References list absent or empty — cannot inspect sub-result classifications")
+    refs = _reference_mode_sub_results(result_data)
+    if not refs:
+        pytest.skip("No reference-mode sub-result summaries found in References or ResultContent")
 
     for idx, ref in enumerate(refs):
         sub_cls = _get_classification(ref)
@@ -1860,11 +1935,11 @@ async def test_single_result_content_has_joining_result_attributes(subscription_
                 "asyncua ExtensionObject deserialization limitation when type definitions "
                 "are not loaded; SINGLE_RESULT content structure cannot be verified"
             )
-        has_joining_attrs = hasattr(sub, "OverallResultValues") or hasattr(sub, "StepResults")
+        has_joining_attrs = any(_iter_joining_result_payloads(sub))
         if not has_joining_attrs:
             pytest.skip(
                 f"Sub-result[{idx}] (SINGLE_RESULT) does not have JoiningResultDataType "
-                f"attributes (OverallResultValues or StepResults) — type {type(sub).__name__!r}; "
+                f"payload in ResultContent — type {type(sub).__name__!r}; "
                 "may be asyncua deserialization gap or simulator extension"
             )
         return
@@ -1889,10 +1964,9 @@ async def test_consolidated_sub_result_type_matches_its_classification(subscript
         cls_int = _get_classification(sub)
         if cls_int != ResultClassification.SINGLE_RESULT:
             continue
-        has_joining_attrs = hasattr(sub, "OverallResultValues") or hasattr(sub, "StepResults")
+        has_joining_attrs = any(_iter_joining_result_payloads(sub))
         assert has_joining_attrs, (
-            f"Sub-result[{idx}] has Classification=SINGLE_RESULT but lacks "
-            "JoiningResultDataType attributes (OverallResultValues or StepResults)"
+            f"Sub-result[{idx}] has Classification=SINGLE_RESULT but lacks JoiningResultDataType payload"
         )
 
 

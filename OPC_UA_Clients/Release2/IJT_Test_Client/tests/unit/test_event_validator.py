@@ -34,31 +34,27 @@ class TestJoiningTechnologyValidator:
         JoiningTechnologyValidator().validate(value, ctx, vr)
         return vr
 
-    def test_all_valid_values(self):
-        for tech in range(8):  # 0..7
-            assert self._validate(tech).ok
+    def test_localized_text_object_valid(self):
+        assert self._validate(types.SimpleNamespace(Text="Tightening")).ok
 
-    def test_invalid_high(self):
-        vr = self._validate(8)
+    def test_plain_string_valid(self):
+        assert self._validate("Tightening").ok
+
+    def test_integer_rejected(self):
+        vr = self._validate(1)
         assert not vr.ok
 
-    def test_invalid_negative(self):
-        vr = self._validate(-1)
+    def test_empty_string_rejected(self):
+        vr = self._validate("")
         assert not vr.ok
 
-    def test_invalid_non_int_string(self):
-        vr = self._validate("OTHER")
+    def test_empty_localized_text_rejected(self):
+        vr = self._validate(types.SimpleNamespace(Text=""))
         assert not vr.ok
 
     def test_invalid_none(self):
         vr = self._validate(None)
         assert not vr.ok
-
-    def test_int_boundary_zero(self):
-        assert self._validate(0).ok
-
-    def test_int_boundary_seven(self):
-        assert self._validate(7).ok
 
 
 # ---------------------------------------------------------------------------
@@ -98,12 +94,12 @@ class TestEntityDataTypeValidator:
         assert not vr.ok
 
     def test_entity_type_valid_bounds(self):
-        for et in range(9):  # 0..8 are all valid for events
+        for et in [0, 8, 26, 42]:
             obj = types.SimpleNamespace(EntityId="e", EntityType=et)
             assert self._validate(obj).ok
 
     def test_entity_type_invalid_high(self):
-        obj = types.SimpleNamespace(EntityId="e", EntityType=9)
+        obj = types.SimpleNamespace(EntityId="e", EntityType=43)
         vr = self._validate(obj)
         assert not vr.ok
 
@@ -199,10 +195,9 @@ class TestReportedValueValidator:
         vr = self._validate(obj)
         assert not vr.ok
 
-    def test_current_value_string_rejected(self):
+    def test_current_value_string_accepted(self):
         obj = types.SimpleNamespace(CurrentValue="not_a_number")
-        vr = self._validate(obj)
-        assert not vr.ok
+        assert self._validate(obj).ok
 
     def test_current_value_int_accepted(self):
         obj = types.SimpleNamespace(CurrentValue=100)
@@ -388,7 +383,7 @@ class TestJoiningSystemEventValidator:
         assert vr.ok
 
     def test_joining_technology_valid(self):
-        event = self._make_good_event(JoiningTechnology=3)
+        event = self._make_good_event(JoiningTechnology=types.SimpleNamespace(Text="Tightening"))
         vr = JoiningSystemEventValidator().validate(event)
         assert vr.ok
 
@@ -660,7 +655,7 @@ class TestJoiningSystemConditionValidator:
         assert not vr.ok
 
     def test_joining_technology_valid(self):
-        condition = self._make_good_condition(JoiningTechnology=2)
+        condition = self._make_good_condition(JoiningTechnology=types.SimpleNamespace(Text="Tightening"))
         vr = JoiningSystemConditionValidator().validate(condition)
         assert vr.ok
 

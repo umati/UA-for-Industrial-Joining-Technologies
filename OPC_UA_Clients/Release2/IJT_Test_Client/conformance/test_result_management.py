@@ -28,6 +28,7 @@ from helpers.namespaces import (
 )
 from helpers.node_discovery import (
     find_child_by_browse_name,
+    find_child_by_browse_name_any,
     find_joining_system,
     get_type_definition,
 )
@@ -113,6 +114,20 @@ async def _find_requested_result_var(result_management, ns_indices):
     if ns_app is not None:
         return await find_child_by_browse_name(result_management, BN.RESULT_TRANSFER, ns_app)
     return None
+
+
+async def _find_results_result_variable(result_management, ns_indices):
+    """Locate Results/Result while accepting spec and application BrowseName namespaces."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    ns_app = ns_indices.get(NS_APP)
+    if ns_mr is None:
+        return None, None
+    results_folder = await find_child_by_browse_name_any(result_management, BN.RESULTS, (ns_mr, ns_ijt, ns_app))
+    if results_folder is None:
+        return None, None
+    result_var = await find_child_by_browse_name_any(results_folder, BN.RESULT, (ns_mr, ns_ijt, ns_app))
+    return results_folder, result_var
 
 
 # ---------------------------------------------------------------------------
@@ -319,28 +334,27 @@ async def test_result_management_last_result_metadata_variable_if_present(result
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
-    ns_ijt = ns_indices.get(NS_IJT_BASE)
-    if ns_ijt is None:
-        pytest.skip("IJT Base namespace not registered on server")
-
-    # ResultMetaData lives at: ResultManagement → Results(ns_mr) → Result(ns_ijt) → ResultMetaData(ns_mr)
+    # ResultMetaData lives at: ResultManagement -> Results -> Result -> ResultMetaData.
     # "LastResultMetaData" does not exist as a flat child of ResultManagement in any NodeSet.
-    results_folder = await find_child_by_browse_name(result_management, BN.RESULTS, ns_mr)
+    results_folder, result_var = await _find_results_result_variable(result_management, ns_indices)
     if results_folder is None:
         pytest.skip("Results folder not found on ResultManagement")
-    result_var = await find_child_by_browse_name(results_folder, BN.RESULT, ns_ijt)
     if result_var is None:
         pytest.skip("Result variable not found under Results folder")
-    last_meta_node = await find_child_by_browse_name(result_var, BN.RESULT_META_DATA, ns_mr)
+    last_meta_node = await find_child_by_browse_name_any(
+        result_var,
+        BN.RESULT_META_DATA,
+        (ns_mr, ns_indices.get(NS_IJT_BASE), ns_indices.get(NS_APP)),
+    )
     if last_meta_node is None:
         pytest.skip("ResultMetaData not found under Results/Result — optional per spec")
 
     try:
         value = await last_meta_node.get_value()
     except Exception as exc:
-        pytest.skip(f"LastResultMetaData could not be read: {exc}")
+        pytest.skip(f"Results/Result/ResultMetaData could not be read: {exc}")
 
-    logger.debug("LastResultMetaData value: %r", value)
+    logger.debug("Results/Result/ResultMetaData value: %r", value)
 
 
 # ---------------------------------------------------------------------------
@@ -431,18 +445,13 @@ async def test_result_management_release_result_handle_if_present(opcua_client, 
 
 
 # ---------------------------------------------------------------------------
-# acknowledge_results — not supported on this server profile
+# acknowledge_results
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
 async def test_result_management_acknowledge_results_if_present(opcua_client, ns_indices):
-    """AcknowledgeResults is not implemented in this server profile.
-
-    Acceptable behavior:
-      - method is absent, or
-      - method is present but call is rejected with OPC UA Bad status.
-    """
+    """AcknowledgeResults must accept an empty ResultIds list when the CU is supported."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -450,7 +459,7 @@ async def test_result_management_acknowledge_results_if_present(opcua_client, ns
     rm = await _rediscover_result_management(opcua_client, ns_mr)
     ack = await find_child_by_browse_name(rm, BN.ACKNOWLEDGE_RESULTS, ns_mr)
     if ack is None:
-        return
+        pytest.fail("AcknowledgeResults method is missing although the CU is enabled")
 
     result = await call_method(
         rm,
@@ -460,9 +469,11 @@ async def test_result_management_acknowledge_results_if_present(opcua_client, ns
         method_name="AcknowledgeResults",
     )
     assert result is not None, "AcknowledgeResults returned None — expected MethodCallResult"
-    assert not result.success, (
-        "AcknowledgeResults succeeded, but this server profile defines this method as unsupported/not implemented"
-    )
+    if not result.success:
+        err_str = str(result.error) if result.error else "unknown"
+        pytest.fail(f"AcknowledgeResults with an empty ResultIds list failed unexpectedly: {err_str}")
+    output = result.output_list
+    assert len(output) >= 2, f"AcknowledgeResults must return [ErrorPerResultId, Error], got {output!r}"
 
 
 @pytest.mark.requires_cu(CU.ACKNOWLEDGE_RESULTS)
@@ -546,7 +557,7 @@ async def test_result_management_request_results_method_present_if_supported(res
 
 
 # ---------------------------------------------------------------------------
-# request_unacknowledged_results — not supported on this server profile
+# request_unacknowledged_results
 # ---------------------------------------------------------------------------
 
 
@@ -554,12 +565,7 @@ async def test_result_management_request_results_method_present_if_supported(res
 async def test_result_management_request_unacknowledged_results_method_present_if_supported(
     result_management, ns_indices
 ):
-    """RequestUnacknowledgedResults is not implemented in this server profile.
-
-    Acceptable behavior:
-      - method is absent, or
-      - method is present but call is rejected with OPC UA Bad status.
-    """
+    """RequestUnacknowledgedResults must be callable when the CU is supported."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
@@ -568,7 +574,7 @@ async def test_result_management_request_unacknowledged_results_method_present_i
     # namespace (ns=1;i=7092), NOT in Machinery/Result namespace.
     rur_node = await find_child_by_browse_name(result_management, BN.REQUEST_UNACKNOWLEDGED_RESULTS, ns_ijt)
     if rur_node is None:
-        return
+        pytest.fail("RequestUnacknowledgedResults method is missing although the CU is enabled")
 
     result = await call_method(
         result_management,
@@ -579,13 +585,17 @@ async def test_result_management_request_unacknowledged_results_method_present_i
         method_name="RequestUnacknowledgedResults",
     )
     assert result is not None, "RequestUnacknowledgedResults returned None — expected MethodCallResult"
-    if not result.success and result.error is not None and "BadArgumentsMissing" in str(result.error):
+    if not result.success:
+        err_str = str(result.error) if result.error else "unknown"
         pytest.fail(
-            "RequestUnacknowledgedResults returned BadArgumentsMissing despite valid "
-            "MaxResults and RequestedMinimumDurationBetweenResults arguments"
+            "RequestUnacknowledgedResults failed despite valid "
+            f"MaxResults and RequestedMinimumDurationBetweenResults arguments: {err_str}"
         )
-    assert not result.success, (
-        "RequestUnacknowledgedResults succeeded, but this server profile defines this method as unsupported/not implemented"
+    output = result.output_list
+    assert len(output) >= 4, (
+        "RequestUnacknowledgedResults must return "
+        "[RevisedMinimumDurationBetweenResults, UnacknowledgedResultCount, Status, StatusMessage], "
+        f"got {output!r}"
     )
 
 
@@ -907,22 +917,67 @@ async def test_result_management_result_access_methods_declared_in_type(session_
         pytest.fail(f"Cannot browse JoiningSystemResultManagementType: {exc}")
 
     declared_methods = {ref.BrowseName.Name for ref in refs if ref.NodeClass == ua.NodeClass.Method}
-    logger.info("JoiningSystemResultManagementType declared methods: %s", sorted(declared_methods))
+
+    inherited_methods: set[str] = set(declared_methods)
+    current_nid = ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_MANAGEMENT_TYPE, ns_ijt)
+    visited: set[tuple[int, object]] = set()
+    for _ in range(10):
+        key = (current_nid.NamespaceIndex, current_nid.Identifier)
+        if key in visited:
+            break
+        visited.add(key)
+        node = session_client.get_node(current_nid)
+        try:
+            parent_refs = await asyncio.wait_for(
+                node.get_references(
+                    refs=RefTypes.HAS_SUBTYPE,
+                    direction=ua.BrowseDirection.Inverse,
+                    includesubtypes=False,
+                    nodeclassmask=ua.NodeClass.Unspecified,
+                ),
+                timeout=10.0,
+            )
+        except Exception as exc:
+            pytest.fail(f"Cannot follow HasSubtype inverse from {current_nid}: {exc}")
+        if not parent_refs:
+            break
+        current_nid = parent_refs[0].NodeId
+        base_node = session_client.get_node(current_nid)
+        try:
+            base_refs = await asyncio.wait_for(
+                base_node.get_references(
+                    refs=33,
+                    direction=ua.BrowseDirection.Forward,
+                    includesubtypes=True,
+                    nodeclassmask=ua.NodeClass.Unspecified,
+                ),
+                timeout=15.0,
+            )
+        except Exception as exc:
+            pytest.fail(f"Cannot browse inherited result-management type {current_nid}: {exc}")
+        inherited_methods.update(ref.BrowseName.Name for ref in base_refs if ref.NodeClass == ua.NodeClass.Method)
+        if (
+            current_nid.NamespaceIndex == ns_mr
+            and current_nid.Identifier == MachineryResultTypes.RESULT_MANAGEMENT_TYPE
+        ):
+            break
+
+    logger.info(
+        "JoiningSystemResultManagementType declared methods: direct=%s, direct+inherited=%s",
+        sorted(declared_methods),
+        sorted(inherited_methods),
+    )
 
     _expected_methods = [
         BN.GET_LATEST_RESULT,
         BN.GET_RESULT_BY_ID,
         BN.GET_RESULT_ID_LIST_FILTERED,
     ]
-    missing = [m for m in _expected_methods if m not in declared_methods]
-    # At minimum GetLatestResult should be declared; some simulators only declare
-    # RequestResults/RequestUnacknowledgedResults in the type and expose the rest on instances.
-    if BN.GET_LATEST_RESULT not in declared_methods:
-        pytest.skip(
-            f"JoiningSystemResultManagementType does not declare '{BN.GET_LATEST_RESULT}' — "
-            f"declared: {sorted(declared_methods)}. "
-            "Simulator may expose result-access methods on the instance rather than in the type. "
-            "Verify instance-level method presence separately."
+    missing = [m for m in _expected_methods if m not in inherited_methods]
+    if BN.GET_LATEST_RESULT not in inherited_methods:
+        pytest.fail(
+            f"JoiningSystemResultManagementType does not declare or inherit '{BN.GET_LATEST_RESULT}' — "
+            f"direct={sorted(declared_methods)}, direct+inherited={sorted(inherited_methods)}"
         )
     if missing:
         logger.info("Optional result-access methods not declared in type definition: %s", missing)
@@ -974,7 +1029,7 @@ async def test_result_management_methods_are_executable_when_present(result_mana
 
 
 @pytest.mark.negative
-@pytest.mark.requires_cu(CU.RESULT_MANAGEMENT)
+@pytest.mark.opcua_core
 async def test_result_management_results_folder_delete_is_rejected(opcua_client, ns_indices):
     """DeleteNodes on a result Variable in the Results folder must be rejected.
 
