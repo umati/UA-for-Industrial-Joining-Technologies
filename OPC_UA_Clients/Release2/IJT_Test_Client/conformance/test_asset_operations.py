@@ -158,7 +158,7 @@ async def _read_first_asset_category_product_instance_uri(
 def _make_calibration_data():
     """Build a minimal CalibrationDataType instance when type definitions are loaded."""
     try:
-        data = ua.CalibrationDataType()
+        data = ua.CalibrationDataType()  # type: ignore[attr-defined]
     except AttributeError:
         return None
     now = datetime.now(timezone.utc)
