@@ -1943,7 +1943,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(!methodId.IsNullNodeId, "SendTextIdentifiers method not found; skipping");
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, methodId, SimToolUri,
+            () => session.CallMethod(methodSetNode, methodId, string.Empty,
                 new[] { "PART-001", "ORDER-123", "VIN-456" }),
             10, "SendTextIdentifiers(3 ids)").ConfigureAwait(false);
 
@@ -1975,7 +1975,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         };
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, methodId, SimToolUri, (object)entities),
+            () => session.CallMethod(methodSetNode, methodId, string.Empty, (object)entities),
             10, "SendIdentifiers(2 entities)").ConfigureAwait(false);
 
         Assert.True(outputs.Count >= 1, "SendIdentifiers must return at least 1 output (Status)");
@@ -2004,7 +2004,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         };
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, methodId, SimToolUri, (object)entities),
+            () => session.CallMethod(methodSetNode, methodId, string.Empty, (object)entities),
             10, "SendIdentifiers(PROGRAM type)").ConfigureAwait(false);
 
         Assert.Equal(0, ReadStatus(outputs, statusIdx: 0));
@@ -2028,12 +2028,12 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             "SendTextIdentifiers or GetIdentifiers method not found; skipping");
 
         await WithTimeout(
-            () => session.CallMethod(methodSetNode, sendTextId, SimToolUri,
+            () => session.CallMethod(methodSetNode, sendTextId, string.Empty,
                 new[] { "LIVE-GET-TEST-001", "LIVE-GET-TEST-002" }),
             10, "SendTextIdentifiers").ConfigureAwait(false);
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, getIdentifiersId, SimToolUri, Array.Empty<string>()),
+            () => session.CallMethod(methodSetNode, getIdentifiersId, string.Empty, Array.Empty<string>()),
             10, "GetIdentifiers").ConfigureAwait(false);
 
         Assert.True(outputs.Count >= 1,
@@ -2063,15 +2063,15 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             "One or more identifier methods not found; skipping");
 
         await WithTimeout(
-            () => session.CallMethod(methodSetNode, sendTextId, SimToolUri, new[] { "RESET-FLOW-001" }),
+            () => session.CallMethod(methodSetNode, sendTextId, string.Empty, new[] { "RESET-FLOW-001" }),
             10, "SendTextIdentifiers").ConfigureAwait(false);
 
         await WithTimeout(
-            () => session.CallMethod(methodSetNode, resetId, SimToolUri, Array.Empty<string>(), true, false),
+            () => session.CallMethod(methodSetNode, resetId, string.Empty, Array.Empty<string>(), true, false),
             10, "ResetIdentifiers").ConfigureAwait(false);
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, getIdentifiersId, SimToolUri, Array.Empty<string>()),
+            () => session.CallMethod(methodSetNode, getIdentifiersId, string.Empty, Array.Empty<string>()),
             10, "GetIdentifiers after reset").ConfigureAwait(false);
 
         Assert.NotNull(outputs);
