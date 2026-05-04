@@ -32,7 +32,7 @@ server-facing compliance/conformance suite and defaults to `conformance` so
 unit tests are not duplicated after Phase 1. Phase 2 appends helper coverage
 diagnostics to `test-results/coverage-combined.xml` and disables only the live
 coverage fail-under gate; the hard helper coverage gate belongs to the Phase 1
-unit stage.
+unit stage and is currently 95%.
 
 ### Report Output Behavior
 

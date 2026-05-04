@@ -196,34 +196,40 @@ public sealed class ResultManagement : IDisposable
     {
         foreach (var value in item.DequeueValues())
         {
-            _log.LogDebug("[DATA] ResultVariable changed @ {Time:HH:mm:ss.fff}  Status={Status}",
-                DateTime.Now, value.StatusCode);
-
-            if (value.Value is null) continue;
-
-            // Unwrap Variant -> ExtensionObject -> ResultDataType
-            var raw = value.Value is Variant v ? v.Value : value.Value;
-            var rd = raw is ExtensionObject eo
-                ? eo.Body as UAModel.MachineryResult.ResultDataType
-                : raw as UAModel.MachineryResult.ResultDataType;
-
-            if (rd != null)
-            {
-                if (!HasMeaningfulResult(rd))
-                {
-                    _log.LogDebug("Result variable changed, but payload was empty/placeholder. Skipping file write.");
-                    continue;
-                }
-
-                IjtFileLogger.WriteResult(IjtJsonSerializer.FormatOutput("Result", rd));
-                _log.LogInformation("Result variable updated. Full payload logged: {Path}",
-                    IjtFileLogger.ResultLogPath);
-            }
-            else
-            {
-                _log.LogDebug("Result variable raw value: {Value}", IjtJsonSerializer.Serialize(value.Value));
-            }
+            ProcessResultVariableValue(value);
         }
+    }
+
+    internal bool ProcessResultVariableValue(DataValue value, Action<string>? writeResult = null)
+    {
+        _log.LogDebug("[DATA] ResultVariable changed @ {Time:HH:mm:ss.fff}  Status={Status}",
+            DateTime.Now, value.StatusCode);
+
+        if (value.Value is null) return false;
+
+        // Unwrap Variant -> ExtensionObject -> ResultDataType
+        var raw = value.Value is Variant v ? v.Value : value.Value;
+        var rd = raw is ExtensionObject eo
+            ? eo.Body as UAModel.MachineryResult.ResultDataType
+            : raw as UAModel.MachineryResult.ResultDataType;
+
+        if (rd != null)
+        {
+            if (!HasMeaningfulResult(rd))
+            {
+                _log.LogDebug("Result variable changed, but payload was empty/placeholder. Skipping file write.");
+                return false;
+            }
+
+            var writer = writeResult ?? IjtFileLogger.WriteResult;
+            writer(IjtJsonSerializer.FormatOutput("Result", rd));
+            _log.LogInformation("Result variable updated. Full payload logged: {Path}",
+                IjtFileLogger.ResultLogPath);
+            return true;
+        }
+
+        _log.LogDebug("Result variable raw value: {Value}", IjtJsonSerializer.Serialize(value.Value));
+        return false;
     }
 
     /// <summary>Stops the result variable data-change subscription if active.</summary>

@@ -54,18 +54,20 @@ select = ["E", "F", "I"]
 ignore = ["E501", "E402", "E731"]
 
 [tool.coverage.run]
-# Omit files never exercised by unit tests: runner, setup script, live-only tests.
+# Measure runtime application/library source; exclude tests and local setup/runner
+# scaffolding so the 95% floor reflects product code rather than test code.
 omit = [
+    "conftest.py",
     "run_all_tests.py",
     "setup_client.py",
-    "tests/live/*",
+    "tests/**",
     ".venv/*",
     ".venv_test/*",
 ]
 
 [tool.coverage.report]
-# Threshold achievable by unit tests alone with the omit list above (~85%).
-fail_under = 80
+# Unit tests are expected to stay at or above 95% line coverage.
+fail_under = 95
 skip_empty = true
 exclude_lines = [
     "pragma: no cover",

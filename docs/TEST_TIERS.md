@@ -166,6 +166,8 @@ To run on a different port, the copy-patch mechanism:
 **C# client** (`OpcUaServerFixture.cs`): temp dir in `{TEMP}/opcua_csharp_{port}_{guid}/`
 - Triggered automatically when `OPCUA_SERVER_PORT != 40451`
 - Phase 2 passes `IJT_PHASE1_ONLY=false`; an all-skipped managed live run is a failure, not accepted as a valid live result
+- If the resolved port is already open, the fixture probes OPC UA readiness first and reuses the server when it is ready; runner-managed mode kills and relaunches only when that readiness probe fails.
+- Native and Docker launch paths both require an OPC UA readiness probe after TCP opens, so tests do not start against a listener whose OPC UA stack is still initialising.
 - Cleaned up in `Dispose()` — works for both local dev and CI
 
 - **CI** (`scripts/start_server_on_port.py`): temp dir in `tmp/server_{port}/`

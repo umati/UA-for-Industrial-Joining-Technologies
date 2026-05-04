@@ -155,7 +155,7 @@ dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 | **coverlet** | `--collect:"XPlat Code Coverage"` | Coverage via coverlet.runsettings |
 
 **Coverage:**
-- Target: 80% (WARN if below, not FAIL)
+- Target: 95% (WARN if below, not FAIL)
 - `coverlet.runsettings` excludes `UAModel.*` (auto-generated) and `Program` (entry point)
 
 ---
@@ -398,6 +398,10 @@ This client's test runner auto-launches a dedicated server instance on port **40
 mechanism — `OpcUaServerFixture.cs` copies the binary, patches `server_configuration.json`, and manages
 the full lifecycle). Port 40451 is not used during CI or parallel test runs. For standalone developer
 use (no `OPCUA_SERVER_PORT` env var set), the runner falls back to the server's native port 40451.
+If the selected port is already open, the fixture first probes OPC UA readiness and reuses the server
+only when the OPC UA stack answers. Runner-managed runs kill and relaunch a process on that port only
+when the readiness probe fails. Fresh native and Docker launches also require the OPC UA readiness
+probe after TCP opens, which prevents all-skipped live runs caused by cold server initialisation.
 
 Runner-managed Phase 2 must produce real live-test evidence. If every live test is skipped while
 `OPCUA_SERVER_PORT` is set, the runner treats that as a failure because the managed server was

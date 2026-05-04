@@ -46,7 +46,7 @@ _TEST_PROJ = _PROJECT_DIR / "Tests" / "IJT_CSharp_Client.Tests" / "IJT_CSharp_Cl
 _RESULTS_DIR = _PROJECT_DIR / "test-results"
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40451"
 _MIN_DOTNET_MAJOR = 10
-_COVERAGE_THRESHOLD = 80.0
+_COVERAGE_THRESHOLD = 95.0
 _PHASE1_TEST_FILTER = "FullyQualifiedName!~LiveIntegration"
 _PHASE2_TEST_FILTER = "FullyQualifiedName~LiveIntegration"
 

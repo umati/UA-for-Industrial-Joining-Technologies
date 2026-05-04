@@ -245,15 +245,8 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     {
         try
         {
-            _session.Browse(
-                null, null,
-                ObjectIds.ObjectsFolder, 0,
-                BrowseDirection.Forward,
-                ReferenceTypeIds.HierarchicalReferences,
-                true, (uint)NodeClass.Object,
-                out _, out var refs);
-
-            if (refs == null) return;
+            var refs = AddressSpaceHelper.BrowseChildren(_session, ObjectIds.ObjectsFolder, NodeClass.Object);
+            if (refs.Count == 0) return;
 
             var typeId = new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, IjtBaseNsIdx);
 
@@ -386,20 +379,12 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             return NodeId.Null;
 
         var mask = nodeClassMask == NodeClass.Unspecified
-            ? (uint)(NodeClass.Object | NodeClass.Variable | NodeClass.Method)
-            : (uint)nodeClassMask;
+            ? NodeClass.Object | NodeClass.Variable | NodeClass.Method
+            : nodeClassMask;
 
         try
         {
-            _session.Browse(
-                null, null, parentId, 0,
-                BrowseDirection.Forward,
-                ReferenceTypeIds.HierarchicalReferences,
-                true, mask,
-                out _, out var refs);
-
-            if (refs == null) return NodeId.Null;
-
+            var refs = AddressSpaceHelper.BrowseChildren(_session, parentId, mask);
             var match = refs.FirstOrDefault(r =>
                 r.BrowseName?.Name?.Equals(childBrowseName, StringComparison.OrdinalIgnoreCase) == true &&
                 (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
@@ -430,19 +415,12 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             return [];
 
         var mask = nodeClassMask == (uint)NodeClass.Unspecified
-            ? (uint)(NodeClass.Object | NodeClass.Variable | NodeClass.Method)
-            : nodeClassMask;
+            ? NodeClass.Object | NodeClass.Variable | NodeClass.Method
+            : (NodeClass)nodeClassMask;
 
         try
         {
-            _session.Browse(
-                null, null, parentId, 0,
-                BrowseDirection.Forward,
-                ReferenceTypeIds.HierarchicalReferences,
-                true, mask,
-                out _, out var refs);
-
-            return refs ?? [];
+            return AddressSpaceHelper.BrowseChildren(_session, parentId, mask);
         }
         catch (ServiceResultException ex)
         {
@@ -466,15 +444,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
         try
         {
-            _session.Browse(
-                null, null, objectId, 0,
-                BrowseDirection.Forward,
-                ReferenceTypeIds.HierarchicalReferences,
-                true, (uint)NodeClass.Method,
-                out _, out var refs);
-
-            if (refs == null)
-                return new Dictionary<string, NodeId>(StringComparer.OrdinalIgnoreCase);
+            var refs = AddressSpaceHelper.BrowseChildren(_session, objectId, NodeClass.Method);
 
             return refs.ToDictionary(
                 r => r.BrowseName.Name,

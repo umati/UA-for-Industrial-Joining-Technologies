@@ -230,6 +230,22 @@ describe('ResultManager - max storage cap', () => {
     expect(rm.getMaxStoredResults()).toBe(200)
   })
 
+  it('uses explicit and direct max storage settings when they are valid', () => {
+    const explicitProvider = {
+      getMaxStoredResults: vi.fn(() => '7'),
+      settings: { maxstoredresults: 3 },
+      maxStoredResults: 2
+    }
+    const directProvider = {
+      getMaxStoredResults: vi.fn(() => 'not-a-number'),
+      settings: { maxstoredresults: 0 },
+      maxStoredResults: 5
+    }
+
+    expect(new ResultManager(makeEventManager(), explicitProvider).getMaxStoredResults()).toBe(7)
+    expect(new ResultManager(makeEventManager(), directProvider).getMaxStoredResults()).toBe(5)
+  })
+
   it('prunes oldest results above configured limit', () => {
     const rm = new ResultManager(makeEventManager(), makeSettingsProvider(2))
     const r1 = makeResult('cap-1', '1')
@@ -254,6 +270,51 @@ describe('ResultManager - max storage cap', () => {
 })
 
 describe('ResultManager - export helpers', () => {
+  it('returns null when every stored result is partial or a reference', () => {
+    const rm = new ResultManager(makeEventManager())
+    rm.addResult(makeResult('only-partial', '1', 'True'))
+    rm.addResult(makeRefResult('only-reference'))
+
+    expect(rm.getLatestFullResult()).toBeNull()
+  })
+
+  it('uses type filters and unresolved roots when exporting bundles', () => {
+    const rm = new ResultManager(makeEventManager())
+    const typeOne = makeResult('type-one', '1')
+    const typeTwo = makeResult('type-two', '2')
+    rm.addResult(typeOne)
+    rm.addResult(typeTwo)
+
+    const typeFiltered = rm.exportBundle({ typeFilter: 1 })
+    const unresolved = rm.exportBundle({ includeUnresolved: true })
+
+    expect(typeFiltered.selectedRootCount).toBe(1)
+    expect(typeFiltered.bundle.results[0].ResultMetaData.ResultId).toBe('type-one')
+    expect(unresolved.selectedRootCount).toBeGreaterThanOrEqual(2)
+  })
+
+  it('ignores falsy roots, null children, and roots without stable result ids', () => {
+    const rm = new ResultManager(makeEventManager())
+    const child = makeResult('duplicate-child', '1', 'False', [])
+    child.ResultMetaData.CreationTime = '2026-01-01T00:00:00.000Z'
+    const parent = makeResult('duplicate-parent', '4', 'False', [
+      null,
+      child
+    ])
+    const missingResultId = {
+      id: 'id-only-root',
+      ResultMetaData: {},
+      ResultContent: [],
+      ClientData: { rebuildState: { claimed: false, partial: false, resolved: false } }
+    }
+
+    const exported = rm.exportBundle({ rootResults: [null, parent, missingResultId] })
+
+    expect(exported.bundle.results.map((item) => item.ResultMetaData.ResultId))
+      .toEqual(['duplicate-parent', 'duplicate-child'])
+    expect(exported.selectedRootCount).toBe(2)
+  })
+
   it('returns latest full result when latest is partial', () => {
     const rm = new ResultManager(makeEventManager())
     const full = makeResult('full-1', '1', 'False')
@@ -320,6 +381,15 @@ describe('ResultManager - export helpers', () => {
 })
 
 describe('ResultManager - bundle import', () => {
+  it('rejects invalid import modes before mutating stored results', () => {
+    const rm = new ResultManager(makeEventManager())
+    const bundle = createResultBundle([])
+
+    expect(() => rm.importBundleFromText(JSON.stringify(bundle), { mode: 'merge' }))
+      .toThrow("Invalid import mode 'merge'")
+    expect(rm.getAllResultsChronological()).toHaveLength(0)
+  })
+
   it('imports valid results and skips invalid ones in best-effort mode', () => {
     const rm = new ResultManager(makeEventManager())
     vi.spyOn(rm, 'createRuntimeResultFromPayload').mockImplementation((payload) =>
@@ -356,11 +426,113 @@ describe('ResultManager - bundle import', () => {
     expect(summary.skipReasons.duplicate_result_id).toBe(1)
   })
 
+  it('counts replacements in replace mode', () => {
+    const rm = new ResultManager(makeEventManager())
+    const existing = makeResult('replace-1', '1', 'True', [])
+    rm.addResult(existing)
+    vi.spyOn(rm, 'createRuntimeResultFromPayload').mockImplementation((payload) =>
+      makeResult(payload.ResultMetaData.ResultId, payload.ResultMetaData.Classification || '1', 'False')
+    )
+
+    const bundle = createResultBundle([
+      { ResultMetaData: { ResultId: 'replace-1', Classification: '1' }, ResultContent: [] }
+    ])
+    const summary = rm.importBundleFromText(JSON.stringify(bundle), { mode: 'replace' })
+
+    expect(summary.replaced).toBe(1)
+    expect(summary.imported).toBe(0)
+  })
+
+  it('reports missing ids and conversion errors as best-effort skips', () => {
+    const rm = new ResultManager(makeEventManager())
+    vi.spyOn(rm, 'createRuntimeResultFromPayload').mockImplementation(() => {
+      throw new Error('cannot convert')
+    })
+
+    const bundle = createResultBundle([
+      { ResultMetaData: { Classification: '1' }, ResultContent: [] },
+      { ResultMetaData: { ResultId: 'bad-model', Classification: '1' }, ResultContent: [] }
+    ])
+    const summary = rm.importBundleFromText(JSON.stringify(bundle), { strict: false })
+
+    expect(summary.imported).toBe(0)
+    expect(summary.skipped).toBe(2)
+    expect(summary.skipReasons.missing_result_id).toBe(1)
+    expect(summary.skipReasons.invalid_result_shape).toBe(1)
+  })
+
+  it('fails fast for missing ids and conversion errors in strict mode', () => {
+    const rm = new ResultManager(makeEventManager())
+    const missingIdBundle = createResultBundle([
+      { ResultMetaData: { Classification: '1' }, ResultContent: [] }
+    ])
+    expect(() => rm.importBundleFromText(JSON.stringify(missingIdBundle), { strict: true }))
+      .toThrow('Import failed: missing_result_id')
+
+    vi.spyOn(rm, 'createRuntimeResultFromPayload').mockImplementation(() => {
+      throw new Error('strict conversion failure')
+    })
+    const conversionBundle = createResultBundle([
+      { ResultMetaData: { ResultId: 'strict-bad', Classification: '1' }, ResultContent: [] }
+    ])
+    expect(() => rm.importBundleFromText(JSON.stringify(conversionBundle), { strict: true }))
+      .toThrow('strict conversion failure')
+  })
+
   it('fails fast in strict mode for invalid result shape', () => {
     const rm = new ResultManager(makeEventManager())
     const bundle = createResultBundle([
       { ResultMetaData: null, ResultContent: [] }
     ])
     expect(() => rm.importBundleFromText(JSON.stringify(bundle), { strict: true })).toThrow('Import failed: invalid_result_shape')
+  })
+})
+
+describe('ResultManager - runtime model and notification edge cases', () => {
+  it('returns raw payloads when no model manager is available for conversion', () => {
+    const rm = new ResultManager({ modelManager: { subscribeSubResults: vi.fn() } })
+    rm.eventManager = {}
+    const payload = { ResultMetaData: { ResultId: 'raw', Classification: '1' }, ResultContent: [] }
+
+    expect(rm.createRuntimeResultFromPayload(payload)).toBe(payload)
+  })
+
+  it('initializes missing client rebuild state before storing results', () => {
+    const rm = new ResultManager(makeEventManager())
+    const missingClientData = {
+      id: 'missing-client-data',
+      classification: '1',
+      ResultMetaData: { ResultId: 'missing-client-data', IsPartial: 'False' },
+      ResultContent: [],
+      replaceReference: vi.fn()
+    }
+    const missingRebuildState = {
+      id: 'missing-rebuild-state',
+      classification: '1',
+      ResultMetaData: { ResultId: 'missing-rebuild-state', IsPartial: 'False' },
+      ResultContent: [],
+      ClientData: {},
+      replaceReference: vi.fn()
+    }
+
+    rm.addResult(missingClientData)
+    rm.addResult(missingRebuildState)
+
+    expect(missingClientData.ClientData.rebuildState.partial).toBe(false)
+    expect(missingRebuildState.ClientData.rebuildState.partial).toBe(false)
+  })
+
+  it('supports removed-result subscribers and ignores null eviction notifications', () => {
+    const rm = new ResultManager(makeEventManager())
+    const removed = vi.fn()
+    rm.subscribeRemoved(removed)
+
+    expect(() => rm.notifyEvictedResult(null)).not.toThrow()
+    rm.notifyEvictedResult(makeResult('removed-1', '1'), 'manual')
+
+    expect(removed).toHaveBeenCalledWith(expect.objectContaining({
+      reason: 'manual',
+      resultId: 'removed-1'
+    }))
   })
 })

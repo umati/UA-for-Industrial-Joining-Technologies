@@ -90,7 +90,7 @@ IJT_Web_Client/
 │   │   └── live/                   # Needs real OPC UA server on :40451 (marker: live)
 │   │       ├── test_opcua_methods.py   # 70 method tests (asyncua monkey-patch)
 │   │       └── test_opcua_live.py      # Event subscription tests
-│   ├── js/unit/                    # Vitest JS unit tests (12 files, 229 tests: 162 unit + 67 source-coverage)
+│   ├── js/unit/                    # Vitest JS unit tests (25 files, 570 tests in the current full JS run)
 │   ├── e2e/                        # Playwright E2E specs
 │   ├── shared_opcua/               # Shared OPC UA adapters (cross-client contracts)
 │   └── legacy/                     # Compatibility test material only
@@ -120,7 +120,7 @@ pip install -r requirements-dev.txt
 python run_all_tests.py
 
 # Python unit tests only (no server)
-python -m pytest tests/ -v --ignore=tests/python/live
+python -m pytest tests/python/unit/ -v
 
 # JS unit only
 npx vitest run
@@ -279,7 +279,7 @@ Same pattern applies to test files outside the package root.
 
 | Step | Command |
 |------|---------|
-| Python unit | `python -m pytest tests/python/unit` |
+| Python unit | `python -m pytest tests/python/unit/` |
 | Python integration | `python -m pytest tests/python/integration -m integration` |
 | Python live (needs server) | `python -m pytest tests/python/live -m live` |
 | JS unit | `npm run test:unit:js` |

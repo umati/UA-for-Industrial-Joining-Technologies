@@ -29,6 +29,52 @@ public sealed class JoiningSystemUnitTests
         return mock;
     }
 
+    private static Mock<ISession> CreateMockSessionWithBrowseResult(ReferenceDescriptionCollection? refs)
+    {
+        var mock = CreateMockSession();
+        var results = new BrowseResultCollection { new BrowseResult { References = refs } };
+        var diagnostics = new DiagnosticInfoCollection();
+#pragma warning disable CS0618
+        mock.Setup(s => s.Browse(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<ViewDescription>(),
+                It.IsAny<uint>(),
+                It.IsAny<BrowseDescriptionCollection>(),
+                out results,
+                out diagnostics))
+            .Returns(new ResponseHeader());
+#pragma warning restore CS0618
+        return mock;
+    }
+
+    private static Mock<ISession> CreateMockSessionWithBrowseException(Exception exception)
+    {
+        var mock = CreateMockSession();
+        var results = new BrowseResultCollection();
+        var diagnostics = new DiagnosticInfoCollection();
+#pragma warning disable CS0618
+        mock.Setup(s => s.Browse(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<ViewDescription>(),
+                It.IsAny<uint>(),
+                It.IsAny<BrowseDescriptionCollection>(),
+                out results,
+                out diagnostics))
+            .Throws(exception);
+#pragma warning restore CS0618
+        return mock;
+    }
+
+    private static NamespaceTable CreateNamespaceTable()
+    {
+        var ns = new NamespaceTable();
+        ns.Append(UAModel.IJTBase.Namespaces.IJTBase);
+        ns.Append(UAModel.IJTTightening.Namespaces.IJTTightening);
+        ns.Append(UAModel.MachineryResult.Namespaces.MachineryResult);
+        ns.Append("http://opcfoundation.org/UA/DI/");
+        return ns;
+    }
+
     private static JoiningSystem CreateSession(ISession session)
         => JoiningSystem.CreateForTesting(session, new ClientConfig { ServerUrl = "opc.tcp://localhost:40451" });
 
@@ -369,6 +415,196 @@ public sealed class JoiningSystemUnitTests
         Assert.True(sut.BrowseChild(NodeId.Null, "AnyChild").IsNullNodeId);
     }
 
+    [Fact]
+    public void BrowseChild_MatchingBrowseNameAndNamespace_ReturnsChildNode()
+    {
+        var child = new NodeId(7001u, 3);
+        var refs = new ReferenceDescriptionCollection
+        {
+            new()
+            {
+                BrowseName = new QualifiedName("OtherChild", 3),
+                NodeId = new ExpandedNodeId(new NodeId(1u, 3)),
+            },
+            new()
+            {
+                BrowseName = new QualifiedName("TargetChild", 3),
+                NodeId = new ExpandedNodeId(child),
+            },
+        };
+        var sut = CreateSession(CreateMockSessionWithBrowseResult(refs).Object);
+
+        var result = sut.BrowseChild(new NodeId(5000u, 3), "targetchild", nsIndex: 3);
+
+        Assert.Equal(child, result);
+    }
+
+    [Fact]
+    public void BrowseChild_WhenBrowseReturnsNullReferences_ReturnsNodeIdNull()
+    {
+        var sut = CreateSession(CreateMockSessionWithBrowseResult(null).Object);
+
+        var result = sut.BrowseChild(new NodeId(5000u, 3), "MissingChild");
+
+        Assert.True(result.IsNullNodeId);
+    }
+
+    [Fact]
+    public void BrowseChild_WhenNoNamespaceMatch_ReturnsNodeIdNull()
+    {
+        var refs = new ReferenceDescriptionCollection
+        {
+            new()
+            {
+                BrowseName = new QualifiedName("TargetChild", 4),
+                NodeId = new ExpandedNodeId(new NodeId(7001u, 4)),
+            },
+        };
+        var sut = CreateSession(CreateMockSessionWithBrowseResult(refs).Object);
+
+        var result = sut.BrowseChild(new NodeId(5000u, 3), "TargetChild", nsIndex: 3);
+
+        Assert.True(result.IsNullNodeId);
+    }
+
+    [Fact]
+    public void BrowseChild_WhenBrowseThrowsServiceResult_ReturnsNodeIdNull()
+    {
+        var sut = CreateSession(CreateMockSessionWithBrowseException(
+            new ServiceResultException(StatusCodes.BadNodeIdUnknown)).Object);
+
+        var result = sut.BrowseChild(new NodeId(5000u, 3), "TargetChild");
+
+        Assert.True(result.IsNullNodeId);
+    }
+
+    [Fact]
+    public void BrowseChild_WhenBrowseThrowsUnexpectedException_ReturnsNodeIdNull()
+    {
+        var sut = CreateSession(CreateMockSessionWithBrowseException(
+            new InvalidOperationException("browse failed")).Object);
+
+        var result = sut.BrowseChild(new NodeId(5000u, 3), "TargetChild");
+
+        Assert.True(result.IsNullNodeId);
+    }
+
+    // ── BrowseChildren ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void BrowseChildren_NullParentId_ReturnsEmptyCollection()
+    {
+        var sut = CreateSession(CreateMockSession().Object);
+
+        var result = sut.BrowseChildren(NodeId.Null);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void BrowseChildren_WhenBrowseReturnsReferences_ReturnsReferences()
+    {
+        var refs = new ReferenceDescriptionCollection
+        {
+            new()
+            {
+                BrowseName = new QualifiedName("ResultManagement", 3),
+                NodeId = new ExpandedNodeId(new NodeId(7002u, 3)),
+            },
+        };
+        var sut = CreateSession(CreateMockSessionWithBrowseResult(refs).Object);
+
+        var result = sut.BrowseChildren(new NodeId(5000u, 3), (uint)NodeClass.Object);
+
+        Assert.Single(result);
+        Assert.Equal("ResultManagement", result[0].BrowseName.Name);
+    }
+
+    [Fact]
+    public void BrowseChildren_WhenBrowseReturnsNullReferences_ReturnsEmptyCollection()
+    {
+        var sut = CreateSession(CreateMockSessionWithBrowseResult(null).Object);
+
+        var result = sut.BrowseChildren(new NodeId(5000u, 3));
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void BrowseChildren_WhenBrowseThrowsServiceResult_ReturnsEmptyCollection()
+    {
+        var sut = CreateSession(CreateMockSessionWithBrowseException(
+            new ServiceResultException(StatusCodes.BadSessionClosed)).Object);
+
+        var result = sut.BrowseChildren(new NodeId(5000u, 3));
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void BrowseChildren_WhenBrowseThrowsUnexpectedException_ReturnsEmptyCollection()
+    {
+        var sut = CreateSession(CreateMockSessionWithBrowseException(
+            new InvalidOperationException("browse failed")).Object);
+
+        var result = sut.BrowseChildren(new NodeId(5000u, 3));
+
+        Assert.Empty(result);
+    }
+
+    // ── DiscoverMethodsUnder ─────────────────────────────────────────────────
+
+    [Fact]
+    public void DiscoverMethodsUnder_WhenBrowseReturnsMethods_ReturnsCaseInsensitiveMap()
+    {
+        var methodId = new NodeId(7100u, 3);
+        var refs = new ReferenceDescriptionCollection
+        {
+            new()
+            {
+                BrowseName = new QualifiedName("GetLatestResult", 3),
+                NodeId = new ExpandedNodeId(methodId),
+            },
+        };
+        var sut = CreateSession(CreateMockSessionWithBrowseResult(refs).Object);
+
+        var result = sut.DiscoverMethodsUnder(new NodeId(5000u, 3));
+
+        Assert.True(result.ContainsKey("getlatestresult"));
+        Assert.Equal(methodId, result["GETLATESTRESULT"]);
+    }
+
+    [Fact]
+    public void DiscoverMethodsUnder_NullObjectId_ReturnsEmptyMap()
+    {
+        var sut = CreateSession(CreateMockSession().Object);
+
+        var result = sut.DiscoverMethodsUnder(NodeId.Null);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void DiscoverMethodsUnder_WhenBrowseReturnsNullReferences_ReturnsEmptyMap()
+    {
+        var sut = CreateSession(CreateMockSessionWithBrowseResult(null).Object);
+
+        var result = sut.DiscoverMethodsUnder(new NodeId(5000u, 3));
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void DiscoverMethodsUnder_WhenBrowseThrows_ReturnsEmptyMap()
+    {
+        var sut = CreateSession(CreateMockSessionWithBrowseException(
+            new InvalidOperationException("browse failed")).Object);
+
+        var result = sut.DiscoverMethodsUnder(new NodeId(5000u, 3));
+
+        Assert.Empty(result);
+    }
+
     // ── ResolveNamespaceIndices via OnKeepAlive reconnect ────────────────────
 
     [Fact]
@@ -376,13 +612,7 @@ public sealed class JoiningSystemUnitTests
     {
         // Arrange: mock NamespaceUris so ResolveNamespaceIndices completes
         var mockSession = CreateMockSession();
-        var ns = new NamespaceTable();
-        // Append the IJT namespaces so GetIndex returns valid indices
-        ns.Append(UAModel.IJTBase.Namespaces.IJTBase);
-        ns.Append(UAModel.IJTTightening.Namespaces.IJTTightening);
-        ns.Append(UAModel.MachineryResult.Namespaces.MachineryResult);
-        ns.Append("http://opcfoundation.org/UA/DI/");
-        mockSession.Setup(s => s.NamespaceUris).Returns(ns);
+        mockSession.Setup(s => s.NamespaceUris).Returns(CreateNamespaceTable());
 
         var sut = CreateSession(mockSession.Object);
         var e = new KeepAliveEventArgs(
@@ -396,6 +626,119 @@ public sealed class JoiningSystemUnitTests
         // Assert: does not throw; namespace indices are resolved
         Assert.Null(ex);
         Assert.True(sut.IjtBaseNsIdx > 0);
+    }
+
+    [Fact]
+    public void OnKeepAlive_BadStatus_DiscoversJoiningSystemByTypeDefinition()
+    {
+        var joiningSystemId = new NodeId(9100u, 4);
+        var refs = new ReferenceDescriptionCollection
+        {
+            new()
+            {
+                BrowseName = new QualifiedName("JoiningSystem1", 4),
+                NodeId = new ExpandedNodeId(joiningSystemId),
+                TypeDefinition = new ExpandedNodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 4),
+            },
+        };
+        var mockSession = CreateMockSessionWithBrowseResult(refs);
+        mockSession.Setup(s => s.NamespaceUris).Returns(CreateNamespaceTable());
+        var sut = CreateSession(mockSession.Object);
+        var e = new KeepAliveEventArgs(
+            new ServiceResult(StatusCodes.BadCommunicationError),
+            ServerState.Unknown,
+            DateTime.UtcNow);
+
+        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+
+        Assert.Null(ex);
+        Assert.Equal(joiningSystemId, sut.NodeId);
+    }
+
+    [Fact]
+    public void OnKeepAlive_BadStatus_DiscoveryFallsBackToFirstNonServerObject()
+    {
+        var fallbackId = new NodeId(9200u, 4);
+        var refs = new ReferenceDescriptionCollection
+        {
+            new()
+            {
+                BrowseName = new QualifiedName("Server", 0),
+                NodeId = new ExpandedNodeId(ObjectIds.Server),
+                TypeDefinition = new ExpandedNodeId(ObjectTypeIds.BaseObjectType),
+            },
+            new()
+            {
+                BrowseName = new QualifiedName("ApplicationRoot", 4),
+                NodeId = new ExpandedNodeId(fallbackId),
+                TypeDefinition = new ExpandedNodeId(ObjectTypeIds.BaseObjectType),
+            },
+        };
+        var mockSession = CreateMockSessionWithBrowseResult(refs);
+        mockSession.Setup(s => s.NamespaceUris).Returns(CreateNamespaceTable());
+        var sut = CreateSession(mockSession.Object);
+        var e = new KeepAliveEventArgs(
+            new ServiceResult(StatusCodes.BadCommunicationError),
+            ServerState.Unknown,
+            DateTime.UtcNow);
+
+        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+
+        Assert.Null(ex);
+        Assert.Equal(fallbackId, sut.NodeId);
+    }
+
+    [Fact]
+    public void OnKeepAlive_BadStatus_DiscoveryWithNoObjectsLeavesNodeIdNull()
+    {
+        var mockSession = CreateMockSessionWithBrowseResult(new ReferenceDescriptionCollection());
+        mockSession.Setup(s => s.NamespaceUris).Returns(CreateNamespaceTable());
+        var sut = CreateSession(mockSession.Object);
+        var e = new KeepAliveEventArgs(
+            new ServiceResult(StatusCodes.BadCommunicationError),
+            ServerState.Unknown,
+            DateTime.UtcNow);
+
+        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+
+        Assert.Null(ex);
+        Assert.True(sut.NodeId.IsNullNodeId);
+    }
+
+    [Fact]
+    public void OnKeepAlive_BadStatus_DiscoveryServiceResultExceptionDoesNotRethrow()
+    {
+        var mockSession = CreateMockSessionWithBrowseException(
+            new ServiceResultException(StatusCodes.BadNodeIdUnknown));
+        mockSession.Setup(s => s.NamespaceUris).Returns(CreateNamespaceTable());
+        var sut = CreateSession(mockSession.Object);
+        var e = new KeepAliveEventArgs(
+            new ServiceResult(StatusCodes.BadCommunicationError),
+            ServerState.Unknown,
+            DateTime.UtcNow);
+
+        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+
+        Assert.Null(ex);
+        Assert.True(sut.NodeId.IsNullNodeId);
+    }
+
+    [Fact]
+    public void OnKeepAlive_BadStatus_DiscoveryUnexpectedExceptionDoesNotRethrow()
+    {
+        var mockSession = CreateMockSessionWithBrowseException(
+            new InvalidOperationException("browse failed"));
+        mockSession.Setup(s => s.NamespaceUris).Returns(CreateNamespaceTable());
+        var sut = CreateSession(mockSession.Object);
+        var e = new KeepAliveEventArgs(
+            new ServiceResult(StatusCodes.BadCommunicationError),
+            ServerState.Unknown,
+            DateTime.UtcNow);
+
+        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+
+        Assert.Null(ex);
+        Assert.True(sut.NodeId.IsNullNodeId);
     }
 
     [Fact]

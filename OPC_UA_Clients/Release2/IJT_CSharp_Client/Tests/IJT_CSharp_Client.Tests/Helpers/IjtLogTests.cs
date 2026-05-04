@@ -12,6 +12,17 @@ namespace IJT_CSharp_Client.Tests.Helpers;
 /// </summary>
 public sealed class IjtLogTests
 {
+    private static Type ConsoleLoggerType =>
+        typeof(IjtLog).GetNestedType("SynchronousConsoleLogger", System.Reflection.BindingFlags.NonPublic)!;
+
+    private static T InvokeConsoleLoggerHelper<T>(string methodName, params object[] args)
+    {
+        var method = ConsoleLoggerType.GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        return (T)method!.Invoke(null, args)!;
+    }
+
     // ── IjtLog.For<T> ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -167,5 +178,44 @@ public sealed class IjtLogTests
         var logger = IjtLog.ForCategory("JoiningSystem");
         var ex = Record.Exception(() => logger.LogWarning("Single segment category log"));
         Assert.Null(ex);
+    }
+
+    // ── SynchronousConsoleLogger private formatting helpers ──────────────────
+
+    [Theory]
+    [InlineData(LogLevel.Trace, "TRACE")]
+    [InlineData(LogLevel.Debug, "DEBUG")]
+    [InlineData(LogLevel.Information, "INFO")]
+    [InlineData(LogLevel.Warning, "WARN")]
+    [InlineData(LogLevel.Error, "ERROR")]
+    [InlineData(LogLevel.Critical, "CRITICAL")]
+    [InlineData(LogLevel.None, "LOG")]
+    public void LevelTag_ReturnsExpectedTag(LogLevel level, string expected)
+    {
+        Assert.Equal(expected, InvokeConsoleLoggerHelper<string>("LevelTag", level));
+    }
+
+    [Theory]
+    [InlineData(LogLevel.Warning, ConsoleColor.Yellow)]
+    [InlineData(LogLevel.Error, ConsoleColor.Red)]
+    [InlineData(LogLevel.Critical, ConsoleColor.Red)]
+    public void ColorFor_ReturnsColorForWarningAndErrors(LogLevel level, ConsoleColor expected)
+    {
+        Assert.Equal(expected, InvokeConsoleLoggerHelper<ConsoleColor?>("ColorFor", level));
+    }
+
+    [Fact]
+    public void ColorFor_ReturnsNullForInformation()
+    {
+        Assert.Null(InvokeConsoleLoggerHelper<ConsoleColor?>("ColorFor", LogLevel.Information));
+    }
+
+    [Theory]
+    [InlineData("", "App")]
+    [InlineData("IJT_CSharp_Client.Client.JoiningSystem", "JoiningSystem")]
+    [InlineData("JoiningSystem", "JoiningSystem")]
+    public void ShortCategory_ReturnsReadableCategory(string category, string expected)
+    {
+        Assert.Equal(expected, InvokeConsoleLoggerHelper<string>("ShortCategory", category));
     }
 }

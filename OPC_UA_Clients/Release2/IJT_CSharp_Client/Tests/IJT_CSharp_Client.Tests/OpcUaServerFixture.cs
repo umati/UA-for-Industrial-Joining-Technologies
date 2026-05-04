@@ -15,7 +15,7 @@ namespace IJT_CSharp_Client.Tests;
 /// Resolution order for the server executable:
 ///   1. OPCUA_SIMULATOR_EXE environment variable
 ///   2. Well-known path relative to repo root (walks up from test assembly location)
-///   3. Already-running server on the resolved port (no launch attempted)
+///   3. Already-running OPC UA-ready server on the resolved port
 ///
 /// Port resolution order (first match wins):
 ///   1. <c>OPCUA_SERVER_PORT</c> environment variable (integer)
@@ -40,27 +40,8 @@ public sealed class OpcUaServerFixture : IDisposable
 
     public OpcUaServerFixture()
     {
-        // When OPCUA_SERVER_PORT is explicitly set the caller is the test runner, which
-        // wants a freshly-managed server on that port.  A stale process from a previous
-        // run may still hold the port (or be in a dying state), causing BadConnectionClosed.
-        // Kill it now so the fixture always launches a clean instance in this mode.
         var testRunnerPort = Environment.GetEnvironmentVariable("OPCUA_SERVER_PORT");
         var managedByRunner = !string.IsNullOrWhiteSpace(testRunnerPort);
-        if (managedByRunner && IsPortOpen(_port))
-        {
-            _log.LogInformation("OPCUA_SERVER_PORT is set — killing stale process on port {Port} before fresh launch.", _port);
-            KillProcessOnPort(_port);
-            Thread.Sleep(500); // brief pause for the OS to release the port
-        }
-
-        // If already listening (and NOT in test-runner mode), use it —
-        // the developer has a server running manually.
-        if (!managedByRunner && IsPortOpen(_port))
-        {
-            _log.LogInformation("OPC UA server already running on port {Port} — skipping auto-launch.", _port);
-            IsAvailable = true;
-            return;
-        }
 
         // IJT_PHASE1_ONLY=true means we're in the unit-test phase of the root runner.
         // Auto-launching the server here would race with test execution; skip it and
@@ -75,16 +56,47 @@ public sealed class OpcUaServerFixture : IDisposable
             return;
         }
 
+        if (IsPortOpen(_port))
+        {
+            var attempts = ProbeMaxAttempts();
+            if (ProbeOpcUaReady(_port, maxAttempts: attempts, delayMs: 1000))
+            {
+                _log.LogInformation(
+                    "OPC UA server already ready on port {Port} — reusing existing server.",
+                    _port);
+                IsAvailable = true;
+                return;
+            }
+
+            if (managedByRunner)
+            {
+                _log.LogInformation(
+                    "OPCUA_SERVER_PORT is set but port {Port} did not pass OPC UA readiness — killing stale process before fresh launch.",
+                    _port);
+                KillProcessOnPort(_port);
+                Thread.Sleep(500); // brief pause for the OS to release the port
+            }
+            else
+            {
+                var msg = $"[OpcUaServerFixture] Port {_port} is open, but OPC UA did not become ready. Live tests will be skipped.";
+                _log.LogWarning("{Message}", msg);
+                Console.Error.WriteLine(msg);
+                IsAvailable = false;
+                return;
+            }
+        }
+
         var exePath = FindServerExecutable();
         if (exePath is null)
         {
             // No native binary — try Docker fallback
             if (TryLaunchViaDocker())
             {
-                IsAvailable = WaitForPort(_port, timeoutSeconds: 60);
+                IsAvailable = WaitForPort(_port, timeoutSeconds: 60)
+                    && ProbeOpcUaReady(_port, maxAttempts: ProbeMaxAttempts(), delayMs: 1000);
                 if (!IsAvailable)
                 {
-                    var msg = $"[OpcUaServerFixture] Docker OPC UA server did not become ready within 60 s on port {_port}. Live tests will be skipped.";
+                    var msg = $"[OpcUaServerFixture] Docker OPC UA server did not become ready on port {_port}. Live tests will be skipped.";
                     _log.LogWarning("{Message}", msg);
                     Console.Error.WriteLine(msg);
                 }
@@ -146,7 +158,8 @@ public sealed class OpcUaServerFixture : IDisposable
             // service layer is accepting connections (not just TCP).  The server opens the
             // TCP listener before the OPC UA stack is fully initialised, so we retry with
             // back-off rather than using a fixed sleep.
-            IsAvailable = ProbeOpcUaReady(_port, maxAttempts: 10, delayMs: 1000);
+            var attempts = ProbeMaxAttempts();
+            IsAvailable = ProbeOpcUaReady(_port, maxAttempts: attempts, delayMs: 1000);
             if (!IsAvailable)
             {
                 var probeMsg = $"[OpcUaServerFixture] Server on port {_port} opened TCP but did not accept OPC UA connections within timeout. Live tests will be skipped.";
@@ -186,6 +199,13 @@ public sealed class OpcUaServerFixture : IDisposable
         }
 
         return 40451;
+    }
+
+    private static int ProbeMaxAttempts()
+    {
+        var isCi = string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase);
+        return isCi ? 30 : 20;
     }
 
     private static string? FindServerExecutable()

@@ -101,6 +101,8 @@ npx playwright show-report               # open HTML report after a run
 
 Unit tests live in `tests/js/unit/` and use Vitest with jsdom.
 E2E tests live in `tests/e2e/` and use Playwright (requires running server).
+Vitest enforces a 95% line-coverage threshold for the unit suite; the runner also
+reports an advisory 95% ratchet floor and a 100% aspirational goal.
 
 ### E2E Test Architecture
 

@@ -27,7 +27,8 @@ export default defineConfig({
       all: true,
       // cobertura: parsed by CI report job (parse_coverage function expects line-rate attribute)
       // text-summary: human-readable output in the CI log
-      reporter: ['text-summary', 'cobertura']
+      reporter: ['text-summary', 'cobertura'],
+      thresholds: { lines: 95 }
     }
   },
 })

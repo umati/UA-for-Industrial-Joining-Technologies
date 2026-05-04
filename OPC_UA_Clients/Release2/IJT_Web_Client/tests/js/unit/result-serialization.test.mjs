@@ -1,11 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createResultBundle,
   parseResultBundle,
-  serializeResultForStorage
+  RESULT_BUNDLE_CONSTANTS,
+  serializeResultForStorage,
+  validateResultBundle
 } from '../../../src/javascripts/ijt-support/results/result-serialization.mjs'
 
 describe('result-serialization', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('serializes result payload and removes runtime keys', () => {
     const serialized = serializeResultForStorage({
       ResultMetaData: { ResultId: 'r1', Classification: '1' },
@@ -127,5 +133,68 @@ describe('result-serialization', () => {
 
     expect(serialized.ResultContent[0].Trace.StepTraces[0].StepResultId).toBe('step-result-1')
     expect(serialized.ResultContent[0].StepResults[0].StepTraceId).toBe('step-trace-1')
+  })
+
+  it('returns null for unsupported storage shapes and adds missing ResultContent', () => {
+    expect(serializeResultForStorage(null)).toBeNull()
+    expect(serializeResultForStorage('not-a-result')).toBeNull()
+    expect(serializeResultForStorage({ ResultContent: [] })).toBeNull()
+
+    const serialized = serializeResultForStorage({
+      ResultMetaData: { ResultId: 'r-minimal', Classification: '1' }
+    })
+    expect(serialized.ResultContent).toEqual([])
+  })
+
+  it('strips functions and private runtime keys during storage serialization', () => {
+    const serialized = serializeResultForStorage({
+      ResultMetaData: { ResultId: 'r-private', Classification: '1' },
+      ResultContent: [],
+      transform: () => 'runtime-only',
+      _localSelection: true
+    })
+
+    expect(serialized.transform).toBeUndefined()
+    expect(serialized._localSelection).toBeUndefined()
+  })
+
+  it('rejects payloads deeper than the configured import depth', () => {
+    const payload = {
+      ResultMetaData: { ResultId: 'r-depth', Classification: '1' },
+      ResultContent: [{ nested: true }]
+    }
+
+    expect(() => serializeResultForStorage(payload, { maxDepth: 1 }))
+      .toThrow(/Max serialization depth exceeded/)
+  })
+
+  it('uses string length for file-size checks when TextEncoder is unavailable', () => {
+    vi.stubGlobal('TextEncoder', undefined)
+    const bundle = createResultBundle([
+      { ResultMetaData: { ResultId: 'r-size', Classification: '1' }, ResultContent: [] }
+    ])
+    const raw = JSON.stringify(bundle)
+
+    expect(() => parseResultBundle(raw, { maxFileSizeBytes: raw.length - 1 }))
+      .toThrow(/Import file exceeds size limit/)
+  })
+
+  it('rejects invalid parse inputs and malformed JSON with actionable messages', () => {
+    expect(() => parseResultBundle({})).toThrow('Import payload must be text')
+    expect(() => parseResultBundle('{bad-json')).toThrow(/Invalid JSON/)
+  })
+
+  it('rejects unsupported bundle versions and oversized result sets', () => {
+    expect(() => validateResultBundle({
+      type: RESULT_BUNDLE_CONSTANTS.EXPORT_TYPE,
+      version: 999,
+      results: []
+    })).toThrow("Unsupported bundle version '999'")
+
+    expect(() => validateResultBundle({
+      type: RESULT_BUNDLE_CONSTANTS.EXPORT_TYPE,
+      version: RESULT_BUNDLE_CONSTANTS.EXPORT_VERSION,
+      results: [{ ResultMetaData: { ResultId: 'one' }, ResultContent: [] }]
+    }, { maxResultsCount: 0 })).toThrow(/Too many results in bundle/)
   })
 })

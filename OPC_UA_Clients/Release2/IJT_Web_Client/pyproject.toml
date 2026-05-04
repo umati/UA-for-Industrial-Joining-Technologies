@@ -69,15 +69,18 @@ ignore = ["E501", "E402", "E731"]
 exclude = ["tests/python/live/*.py"]
 
 [tool.coverage.run]
-# Measure only library + application source; exclude files that are never exercised
-# by unit tests (live/integration tests, runner infrastructure, scripts).
+# Measure runtime application/library source; exclude tests and local setup/runner
+# scaffolding so the 95% floor reflects product code rather than test code.
 omit = [
     "run_all_tests.py",
     "run_docker_setup.py",
+    "setup_project.py",
     "scripts/*",
+    "tests/**",
     "tests/python/live/*",
     "tests/python/integration/*",
     "tests/shared_opcua/*",
+    "conftest.py",
     # Compatibility shim only imported by live/integration tests (already omitted above).
     "tests/python/_asyncua_compat.py",
     ".venv/*",
@@ -85,8 +88,8 @@ omit = [
 ]
 
 [tool.coverage.report]
-# Unit tests alone now reach ~95% with setup_project/index/connection coverage sprint (2026-04-27).
-fail_under = 90
+# Unit tests are expected to stay at or above 95% line coverage.
+fail_under = 95
 skip_empty = true
 exclude_lines = [
     "pragma: no cover",

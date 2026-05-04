@@ -77,7 +77,7 @@ Run tests from each project's own directory, not from the repo root.
 
 ```sh
 # ✅ Correct — run from project directory
-cd OPC_UA_Clients/Release2/IJT_Web_Client && pytest tests/python/unit
+cd OPC_UA_Clients/Release2/IJT_Web_Client && pytest tests/python/unit/
 cd OPC_UA_Clients/Release2/IJT_Console_Client && pytest tests/unit
 
 # ❌ Wrong — from repo root, both conftest.py files collide
@@ -146,18 +146,21 @@ Coverage is configured in each project's `pyproject.toml`. **Never hardcode thre
 
 | Project | `fail_under` | Notes |
 |---------|-------------|-------|
-| Web Client | **90%** | Configured in `pyproject.toml` — applies to Python unit run. |
-| Console Client | 80% | Configured in `pyproject.toml` — applies to unit run |
-| Test Client | **90%** | Configured in `pyproject.toml` — live-test-only helpers reduce coverage on conformance-only runs; `tests/unit/` supplements with pure-logic coverage |
+| Web Client | **95%** | Configured in `pyproject.toml` — applies to Python unit run. |
+| Console Client | **95%** | Configured in `pyproject.toml` — applies to unit run |
+| Test Client | **95%** | Configured in `pyproject.toml` — live-test-only helpers reduce coverage on conformance-only runs; `tests/unit/` supplements with pure-logic coverage |
+
+Python coverage gates measure runtime application/helper code and intentionally omit tests, virtual environments, local setup scripts, runner scaffolding, and live-only tests.
 
 **C# Client (coverlet)**: Exclusions defined in `coverlet.runsettings` — excludes `UAModel` (auto-generated OPC UA type bindings) and `Program` namespaces, plus `[GeneratedCode]`, `[ExcludeFromCodeCoverage]`, and `[CompilerGeneratedAttribute]` attributes. CI passes `--settings coverlet.runsettings` to `dotnet test` so exclusions are applied to both collection and the summary table.
+The C# runner treats 95% as the advisory line-coverage floor for the non-generated client code it parses from Cobertura output.
 
 **Node Client (JavaScript/Vitest)**: Coverage threshold is NOT in pyproject.toml (JS project).
-- Hard gate: `coverage.thresholds` in `vitest.config.mjs` (if set)
-- Ratchet floor: `_COVERAGE_THRESHOLD = 85.0` in `IJT_Node_Client/run_all_tests.py` — WARN-only, advisory/non-gated, ratchet upward as coverage improves. Aspirational goal: 90%.
+- Hard gate: `coverage.thresholds.lines = 95` in `vitest.config.mjs`
+- Ratchet floor: `_COVERAGE_THRESHOLD = 95.0` in `IJT_Node_Client/run_all_tests.py` — WARN-only, advisory/non-gated. Aspirational goal: 100%.
 - Coverage reporters: `text-summary`, `cobertura` — the cobertura XML is parsed by the CI report job
 
-**Web Client JS (Vitest)**: Threshold enforced at 80% via `vitest.config.mjs` `thresholds.lines`. Reporters: `text`, `lcov`, `cobertura`.
+**Web Client JS (Vitest)**: Threshold enforced at 95% via `vitest.config.mjs` `thresholds.lines`. Reporters: `text`, `lcov`, `cobertura`.
 
 ---
 

@@ -345,6 +345,88 @@ public sealed class ResultManagementUnitTests
         Assert.Null(ex);
     }
 
+    // ── Result variable value processing ─────────────────────────────────────
+
+    [Fact]
+    public void ProcessResultVariableValue_WithNullValue_ReturnsFalseAndDoesNotWrite()
+    {
+        var session = MockSessionBuilder.Create();
+        using var rm = new ResultManagement(session.Object);
+        var writes = new List<string>();
+
+        var processed = rm.ProcessResultVariableValue(new DataValue { Value = null }, writes.Add);
+
+        Assert.False(processed);
+        Assert.Empty(writes);
+    }
+
+    [Fact]
+    public void ProcessResultVariableValue_WithExtensionObjectResult_WritesPayload()
+    {
+        var session = MockSessionBuilder.Create();
+        using var rm = new ResultManagement(session.Object);
+        var writes = new List<string>();
+        var rd = new UAModel.MachineryResult.ResultDataType
+        {
+            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "RESULT-VAR-1" }
+        };
+
+        var processed = rm.ProcessResultVariableValue(
+            new DataValue { Value = new Variant(new ExtensionObject(rd)) },
+            writes.Add);
+
+        Assert.True(processed);
+        Assert.Single(writes);
+        Assert.Contains("RESULT-VAR-1", writes[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProcessResultVariableValue_WithDirectResult_WritesPayload()
+    {
+        var session = MockSessionBuilder.Create();
+        using var rm = new ResultManagement(session.Object);
+        var writes = new List<string>();
+        var rd = new UAModel.MachineryResult.ResultDataType
+        {
+            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "RESULT-DIRECT-1" }
+        };
+
+        var processed = rm.ProcessResultVariableValue(new DataValue { Value = rd }, writes.Add);
+
+        Assert.True(processed);
+        Assert.Single(writes);
+    }
+
+    [Fact]
+    public void ProcessResultVariableValue_WithPlaceholderResult_ReturnsFalseAndDoesNotWrite()
+    {
+        var session = MockSessionBuilder.Create();
+        using var rm = new ResultManagement(session.Object);
+        var writes = new List<string>();
+        var rd = new UAModel.MachineryResult.ResultDataType
+        {
+            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = " " }
+        };
+
+        var processed = rm.ProcessResultVariableValue(new DataValue { Value = rd }, writes.Add);
+
+        Assert.False(processed);
+        Assert.Empty(writes);
+    }
+
+    [Fact]
+    public void ProcessResultVariableValue_WithRawNonResultValue_ReturnsFalseAndDoesNotWrite()
+    {
+        var session = MockSessionBuilder.Create();
+        using var rm = new ResultManagement(session.Object);
+        var writes = new List<string>();
+
+        var processed = rm.ProcessResultVariableValue(new DataValue { Value = "raw-value" }, writes.Add);
+
+        Assert.False(processed);
+        Assert.Empty(writes);
+    }
+
     // ── GetResultManagementNode fallback path ────────────────────────────────
 
     [Fact]

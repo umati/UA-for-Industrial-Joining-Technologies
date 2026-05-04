@@ -22,7 +22,7 @@ export default defineConfig({
       reportsDirectory: 'test-results/coverage',
       include: ['src/javascripts/ijt-support/**/*.mjs'],
       exclude: ['src/javascripts/views/**/*.mjs'],  // views require DOM
-      thresholds: { lines: 80 }
+      thresholds: { lines: 95 }
     }
   }
 })

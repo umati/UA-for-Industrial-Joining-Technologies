@@ -374,3 +374,306 @@ describe('NodeOPCUAInterface — dispatch to real connection methods', () => {
     expect(mockConn.eventSubscription).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Connection methods — exercise the async OPC UA wrapper branches through the
+// real Connection object created by the public socket API.
+// ---------------------------------------------------------------------------
+
+describe('Connection — OPC UA method wrappers', () => {
+  let iface, io, socket, connectionCallback, conn, mockOPCUA
+
+  const flushAsync = () => new Promise(resolve => setTimeout(resolve, 0))
+
+  beforeEach(() => {
+    socket = {
+      on: vi.fn((event, cb) => {
+        socket._handlers = socket._handlers || {}
+        socket._handlers[event] = cb
+      }),
+      _handlers: {}
+    }
+    io = {
+      on: vi.fn((event, cb) => { if (event === 'connection') connectionCallback = cb }),
+      emit: vi.fn()
+    }
+    const mockClient = {
+      on: vi.fn(),
+      connect: vi.fn(() => new Promise(() => {})),
+      disconnect: vi.fn(() => Promise.resolve())
+    }
+    mockOPCUA = {
+      OPCUAClient: { create: vi.fn(() => mockClient) },
+      StatusCodes: { Good: 'Good' },
+      makeBrowsePath: vi.fn((nodeId, browsePath) => ({ nodeId, browsePath })),
+      coerceNodeId: vi.fn(value => `coerced:${value}`),
+      promoteOpaqueStructure: vi.fn(() => Promise.resolve()),
+      constructEventFilter: vi.fn(fields => ({ fields })),
+      ClientMonitoredItem: {
+        create: vi.fn()
+      }
+    }
+    iface = new NodeOPCUAInterface(io, { DisplayName: 3, Value: 13, EventNotifier: 12 })
+    iface.setupSocketIO(mockOPCUA)
+    connectionCallback(socket)
+    socket._handlers['connect to']('opc.tcp://server:4840')
+    conn = iface.connectionList['opc.tcp://server:4840']
+    conn.connectionState = 'connected'
+  })
+
+  afterEach(() => vi.restoreAllMocks())
+
+  it('read emits readresult and promotes ResultContent when present', async () => {
+    const dataValue = {
+      value: { value: { resultContent: ['opaque'] } },
+      toString: () => 'DataValue(1)'
+    }
+    conn.session = { read: vi.fn().mockResolvedValue(dataValue) }
+
+    conn.read('cid-read', 'ns=1;i=1001', 'Value')
+    await flushAsync()
+
+    expect(conn.session.read).toHaveBeenCalledWith({
+      nodeId: 'ns=1;i=1001',
+      attributeId: 13
+    })
+    expect(mockOPCUA.promoteOpaqueStructure).toHaveBeenCalledWith(conn.session, [{ value: ['opaque'] }])
+    expect(io.emit).toHaveBeenCalledWith('readresult', expect.objectContaining({
+      endpointurl: 'opc.tcp://server:4840',
+      callid: 'cid-read',
+      stringValue: 'DataValue(1)',
+      nodeid: 'ns=1;i=1001',
+      attribute: 'Value'
+    }))
+  })
+
+  it('read defaults to DisplayName and emits error on read failure', async () => {
+    conn.session = { read: vi.fn().mockRejectedValue(new Error('read failed')) }
+    conn.displayFunction = vi.fn()
+
+    conn.read('cid-read', 'ns=1;i=1001')
+    await flushAsync()
+
+    expect(conn.session.read).toHaveBeenCalledWith({
+      nodeId: 'ns=1;i=1001',
+      attributeId: 3
+    })
+    expect(conn.displayFunction).toHaveBeenCalledWith(expect.stringContaining('read failed'))
+    expect(io.emit).toHaveBeenCalledWith('error message', expect.objectContaining({ context: 'read' }))
+  })
+
+  it('translateBrowsePath emits target NodeId for Good status', async () => {
+    conn.session = {
+      translateBrowsePath: vi.fn().mockResolvedValue({
+        statusCode: 'Good',
+        targets: [{ targetId: 'ns=1;i=42' }]
+      })
+    }
+
+    conn.translateBrowsePath('cid-path', 'ns=0;i=84', '/0:Objects')
+    await flushAsync()
+
+    expect(mockOPCUA.makeBrowsePath).toHaveBeenCalledWith('ns=0;i=84', '/0:Objects')
+    expect(io.emit).toHaveBeenCalledWith('pathtoidresult', {
+      endpointurl: 'opc.tcp://server:4840',
+      callid: 'cid-path',
+      nodeid: 'ns=1;i=42'
+    })
+  })
+
+  it('translateBrowsePath returns quietly for non-Good status', async () => {
+    conn.session = {
+      translateBrowsePath: vi.fn().mockResolvedValue({ statusCode: 'BadNoMatch', targets: [] })
+    }
+
+    conn.translateBrowsePath('cid-path', 'ns=0;i=84', '/0:Missing')
+    await flushAsync()
+
+    expect(io.emit).not.toHaveBeenCalledWith('pathtoidresult', expect.anything())
+  })
+
+  it('translateBrowsePath emits error message on exception', async () => {
+    conn.session = { translateBrowsePath: vi.fn().mockRejectedValue(new Error('path failed')) }
+    conn.displayFunction = vi.fn()
+
+    conn.translateBrowsePath('cid-path', 'ns=0;i=84', '/0:Objects')
+    await flushAsync()
+
+    expect(conn.displayFunction).toHaveBeenCalledWith(expect.stringContaining('path failed'))
+    expect(io.emit).toHaveBeenCalledWith('error message', expect.objectContaining({ context: 'translateBrowsePath' }))
+  })
+
+  it('browse emits browseresult from callback', async () => {
+    const browseResult = { references: [{ browseName: 'Objects' }] }
+    conn.session = {
+      browse: vi.fn(async (_nodeToBrowse, cb) => cb(null, browseResult))
+    }
+
+    conn.browse('cid-browse', 'ns=0;i=84', true)
+    await flushAsync()
+
+    expect(conn.session.browse).toHaveBeenCalledWith(expect.objectContaining({
+      nodeId: 'ns=0;i=84',
+      browseDirection: 'Both'
+    }), expect.any(Function))
+    expect(io.emit).toHaveBeenCalledWith('browseresult', expect.objectContaining({
+      endpointurl: 'opc.tcp://server:4840',
+      callid: 'cid-browse',
+      browseresult: browseResult,
+      details: true
+    }))
+  })
+
+  it('browse emits error message on thrown exception', async () => {
+    conn.session = { browse: vi.fn(() => { throw new Error('browse failed') }) }
+
+    conn.browse('cid-browse', 'ns=0;i=84')
+    await flushAsync()
+
+    expect(io.emit).toHaveBeenCalledWith('error message', expect.objectContaining({ context: 'browse' }))
+  })
+
+  it('methodCall emits callresult for callback success', async () => {
+    const results = { statusCode: 'Good' }
+    conn.session = {
+      call: vi.fn((_methodToCall, cb) => cb(null, results))
+    }
+
+    conn.methodCall('cid-method', 'ns=1;i=1', 'ns=1;i=2', [{ value: 1 }])
+    await flushAsync()
+
+    expect(conn.session.call).toHaveBeenCalledWith({
+      objectId: 'coerced:ns=1;i=1',
+      methodId: 'coerced:ns=1;i=2',
+      inputArguments: [{ value: 1 }]
+    }, expect.any(Function))
+    expect(io.emit).toHaveBeenCalledWith('callresult', {
+      endpointurl: 'opc.tcp://server:4840',
+      callid: 'cid-method',
+      results
+    })
+  })
+
+  it('methodCall callback error does not emit callresult', async () => {
+    conn.session = {
+      call: vi.fn((_methodToCall, cb) => cb(new Error('method failed')))
+    }
+
+    conn.methodCall('cid-method', 'ns=1;i=1', 'ns=1;i=2', [])
+    await flushAsync()
+
+    expect(io.emit).not.toHaveBeenCalledWith('callresult', expect.anything())
+  })
+
+  it('methodCall emits error message when argument coercion fails', async () => {
+    mockOPCUA.coerceNodeId = vi.fn(() => { throw new Error('bad node') })
+    conn.opcua = mockOPCUA
+    conn.session = { call: vi.fn() }
+
+    conn.methodCall('cid-method', 'bad', 'ns=1;i=2', [])
+    await flushAsync()
+
+    expect(io.emit).toHaveBeenCalledWith('error message', expect.objectContaining({ context: 'method' }))
+    expect(conn.session.call).not.toHaveBeenCalled()
+  })
+
+  it('closeConnection terminates monitors, subscription, session, and client', async () => {
+    const monitor = { terminate: vi.fn(done => done()) }
+    conn.eventMonitoringItems = [monitor]
+    conn.subscription = { terminate: vi.fn(() => Promise.resolve()) }
+    conn.session = { close: vi.fn(() => Promise.resolve()) }
+    conn.client = { disconnect: vi.fn(() => Promise.resolve()) }
+
+    await conn.closeConnection()
+
+    expect(monitor.terminate).toHaveBeenCalled()
+    expect(conn.subscription).toBeNull()
+    expect(conn.session).toBeNull()
+    expect(conn.client).toBeNull()
+    expect(conn.eventMonitoringItems).toEqual([])
+    expect(conn.connectionState).toBe('closed')
+    expect(io.emit).toHaveBeenCalledWith('client disconnected', { endpointurl: 'opc.tcp://server:4840' })
+  })
+
+  it('closeConnection reports cleanup errors and still closes', async () => {
+    conn.eventMonitoringItems = [{ terminate: vi.fn(() => { throw new Error('monitor failed') }) }]
+    conn.subscription = { terminate: vi.fn(() => Promise.reject(new Error('unsubscribe failed'))) }
+    conn.session = { close: vi.fn(() => Promise.reject(new Error('session failed'))) }
+    conn.client = { disconnect: vi.fn(() => Promise.reject(new Error('disconnect failed'))) }
+
+    await conn.closeConnection()
+
+    expect(io.emit).toHaveBeenCalledWith('error message', expect.objectContaining({ context: 'closedown' }))
+    expect(io.emit).toHaveBeenCalledWith('client disconnected', { endpointurl: 'opc.tcp://server:4840' })
+    expect(conn.connectionState).toBe('closed')
+  })
+
+  it('eventSubscription creates monitored item and emits promoted event payload', async () => {
+    const handlers = {}
+    const eventMonitoringItem = {
+      on: vi.fn((event, cb) => {
+        handlers[event] = cb
+        return eventMonitoringItem
+      })
+    }
+    mockOPCUA.ClientMonitoredItem.create.mockReturnValue(eventMonitoringItem)
+    conn.subscription = { id: 1 }
+    conn.session = { id: 2 }
+
+    await conn.eventSubscription(['Result', 'Message'], { subscriber: 'demo' })
+    handlers.initialized()
+    handlers.changed([
+      { value: { resultContent: ['opaque'] }, toString: () => 'result' },
+      { value: 'msg', toString: () => 'msg' }
+    ])
+    await flushAsync()
+
+    expect(mockOPCUA.constructEventFilter).toHaveBeenCalledWith(['Result', 'Message'])
+    expect(mockOPCUA.ClientMonitoredItem.create).toHaveBeenCalledWith(
+      conn.subscription,
+      expect.objectContaining({ nodeId: 'i=2253', attributeId: 12 }),
+      expect.objectContaining({ queueSize: 100000 })
+    )
+    expect(mockOPCUA.promoteOpaqueStructure).toHaveBeenCalledWith(conn.session, [{ value: { resultContent: ['opaque'] } }])
+    expect(io.emit).toHaveBeenCalledWith('subscribed event', {
+      endpointurl: 'opc.tcp://server:4840',
+      result: expect.objectContaining({
+        Result: expect.any(Object),
+        Message: expect.any(Object),
+        subscriberDetails: { subscriber: 'demo' }
+      })
+    })
+    expect(conn.eventMonitoringItems).toContain(eventMonitoringItem)
+  })
+
+  it('eventSubscription ignores changed events after disconnect', async () => {
+    const handlers = {}
+    const eventMonitoringItem = { on: vi.fn((event, cb) => { handlers[event] = cb; return eventMonitoringItem }) }
+    mockOPCUA.ClientMonitoredItem.create.mockReturnValue(eventMonitoringItem)
+    conn.subscription = { id: 1 }
+    conn.connectionState = 'closed'
+
+    await conn.eventSubscription(['Result'], {})
+    handlers.changed([{ value: 'stale' }])
+    await flushAsync()
+
+    expect(io.emit).not.toHaveBeenCalledWith('subscribed event', expect.anything())
+  })
+
+  it('eventSubscription emits error message when promotion fails', async () => {
+    const handlers = {}
+    const eventMonitoringItem = { on: vi.fn((event, cb) => { handlers[event] = cb; return eventMonitoringItem }) }
+    mockOPCUA.ClientMonitoredItem.create.mockReturnValue(eventMonitoringItem)
+    mockOPCUA.promoteOpaqueStructure.mockRejectedValue(new Error('promote failed'))
+    conn.subscription = { id: 1 }
+    conn.session = { id: 2 }
+    conn.displayFunction = vi.fn()
+
+    await conn.eventSubscription(['Result'], {})
+    handlers.changed([{ value: { resultContent: ['opaque'] } }])
+    await flushAsync()
+
+    expect(conn.displayFunction).toHaveBeenCalledWith(expect.stringContaining('promote failed'))
+    expect(io.emit).toHaveBeenCalledWith('error message', expect.objectContaining({ context: 'eventMonitoring' }))
+  })
+})
