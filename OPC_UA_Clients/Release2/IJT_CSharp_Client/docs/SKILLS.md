@@ -138,7 +138,7 @@ dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 
 ---
 
-## Test Baseline
+## Test Scope
 
 | Scope | Notes |
 |-------|-------|
@@ -227,12 +227,12 @@ filter.WhereClause = BuildOfTypeClause(resultReadyTypeId);     // ResultReadyEve
 
 ---
 
-## Known Issues / Deferred Work
+## Test Coverage Boundaries
 
-| Issue | Status | Notes |
-|-------|--------|-------|
-| Browse exception tests in unit tier | Accepted | `ISession.Browse` synchronous overload is an extension method — Moq cannot intercept. Browse-exception guards are production-correct; coverage is via live integration tests only. |
-| `FullFlow_SendJoint_GetJoint_SelectJoint_DeleteJoint` | Fixed | Joint now created with PROGRAM entity (entityType=27) in `associatedEntities`. `JointDataType.Create()` factory updated to accept `EntityDataType[]?`. |
+| Boundary | Policy |
+|----------|--------|
+| Browse exception tests in unit tier | `ISession.Browse` synchronous overload is an extension method, so Moq cannot intercept it. Browse-exception guards are covered through live integration tests. |
+| Joint test data | Use `JointDataType.Create()` when constructing joints with optional fields. Include a `PROGRAM` associated entity when test data needs program context. |
 
 ---
 
@@ -319,16 +319,16 @@ JoiningSystem
 
 ---
 
-## Console UX Fixes Applied
+## Console UX Design
 
-| Issue | Fix |
-|-------|-----|
-| `°` rendered as `?` | `Console.OutputEncoding = UTF8` at startup; `IjtResultFormatter.NormalizeUnits()` maps U+00B0/U+FFFD → `"deg"` |
-| Log racing with prompt | Replaced `AddSimpleConsole` with synchronous `SynchronousConsoleProvider` in `IjtLog.cs` — all console writes share a static lock |
-| result.json / event log data missing | All log files use `File.WriteAllText` (overwrite) — always reflects latest payload; no append accumulation |
-| result.json missing trace data | `IjtResultFormatter.FormatTrace()` fully implemented; all trace steps written to `result/result.json` |
-| Unicode box drawing garbled | `IjtMenuHelper.cs` uses ASCII-only box drawing characters |
-| Prompt clutter | 2-line compact prompt; `h`/`help` shows full usage on demand only |
+| Concern | Current design |
+|---------|----------------|
+| Unit display | `Console.OutputEncoding = UTF8` at startup; `IjtResultFormatter.NormalizeUnits()` maps U+00B0/U+FFFD to `"deg"`. |
+| Log/prompt ordering | `SynchronousConsoleProvider` in `IjtLog.cs`; all console writes share a static lock. |
+| JSON log freshness | Log files use `File.WriteAllText` and overwrite on every call, so each file reflects the latest payload. |
+| Trace output | `IjtResultFormatter.FormatTrace()` writes trace steps to `result/result.json`. |
+| Terminal compatibility | `IjtMenuHelper.cs` uses ASCII-only box drawing characters. |
+| Prompt density | Compact prompt; `h`/`help` shows full usage on demand. |
 
 ---
 

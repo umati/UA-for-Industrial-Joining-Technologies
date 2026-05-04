@@ -91,7 +91,8 @@ def _classify_report(report) -> str:
         return "passed"
     if report.skipped:
         reason = _skip_text(report)
-        if "not declared supported" in reason or "Not Supported" in reason:
+        reason_lower = reason.lower()
+        if "not declared supported" in reason_lower or "not supported" in reason_lower:
             return "not_supported"
         return "blocked"
     return "skipped"

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import os
 import socket
 import sys
@@ -52,6 +53,7 @@ try:
     from asyncua import Client as _Client
     from asyncua import ua as _ua
 
+    logging.getLogger("asyncua").setLevel(logging.ERROR)
     _OpcUaError = _ua.UaError
 except ImportError as exc:
     raise ImportError(

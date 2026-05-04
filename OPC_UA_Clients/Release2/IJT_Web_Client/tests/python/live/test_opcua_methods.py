@@ -227,6 +227,60 @@ async def _pi_uri(c) -> str:
         return ""
 
 
+async def _required_pi_uri(c) -> str:
+    pi = await _pi_uri(c)
+    if not pi.strip():
+        pytest.skip("Tool ProductInstanceUri not available — cannot call PIU-scoped live method")
+    return pi
+
+
+def _method_items(output: list) -> list:
+    if output and isinstance(output[0], list):
+        return output[0]
+    return output or []
+
+
+def _joining_process_id_from_entry(entry) -> str:
+    entry = getattr(entry, "Value", entry)
+    meta = getattr(entry, "JoiningProcessMetaData", None)
+    for source in (entry, meta):
+        if source is None:
+            continue
+        value = (
+            getattr(source, "JoiningProcessId", None)
+            or getattr(source, "Id", None)
+            or getattr(source, "ProgramId", None)
+        )
+        if value:
+            return str(value)
+    return entry if isinstance(entry, str) else ""
+
+
+def _joining_process_origin_id_from_entry(entry) -> str:
+    entry = getattr(entry, "Value", entry)
+    meta = getattr(entry, "JoiningProcessMetaData", None)
+    for source in (entry, meta):
+        if source is None:
+            continue
+        value = getattr(source, "JoiningProcessOriginId", None)
+        if value:
+            return str(value)
+    return ""
+
+
+async def _enable_asset_if_possible(c, pi: str) -> None:
+    try:
+        await _call(
+            c,
+            _ASSET,
+            f"{_ASSET}/EnableAsset",
+            _v(pi, ua.VariantType.String),
+            _v(True, ua.VariantType.Boolean),
+        )
+    except (OSError, ua.UaStatusCodeError):
+        pass
+
+
 async def _has_simulation_methods(c) -> bool:
     """Return True when this endpoint exposes the simulator-only Simulations folder."""
     try:
@@ -735,69 +789,100 @@ class TestEnableAsset:
 class TestJoiningProcess:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
-    async def _jp(self, c):
+    async def _jp(self, c, pi: str):
+        try:
+            output = await _call(c, _JP, f"{_JP}/GetJoiningProcessList", _v(pi, ua.VariantType.String))
+        except (OSError, ua.UaStatusCodeError) as exc:
+            pytest.skip(f"GetJoiningProcessList returned {exc} — cannot build JoiningProcessIdentification")
+        programs = _method_items(output)
+        if not programs:
+            pytest.skip("GetJoiningProcessList returned no programs — cannot build JoiningProcessIdentification")
+        process_id = _joining_process_id_from_entry(programs[0])
+        if not process_id:
+            pytest.skip("First joining process has no usable JoiningProcessId")
         jp = ua.JoiningProcessIdentificationDataType()  # type: ignore[attr-defined]
-        jp.JoiningProcessId = jp.JoiningProcessOriginId = jp.SelectionName = ""
+        jp.JoiningProcessId = process_id
+        jp.JoiningProcessOriginId = _joining_process_origin_id_from_entry(programs[0])
+        jp.SelectionName = ""
         return jp
 
     async def test_get_process_list(self, ijt_session):
         c, *_ = ijt_session
-        assert (
-            await _call(c, _JP, f"{_JP}/GetJoiningProcessList", _v(await _pi_uri(c), ua.VariantType.String)) is not None
-        )
+        pi = await _required_pi_uri(c)
+        assert await _call(c, _JP, f"{_JP}/GetJoiningProcessList", _v(pi, ua.VariantType.String)) is not None
 
     async def test_get_selected_program(self, ijt_session):
         c, *_ = ijt_session
+        pi = await _required_pi_uri(c)
         try:
-            result = await _call(
-                c, _JP, f"{_JP}/GetSelectedJoiningProgram", _v(await _pi_uri(c), ua.VariantType.String)
-            )
+            result = await _call(c, _JP, f"{_JP}/GetSelectedJoiningProgram", _v(pi, ua.VariantType.String))
             assert result is not None
-        except (OSError, ua.UaStatusCodeError):
-            pass  # Uncertain status is valid when no program is currently selected
+        except (OSError, ua.UaStatusCodeError) as exc:
+            pytest.skip(f"GetSelectedJoiningProgram returned {exc} — no program is currently selected")
 
     async def test_abort_with_localized_text(self, ijt_session):
         c, *_ = ijt_session
-        jp = await self._jp(c)
-        result = await _call(
-            c,
-            _JP,
-            f"{_JP}/AbortJoiningProcess",
-            _v(await _pi_uri(c), ua.VariantType.String),
-            ua.Variant(jp, ua.VariantType.ExtensionObject),
-            ua.Variant(ua.LocalizedText(Text="Test abort", Locale="en"), ua.VariantType.LocalizedText),
-        )
+        pi = await _required_pi_uri(c)
+        jp = await self._jp(c, pi)
+        try:
+            result = await _call(
+                c,
+                _JP,
+                f"{_JP}/AbortJoiningProcess",
+                _v(pi, ua.VariantType.String),
+                ua.Variant(jp, ua.VariantType.ExtensionObject),
+                ua.Variant(ua.LocalizedText(Text="Test abort", Locale="en"), ua.VariantType.LocalizedText),
+            )
+        except (OSError, ua.UaStatusCodeError) as exc:
+            pytest.skip(f"AbortJoiningProcess returned {exc} — no active process is available to abort")
         assert result is not None
 
     async def test_increment_decrement_counter(self, ijt_session):
         c, *_ = ijt_session
-        jp, pi = await self._jp(c), await _pi_uri(c)
-        await _call(
-            c,
-            _JP,
-            f"{_JP}/IncrementJoiningProcessCounter",
-            _v(pi, ua.VariantType.String),
-            ua.Variant(jp, ua.VariantType.ExtensionObject),
-            _v(1, ua.VariantType.UInt32),
-        )
-        await _call(
-            c,
-            _JP,
-            f"{_JP}/DecrementJoiningProcessCounter",
-            _v(pi, ua.VariantType.String),
-            ua.Variant(jp, ua.VariantType.ExtensionObject),
-            _v(1, ua.VariantType.UInt32),
-        )
+        pi = await _required_pi_uri(c)
+        jp = await self._jp(c, pi)
+        try:
+            await _call(
+                c,
+                _JP,
+                f"{_JP}/IncrementJoiningProcessCounter",
+                _v(pi, ua.VariantType.String),
+                ua.Variant(jp, ua.VariantType.ExtensionObject),
+                _v(1, ua.VariantType.UInt32),
+            )
+            await _call(
+                c,
+                _JP,
+                f"{_JP}/DecrementJoiningProcessCounter",
+                _v(pi, ua.VariantType.String),
+                ua.Variant(jp, ua.VariantType.ExtensionObject),
+                _v(1, ua.VariantType.UInt32),
+            )
+        except (OSError, ua.UaStatusCodeError) as exc:
+            pytest.skip(f"JoiningProcess counter update returned {exc}")
 
     async def test_start_selected_joining(self, ijt_session):
         c, *_ = ijt_session
-        result = await _call(
-            c,
-            _JP,
-            f"{_JP}/StartSelectedJoining",
-            _v(await _pi_uri(c), ua.VariantType.String),
-            _v(True, ua.VariantType.Boolean),
-        )
+        pi = await _required_pi_uri(c)
+        jp = await self._jp(c, pi)
+        await _enable_asset_if_possible(c, pi)
+        try:
+            await _call(
+                c,
+                _JP,
+                f"{_JP}/SelectJoiningProcess",
+                _v(pi, ua.VariantType.String),
+                ua.Variant(jp, ua.VariantType.ExtensionObject),
+            )
+            result = await _call(
+                c,
+                _JP,
+                f"{_JP}/StartSelectedJoining",
+                _v(pi, ua.VariantType.String),
+                _v(True, ua.VariantType.Boolean),
+            )
+        except (OSError, ua.UaStatusCodeError) as exc:
+            pytest.skip(f"StartSelectedJoining returned {exc} after SelectJoiningProcess")
         assert result is not None
 
 

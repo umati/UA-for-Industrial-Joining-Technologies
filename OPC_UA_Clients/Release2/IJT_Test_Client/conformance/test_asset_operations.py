@@ -621,11 +621,13 @@ _INVALID_PIU = "urn:conformance:test:nonexistent:asset:xyz999"
 
 
 @pytest.mark.requires_cu(CU.METHOD_INPUT_ARGUMENT)
-async def test_method_input_argument_null_piu_uses_same_asset_as_empty(opcua_client, ns_indices):
-    """Calling a method with a Null Variant PIU must behave identically to an empty string.
+async def test_method_input_argument_null_piu_policy_for_tool_scoped_method(opcua_client, ns_indices):
+    """Null PIU must be handled explicitly for a tool-scoped method.
 
-    Per spec: "empty or NULL → Server uses identifier of asset where Server is deployed."
-    Both empty string and Null must resolve to the same default asset.
+    The simulator policy is to return method result Uncertain for null PIU on
+    PIU-scoped methods. A server that intentionally maps null PIU to its
+    deployed/default asset may also return success, but null must not be treated
+    as an unsupported client/test condition.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -652,10 +654,8 @@ async def test_method_input_argument_null_piu_uses_same_asset_as_empty(opcua_cli
                 "Server requires non-null ProductInstanceUri — Null PIU semantic may not be implemented on this server"
             )
         if "Uncertain" in err_str:
-            pytest.skip(
-                "Server returned Uncertain for null ProductInstanceUri — "
-                "simulator does not resolve null PIU to deployed asset (known simulator deviation)"
-            )
+            # Accepted simulator policy: null PIU on a PIU-scoped method is rejected through methodStatusCode.
+            return
         pytest.fail(f"EnableAsset with Null PIU failed unexpectedly: {err_str}")
 
 

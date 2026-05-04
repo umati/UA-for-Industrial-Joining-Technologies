@@ -11,7 +11,7 @@ failed just because a feature is not implemented on a given server.
 
 Usage in conftest.py::
 
-    from helpers.profile_loader import load_supported_cus, is_cu_supported
+    from helpers.profile_loader import get_skip_reason, load_supported_cus, is_cu_supported
 
     # at session start:
     _SUPPORTED = load_supported_cus()
@@ -20,10 +20,7 @@ Usage in conftest.py::
         for marker in item.iter_markers("requires_cu"):
             for cu_key in marker.args:
                 if not is_cu_supported(cu_key, _SUPPORTED):
-                    pytest.skip(
-                        f"Conformance unit '{cu_key}' is not declared supported "
-                        f"in server_capabilities.yaml — skipping per profile config"
-                    )
+                    pytest.skip(get_skip_reason(cu_key))
 """
 
 from __future__ import annotations
@@ -34,6 +31,8 @@ from pathlib import Path
 from typing import FrozenSet
 
 import yaml
+
+from helpers.skip_reasons import not_supported_reason
 
 logger = logging.getLogger(__name__)
 
@@ -190,9 +189,13 @@ def get_skip_reason(cu_key: str, capabilities_path: Path | None = None) -> str:
     else:
         caps_file = capabilities_path
 
-    return (
-        f"Conformance unit '{cu_key}' is not declared supported for this server. "
-        f"To enable: add it under cu_overrides in {caps_file.name} "
-        f"or switch to a profile that includes it. "
-        f"Config file: {caps_file}"
+    return not_supported_reason(
+        cu_key,
+        detail=(
+            f"CU: {cu_key}. "
+            f"To enable: add it under cu_overrides in {caps_file.name} "
+            f"or switch to a profile that includes it. "
+            f"Config file: {caps_file}"
+        ),
+        is_cu=True,
     )

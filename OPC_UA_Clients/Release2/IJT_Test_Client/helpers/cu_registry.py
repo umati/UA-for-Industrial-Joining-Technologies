@@ -22,6 +22,7 @@ Usage::
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import FrozenSet
 
@@ -354,3 +355,104 @@ class CU:
         DELETE_JOINT_COMPONENT,
         GET_JOINT_REVISION_LIST,
     )
+
+
+_CU_METHOD_NAMES: dict[str, tuple[str, ...]] = {
+    CU.GET_LATEST_RESULT: ("GetLatestResult",),
+    CU.GET_RESULT_BY_ID: ("GetResultById",),
+    CU.GET_RESULT_WITH_FILTER_CRITERIA: ("GetResultIdListFiltered",),
+    CU.REQUEST_RESULTS: ("RequestResults",),
+    CU.ACKNOWLEDGE_RESULTS: ("AcknowledgeResults",),
+    CU.REQUEST_UNACKNOWLEDGED_RESULTS: ("RequestUnacknowledgedResults",),
+    CU.DISCONNECT_ASSET: ("DisconnectAsset",),
+    CU.ENABLE_TOOL: ("EnableAsset",),
+    CU.SET_CALIBRATION: ("SetCalibration",),
+    CU.REBOOT_ASSET: ("RebootAsset",),
+    CU.FEEDBACK_METHODS: ("GetFeedbackFileList", "SendFeedback"),
+    CU.SET_TIME: ("SetTime",),
+    CU.SET_OFFLINE_TIMER: ("SetOfflineTimer",),
+    CU.IO_SIGNALS_METHODS: ("GetIOSignals", "SetIOSignals"),
+    CU.GET_ERROR_INFORMATION: ("GetErrorInformation",),
+    CU.EXECUTE_OPERATION: ("ExecuteOperation",),
+    CU.SEND_IDENTIFIERS: ("SendIdentifiers", "SendTextIdentifiers"),
+    CU.GET_IDENTIFIERS: ("GetIdentifiers",),
+    CU.RESET_IDENTIFIERS: ("ResetIdentifiers",),
+    CU.GET_JOINING_PROCESS_LIST: ("GetJoiningProcessList",),
+    CU.ABORT_JOINING_PROCESS: ("AbortJoiningProcess",),
+    CU.START_SELECTED_JOINING: ("StartSelectedJoining",),
+    CU.SELECT_JOINING_PROCESS: ("SelectJoiningProcess",),
+    CU.DESELECT_JOINING_PROCESS: ("DeselectJoiningProcess",),
+    CU.RESET_JOINING_PROCESS: ("ResetJoiningProcess",),
+    CU.INCREMENT_JOINING_PROCESS_COUNTER: ("IncrementJoiningProcessCounter",),
+    CU.DECREMENT_JOINING_PROCESS_COUNTER: ("DecrementJoiningProcessCounter",),
+    CU.SET_JOINING_PROCESS_SIZE: ("SetJoiningProcessSize",),
+    CU.START_JOINING_PROCESS: ("StartJoiningProcess",),
+    CU.DELETE_JOINING_PROCESS: ("DeleteJoiningProcess",),
+    CU.GET_SELECTED_JOINING_PROGRAM: ("GetSelectedJoiningProgram",),
+    CU.SEND_JOINING_PROCESS: ("SendJoiningProcess",),
+    CU.GET_JOINING_PROCESS: ("GetJoiningProcess",),
+    CU.SET_JOINING_PROCESS_COUNTER: ("SetJoiningProcessCounter",),
+    CU.SET_JOINING_PROCESS_MAPPING: ("SetJoiningProcessMapping",),
+    CU.GET_JOINING_PROCESS_REVISION_LIST: ("GetJoiningProcessRevisionList",),
+    CU.SEND_JOINT: ("SendJoint",),
+    CU.GET_JOINT_LIST: ("GetJointList",),
+    CU.SELECT_JOINT: ("SelectJoint",),
+    CU.GET_JOINT: ("GetJoint",),
+    CU.DELETE_JOINT: ("DeleteJoint",),
+    CU.SEND_JOINT_DESIGN: ("SendJointDesign",),
+    CU.GET_JOINT_DESIGN_LIST: ("GetJointDesignList",),
+    CU.GET_JOINT_DESIGN: ("GetJointDesign",),
+    CU.DELETE_JOINT_DESIGN: ("DeleteJointDesign",),
+    CU.SEND_JOINT_COMPONENT: ("SendJointComponent",),
+    CU.GET_JOINT_COMPONENT_LIST: ("GetJointComponentList",),
+    CU.GET_JOINT_COMPONENT: ("GetJointComponent",),
+    CU.DELETE_JOINT_COMPONENT: ("DeleteJointComponent",),
+    CU.GET_JOINT_REVISION_LIST: ("GetJointRevisionList",),
+}
+
+_METHOD_TO_CU: dict[str, str] = {method: cu_key for cu_key, methods in _CU_METHOD_NAMES.items() for method in methods}
+
+_ACRONYMS = {
+    "id": "ID",
+    "io": "IO",
+}
+
+
+def _title_from_key(cu_key: str) -> str:
+    words = []
+    for token in cu_key.split("_"):
+        words.append(_ACRONYMS.get(token, token.capitalize()))
+    return " ".join(words)
+
+
+def cu_display_name(cu_key: str) -> str:
+    """Return the public report label for a CU key."""
+    return f"IJT {_title_from_key(cu_key)}"
+
+
+def cu_method_names(cu_key: str) -> tuple[str, ...]:
+    """Return OPC UA method BrowseNames associated with a CU, if any."""
+    return _CU_METHOD_NAMES.get(cu_key, ())
+
+
+def cu_key_for_method(method_name: str) -> str | None:
+    """Return the CU key associated with an OPC UA method BrowseName."""
+    return _METHOD_TO_CU.get(method_name)
+
+
+def format_cu_not_supported(cu_key: str) -> str:
+    """Return a compact report label for unsupported CU skips."""
+    methods = cu_method_names(cu_key)
+    if not methods:
+        return f"{cu_display_name(cu_key)} NOT SUPPORTED"
+    method_label = "Method" if len(methods) == 1 else "Methods"
+    return f"{cu_display_name(cu_key)} - {method_label}: {', '.join(methods)} NOT SUPPORTED"
+
+
+def format_method_not_supported(method_name: str) -> str:
+    """Return the matching unsupported-CU label for an OPC UA method BrowseName."""
+    cu_key = _METHOD_TO_CU.get(method_name)
+    if cu_key:
+        return format_cu_not_supported(cu_key)
+    display = re.sub(r"(?<!^)(?=[A-Z])", " ", method_name).replace("_", " ")
+    return f"IJT {display} - Method: {method_name} NOT SUPPORTED"

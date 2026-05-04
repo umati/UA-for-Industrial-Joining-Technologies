@@ -16,18 +16,19 @@ Architecture: Two-phase execution
   Phase 2 (PARALLEL)   -- live integration tests, no shared server.
                           Each sub-runner owns its server on a dedicated port
                           and manages its full lifecycle independently:
+                            - Server smoke    -> native/default server port (40451)
                             - Console Client  → OPCUA_SERVER_PORT_CONSOLE_CLIENT (40461)
                             - Test Client     → OPCUA_SERVER_PORT_TEST_CLIENT    (40462)
                             - Web Client      → OPCUA_SERVER_PORT_WEB_CLIENT     (40463)
                             - C# Client       → OPCUA_SERVER_PORT_CSHARP_CLIENT  (40464)
-                          Port 40451 is reserved for Release 1 / Node client only.
+                          Release 2 clients do not share 40451.
 
 Usage:
   python run_all_tests.py                    # full run (Phase 1 + Phase 2)
   python run_all_tests.py --phase1           # static + unit tests only (no server)
-  python run_all_tests.py --phase2           # live tests only (sub-runners auto-start servers)
+  python run_all_tests.py --phase2           # server smoke + live tests
   python run_all_tests.py --suite md-hygiene # single suite by name
-  python run_all_tests.py --suite server-smoke  # manual utility: smoke-test server on port 40451
+  python run_all_tests.py --suite server-smoke  # focused server smoke on port 40451
   python run_all_tests.py --verbose          # DEBUG-level logging
   python run_all_tests.py --help
 
@@ -575,7 +576,7 @@ def _start_server(no_rebuild: bool = False) -> bool:
     Calls ``sys.exit(1)`` only if Docker is the chosen path and compose fails.
     """
     # 1. Already running?
-    if _wait_for_port(OPCUA_PORT, timeout=3):
+    if _wait_for_port(OPCUA_PORT, timeout=3, missing_ok=True):
         log.info("OPC UA server already running on port %d — skipping start.", OPCUA_PORT)
         return False
 
@@ -602,7 +603,7 @@ def _start_server(no_rebuild: bool = False) -> bool:
     return True
 
 
-def _wait_for_port(port: int = OPCUA_PORT, timeout: int = 90) -> bool:
+def _wait_for_port(port: int = OPCUA_PORT, timeout: int = 90, *, missing_ok: bool = False) -> bool:
     """TCP probe; returns True once the port accepts connections."""
     log.info("Waiting for OPC UA server on port %d (timeout=%ds)...", port, timeout)
     deadline = time.monotonic() + timeout
@@ -613,7 +614,10 @@ def _wait_for_port(port: int = OPCUA_PORT, timeout: int = 90) -> bool:
                 return True
         except OSError:
             time.sleep(2)
-    log.error("Server did not become ready on port %d within %ds.", port, timeout)
+    if missing_ok:
+        log.info("No existing OPC UA server detected on port %d; starting one now.", port)
+    else:
+        log.error("Server did not become ready on port %d within %ds.", port, timeout)
     return False
 
 
@@ -1364,6 +1368,7 @@ PHASE1_SUITES: dict[str, object] = {
 }
 
 PHASE2_SUITES: dict[str, object] = {
+    "server-smoke": _suite_server_smoke,
     "csharp-live": _suite_csharp_live,
     "console-live": _suite_console_live,
     "testclient-full": _suite_testclient_full,
@@ -1371,10 +1376,8 @@ PHASE2_SUITES: dict[str, object] = {
 }
 
 # Utility suites — not part of the default parallel Phase 2 run.
-# Run individually with --suite <name> for manual checks.
-_UTILITY_SUITES: dict[str, object] = {
-    "server-smoke": _suite_server_smoke,
-}
+# Keep this registry for focused future checks that should not run by default.
+_UTILITY_SUITES: dict[str, object] = {}
 
 ALL_SUITE_KEYS: list[str] = list(PHASE1_SUITES) + list(PHASE2_SUITES) + list(_UTILITY_SUITES)
 
@@ -1413,16 +1416,20 @@ def run_phase1(suites: dict) -> list[SuiteResult]:
 def run_phase2(suites: dict) -> list[SuiteResult]:
     """Run Phase 2 suites in parallel.
 
-    Each suite delegates to its sub-project runner, which fully owns its OPC UA
-    server lifecycle on a dedicated port:
+    Phase 1 completes before Phase 2 starts, so the Release 1 Node Client's
+    Phase 1-only suite cannot overlap with server-smoke on port 40451.
+
+    server-smoke validates the native/default server package on port 40451.
+    Each Release 2 client suite delegates to its sub-project runner, which fully
+    owns its OPC UA server lifecycle on a dedicated port:
 
         Console Client   → OPCUA_SERVER_PORT_CONSOLE_CLIENT (40461)
         Test Client      → OPCUA_SERVER_PORT_TEST_CLIENT    (40462)
         Web Client       → OPCUA_SERVER_PORT_WEB_CLIENT     (40463)
         C# Client        → OPCUA_SERVER_PORT_CSHARP_CLIENT  (40464)
 
-    The root runner starts no shared server.  Results are emitted as each
-    suite completes; order is non-deterministic (fastest finishes first).
+    Results are emitted as each suite completes; order is non-deterministic
+    (fastest finishes first).
     """
     _banner("PHASE 2 \u2014 Live / Integration tests  (parallel, dedicated ports per suite)")
     log.info(
@@ -1623,7 +1630,7 @@ def _build_parser() -> argparse.ArgumentParser:
     group.add_argument(
         "--phase2",
         action="store_true",
-        help="Phase 2 only: live tests, each sub-runner manages its own server (40461-40464)",
+        help="Phase 2 only: server smoke on 40451 plus live client tests on dedicated ports",
     )
     group.add_argument(
         "--suite",
@@ -1645,8 +1652,17 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _configure_stdio_utf8() -> None:
+    """Use UTF-8 for runner output before argparse can print help text."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            with contextlib.suppress(Exception):
+                stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> int:
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+    _configure_stdio_utf8()
     _cleanup_caches(REPO_ROOT)  # pre-run: clear stale caches from interrupted runs
     parser = _build_parser()
     args = parser.parse_args()
@@ -1655,20 +1671,14 @@ def main() -> int:
         print("Phase 1 suites (parallel, no server):")
         for k in PHASE1_SUITES:
             print(f"  {k}")
-        print("Phase 2 suites (parallel, each runner owns its server on a dedicated port):")
+        print("Phase 2 suites (parallel, server smoke on 40451; clients own dedicated ports):")
         for k in PHASE2_SUITES:
             print(f"  {k}")
-        print("Utility suites (run manually with --suite <name>):")
-        for k in _UTILITY_SUITES:
-            print(f"  {k}")
+        if _UTILITY_SUITES:
+            print("Utility suites (run manually with --suite <name>):")
+            for k in _UTILITY_SUITES:
+                print(f"  {k}")
         return 0
-
-    # Reconfigure stdout/stderr to UTF-8 so box-drawing characters render
-    # correctly when output is piped or redirected (Windows defaults to cp1252).
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            with contextlib.suppress(Exception):
-                stream.reconfigure(encoding="utf-8", errors="replace")
 
     _setup_logging(verbose=args.verbose)
 

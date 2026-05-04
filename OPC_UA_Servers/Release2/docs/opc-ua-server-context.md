@@ -1,6 +1,6 @@
 # OPC UA Server Technical Context
 
-Technical reference for the OPC UA IJT server validated by this test suite.
+Technical reference for the OPC UA IJT server used by this test suite.
 Based on the OPC UA IJT companion specifications and live server discovery.
 
 ---
@@ -227,7 +227,12 @@ Full list (1–60): see `helpers/namespaces.py` `SimulateEventType` class.
 | STUB-002 | ReleaseResultHandle | Not implemented; compliant behavior is method absence or Bad status (BadNotImplemented/BadNotSupported) |
 | STUB-003 | AcknowledgeResults | Not implemented near-term; compliant behavior is method absence or Bad status |
 | STUB-004 | RequestUnacknowledgedResults | Not implemented near-term; compliant behavior is method absence or Bad status |
-| GAP-001 | HasInterface references | Not emitted on asset instance nodes — 17 Test Client tests xfailed as a result |
-| GAP-002 | AssociatedWith references | Not exposed on controller/tool asset nodes |
-| GAP-003 | ProductInstanceUri | The `TighteningTool/Identification/ProductInstanceUri` variable is empty in the simulator. Methods that require a valid ProductInstanceUri (EnableAsset, SelectJoint, StartSelectedJoining) return None from the client; live tests skip gracefully. |
 | GAP-004 | GetIdentifiers / ResetIdentifiers | `ResetIdentifiers(ProductInstanceUri: String, IdentifierList: NormalizedString[] (NodeSet DataType i=31918), ResetAll: Boolean, ResetLatest: Boolean)` — all 4 arguments required. Calling with fewer returns BadArgumentsMissing. Client tests pass all 4 args. Empty arrays may be encoded as `ExtensionObject[]` in asyncua only as a client-side workaround, not as the method signature. |
+
+Current implemented address-space expectations:
+
+| Area | Current status |
+|------|----------------|
+| HasInterface references | Asset instance interface references are implemented. |
+| AssociatedWith references | Controller/tool asset associations are implemented. |
+| ProductInstanceUri | Visible `ProductInstanceUri` population is implemented. |

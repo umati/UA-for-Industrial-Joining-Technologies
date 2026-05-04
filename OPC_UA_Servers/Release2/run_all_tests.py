@@ -132,15 +132,24 @@ def _cmd_available(cmd: str) -> bool:
 def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     """Fast preflight: return True only if a verified HTTPS connection to host succeeds.
 
-    Uses the default SSL context (certificate verification enabled). Returns False
-    immediately on SSL cert errors, connection refused, or timeout — avoiding
-    the multi-minute retry delays that pip-audit and semgrep impose on failure.
+    Prefer requests when available because Semgrep and pip-audit use the
+    requests/certifi trust path. Returns False immediately on SSL cert errors,
+    connection refused, or timeout, avoiding the multi-minute retry delays that
+    advisory tools impose on failure.
     """
-    import urllib.request
-
+    path = "/c/p/default" if host == "semgrep.dev" else "/"
+    url = f"https://{host}{path}"
     try:
-        # safe: always https; host is a known constant (pypi.org, semgrep.dev)
-        urllib.request.urlopen(f"https://{host}/", timeout=timeout)  # nosec B310
+        try:
+            import requests
+        except Exception:
+            import urllib.request
+
+            # safe: always https; host is a known constant (pypi.org, semgrep.dev)
+            urllib.request.urlopen(url, timeout=timeout)  # noqa: S310  # nosec B310
+        else:
+            response = requests.get(url, timeout=timeout)
+            response.raise_for_status()
         return True
     except Exception:
         return False

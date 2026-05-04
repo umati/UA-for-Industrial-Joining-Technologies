@@ -124,9 +124,10 @@ it.skipIf(!gitAvailable, 'git not available — skip source-coverage checks (zip
 Each Python client runner reserves a dedicated server port so that multiple clients can
 run their live/integration tests in parallel without port conflicts.
 
-> **Root runner Phase 2:** The root-level `run_all_tests.py` runs all 4 client suites
-> **simultaneously** via `ThreadPoolExecutor` — not sequentially. Each sub-runner
-> auto-launches its own server on its dedicated port.
+> **Root runner Phase 2:** The root-level `run_all_tests.py` runs server smoke plus
+> all 4 client suites **simultaneously** via `ThreadPoolExecutor` — not sequentially.
+> The server smoke suite validates the native/default server package on port 40451.
+> Each client sub-runner auto-launches its own server on its dedicated port.
 
 ### Port Assignment
 
@@ -137,11 +138,16 @@ run their live/integration tests in parallel without port conflicts.
 | IJT_Test_Client    | 40462     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
 | IJT_Web_Client     | 40463     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
 | IJT_Node_Client    | **40451** (fixed) | N/A (Node) | **Release 1 legacy** — server port is hardcoded, dynamic isolation not supported |
-| Server native/default | 40451  | —            | Built-in default (from `server_configuration.json`) — freed for direct dev + monorepo tests |
+| Server smoke/native default | 40451  | —            | Built-in default (from `server_configuration.json`); root runner Phase 2 validates this package path |
+
+The root runner runs Phase 1 to completion before starting Phase 2. The Release 1
+Node Client is included only in Phase 1 (`--phase1` delegated runner), so the
+default root run does not overlap Node Client activity with `server-smoke` on
+port 40451.
 
 > **Rule:** Release 2 clients MUST NOT use port 40451. That port is reserved as the server's native
 > default and must remain free for direct development work and monorepo tests.
-> Server self-tests (smoke tests) may use 40451 because they test the server in its native configuration.
+> Server self-tests (smoke tests) use 40451 because they test the server in its native configuration.
 
 ### How `server_configuration.json` Copy Mechanism Works
 

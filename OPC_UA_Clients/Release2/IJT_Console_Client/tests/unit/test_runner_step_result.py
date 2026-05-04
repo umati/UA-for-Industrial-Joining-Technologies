@@ -68,6 +68,26 @@ def test_skip_state():
     assert r.skipped
 
 
+def test_semgrep_https_preflight_checks_rules_endpoint(monkeypatch):
+    seen: list[str] = []
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _Requests:
+        @staticmethod
+        def get(url: str, timeout: float):
+            seen.append(url)
+            assert timeout == 5.0
+            return _Response()
+
+    monkeypatch.setitem(sys.modules, "requests", _Requests)
+
+    assert _mod._is_https_reachable("semgrep.dev")
+    assert seen == ["https://semgrep.dev/c/p/default"]
+
+
 # ---------------------------------------------------------------------------
 # Suite counter logic — mirrors the counters in main()
 # ---------------------------------------------------------------------------

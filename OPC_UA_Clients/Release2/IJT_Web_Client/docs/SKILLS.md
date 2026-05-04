@@ -93,7 +93,7 @@ IJT_Web_Client/
 │   ├── js/unit/                    # Vitest JS unit tests (12 files, 229 tests: 162 unit + 67 source-coverage)
 │   ├── e2e/                        # Playwright E2E specs
 │   ├── shared_opcua/               # Shared OPC UA adapters (cross-client contracts)
-│   └── legacy/                     # Old Pytest stubs (historical only)
+│   └── legacy/                     # Compatibility test material only
 │
 ├── src/resources/
 │   └── css/nodeStyle.css   # Main stylesheet (referenced by index.html directly)
@@ -330,15 +330,14 @@ Only standard files at root: `index.html`, `index.py`, `config.js`, `run_all_tes
 
 > **`.state/`** — pure runtime state (gitignored). Contains process JSON, locks, temp venvs. No code changes ever needed here.
 
-### Deleted/Moved (do not re-create at root)
-- `create_structure.py` → `scripts/create_structure.py`
-- `network_utils.py` → `src/python/network_utils.py`
-- `nodeStyle.css` → `src/resources/css/nodeStyle.css`
-- `conftest.py` (root no-op stub) — deleted
-- `run_tests.sh`, `RUN_ALL_TESTS.bat`, `run_all_tests_bootstrap.ps1` (root) — deleted
-- `scripts/run_all_tests_bootstrap.py` — deleted (superseded by `run_all_tests.py` at project root)
-- `scripts/run_tests.py` — deleted (orphaned)
-- `Pytest/` directory — deleted (content in `tests/legacy/`)
+### Root Placement Guardrails
+- `scripts/create_structure.py` is the only scaffolding script location; do not add a root-level copy.
+- `src/python/network_utils.py` is the only network helper location; do not add root-level import shims.
+- `src/resources/css/nodeStyle.css` is the stylesheet location used by `index.html`.
+- Do not add a root `conftest.py`; pytest fixtures live under `tests/`.
+- Do not add root shell/bootstrap runners; use project-root `run_all_tests.py`.
+- Do not add `scripts/run_tests.py` or `scripts/run_all_tests_bootstrap.py`; use project-root `run_all_tests.py`.
+- Do not add a `Pytest/` directory; compatibility test material belongs under `tests/legacy/` when needed.
 
 ---
 
@@ -391,7 +390,7 @@ Runs Python unit + integration tests, JS unit tests, ESLint, Bandit, mypy, pip-a
 4. **Never** subscribe events on individual method nodes — always use the Server node.
 5. **Never** use raw string connection states in JS — use `CONNECTION_STATES` enum.
 6. **Never** change linked-value object shape `{ type, value, link }`.
-7. **Never** run `create_structure.py` again — it's a one-time script already executed.
+7. Treat `scripts/create_structure.py` as scaffolding only; do not run it as part of normal development.
 
 
 ## Environment Variables

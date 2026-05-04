@@ -138,10 +138,12 @@ Both files live inside the binary folder (extracted ZIP):
 | STUB-002 | `ReleaseResultHandle` | Returns `BadNotImplemented` |
 | STUB-003 | `AcknowledgeResults` | Not implemented; compliant behavior is method absence or `BadNotImplemented` |
 | STUB-004 | `RequestUnacknowledgedResults` | Not implemented; compliant behavior is method absence or `BadNotImplemented` |
-| GAP-001 | HasInterface references | Not emitted on asset instance nodes — 17 Test Client tests xfailed |
-| GAP-002 | AssociatedWith references | Not exposed on controller/tool nodes |
-| GAP-003 | `ProductInstanceUri` | Empty in simulator — methods requiring it return None |
 | GAP-004 | `GetIdentifiers` / `ResetIdentifiers` | `ResetIdentifiers(ProductInstanceUri: String, IdentifierList: NormalizedString[] (NodeSet DataType i=31918), ResetAll: Boolean, ResetLatest: Boolean)` — all 4 arguments required; calls with fewer return `BadArgumentsMissing`. Empty arrays may be encoded as `ExtensionObject[]` in asyncua only as a client-side workaround, not as the method signature. |
+
+Current address-space expectations: asset instances expose their supported
+interfaces through `HasInterface`, controller/tool asset nodes expose relevant
+`AssociatedWith` relationships, and tool identification exposes a visible
+`ProductInstanceUri`.
 
 Full details: `OPC_UA_Servers/Release2/docs/opc-ua-server-context.md`
 

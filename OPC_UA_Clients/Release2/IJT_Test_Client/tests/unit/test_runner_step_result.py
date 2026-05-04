@@ -68,6 +68,26 @@ def test_skip_state():
     assert r.skipped
 
 
+def test_semgrep_https_preflight_checks_rules_endpoint(monkeypatch):
+    seen: list[str] = []
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _Requests:
+        @staticmethod
+        def get(url: str, timeout: float):
+            seen.append(url)
+            assert timeout == 5.0
+            return _Response()
+
+    monkeypatch.setitem(sys.modules, "requests", _Requests)
+
+    assert _mod._is_https_reachable("semgrep.dev")
+    assert seen == ["https://semgrep.dev/c/p/default"]
+
+
 # ---------------------------------------------------------------------------
 # Suite counter logic — mirrors the counters in main()
 # ---------------------------------------------------------------------------
@@ -170,6 +190,39 @@ def test_live_tests_respect_explicit_coverage_args():
     assert "--cov-append" not in args
     assert "--cov-fail-under=0" not in args
     assert "--no-cov" not in args
+
+
+# ---------------------------------------------------------------------------
+# Skip reason summary normalization
+# ---------------------------------------------------------------------------
+
+
+def test_skip_summary_formats_cu_not_supported_reason():
+    reason = (
+        "Skipped: Conformance unit 'send_joining_process' is not declared supported "
+        "for this server. Config file: server_capabilities.simulator.yaml"
+    )
+    assert _mod._summarize_skip_reason(reason) == "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED"
+
+
+def test_skip_summary_formats_optional_method_reason():
+    reason = "Skipped: Optional method 'SendJoiningProcess': Not Supported - skipping"
+    assert _mod._summarize_skip_reason(reason) == "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED"
+
+
+def test_skip_summary_formats_browse_name_reason():
+    reason = "SetCalibration: Not Supported - cannot validate method signature"
+    assert _mod._summarize_skip_reason(reason) == "IJT Set Calibration - Method: SetCalibration NOT SUPPORTED"
+
+
+def test_skip_summary_formats_method_suffix_reason():
+    reason = "AcknowledgeResults method: Not Supported - optional per spec"
+    assert _mod._summarize_skip_reason(reason) == "IJT Acknowledge Results - Method: AcknowledgeResults NOT SUPPORTED"
+
+
+def test_skip_summary_leaves_non_method_not_supported_reason():
+    reason = "ResultMetaData: Not Supported - covered by basic_result tests"
+    assert _mod._summarize_skip_reason(reason) == reason
 
 
 # ---------------------------------------------------------------------------

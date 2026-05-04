@@ -1,5 +1,14 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-05-04
+
+1. Improved joining process simulation so select, start, abort, reset, and counter operations use the configured simulated joining process data more consistently.
+2. Added intervention result simulation for joining process counter changes, reset, and abort operations, including related batch and job result updates where applicable.
+3. Improved joining process event simulation for selected and stopped joining process scenarios.
+4. Improved validation for product instance URIs in simulator method calls. Methods now return clearer method status information when a required product instance URI is empty or invalid.
+5. Improved result trace data consistency by avoiding trace point indexes when trace data is not present.
+6. Multiple bug fixes and optimizations.
+
 ## 2026-05-02
 
 1. Corrected the `SetJoiningProcessSize` input argument name from `CounterSize` to `MaxCounterSize` to match the released IJT NodeSet.
@@ -14,7 +23,7 @@
 1. Fixed delays in result variable updates. When results arrive in quick succession, the server now waits only the minimum necessary time between updates instead of always waiting the full interval. Connected clients will see result data appear more promptly.
 2. Fixed server startup and shutdown responsiveness. The server now becomes ready faster after launch and stops more cleanly on shutdown, reducing the time clients need to wait.
 3. Fixed a rare issue where a simulation start or stop command could appear unresponsive due to a timing gap in state change handling.
-4. Multiple internal bug fixes and improvements.
+4. Multiple implementation bug fixes and improvements.
 
 ## 2026-04-21
 

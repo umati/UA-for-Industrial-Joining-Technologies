@@ -1,0 +1,219 @@
+id: reference_joining_process_workflow
+title: Reference Joining Process Workflow
+version: 1
+status: demo_ready
+purpose: >
+  Demonstrate a generic IJT client workflow from server connection through tool
+  discovery, work identifiers, joining process selection, result observation,
+  and cleanup.
+source_note: >
+  Portable reference workflow source for demos and future workflow automation.
+scope:
+  - Interactive step-by-step demo for reviews and Teams walkthroughs.
+  - Data-driven checklist for future live workflow automation.
+  - Non-conformance scenario lane; official conformance tests remain separate.
+out_of_scope:
+  - Production-specific station names, model names, and identifiers.
+  - Server rebuild or package creation.
+  - JoiningSystemConditionType validation.
+demo_values:
+  endpoint: opc.tcp://localhost:40451
+  station_id: EXAMPLE-STATION-01
+  tool_alias: EXAMPLE-TOOL-01
+  work_order_id: EXAMPLE-WORK-ORDER-001
+  product_serial: EXAMPLE-SERIAL-001
+  product_model: EXAMPLE-MODEL-A
+  screw_count: "1"
+actors:
+  - name: External line service
+    role: Provides required tool list, station context, and product identifiers.
+  - name: IJT OPC UA client
+    role: Connects to the server, selects the joining process, sends identifiers, and verifies evidence.
+  - name: IJT OPC UA server
+    role: Exposes tools, joining-process methods, events, and result access.
+  - name: Review audience
+    role: Follows the step-by-step evidence tables during demo mode.
+phases:
+  - id: connection
+    title: Connection and discovery
+  - id: tool_setup
+    title: Tool identification and readiness
+  - id: work_context
+    title: Work identifiers
+  - id: process_selection
+    title: Joining process selection
+  - id: execution
+    title: Execution and result observation
+  - id: decision
+    title: Repeat or finish decision
+  - id: cleanup
+    title: Cleanup
+steps:
+  - id: connect_server
+    phase: connection
+    title: Establish OPC UA connection
+    workflow_action: Connect to the configured IJT OPC UA endpoint.
+    opcua_surface:
+      - Connect session
+      - Discover namespace indexes
+      - Find JoiningSystem object
+    expected_evidence:
+      - Session is active
+      - JoiningSystem is found
+      - IJT, DI, and Machinery Result namespaces are resolved
+    simulator_support: current
+    demo_note: Shows that the workflow starts from standard OPC UA discovery, not hardcoded NodeIds.
+
+  - id: discover_required_tools
+    phase: tool_setup
+    title: Discover required tools
+    workflow_action: Match the line-service tool requirement to tools exposed by the IJT server.
+    opcua_surface:
+      - AssetManagement
+      - Tool assets
+      - Identification/ProductInstanceUri
+      - SerialNumber or visible tool identity
+    expected_evidence:
+      - Required tool is listed
+      - ProductInstanceUri is non-empty
+      - Human-readable identity can be shown in the demo table
+    simulator_support: current
+    demo_note: Uses generic tool aliases such as EXAMPLE-TOOL-01.
+
+  - id: verify_tool_ready
+    phase: tool_setup
+    title: Verify tool readiness
+    workflow_action: Confirm that the required tool is connected and ready for a joining operation.
+    opcua_surface:
+      - Asset state reads
+      - Optional EnableAsset call when available
+    expected_evidence:
+      - Tool is present in the address space
+      - Enable or readiness command succeeds when supported
+      - Unsupported optional readiness commands are reported as skipped evidence, not failure
+    simulator_support: partial
+    demo_note: Keeps the workflow portable across simulators and real controllers.
+
+  - id: send_work_identifiers
+    phase: work_context
+    title: Send work identifiers
+    workflow_action: Attach generic product and station identifiers to the operation.
+    opcua_surface:
+      - SendIdentifiers
+      - GetIdentifiers
+    expected_evidence:
+      - Work order identifier is accepted
+      - Product serial and model identifiers are accepted
+      - Readback matches the sent identifiers when GetIdentifiers is supported
+    simulator_support: current
+    demo_note: Example identifiers are generic and safe for public review.
+
+  - id: get_joining_process_list
+    phase: process_selection
+    title: Read joining process catalog
+    workflow_action: Read available joining processes and choose the configured process.
+    opcua_surface:
+      - GetJoiningProcessList
+      - JoiningProcessIdentification
+    expected_evidence:
+      - At least one joining process is returned
+      - Selected process identification is captured in the report
+      - Empty ProductInstanceUri is only used where the server policy allows controller-level catalog discovery
+    simulator_support: current
+    demo_note: This is the bridge between line-service process intent and IJT process selection.
+
+  - id: select_joining_process
+    phase: process_selection
+    title: Select joining process
+    workflow_action: Select the chosen joining process for the tool and confirm selected state.
+    opcua_surface:
+      - SelectJoiningProcess
+      - GetSelectedJoiningProgram
+      - Joining-process selection event when available
+    expected_evidence:
+      - SelectJoiningProcess returns Good
+      - GetSelectedJoiningProgram reflects the selected process
+      - Event evidence is recorded when emitted by the server
+    simulator_support: current
+    demo_note: Demonstrates the user-visible process-selection event path.
+
+  - id: set_process_size
+    phase: process_selection
+    title: Set joining process size
+    workflow_action: Set the operation size to one joining operation for the demo part.
+    opcua_surface:
+      - SetJoiningProcessSize
+      - Joining-process counter state
+    expected_evidence:
+      - Size or counter method returns Good when supported
+      - The report records one expected operation for this demo pass
+    simulator_support: current
+    demo_note: Represents the single-screw path from the sample flow.
+
+  - id: execute_joining
+    phase: execution
+    title: Execute selected joining
+    workflow_action: Start the selected joining process and wait for simulated completion.
+    opcua_surface:
+      - StartSelectedJoining
+      - StartJoiningProcess when selected-state flow is not used
+      - Result event subscription
+    expected_evidence:
+      - Start method returns Good
+      - New result event or result availability is observed
+      - The result is associated with the selected process context where exposed
+    simulator_support: current
+    demo_note: Live automation can use the existing result collector and simulator trigger helpers.
+
+  - id: verify_new_result
+    phase: execution
+    title: Verify new result
+    workflow_action: Confirm that the observed result is new and can be retrieved by identifier.
+    opcua_surface:
+      - ResultReady or result event
+      - GetResultById
+      - Recent result list where available
+    expected_evidence:
+      - ResultId is captured
+      - Result retrieval returns Good
+      - Duplicate or stale result is rejected by the workflow evidence check
+    simulator_support: current
+    demo_note: Mirrors the operator question "is this really a new result?" with reusable workflow wording.
+
+  - id: repeat_or_finish
+    phase: decision
+    title: Decide whether to repeat
+    workflow_action: If more operations remain, repeat selection/execution evidence; otherwise finish the part.
+    opcua_surface:
+      - Joining process counter
+      - Result count
+      - Client-side workflow state
+    expected_evidence:
+      - Remaining operation count is visible in the report
+      - For this demo data, one operation means the workflow finishes
+    simulator_support: client_only
+    demo_note: Keeps loop control in the client workflow definition.
+
+  - id: cleanup_state
+    phase: cleanup
+    title: Cleanup workflow state
+    workflow_action: Reset demo identifiers and clear selected joining state where supported.
+    opcua_surface:
+      - ResetIdentifiers
+      - DeselectJoiningProcess
+      - Optional EnableAsset false
+    expected_evidence:
+      - Cleanup calls return Good when supported
+      - Unsupported optional cleanup is recorded as skipped evidence
+      - Cleanup evidence is clear for repeated demo runs
+    simulator_support: current
+    demo_note: Makes repeated demos deterministic and reviewable.
+server_change_policy:
+  no_server_change_needed_for:
+    - Demo report generation
+    - Current supported joining-process workflow happy path
+    - Generic result verification using existing result/event helpers
+  server_change_needed_if:
+    - The workflow must validate JoiningSystemConditionType events
+    - The workflow depends on methods currently reported as NotSupported or NotImplemented
+    - The workflow requires hardware-like IO timing or persistent controller state beyond current simulator scope

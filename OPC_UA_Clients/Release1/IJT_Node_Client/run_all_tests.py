@@ -74,6 +74,32 @@ def _cmd_available(cmd: str) -> bool:
     return shutil.which(cmd) is not None
 
 
+def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
+    """Fast verified-HTTPS preflight for network-backed advisory tools.
+
+    Prefer requests when available because Semgrep and pip-audit use the
+    requests/certifi trust path. That avoids a false positive preflight where
+    urllib succeeds but the advisory tool later fails with a certificate
+    traceback and long retry delay.
+    """
+    path = "/c/p/default" if host == "semgrep.dev" else "/"
+    url = f"https://{host}{path}"
+    try:
+        try:
+            import requests
+        except Exception:
+            import urllib.request
+
+            # safe: always https; host is a known constant (semgrep.dev)
+            urllib.request.urlopen(url, timeout=timeout)  # noqa: S310  # nosec B310
+        else:
+            response = requests.get(url, timeout=timeout)
+            response.raise_for_status()
+        return True
+    except Exception:
+        return False
+
+
 # On Windows npm/npx are .cmd batch files; shutil.which resolves that correctly.
 _NPM: str = shutil.which("npm.cmd") or shutil.which("npm") or "npm"
 _NPX: str = shutil.which("npx.cmd") or shutil.which("npx") or "npx"
@@ -517,10 +543,18 @@ def _step_semgrep() -> StepResult:
     label = "Semgrep"
     if not _cmd_available("semgrep"):
         return StepResult(label, "PHASE 1", "SKIP", "not installed", 0.0)
+    t0 = time.monotonic()
+    if not _is_https_reachable("semgrep.dev"):
+        return StepResult(
+            label,
+            "PHASE 1",
+            "WARN",
+            "network/TLS unavailable (preflight)",
+            time.monotonic() - t0,
+        )
     results_dir = _PROJECT_DIR / "test-results"
     results_dir.mkdir(parents=True, exist_ok=True)
     out_file = results_dir / "semgrep.json"
-    t0 = time.monotonic()
     rc, _ = _run(
         ["semgrep", "--config=p/default", "--json", f"--output={out_file}", "."],
     )

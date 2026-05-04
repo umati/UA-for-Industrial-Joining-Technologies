@@ -143,7 +143,7 @@ Coverage is configured in each project's `pyproject.toml`. **Never hardcode thre
 
 | Project | `fail_under` | Notes |
 |---------|-------------|-------|
-| Web Client | **90%** | Configured in `pyproject.toml` — applies to Python unit run. Raised 70→90 in coverage sprint 2026-04-27 (96.78% actual, 602 tests). |
+| Web Client | **90%** | Configured in `pyproject.toml` — applies to Python unit run. |
 | Console Client | 80% | Configured in `pyproject.toml` — applies to unit run |
 | Test Client | **90%** | Configured in `pyproject.toml` — live-test-only helpers reduce coverage on conformance-only runs; `tests/unit/` supplements with pure-logic coverage |
 
@@ -151,7 +151,7 @@ Coverage is configured in each project's `pyproject.toml`. **Never hardcode thre
 
 **Node Client (JavaScript/Vitest)**: Coverage threshold is NOT in pyproject.toml (JS project).
 - Hard gate: `coverage.thresholds` in `vitest.config.mjs` (if set)
-- Ratchet floor: `_COVERAGE_THRESHOLD = 85.0` in `IJT_Node_Client/run_all_tests.py` — WARN-only, advisory/non-gated, ratchet upward as coverage improves. Aspirational goal: 90%. (Current: ~91%+ statements with 858 tests)
+- Ratchet floor: `_COVERAGE_THRESHOLD = 85.0` in `IJT_Node_Client/run_all_tests.py` — WARN-only, advisory/non-gated, ratchet upward as coverage improves. Aspirational goal: 90%.
 - Coverage reporters: `text-summary`, `cobertura` — the cobertura XML is parsed by the CI report job
 
 **Web Client JS (Vitest)**: Threshold enforced at 80% via `vitest.config.mjs` `thresholds.lines`. Reporters: `text`, `lcov`, `cobertura`.
@@ -170,6 +170,8 @@ All Python runner scripts (`run_all_tests.py`) use a `_StepResult` class with fo
 | `skipped=True` | **SKIP** | yellow | `skipped` | Tool not installed / not applicable |
 
 **Advisory tool rule**: Tools whose failures are inherently non-actionable on the local/CI environment (Semgrep SSL, pyright advisory, pip-audit network) must use `result.warn = True` — **never** `result.ok = False`. Setting `ok=False` converts an advisory observation into a suite-blocking failure.
+
+**Semgrep preflight rule**: When a runner uses `--config=p/default`, the network preflight must probe `https://semgrep.dev/c/p/default`, not only `https://semgrep.dev/`. Use `requests` when available so the preflight follows the same certifi/TLS trust path as Semgrep and pip-audit. The root host can be reachable while the rule download path fails TLS/auth, which otherwise costs roughly 100 seconds and emits traceback noise before producing the same advisory WARN.
 
 The invariant is unit-tested in `tests/unit/test_runner_step_result.py` in both Console Client and Test Client:
 - `test_semgrep_parse_failure_sets_warn_not_fail` — parse failure must set `warn=True`
@@ -371,6 +373,8 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `live-console` | `integration.yml` | **40461** | Windows native EXE |
 | `csharp-live` (nightly) | `integration.yml` | **40464** | Windows native EXE |
 
+Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation also exercises the native/default server package path on port 40451.
+
 > Release 1 Node Client always uses 40451 (fixed — no dynamic port support).
 > Server self-tests (smoke) correctly use 40451 — they test the server in its native configuration.
 > All Release 2 client jobs now use dedicated isolated ports.
@@ -400,13 +404,13 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 | Subscribe events on Server node, not method nodes | Subscribing on individual nodes causes `BadNoSubscription` under load |
 | Skip venv in Docker (`IS_DOCKER=true`) | Container runs as non-root; `/opt/ijt_venv` not writable |
 | No `scripts/` at repo root | Each project owns its own helpers; nothing shared at root level |
-| `Python/network_utils.py` canonical | Moved from root; all imports use `from Python.network_utils import ...` |
+| `Python/network_utils.py` canonical | Shared network helpers live in this module; all imports use `from Python.network_utils import ...` |
 | `ruff target-version = "py313"` (not py314) | ruff 0.15.x bug #24041: `ruff format` with py314 strips parens from `except (A, B):` → Python 2 syntax. py313 is the workaround; guard test `test_ruff_format_guard.py` in Console + Test Client unit suites catches any regression. Restore to py314 once upstream fixes #24041 |
 | No custom EventFilter | Full `ResultDataType` payload arrives in event without custom filter |
 | C# live-test sync OPC UA calls wrapped in hard timeouts | `BrowseChild`, `Subscribe`, `CallMethod`, and `Unsubscribe` are synchronous and can stall under server load; guarded `Task.WhenAny` timeouts prevent test-host hangs |
 | `JoiningSystem.DisposeAsync` cleanup guard timeout | Management-object dispose calls can perform synchronous network operations; timeout-bounded cleanup (8s management + 10s session close) avoids indefinite teardown stalls |
 | Console live tests override coverage gate (`--cov-fail-under=0`) | Live tests intentionally exercise a narrow surface against a live server; global unit-test coverage threshold should not fail live stage |
-| `pre-commit` as sole hook manager (no Husky) | Polyglot monorepo best practice — one hook manager for all languages. Husky is idiomatic for pure Node.js repos; `pre-commit` handles Python + JS + YAML + TOML uniformly. JS linting wired via `npm --prefix` local hooks in `.pre-commit-config.yaml`. Husky removed from Web Client `package.json` to prevent hook ownership conflict. |
+| `pre-commit` as sole hook manager (no Husky) | Polyglot monorepo best practice — one hook manager for all languages. `pre-commit` handles Python + JS + YAML + TOML uniformly, and JS linting is wired via `npm --prefix` local hooks in `.pre-commit-config.yaml`. Do not add a second hook manager for subprojects. |
 | `coverlet.runsettings` passed via `--settings` in CI | Without `--settings`, `ExcludeByNamespace` (UAModel, Program) and `[GeneratedCode]` exclusions are ignored — auto-generated code inflates C# line count and deflates coverage % |
 | `playwright/test` import (not `@playwright/test` package) | Node Client has `playwright` (not `@playwright/test`) in `package.json`. `playwright` exposes the same test API at `playwright/test`. Avoids adding a second overlapping Playwright package. |
 | `pytest_sessionfinish` cleanup hook in Web Client `conftest.py` | `__pycache__` and `tmp/pytest` created by direct `pytest` invocations are cleaned up post-session even when `run_all_tests.py` is not used. Keeps project tree clean on every run path. |

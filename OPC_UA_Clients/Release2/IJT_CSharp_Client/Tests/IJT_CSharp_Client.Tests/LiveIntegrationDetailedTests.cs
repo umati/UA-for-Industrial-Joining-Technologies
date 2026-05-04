@@ -104,6 +104,49 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     }
 
     /// <summary>
+    /// Reads the runtime Tool ProductInstanceUri from the address space.
+    /// Hardcoded simulator examples can drift from rebuilt packages; PIU-scoped
+    /// method tests should use the server's visible asset value.
+    /// </summary>
+    private static async Task<string> ReadRequiredToolProductInstanceUri(JoiningSystem session)
+    {
+        var productInstanceUri = await WithTimeout(() =>
+        {
+            var assetManagement = session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
+            if (assetManagement.IsNullNodeId) return string.Empty;
+
+            var assets = session.BrowseChild(assetManagement, UAModel.IJTBase.BrowseNames.Assets);
+            if (assets.IsNullNodeId) return string.Empty;
+
+            var tools = session.BrowseChild(assets, "Tools");
+            if (tools.IsNullNodeId) return string.Empty;
+
+            foreach (var toolRef in session.BrowseChildren(tools, (uint)NodeClass.Object))
+            {
+                var toolNode = (NodeId)toolRef.NodeId;
+                var identification = session.BrowseChild(toolNode, "Identification");
+                if (identification.IsNullNodeId) continue;
+
+                var piuNode = session.BrowseChild(
+                    identification,
+                    "ProductInstanceUri",
+                    nodeClassMask: NodeClass.Variable);
+                if (piuNode.IsNullNodeId) continue;
+
+                var value = AddressSpaceHelper.ReadValue<string>(session.Session, piuNode);
+                if (!string.IsNullOrWhiteSpace(value)) return value;
+            }
+
+            return string.Empty;
+        }, 10, "read Tool ProductInstanceUri").ConfigureAwait(false);
+
+        Skip.IfNot(
+            !string.IsNullOrWhiteSpace(productInstanceUri),
+            "Tool ProductInstanceUri not available; skipping PIU-scoped positive-flow test");
+        return productInstanceUri;
+    }
+
+    /// <summary>
     /// Triggers <c>SimulateSingleResult(resultType, includeTraces)</c> on the server.
     /// Returns <c>false</c> when simulation nodes are absent so the caller can Skip.
     /// </summary>
@@ -696,9 +739,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var methodId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.EnableAsset,
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset).ConfigureAwait(false);
         Skip.IfNot(!methodId.IsNullNodeId, "EnableAsset method not found; skipping");
+        var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, methodId, string.Empty, true),
+            () => session.CallMethod(methodSetNode, methodId, productInstanceUri, true),
             10, "EnableAsset(true)").ConfigureAwait(false);
 
         Assert.NotNull(outputs);
@@ -717,14 +761,15 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var methodId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.EnableAsset,
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset).ConfigureAwait(false);
         Skip.IfNot(!methodId.IsNullNodeId, "EnableAsset method not found; skipping");
+        var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         var disableEx = await Record.ExceptionAsync(() =>
-            WithTimeout(() => session.CallMethod(methodSetNode, methodId, string.Empty, false),
+            WithTimeout(() => session.CallMethod(methodSetNode, methodId, productInstanceUri, false),
                 10, "EnableAsset(false)")).ConfigureAwait(false);
         Assert.Null(disableEx);
 
         var enableEx = await Record.ExceptionAsync(() =>
-            WithTimeout(() => session.CallMethod(methodSetNode, methodId, string.Empty, true),
+            WithTimeout(() => session.CallMethod(methodSetNode, methodId, productInstanceUri, true),
                 10, "EnableAsset(true)")).ConfigureAwait(false);
         Assert.Null(enableEx);
     }
@@ -745,14 +790,15 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
         Skip.IfNot(!sendTextId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
             "SendTextIdentifiers or GetIdentifiers method not found; skipping");
+        var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         await WithTimeout(
-            () => session.CallMethod(methodSetNode, sendTextId, string.Empty,
+            () => session.CallMethod(methodSetNode, sendTextId, productInstanceUri,
                 new[] { "LIVE-TEST-001", "BATCH-X" }),
             10, "SendTextIdentifiers").ConfigureAwait(false);
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, getIdentifiersId, string.Empty, Array.Empty<string>()),
+            () => session.CallMethod(methodSetNode, getIdentifiersId, productInstanceUri, Array.Empty<string>()),
             10, "GetIdentifiers").ConfigureAwait(false);
 
         Assert.NotNull(outputs);
@@ -776,6 +822,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
         Skip.IfNot(!sendId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
             "SendIdentifiers or GetIdentifiers method not found; skipping");
+        var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         var entities = new[]
         {
@@ -786,12 +833,12 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         };
 
         var sendEx = await Record.ExceptionAsync(() =>
-            WithTimeout(() => session.CallMethod(methodSetNode, sendId, string.Empty, (object)entities),
+            WithTimeout(() => session.CallMethod(methodSetNode, sendId, productInstanceUri, (object)entities),
                 10, "SendIdentifiers")).ConfigureAwait(false);
         Assert.Null(sendEx);
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, getIdentifiersId, string.Empty, Array.Empty<string>()),
+            () => session.CallMethod(methodSetNode, getIdentifiersId, productInstanceUri, Array.Empty<string>()),
             10, "GetIdentifiers after SendIdentifiers").ConfigureAwait(false);
 
         Assert.NotNull(outputs);
@@ -815,13 +862,14 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers).ConfigureAwait(false);
         Skip.IfNot(!sendTextId.IsNullNodeId && !resetId.IsNullNodeId,
             "SendTextIdentifiers or ResetIdentifiers method not found; skipping");
+        var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         await WithTimeout(
-            () => session.CallMethod(methodSetNode, sendTextId, string.Empty, new[] { "RESET-TEST-001" }),
+            () => session.CallMethod(methodSetNode, sendTextId, productInstanceUri, new[] { "RESET-TEST-001" }),
             10, "SendTextIdentifiers before reset").ConfigureAwait(false);
 
         var resetEx = await Record.ExceptionAsync(() =>
-            WithTimeout(() => session.CallMethod(methodSetNode, resetId, string.Empty, Array.Empty<string>(), true, false),
+            WithTimeout(() => session.CallMethod(methodSetNode, resetId, productInstanceUri, Array.Empty<string>(), true, false),
                 10, "ResetIdentifiers")).ConfigureAwait(false);
         Assert.Null(resetEx);
     }
@@ -888,7 +936,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             joiningProcessId: "TEST-JP-LIVE-001",
             selectionName: "live-integration-test");
         var outputs = await WithTimeout(
-            () => session.CallMethod(jpmNode, methodId, string.Empty, new ExtensionObject(jpId)),
+            () => session.CallMethod(jpmNode, methodId, SimToolUri, new ExtensionObject(jpId)),
             15, "SelectJoiningProcess").ConfigureAwait(false);
 
         Assert.NotNull(outputs);
@@ -921,7 +969,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(!methodId.IsNullNodeId, "GetSelectedJoiningProgram method not found; skipping");
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(jpmNode, methodId, string.Empty),
+            () => session.CallMethod(jpmNode, methodId, SimToolUri),
             15, "GetSelectedJoiningProgram").ConfigureAwait(false);
 
         Assert.NotNull(outputs);
@@ -952,10 +1000,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             15, "GetJoiningProcessList").ConfigureAwait(false);
         Skip.IfNot(listOutputs.Count >= 1, "No outputs from GetJoiningProcessList; skipping round-trip");
 
-        // All fields empty: Create() produces EncodingMask=0 which is correct for "no criteria provided".
-        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create();
+        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+            joiningProcessId: SimProgram4StepsId);
         var selectEx = await Record.ExceptionAsync(() =>
-            WithTimeout(() => session.CallMethod(jpmNode, selectMethodId, string.Empty, new ExtensionObject(jpId)),
+            WithTimeout(() => session.CallMethod(jpmNode, selectMethodId, SimToolUri, new ExtensionObject(jpId)),
                 15, "SelectJoiningProcess")).ConfigureAwait(false);
         Assert.Null(selectEx);
     }
@@ -1123,20 +1171,21 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
         Skip.IfNot(!sendTextId.IsNullNodeId && !resetId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
             "One or more identifier methods not found; skipping");
+        var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         // Step 1: send
         await WithTimeout(
-            () => session.CallMethod(methodSetNode, sendTextId, string.Empty, new[] { "FLOW-TEST-001" }),
+            () => session.CallMethod(methodSetNode, sendTextId, productInstanceUri, new[] { "FLOW-TEST-001" }),
             10, "SendTextIdentifiers").ConfigureAwait(false);
 
         // Step 2: reset
         await WithTimeout(
-            () => session.CallMethod(methodSetNode, resetId, string.Empty, Array.Empty<string>(), true, false),
+            () => session.CallMethod(methodSetNode, resetId, productInstanceUri, Array.Empty<string>(), true, false),
             10, "ResetIdentifiers").ConfigureAwait(false);
 
         // Step 3: get — must succeed (method call completes, outputs non-null)
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, getIdentifiersId, string.Empty, Array.Empty<string>()),
+            () => session.CallMethod(methodSetNode, getIdentifiersId, productInstanceUri, Array.Empty<string>()),
             10, "GetIdentifiers after reset").ConfigureAwait(false);
 
         Assert.NotNull(outputs);
@@ -1789,7 +1838,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
             joiningProcessId: SimProgram4StepsId);
         var outputs = await WithTimeout(
-            () => session.CallMethod(jpmNode, methodId, string.Empty, new ExtensionObject(jpId)),
+            () => session.CallMethod(jpmNode, methodId, SimToolUri, new ExtensionObject(jpId)),
             15, "SelectJoiningProcess(Program_4_Steps)").ConfigureAwait(false);
 
         Assert.True(outputs.Count >= 1, "SelectJoiningProcess must return at least 1 output (Status)");
@@ -1813,7 +1862,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
             joiningProcessId: SimProgramOneStepId, selectionName: "ProgramIndex_1");
         var outputs = await WithTimeout(
-            () => session.CallMethod(jpmNode, methodId, string.Empty, new ExtensionObject(jpId)),
+            () => session.CallMethod(jpmNode, methodId, SimToolUri, new ExtensionObject(jpId)),
             15, "SelectJoiningProcess(Program_One_Step+selectionName)").ConfigureAwait(false);
 
         Assert.Equal(0, ReadStatus(outputs, statusIdx: 0));
@@ -1840,12 +1889,12 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         // First select a known process
         var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(joiningProcessId: SimProgram4StepsId);
         await WithTimeout(
-            () => session.CallMethod(jpmNode, selectId, string.Empty, new ExtensionObject(jpId)),
+            () => session.CallMethod(jpmNode, selectId, SimToolUri, new ExtensionObject(jpId)),
             15, "SelectJoiningProcess").ConfigureAwait(false);
 
         // Then retrieve the selected program
         var outputs = await WithTimeout(
-            () => session.CallMethod(jpmNode, getSelectedId, string.Empty),
+            () => session.CallMethod(jpmNode, getSelectedId, SimToolUri),
             15, "GetSelectedJoiningProgram").ConfigureAwait(false);
 
         Assert.NotNull(outputs);
@@ -1874,7 +1923,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
 
         // Step 1 — get list, extract first process ID
         var listOutputs = await WithTimeout(
-            () => session.CallMethod(jpmNode, listId, string.Empty),
+            () => session.CallMethod(jpmNode, listId, SimToolUri),
             15, "GetJoiningProcessList").ConfigureAwait(false);
         Skip.IfNot(listOutputs.Count >= 1, "No list output; skipping round-trip");
 
@@ -1884,13 +1933,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
 
         // Step 2 — select
         var selectOut = await WithTimeout(
-            () => session.CallMethod(jpmNode, selectId, string.Empty, new ExtensionObject(jpId)),
+            () => session.CallMethod(jpmNode, selectId, SimToolUri, new ExtensionObject(jpId)),
             15, "SelectJoiningProcess").ConfigureAwait(false);
         Assert.Equal(0, ReadStatus(selectOut, statusIdx: 0));
 
         // Step 3 — get selected program and verify it returns something
         var progOutputs = await WithTimeout(
-            () => session.CallMethod(jpmNode, getProgId, string.Empty),
+            () => session.CallMethod(jpmNode, getProgId, SimToolUri),
             15, "GetSelectedJoiningProgram").ConfigureAwait(false);
         Assert.True(progOutputs.Count >= 1, "GetSelectedJoiningProgram must return ≥1 output after select");
     }
@@ -1941,9 +1990,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var methodId = await BrowseMethodNode(session, methodSetNode, "SendTextIdentifiers",
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
         Skip.IfNot(!methodId.IsNullNodeId, "SendTextIdentifiers method not found; skipping");
+        var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, methodId, string.Empty,
+            () => session.CallMethod(methodSetNode, methodId, productInstanceUri,
                 new[] { "PART-001", "ORDER-123", "VIN-456" }),
             10, "SendTextIdentifiers(3 ids)").ConfigureAwait(false);
 
@@ -1964,6 +2014,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var methodId = await BrowseMethodNode(session, methodSetNode, "SendIdentifiers",
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers).ConfigureAwait(false);
         Skip.IfNot(!methodId.IsNullNodeId, "SendIdentifiers method not found; skipping");
+        var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         // Entity 1 — PART (type 22), Entity 2 — TOOL (type 4)
         var entities = new[]
@@ -1975,7 +2026,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         };
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, methodId, string.Empty, (object)entities),
+            () => session.CallMethod(methodSetNode, methodId, productInstanceUri, (object)entities),
             10, "SendIdentifiers(2 entities)").ConfigureAwait(false);
 
         Assert.True(outputs.Count >= 1, "SendIdentifiers must return at least 1 output (Status)");
@@ -1995,6 +2046,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var methodId = await BrowseMethodNode(session, methodSetNode, "SendIdentifiers",
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers).ConfigureAwait(false);
         Skip.IfNot(!methodId.IsNullNodeId, "SendIdentifiers method not found; skipping");
+        var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         // PROGRAM (type 27)
         var entities = new[]
@@ -2004,7 +2056,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         };
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, methodId, string.Empty, (object)entities),
+            () => session.CallMethod(methodSetNode, methodId, productInstanceUri, (object)entities),
             10, "SendIdentifiers(PROGRAM type)").ConfigureAwait(false);
 
         Assert.Equal(0, ReadStatus(outputs, statusIdx: 0));
@@ -2026,14 +2078,15 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
         Skip.IfNot(!sendTextId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
             "SendTextIdentifiers or GetIdentifiers method not found; skipping");
+        var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         await WithTimeout(
-            () => session.CallMethod(methodSetNode, sendTextId, string.Empty,
+            () => session.CallMethod(methodSetNode, sendTextId, productInstanceUri,
                 new[] { "LIVE-GET-TEST-001", "LIVE-GET-TEST-002" }),
             10, "SendTextIdentifiers").ConfigureAwait(false);
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, getIdentifiersId, string.Empty, Array.Empty<string>()),
+            () => session.CallMethod(methodSetNode, getIdentifiersId, productInstanceUri, Array.Empty<string>()),
             10, "GetIdentifiers").ConfigureAwait(false);
 
         Assert.True(outputs.Count >= 1,
@@ -2061,17 +2114,18 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
         Skip.IfNot(!sendTextId.IsNullNodeId && !resetId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
             "One or more identifier methods not found; skipping");
+        var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         await WithTimeout(
-            () => session.CallMethod(methodSetNode, sendTextId, string.Empty, new[] { "RESET-FLOW-001" }),
+            () => session.CallMethod(methodSetNode, sendTextId, productInstanceUri, new[] { "RESET-FLOW-001" }),
             10, "SendTextIdentifiers").ConfigureAwait(false);
 
         await WithTimeout(
-            () => session.CallMethod(methodSetNode, resetId, string.Empty, Array.Empty<string>(), true, false),
+            () => session.CallMethod(methodSetNode, resetId, productInstanceUri, Array.Empty<string>(), true, false),
             10, "ResetIdentifiers").ConfigureAwait(false);
 
         var outputs = await WithTimeout(
-            () => session.CallMethod(methodSetNode, getIdentifiersId, string.Empty, Array.Empty<string>()),
+            () => session.CallMethod(methodSetNode, getIdentifiersId, productInstanceUri, Array.Empty<string>()),
             10, "GetIdentifiers after reset").ConfigureAwait(false);
 
         Assert.NotNull(outputs);

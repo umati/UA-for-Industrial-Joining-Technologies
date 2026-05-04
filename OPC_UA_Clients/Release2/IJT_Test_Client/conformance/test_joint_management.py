@@ -47,8 +47,8 @@ from asyncua import ua
 
 from helpers.cu_registry import CU
 from helpers.method_signature import JOINT_METHOD_INPUTS, assert_input_argument_names
-from helpers.namespaces import BN, NS_IJT_BASE, NS_OPC_UA
-from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, NS_OPC_UA
+from helpers.node_discovery import find_child_by_browse_name, find_joining_system, read_tool_product_instance_uri
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -80,9 +80,10 @@ def _is_empty_string_arg(arg) -> bool:
 class _JointManagementAdapter:
     """Delegate node that upgrades legacy JointManagement calls to current signatures."""
 
-    def __init__(self, node, method_names_by_nodeid: dict[str, str]):
+    def __init__(self, node, method_names_by_nodeid: dict[str, str], default_product_instance_uri: str = ""):
         self._node = node
         self._method_names_by_nodeid = method_names_by_nodeid
+        self._default_product_instance_uri = default_product_instance_uri
 
     def __getattr__(self, name):
         return getattr(self._node, name)
@@ -91,25 +92,34 @@ class _JointManagementAdapter:
         nodeid = getattr(method_node_id, "nodeid", method_node_id)
         return self._method_names_by_nodeid.get(str(nodeid))
 
+    def _default_piu_arg(self):
+        return _piu_arg(self._default_product_instance_uri)
+
+    def _normalize_piu_arg(self, args: tuple) -> tuple:
+        if not args or not self._default_product_instance_uri or not _is_empty_string_arg(args[0]):
+            return args
+        return (self._default_piu_arg(), *args[1:])
+
     def _normalize_args(self, method_name: str | None, args: tuple) -> tuple:
         if method_name not in JOINT_METHOD_INPUTS:
             return args
+        args = self._normalize_piu_arg(args)
         expected = JOINT_METHOD_INPUTS[method_name]
         if expected == ("ProductInstanceUri",):
-            return args if len(args) == 1 else (_piu_arg(),)
+            return args if len(args) == 1 else (self._default_piu_arg(),)
         if method_name in {"GetJoint", "GetJointDesign", "GetJointComponent", "GetJointRevisionList"}:
-            return args if len(args) == 2 else (_piu_arg(), *args)
+            return args if len(args) == 2 else (self._default_piu_arg(), *args)
         if method_name in {"SendJoint", "SendJointDesign", "SendJointComponent"}:
-            return args if len(args) == 2 else (_piu_arg(), *args)
+            return args if len(args) == 2 else (self._default_piu_arg(), *args)
         if method_name in {"DeleteJointDesign", "DeleteJointComponent"}:
-            return args if len(args) == 2 else (_piu_arg(), *args)
+            return args if len(args) == 2 else (self._default_piu_arg(), *args)
         if method_name in {"SelectJoint", "DeleteJoint"}:
             if len(args) == 3:
                 return args
             if len(args) == 2:
-                return (_piu_arg(), *args)
+                return (self._default_piu_arg(), *args)
             if len(args) == 1:
-                return (_piu_arg(), args[0], _string_arg(""))
+                return (self._default_piu_arg(), args[0], _string_arg(""))
         return args
 
     async def call_method(self, method_node_id, *args):
@@ -122,7 +132,23 @@ class _JointManagementAdapter:
 # ---------------------------------------------------------------------------
 
 
-async def _get_joint_management(client, ns_ijt):
+async def _read_default_tool_product_instance_uri(client, ns_ijt: int, ns_indices: dict | None = None) -> str:
+    ns_di = ns_indices.get(NS_DI) if ns_indices else None
+    ns_app = ns_indices.get(NS_APP) if ns_indices else None
+    try:
+        if ns_di is None:
+            ns_di = await client.get_namespace_index(NS_DI)
+    except ua.UaError:
+        ns_di = 0
+    try:
+        if ns_app is None:
+            ns_app = await client.get_namespace_index(NS_APP)
+    except ua.UaError:
+        ns_app = None
+    return await read_tool_product_instance_uri(client, ns_ijt, ns_di or 0, ns_app)
+
+
+async def _get_joint_management(client, ns_ijt, ns_indices: dict | None = None):
     """Re-discover JointManagement on a fresh client connection."""
     js = await find_joining_system(client)
     if js is None:
@@ -135,7 +161,8 @@ async def _get_joint_management(client, ns_ijt):
         node = await find_child_by_browse_name(jm, method_name, ns_ijt)
         if node is not None:
             method_names_by_nodeid[str(node.nodeid)] = method_name
-    return _JointManagementAdapter(jm, method_names_by_nodeid)
+    default_piu = await _read_default_tool_product_instance_uri(client, ns_ijt, ns_indices)
+    return _JointManagementAdapter(jm, method_names_by_nodeid, default_piu)
 
 
 def _require_ns_ijt(ns_indices):

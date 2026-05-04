@@ -10,7 +10,15 @@ import re
 
 import pytest
 
-from helpers.cu_registry import CU, ConformanceUnitMeta
+from helpers.cu_registry import (
+    CU,
+    ConformanceUnitMeta,
+    cu_display_name,
+    cu_key_for_method,
+    cu_method_names,
+    format_cu_not_supported,
+    format_method_not_supported,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -188,6 +196,43 @@ class TestCuCollections:
         for coll in all_collections:
             for item in coll:
                 assert pattern.match(item), f"Collection item {item!r} is not snake_case"
+
+
+# ---------------------------------------------------------------------------
+# Report labels
+# ---------------------------------------------------------------------------
+
+
+class TestCuReportLabels:
+    def test_display_name_is_public_ijt_label(self):
+        assert cu_display_name(CU.SEND_JOINING_PROCESS) == "IJT Send Joining Process"
+
+    def test_method_names_for_method_cu(self):
+        assert cu_method_names(CU.SEND_JOINING_PROCESS) == ("SendJoiningProcess",)
+
+    def test_not_supported_label_includes_method_name(self):
+        assert (
+            format_cu_not_supported(CU.SEND_JOINING_PROCESS)
+            == "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED"
+        )
+
+    def test_not_supported_label_handles_multi_method_cu(self):
+        assert (
+            format_cu_not_supported(CU.FEEDBACK_METHODS)
+            == "IJT Feedback Methods - Methods: GetFeedbackFileList, SendFeedback NOT SUPPORTED"
+        )
+
+    def test_not_supported_label_without_method_mapping(self):
+        assert format_cu_not_supported(CU.JOINT_DESIGN_DATA) == "IJT Joint Design Data NOT SUPPORTED"
+
+    def test_method_lookup_uses_cu_label(self):
+        assert (
+            format_method_not_supported("SendJoiningProcess")
+            == "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED"
+        )
+
+    def test_cu_key_for_method(self):
+        assert cu_key_for_method("SendJoiningProcess") == CU.SEND_JOINING_PROCESS
 
 
 # ---------------------------------------------------------------------------

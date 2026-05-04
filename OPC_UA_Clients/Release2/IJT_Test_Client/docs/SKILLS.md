@@ -12,11 +12,18 @@ python run_all_tests.py
 
 # Always generate Excel report (non-fatal post-step)
 python run_all_tests.py --excel=always
+
+# Generate a reference workflow walkthrough for review/demo use
+python scripts/run_reference_workflow.py --output test-results/reference-workflows/reference_joining_process_workflow.md
 ```
 
-Note: `run_tests.py` was merged into `run_all_tests.py` and deleted. Use `run_all_tests.py` only.
+Use `run_all_tests.py` as the only test runner entry point.
 
 See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail explanations, and Excel output details.
+
+Reference workflow walkthroughs are separate from conformance evidence. They are
+driven by YAML under `reference_workflows/`, render Markdown tables for review
+or Teams demos, and are not collected by default Phase 2 runs.
 
 `python run_all_tests.py` is the full orchestrator. Phase 1 runs static,
 security, unit, type, and formatting checks. Phase 2 runs the live
@@ -89,7 +96,7 @@ from the IJT specification.
 Endpoint:       opc.tcp://localhost:40451   (override: OPCUA_SERVER_URL env var)
 Binary:         OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe
 Python:         3.14+  (test venv at .venv_test/)
-Key packages:   asyncua>=1.2b2, pytest>=9.0.2, pytest-asyncio>=1.3.0, pytest-timeout>=2.4.0
+Key packages:   asyncua>=1.2b2, PyYAML>=6.0, pytest>=9.0.2, pytest-asyncio>=1.3.0, pytest-timeout>=2.4.0
 Run tests:      .venv_test/bin/python -m pytest -v          (Linux)
                 .venv_test\Scripts\python -m pytest -v      (Windows)
 Auto-launch:    set OPCUA_SIMULATOR_EXE=<path>  to auto-start server if not running
@@ -153,6 +160,7 @@ Objects/
 ```
 IJT_Test_Client/
 ├── docs/SKILLS.md                ← developer reference for this sub-project
+├── reference_workflows/          ← reference workflow YAML for demo/report lanes
 ├── conftest.py                   ← all pytest fixtures (session + function scoped)
 ├── pyproject.toml                ← asyncio_mode=auto, timeout=120, mypy check_untyped_defs=true (+ ruff, coverage, bandit); OPC UA test dirs have [[tool.mypy.overrides]] suppressing asyncua stub false-positives
 ├── helpers/
@@ -160,6 +168,7 @@ IJT_Test_Client/
 │   ├── cu_compliance_report.py   ← pytest plugin for CU/workbook compliance JSON
 │   ├── method_signature.py       ← NodeSet-derived method InputArguments guards
 │   ├── workbook_traceability.py  ← checked-in Test Cases workbook row metadata
+│   ├── reference_workflow.py     ← reference workflow demo/report renderer helpers
 │   ├── identifier_utils.py       ← shared identifier conformance helpers
 │   ├── node_discovery.py         ← async browse helpers (_browse_refs, find_child_by_browse_name)
 │   ├── event_collector.py        ← EventCollector for subscription tests
@@ -173,6 +182,7 @@ IJT_Test_Client/
 ├── joining_process/              ← JoiningProcessManagement structure + methods
 ├── joint/                        ← JointManagement structure + methods
 ├── conformance/                  ← Conformance Unit tests (asset, result, event, joining process, joint)
+├── scripts/run_reference_workflow.py ← Markdown + interactive reference workflow runner
 ├── tests/
     └── unit/                     ← Pure-logic helper tests (no OPC UA server needed)
         ├── conftest.py           ← SimpleNamespace fixtures for validator inputs
@@ -296,6 +306,13 @@ assert len(events) >= 1
 Skip reasons must name the actual missing capability or precondition. Avoid generic text like
 `No condition event received` or `RequestResults raised ua.UaError`; include the event source,
 method name, and actual exception/status so CI skip summaries are diagnostic.
+Unsupported CU/optional-method skips should summarize as
+`IJT <CU Name> - Method: <BrowseName> NOT SUPPORTED` when the CU maps to a
+method, for example `IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED`.
+Use `helpers.skip_reasons.skip_not_supported(...)`, `skip_blocked(...)`,
+`skip_accepted_policy(...)`, or `skip_environment(...)` instead of hand-written
+generic text. JUnit summary normalization accepts direct `Not Supported`
+messages for compatibility, but new skip sites should use the helper APIs.
 
 ### GetLatestResult Return Convention
 `GetLatestResult` returns **three** output arguments: `[ResultHandle: UInt32, Result: ResultDataType, Error: Int32]`.
@@ -330,7 +347,9 @@ return result_data
 
 All callers must guard: `if result_data is None: pytest.skip(...)`.
 
-Files using this pattern: **now deprecated in result tests** — all result conformance files migrated to ResultCollector (2026-04-28). GetLatestResult retry remains only in standalone GetLatestResult-specific tests in `test_result_access.py`.
+Use this retry pattern only in standalone GetLatestResult-specific tests in
+`test_result_access.py`. Result conformance tests should prefer
+`ResultCollector`.
 
 ---
 

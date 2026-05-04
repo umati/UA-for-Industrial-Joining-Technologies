@@ -68,6 +68,10 @@ class TestGetSkipReason:
         reason = get_skip_reason("single_result")
         assert "single_result" in reason
 
+    def test_uses_public_not_supported_label(self):
+        reason = get_skip_reason("send_joining_process")
+        assert reason.startswith("IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED")
+
     def test_mentions_config_file(self):
         reason = get_skip_reason("any_key")
         assert "server_capabilities.yaml" in reason or "yaml" in reason.lower()

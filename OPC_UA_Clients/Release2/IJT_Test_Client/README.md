@@ -19,7 +19,9 @@ Conformance test client for validating OPC UA IJT servers against the Industrial
 - **Run tests:** `python run_all_tests.py`
   - Test results are written to `test-results/`.
 - **Generate an Excel report:** `python run_all_tests.py --excel=always`
+- **Generate a reference workflow walkthrough:** `python scripts/run_reference_workflow.py --output test-results/reference-workflows/reference_joining_process_workflow.md`
 
 ## Test Reports
 
 - [Test report formats](docs/test-results.md)
+- [Reference workflow demos](reference_workflows/README.md)

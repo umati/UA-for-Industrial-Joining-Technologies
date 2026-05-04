@@ -31,6 +31,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -165,6 +166,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("run_all_tests")
+logging.getLogger("asyncua").setLevel(logging.ERROR)
 
 _USE_COLOUR: bool = False
 _VERBOSE: bool = False
@@ -700,12 +702,17 @@ def _check_server(skip: bool) -> None:
         else:
             logger.warning("NO Server TCP port is open but OPC UA handshake failed.")
         return
-    logger.warning("NO Server not reachable at %s:%s", host, port)
     sim_exe = os.environ.get("OPCUA_SIMULATOR_EXE")
+    well_known = None
+    if not sim_exe:
+        well_known = next((p for p in _WELL_KNOWN_SIMULATOR_PATHS if p.exists()), None)
+    if sim_exe or well_known:
+        logger.info("No existing OPC UA server reachable at %s:%s; auto-launch will run.", host, port)
+    else:
+        logger.warning("No OPC UA server reachable at %s:%s", host, port)
     if sim_exe:
         logger.info("  Auto-launch enabled: OPCUA_SIMULATOR_EXE=%s", sim_exe)
     else:
-        well_known = next((p for p in _WELL_KNOWN_SIMULATOR_PATHS if p.exists()), None)
         if well_known:
             logger.info("  Simulator found at well-known path: %s", well_known)
             logger.info("  Will attempt to start it automatically.")
@@ -872,15 +879,24 @@ def _step_bandit() -> _StepResult:
 def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     """Fast preflight: return True only if a verified HTTPS connection to host succeeds.
 
-    Uses the default SSL context (certificate verification enabled). Returns False
-    immediately on SSL cert errors, connection refused, or timeout — avoiding
-    the multi-minute retry delays that pip-audit and semgrep impose on failure.
+    Prefer requests when available because Semgrep and pip-audit use the
+    requests/certifi trust path. Returns False immediately on SSL cert errors,
+    connection refused, or timeout, avoiding the multi-minute retry delays that
+    advisory tools impose on failure.
     """
-    import urllib.request
-
+    path = "/c/p/default" if host == "semgrep.dev" else "/"
+    url = f"https://{host}{path}"
     try:
-        # safe: always https; host is a known constant (pypi.org, semgrep.dev)
-        urllib.request.urlopen(f"https://{host}/", timeout=timeout)  # nosec B310
+        try:
+            import requests
+        except Exception:
+            import urllib.request
+
+            # safe: always https; host is a known constant (pypi.org, semgrep.dev)
+            urllib.request.urlopen(url, timeout=timeout)  # noqa: S310  # nosec B310
+        else:
+            response = requests.get(url, timeout=timeout)
+            response.raise_for_status()
         return True
     except Exception:
         return False
@@ -1285,6 +1301,43 @@ def _default_excel_mode() -> str:
     return "always" if os.environ.get("CI") else "on-success"
 
 
+def _summarize_skip_reason(message: str) -> str:
+    """Return the compact skip reason shown in the runner summary."""
+    from helpers.cu_registry import cu_key_for_method, format_cu_not_supported, format_method_not_supported
+
+    msg = message.removeprefix("Skipped: ").strip()
+
+    cu_match = re.search(r"Conformance unit '([^']+)'", msg)
+    if cu_match:
+        return format_cu_not_supported(cu_match.group(1))
+
+    method_match = re.search(
+        r"Optional (?:[A-Za-z]+Management )?method '([^']+)'\s*:\s*Not Supported",
+        msg,
+        re.IGNORECASE,
+    )
+    if method_match:
+        return format_method_not_supported(method_match.group(1))
+
+    method_match = re.search(r"^([A-Za-z][A-Za-z0-9_]*)\s+method\s*:\s*Not Supported\b", msg, re.IGNORECASE)
+    if method_match:
+        return format_method_not_supported(method_match.group(1))
+
+    method_match = re.search(r"^'([^']+)'\s*:\s*Not Supported\b", msg, re.IGNORECASE)
+    if method_match and cu_key_for_method(method_match.group(1)):
+        return format_method_not_supported(method_match.group(1))
+
+    method_match = re.search(r"^([A-Za-z][A-Za-z0-9_]*)\s*:\s*Not Supported\b", msg, re.IGNORECASE)
+    if method_match and cu_key_for_method(method_match.group(1)):
+        return format_method_not_supported(method_match.group(1))
+
+    not_supported_index = msg.upper().find(" NOT SUPPORTED")
+    if not_supported_index >= 0 and msg.startswith("IJT "):
+        return msg[: not_supported_index + len(" NOT SUPPORTED")]
+
+    return msg
+
+
 def _print_skip_reason_summary(junit_xml_path: Path | None) -> None:
     """Parse a pytest JUnit XML and print a grouped skip-reason summary.
 
@@ -1310,8 +1363,7 @@ def _print_skip_reason_summary(junit_xml_path: Path | None) -> None:
         msg = (skip_el.get("message") or "").strip()
         if not msg:
             msg = (skip_el.text or "").strip()
-        # Normalise: strip leading "Skipped: " prefix that pytest sometimes adds
-        msg = msg.removeprefix("Skipped: ").strip()
+        msg = _summarize_skip_reason(msg)
         # Truncate long reasons to keep the table readable
         reason = msg[:80] + "…" if len(msg) > 80 else msg
         reasons[reason or "(no reason)"] += 1
