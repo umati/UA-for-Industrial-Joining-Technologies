@@ -310,7 +310,7 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     url = f"https://{host}{path}"
     try:
         try:
-            import requests
+            import requests  # type: ignore[import-untyped]
         except Exception:
             import urllib.request
 
@@ -524,7 +524,16 @@ def _stage_python_lint(python: Path) -> StageResult:
 
     if _py_module_available("mypy"):
         rc = _run(
-            [python, "-m", "mypy", "src/", "--ignore-missing-imports", "--cache-dir", str(_TMP_DIR / "mypy-cache")],
+            [
+                python,
+                "-m",
+                "mypy",
+                ".",
+                "--ignore-missing-imports",
+                "--no-error-summary",
+                "--cache-dir",
+                str(_TMP_DIR / "mypy-cache"),
+            ],
             label="mypy",
         )
         if rc != 0:

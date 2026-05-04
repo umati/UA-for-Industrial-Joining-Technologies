@@ -42,6 +42,7 @@ unit stage.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
 - Local default is `on-success`; CI default is `always`.
 - Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
+- Excel and GitHub Actions summaries include IJT CS profile, facet, and CU coverage tables when the live CU compliance report is present.
 - Missing phase1 tools are auto-installed locally by default; CI keeps auto-install off by default for reproducibility.
 - Use `--no-auto-install-tools` to disable local auto-install, or `--auto-install-tools` to force-enable it.
 

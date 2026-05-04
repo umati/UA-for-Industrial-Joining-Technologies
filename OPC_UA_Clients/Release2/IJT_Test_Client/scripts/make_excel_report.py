@@ -6,11 +6,14 @@ Reads:  test-results/pytest.xml   (or path given via --xml=FILE)
 Writes: test-results/report.xlsx  (or path given via --out=FILE)
 
 Sheets produced:
-  Summary       — headline counts (passed / failed / skipped / xfailed) by test area
-  All Tests     — every test: name, file, status, duration, skip/fail reason
-  Failures      — only failed tests with full message
-  Skipped       — only skipped tests with reason
-  Expected Fail — xfailed and xpassed tests with reason
+  Summary          — headline counts (passed / failed / skipped / xfailed) by test area
+  All Tests        — every test: name, file, status, duration, skip/fail reason
+  Failures         — only failed tests with full message
+  Skipped          — only skipped tests with reason
+  Expected Fail    — xfailed and xpassed tests with reason
+  Profile Coverage — IJT CS profile-level coverage, when CU JSON is present
+  Facet Coverage   — IJT CS facet-level coverage, when CU JSON is present
+  CU Coverage      — one row per conformance unit, when CU JSON is present
 
 Usage:
   python scripts/make_excel_report.py
@@ -21,11 +24,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import xml.etree.ElementTree as ET  # nosec B405
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 # Bandit B405/B314 suppressions are limited to trusted JUnit XML from pytest.
 
@@ -37,6 +43,12 @@ except ImportError:
     print("ERROR: openpyxl is required.  Run: pip install openpyxl", file=sys.stderr)
     sys.exit(1)
 
+yaml: Any
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
 # ── Colour palette ────────────────────────────────────────────────────────────
 _GREEN = "FF92D050"  # passed
 _RED = "FFFF0000"  # failed
@@ -44,7 +56,13 @@ _YELLOW = "FFFFFF00"  # skipped
 _ORANGE = "FFFFC000"  # xfailed / xpassed
 _BLUE = "FF9DC3E6"  # header rows
 _GRAY = "FFF2F2F2"  # alternating row background
+_DARK_GRAY = "FFD9E1F2"
 _WHITE = "FFFFFFFF"
+_LIGHT_GREEN = "FFE2F0D9"
+_LIGHT_RED = "FFFFE5E5"
+_LIGHT_YELLOW = "FFFFF2CC"
+_LIGHT_ORANGE = "FFFCE4D6"
+_LIGHT_BLUE = "FFDDEBF7"
 
 _STATUS_COLOUR = {
     "passed": _GREEN,
@@ -54,6 +72,24 @@ _STATUS_COLOUR = {
     "xpassed": _ORANGE,
     "error": _RED,
 }
+
+_CU_STATUS_COLOUR = {
+    "supported": _LIGHT_GREEN,
+    "partial": _LIGHT_YELLOW,
+    "action_needed": _LIGHT_RED,
+    "passed": _LIGHT_GREEN,
+    "failed": _LIGHT_RED,
+    "error": _LIGHT_RED,
+    "not_supported": _LIGHT_YELLOW,
+    "blocked": _LIGHT_ORANGE,
+    "untested": _GRAY,
+    "skipped": _LIGHT_YELLOW,
+    "unknown": _WHITE,
+}
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_PROFILES_DIR = _PROJECT_ROOT / "profiles"
+_DEFAULT_CU_JSON = _PROJECT_ROOT / "test-results" / "cu-compliance-report.json"
 
 # ── Data model ────────────────────────────────────────────────────────────────
 
@@ -76,6 +112,30 @@ class TestCase:
     @property
     def short_name(self) -> str:
         return self.name
+
+
+@dataclass(frozen=True)
+class FacetInfo:
+    key: str
+    display_name: str
+    description: str
+    conformance_units: list[str]
+
+
+@dataclass(frozen=True)
+class ProfileInfo:
+    key: str
+    name: str
+    description: str
+    facets: list[str]
+
+
+@dataclass(frozen=True)
+class CapabilitiesInfo:
+    server_name: str
+    active_profile: str
+    supported_facets: list[str]
+    overrides: dict[str, str]
 
 
 # ── XML parsing ───────────────────────────────────────────────────────────────
@@ -143,6 +203,192 @@ def parse_junit_xml(path: Path) -> list[TestCase]:
             )
 
     return cases
+
+
+# ── CU / profile metadata parsing ─────────────────────────────────────────────
+
+
+def _load_json(path: Path | None) -> dict[str, Any] | None:
+    if path is None or not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _load_yaml(path: Path) -> dict[str, Any]:
+    if yaml is None or not path.exists():
+        return {}
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _load_facets() -> dict[str, FacetInfo]:
+    raw = _load_yaml(_PROFILES_DIR / "facets.yaml")
+    facets: dict[str, FacetInfo] = {}
+    for key, data in (raw.get("facets") or {}).items():
+        if not isinstance(data, dict):
+            continue
+        units = [str(cu) for cu in data.get("conformance_units", [])]
+        facets[str(key)] = FacetInfo(
+            key=str(key),
+            display_name=str(data.get("display_name") or _title_from_key(str(key))),
+            description=str(data.get("description") or "").strip(),
+            conformance_units=units,
+        )
+    return facets
+
+
+def _load_profiles() -> dict[str, ProfileInfo]:
+    profiles: dict[str, ProfileInfo] = {}
+    for path in sorted(_PROFILES_DIR.glob("*.yaml")):
+        if path.name == "facets.yaml":
+            continue
+        raw = _load_yaml(path)
+        profile_raw = raw.get("profile")
+        profile: dict[str, Any] = profile_raw if isinstance(profile_raw, dict) else {}
+        profiles[path.stem] = ProfileInfo(
+            key=path.stem,
+            name=str(profile.get("name") or _title_from_key(path.stem)),
+            description=str(profile.get("description") or "").strip(),
+            facets=[str(facet) for facet in profile.get("facets", [])],
+        )
+    return profiles
+
+
+def _load_capabilities(path: Path | None) -> CapabilitiesInfo | None:
+    raw = _load_yaml(path) if path else {}
+    if not raw:
+        return None
+    server_raw = raw.get("server")
+    server: dict[str, Any] = server_raw if isinstance(server_raw, dict) else {}
+    return CapabilitiesInfo(
+        server_name=str(server.get("name") or "Server under test"),
+        active_profile=str(raw.get("active_profile") or ""),
+        supported_facets=[str(facet) for facet in raw.get("supported_facets", [])],
+        overrides={str(key): str(value) for key, value in (raw.get("cu_overrides") or {}).items()},
+    )
+
+
+def _title_from_key(key: str) -> str:
+    acronyms = {"cu": "CU", "id": "ID", "io": "IO", "ijt": "IJT"}
+    return " ".join(acronyms.get(token, token.capitalize()) for token in key.split("_"))
+
+
+def _cu_display_name(cu_key: str) -> str:
+    return f"IJT {_title_from_key(cu_key)}"
+
+
+def _supported_set(cu_payload: dict[str, Any]) -> set[str] | None:
+    supported = cu_payload.get("supported_cus")
+    if supported is None:
+        return None
+    return {str(cu) for cu in supported}
+
+
+def _cus_for_profile(profile: ProfileInfo, facets: dict[str, FacetInfo]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for facet_key in profile.facets:
+        for cu_key in facets.get(facet_key, FacetInfo(facet_key, facet_key, "", [])).conformance_units:
+            if cu_key not in seen:
+                seen.add(cu_key)
+                ordered.append(cu_key)
+    return ordered
+
+
+def _cu_to_facets(facets: dict[str, FacetInfo]) -> dict[str, list[str]]:
+    mapping: dict[str, list[str]] = {}
+    for facet in facets.values():
+        for cu_key in facet.conformance_units:
+            mapping.setdefault(cu_key, []).append(facet.display_name)
+    return mapping
+
+
+def _ordered_cu_keys(by_cu: dict[str, Any], facets: dict[str, FacetInfo]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for facet in facets.values():
+        for cu_key in facet.conformance_units:
+            if cu_key in by_cu and cu_key not in seen:
+                seen.add(cu_key)
+                ordered.append(cu_key)
+    ordered.extend(sorted(str(cu_key) for cu_key in by_cu if str(cu_key) not in seen))
+    return ordered
+
+
+def _cu_evidence_key(data: dict[str, Any]) -> str:
+    passed = int(data.get("passed", 0) or 0)
+    failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
+    not_supported = int(data.get("not_supported", 0) or 0)
+    blocked = int(data.get("blocked", 0) or 0)
+    skipped = int(data.get("skipped", 0) or 0)
+    untested = int(data.get("untested", 0) or 0)
+    test_count = int(data.get("test_count", 0) or 0)
+
+    if failed:
+        return "action_needed"
+    if passed and (not_supported or blocked or skipped or untested):
+        return "partial"
+    if not_supported:
+        return "not_supported"
+    if blocked:
+        return "blocked"
+    if passed:
+        return "supported"
+    if untested or test_count == 0:
+        return "untested"
+    return "unknown"
+
+
+def _cu_evidence_label(status: str) -> str:
+    labels = {
+        "supported": "Supported",
+        "partial": "Partial",
+        "not_supported": "Not Supported",
+        "blocked": "Blocked",
+        "action_needed": "Action Needed",
+        "untested": "Untested",
+    }
+    return labels.get(status, status.replace("_", " ").title() or "Unknown")
+
+
+def _count_cu_outcomes(cu_keys: list[str], by_cu: dict[str, Any]) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    for cu_key in cu_keys:
+        data_raw = by_cu.get(cu_key)
+        data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
+        counts[_cu_evidence_key(data)] += 1
+    return counts
+
+
+def _evidence_status(counts: Counter[str], total: int) -> str:
+    if counts["action_needed"]:
+        return "ACTION NEEDED"
+    if counts["blocked"]:
+        return "BLOCKED"
+    if counts["partial"] or counts["not_supported"]:
+        return "PARTIAL"
+    if total and counts["supported"] == total:
+        return "SUPPORTED"
+    if counts["supported"]:
+        return "PARTIAL"
+    return "NO EVIDENCE"
+
+
+def _status_fill(status: str) -> PatternFill:
+    colour = {
+        "SUPPORTED": _LIGHT_GREEN,
+        "PARTIAL": _LIGHT_YELLOW,
+        "BLOCKED": _LIGHT_ORANGE,
+        "ACTION NEEDED": _LIGHT_RED,
+        "NO EVIDENCE": _GRAY,
+    }.get(status, _WHITE)
+    return _fill(colour)
+
+
+def _pct(numerator: int, denominator: int) -> str:
+    if denominator <= 0:
+        return "n/a"
+    return f"{(numerator * 100 / denominator):.1f}%"
 
 
 # ── Excel helpers ─────────────────────────────────────────────────────────────
@@ -295,6 +541,244 @@ def _build_filtered(
             cell.alignment = Alignment(wrap_text=True, vertical="top")
 
 
+def _write_metric_block(ws, start_row: int, rows: list[tuple[str, object]]) -> int:
+    _apply_header(ws, start_row, ["Metric", "Value"], [34, 80])
+    for idx, (label, value) in enumerate(rows, start=start_row + 1):
+        ws.cell(row=idx, column=1, value=label).font = Font(bold=True)
+        ws.cell(row=idx, column=2, value=value).alignment = Alignment(wrap_text=True, vertical="top")
+    return start_row + len(rows) + 2
+
+
+def _build_profile_coverage(
+    wb: openpyxl.Workbook,
+    cu_payload: dict[str, Any],
+    profiles: dict[str, ProfileInfo],
+    facets: dict[str, FacetInfo],
+    capabilities: CapabilitiesInfo | None,
+) -> None:
+    ws = wb.create_sheet("Profile Coverage")
+    ws.sheet_view.showGridLines = False
+    ws.freeze_panes = "A10"
+
+    by_cu = cu_payload.get("by_cu", {}) if isinstance(cu_payload.get("by_cu"), dict) else {}
+    supported = _supported_set(cu_payload)
+    summary = cu_payload.get("summary", {}) if isinstance(cu_payload.get("summary"), dict) else {}
+
+    ws["A1"] = "IJT Profile / Facet Coverage"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A2"] = (
+        "This sheet maps the run evidence to the IJT CS profile and facet model. "
+        "Use it to see which parts of the specification are supported, partial, blocked, "
+        "or not supported by the server under test."
+    )
+    ws["A2"].alignment = Alignment(wrap_text=True)
+
+    active = capabilities.active_profile if capabilities else ""
+    server = capabilities.server_name if capabilities else "Server under test"
+    next_row = _write_metric_block(
+        ws,
+        4,
+        [
+            ("Server", server),
+            ("Active profile", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
+            ("Official IJT CUs", summary.get("official_cu_count", len(by_cu))),
+            ("Declared supported CUs", len(supported) if supported is not None else "not declared"),
+            ("Workbook test cases", summary.get("workbook_case_count", "n/a")),
+        ],
+    )
+
+    headers = [
+        "Profile",
+        "Scope",
+        "Facets",
+        "CUs",
+        "Declared Supported",
+        "Supported",
+        "Partial",
+        "Not Supported",
+        "Blocked",
+        "Action Needed",
+        "Untested",
+        "Support %",
+        "Evidence",
+        "Description",
+    ]
+    widths = [28, 12, 8, 8, 14, 10, 8, 14, 9, 13, 9, 10, 16, 70]
+    _apply_header(ws, next_row, headers, widths)
+
+    row = next_row + 1
+    for profile in profiles.values():
+        cu_keys = _cus_for_profile(profile, facets)
+        counts = _count_cu_outcomes(cu_keys, by_cu)
+        supported_count = len([cu_key for cu_key in cu_keys if supported is None or cu_key in supported])
+        evidence = _evidence_status(counts, len(cu_keys))
+        values = [
+            profile.name,
+            "Active" if profile.key == active else "Reference",
+            len(profile.facets),
+            len(cu_keys),
+            supported_count,
+            counts["supported"],
+            counts["partial"],
+            counts["not_supported"],
+            counts["blocked"],
+            counts["action_needed"],
+            counts["untested"],
+            _pct(supported_count, len(cu_keys)),
+            evidence,
+            profile.description,
+        ]
+        for col, value in enumerate(values, start=1):
+            cell = ws.cell(row=row, column=col, value=value)
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+            if col == 2 and value == "Active":
+                cell.fill = _fill(_LIGHT_BLUE)
+                cell.font = Font(bold=True)
+            if col == 13:
+                cell.fill = _status_fill(str(value))
+                cell.font = Font(bold=True)
+        row += 1
+
+    ws.auto_filter.ref = f"A{next_row}:N{row - 1}"
+
+
+def _build_facet_coverage(
+    wb: openpyxl.Workbook,
+    cu_payload: dict[str, Any],
+    facets: dict[str, FacetInfo],
+    capabilities: CapabilitiesInfo | None,
+) -> None:
+    ws = wb.create_sheet("Facet Coverage")
+    ws.sheet_view.showGridLines = False
+    ws.freeze_panes = "A2"
+
+    by_cu = cu_payload.get("by_cu", {}) if isinstance(cu_payload.get("by_cu"), dict) else {}
+    supported = _supported_set(cu_payload)
+    active_extra_facets = set(capabilities.supported_facets if capabilities else [])
+
+    headers = [
+        "Facet",
+        "Facet Key",
+        "Scope",
+        "CUs",
+        "Declared Supported",
+        "Supported",
+        "Partial",
+        "Not Supported",
+        "Blocked",
+        "Action Needed",
+        "Untested",
+        "Support %",
+        "Evidence",
+        "Description",
+    ]
+    widths = [34, 34, 12, 8, 14, 10, 8, 14, 9, 13, 9, 10, 16, 70]
+    _apply_header(ws, 1, headers, widths)
+
+    for row, facet in enumerate(facets.values(), start=2):
+        cu_keys = facet.conformance_units
+        counts = _count_cu_outcomes(cu_keys, by_cu)
+        supported_count = len([cu_key for cu_key in cu_keys if supported is None or cu_key in supported])
+        evidence = _evidence_status(counts, len(cu_keys))
+        scope = "Additional" if facet.key in active_extra_facets else "Profile"
+        values = [
+            facet.display_name,
+            facet.key,
+            scope,
+            len(cu_keys),
+            supported_count,
+            counts["supported"],
+            counts["partial"],
+            counts["not_supported"],
+            counts["blocked"],
+            counts["action_needed"],
+            counts["untested"],
+            _pct(supported_count, len(cu_keys)),
+            evidence,
+            facet.description,
+        ]
+        for col, value in enumerate(values, start=1):
+            cell = ws.cell(row=row, column=col, value=value)
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+            if col == 13:
+                cell.fill = _status_fill(str(value))
+                cell.font = Font(bold=True)
+
+    ws.auto_filter.ref = f"A1:N{max(1, len(facets) + 1)}"
+
+
+def _build_cu_coverage(
+    wb: openpyxl.Workbook,
+    cu_payload: dict[str, Any],
+    facets: dict[str, FacetInfo],
+    capabilities: CapabilitiesInfo | None,
+) -> None:
+    ws = wb.create_sheet("CU Coverage")
+    ws.sheet_view.showGridLines = False
+    ws.freeze_panes = "A2"
+
+    by_cu = cu_payload.get("by_cu", {}) if isinstance(cu_payload.get("by_cu"), dict) else {}
+    supported = _supported_set(cu_payload)
+    facet_map = _cu_to_facets(facets)
+    overrides = capabilities.overrides if capabilities else {}
+    ordered_keys = _ordered_cu_keys(by_cu, facets)
+
+    headers = [
+        "CU",
+        "CU Key",
+        "Facet(s)",
+        "Declared Support",
+        "Evidence",
+        "Tests",
+        "Passed",
+        "Not Supported",
+        "Blocked",
+        "Failed/Error",
+        "Workbook Cases",
+        "Positive",
+        "Negative",
+        "Override",
+        "Example Test",
+    ]
+    widths = [34, 34, 44, 18, 16, 8, 8, 14, 9, 12, 14, 9, 9, 14, 80]
+    _apply_header(ws, 1, headers, widths)
+
+    for row, cu_key in enumerate(ordered_keys, start=2):
+        data_raw = by_cu.get(cu_key)
+        data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
+        evidence = _cu_evidence_key(data)
+        failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
+        tests = data.get("tests") if isinstance(data.get("tests"), list) else []
+        support = "Declared" if supported is None or cu_key in supported else "Not declared"
+        values = [
+            _cu_display_name(cu_key),
+            cu_key,
+            ", ".join(facet_map.get(cu_key, [])),
+            support,
+            _cu_evidence_label(evidence),
+            int(data.get("test_count", 0) or 0),
+            int(data.get("passed", 0) or 0),
+            int(data.get("not_supported", 0) or 0),
+            int(data.get("blocked", 0) or 0),
+            failed,
+            int(data.get("workbook_case_count", 0) or 0),
+            int(data.get("workbook_positive_case_count", 0) or 0),
+            int(data.get("workbook_negative_case_count", 0) or 0),
+            overrides.get(cu_key, ""),
+            str(tests[0]) if tests else "",
+        ]
+        for col, value in enumerate(values, start=1):
+            cell = ws.cell(row=row, column=col, value=value)
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+            if col == 4 and value == "Not declared":
+                cell.fill = _fill(_LIGHT_YELLOW)
+            if col == 5:
+                cell.fill = _fill(_CU_STATUS_COLOUR.get(evidence, _WHITE))
+                cell.font = Font(bold=True)
+
+    ws.auto_filter.ref = f"A1:O{max(1, len(ordered_keys) + 1)}"
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
@@ -302,6 +786,16 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--xml", default="test-results/pytest.xml", help="JUnit XML input file")
     p.add_argument("--out", default="test-results/report.xlsx", help="Excel output file")
+    p.add_argument(
+        "--cu-json",
+        default=str(_DEFAULT_CU_JSON),
+        help="Optional CU compliance JSON input for profile/facet/CU sheets",
+    )
+    p.add_argument(
+        "--capabilities",
+        default=None,
+        help="Optional server capabilities YAML used to label the active profile",
+    )
     return p.parse_args()
 
 
@@ -320,6 +814,10 @@ def main() -> int:
     print(f"Reading: {xml_path}")
     cases = parse_junit_xml(xml_path)
     print(f"  {len(cases)} test cases found")
+    cu_payload = _load_json(Path(args.cu_json))
+    capabilities = _load_capabilities(Path(args.capabilities)) if args.capabilities else None
+    facets = _load_facets()
+    profiles = _load_profiles()
 
     run_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -331,6 +829,10 @@ def main() -> int:
     _build_filtered(wb, cases, "Failures", ["failed", "error"], _RED)
     _build_filtered(wb, cases, "Skipped", ["skipped"], _YELLOW)
     _build_filtered(wb, cases, "Expected Fail", ["xfailed", "xpassed"], _ORANGE)
+    if cu_payload and facets:
+        _build_profile_coverage(wb, cu_payload, profiles, facets, capabilities)
+        _build_facet_coverage(wb, cu_payload, facets, capabilities)
+        _build_cu_coverage(wb, cu_payload, facets, capabilities)
 
     wb.save(out_path)
 
@@ -347,6 +849,8 @@ def main() -> int:
     print(f"  Skipped:  {skipped}")
     print(f"  Xfailed:  {xfailed}")
     print(f"  Total:    {len(cases)}")
+    if cu_payload and facets:
+        print("  CU sheets: Profile Coverage, Facet Coverage, CU Coverage")
     if failed > 0:
         print(f"\n  *** {failed} FAILURE(S) — see 'Failures' sheet ***")
     return 0

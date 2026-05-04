@@ -888,7 +888,7 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     url = f"https://{host}{path}"
     try:
         try:
-            import requests
+            import requests  # type: ignore[import-untyped]
         except Exception:
             import urllib.request
 
@@ -1402,6 +1402,9 @@ def _step_excel_report(xml_path: Path, out_path: Path) -> _StepResult:
     """Generate Excel report from JUnit XML. Failures here are advisory only."""
     result = _StepResult("[POST] Excel report")
     t0 = time.monotonic()
+    capabilities_path = os.environ.get("OPCUA_CAPABILITIES_FILE")
+    if not capabilities_path and _RUNNER_SET_CAPABILITIES_FILE and _SIMULATOR_CAPABILITIES.exists():
+        capabilities_path = str(_SIMULATOR_CAPABILITIES)
     cmd = [
         str(_venv_python(VENV)),
         str(_HERE / "scripts" / "make_excel_report.py"),
@@ -1410,6 +1413,8 @@ def _step_excel_report(xml_path: Path, out_path: Path) -> _StepResult:
         "--out",
         str(out_path),
     ]
+    if capabilities_path:
+        cmd.extend(["--capabilities", capabilities_path])
     rc, output = _run(cmd, cwd=_HERE)
     result.duration = time.monotonic() - t0
     result.ok = rc == 0

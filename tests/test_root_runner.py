@@ -128,3 +128,29 @@ def test_all_runner_https_preflights_fail_fast_on_requests_tls_error(monkeypatch
         assert not module._is_https_reachable("semgrep.dev")
 
     assert seen == ["https://semgrep.dev/c/p/default"] * len(_RUNNER_PATHS)
+
+
+def test_all_runner_optional_requests_imports_are_mypy_suppressed() -> None:
+    result = _runner._check_runner_requests_import_typing()
+
+    assert result.status == "PASS"
+    assert result.detail == "6 runner(s) verified"
+
+
+def test_runner_requests_typing_guard_detects_unsuppressed_import(monkeypatch) -> None:
+    class _FakeRunnerPath:
+        def exists(self) -> bool:
+            return True
+
+        def relative_to(self, root):
+            return Path("fake/run_all_tests.py")
+
+        def read_text(self, encoding: str) -> str:
+            return "def check():\n    import requests\n"
+
+    monkeypatch.setattr(_runner, "_RUNNER_SCRIPT_PATHS", (_FakeRunnerPath(),))
+
+    result = _runner._check_runner_requests_import_typing()
+
+    assert result.status == "FAIL"
+    assert result.detail == "1 optional requests import(s) need type ignore"

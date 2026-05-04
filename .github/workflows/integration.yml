@@ -376,6 +376,7 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
         env:
           OPCUA_SERVER_URL: opc.tcp://localhost:40462
+          OPCUA_CAPABILITIES_FILE: server_capabilities.simulator.yaml
         run: |
           python scripts/make_excel_report.py
           python scripts/make_ci_summary.py

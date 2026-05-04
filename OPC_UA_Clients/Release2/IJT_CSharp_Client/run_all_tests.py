@@ -111,7 +111,7 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     url = f"https://{host}{path}"
     try:
         try:
-            import requests
+            import requests  # type: ignore[import-untyped]
         except Exception:
             import urllib.request
 

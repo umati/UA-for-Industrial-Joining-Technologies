@@ -143,8 +143,20 @@ that need manual classification.
 | **Failures (N)** | Failed tests only — with full failure message |
 | **Skipped (N)** | Skipped tests only — with skip reason |
 | **Expected Fail (N)** | Xfailed/xpassed — expected failures with reason |
+| **Profile Coverage** | User-facing IJT CS profile summary: active profile, declared support, evidence status, and profile-level CU counts |
+| **Facet Coverage** | IJT CS facet table with CU counts, declared support, pass/not-supported/blocked/fail evidence, and facet descriptions |
+| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, declared support, evidence outcome, workbook case counts, and example test |
 
 Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠 orange = xfailed.
+
+The profile/facet/CU sheets are generated when
+`test-results/cu-compliance-report.json` is present. CI Integration also adds a
+compact **IJT CS Profile / Facet Coverage** table to `summary.md` and the
+GitHub Actions step summary, so users can see the active profile, reference
+profiles, facet coverage, attention CUs, and a collapsible full CU coverage
+table without downloading the Excel file first.
+Profile and facet tables distinguish fully supported CUs from partial CUs,
+where at least one path passes but another path is blocked or Not Supported.
 
 ---
 

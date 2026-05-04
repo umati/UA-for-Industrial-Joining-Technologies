@@ -175,6 +175,14 @@ TEST_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Test_Client"
 WEB_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client"
 NODE_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release1" / "IJT_Node_Client"
 SMOKE_TEST = SERVER_DIR / "tests" / "smoke_test.py"
+_RUNNER_SCRIPT_PATHS: tuple[Path, ...] = (
+    NODE_CLIENT_DIR / "run_all_tests.py",
+    CSHARP_DIR / "run_all_tests.py",
+    CONSOLE_DIR / "run_all_tests.py",
+    TEST_CLIENT_DIR / "run_all_tests.py",
+    WEB_CLIENT_DIR / "run_all_tests.py",
+    SERVER_DIR / "run_all_tests.py",
+)
 
 # ---------------------------------------------------------------------------
 # Canonical OPC UA server port assignments — change here, change everywhere.
@@ -892,6 +900,38 @@ def _check_zizmor(results_dir: Path) -> StepResult:
     return _parse_zizmor_output(result.stdout, result.returncode)
 
 
+def _check_runner_requests_import_typing() -> StepResult:
+    """Keep optional requests imports mypy-clean when requests is installed without stubs."""
+    issues: list[str] = []
+    for path in _RUNNER_SCRIPT_PATHS:
+        if not path.exists():
+            issues.append(f"{path}: missing")
+            continue
+        try:
+            rel = path.relative_to(REPO_ROOT)
+        except ValueError:
+            rel = path
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            has_requests_import = line.strip().startswith("import requests")
+            has_type_ignore = "type: ignore[import-untyped]" in line
+            if has_requests_import and not has_type_ignore:
+                issues.append(f"{rel}:{lineno}")
+
+    if issues:
+        for issue in issues:
+            print(f"  runner requests import lacks mypy suppression: {issue}", flush=True)
+        return StepResult(
+            "Runner requests typing guard",
+            "FAIL",
+            f"{len(issues)} optional requests import(s) need type ignore",
+        )
+    return StepResult(
+        "Runner requests typing guard",
+        "PASS",
+        f"{len(_RUNNER_SCRIPT_PATHS)} runner(s) verified",
+    )
+
+
 def _print_step_result(r: StepResult) -> None:
     """Print a single GHA check result in the [ROOT] format."""
     _STATUS_COLOUR = {
@@ -916,6 +956,7 @@ def _run_gha_checks() -> list[SuiteResult]:
     results_dir.mkdir(exist_ok=True)
 
     step_results = [
+        _check_runner_requests_import_typing(),
         _check_actionlint(results_dir),
         _check_action_versions(),
         _check_zizmor(results_dir),
