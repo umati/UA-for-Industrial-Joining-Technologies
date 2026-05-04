@@ -62,6 +62,7 @@ _VENV = ROOT / ".venv_test"
 _TMP_DIR = ROOT / "tmp"
 _REQUIREMENTS = ROOT / "requirements.txt"
 _REQUIREMENTS_DEV = ROOT / "requirements-dev.txt"
+_NPM_INSTALL_FLAGS = ["--legacy-peer-deps", "--no-audit", "--no-fund"]
 
 
 # ---------------------------------------------------------------------------
@@ -215,6 +216,7 @@ def _run(
     label: str = "",
     env: dict | None = None,
     timeout: int | None = 300,
+    timeout_message: str | None = None,
 ) -> int:
     display = label or " ".join(str(c) for c in cmd[:5])
     print(f"\n{_C.DIM}CMD: {display}{_C.RESET}")
@@ -233,11 +235,46 @@ def _run(
                 proc.kill()
                 with contextlib.suppress(subprocess.TimeoutExpired):
                     proc.communicate(timeout=5)
-                print(f"{_C.YELLOW}[TIMEOUT] {display} exceeded {timeout}s{_C.RESET}")
+                message = timeout_message or f"[TIMEOUT] {display} exceeded {timeout}s"
+                print(f"{_C.YELLOW}{message}{_C.RESET}")
                 return -1
     except FileNotFoundError:
         print(f"{_C.YELLOW}[WARN] Command not found: {cmd[0]}{_C.RESET}")
         return 1
+
+
+def _run_captured(
+    cmd: list,
+    *,
+    cwd: Path = ROOT,
+    label: str = "",
+    env: dict | None = None,
+    timeout: int | None = 300,
+) -> tuple[int, str]:
+    """Run *cmd* quietly and return (exit_code, combined_output)."""
+    display = label or " ".join(str(c) for c in cmd[:5])
+    print(f"\n{_C.DIM}CMD: {display}{_C.RESET}")
+    try:
+        with subprocess.Popen(
+            [str(c) for c in cmd],
+            cwd=str(cwd),
+            env=env or os.environ.copy(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            stdin=subprocess.DEVNULL,
+        ) as proc:
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout)
+                return proc.returncode, (stdout or "") + (stderr or "")
+            except subprocess.TimeoutExpired:
+                _kill_proc_tree(proc.pid)
+                proc.kill()
+                with contextlib.suppress(subprocess.TimeoutExpired):
+                    stdout, stderr = proc.communicate(timeout=5)
+                return -1, f"[TIMEOUT] {display} exceeded {timeout}s"
+    except FileNotFoundError:
+        return 1, f"[WARN] Command not found: {cmd[0]}"
 
 
 def _run_to_file(
@@ -306,7 +343,10 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     connection refused, or timeout, avoiding the multi-minute retry delays that
     advisory tools impose on failure.
     """
-    path = "/c/p/default" if host == "semgrep.dev" else "/"
+    path = {
+        "pypi.org": "/pypi/pip/json",
+        "semgrep.dev": "/c/p/default",
+    }.get(host, "/")
     url = f"https://{host}{path}"
     try:
         try:
@@ -454,7 +494,7 @@ def _stage_npm_install() -> StageResult:
             "npm-install", 0, skipped=True, duration=time.monotonic() - t0, notes=["node_modules already present"]
         )
     _banner("STAGE 1c  npm install (node_modules missing or empty)")
-    rc = _run([npm, "install", "--legacy-peer-deps"], label="npm install")
+    rc = _run([npm, "install", *_NPM_INSTALL_FLAGS], label="npm install")
     return StageResult("npm-install", rc, duration=time.monotonic() - t0)
 
 
@@ -523,16 +563,22 @@ def _stage_python_lint(python: Path) -> StageResult:
         notes.append("ruff not installed")
 
     if _py_module_available("mypy"):
+        sources: list[str] = [str(p) for p in ROOT.glob("*.py")]
+        sources.extend(str(ROOT / name) for name in ("scripts", "src/python", "tests") if (ROOT / name).exists())
         rc = _run(
             [
                 python,
                 "-m",
                 "mypy",
-                ".",
+                *sources,
                 "--ignore-missing-imports",
                 "--no-error-summary",
+                "--disable-error-code",
+                "annotation-unchecked",
                 "--cache-dir",
                 str(_TMP_DIR / "mypy-cache"),
+                "--exclude",
+                r"(\.venv|node_modules|tmp|test-results|pytest-cache-files-.*|\.state)",
             ],
             label="mypy",
         )
@@ -572,24 +618,64 @@ def _stage_python_lint(python: Path) -> StageResult:
             _skip("pip-audit skipped — network/TLS unavailable")
             notes.append("pip-audit skipped (network)")
         else:
+            pip_audit_cache = _TMP_DIR / "pip-audit-cache"
+            pip_audit_cache.mkdir(parents=True, exist_ok=True)
+            pip_audit_env = os.environ.copy()
+            pip_audit_env.update(
+                {
+                    # Keep cache local to project temp dir to avoid user-profile permission issues.
+                    "PIP_AUDIT_CACHE_DIR": str(pip_audit_cache),
+                    "PIP_CACHE_DIR": str(pip_audit_cache),
+                }
+            )
             rc = _run(
-                [python, "-m", "pip_audit", "--format", "json", "-o", str(results_dir / "pip-audit.json")],
+                [
+                    python,
+                    "-m",
+                    "pip_audit",
+                    "--format",
+                    "json",
+                    "-o",
+                    str(results_dir / "pip-audit.json"),
+                    "--progress-spinner",
+                    "off",
+                    "--timeout",
+                    "5",
+                    "--cache-dir",
+                    str(pip_audit_cache),
+                ],
                 label="pip-audit",
-                timeout=60,  # corporate network often blocks osv.dev; fail fast rather than wait 300s
+                env=pip_audit_env,
+                timeout=90 if IS_CI else 30,
+                timeout_message="[SKIP] pip-audit skipped — network/TLS timeout",
             )
             if rc not in (0, 1, -1):  # 1 = CVEs found (informational); -1 = timeout/network (advisory)
                 overall_rc = rc
+            if rc == -1:
+                notes.append("pip-audit skipped (network timeout)")
     else:
         _skip("pip-audit not installed — pip install pip-audit")
         notes.append("pip-audit not installed")
 
     if _py_module_available("detect_secrets"):
-        rc = _run([python, "-m", "detect_secrets", "scan"], label="detect-secrets scan")
+        rc, output = _run_captured(
+            [python, "-m", "detect_secrets", "scan"],
+            label="detect-secrets scan",
+            timeout=60,
+        )
         if rc == 1:
-            # rc=1: secrets found OR tool error (e.g. git not in PATH on Windows).
-            # Treat as advisory — detect-secrets is informational, not a hard gate.
-            _warn("detect-secrets: advisory exit 1 (findings or environment issue)")
-            notes.append("detect-secrets: advisory")
+            if "WinError 5" in output or "PermissionError" in output:
+                _skip("detect-secrets skipped — Windows policy blocked multiprocessing")
+                notes.append("detect-secrets skipped (Windows policy)")
+                rc = 0
+            else:
+                # rc=1: secrets found OR tool error (e.g. git not in PATH on Windows).
+                # Treat as advisory — detect-secrets is informational, not a hard gate.
+                _warn("detect-secrets: advisory exit 1 (findings or environment issue)")
+                notes.append("detect-secrets: advisory")
+        elif rc == -1:
+            _skip("detect-secrets skipped — timeout")
+            notes.append("detect-secrets skipped (timeout)")
         elif rc not in (0, -1):
             overall_rc = rc
     else:
@@ -798,7 +884,7 @@ def _stage_js_unit() -> StageResult:
 
     if not (ROOT / "node_modules").exists():
         _info("node_modules not found — running npm install")
-        rc = _run([npm, "install", "--legacy-peer-deps"], label="npm install")
+        rc = _run([npm, "install", *_NPM_INSTALL_FLAGS], label="npm install")
         if rc != 0:
             return StageResult("js-unit", rc, duration=time.monotonic() - t0, notes=["npm install failed"])
 

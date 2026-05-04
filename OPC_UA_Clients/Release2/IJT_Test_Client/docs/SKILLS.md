@@ -38,12 +38,13 @@ unit stage.
 
 - `run_all_tests.py` writes JUnit XML to `test-results/pytest-live.xml` by default (or `--junit-xml FILE`).
 - Live CU compliance output is `test-results/cu-compliance-report.json`; unit-stage plugin output is redirected to `test-results/cu-compliance-report-unit.json` when CU-marked tests are collected.
+- In each `by_cu` row, `outcome` is the raw execution rollup kept for compatibility; `compliance` is the conservative report status consumed by GitHub/Excel. New tooling should read `compliance`.
 - The live CU compliance report includes workbook traceability for the checked-in Test Cases workbook: 1,122 expected TC header rows grouped by official CU, positive/negative classification, CTT/review/spec-link metadata, and optional exact row links from `@pytest.mark.workbook_ref("Sheet", [row])`.
 - Unit-only and collect-only pytest sessions must not write or overwrite the live CU compliance report.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
 - Local default is `on-success`; CI default is `always`.
 - Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
-- Excel and GitHub Actions summaries include IJT CS profile, facet, and CU coverage tables when the live CU compliance report is present.
+- Excel and GitHub Actions summaries include IJT CS profile, facet, and CU coverage tables when the live CU compliance report is present; report wording uses `Tested Profile`, `Reference Comparison`, `CUs in Tested Profile`, and `Reason Shown` for public clarity.
 - Missing phase1 tools are auto-installed locally by default; CI keeps auto-install off by default for reproducibility.
 - Use `--no-auto-install-tools` to disable local auto-install, or `--auto-install-tools` to force-enable it.
 
@@ -61,6 +62,7 @@ unit stage.
 
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
 `semgrep` (static analysis), `pyright` (strict type checking — **advisory, non-blocking**), `detect-secrets` (secrets).
+pip-audit uses the PyPI JSON endpoint preflight, local project cache, spinner disabled, and short timeouts; network/TLS/timeout outcomes are SKIP, not PASS/FAIL.
 Pyright is configured in `pyproject.toml` to use `.venv_test` so installed project dependencies are resolved consistently during local runner checks.
 
 A **Python pytest suite** that validates an OPC UA server implementing the

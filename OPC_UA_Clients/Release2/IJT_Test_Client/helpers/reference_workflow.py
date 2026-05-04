@@ -41,9 +41,11 @@ def validate_workflow(workflow: dict[str, Any]) -> None:
     for index, step in enumerate(steps, start=1):
         if not isinstance(step, dict):
             raise ValueError(f"Workflow step {index} must be a mapping")
-        for key in ("id", "phase", "title", "workflow_action", "expected_evidence"):
+        for key in ("id", "phase", "title", "workflow_action"):
             if key not in step:
                 raise ValueError(f"Workflow step {index} is missing required key: {key}")
+        if "expected_outcome" not in step and "expected_evidence" not in step:
+            raise ValueError(f"Workflow step {index} is missing required key: expected_outcome")
 
 
 def render_workflow_markdown(workflow: dict[str, Any]) -> str:
@@ -74,14 +76,14 @@ def render_workflow_markdown(workflow: dict[str, Any]) -> str:
         "## Step Flow",
         "",
         _markdown_table(
-            ["Step", "Phase", "Workflow Action", "OPC UA Surface", "Expected Evidence", "Support"],
+            ["Step", "Phase", "Workflow Action", "OPC UA Surface", "Expected Outcome", "Support"],
             [
                 [
                     f"{index}. {step['title']}",
                     _phase_title(workflow, step["phase"]),
                     step.get("workflow_action", ""),
                     step.get("opcua_surface", []),
-                    step.get("expected_evidence", []),
+                    _expected_outcome(step),
                     step.get("simulator_support", ""),
                 ]
                 for index, step in enumerate(workflow["steps"], start=1)
@@ -118,10 +120,14 @@ def render_interactive_step(step: dict[str, Any], index: int, total: int, workfl
             f"Phase: {_phase_title(workflow, step['phase'])}",
             f"Action: {step.get('workflow_action', '')}",
             f"OPC UA: {_as_text(step.get('opcua_surface', []))}",
-            f"Evidence: {_as_text(step.get('expected_evidence', []))}",
+            f"Expected outcome: {_as_text(_expected_outcome(step))}",
             f"Support: {step.get('simulator_support', '')}",
         ]
     )
+
+
+def _expected_outcome(step: dict[str, Any]) -> Any:
+    return step.get("expected_outcome", step.get("expected_evidence", []))
 
 
 def _policy_rows(policy: dict[str, Any]) -> list[list[Any]]:

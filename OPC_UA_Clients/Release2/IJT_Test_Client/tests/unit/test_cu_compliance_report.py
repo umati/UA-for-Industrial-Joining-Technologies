@@ -9,6 +9,7 @@ from helpers.cu_compliance_report import (
     CuComplianceReportRecorder,
     _classify_report,
     _marker_cus,
+    _rollup_compliance,
     _rollup_outcome,
     _skip_text,
 )
@@ -92,6 +93,14 @@ def test_classify_report_maps_pytest_outcomes():
         _classify_report(_Report(skipped=True, longrepr=("file.py", 1, "Skipped: method: Not Supported")))
         == "not_supported"
     )
+    assert (
+        _classify_report(_Report(skipped=True, longrepr=("file.py", 1, "Skipped: ACCEPTED POLICY - state")))
+        == "accepted_policy"
+    )
+    assert (
+        _classify_report(_Report(skipped=True, longrepr=("file.py", 1, "Skipped: ENVIRONMENT - asyncua limitation")))
+        == "environment"
+    )
     assert _classify_report(_Report(skipped=True, longrepr=("file.py", 1, "Skipped: precondition unavailable"))) == (
         "blocked"
     )
@@ -101,8 +110,19 @@ def test_rollup_outcome_uses_compliance_priority():
     assert _rollup_outcome([]) == "untested"
     assert _rollup_outcome(["passed", "failed", "not_supported"]) == "failed"
     assert _rollup_outcome(["passed", "blocked"]) == "passed"
+    assert _rollup_outcome(["passed", "accepted_policy", "environment"]) == "passed"
     assert _rollup_outcome(["not_supported", "not_supported"]) == "not_supported"
     assert _rollup_outcome(["blocked", "not_supported"]) == "blocked"
+
+
+def test_rollup_compliance_is_conservative_for_report_readers():
+    assert _rollup_compliance([]) == "untested"
+    assert _rollup_compliance(["passed", "failed", "not_supported"]) == "action_needed"
+    assert _rollup_compliance(["passed", "blocked"]) == "partial"
+    assert _rollup_compliance(["passed", "accepted_policy", "environment"]) == "supported"
+    assert _rollup_compliance(["not_supported", "not_supported"]) == "not_supported"
+    assert _rollup_compliance(["blocked", "not_supported"]) == "blocked"
+    assert _rollup_compliance(["accepted_policy", "environment"]) == "blocked"
 
 
 def test_recorder_writes_cu_compliance_json(report_tmp_path, monkeypatch):
@@ -159,8 +179,11 @@ def test_recorder_writes_cu_compliance_json(report_tmp_path, monkeypatch):
     assert payload["summary"]["extension_cus"] == ["vendor_extension_cu"]
     assert payload["summary"]["missing_test_cus"] == []
     assert payload["by_cu"]["single_result"]["outcome"] == "passed"
+    assert payload["by_cu"]["single_result"]["compliance"] == "supported"
     assert payload["by_cu"]["acknowledge_results"]["outcome"] == "not_supported"
+    assert payload["by_cu"]["acknowledge_results"]["compliance"] == "not_supported"
     assert payload["by_cu"]["vendor_extension_cu"]["outcome"] == "untested"
+    assert payload["by_cu"]["vendor_extension_cu"]["compliance"] == "untested"
     reasons = {entry["nodeid"]: entry["reason"] for entry in payload["tests"]}
     assert reasons["conformance/test_file.py::test_not_supported"] == (
         "Skipped: AcknowledgeResults method: Not Supported"

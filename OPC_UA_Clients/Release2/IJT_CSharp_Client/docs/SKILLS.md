@@ -298,14 +298,17 @@ JoiningSystem
         │     ├── SimulateJobResult(sendAsReferences)
         │     └── SimulateBulkResults(resultType, includeTraces, fromSeq, toSeq, minDurationMs, updateResultVariables)
         └── SimulateEventsAndConditions
-              ├── SimulateEvents(eventType, count)     ← aliased as SimulateEvent in client
+              ├── SimulateEvents(eventType)            ← aliased as SimulateEvent in client
               └── SimulateBulkEvents(eventType, count)
 ```
 
 **Key notes:**
 - All simulation result method booleans (`includeTraces`, `sendAsReferences`, `updateResultVariables`) should be `true` in tests — they enable the richest data path through the server.
 - `SimulateBulkResults`: requires `toSeq >= fromSeq + 5` and `minDurationMs >= 100` (validated client-side before call).
+- `SimulateEvents`: takes exactly one `eventType` argument. Use `SimulateBulkEvents(eventType, count)` for count-based event generation.
 - `SimulateBulkEvents`: count capped at 1000 (validated client-side).
+- Event simulation calls use `SimulateEventsAndConditions` as the object node
+  and `SimulateEvents` / `SimulateBulkEvents` as Method children.
 - Node paths are cached after first browse. Cache is invalidated on `OnKeepAlive` reconnect.
 - Simulation methods trigger real events on the server; live tests guard with browse-check + `Skip.If` if the `Simulations` node is absent.
 

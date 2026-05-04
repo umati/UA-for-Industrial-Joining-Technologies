@@ -63,7 +63,7 @@ IJT_Console_Client/
     │   └── test_utils_extended.py             # _to_json_str/bytes, log_* helpers, nodeid_to_str
     └── live/
         ├── conftest.py                   # auto-starts OPC UA server; pytest.fail() if unreachable
-        └── test_opcua_live_console.py    # live OPC UA tests (xfail for ProductInstanceUri)
+        └── test_opcua_live_console.py    # live OPC UA tests with dynamic Tool PIU lookup
 ```
 
 ---
@@ -92,6 +92,7 @@ All auto-detected — present=run, absent=skip with install hint.
 `pyright` is installed by default (listed in `requirements-dev.txt`) and runs as **advisory** (non-blocking; findings written to `pyright.stderr.txt`). It uses basic mode; `tests/unit` is excluded from pyright scope because unit tests intentionally pass wrong types for edge-case testing. See `pyrightconfig.json`.
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
 `semgrep` (static analysis), `pyright` (standard install, advisory), `detect-secrets` (secrets).
+pip-audit uses the PyPI JSON endpoint preflight, local project cache, spinner disabled, and short timeouts; network/TLS/timeout outcomes are SKIP, not PASS/FAIL.
 
 ---
 
@@ -128,9 +129,18 @@ python3 setup_client.py --url="opc.tcp://<ip>:<port>"
 - Connection state managed via `CONNECTION_STATES` enum.
 
 ### Method Calls (`method_caller.py`)
-- All simulation methods accept a boolean input argument (must not omit it).
+- Simulation methods use method-specific signatures. Do not infer a shared
+  boolean-only shape across result, event, and bulk simulation methods.
 - `SimulateBulkResults` sends results **one by one** in a detached thread.
 - Retry logic needed for `BadTooManyOperations` (bulk results flag on server).
+- Tool-scoped method calls read `ProductInstanceUri` by browsing the visible
+  `AssetManagement/Assets/Tools/*/Identification/ProductInstanceUri` value.
+  Do not use hardcoded namespace indexes or string NodeIds for this path.
+  Server instance NodeIds and spec BrowseName namespaces can differ, so browse
+  helpers should match the expected namespace first and fall back to exact
+  BrowseName text when the server exposes mixed namespace shapes.
+- Live tests that share a module-scoped asyncua client must use the same
+  pytest-asyncio loop scope, e.g. `@pytest.mark.asyncio(loop_scope="module")`.
 - **Joint IDs**: always use `Joint_1`, `Joint_2` (capital J, underscore). Never use `joint1`.
   - Pass `--joint-id Joint_1` on command line (see **Method Call Quick Reference** section below)
   - Dynamically call `GetJointList` to discover real IDs before calling `GetJoint`/`SelectJoint`.
@@ -181,17 +191,17 @@ Both clients share the same OPC UA IJT method NodeId patterns and event subscrip
 - **Default endpoint**: `opc.tcp://localhost:40451`
 - **Location**: `OPC_UA_Servers/Release2/` in this repo
 - **Key simulation methods** (ns=1):
-  - `TighteningSystem/Simulations/SimulateResults` — single result
-  - `TighteningSystem/Simulations/SimulateBulkResults` — multiple results (one by one)
-  - `TighteningSystem/Simulations/SimulateEvents` — system events
-  - All take one boolean input argument (`IsSimulated`)
+  - `TighteningSystem/Simulations/SimulateResults/SimulateSingleResult(resultType, includeTraces)`
+  - `TighteningSystem/Simulations/SimulateResults/SimulateBulkResults(...)` — multiple results (one by one)
+  - `TighteningSystem/Simulations/SimulateEventsAndConditions/SimulateEvents(eventType)`
+  - `TighteningSystem/Simulations/SimulateEventsAndConditions/SimulateBulkEvents(eventType, count)`
 - UaExpert saved config: `IJT_LOCAL_SIMULATOR.uap` (read-only reference)
 
 ---
 
 ## Common Mistakes to Avoid
 
-1. **Never** omit the boolean argument when calling simulation methods.
+1. **Never** assume all simulation methods have the same argument list.
 2. **Never** subscribe events on method nodes — always use Server node.
 3. **Never** assume `SimulateBulkResults` sends all results at once — it sends one by one.
 4. **Never** ignore `BadTooManyOperations` — add retry logic.

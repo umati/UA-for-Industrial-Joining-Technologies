@@ -60,6 +60,7 @@ _GRAY = "FFF2F2F2"  # alternating row background
 _DARK_GRAY = "FFD9E1F2"
 _WHITE = "FFFFFFFF"
 _LIGHT_GREEN = "FFE2F0D9"
+_LIGHT_GREEN_NOTE = "FFEAF7E8"
 _LIGHT_RED = "FFFFE5E5"
 _LIGHT_YELLOW = "FFFFF2CC"
 _LIGHT_ORANGE = "FFFCE4D6"
@@ -76,7 +77,7 @@ _STATUS_COLOUR = {
 
 _CU_STATUS_COLOUR = {
     "supported": _LIGHT_GREEN,
-    "partial": _LIGHT_YELLOW,
+    "partial": _LIGHT_GREEN_NOTE,
     "action_needed": _LIGHT_RED,
     "passed": _LIGHT_GREEN,
     "failed": _LIGHT_RED,
@@ -91,6 +92,7 @@ _CU_STATUS_COLOUR = {
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _PROFILES_DIR = _PROJECT_ROOT / "profiles"
 _DEFAULT_CU_JSON = _PROJECT_ROOT / "test-results" / "cu-compliance-report.json"
+_CU_COMPLIANCE_KEYS = {"supported", "partial", "not_supported", "blocked", "action_needed", "untested"}
 
 # ── Data model ────────────────────────────────────────────────────────────────
 
@@ -335,10 +337,16 @@ def _ordered_cu_keys(by_cu: dict[str, Any], facets: dict[str, FacetInfo]) -> lis
 
 
 def _cu_compliance_key(data: dict[str, Any]) -> str:
+    explicit = str(data.get("compliance") or "")
+    if explicit in _CU_COMPLIANCE_KEYS:
+        return explicit
+
     passed = int(data.get("passed", 0) or 0)
     failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
     not_supported = int(data.get("not_supported", 0) or 0)
     blocked = int(data.get("blocked", 0) or 0)
+    accepted_policy = int(data.get("accepted_policy", 0) or 0)
+    environment = int(data.get("environment", 0) or 0)
     skipped = int(data.get("skipped", 0) or 0)
     untested = int(data.get("untested", 0) or 0)
     test_count = int(data.get("test_count", 0) or 0)
@@ -347,12 +355,14 @@ def _cu_compliance_key(data: dict[str, Any]) -> str:
         return "action_needed"
     if passed and (not_supported or blocked or skipped or untested):
         return "partial"
-    if not_supported:
-        return "not_supported"
     if blocked:
         return "blocked"
+    if not_supported:
+        return "not_supported"
     if passed:
         return "supported"
+    if accepted_policy or environment:
+        return "blocked"
     if untested or test_count == 0:
         return "untested"
     return "unknown"
@@ -423,6 +433,8 @@ def _cu_note_summary(cu_key: str, tests_by_cu: dict[str, list[dict[str, Any]]]) 
         ("error", "Error"),
         ("blocked", "Blocked"),
         ("not_supported", "Not Supported"),
+        ("accepted_policy", "Accepted Policy"),
+        ("environment", "Environment"),
         ("skipped", "Skipped"),
         ("xfailed", "Expected Failure"),
         ("untested", "Untested"),
@@ -461,7 +473,7 @@ def _compliance_status(counts: Counter[str], total: int) -> str:
 def _status_fill(status: str) -> PatternFill:
     colour = {
         "SUPPORTED": _LIGHT_GREEN,
-        "SUPPORTED WITH NOTES": _LIGHT_YELLOW,
+        "SUPPORTED WITH NOTES": _LIGHT_GREEN_NOTE,
         "BLOCKED": _LIGHT_ORANGE,
         "ACTION NEEDED": _LIGHT_RED,
         "NO COMPLIANCE RESULT": _GRAY,
@@ -652,9 +664,10 @@ def _build_profile_coverage(
     ws["A1"].font = Font(bold=True, size=14)
     ws["A2"] = (
         "This sheet maps the current test run to the IJT CS profile and facet model. "
-        "Start with the Server Profile row; Reference Only profile rows are comparison views, not extra pass/fail requirements. "
-        "Server Profile CUs and In Server Profile come from the active server capability file. "
-        "Compliance comes from this test run."
+        "Start with the Tested Profile row; Reference Comparison rows are shown for orientation against other IJT CS profiles, not extra pass/fail requirements. "
+        "CUs in Tested Profile and In Tested Profile come from the active server capability file. "
+        "Compliance comes from this test run. Accepted policy and environment/tooling limitation skips remain visible in "
+        "raw skip reports, but they do not reduce CU compliance when the CU also has passing support coverage."
     )
     ws["A2"].alignment = Alignment(wrap_text=True)
 
@@ -665,26 +678,26 @@ def _build_profile_coverage(
         4,
         [
             ("Server", server),
-            ("Server profile", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
+            ("Tested profile", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
             ("Official IJT CUs", summary.get("official_cu_count", len(by_cu))),
-            ("Server profile CUs", len(supported) if supported is not None else "n/a"),
+            ("CUs in tested profile", len(supported) if supported is not None else "n/a"),
             ("Workbook test cases", summary.get("workbook_case_count", "n/a")),
         ],
     )
 
     headers = [
         "Profile",
-        "Profile Role",
+        "Profile View",
         "Facets",
         "CUs",
-        "Server Profile CUs",
+        "CUs in Tested Profile",
         "Supported",
         "With Notes",
         "Not Supported",
         "Blocked",
         "Action Needed",
         "Untested",
-        "Server Profile %",
+        "Tested Profile %",
         "Compliance",
         "Description",
     ]
@@ -699,7 +712,7 @@ def _build_profile_coverage(
         compliance = _compliance_status(counts, len(cu_keys))
         values = [
             profile.name,
-            "Server Profile" if profile.key == active else "Reference Only",
+            "Tested Profile" if profile.key == active else "Reference Comparison",
             len(profile.facets),
             len(cu_keys),
             server_profile_cus,
@@ -716,7 +729,7 @@ def _build_profile_coverage(
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            if col == 2 and value == "Server Profile":
+            if col == 2 and value == "Tested Profile":
                 cell.fill = _fill(_LIGHT_BLUE)
                 cell.font = Font(bold=True)
             if col == 13:
@@ -746,14 +759,14 @@ def _build_facet_coverage(
         "Facet Key",
         "Facet Role",
         "CUs",
-        "Server Profile CUs",
+        "CUs in Tested Profile",
         "Supported",
         "With Notes",
         "Not Supported",
         "Blocked",
         "Action Needed",
         "Untested",
-        "Server Profile %",
+        "Tested Profile %",
         "Compliance",
         "Description",
     ]
@@ -813,7 +826,7 @@ def _build_cu_coverage(
         "CU",
         "CU Key",
         "Facet(s)",
-        "In Server Profile",
+        "In Tested Profile",
         "Compliance",
         "Tests",
         "Passed",

@@ -113,6 +113,28 @@ def test_all_runner_https_preflights_use_requests_rules_endpoint(monkeypatch) ->
     assert seen == [("https://semgrep.dev/c/p/default", 5.0)] * len(_RUNNER_PATHS)
 
 
+def test_all_runner_https_preflights_use_pypi_json_endpoint(monkeypatch) -> None:
+    seen: list[tuple[str, float]] = []
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _Requests:
+        @staticmethod
+        def get(url: str, timeout: float):
+            seen.append((url, timeout))
+            return _Response()
+
+    monkeypatch.setitem(sys.modules, "requests", _Requests)
+
+    for relative_path, module_name in _RUNNER_PATHS:
+        module = _load_runner_at(relative_path, f"{module_name}_pypi_endpoint")
+        assert module._is_https_reachable("pypi.org")
+
+    assert seen == [("https://pypi.org/pypi/pip/json", 5.0)] * len(_RUNNER_PATHS)
+
+
 def test_all_runner_https_preflights_fail_fast_on_requests_tls_error(monkeypatch) -> None:
     seen: list[str] = []
 
@@ -129,6 +151,21 @@ def test_all_runner_https_preflights_fail_fast_on_requests_tls_error(monkeypatch
         assert not module._is_https_reachable("semgrep.dev")
 
     assert seen == ["https://semgrep.dev/c/p/default"] * len(_RUNNER_PATHS)
+
+
+def test_node_and_web_npm_install_steps_suppress_funding_and_inline_audit_noise() -> None:
+    node = _load_runner_at(
+        "OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests.py",
+        "ijt_node_runner_npm_flags",
+    )
+    web = _load_runner_at(
+        "OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py",
+        "ijt_web_client_runner_npm_flags",
+    )
+
+    for module in (node, web):
+        assert "--no-audit" in module._NPM_INSTALL_FLAGS
+        assert "--no-fund" in module._NPM_INSTALL_FLAGS
 
 
 def test_optional_import_typing_guard_passes_current_files() -> None:
@@ -204,6 +241,13 @@ def test_run_capture_forces_child_python_utf8(monkeypatch) -> None:
     assert "ok" in output
     assert captured["PYTHONIOENCODING"] == "utf-8"
     assert captured["PYTHONUTF8"] == "1"
+    assert captured["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] == "1"
+    assert captured["DOTNET_CLI_TELEMETRY_OPTOUT"] == "1"
+    assert captured["DOTNET_NOLOGO"] == "1"
+    assert captured["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] == "0"
+    assert captured["DOTNET_GENERATE_ASPNET_CERTIFICATE"] == "false"
+    assert Path(captured["npm_config_cache"]).parts[-3:] == ("tmp", "runner-env", "npm-cache")
+    assert Path(captured["PIP_CACHE_DIR"]).parts[-3:] == ("tmp", "runner-env", "pip-cache")
 
 
 def test_csharp_phase2_live_tests_clear_phase1_only_flag(monkeypatch) -> None:

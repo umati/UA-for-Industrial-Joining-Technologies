@@ -6,6 +6,7 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -170,25 +171,94 @@ async def test_read_server_time_exception_returns_none():
 # ── read_tool_identifier ──
 
 
+class _FakeBrowseNode:
+    def __init__(self, name: str, *, value=None, children=None, ns_idx: int = 2):
+        self.name = name
+        self.value = value
+        self.children = children or []
+        self.ns_idx = ns_idx
+
+    async def get_child(self, path: str):
+        ns, child_name = path.split(":", 1)
+        for child in self.children:
+            if child.name == child_name and child.ns_idx == int(ns):
+                return child
+        raise RuntimeError(f"{child_name} not found")
+
+    async def get_children(self):
+        return self.children
+
+    async def read_browse_name(self):
+        return SimpleNamespace(Name=self.name, NamespaceIndex=self.ns_idx)
+
+    async def read_value(self):
+        return self.value
+
+
+def _tool_identifier_client(*values: str | None, ns_idx: int | None = 2):
+    tool_nodes = []
+    for index, value in enumerate(values, start=1):
+        piu = _FakeBrowseNode("ProductInstanceUri", value=value, ns_idx=ns_idx or 2)
+        identification = _FakeBrowseNode("Identification", children=[piu], ns_idx=ns_idx or 2)
+        tool_nodes.append(_FakeBrowseNode(f"TighteningTool{index}", children=[identification], ns_idx=ns_idx or 2))
+
+    tools = _FakeBrowseNode("Tools", children=tool_nodes, ns_idx=ns_idx or 2)
+    assets = _FakeBrowseNode("Assets", children=[tools], ns_idx=ns_idx or 2)
+    asset_management = _FakeBrowseNode("AssetManagement", children=[assets], ns_idx=ns_idx or 2)
+    joining_system = _FakeBrowseNode("TighteningSystem", children=[asset_management], ns_idx=ns_idx or 2)
+    client = MagicMock()
+    client.nodes = SimpleNamespace(objects=_FakeBrowseNode("Objects", children=[joining_system], ns_idx=0))
+    if ns_idx is None:
+        client.get_namespace_index = AsyncMock(side_effect=RuntimeError("namespace not cached"))
+        client.get_node.side_effect = RuntimeError("NamespaceArray unavailable")
+    else:
+        client.get_namespace_index = AsyncMock(return_value=ns_idx)
+    return client
+
+
 @pytest.mark.asyncio
 async def test_read_tool_identifier_happy_path():
-    """read_tool_identifier returns the value read from the node."""
-    mock_client = MagicMock()
-    mock_node = AsyncMock()
-    mock_node.read_value = AsyncMock(return_value="ProductInstanceUri_123")
-    mock_client.get_node.return_value = mock_node
+    """read_tool_identifier returns the first non-empty visible tool PIU."""
+    mock_client = _tool_identifier_client("", "ProductInstanceUri_123")
 
     result = await read_tool_identifier(mock_client)
     assert result == "ProductInstanceUri_123"
 
 
 @pytest.mark.asyncio
-async def test_read_tool_identifier_exception_returns_none():
-    """read_tool_identifier returns None when an exception is raised."""
+async def test_read_tool_identifier_browses_by_name_when_namespace_unavailable():
+    """read_tool_identifier still works when namespace index lookup is unavailable."""
+    mock_client = _tool_identifier_client("ProductInstanceUri_456", ns_idx=None)
+
+    result = await read_tool_identifier(mock_client)
+    assert result == "ProductInstanceUri_456"
+
+
+@pytest.mark.asyncio
+async def test_read_tool_identifier_accepts_spec_namespace_browse_names_under_app_namespace():
+    """Visible tool PIU discovery must handle mixed application/spec BrowseName namespaces."""
+    piu = _FakeBrowseNode("ProductInstanceUri", value="ProductInstanceUri_Mixed", ns_idx=2)
+    identification = _FakeBrowseNode("Identification", children=[piu], ns_idx=2)
+    tool = _FakeBrowseNode("TighteningTool", children=[identification], ns_idx=7)
+    tools = _FakeBrowseNode("Tools", children=[tool], ns_idx=7)
+    assets = _FakeBrowseNode("Assets", children=[tools], ns_idx=7)
+    asset_management = _FakeBrowseNode("AssetManagement", children=[assets], ns_idx=7)
+    joining_system = _FakeBrowseNode("TighteningSystem", children=[asset_management], ns_idx=1)
+    client = MagicMock()
+    client.nodes = SimpleNamespace(objects=_FakeBrowseNode("Objects", children=[joining_system], ns_idx=0))
+    client.get_namespace_index = AsyncMock(return_value=1)
+
+    result = await read_tool_identifier(client)
+
+    assert result == "ProductInstanceUri_Mixed"
+
+
+@pytest.mark.asyncio
+async def test_read_tool_identifier_missing_path_returns_none():
+    """read_tool_identifier returns None when the tool PIU path is absent."""
     mock_client = MagicMock()
-    mock_node = AsyncMock()
-    mock_node.read_value = AsyncMock(side_effect=OSError("no node"))
-    mock_client.get_node.return_value = mock_node
+    mock_client.nodes = SimpleNamespace(objects=_FakeBrowseNode("Objects", children=[], ns_idx=0))
+    mock_client.get_namespace_index = AsyncMock(return_value=2)
 
     result = await read_tool_identifier(mock_client)
     assert result is None

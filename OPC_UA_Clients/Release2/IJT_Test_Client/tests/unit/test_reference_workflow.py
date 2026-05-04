@@ -23,6 +23,6 @@ def test_reference_workflow_markdown_contains_demo_tables():
 
     assert "## Demo Values" in rendered
     assert "## Step Flow" in rendered
-    assert "| Step | Phase | Workflow Action | OPC UA Surface | Expected Evidence | Support |" in rendered
+    assert "| Step | Phase | Workflow Action | OPC UA Surface | Expected Outcome | Support |" in rendered
     assert "Select joining process" in rendered
     assert "Verify new result" in rendered

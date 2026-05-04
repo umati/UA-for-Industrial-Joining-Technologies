@@ -88,6 +88,47 @@ def test_semgrep_https_preflight_checks_rules_endpoint(monkeypatch):
     assert seen == ["https://semgrep.dev/c/p/default"]
 
 
+def test_pypi_https_preflight_checks_json_endpoint(monkeypatch):
+    seen: list[str] = []
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _Requests:
+        @staticmethod
+        def get(url: str, timeout: float):
+            seen.append(url)
+            assert timeout == 5.0
+            return _Response()
+
+    monkeypatch.setitem(sys.modules, "requests", _Requests)
+
+    assert _mod._is_https_reachable("pypi.org")
+    assert seen == ["https://pypi.org/pypi/pip/json"]
+
+
+def test_pip_audit_timeout_is_advisory_skip():
+    timeout_output = "[TIMEOUT] Command exceeded 30s limit: pip-audit\n"
+    with (
+        patch.object(_mod, "_ensure_python_tool", return_value=(True, "")),
+        patch.object(_mod, "_is_https_reachable", return_value=True),
+        patch.object(Path, "mkdir", return_value=None),
+        patch.object(Path, "write_text", return_value=None),
+        patch.object(_mod, "_run", return_value=(1, timeout_output)) as run_cmd,
+    ):
+        result = _mod._step_pip_audit()
+
+    assert result.ok
+    assert result.skipped
+    assert "network unavailable" in result.note
+    command = run_cmd.call_args.args[0]
+    assert "--progress-spinner" in command
+    assert "--timeout" in command
+    assert "--cache-dir" in command
+    assert run_cmd.call_args.kwargs["timeout_label"] == "pip-audit"
+
+
 # ---------------------------------------------------------------------------
 # Suite counter logic — mirrors the counters in main()
 # ---------------------------------------------------------------------------

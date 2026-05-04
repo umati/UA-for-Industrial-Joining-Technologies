@@ -107,7 +107,10 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     connection refused, or timeout, avoiding the multi-minute retry delays that
     advisory tools impose on failure.
     """
-    path = "/c/p/default" if host == "semgrep.dev" else "/"
+    path = {
+        "pypi.org": "/pypi/pip/json",
+        "semgrep.dev": "/c/p/default",
+    }.get(host, "/")
     url = f"https://{host}{path}"
     try:
         try:
@@ -199,6 +202,11 @@ def _run(
     stderr is inherited (visible in terminal).
     """
     merged_env = {**os.environ, **(env or {})}
+    merged_env.setdefault("DOTNET_SKIP_FIRST_TIME_EXPERIENCE", "1")
+    merged_env.setdefault("DOTNET_CLI_TELEMETRY_OPTOUT", "1")
+    merged_env.setdefault("DOTNET_NOLOGO", "1")
+    merged_env.setdefault("DOTNET_ADD_GLOBAL_TOOLS_TO_PATH", "0")
+    merged_env.setdefault("DOTNET_GENERATE_ASPNET_CERTIFICATE", "false")
     result = subprocess.run(
         cmd,
         cwd=str(cwd),

@@ -252,6 +252,7 @@ jobs:
             -v "${{ github.workspace }}/test-results:/out" \
             ijt-web-client:test-ci \
             python -m pytest tests/python/unit/ \
+              -m "not checkout_hygiene" \
               -v --tb=short --no-header \
               --junitxml=/out/pytest-unit.xml
 

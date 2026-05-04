@@ -33,6 +33,7 @@ from helpers.node_discovery import (
     get_type_definition,
 )
 from helpers.result_validator import assert_result_data_valid
+from helpers.skip_reasons import skip_environment
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -1075,7 +1076,7 @@ async def test_result_management_results_folder_delete_is_rejected(opcua_client,
     except (ua.UaError, Exception) as exc:
         # Any error (ua.UaError, transport Exception, serialization error) means the
         # asyncua client could not issue the DeleteNodes service — skip gracefully.
-        pytest.skip(
-            f"DeleteNodes service unavailable via this asyncua version: {exc} — "
-            "server-side rejection cannot be verified; verify manually or use OPC UA CTT"
+        skip_environment(
+            f"asyncua DeleteNodes service call unavailable ({exc}); server-side rejection "
+            "must be verified manually or with OPC UA CTT"
         )

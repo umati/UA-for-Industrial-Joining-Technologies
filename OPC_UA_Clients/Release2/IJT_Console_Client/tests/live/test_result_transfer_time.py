@@ -30,10 +30,10 @@ Pass/fail criteria (aggregate over all samples):
   p90(total_transfer_ms)   ≤  _THRESHOLD_P90_MS
 
 Note:
-  This test requires the Atlas Copco IJT simulator (NS_APP namespace present).
+  This test requires the IJT simulator's SimulateSingleResult method.
   It will be skipped automatically against a real controller that does not expose
-  the SimulateSingleResult method.  For real-controller measurement, trigger results
-  manually and extend _COLLECT_TIMEOUT_S accordingly.
+  simulation methods. For real-controller measurement, trigger results manually
+  and extend _COLLECT_TIMEOUT_S accordingly.
 """
 
 import asyncio
@@ -130,23 +130,59 @@ async def _ns_index(client: Client, uri: str) -> int | None:
     """Return the runtime namespace index for *uri*, or None if not registered."""
     try:
         return await client.get_namespace_index(uri)
-    except Exception:  # noqa: BLE001
-        return None
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Namespace index lookup failed; reading NamespaceArray fallback: %s", exc)
 
-
-async def _find_child(parent_node, ns_idx: int, browse_name: str):
-    """Return a direct child node by (ns_idx, browse_name), or None if absent."""
     try:
-        return await parent_node.get_child(f"{ns_idx}:{browse_name}")
+        namespace_array_node = client.get_node(ua.NodeId(2255, 0))  # type: ignore[arg-type]  # Server.NamespaceArray
+        namespace_array = await namespace_array_node.read_value()
+        return list(namespace_array).index(uri)
     except Exception:  # noqa: BLE001
         return None
 
 
-async def _locate_simulate_results(method_client: Client, ns_app: int):
+async def _find_child(parent_node, ns_idx: int | None, browse_name: str):
+    """Return a direct child by BrowseName.
+
+    The simulator stores instance NodeIds in the application namespace, while
+    several BrowseNames come from their defining specification namespace
+    (DI/IJT/Machinery Result). Try the application namespace first for speed,
+    then fall back to the first direct child with the requested BrowseName.Name.
+    """
+    if ns_idx is not None:
+        try:
+            return await parent_node.get_child(f"{ns_idx}:{browse_name}")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Direct browse lookup failed for %s; enumerating children: %s", browse_name, exc)
+
+    try:
+        children = await parent_node.get_children()
+    except Exception:  # noqa: BLE001
+        return None
+
+    fallback_child = None
+    for child in children:
+        try:
+            child_browse_name = await child.read_browse_name()
+        except Exception:  # noqa: BLE001
+            continue
+
+        if getattr(child_browse_name, "Name", None) != browse_name:
+            continue
+        if ns_idx is None or getattr(child_browse_name, "NamespaceIndex", None) == ns_idx:
+            return child
+        if fallback_child is None:
+            fallback_child = child
+    return fallback_child
+
+
+async def _locate_simulate_results(method_client: Client, ns_app: int | None):
     """Return (simulate_results_node, method_node) or (None, None) on failure.
 
     Walks:  Objects → TighteningSystem → Simulations → SimulateResults
-    All nodes are under the application namespace (ns_app).
+    Nodes are matched in the application namespace when it is available, then
+    by BrowseName.Name as a fallback for servers whose namespace index lookup
+    is delayed or unavailable on this connection.
     """
     objects = method_client.nodes.objects
     js = await _find_child(objects, ns_app, "TighteningSystem")
@@ -451,6 +487,7 @@ def _write_ci_report(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.asyncio(loop_scope="module")
 async def test_result_transfer_time(
     _method_client: Client,
     _sub_client: Client,
@@ -465,16 +502,12 @@ async def test_result_transfer_time(
     A _INTER_RESULT_DELAY_S pause between triggers simulates the cadence of
     realistic tool-trigger presses from an operator.
 
-    Skipped automatically if the simulator namespace (NS_APP) is absent —
-    SimulateSingleResult is only available on the Atlas Copco IJT simulator.
+    Skipped automatically if SimulateSingleResult is absent. Namespace index
+    lookup is advisory; method discovery falls back to BrowseName.Name.
     """
-    # Resolve namespaces — skip if simulator not available
+    # Resolve namespaces. NS_APP is advisory for method lookup because the
+    # simulator method path can also be discovered by BrowseName.Name.
     ns_app = await _ns_index(_method_client, _NS_APP_URI)
-    if ns_app is None:
-        pytest.skip(
-            "Simulator namespace (NS_APP) not registered — "
-            "SimulateSingleResult is only available on the Atlas Copco IJT simulator"
-        )
 
     ns_ijt = await _ns_index(_sub_client, _NS_IJT_BASE_URI)
     if ns_ijt is None:

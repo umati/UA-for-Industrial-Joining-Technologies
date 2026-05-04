@@ -23,8 +23,8 @@ Background:
     "Mandatory child with BrowseName EnumStrings not found" with a fallback to
     "Possible matching Custom Objects" — confirming the reference type is wrong.
 
-    This bug affects Cable, Feeder, Battery, PowerSupply, and Sensor in the Atlas Copco
-    IJT server when PhysicalQuantity is wired via the wrong reference type in
+    This bug affects Cable, Feeder, Battery, PowerSupply, and Sensor in affected
+    IJT server builds when PhysicalQuantity is wired via the wrong reference type in
     address_space_helper_t.cpp.
 
     These tests are the authoritative regression gate: they MUST fail when the bug is

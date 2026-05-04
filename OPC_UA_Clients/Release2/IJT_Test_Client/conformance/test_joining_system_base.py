@@ -41,6 +41,7 @@ from helpers.node_discovery import (
     get_type_definition,
     has_interface,
 )
+from helpers.skip_reasons import skip_environment
 
 logger = logging.getLogger(__name__)
 
@@ -1189,9 +1190,9 @@ async def test_machinery_building_blocks_add_nodes_is_rejected(opcua_client, ns_
         )
         logger.info("AddNodes correctly rejected: %s", results[0].StatusCode)
     except (ua.UaError, Exception) as exc:
-        pytest.skip(
-            f"AddNodes service unavailable via this asyncua version: {exc} — "
-            "server-side rejection cannot be verified; verify manually or use OPC UA CTT"
+        skip_environment(
+            f"asyncua AddNodes service call unavailable ({exc}); server-side rejection "
+            "must be verified manually or with OPC UA CTT"
         )
 
 
@@ -1483,7 +1484,7 @@ async def test_asset_management_add_nodes_to_controllers_folder_is_rejected(opcu
         )
         logger.info("AddNodes to Controllers correctly rejected: %s", results[0].StatusCode)
     except (ua.UaError, Exception) as exc:
-        pytest.skip(
-            f"AddNodes service unavailable via this asyncua version: {exc} — "
-            "server-side rejection cannot be verified; verify manually or use OPC UA CTT"
+        skip_environment(
+            f"asyncua AddNodes service call unavailable ({exc}); server-side rejection "
+            "must be verified manually or with OPC UA CTT"
         )

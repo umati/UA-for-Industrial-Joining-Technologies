@@ -137,7 +137,10 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     connection refused, or timeout, avoiding the multi-minute retry delays that
     advisory tools impose on failure.
     """
-    path = "/c/p/default" if host == "semgrep.dev" else "/"
+    path = {
+        "pypi.org": "/pypi/pip/json",
+        "semgrep.dev": "/c/p/default",
+    }.get(host, "/")
     url = f"https://{host}{path}"
     try:
         try:
@@ -383,22 +386,41 @@ def _check_pip_audit(results: list) -> None:
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     audit_out = RESULTS_DIR / "pip-audit.json"
-    r = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pip_audit",
-            "-r",
-            str(reqs),
-            "--format",
-            "json",
-            "-o",
-            str(audit_out),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    pip_audit_cache = PROJ_DIR / "tmp" / "pip-audit-cache"
+    pip_audit_cache.mkdir(parents=True, exist_ok=True)
+    try:
+        r = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pip_audit",
+                "-r",
+                str(reqs),
+                "--format",
+                "json",
+                "-o",
+                str(audit_out),
+                "--progress-spinner",
+                "off",
+                "--timeout",
+                "5",
+                "--cache-dir",
+                str(pip_audit_cache),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=90 if os.environ.get("CI") else 30,
+            env={
+                **os.environ,
+                # Keep cache local to project temp dir to avoid user-profile permission issues.
+                "PIP_AUDIT_CACHE_DIR": str(pip_audit_cache),
+                "PIP_CACHE_DIR": str(pip_audit_cache),
+            },
+        )
+    except subprocess.TimeoutExpired:
+        _record(results, 1, label, True, "SKIP — network/TLS timeout")
+        return
     if r.returncode == 0:
         try:
             data = json.loads(audit_out.read_text(encoding="utf-8"))
@@ -409,6 +431,22 @@ def _check_pip_audit(results: list) -> None:
         except Exception:
             _record(results, 1, label, True, "PASS")
     else:
+        output = (r.stdout or "") + (r.stderr or "")
+        low = output.lower()
+        network_markers = (
+            "httpsconnectionpool(",
+            "max retries exceeded",
+            "failed to establish a new connection",
+            "ssl:",
+            "certificate verify failed",
+            "connectionerror",
+            "newconnectionerror",
+            "[timeout]",
+            "socket operation was attempted to an unreachable network",
+        )
+        if any(marker in low for marker in network_markers):
+            _record(results, 1, label, True, "SKIP — network/TLS unavailable")
+            return
         _record(results, 1, label, False, f"FAIL (exit {r.returncode})")
 
 
@@ -496,8 +534,8 @@ def _check_binaries(results: list) -> None:
     """Informational: report which distributable binaries are present."""
     label = "Binaries present"
     parts = [
-        f"Linux {'✓' if _LINUX_BINARY.exists() else '✗'}",
-        f"Windows {'✓' if _WINDOWS_ZIP.exists() else '✗'}",
+        f"Linux extracted binary {'✓' if _LINUX_BINARY.exists() else '✗'}",
+        f"Windows package zip {'✓' if _WINDOWS_ZIP.exists() else '✗'}",
     ]
     _record(results, 1, label, True, f"PASS ({', '.join(parts)})")
 

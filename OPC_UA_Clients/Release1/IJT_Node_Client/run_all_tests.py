@@ -68,6 +68,7 @@ _WELL_KNOWN_SIMULATOR_PATHS = [
     / "opcua_ijt_demo_application",
 ]
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40451"
+_NPM_INSTALL_FLAGS = ["--no-audit", "--no-fund"]
 
 
 def _cmd_available(cmd: str) -> bool:
@@ -82,7 +83,10 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     urllib succeeds but the advisory tool later fails with a certificate
     traceback and long retry delay.
     """
-    path = "/c/p/default" if host == "semgrep.dev" else "/"
+    path = {
+        "pypi.org": "/pypi/pip/json",
+        "semgrep.dev": "/c/p/default",
+    }.get(host, "/")
     url = f"https://{host}{path}"
     try:
         try:
@@ -351,7 +355,7 @@ def _check_prerequisites() -> bool:
 def _step_npm_ci() -> StepResult:
     label = "npm ci"
     t0 = time.monotonic()
-    rc, _ = _run([_NPM, "ci"])
+    rc, _ = _run([_NPM, "ci", *_NPM_INSTALL_FLAGS])
     dur = time.monotonic() - t0
     if rc != 0:
         return StepResult(label, "PHASE 1", "FAIL", f"exit {rc}", dur)

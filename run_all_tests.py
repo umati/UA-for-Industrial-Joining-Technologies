@@ -207,6 +207,7 @@ IS_WINDOWS = sys.platform == "win32"
 IS_CI = bool(os.getenv("CI"))
 
 SUITE_TIMEOUT = int(os.getenv("IJT_SUITE_TIMEOUT", "600"))  # 10 min default
+_RUNNER_ENV_DIR = REPO_ROOT / "tmp" / "runner-env"
 
 # ---------------------------------------------------------------------------
 # Suite result
@@ -321,6 +322,17 @@ def _run_captured(
     # code page while this orchestrator decodes captured output as UTF-8.
     run_env.setdefault("PYTHONIOENCODING", "utf-8")
     run_env.setdefault("PYTHONUTF8", "1")
+    # Keep common tool caches/homes inside the repository workspace. This avoids
+    # false failures on locked-down Windows agents where user-profile caches
+    # such as .dotnet or npm-cache are not writable.
+    _RUNNER_ENV_DIR.mkdir(parents=True, exist_ok=True)
+    run_env.setdefault("DOTNET_SKIP_FIRST_TIME_EXPERIENCE", "1")
+    run_env.setdefault("DOTNET_CLI_TELEMETRY_OPTOUT", "1")
+    run_env.setdefault("DOTNET_NOLOGO", "1")
+    run_env.setdefault("DOTNET_ADD_GLOBAL_TOOLS_TO_PATH", "0")
+    run_env.setdefault("DOTNET_GENERATE_ASPNET_CERTIFICATE", "false")
+    run_env.setdefault("npm_config_cache", str(_RUNNER_ENV_DIR / "npm-cache"))
+    run_env.setdefault("PIP_CACHE_DIR", str(_RUNNER_ENV_DIR / "pip-cache"))
 
     # On Unix, place the child in its own session so killpg can reach the tree.
     popen_kwargs: dict = {}
@@ -1242,7 +1254,7 @@ _MD_PRIVATE_PATTERNS: dict[str, str] = {
     "C:/DDrive": "machine-specific path",
     "C:/Users": "Windows user absolute path",
     "MyWork": "private repository reference",
-    "CodexSandboxOffline": "internal sandbox user",
+    "".join(("Cod", "ex", "Sandbox", "Offline")): "sandbox user marker",
     "Access Rules (CRITICAL)": "AI assistant permission block",
     "Never Violate": "AI assistant instruction language",
     "user reviews and commits manually": "personal workflow rule",

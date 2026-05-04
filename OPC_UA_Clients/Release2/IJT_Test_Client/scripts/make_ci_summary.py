@@ -34,6 +34,7 @@ except ImportError:
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _PROFILES_DIR = _PROJECT_ROOT / "profiles"
 _DEFAULT_CU_JSON = _PROJECT_ROOT / "test-results" / "cu-compliance-report.json"
+_CU_COMPLIANCE_KEYS = {"supported", "partial", "not_supported", "blocked", "action_needed", "untested"}
 
 # ── Parse JUnit XML ───────────────────────────────────────────────────────────
 
@@ -216,10 +217,16 @@ def _in_server_profile(cu_key: str, supported: set[str] | None) -> str:
 
 
 def _cu_compliance_key(data: dict[str, Any]) -> str:
+    explicit = str(data.get("compliance") or "")
+    if explicit in _CU_COMPLIANCE_KEYS:
+        return explicit
+
     passed = int(data.get("passed", 0) or 0)
     failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
     not_supported = int(data.get("not_supported", 0) or 0)
     blocked = int(data.get("blocked", 0) or 0)
+    accepted_policy = int(data.get("accepted_policy", 0) or 0)
+    environment = int(data.get("environment", 0) or 0)
     skipped = int(data.get("skipped", 0) or 0)
     untested = int(data.get("untested", 0) or 0)
     test_count = int(data.get("test_count", 0) or 0)
@@ -228,12 +235,14 @@ def _cu_compliance_key(data: dict[str, Any]) -> str:
         return "action_needed"
     if passed and (not_supported or blocked or skipped or untested):
         return "partial"
-    if not_supported:
-        return "not_supported"
     if blocked:
         return "blocked"
+    if not_supported:
+        return "not_supported"
     if passed:
         return "supported"
+    if accepted_policy or environment:
+        return "blocked"
     if untested or test_count == 0:
         return "untested"
     return "unknown"
@@ -245,11 +254,11 @@ def _compliance_label(counts: Counter[str], total: int) -> str:
     if counts["blocked"]:
         return "🟠 Blocked"
     if counts["partial"] or counts["not_supported"]:
-        return "🟡 Supported with notes"
+        return "🟩 Supported with notes"
     if total and counts["supported"] == total:
         return "🟢 Supported"
     if counts["supported"]:
-        return "🟡 Supported with notes"
+        return "🟩 Supported with notes"
     return "⚪ No compliance result"
 
 
@@ -281,7 +290,7 @@ def _ordered_cu_keys(by_cu: dict[str, Any], facets: dict[str, dict[str, Any]]) -
 def _outcome_label(outcome: str) -> str:
     labels = {
         "supported": "🟢 Supported",
-        "partial": "🟡 Supported with notes",
+        "partial": "🟩 Supported with notes",
         "not_supported": "🟡 Not Supported",
         "blocked": "🟠 Blocked",
         "action_needed": "🔴 Action needed",
@@ -336,6 +345,8 @@ def _cu_note_summary(cu_key: str, tests_by_cu: dict[str, list[dict[str, Any]]]) 
         ("error", "Error"),
         ("blocked", "Blocked"),
         ("not_supported", "Not Supported"),
+        ("accepted_policy", "Accepted Policy"),
+        ("environment", "Environment"),
         ("skipped", "Skipped"),
         ("xfailed", "Expected Failure"),
         ("untested", "Untested"),
@@ -382,7 +393,7 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
     lines.append("## IJT CS Profile / Facet Coverage")
     lines.append("")
     lines.append(
-        f"**Server profile source:** {server_name}  |  "
+        f"**Capability source:** {server_name}  |  "
         f"**CU compliance:** {all_counts['supported']} supported, {all_counts['partial']} supported with notes, "
         f"{all_counts['not_supported']} not supported, {all_counts['blocked']} blocked, "
         f"{all_counts['action_needed']} action needed"
@@ -394,12 +405,16 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
         "failures and errors are reported separately as Action needed._"
     )
     lines.append(
-        "_Server Profile CUs and In Server Profile come from the active server capability file; "
+        "_Accepted policy and environment/tooling limitation skips are kept in the raw skip summary, "
+        "but they do not reduce CU compliance when the CU also has passing support coverage._"
+    )
+    lines.append(
+        "_CUs in Tested Profile and In Tested Profile come from the active server capability file; "
         "Compliance comes from this test run._"
     )
     lines.append(
-        "_How to read this section: start with the Server Profile row. Reference Only profile rows are comparison views "
-        "against other IJT CS profiles; they are not additional pass/fail requirements for this server._"
+        "_How to read this section: start with the Tested Profile row. Reference Comparison profile rows are shown "
+        "only for orientation against other IJT CS profiles; they are not extra pass/fail requirements for this server._"
     )
     lines.append("")
     if active:
@@ -407,24 +422,24 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
         active_counts = _count_outcomes(active_cus, by_cu)
         server_profile_cus = _server_profile_cu_count(active_cus, supported)
         lines.append(
-            f"**Server profile:** {active['name']}  |  "
-            f"**Server profile support:** {server_profile_cus}/{len(active_cus)} CUs  |  "
+            f"**Tested profile:** {active['name']}  |  "
+            f"**Tested profile support:** {server_profile_cus}/{len(active_cus)} CUs  |  "
             f"**Compliance:** {_compliance_label(active_counts, len(active_cus))}"
         )
     else:
-        lines.append("**Server profile:** no server profile found in available capabilities file")
+        lines.append("**Tested profile:** no active profile found in available capabilities file")
     lines.append("")
 
     lines.append("### Profiles")
     lines.append("")
     lines.append(
-        "| Profile | Profile Role | Facets | CUs | Server Profile CUs | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
+        "| Profile | Profile View | Facets | CUs | CUs in Tested Profile | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
     )
     lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|")
     for key, profile in profiles.items():
         cu_keys = _profile_cus(profile, facets)
         counts = _count_outcomes(cu_keys, by_cu)
-        profile_role = "Server Profile" if key == active_profile else "Reference Only"
+        profile_role = "Tested Profile" if key == active_profile else "Reference Comparison"
         lines.append(
             f"| {_md_cell(str(profile.get('name', _title_from_key(key))))} | {profile_role} | "
             f"{len(profile.get('facets', []))} | {len(cu_keys)} | {_server_profile_cu_count(cu_keys, supported)} | "
@@ -437,7 +452,7 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
     lines.append("### Facets")
     lines.append("")
     lines.append(
-        "| Facet | CUs | Server Profile CUs | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
+        "| Facet | CUs | CUs in Tested Profile | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
     )
     lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---|")
     for facet in facets.values():
@@ -462,7 +477,7 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
         lines.append("### CUs With Notes / Not Supported")
         lines.append("")
         lines.append(
-            "| CU | Facet(s) | In Server Profile | Compliance | Why Listed | Tests | Passed | Not Supported | Blocked | Failed/Error |"
+            "| CU | Facet(s) | In Tested Profile | Compliance | Reason Shown | Tests | Passed | Not Supported | Blocked | Failed/Error |"
         )
         lines.append("|---|---|---|---|---|---:|---:|---:|---:|---:|")
         for cu_key, data in attention_cus[:40]:
@@ -483,7 +498,7 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
     lines.append("<summary>Full CU coverage table</summary>")
     lines.append("")
     lines.append(
-        "| CU | Facet(s) | In Server Profile | Compliance | Tests | Passed | Not Supported | Blocked | Failed/Error | Workbook Cases |"
+        "| CU | Facet(s) | In Tested Profile | Compliance | Tests | Passed | Not Supported | Blocked | Failed/Error | Workbook Cases |"
     )
     lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|")
     for cu_key in all_cu_keys:

@@ -70,7 +70,7 @@ async def connected_client() -> AsyncGenerator:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio(loop_scope="module")
 async def test_connect_to_server():
     """A real connection to the OPC UA server can be established."""
     from opcua_client import OPCUAClient
@@ -83,7 +83,7 @@ async def test_connect_to_server():
         await client.cleanup()
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio(loop_scope="module")
 async def test_browse_root_node_returns_results():
     """Browsing the root node must return at least one child node."""
     from opcua_client import OPCUAClient
@@ -103,7 +103,7 @@ async def test_browse_root_node_returns_results():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio(loop_scope="module")
 async def test_subscribe_to_events_registers_handlers():
     """subscribe_to_events() must create both result and system-event handlers."""
     from opcua_client import OPCUAClient
@@ -121,7 +121,7 @@ async def test_subscribe_to_events_registers_handlers():
         await client.cleanup()
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio(loop_scope="module")
 async def test_subscribe_to_events_and_wait_for_event():
     """Subscribe and wait up to 30 s for at least one event to arrive."""
     from opcua_client import OPCUAClient
@@ -148,7 +148,7 @@ async def test_subscribe_to_events_and_wait_for_event():
         await client.cleanup()
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio(loop_scope="module")
 async def test_cleanup_releases_subscriptions():
     """cleanup() must delete subscriptions and set them to None."""
     from opcua_client import OPCUAClient
@@ -173,7 +173,7 @@ async def test_cleanup_releases_subscriptions():
 class TestMethods:
     """Live tests for OPCUAMethodCaller — enable_asset, select_joint, start_selected_joining."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_enable_asset_true(self, connected_client):
         """EnableAsset(enable=True) must return a dict with a numeric status code."""
         result = await connected_client.methods.enable_asset(
@@ -185,7 +185,7 @@ class TestMethods:
             pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in result, f"Result must contain 'status' key, got: {result}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_enable_asset_false(self, connected_client):
         """EnableAsset(enable=False) must return a dict with a numeric status code."""
         result = await connected_client.methods.enable_asset(
@@ -197,7 +197,7 @@ class TestMethods:
             pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in result, f"Result must contain 'status' key, got: {result}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_enable_asset_disable_then_reenable(self, connected_client):
         """Disable then re-enable — both calls must succeed."""
         disable_result = await connected_client.methods.enable_asset(
@@ -212,7 +212,7 @@ class TestMethods:
             pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in enable_result
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_select_joint_returns_status(self, connected_client):
         """SelectJoint must return a dict with a status code (any code is acceptable).
 
@@ -230,7 +230,7 @@ class TestMethods:
             pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in result, f"Result must have 'status' key, got: {result}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_select_joint_empty_origin_id(self, connected_client):
         """SelectJoint with an explicit empty origin ID must not raise."""
         result = await connected_client.methods.select_joint(
@@ -242,7 +242,7 @@ class TestMethods:
         if result is None:
             pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_start_selected_joining_deselect_true(self, connected_client):
         """StartSelectedJoining(deselect=True) must return a dict with a status code."""
         result = await connected_client.methods.start_selected_joining(
@@ -254,7 +254,7 @@ class TestMethods:
             pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in result, f"Result must contain 'status' key, got: {result}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_start_selected_joining_deselect_false(self, connected_client):
         """StartSelectedJoining(deselect=False) must return a dict with a status code."""
         result = await connected_client.methods.start_selected_joining(
@@ -266,7 +266,7 @@ class TestMethods:
             pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in result
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_select_joint_2_returns_status(self, connected_client):
         """SelectJoint("Joint_2") must return a dict with a status code.
 
@@ -284,7 +284,7 @@ class TestMethods:
             pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in result, f"Result must have 'status' key, got: {result}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_select_joint_with_env_ids_joint_1_then_joint_2(self, connected_client):
         """SelectJoint called twice — first Joint_1 then Joint_2 — must both return status.
 
@@ -335,7 +335,7 @@ class TestJointWorkflow:
     Client's own method-caller path end-to-end.
     """
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_joint_1_select_then_start_returns_status(self, connected_client):
         """SelectJoint(Joint_1) → StartSelectedJoining must both return a 'status' key.
 
@@ -362,7 +362,7 @@ class TestJointWorkflow:
             pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in start_result, f"StartSelectedJoining must return status, got: {start_result}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_joint_2_select_then_start_returns_status(self, connected_client):
         """SelectJoint(Joint_2) → StartSelectedJoining must both return a 'status' key.
 
@@ -389,7 +389,7 @@ class TestJointWorkflow:
             pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
         assert "status" in start_result, f"StartSelectedJoining must return status, got: {start_result}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_sequential_joint_1_then_joint_2_full_workflow(self, connected_client):
         """Run Joint_1 workflow then Joint_2 workflow in sequence — all calls must return status.
 

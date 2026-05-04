@@ -31,6 +31,52 @@ def test_report_compliance_key_labels_mixed_pass_and_blocked_as_notes():
     assert _excel_report._cu_compliance_label(_excel_report._cu_compliance_key(data)) == "Supported with Notes"
 
 
+def test_report_compliance_key_prefers_explicit_json_field():
+    data = {
+        "outcome": "passed",
+        "compliance": "partial",
+        "passed": 3,
+        "blocked": 0,
+        "not_supported": 0,
+        "failed": 0,
+        "error": 0,
+        "test_count": 3,
+    }
+
+    assert _ci_summary._cu_compliance_key(data) == "partial"
+    assert _excel_report._cu_compliance_key(data) == "partial"
+
+
+def test_report_compliance_key_keeps_blocked_conservative_without_passes():
+    data = {
+        "passed": 0,
+        "blocked": 1,
+        "not_supported": 2,
+        "failed": 0,
+        "error": 0,
+        "test_count": 3,
+    }
+
+    assert _ci_summary._cu_compliance_key(data) == "blocked"
+    assert _excel_report._cu_compliance_key(data) == "blocked"
+
+
+def test_report_compliance_key_ignores_accepted_policy_when_support_passed():
+    data = {
+        "passed": 2,
+        "accepted_policy": 3,
+        "environment": 1,
+        "blocked": 0,
+        "not_supported": 0,
+        "failed": 0,
+        "error": 0,
+        "test_count": 6,
+    }
+
+    assert _ci_summary._cu_compliance_key(data) == "supported"
+    assert _excel_report._cu_compliance_key(data) == "supported"
+
+
 def test_ci_summary_renders_profile_facet_and_full_cu_tables(monkeypatch):
     monkeypatch.setattr(
         _ci_summary,
@@ -38,7 +84,7 @@ def test_ci_summary_renders_profile_facet_and_full_cu_tables(monkeypatch):
         lambda: {
             "basic_facet": {
                 "display_name": "Basic Facet",
-                "conformance_units": ["joining_system_base", "optional_feature"],
+                "conformance_units": ["joining_system_base", "state_policy_note", "optional_feature"],
             }
         },
     )
@@ -61,12 +107,18 @@ def test_ci_summary_renders_profile_facet_and_full_cu_tables(monkeypatch):
         },
     )
     payload = {
-        "supported_cus": ["joining_system_base"],
+        "supported_cus": ["joining_system_base", "state_policy_note"],
         "by_cu": {
             "joining_system_base": {
                 "passed": 2,
                 "test_count": 2,
                 "workbook_case_count": 3,
+            },
+            "state_policy_note": {
+                "passed": 1,
+                "accepted_policy": 1,
+                "test_count": 2,
+                "workbook_case_count": 1,
             },
             "optional_feature": {
                 "not_supported": 1,
@@ -80,7 +132,13 @@ def test_ci_summary_renders_profile_facet_and_full_cu_tables(monkeypatch):
                 "nodeid": "conformance/test_optional.py::test_optional_feature",
                 "outcome": "not_supported",
                 "reason": "Skipped: OptionalFeature: Not Supported — cannot run optional feature",
-            }
+            },
+            {
+                "cus": ["state_policy_note"],
+                "nodeid": "conformance/test_state.py::test_state_policy",
+                "outcome": "accepted_policy",
+                "reason": "Skipped: ACCEPTED POLICY - Method: SelectJoiningProcess - state not ready",
+            },
         ],
     }
 
@@ -89,12 +147,14 @@ def test_ci_summary_renders_profile_facet_and_full_cu_tables(monkeypatch):
     assert "### Profiles" in rendered
     assert "### Facets" in rendered
     assert "### CUs With Notes / Not Supported" in rendered
-    assert "Profile Role" in rendered
-    assert "Server Profile CUs" in rendered
-    assert "In Server Profile" in rendered
-    assert "Why Listed" in rendered
+    assert "Profile View" in rendered
+    assert "CUs in Tested Profile" in rendered
+    assert "In Tested Profile" in rendered
+    assert "Reason Shown" in rendered
     assert "OptionalFeature: Not Supported" in rendered
     assert "<summary>Full CU coverage table</summary>" in rendered
     assert "Report Test Server" in rendered
     assert "| IJT Joining System Base | Basic Facet | Yes | 🟢 Supported | 2 | 2 | 0 | 0 | 0 | 3 |" in rendered
+    assert "| IJT State Policy Note | Basic Facet | Yes | 🟢 Supported | 2 | 1 | 0 | 0 | 0 | 1 |" in rendered
     assert "| IJT Optional Feature | Basic Facet | No | 🟡 Not Supported | 1 | 0 | 1 | 0 | 0 | 2 |" in rendered
+    assert "Accepted Policy: ACCEPTED POLICY - Method: SelectJoiningProcess - state not ready" not in rendered

@@ -28,11 +28,11 @@ actors:
   - name: External line service
     role: Provides required tool list, station context, and product identifiers.
   - name: IJT OPC UA client
-    role: Connects to the server, selects the joining process, sends identifiers, and verifies evidence.
+    role: Connects to the server, selects the joining process, sends identifiers, and verifies outcomes.
   - name: IJT OPC UA server
     role: Exposes tools, joining-process methods, events, and result access.
   - name: Review audience
-    role: Follows the step-by-step evidence tables during demo mode.
+    role: Follows the step-by-step outcome tables during demo mode.
 phases:
   - id: connection
     title: Connection and discovery
@@ -57,7 +57,7 @@ steps:
       - Connect session
       - Discover namespace indexes
       - Find JoiningSystem object
-    expected_evidence:
+    expected_outcome:
       - Session is active
       - JoiningSystem is found
       - IJT, DI, and Machinery Result namespaces are resolved
@@ -73,7 +73,7 @@ steps:
       - Tool assets
       - Identification/ProductInstanceUri
       - SerialNumber or visible tool identity
-    expected_evidence:
+    expected_outcome:
       - Required tool is listed
       - ProductInstanceUri is non-empty
       - Human-readable identity can be shown in the demo table
@@ -87,10 +87,10 @@ steps:
     opcua_surface:
       - Asset state reads
       - Optional EnableAsset call when available
-    expected_evidence:
+    expected_outcome:
       - Tool is present in the address space
       - Enable or readiness command succeeds when supported
-      - Unsupported optional readiness commands are reported as skipped evidence, not failure
+      - Unsupported optional readiness commands are reported as skipped outcomes, not failures
     simulator_support: partial
     demo_note: Keeps the workflow portable across simulators and real controllers.
 
@@ -101,7 +101,7 @@ steps:
     opcua_surface:
       - SendIdentifiers
       - GetIdentifiers
-    expected_evidence:
+    expected_outcome:
       - Work order identifier is accepted
       - Product serial and model identifiers are accepted
       - Readback matches the sent identifiers when GetIdentifiers is supported
@@ -115,7 +115,7 @@ steps:
     opcua_surface:
       - GetJoiningProcessList
       - JoiningProcessIdentification
-    expected_evidence:
+    expected_outcome:
       - At least one joining process is returned
       - Selected process identification is captured in the report
       - Empty ProductInstanceUri is only used where the server policy allows controller-level catalog discovery
@@ -130,10 +130,10 @@ steps:
       - SelectJoiningProcess
       - GetSelectedJoiningProgram
       - Joining-process selection event when available
-    expected_evidence:
+    expected_outcome:
       - SelectJoiningProcess returns Good
       - GetSelectedJoiningProgram reflects the selected process
-      - Event evidence is recorded when emitted by the server
+      - Event observation is recorded when emitted by the server
     simulator_support: current
     demo_note: Demonstrates the user-visible process-selection event path.
 
@@ -144,7 +144,7 @@ steps:
     opcua_surface:
       - SetJoiningProcessSize
       - Joining-process counter state
-    expected_evidence:
+    expected_outcome:
       - Size or counter method returns Good when supported
       - The report records one expected operation for this demo pass
     simulator_support: current
@@ -158,7 +158,7 @@ steps:
       - StartSelectedJoining
       - StartJoiningProcess when selected-state flow is not used
       - Result event subscription
-    expected_evidence:
+    expected_outcome:
       - Start method returns Good
       - New result event or result availability is observed
       - The result is associated with the selected process context where exposed
@@ -173,22 +173,22 @@ steps:
       - ResultReady or result event
       - GetResultById
       - Recent result list where available
-    expected_evidence:
+    expected_outcome:
       - ResultId is captured
       - Result retrieval returns Good
-      - Duplicate or stale result is rejected by the workflow evidence check
+      - Duplicate or stale result is rejected by the workflow freshness check
     simulator_support: current
     demo_note: Mirrors the operator question "is this really a new result?" with reusable workflow wording.
 
   - id: repeat_or_finish
     phase: decision
     title: Decide whether to repeat
-    workflow_action: If more operations remain, repeat selection/execution evidence; otherwise finish the part.
+    workflow_action: If more operations remain, repeat selection/execution checks; otherwise finish the part.
     opcua_surface:
       - Joining process counter
       - Result count
       - Client-side workflow state
-    expected_evidence:
+    expected_outcome:
       - Remaining operation count is visible in the report
       - For this demo data, one operation means the workflow finishes
     simulator_support: client_only
@@ -202,10 +202,10 @@ steps:
       - ResetIdentifiers
       - DeselectJoiningProcess
       - Optional EnableAsset false
-    expected_evidence:
+    expected_outcome:
       - Cleanup calls return Good when supported
-      - Unsupported optional cleanup is recorded as skipped evidence
-      - Cleanup evidence is clear for repeated demo runs
+      - Unsupported optional cleanup is recorded as a skipped outcome
+      - Cleanup outcome is clear for repeated demo runs
     simulator_support: current
     demo_note: Makes repeated demos deterministic and reviewable.
 server_change_policy:

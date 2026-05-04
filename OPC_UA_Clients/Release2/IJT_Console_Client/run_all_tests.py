@@ -491,6 +491,7 @@ def _run(
     cwd: Path = _HERE,
     extra_env: dict[str, str] | None = None,
     timeout: int | None = 300,
+    timeout_label: str | None = None,
 ) -> tuple[int, str]:
     """
     Run *cmd* and return (returncode, combined_stdout_stderr).
@@ -527,7 +528,8 @@ def _run(
                     stdout, stderr = proc.communicate(timeout=5)
                 except subprocess.TimeoutExpired:
                     stdout, stderr = "", ""
-                return 1, f"[TIMEOUT] Command exceeded {timeout}s limit: {cmd[0]}\n"
+                label = timeout_label or cmd[0]
+                return 1, f"[TIMEOUT] Command exceeded {timeout}s limit: {label}\n"
     except FileNotFoundError:
         return 1, f"[ERROR] Command not found: {cmd[0]}\n"
     except Exception as exc:
@@ -657,6 +659,8 @@ def _step_mypy() -> _StepResult:
             *sources,
             "--ignore-missing-imports",
             "--no-error-summary",
+            "--disable-error-code",
+            "annotation-unchecked",
             "--cache-dir",
             str(_TMP_DIR / "mypy-cache"),
             "--exclude",
@@ -703,7 +707,10 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     connection refused, or timeout, avoiding the multi-minute retry delays that
     advisory tools impose on failure.
     """
-    path = "/c/p/default" if host == "semgrep.dev" else "/"
+    path = {
+        "pypi.org": "/pypi/pip/json",
+        "semgrep.dev": "/c/p/default",
+    }.get(host, "/")
     url = f"https://{host}{path}"
     try:
         try:
@@ -736,7 +743,30 @@ def _step_pip_audit() -> _StepResult:
         result.note = "network/TLS unavailable — pip-audit skipped"
         result.duration = time.monotonic() - t0
         return result
-    rc, output = _run([sys.executable, "-m", "pip_audit", "--format", "json"], timeout=60)
+    pip_audit_cache = _TMP_DIR / "pip-audit-cache"
+    pip_audit_cache.mkdir(parents=True, exist_ok=True)
+    rc, output = _run(
+        [
+            sys.executable,
+            "-m",
+            "pip_audit",
+            "--format",
+            "json",
+            "--progress-spinner",
+            "off",
+            "--timeout",
+            "5",
+            "--cache-dir",
+            str(pip_audit_cache),
+        ],
+        extra_env={
+            # Keep cache local to project temp dir to avoid user-profile permission issues.
+            "PIP_AUDIT_CACHE_DIR": str(pip_audit_cache),
+            "PIP_CACHE_DIR": str(pip_audit_cache),
+        },
+        timeout=90 if os.environ.get("CI") else 30,
+        timeout_label="pip-audit",
+    )
     result.duration = time.monotonic() - t0
     (_RESULTS_DIR / "pip-audit.json").write_text(output, encoding="utf-8")
     try:
@@ -772,8 +802,8 @@ def _step_pip_audit() -> _StepResult:
         )
         if any(marker in low for marker in network_markers):
             result.ok = True
-            result.note = "network/TLS unavailable — pip-audit advisory only"
-            _log(output)
+            result.skipped = True
+            result.note = "network unavailable for pip-audit (security check skipped)"
         else:
             result.ok = rc == 0
             if not result.ok:

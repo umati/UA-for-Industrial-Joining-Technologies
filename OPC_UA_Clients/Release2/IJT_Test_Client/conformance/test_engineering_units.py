@@ -25,6 +25,7 @@ from helpers.result_validator import (
     ValidationContext,
     ValidationResult,
 )
+from helpers.skip_reasons import skip_accepted_policy
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -456,7 +457,10 @@ async def test_trace_content_data_type_has_engineering_units(subscription_client
                     trace_values.extend(_unwrap_variant(tc) for tc in trace_content)
 
     if not trace_values:
-        pytest.skip("No StepTraceContent entries found in result — trace EU check skipped")
+        skip_accepted_policy(
+            "trace content is not present in this result; result-value engineering-unit coverage remains available",
+            method="Result Trace",
+        )
 
     failures: list[str] = []
     for idx, tc in enumerate(trace_values):
@@ -547,7 +551,10 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
 
     list_node = await find_child_by_browse_name(jm, "GetJointDesignList", ns_ijt)
     if list_node is None:
-        pytest.skip("GetJointDesignList: Not Supported — cannot retrieve designs")
+        skip_accepted_policy(
+            "optional joint-design data is unavailable; result-value engineering-unit coverage remains available",
+            method="GetJointDesignList",
+        )
     await assert_input_argument_names(
         list_node,
         JOINT_METHOD_INPUTS["GetJointDesignList"],
@@ -563,18 +570,28 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
         method_name="GetJointDesignList",
     )
     if not list_result.success:
-        pytest.skip(f"GetJointDesignList not callable: {list_result.error}")
+        skip_accepted_policy(
+            "optional joint-design data is unavailable; result-value engineering-unit coverage remains available",
+            method="GetJointDesignList",
+            status=str(list_result.error),
+        )
 
     outputs = list_result.output_list
     design_list = outputs[0] if outputs and isinstance(outputs[0], (list, tuple)) else outputs
 
     if not design_list:
-        pytest.skip("No joint designs on server — design value EU check skipped")
+        skip_accepted_policy(
+            "no joint designs are configured on the server; result-value engineering-unit coverage remains available",
+            method="GetJointDesignList",
+        )
 
     first_id = str(design_list[0] if isinstance(design_list, (list, tuple)) else design_list)
     get_node = await find_child_by_browse_name(jm, "GetJointDesign", ns_ijt)
     if get_node is None:
-        pytest.skip("GetJointDesign: Not Supported — cannot retrieve design data")
+        skip_accepted_policy(
+            "optional joint-design data is unavailable; result-value engineering-unit coverage remains available",
+            method="GetJointDesign",
+        )
     await assert_input_argument_names(
         get_node,
         JOINT_METHOD_INPUTS["GetJointDesign"],
@@ -590,11 +607,18 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
         method_name="GetJointDesign",
     )
     if not get_result.success:
-        pytest.skip(f"GetJointDesign not callable: {get_result.error}")
+        skip_accepted_policy(
+            "optional joint-design data is unavailable; result-value engineering-unit coverage remains available",
+            method="GetJointDesign",
+            status=str(get_result.error),
+        )
     design_data = get_result.output_list[0] if get_result.output_list else None
 
     if design_data is None:
-        pytest.skip("GetJointDesign returned None — skipping design value EU check")
+        skip_accepted_policy(
+            "joint-design data was empty; result-value engineering-unit coverage remains available",
+            method="GetJointDesign",
+        )
 
     design_values: list = []
     for attr in ("DesignValues", "Values"):
@@ -603,7 +627,10 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
             design_values.extend(vals)
 
     if not design_values:
-        pytest.skip("No DesignValueDataType entries found in joint design — EU check skipped")
+        skip_accepted_policy(
+            "joint design has no DesignValueDataType entries; result-value engineering-unit coverage remains available",
+            method="GetJointDesign",
+        )
 
     failures: list[str] = []
     for idx, dv in enumerate(design_values):

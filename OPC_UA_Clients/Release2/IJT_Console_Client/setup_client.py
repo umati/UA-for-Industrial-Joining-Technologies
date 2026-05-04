@@ -113,9 +113,11 @@ def _python_in_venv() -> Path:
 
 def _run_command(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess | None:
     if check:
-        subprocess.check_call(cmd)  # nosec B603 — cmd is a hardcoded list, no user input
+        # safe: cmd is a hardcoded list assembled by this setup script, not user input.
+        subprocess.check_call(cmd)  # nosec B603
         return None
-    return subprocess.run(cmd, check=False)  # nosec B603 — cmd is a hardcoded list, no user input
+    # safe: cmd is a hardcoded list assembled by this setup script, not user input.
+    return subprocess.run(cmd, check=False)  # nosec B603
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -127,7 +129,8 @@ def _env_bool(name: str, default: bool) -> bool:
 
 def _list_pythons_windows() -> list[str]:
     try:
-        out = subprocess.check_output(["py", "-0"], text=True, stderr=subprocess.STDOUT)  # nosec B603 B607 — hardcoded command, not user input
+        # safe: fixed Windows Python launcher command, no user-controlled input.
+        out = subprocess.check_output(["py", "-0"], text=True, stderr=subprocess.STDOUT)  # nosec B603 B607
     except Exception as exc:
         log.debug("py -0 failed: %s", exc)
         return []
@@ -151,9 +154,8 @@ def _find_latest_python_executable() -> tuple[list[str], str]:
             try:
                 major, minor = map(int, version.split("."))
                 candidates.append(((major, minor), ["py", f"-{version}"], version))
-            except Exception as exc:  # nosec B112 — version string parse failure; skip this candidate
+            except ValueError as exc:
                 log.debug("Skipping Python version '%s': %s", version, exc)
-                continue
         _cur_ver = f"{sys.version_info[0]}.{sys.version_info[1]}"
         candidates.append(((sys.version_info[0], sys.version_info[1]), [sys.executable], _cur_ver))
 
@@ -167,19 +169,21 @@ def _find_latest_python_executable() -> tuple[list[str], str]:
     for minor in range(20, 9, -1):
         exe = f"python3.{minor}"
         try:
-            subprocess.check_call([exe, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # nosec B603 B607 — hardcoded command, not user input
+            # safe: fixed interpreter probe command, no user-controlled input.
+            subprocess.check_call([exe, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # nosec B603
             return ([exe], f"3.{minor}")
-        except Exception as exc:  # nosec B112 — executable check failure; skip this candidate
+        except (OSError, subprocess.CalledProcessError) as exc:
             log.debug("Skipping Python executable '%s': %s", exe, exc)
-            continue
 
     try:
+        # safe: fixed interpreter probe command, no user-controlled input.
         subprocess.check_call(
             ["python3", "--version"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-        )  # nosec B603 B607 — hardcoded command, not user input
-        version = subprocess.check_output(  # nosec B603 B607 — hardcoded command, not user input
+        )  # nosec B603 B607
+        # safe: fixed interpreter version command, no user-controlled input.
+        version = subprocess.check_output(  # nosec B603 B607
             [
                 "python3",
                 "-c",
@@ -206,7 +210,8 @@ def _relaunch_under_latest_python() -> None:
         latest_ver,
         " ".join(shlex.quote(c) for c in cmd),
     )
-    os.execvp(cmd[0], cmd)  # nosec B606 — cmd[0] is a Python interpreter path, not user input
+    # safe: cmd[0] is a Python interpreter path selected by this setup script.
+    os.execvp(cmd[0], cmd)  # nosec B606
 
 
 def _require_python_314_or_newer(version_string: str | None = None) -> None:
@@ -251,7 +256,8 @@ def _warn_if_untested_python(version_string: str | None = None) -> None:
 
 def _resolve_python_executable(latest_cmd: list[str]) -> str:
     try:
-        exe = subprocess.check_output(  # nosec B603 B607 — hardcoded command, not user input
+        # safe: fixed Python launcher resolution command, no shell string.
+        exe = subprocess.check_output(  # nosec B603
             latest_cmd + ["-c", "import sys; print(sys.executable)"],
             text=True,
         ).strip()
@@ -323,7 +329,8 @@ def _is_simulator_process_running() -> bool:
     if not IS_WINDOWS:
         return False
     try:
-        output = subprocess.check_output(  # nosec B603 B607 — hardcoded command, not user input
+        # safe: fixed tasklist query for the simulator executable name.
+        output = subprocess.check_output(  # nosec B603 B607
             ["tasklist", "/FI", f"IMAGENAME eq {SIMULATOR_EXE_NAME}"],
             text=True,
             stderr=subprocess.DEVNULL,
@@ -376,7 +383,8 @@ def _ensure_opc_server_running(endpoint: str, *, context: str, allow_launch: boo
                     popen_kwargs: dict[str, Any] = {"cwd": str(exe.parent)}
                     if IS_WINDOWS:
                         popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE  # type: ignore[attr-defined]
-                    proc = subprocess.Popen([str(exe)], **popen_kwargs)  # nosec B603 B607 — hardcoded path, not user input  # pylint: disable=consider-using-with
+                    # safe: exe is selected from the unpacked simulator package path, not user input.
+                    proc = subprocess.Popen([str(exe)], **popen_kwargs)  # nosec B603  # pylint: disable=consider-using-with
                     log.info("Launched OPC UA simulator with PID: %d", proc.pid)
                     if _wait_for_endpoint_ready(
                         endpoint,
@@ -465,7 +473,8 @@ def _create_virtualenv(latest_cmd: list[str]) -> None:
     log.info("Creating virtual environment with interpreter: %s", target_exe)
 
     try:
-        subprocess.check_call([target_exe, "-m", "venv", "--without-pip", str(VENV_DIR)])  # nosec B603 B607 — hardcoded command, not user input
+        # safe: fixed venv creation command using the interpreter selected by this setup script.
+        subprocess.check_call([target_exe, "-m", "venv", "--without-pip", str(VENV_DIR)])  # nosec B603
     except subprocess.CalledProcessError as exc:
         log.error("Venv creation failed: %s", exc)
         sys.exit(1)
@@ -477,13 +486,15 @@ def _create_virtualenv(latest_cmd: list[str]) -> None:
         env["TMPDIR"] = str(tmp_dir)
         env["TEMP"] = str(tmp_dir)
         env["TMP"] = str(tmp_dir)
-        subprocess.check_call(  # nosec B603 B607 — hardcoded command, not user input
+        # safe: fixed ensurepip command using this project's virtual environment.
+        subprocess.check_call(  # nosec B603
             [str(_python_in_venv()), "-m", "ensurepip", "--upgrade"],
             env=env,
         )
     except Exception as exc:
         log.warning("Failed to ensure pip in virtualenv via ensurepip: %s", exc)
-        subprocess.check_call(  # nosec B603 B607 — hardcoded command, not user input
+        # safe: fixed pip bootstrap fallback command using this project's virtual environment.
+        subprocess.check_call(  # nosec B603
             [
                 sys.executable,
                 "-m",
@@ -506,12 +517,15 @@ def _install_python_packages() -> None:
         sys.exit(1)
 
     log.info("Using Python executable: %s", python)
-    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip"])  # nosec B603 B607 — hardcoded command, not user input
-    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_file)])  # nosec B603 B607 — hardcoded command, not user input
+    # safe: fixed pip command using this project's virtual environment.
+    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip"])  # nosec B603
+    # safe: requirements.txt path is fixed to this project directory.
+    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_file)])  # nosec B603
 
     try:
-        subprocess.check_call(
-            [  # nosec B603 B607 — hardcoded command, not user input
+        # safe: fixed optional crypto package upgrade command.
+        subprocess.check_call(  # nosec B603
+            [
                 str(python),
                 "-m",
                 "pip",
@@ -529,8 +543,9 @@ def _install_python_packages() -> None:
     # can find the current pre-release. --pre does NOT force a pre-release: once asyncua
     # 1.2.x stable is published, pip automatically picks that as the highest matching version.
     log.info("Installing asyncua (--pre enabled for 1.2b2+ / Python 3.14): %s", asyncua_spec)
-    subprocess.check_call(
-        [  # nosec B603 B607 — hardcoded command, not user input
+    # safe: asyncua version spec comes from a dedicated package-spec env var, not a shell string.
+    subprocess.check_call(  # nosec B603
+        [
             str(python),
             "-m",
             "pip",
@@ -543,7 +558,8 @@ def _install_python_packages() -> None:
 
     # Verify the installed asyncua satisfies the minimum version.
     try:
-        installed = subprocess.check_output(  # nosec B603 B607 — hardcoded command, not user input
+        # safe: fixed Python one-liner running inside this project's virtual environment.
+        installed = subprocess.check_output(  # nosec B603
             [str(python), "-c", "import asyncua; print(asyncua.__version__)"],
             text=True,
         ).strip()
@@ -628,7 +644,8 @@ def _run_client(url_arg: str, passthrough: list[str] | None) -> None:
 
     log.info("Launching IJT Console Client with URL: %s", url_arg)
     try:
-        subprocess.call(cmd)  # nosec B603 — cmd is a hardcoded list, no user input
+        # safe: cmd is a fixed Python entry point plus an OPC UA URL argument, never a shell string.
+        subprocess.call(cmd)  # nosec B603
     except KeyboardInterrupt:
         log.info("KeyboardInterrupt received in setup wrapper while waiting for console client. Exiting cleanly.")
 

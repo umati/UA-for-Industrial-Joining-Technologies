@@ -292,6 +292,7 @@ def _run(
     cwd: Path = _HERE,
     extra_env: dict[str, str] | None = None,
     timeout: int | None = 300,
+    timeout_label: str | None = None,
 ) -> tuple[int, str]:
     """
     Run *cmd* and return (returncode, combined_stdout_stderr).
@@ -328,7 +329,8 @@ def _run(
                     stdout, stderr = proc.communicate(timeout=5)
                 except subprocess.TimeoutExpired:
                     stdout, stderr = "", ""
-                return 1, f"[TIMEOUT] Command exceeded {timeout}s limit: {cmd[0]}\n"
+                label = timeout_label or cmd[0]
+                return 1, f"[TIMEOUT] Command exceeded {timeout}s limit: {label}\n"
     except FileNotFoundError:
         return 1, f"[ERROR] Command not found: {cmd[0]}\n"
     except Exception as exc:
@@ -884,7 +886,10 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     connection refused, or timeout, avoiding the multi-minute retry delays that
     advisory tools impose on failure.
     """
-    path = "/c/p/default" if host == "semgrep.dev" else "/"
+    path = {
+        "pypi.org": "/pypi/pip/json",
+        "semgrep.dev": "/c/p/default",
+    }.get(host, "/")
     url = f"https://{host}{path}"
     try:
         try:
@@ -921,13 +926,26 @@ def _step_pip_audit() -> _StepResult:
     pip_audit_cache = _TMP_DIR / "pip-audit-cache"
     pip_audit_cache.mkdir(parents=True, exist_ok=True)
     rc, output = _run(
-        [sys.executable, "-m", "pip_audit", "--format", "json"],
+        [
+            sys.executable,
+            "-m",
+            "pip_audit",
+            "--format",
+            "json",
+            "--progress-spinner",
+            "off",
+            "--timeout",
+            "5",
+            "--cache-dir",
+            str(pip_audit_cache),
+        ],
         extra_env={
             # Keep cache local to project temp dir to avoid user-profile permission issues.
             "PIP_AUDIT_CACHE_DIR": str(pip_audit_cache),
             "PIP_CACHE_DIR": str(pip_audit_cache),
         },
-        timeout=60,  # Match Console Client; 300s default caused 5-minute stall on network-unavailable hosts.
+        timeout=90 if os.environ.get("CI") else 30,
+        timeout_label="pip-audit",
     )
     result.duration = time.monotonic() - t0
     (_RESULTS_DIR / "pip-audit.json").write_text(output, encoding="utf-8")

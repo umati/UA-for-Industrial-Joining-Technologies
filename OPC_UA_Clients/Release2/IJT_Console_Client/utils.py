@@ -8,6 +8,7 @@ import aiofiles  # type: ignore[import-untyped]
 import pytz  # type: ignore[import-untyped]
 from asyncua import Client, ua
 from asyncua.ua import String
+from asyncua.ua.uaerrors import UaError
 
 # ---- START: robust JSON import (fallback if orjson is missing) ----
 try:
@@ -38,6 +39,8 @@ def _to_json_bytes(obj) -> bytes:
 from client_config import ENABLE_RESULT_FILE_LOGGING
 from ijt_logger import ijt_log
 from serialize_data import serialize_full_event
+
+_NS_APP_URI = "urn:AtlasCopco:IJT:Tightening:Server/"
 
 
 def log_field(label: str, value: str, label_width: int = 35):
@@ -73,15 +76,86 @@ async def read_server_time(client: Client) -> datetime | None:
         return None
 
 
-async def read_tool_identifier(client: Client) -> String | None:
+async def _namespace_index(client: Client, namespace_uri: str) -> int | None:
     try:
-        node = client.get_node(
-            ua.NodeId(
-                "TighteningSystem/AssetManagement/Assets/Tools/TighteningTool/Identification/ProductInstanceUri",  # type: ignore[arg-type]
-                1,  # type: ignore[arg-type]
-            )
-        )  # ns=1;s=TighteningSystem/AssetManagement/Assets/Tools/TighteningTool/Identification/ProductInstanceUri
-        return await node.read_value()
+        return await client.get_namespace_index(namespace_uri)
+    except Exception as exc:
+        ijt_log.debug(f"Namespace index lookup failed; reading NamespaceArray fallback: {exc}")
+
+    try:
+        namespace_array_node = client.get_node(ua.NodeId(2255, 0))  # type: ignore[arg-type]  # Server.NamespaceArray
+        namespace_array = await namespace_array_node.read_value()
+        return list(namespace_array).index(namespace_uri)
+    except Exception:
+        return None
+
+
+async def _find_child_by_browse_name(parent_node, browse_name: str, ns_idx: int | None = None):
+    if ns_idx is not None:
+        try:
+            return await parent_node.get_child(f"{ns_idx}:{browse_name}")
+        except Exception as exc:
+            ijt_log.debug(f"Direct browse lookup failed for {browse_name}; enumerating children: {exc}")
+
+    try:
+        children = await parent_node.get_children()
+    except Exception:
+        return None
+
+    fallback_child = None
+    for child in children:
+        try:
+            child_browse_name = await child.read_browse_name()
+        except (AttributeError, UaError) as exc:
+            ijt_log.debug(f"Skipping unreadable child BrowseName while looking for {browse_name}: {exc}")
+            child_browse_name = None
+
+        if child_browse_name is None:
+            continue
+
+        if getattr(child_browse_name, "Name", None) != browse_name:
+            continue
+        if ns_idx is None or getattr(child_browse_name, "NamespaceIndex", None) == ns_idx:
+            return child
+        if fallback_child is None:
+            fallback_child = child
+    return fallback_child
+
+
+async def read_tool_identifier(client: Client) -> String | str | None:
+    try:
+        ns_app = await _namespace_index(client, _NS_APP_URI)
+        objects = client.nodes.objects
+
+        joining_system = await _find_child_by_browse_name(objects, "TighteningSystem", ns_app)
+        if joining_system is None:
+            return None
+
+        asset_management = await _find_child_by_browse_name(joining_system, "AssetManagement", ns_app)
+        if asset_management is None:
+            return None
+
+        assets = await _find_child_by_browse_name(asset_management, "Assets", ns_app)
+        if assets is None:
+            return None
+
+        tools = await _find_child_by_browse_name(assets, "Tools", ns_app)
+        if tools is None:
+            return None
+
+        for tool_node in await tools.get_children():
+            identification = await _find_child_by_browse_name(tool_node, "Identification", ns_app)
+            if identification is None:
+                continue
+
+            piu_node = await _find_child_by_browse_name(identification, "ProductInstanceUri", ns_app)
+            if piu_node is None:
+                continue
+
+            value = await piu_node.read_value()
+            if value is not None and str(value).strip():
+                return value
+        return None
     except Exception as e:
         ijt_log.warning(f"{'Tool Identifier Read Failed':<40} : {e}")
         return None

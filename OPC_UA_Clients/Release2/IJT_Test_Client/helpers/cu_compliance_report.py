@@ -24,8 +24,10 @@ _TERMINAL_OUTCOME_RANK = {
     "passed": 2,
     "not_supported": 3,
     "blocked": 4,
-    "skipped": 5,
-    "untested": 6,
+    "accepted_policy": 5,
+    "environment": 6,
+    "skipped": 7,
+    "untested": 8,
 }
 
 
@@ -92,6 +94,14 @@ def _classify_report(report) -> str:
     if report.skipped:
         reason = _skip_text(report)
         reason_lower = reason.lower()
+        if "accepted policy" in reason_lower or "accepted as optional server behaviour" in reason_lower:
+            return "accepted_policy"
+        if (
+            "environment" in reason_lower
+            or "service unavailable via this asyncua version" in reason_lower
+            or "client-library limitation" in reason_lower
+        ):
+            return "environment"
         if "not declared supported" in reason_lower or "not supported" in reason_lower:
             return "not_supported"
         return "blocked"
@@ -113,6 +123,36 @@ def _rollup_outcome(outcomes: Iterable[str]) -> str:
     if "blocked" in outcomes:
         return "blocked"
     return min(outcomes, key=lambda outcome: _TERMINAL_OUTCOME_RANK.get(outcome, 99))
+
+
+def _rollup_compliance(outcomes: Iterable[str]) -> str:
+    """Return the conservative user-facing CU compliance status.
+
+    `outcome` stays an execution rollup for backward compatibility. `compliance`
+    is the status report renderers should display: support can be present while
+    still carrying notes, and unresolved blocked paths take precedence over
+    Not Supported when no passing support path exists.
+    """
+    outcomes = list(outcomes)
+    if not outcomes:
+        return "untested"
+    if "failed" in outcomes or "error" in outcomes:
+        return "action_needed"
+    if "passed" in outcomes and any(
+        outcome in {"not_supported", "blocked", "skipped", "untested"} for outcome in outcomes
+    ):
+        return "partial"
+    if "blocked" in outcomes:
+        return "blocked"
+    if "not_supported" in outcomes:
+        return "not_supported"
+    if "passed" in outcomes:
+        return "supported"
+    if "accepted_policy" in outcomes or "environment" in outcomes:
+        return "blocked"
+    if "untested" in outcomes:
+        return "untested"
+    return "unknown"
 
 
 def _is_collect_only_session(session) -> bool:
@@ -166,7 +206,9 @@ class CuComplianceReportRecorder:
             "outcome": outcome,
             "phase": report.when,
             "duration_s": round(float(getattr(report, "duration", 0.0)), 6),
-            "reason": _skip_text(report) if outcome in {"not_supported", "blocked"} else "",
+            "reason": _skip_text(report)
+            if outcome in {"not_supported", "blocked", "accepted_policy", "environment"}
+            else "",
         }
 
     def pytest_sessionfinish(self, session, exitstatus):  # noqa: D401
@@ -217,6 +259,7 @@ class CuComplianceReportRecorder:
             workbook_cu = workbook.get("by_cu", {}).get(cu_key, {}) if isinstance(workbook.get("by_cu"), dict) else {}
             by_cu[cu_key] = {
                 "outcome": _rollup_outcome(outcomes),
+                "compliance": _rollup_compliance(outcomes),
                 "test_count": len(tests),
                 "workbook_case_count": int(workbook_cu.get("case_count", 0) or 0),
                 "workbook_positive_case_count": int(workbook_cu.get("positive_case_count", 0) or 0),
@@ -226,6 +269,8 @@ class CuComplianceReportRecorder:
                 "error": outcomes.count("error"),
                 "not_supported": outcomes.count("not_supported"),
                 "blocked": outcomes.count("blocked"),
+                "accepted_policy": outcomes.count("accepted_policy"),
+                "environment": outcomes.count("environment"),
                 "skipped": outcomes.count("skipped"),
                 "untested": outcomes.count("untested"),
                 "tests": [test["nodeid"] for test in tests],

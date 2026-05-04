@@ -20,6 +20,7 @@ External calls are patched via unittest.mock / monkeypatch.
 import socket
 import subprocess
 import sys
+import uuid
 import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -1362,12 +1363,24 @@ class TestSetupLock:
         lock = sp._SetupLock(tmp_path / "test.lock")
         assert lock.acquire() is False
 
-    def test_acquire_windows_succeeds(self, tmp_path):
-        if not sp.IS_WINDOWS:
-            pytest.skip("Windows-only test")
-        lock = sp._SetupLock(tmp_path / "test.lock")
+    def test_acquire_windows_succeeds(self, monkeypatch):
+        monkeypatch.setattr(sp, "IS_WINDOWS", True)
+        calls = []
+        fake_msvcrt = types.ModuleType("msvcrt")
+        setattr(fake_msvcrt, "LK_NBLCK", 1)
+        setattr(fake_msvcrt, "LK_UNLCK", 2)
+
+        def _locking(_fd, mode, nbytes):
+            calls.append((mode, nbytes))
+
+        setattr(fake_msvcrt, "locking", _locking)
+        monkeypatch.setitem(sys.modules, "msvcrt", fake_msvcrt)
+
+        lock_path = Path(__file__).parents[2] / "tmp" / "unit_setup_lock" / uuid.uuid4().hex / "test.lock"
+        lock = sp._SetupLock(lock_path)
         assert lock.acquire() is True
         lock.release()
+        assert calls == [(fake_msvcrt.LK_NBLCK, 1), (fake_msvcrt.LK_UNLCK, 1)]
 
 
 # =============================================================================

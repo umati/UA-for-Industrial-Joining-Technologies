@@ -76,6 +76,7 @@ def _git_ls_files(pattern: str) -> list[str]:
     not _git_available(),
     reason="git not installed — skipping tracked-artefact checks",
 )
+@pytest.mark.checkout_hygiene
 class TestGitTrackedArtefacts:
     def test_no_pyc_files_tracked(self):
         """No .pyc files should be committed to git."""
@@ -142,6 +143,7 @@ class TestGitTrackedArtefacts:
 # ===========================================================================
 
 
+@pytest.mark.checkout_hygiene
 class TestGitignoreCoverage:
     """Verify the root .gitignore covers all critical patterns."""
 
@@ -191,6 +193,7 @@ class TestGitignoreCoverage:
 # ===========================================================================
 
 
+@pytest.mark.checkout_hygiene
 class TestConnectionpointsDefault:
     """Enforce that committed connectionpoints.json files contain only the LOCAL entry.
 

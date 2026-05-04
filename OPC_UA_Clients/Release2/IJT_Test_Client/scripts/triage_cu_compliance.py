@@ -135,8 +135,12 @@ def _cu_rows(payload: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     return sorted((str(cu), data) for cu, data in by_cu.items() if isinstance(data, dict))
 
 
-def _outcome_counts(rows: list[tuple[str, dict[str, Any]]]) -> Counter[str]:
-    return Counter(str(data.get("outcome", "unknown")) for _cu, data in rows)
+def _cu_compliance(data: dict[str, Any]) -> str:
+    return str(data.get("compliance") or data.get("outcome") or "unknown")
+
+
+def _compliance_counts(rows: list[tuple[str, dict[str, Any]]]) -> Counter[str]:
+    return Counter(_cu_compliance(data) for _cu, data in rows)
 
 
 def _tests_by_outcome(tests: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -161,13 +165,13 @@ def _review_flags(payload: dict[str, Any]) -> list[tuple[str, str, str]]:
     supported = set(payload.get("supported_cus") or [])
 
     for cu_key, data in _cu_rows(payload):
-        outcome = str(data.get("outcome", "unknown"))
+        compliance = _cu_compliance(data)
         passed = int(data.get("passed", 0) or 0)
         blocked = int(data.get("blocked", 0) or 0)
         not_supported = int(data.get("not_supported", 0) or 0)
         test_count = int(data.get("test_count", 0) or 0)
 
-        if outcome == "untested" or test_count == 0:
+        if compliance == "untested" or test_count == 0:
             flags.append((cu_key, "missing-test", "No collected test path for this CU."))
         if passed and blocked:
             flags.append((cu_key, "mixed-pass-blocked", f"{passed} passed and {blocked} blocked tests."))
@@ -175,12 +179,10 @@ def _review_flags(payload: dict[str, Any]) -> list[tuple[str, str, str]]:
             flags.append(
                 (cu_key, "mixed-pass-not-supported", f"{passed} passed and {not_supported} Not Supported tests.")
             )
-        if cu_key in supported and outcome == "not_supported":
-            flags.append(
-                (cu_key, "supported-but-not-supported", "CU is declared supported but rolled up Not Supported.")
-            )
-        if cu_key in supported and outcome == "blocked":
-            flags.append((cu_key, "supported-but-blocked", "CU is declared supported but rolled up Blocked."))
+        if cu_key in supported and compliance == "not_supported":
+            flags.append((cu_key, "supported-but-not-supported", "CU is declared supported but reports Not Supported."))
+        if cu_key in supported and compliance == "blocked":
+            flags.append((cu_key, "supported-but-blocked", "CU is declared supported but reports Blocked."))
 
         for test in _tests_for_cu(data, lookup):
             outcome = str(test.get("outcome", ""))
@@ -198,7 +200,7 @@ def _render(payload: dict[str, Any], junit_cases: list[JUnitCase], source: Path,
     tests = payload.get("tests", []) if isinstance(payload.get("tests"), list) else []
     grouped_tests = _tests_by_outcome(tests)
     cu_rows = _cu_rows(payload)
-    cu_outcomes = _outcome_counts(cu_rows)
+    cu_compliance = _compliance_counts(cu_rows)
     flags = _review_flags(payload)
 
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -241,12 +243,12 @@ def _render(payload: dict[str, Any], junit_cases: list[JUnitCase], source: Path,
         lines.append("> a failed collection, or a pytest invocation that did not include `conformance`.")
         lines.append("")
 
-    lines.append("## CU Outcomes")
+    lines.append("## CU Compliance")
     lines.append("")
-    lines.append("| Outcome | CU Count |")
+    lines.append("| Compliance | CU Count |")
     lines.append("|---|---:|")
-    for outcome, count in sorted(cu_outcomes.items()):
-        lines.append(f"| `{outcome}` | {count} |")
+    for compliance, count in sorted(cu_compliance.items()):
+        lines.append(f"| `{compliance}` | {count} |")
     lines.append("")
 
     lines.append("## Test Outcomes")
@@ -350,7 +352,8 @@ def _render(payload: dict[str, Any], junit_cases: list[JUnitCase], source: Path,
         "- `blocked`: acceptable only when a trigger, prerequisite, data source, or simulator capability is unavailable."
     )
     lines.append(
-        "- `mixed-pass-blocked`: review manually because CU rollup can look passed while some row intent is untested."
+        "- `mixed-pass-blocked`: review manually because raw execution can include passing support coverage while "
+        "one or more row intents still need a precondition or trigger."
     )
     lines.append("- `missing-test`: not acceptable for official CUs in the final compliance client.")
     return "\n".join(lines) + "\n"

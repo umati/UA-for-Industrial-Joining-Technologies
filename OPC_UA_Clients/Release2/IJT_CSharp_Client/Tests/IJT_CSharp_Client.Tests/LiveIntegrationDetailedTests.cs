@@ -69,22 +69,34 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     }
 
     /// <summary>
-    /// Navigates JoiningSystem → Simulations and browses for <c>SimulateEvents</c>.
+    /// Navigates JoiningSystem → Simulations → SimulateEventsAndConditions and browses for
+    /// <c>SimulateEvents</c>.
     /// Returns (<see cref="NodeId.Null"/>, <see cref="NodeId.Null"/>) if not found.
     /// </summary>
-    private static async Task<(NodeId simsNode, NodeId simEventsMethod)> BrowseSimulateEventsMethod(
+    private static async Task<(NodeId eventSimulationNode, NodeId simEventsMethod)> BrowseSimulateEventsMethod(
         JoiningSystem session)
     {
         return await WithTimeout(() =>
         {
             var sims = session.BrowseChild(session.NodeId, "Simulations");
             if (sims.IsNullNodeId) return (NodeId.Null, NodeId.Null);
-            // Try the actual browse name used on this server first, then fallback
-            var meth = session.BrowseChild(sims, "SimulateEventsAndConditions", nodeClassMask: NodeClass.Method);
-            if (meth.IsNullNodeId)
-                meth = session.BrowseChild(sims, "SimulateEvents", nodeClassMask: NodeClass.Method);
-            return (sims, meth);
-        }, 10, "browse Simulations/SimulateEvents[AndConditions]").ConfigureAwait(false);
+
+            var eventSimulationNode = session.BrowseChild(
+                sims,
+                "SimulateEventsAndConditions",
+                nodeClassMask: NodeClass.Object);
+            if (!eventSimulationNode.IsNullNodeId)
+            {
+                var meth = session.BrowseChild(
+                    eventSimulationNode,
+                    "SimulateEvents",
+                    nodeClassMask: NodeClass.Method);
+                return (eventSimulationNode, meth);
+            }
+
+            var directMeth = session.BrowseChild(sims, "SimulateEvents", nodeClassMask: NodeClass.Method);
+            return (sims, directMeth);
+        }, 10, "browse Simulations/SimulateEventsAndConditions/SimulateEvents").ConfigureAwait(false);
     }
 
     /// <summary>
@@ -445,16 +457,16 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
         Skip.IfNot(subOk, "Subscribe timed out; skipping");
 
-        var (simsNode, simEventsMethod) = await BrowseSimulateEventsMethod(session).ConfigureAwait(false);
+        var (eventSimulationNode, simEventsMethod) = await BrowseSimulateEventsMethod(session).ConfigureAwait(false);
         Skip.IfNot(!simEventsMethod.IsNullNodeId, "SimulateEvents method not found; skipping");
 
         var tcs = new TaskCompletionSource<EventSubscriber.JoiningSystemEventArgs>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         session.EventSubscriber.OnJoiningSystemEvent += (_, e) => tcs.TrySetResult(e);
 
-        // SimulateEvents(eventType: UInt32, count: UInt32)
+        // SimulateEvents(eventType: UInt32). Use SimulateBulkEvents for count-based event generation.
         await WithTimeout(
-            () => session.CallMethod(simsNode, simEventsMethod, (uint)1, (uint)1),
+            () => session.CallMethod(eventSimulationNode, simEventsMethod, (uint)1),
             10, "SimulateEvents").ConfigureAwait(false);
 
         var received = await Task.WhenAny(tcs.Task, Task.Delay(10_000, cts.Token))

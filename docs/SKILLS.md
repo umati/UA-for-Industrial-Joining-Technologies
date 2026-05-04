@@ -118,7 +118,7 @@ Every `run_all_tests.py` calls `_cleanup_caches()` after writing reports. Cleanu
 | Sub-project runners | Own project dir (recursive) | `__pycache__`, `.ruff_cache`, `.mypy_cache`, `.coverage*`, `*.pyc` |
 | Root orchestrator | Repo root only (non-recursive) | Same + `pki/`, `PKI/` |
 
-`.pytest_cache` is cleaned post-run (regenerates on next run; `--lf`/`--ff` only work within the same session). Always preserved: `test-results/` (reports).
+`.pytest_cache` is cleaned post-run (regenerates on next run; `--lf`/`--ff` only work within the same session). Always preserved: `test-results/` (reports). The root orchestrator may create `tmp/runner-env/` for delegated tool caches; it is runtime state and must remain untracked.
 
 ---
 
@@ -172,9 +172,15 @@ All Python runner scripts (`run_all_tests.py`) use a `_StepResult` class with fo
 | `ok=False, warn=False` | **FAIL** | red | `failed` → suite FAIL | Real defect or gate violation |
 | `skipped=True` | **SKIP** | yellow | `skipped` | Tool not installed / not applicable |
 
-**Advisory tool rule**: Tools whose failures are inherently non-actionable on the local/CI environment (Semgrep SSL, pyright advisory, pip-audit network) must use `result.warn = True` — **never** `result.ok = False`. Setting `ok=False` converts an advisory observation into a suite-blocking failure.
+**Advisory tool rule**: Tools whose failures are inherently non-actionable on the local/CI environment (Semgrep SSL, pyright advisory, pip-audit network) must use `result.warn = True` or `skipped=True` — **never** `result.ok = False`. Setting `ok=False` converts an advisory observation into a suite-blocking failure.
 
 **Semgrep preflight rule**: When a runner uses `--config=p/default`, the network preflight must probe `https://semgrep.dev/c/p/default`, not only `https://semgrep.dev/`. Use `requests` when available so the preflight follows the same certifi/TLS trust path as Semgrep and pip-audit. Keep `requests` optional inside the helper and annotate that import with `# type: ignore[import-untyped]` unless `types-requests` is a required dev dependency. Optional imports used by runner/report tooling are covered by the root optional-import typing guard, including untyped imports and forward-annotation/reimport patterns that mypy flags as `no-redef`. The root host can be reachable while the rule download path fails TLS/auth, which otherwise costs roughly 100 seconds and emits traceback noise before producing the same advisory WARN.
+
+**pip-audit preflight rule**: pip-audit must preflight `https://pypi.org/pypi/pip/json`, not the PyPI root page, and must use `--progress-spinner off`, `--timeout 5`, and a project-local `--cache-dir`. Local parent-process timeout should be short (30s); CI can be longer (90s). Network/TLS/timeout outcomes are advisory skips, not PASS and not FAIL.
+
+**npm install noise rule**: Runner-managed dependency installs must pass `--no-audit --no-fund` to `npm ci` / `npm install` so repeated local and CI runs do not print funding/audit summaries. Keep `npm audit` as a separate explicit security step; do not rely on install-time audit output.
+
+**Root child environment rule**: The root orchestrator sets repo-local defaults for Python/npm child-process caches (`PIP_CACHE_DIR`, `npm_config_cache`) under `tmp/runner-env/`, plus UTF-8 Python output. Do not override `DOTNET_CLI_HOME` or `NUGET_PACKAGES` by default: local/offline runs should keep using standard .NET/NuGet behavior unless the caller explicitly chooses another location. Explicit caller-provided environment variables still win.
 
 The invariant is unit-tested in `tests/unit/test_runner_step_result.py` in both Console Client and Test Client:
 - `test_semgrep_parse_failure_sets_warn_not_fail` — parse failure must set `warn=True`
@@ -305,7 +311,7 @@ UA-for-Industrial-Joining-Technologies/
 ### IJT Node Client (`OPC_UA_Clients/Release1/IJT_Node_Client/`)
 - **Stack**: Node.js 24+, node-opcua, Socket.io, Vitest, Playwright
 - **Purpose**: Node.js + browser OPC UA IJT client (Release 1)
-- **One test command**: `python run_all_tests.py` (npm ci + vitest + eslint + npm audit)
+- **One test command**: `python run_all_tests.py` (quiet npm ci + vitest + eslint + explicit npm audit)
 - **E2E tests**: 27 Playwright specs in `tests/e2e/` — skip gracefully in CI (no server); run locally with `node index.js` then `npx playwright test`
 - **Details**: read `OPC_UA_Clients/Release1/IJT_Node_Client/docs/SKILLS.md`
 

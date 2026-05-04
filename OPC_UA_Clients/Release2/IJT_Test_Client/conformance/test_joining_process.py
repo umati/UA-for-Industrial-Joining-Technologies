@@ -61,6 +61,7 @@ from helpers.node_discovery import (
     get_type_definition,
     read_tool_product_instance_uri,
 )
+from helpers.skip_reasons import skip_accepted_policy
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -358,7 +359,11 @@ async def test_select_joining_process_with_valid_program_succeeds(opcua_client, 
     if not call_result.success:
         err_str = str(call_result.error) if call_result.error else "unknown error"
         if any(s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound", "Uncertain")):
-            pytest.skip(f"SelectJoiningProcess returned {err_str} — accepted as optional server behaviour")
+            skip_accepted_policy(
+                "server may reject the listed process for current controller/tool state",
+                method=BN.SELECT_JOINING_PROCESS,
+                status=err_str,
+            )
         pytest.fail(f"SelectJoiningProcess with valid program ID failed: {err_str}")
 
 
@@ -473,16 +478,21 @@ async def test_start_selected_joining_triggers_result_ready_event(subscription_c
                     "Uncertain",
                 )
             ):
-                pytest.skip(f"StartSelectedJoining returned {err_str} — tool may not be active or connected")
+                skip_accepted_policy(
+                    "tool/controller state is not ready to execute the selected joining process",
+                    method=BN.START_SELECTED_JOINING,
+                    status=err_str,
+                )
             pytest.fail(f"StartSelectedJoining failed unexpectedly: {err_str}")
         # P06: server returns OpcUa_Good + bad methodStatusCode in output[0] when no process is selected
         output = start_result.output_list
         if output:
             try:
                 if int(output[0]) != 0:
-                    pytest.skip(
-                        "StartSelectedJoining returned Good with bad output status — "
-                        "no joining process active or selected"
+                    skip_accepted_policy(
+                        "method returned Good with a non-success domain status because no joining process is active or selected",
+                        method=BN.START_SELECTED_JOINING,
+                        status=str(output[0]),
                     )
             except (TypeError, ValueError):
                 pass
@@ -605,17 +615,19 @@ async def test_start_selected_joining_with_deselect_after_joining_true(subscript
                     "BadArgumentsMissing",
                 )
             ):
-                pytest.skip(
-                    f"StartSelectedJoining(DeselectAfterJoining=True) returned {err_str} "
-                    "— tool may not be active or connected"
+                skip_accepted_policy(
+                    "tool/controller state is not ready to execute the selected joining process",
+                    method=BN.START_SELECTED_JOINING,
+                    status=err_str,
                 )
             pytest.fail(f"StartSelectedJoining(DeselectAfterJoining=True) failed unexpectedly: {err_str}")
         events = await collector.collect(count=1, timeout_s=45.0)
 
     if not events:
-        pytest.skip(
-            "StartSelectedJoining(DeselectAfterJoining=True) did not produce a ResultReadyEvent within timeout — "
-            "tool may not be physically running; trigger manually if using a real controller"
+        skip_accepted_policy(
+            "no running joining-process execution produced a ResultReadyEvent within timeout",
+            method=BN.START_SELECTED_JOINING,
+            status="No event within timeout",
         )
     assert_result_ready_event_valid(
         events[0],
@@ -758,7 +770,11 @@ async def test_get_selected_joining_program_returns_program(opcua_client, ns_ind
             s in err_str
             for s in ("BadNotSupported", "BadNothingToDo", "BadNotImplemented", "BadArgumentsMissing", "Uncertain")
         ):
-            pytest.skip(f"GetSelectedJoiningProgram returned {err_str} — skipping")
+            skip_accepted_policy(
+                "no selected joining program is available for the current controller/tool state",
+                method=BN.GET_SELECTED_JOINING_PROGRAM,
+                status=err_str,
+            )
         pytest.fail(f"GetSelectedJoiningProgram failed unexpectedly: {err_str}")
 
 
@@ -1512,9 +1528,10 @@ async def test_abort_joining_process_generates_event_if_present(subscription_cli
                 pytest.skip(f"AbortJoiningProcess returned {err_str} — no active process to abort")
         events = await collector.collect(count=1, timeout_s=30.0)
     if not events:
-        pytest.skip(
-            "AbortJoiningProcess did not produce an event within timeout — "
-            "tool may not be active; trigger manually with a running process"
+        skip_accepted_policy(
+            "no active joining-process execution was available to produce an abort event",
+            method=BN.ABORT_JOINING_PROCESS,
+            status="No event within timeout",
         )
     assert len(events) >= 1, "Expected at least one event after AbortJoiningProcess"
 
@@ -1557,9 +1574,10 @@ async def test_start_selected_joining_after_select_returns_good(opcua_client, ns
     )
     if not select_result.success:
         err_str = str(select_result.error) if select_result.error else "unknown"
-        pytest.skip(
-            f"SelectJoiningProcess precondition failed ({err_str}) — "
-            "current server listed a process but did not allow selecting it"
+        skip_accepted_policy(
+            "server listed a process but did not allow selecting it in the current controller/tool state",
+            method=BN.SELECT_JOINING_PROCESS,
+            status=err_str,
         )
     start_node = await _find_method_node(jpm, BN.START_SELECTED_JOINING, ns_ijt)
     assert start_node is not None, f"Required method '{BN.START_SELECTED_JOINING}' not found after SelectJoiningProcess"
@@ -1582,8 +1600,10 @@ async def test_start_selected_joining_after_select_returns_good(opcua_client, ns
                 "BadInvalidState",
             )
         ):
-            pytest.skip(
-                f"StartSelectedJoining returned {err_str} after select — tool may not be ready or physically connected"
+            skip_accepted_policy(
+                "tool/controller state is not ready to execute immediately after selection",
+                method=BN.START_SELECTED_JOINING,
+                status=err_str,
             )
         pytest.fail(f"StartSelectedJoining raised unexpected error after SelectJoiningProcess: {err_str}")
 
@@ -1632,7 +1652,11 @@ async def test_select_joining_process_state_reflected_after_select(opcua_client,
             s in err_str
             for s in ("BadNotSupported", "BadInvalidArgument", "BadNotFound", "BadArgumentsMissing", "Uncertain")
         ):
-            pytest.skip(f"SelectJoiningProcess returned {err_str} — skipping")
+            skip_accepted_policy(
+                "server may reject selection for current controller/tool state",
+                method=BN.SELECT_JOINING_PROCESS,
+                status=err_str,
+            )
         pytest.fail(f"SelectJoiningProcess failed: {err_str}")
     get_result = await find_and_call_method(
         jpm, BN.GET_SELECTED_JOINING_PROGRAM, ns_ijt, _piu_arg(pi_uri), timeout=15.0
@@ -1640,7 +1664,11 @@ async def test_select_joining_process_state_reflected_after_select(opcua_client,
     if not get_result.success:
         err_str = str(get_result.error) if get_result.error else "unknown"
         if any(s in err_str for s in ("BadNotSupported", "BadNothingToDo")):
-            pytest.skip(f"GetSelectedJoiningProgram returned {err_str} after select")
+            skip_accepted_policy(
+                "selected program is not readable for the current controller/tool state",
+                method=BN.GET_SELECTED_JOINING_PROGRAM,
+                status=err_str,
+            )
         pytest.fail(f"GetSelectedJoiningProgram failed after SelectJoiningProcess: {err_str}")
     assert get_result.output_list is not None, (
         "GetSelectedJoiningProgram must return non-null after SelectJoiningProcess"
@@ -2035,9 +2063,10 @@ async def test_get_selected_joining_program_result_has_valid_fields(opcua_client
     )
     if not select_result.success:
         err_str = str(select_result.error) if select_result.error else "unknown"
-        pytest.skip(
-            f"SelectJoiningProcess precondition failed ({err_str}) — "
-            "cannot verify GetSelectedJoiningProgram result fields"
+        skip_accepted_policy(
+            "selection precondition could not be established for current controller/tool state",
+            method=BN.SELECT_JOINING_PROCESS,
+            status=err_str,
         )
     get_result = await find_and_call_method(
         jpm, BN.GET_SELECTED_JOINING_PROGRAM, ns_ijt, _piu_arg(pi_uri), timeout=15.0
@@ -2045,7 +2074,11 @@ async def test_get_selected_joining_program_result_has_valid_fields(opcua_client
     if not get_result.success:
         err_str = str(get_result.error) if get_result.error else "unknown"
         if any(s in err_str for s in ("BadNotSupported", "BadNothingToDo")):
-            pytest.skip(f"GetSelectedJoiningProgram returned {err_str}")
+            skip_accepted_policy(
+                "selected program is not readable for the current controller/tool state",
+                method=BN.GET_SELECTED_JOINING_PROGRAM,
+                status=err_str,
+            )
         pytest.fail(f"GetSelectedJoiningProgram failed: {err_str}")
     programs = get_result.output_list
     assert programs is not None, "GetSelectedJoiningProgram must return non-null after select"

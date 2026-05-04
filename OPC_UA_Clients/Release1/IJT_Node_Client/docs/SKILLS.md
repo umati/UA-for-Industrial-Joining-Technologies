@@ -126,6 +126,10 @@ the full Phase 2 suite (server auto-launched if binary is present).
 
 ### Zero-Escape Testing Tools (run_all_tests.py Phase 1, auto-detected)
 
+Runner-managed `npm ci` uses `--no-audit --no-fund` to keep repeated local/CI
+logs readable; JS CVEs are still checked by the separate explicit `npm audit`
+step.
+
 `eslint` (lint), `prettier` (format), `npm audit` (CVE scan), `depcheck` (unused deps),
 `semgrep` (AI security rules), `detect-secrets` (hardcoded secrets).
 
