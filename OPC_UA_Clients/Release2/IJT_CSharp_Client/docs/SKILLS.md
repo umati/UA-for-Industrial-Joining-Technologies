@@ -363,7 +363,7 @@ Always call `JoiningSystem.BrowseMethod(objectId, name, fallbackConstant)` — n
 | `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | OPC UA server endpoint |
 | `OPCUA_SERVER_PORT` | `40451` | Alternative port-based server endpoint selection; test runner manages isolation automatically |
 | `OPCUA_SIMULATOR_EXE` | *(auto-discover)* | Explicit simulator binary path for fixture launch |
-| `IJT_PHASE1_ONLY` | `false` | Forces fixture to skip server auto-launch (unit test CI phase) |
+| `IJT_PHASE1_ONLY` | `false` | Set to `true` only for unit-test-only runs; Phase 2 explicitly passes `false` so stale shell state cannot suppress live server startup |
 | `IJT_CSHARP_CLEAN` | `false` | If `true/1/yes`, `run_all_tests.py` removes `bin/` and `obj/` before and after run |
 
 ---
@@ -395,6 +395,10 @@ This client's test runner auto-launches a dedicated server instance on port **40
 mechanism — `OpcUaServerFixture.cs` copies the binary, patches `server_configuration.json`, and manages
 the full lifecycle). Port 40451 is not used during CI or parallel test runs. For standalone developer
 use (no `OPCUA_SERVER_PORT` env var set), the runner falls back to the server's native port 40451.
+
+Runner-managed Phase 2 must produce real live-test evidence. If every live test is skipped while
+`OPCUA_SERVER_PORT` is set, the runner treats that as a failure because the managed server was
+unavailable; it is not accepted as a green live run.
 
 For the full port assignment table, auto-launch mechanics, and venv rationale, see
 [`docs/TEST_TIERS.md`](../../../../docs/TEST_TIERS.md).

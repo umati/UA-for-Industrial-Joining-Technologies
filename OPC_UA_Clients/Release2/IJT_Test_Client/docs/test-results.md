@@ -72,7 +72,7 @@ compliance/conformance runs. Unit-only runs can still load `conftest.py`, so
 `cu-compliance-report-unit.json` when CU-marked tests are collected. Unit-only
 runs with no CU-marked tests and collect-only sessions do not write or
 overwrite the main live report; this keeps `cu-compliance-report.json` tied to
-executed compliance evidence.
+executed compliance results.
 The live report records collected CU-marked tests, per-test outcomes, CU
 rollups, Not Supported skips, and official CUs with no collected test path.
 Unsupported CU skips use compact public labels in runner summaries, for example
@@ -86,7 +86,7 @@ the `workbook` section contains the expected 1,122 test-case header rows,
 positive/negative classification, CTT/review/spec-link metadata, and the CU key
 each row belongs to. Rows are linked to tests by CU by default
 (`mapping_precision = "cu"`). Add `@pytest.mark.workbook_ref("Sheet", [row])`
-or multiple rows when a test provides exact evidence for specific workbook rows.
+or multiple rows when a test validates specific workbook rows.
 The report summary exposes `workbook_case_count`,
 `workbook_expected_case_count`, `workbook_exact_case_count`, and
 `workbook_missing_case_cus`.
@@ -104,7 +104,7 @@ server-facing compliance/conformance suite. Phase 2 selects `conformance` by
 default so unit tests are not duplicated after Phase 1. Phase 2 appends helper
 coverage diagnostics to `test-results/coverage-combined.xml` but sets live
 coverage fail-under to 0; helper coverage fail-under remains a Phase 1
-unit-stage quality gate, while Phase 2 is compliance evidence against a live
+unit-stage quality gate, while Phase 2 is compliance validation against a live
 server.
 Passing explicit pytest paths or explicit coverage arguments after the runner
 arguments remains supported for targeted diagnostic runs.
@@ -128,8 +128,8 @@ python scripts/triage_cu_compliance.py \
 ```
 
 The triage summary is for review, not certification output. It highlights
-failed/error CUs, blocked and Not Supported reason buckets, CUs with mixed
-pass+blocked signals, missing official CU tests, and suspicious skip reasons
+failed/error CUs, blocked and Not Supported reason buckets, CUs with supported
+results plus notes, missing official CU tests, and suspicious skip reasons
 that need manual classification.
 
 ---
@@ -143,9 +143,9 @@ that need manual classification.
 | **Failures (N)** | Failed tests only — with full failure message |
 | **Skipped (N)** | Skipped tests only — with skip reason |
 | **Expected Fail (N)** | Xfailed/xpassed — expected failures with reason |
-| **Profile Coverage** | User-facing IJT CS profile summary: active profile, declared support, evidence status, and profile-level CU counts |
-| **Facet Coverage** | IJT CS facet table with CU counts, declared support, pass/not-supported/blocked/fail evidence, and facet descriptions |
-| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, declared support, evidence outcome, workbook case counts, and example test |
+| **Profile Coverage** | User-facing IJT CS profile summary: server profile, server profile CU count, compliance status, and profile-level CU counts |
+| **Facet Coverage** | IJT CS facet table with CU counts, server profile CU count, pass/not-supported/blocked/fail status, and facet descriptions |
+| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, whether it is in the server profile, compliance outcome, workbook case counts, and example test |
 
 Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠 orange = xfailed.
 
@@ -153,10 +153,21 @@ The profile/facet/CU sheets are generated when
 `test-results/cu-compliance-report.json` is present. CI Integration also adds a
 compact **IJT CS Profile / Facet Coverage** table to `summary.md` and the
 GitHub Actions step summary, so users can see the active profile, reference
-profiles, facet coverage, attention CUs, and a collapsible full CU coverage
+profiles, facet coverage, CUs with notes or Not Supported declarations, and a collapsible full CU coverage
 table without downloading the Excel file first.
-Profile and facet tables distinguish fully supported CUs from partial CUs,
-where at least one path passes but another path is blocked or Not Supported.
+`Server Profile CUs` and `In Server Profile` are read from the active server
+capability file (`n/a` when no capability file was loaded); `Compliance` is
+calculated from the current test run. Start with the `Server Profile` row.
+`Reference Only` profile rows are comparison views against other IJT CS
+profiles, not additional pass/fail requirements for this server.
+The `Why Listed` / `Notes` fields explain why a supported CU still appears in
+the notes table, such as a dependency on an optional method, an unavailable
+event trigger, or an unreproducible runtime precondition.
+Profile and facet tables distinguish fully supported CUs from CUs supported
+with notes. "Supported with notes" means at least one test path passed and
+the remaining non-passing rows are accepted skips, Not Supported methods/CUs
+from the server profile, or environment/precondition notes; failures and errors
+are reported separately as action needed.
 
 ---
 

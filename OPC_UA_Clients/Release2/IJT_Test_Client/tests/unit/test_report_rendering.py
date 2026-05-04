@@ -24,11 +24,11 @@ def test_ci_summary_skip_reason_bucket_preserves_public_method_label():
     )
 
 
-def test_report_evidence_key_marks_mixed_pass_and_blocked_as_partial():
+def test_report_compliance_key_labels_mixed_pass_and_blocked_as_notes():
     data = {"passed": 2, "blocked": 1, "not_supported": 0, "failed": 0, "error": 0, "test_count": 3}
 
-    assert _ci_summary._cu_evidence_key(data) == "partial"
-    assert _excel_report._cu_evidence_label(_excel_report._cu_evidence_key(data)) == "Partial"
+    assert _ci_summary._cu_compliance_key(data) == "partial"
+    assert _excel_report._cu_compliance_label(_excel_report._cu_compliance_key(data)) == "Supported with Notes"
 
 
 def test_ci_summary_renders_profile_facet_and_full_cu_tables(monkeypatch):
@@ -74,13 +74,26 @@ def test_ci_summary_renders_profile_facet_and_full_cu_tables(monkeypatch):
                 "workbook_case_count": 2,
             },
         },
+        "tests": [
+            {
+                "cus": ["optional_feature"],
+                "nodeid": "conformance/test_optional.py::test_optional_feature",
+                "outcome": "not_supported",
+                "reason": "Skipped: OptionalFeature: Not Supported — cannot run optional feature",
+            }
+        ],
     }
 
     rendered = "\n".join(_ci_summary._render_profile_facet_summary(payload))
 
     assert "### Profiles" in rendered
     assert "### Facets" in rendered
-    assert "### CUs Requiring Attention" in rendered
+    assert "### CUs With Notes / Not Supported" in rendered
+    assert "Profile Role" in rendered
+    assert "Server Profile CUs" in rendered
+    assert "In Server Profile" in rendered
+    assert "Why Listed" in rendered
+    assert "OptionalFeature: Not Supported" in rendered
     assert "<summary>Full CU coverage table</summary>" in rendered
     assert "Report Test Server" in rendered
     assert "| IJT Joining System Base | Basic Facet | Yes | 🟢 Supported | 2 | 2 | 0 | 0 | 0 | 3 |" in rendered

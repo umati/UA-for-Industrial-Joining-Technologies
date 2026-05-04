@@ -329,8 +329,9 @@ async def test_select_joining_process_with_valid_program_succeeds(opcua_client, 
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
 
-    list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(), timeout=15.0)
+    list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(pi_uri), timeout=15.0)
     if not list_result.success:
         pytest.skip("GetJoiningProcessList unavailable — cannot determine valid program ID")
     programs = list_result.output_list
@@ -349,7 +350,7 @@ async def test_select_joining_process_with_valid_program_succeeds(opcua_client, 
     call_result = await call_method(
         jpm,
         method_node,
-        _piu_arg(),
+        _piu_arg(pi_uri),
         jp_arg,
         timeout=15.0,
         method_name=BN.SELECT_JOINING_PROCESS,
@@ -743,11 +744,12 @@ async def test_get_selected_joining_program_returns_program(opcua_client, ns_ind
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     result = await find_and_call_method(
         jpm,
         BN.GET_SELECTED_JOINING_PROGRAM,
         ns_ijt,
-        _piu_arg(),
+        _piu_arg(pi_uri),
         timeout=15.0,
     )
     if not result.success:
@@ -1530,8 +1532,9 @@ async def test_start_selected_joining_after_select_returns_good(opcua_client, ns
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
 
-    list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(), timeout=15.0)
+    list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(pi_uri), timeout=15.0)
     if not list_result.success:
         err_str = str(list_result.error) if list_result.error else "unknown"
         pytest.skip(f"GetJoiningProcessList failed ({err_str}) — cannot establish SelectJoiningProcess precondition")
@@ -1547,7 +1550,7 @@ async def test_start_selected_joining_after_select_returns_good(opcua_client, ns
     select_result = await call_method(
         jpm,
         select_node,
-        _piu_arg(),
+        _piu_arg(pi_uri),
         jp_arg,
         timeout=15.0,
         method_name=BN.SELECT_JOINING_PROCESS,
@@ -1598,8 +1601,9 @@ async def test_select_joining_process_state_reflected_after_select(opcua_client,
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
 
-    list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(), timeout=15.0)
+    list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(pi_uri), timeout=15.0)
     if not list_result.success:
         err_str = str(list_result.error) if list_result.error else "unknown"
         pytest.skip(f"GetJoiningProcessList failed ({err_str}) — cannot determine a valid program ID")
@@ -1617,7 +1621,7 @@ async def test_select_joining_process_state_reflected_after_select(opcua_client,
     select_result = await call_method(
         jpm,
         select_node,
-        _piu_arg(),
+        _piu_arg(pi_uri),
         jp_arg,
         timeout=15.0,
         method_name=BN.SELECT_JOINING_PROCESS,
@@ -1630,7 +1634,9 @@ async def test_select_joining_process_state_reflected_after_select(opcua_client,
         ):
             pytest.skip(f"SelectJoiningProcess returned {err_str} — skipping")
         pytest.fail(f"SelectJoiningProcess failed: {err_str}")
-    get_result = await find_and_call_method(jpm, BN.GET_SELECTED_JOINING_PROGRAM, ns_ijt, _piu_arg(), timeout=15.0)
+    get_result = await find_and_call_method(
+        jpm, BN.GET_SELECTED_JOINING_PROGRAM, ns_ijt, _piu_arg(pi_uri), timeout=15.0
+    )
     if not get_result.success:
         err_str = str(get_result.error) if get_result.error else "unknown"
         if any(s in err_str for s in ("BadNotSupported", "BadNothingToDo")):

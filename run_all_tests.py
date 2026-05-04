@@ -183,6 +183,10 @@ _RUNNER_SCRIPT_PATHS: tuple[Path, ...] = (
     WEB_CLIENT_DIR / "run_all_tests.py",
     SERVER_DIR / "run_all_tests.py",
 )
+_OPTIONAL_IMPORT_GUARD_PATHS: tuple[Path, ...] = _RUNNER_SCRIPT_PATHS + (
+    TEST_CLIENT_DIR / "scripts" / "make_ci_summary.py",
+    TEST_CLIENT_DIR / "scripts" / "make_excel_report.py",
+)
 
 # ---------------------------------------------------------------------------
 # Canonical OPC UA server port assignments — change here, change everywhere.
@@ -312,7 +316,11 @@ def _run_captured(
     sep = "\u2500" * min(len(header), 78)
     preamble = f"{header}\n{sep}\n"
 
-    run_env = env if env is not None else os.environ.copy()
+    run_env = dict(env) if env is not None else os.environ.copy()
+    # Child Python runners on Windows otherwise emit text through the active
+    # code page while this orchestrator decodes captured output as UTF-8.
+    run_env.setdefault("PYTHONIOENCODING", "utf-8")
+    run_env.setdefault("PYTHONUTF8", "1")
 
     # On Unix, place the child in its own session so killpg can reach the tree.
     popen_kwargs: dict = {}
@@ -900,10 +908,10 @@ def _check_zizmor(results_dir: Path) -> StepResult:
     return _parse_zizmor_output(result.stdout, result.returncode)
 
 
-def _check_runner_requests_import_typing() -> StepResult:
-    """Keep optional requests imports mypy-clean when requests is installed without stubs."""
+def _check_optional_import_typing() -> StepResult:
+    """Keep optional imports mypy-clean when packages are installed without stubs."""
     issues: list[str] = []
-    for path in _RUNNER_SCRIPT_PATHS:
+    for path in _OPTIONAL_IMPORT_GUARD_PATHS:
         if not path.exists():
             issues.append(f"{path}: missing")
             continue
@@ -911,25 +919,49 @@ def _check_runner_requests_import_typing() -> StepResult:
             rel = path.relative_to(REPO_ROOT)
         except ValueError:
             rel = path
+        forward_annotations: dict[str, int] = {}
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            has_requests_import = line.strip().startswith("import requests")
+            stripped = line.strip()
+            annotation_match = re.fullmatch(r"([A-Za-z_]\w*)\s*:\s*Any(?:\s*#.*)?", stripped)
+            if annotation_match:
+                forward_annotations[annotation_match.group(1)] = lineno
+
+            has_requests_import = stripped.startswith("import requests")
             has_type_ignore = "type: ignore[import-untyped]" in line
             if has_requests_import and not has_type_ignore:
-                issues.append(f"{rel}:{lineno}")
+                issues.append(f"{rel}:{lineno} import requests lacks type ignore")
+
+            import_match = re.fullmatch(
+                r"import\s+([A-Za-z_]\w*)(?:\s+as\s+([A-Za-z_]\w*))?(?:\s*#.*)?",
+                stripped,
+            )
+            if import_match:
+                bound_name = import_match.group(2) or import_match.group(1)
+                annotated_at = forward_annotations.get(bound_name)
+                if annotated_at is not None:
+                    issues.append(
+                        f"{rel}:{lineno} import redefines {bound_name!r} "
+                        f"annotated at line {annotated_at}"
+                    )
 
     if issues:
         for issue in issues:
-            print(f"  runner requests import lacks mypy suppression: {issue}", flush=True)
+            print(f"  optional import typing issue: {issue}", flush=True)
         return StepResult(
-            "Runner requests typing guard",
+            "Optional import typing guard",
             "FAIL",
-            f"{len(issues)} optional requests import(s) need type ignore",
+            f"{len(issues)} optional import typing issue(s)",
         )
     return StepResult(
-        "Runner requests typing guard",
+        "Optional import typing guard",
         "PASS",
-        f"{len(_RUNNER_SCRIPT_PATHS)} runner(s) verified",
+        f"{len(_OPTIONAL_IMPORT_GUARD_PATHS)} file(s) verified",
     )
+
+
+def _check_runner_requests_import_typing() -> StepResult:
+    """Backward-compatible wrapper for the old guard name used by older tests/hooks."""
+    return _check_optional_import_typing()
 
 
 def _print_step_result(r: StepResult) -> None:
@@ -956,7 +988,7 @@ def _run_gha_checks() -> list[SuiteResult]:
     results_dir.mkdir(exist_ok=True)
 
     step_results = [
-        _check_runner_requests_import_typing(),
+        _check_optional_import_typing(),
         _check_actionlint(results_dir),
         _check_action_versions(),
         _check_zizmor(results_dir),

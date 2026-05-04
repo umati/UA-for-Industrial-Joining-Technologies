@@ -24,7 +24,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import json
+import re
 import sys
 import xml.etree.ElementTree as ET  # nosec B405
 from collections import Counter
@@ -43,11 +45,10 @@ except ImportError:
     print("ERROR: openpyxl is required.  Run: pip install openpyxl", file=sys.stderr)
     sys.exit(1)
 
-yaml: Any
 try:
-    import yaml
+    import yaml  # type: ignore[import-untyped]
 except ImportError:
-    yaml = None
+    yaml = None  # type: ignore[assignment]
 
 # ── Colour palette ────────────────────────────────────────────────────────────
 _GREEN = "FF92D050"  # passed
@@ -284,6 +285,24 @@ def _supported_set(cu_payload: dict[str, Any]) -> set[str] | None:
     return {str(cu) for cu in supported}
 
 
+def _server_profile_cu_count(cu_keys: list[str], supported: set[str] | None) -> int | str:
+    if supported is None:
+        return "n/a"
+    return len([cu_key for cu_key in cu_keys if cu_key in supported])
+
+
+def _in_server_profile(cu_key: str, supported: set[str] | None) -> str:
+    if supported is None:
+        return "n/a"
+    return "Yes" if cu_key in supported else "No"
+
+
+def _server_profile_pct(server_profile_cus: int | str, total: int) -> str:
+    if not isinstance(server_profile_cus, int):
+        return "n/a"
+    return _pct(server_profile_cus, total)
+
+
 def _cus_for_profile(profile: ProfileInfo, facets: dict[str, FacetInfo]) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
@@ -315,7 +334,7 @@ def _ordered_cu_keys(by_cu: dict[str, Any], facets: dict[str, FacetInfo]) -> lis
     return ordered
 
 
-def _cu_evidence_key(data: dict[str, Any]) -> str:
+def _cu_compliance_key(data: dict[str, Any]) -> str:
     passed = int(data.get("passed", 0) or 0)
     failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
     not_supported = int(data.get("not_supported", 0) or 0)
@@ -339,10 +358,10 @@ def _cu_evidence_key(data: dict[str, Any]) -> str:
     return "unknown"
 
 
-def _cu_evidence_label(status: str) -> str:
+def _cu_compliance_label(status: str) -> str:
     labels = {
         "supported": "Supported",
-        "partial": "Partial",
+        "partial": "Supported with Notes",
         "not_supported": "Not Supported",
         "blocked": "Blocked",
         "action_needed": "Action Needed",
@@ -356,31 +375,96 @@ def _count_cu_outcomes(cu_keys: list[str], by_cu: dict[str, Any]) -> Counter[str
     for cu_key in cu_keys:
         data_raw = by_cu.get(cu_key)
         data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
-        counts[_cu_evidence_key(data)] += 1
+        counts[_cu_compliance_key(data)] += 1
     return counts
 
 
-def _evidence_status(counts: Counter[str], total: int) -> str:
+def _reason_bucket(message: str) -> str:
+    msg = re.sub(r"\s+", " ", message.strip())
+    if not msg:
+        return "no reason"
+    if msg.startswith("("):
+        try:
+            longrepr = ast.literal_eval(msg)
+        except (SyntaxError, ValueError):
+            longrepr = None
+        if isinstance(longrepr, tuple) and longrepr and isinstance(longrepr[-1], str):
+            msg = re.sub(r"\s+", " ", longrepr[-1].strip())
+    msg = re.sub(r"^Skipped:\s*", "", msg, flags=re.IGNORECASE)
+    msg = re.split(r"\s+-\s+CU:\s*", msg, maxsplit=1)[0].strip()
+    msg = re.split(r"\.\s+To enable:\s*", msg, maxsplit=1)[0].strip()
+    msg = re.split(r"\s+Config file:\s*", msg, maxsplit=1)[0].strip()
+    not_supported = " NOT SUPPORTED"
+    if not_supported in msg:
+        end = msg.find(not_supported) + len(not_supported)
+        return msg[:end].strip()
+    if len(msg) > 180:
+        return f"{msg[:177].rstrip()}..."
+    return msg
+
+
+def _cu_test_index(cu_payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    indexed: dict[str, list[dict[str, Any]]] = {}
+    tests = cu_payload.get("tests")
+    if not isinstance(tests, list):
+        return indexed
+    for test in tests:
+        if not isinstance(test, dict):
+            continue
+        for cu_key in test.get("cus", []):
+            indexed.setdefault(str(cu_key), []).append(test)
+    return indexed
+
+
+def _cu_note_summary(cu_key: str, tests_by_cu: dict[str, list[dict[str, Any]]]) -> str:
+    tests = tests_by_cu.get(cu_key, [])
+    priority = [
+        ("failed", "Failed"),
+        ("error", "Error"),
+        ("blocked", "Blocked"),
+        ("not_supported", "Not Supported"),
+        ("skipped", "Skipped"),
+        ("xfailed", "Expected Failure"),
+        ("untested", "Untested"),
+    ]
+    notes: list[str] = []
+    for outcome, label in priority:
+        matching = [test for test in tests if str(test.get("outcome") or "") == outcome]
+        if not matching:
+            continue
+        reason = next((_reason_bucket(str(test.get("reason") or "")) for test in matching if test.get("reason")), "")
+        if reason and reason != "no reason":
+            notes.append(f"{label}: {reason}")
+        else:
+            notes.append(f"{label}: {len(matching)} test(s)")
+    if not notes:
+        return ""
+    if len(notes) > 2:
+        return "; ".join(notes[:2]) + f"; {len(notes) - 2} more"
+    return "; ".join(notes)
+
+
+def _compliance_status(counts: Counter[str], total: int) -> str:
     if counts["action_needed"]:
         return "ACTION NEEDED"
     if counts["blocked"]:
         return "BLOCKED"
     if counts["partial"] or counts["not_supported"]:
-        return "PARTIAL"
+        return "SUPPORTED WITH NOTES"
     if total and counts["supported"] == total:
         return "SUPPORTED"
     if counts["supported"]:
-        return "PARTIAL"
-    return "NO EVIDENCE"
+        return "SUPPORTED WITH NOTES"
+    return "NO COMPLIANCE RESULT"
 
 
 def _status_fill(status: str) -> PatternFill:
     colour = {
         "SUPPORTED": _LIGHT_GREEN,
-        "PARTIAL": _LIGHT_YELLOW,
+        "SUPPORTED WITH NOTES": _LIGHT_YELLOW,
         "BLOCKED": _LIGHT_ORANGE,
         "ACTION NEEDED": _LIGHT_RED,
-        "NO EVIDENCE": _GRAY,
+        "NO COMPLIANCE RESULT": _GRAY,
     }.get(status, _WHITE)
     return _fill(colour)
 
@@ -567,9 +651,10 @@ def _build_profile_coverage(
     ws["A1"] = "IJT Profile / Facet Coverage"
     ws["A1"].font = Font(bold=True, size=14)
     ws["A2"] = (
-        "This sheet maps the run evidence to the IJT CS profile and facet model. "
-        "Use it to see which parts of the specification are supported, partial, blocked, "
-        "or not supported by the server under test."
+        "This sheet maps the current test run to the IJT CS profile and facet model. "
+        "Start with the Server Profile row; Reference Only profile rows are comparison views, not extra pass/fail requirements. "
+        "Server Profile CUs and In Server Profile come from the active server capability file. "
+        "Compliance comes from this test run."
     )
     ws["A2"].alignment = Alignment(wrap_text=True)
 
@@ -580,27 +665,27 @@ def _build_profile_coverage(
         4,
         [
             ("Server", server),
-            ("Active profile", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
+            ("Server profile", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
             ("Official IJT CUs", summary.get("official_cu_count", len(by_cu))),
-            ("Declared supported CUs", len(supported) if supported is not None else "not declared"),
+            ("Server profile CUs", len(supported) if supported is not None else "n/a"),
             ("Workbook test cases", summary.get("workbook_case_count", "n/a")),
         ],
     )
 
     headers = [
         "Profile",
-        "Scope",
+        "Profile Role",
         "Facets",
         "CUs",
-        "Declared Supported",
+        "Server Profile CUs",
         "Supported",
-        "Partial",
+        "With Notes",
         "Not Supported",
         "Blocked",
         "Action Needed",
         "Untested",
-        "Support %",
-        "Evidence",
+        "Server Profile %",
+        "Compliance",
         "Description",
     ]
     widths = [28, 12, 8, 8, 14, 10, 8, 14, 9, 13, 9, 10, 16, 70]
@@ -610,28 +695,28 @@ def _build_profile_coverage(
     for profile in profiles.values():
         cu_keys = _cus_for_profile(profile, facets)
         counts = _count_cu_outcomes(cu_keys, by_cu)
-        supported_count = len([cu_key for cu_key in cu_keys if supported is None or cu_key in supported])
-        evidence = _evidence_status(counts, len(cu_keys))
+        server_profile_cus = _server_profile_cu_count(cu_keys, supported)
+        compliance = _compliance_status(counts, len(cu_keys))
         values = [
             profile.name,
-            "Active" if profile.key == active else "Reference",
+            "Server Profile" if profile.key == active else "Reference Only",
             len(profile.facets),
             len(cu_keys),
-            supported_count,
+            server_profile_cus,
             counts["supported"],
             counts["partial"],
             counts["not_supported"],
             counts["blocked"],
             counts["action_needed"],
             counts["untested"],
-            _pct(supported_count, len(cu_keys)),
-            evidence,
+            _server_profile_pct(server_profile_cus, len(cu_keys)),
+            compliance,
             profile.description,
         ]
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            if col == 2 and value == "Active":
+            if col == 2 and value == "Server Profile":
                 cell.fill = _fill(_LIGHT_BLUE)
                 cell.font = Font(bold=True)
             if col == 13:
@@ -659,17 +744,17 @@ def _build_facet_coverage(
     headers = [
         "Facet",
         "Facet Key",
-        "Scope",
+        "Facet Role",
         "CUs",
-        "Declared Supported",
+        "Server Profile CUs",
         "Supported",
-        "Partial",
+        "With Notes",
         "Not Supported",
         "Blocked",
         "Action Needed",
         "Untested",
-        "Support %",
-        "Evidence",
+        "Server Profile %",
+        "Compliance",
         "Description",
     ]
     widths = [34, 34, 12, 8, 14, 10, 8, 14, 9, 13, 9, 10, 16, 70]
@@ -678,23 +763,23 @@ def _build_facet_coverage(
     for row, facet in enumerate(facets.values(), start=2):
         cu_keys = facet.conformance_units
         counts = _count_cu_outcomes(cu_keys, by_cu)
-        supported_count = len([cu_key for cu_key in cu_keys if supported is None or cu_key in supported])
-        evidence = _evidence_status(counts, len(cu_keys))
-        scope = "Additional" if facet.key in active_extra_facets else "Profile"
+        server_profile_cus = _server_profile_cu_count(cu_keys, supported)
+        compliance = _compliance_status(counts, len(cu_keys))
+        facet_role = "Additional Server Facet" if facet.key in active_extra_facets else "Profile Facet"
         values = [
             facet.display_name,
             facet.key,
-            scope,
+            facet_role,
             len(cu_keys),
-            supported_count,
+            server_profile_cus,
             counts["supported"],
             counts["partial"],
             counts["not_supported"],
             counts["blocked"],
             counts["action_needed"],
             counts["untested"],
-            _pct(supported_count, len(cu_keys)),
-            evidence,
+            _server_profile_pct(server_profile_cus, len(cu_keys)),
+            compliance,
             facet.description,
         ]
         for col, value in enumerate(values, start=1):
@@ -722,13 +807,14 @@ def _build_cu_coverage(
     facet_map = _cu_to_facets(facets)
     overrides = capabilities.overrides if capabilities else {}
     ordered_keys = _ordered_cu_keys(by_cu, facets)
+    tests_by_cu = _cu_test_index(cu_payload)
 
     headers = [
         "CU",
         "CU Key",
         "Facet(s)",
-        "Declared Support",
-        "Evidence",
+        "In Server Profile",
+        "Compliance",
         "Tests",
         "Passed",
         "Not Supported",
@@ -738,24 +824,25 @@ def _build_cu_coverage(
         "Positive",
         "Negative",
         "Override",
+        "Notes",
         "Example Test",
     ]
-    widths = [34, 34, 44, 18, 16, 8, 8, 14, 9, 12, 14, 9, 9, 14, 80]
+    widths = [34, 34, 44, 18, 16, 8, 8, 14, 9, 12, 14, 9, 9, 14, 80, 80]
     _apply_header(ws, 1, headers, widths)
 
     for row, cu_key in enumerate(ordered_keys, start=2):
         data_raw = by_cu.get(cu_key)
         data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
-        evidence = _cu_evidence_key(data)
+        compliance = _cu_compliance_key(data)
         failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
         tests = data.get("tests") if isinstance(data.get("tests"), list) else []
-        support = "Declared" if supported is None or cu_key in supported else "Not declared"
+        support = _in_server_profile(cu_key, supported)
         values = [
             _cu_display_name(cu_key),
             cu_key,
             ", ".join(facet_map.get(cu_key, [])),
             support,
-            _cu_evidence_label(evidence),
+            _cu_compliance_label(compliance),
             int(data.get("test_count", 0) or 0),
             int(data.get("passed", 0) or 0),
             int(data.get("not_supported", 0) or 0),
@@ -765,18 +852,19 @@ def _build_cu_coverage(
             int(data.get("workbook_positive_case_count", 0) or 0),
             int(data.get("workbook_negative_case_count", 0) or 0),
             overrides.get(cu_key, ""),
+            _cu_note_summary(cu_key, tests_by_cu),
             str(tests[0]) if tests else "",
         ]
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            if col == 4 and value == "Not declared":
+            if col == 4 and value == "No":
                 cell.fill = _fill(_LIGHT_YELLOW)
             if col == 5:
-                cell.fill = _fill(_CU_STATUS_COLOUR.get(evidence, _WHITE))
+                cell.fill = _fill(_CU_STATUS_COLOUR.get(compliance, _WHITE))
                 cell.font = Font(bold=True)
 
-    ws.auto_filter.ref = f"A1:O{max(1, len(ordered_keys) + 1)}"
+    ws.auto_filter.ref = f"A1:P{max(1, len(ordered_keys) + 1)}"
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

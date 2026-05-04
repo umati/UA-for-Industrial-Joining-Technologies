@@ -148,18 +148,18 @@ repos:
         pass_filenames: false
         files: '^OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/css/.*\.css$'
 
-      # Lightweight static guard for optional requests imports in runner
-      # preflights. Full mypy is intentionally kept in project runners/CI, but
-      # this catches the installed-without-stubs requests case before commit.
-      - id: runner-requests-typing-guard
-        name: Runner requests typing guard
+      # Lightweight static guard for optional imports that are known to trip
+      # mypy when packages are installed without stubs. Full mypy stays in
+      # project runners/CI; this catches narrow cross-runner patterns early.
+      - id: optional-import-typing-guard
+        name: Optional import typing guard
         language: system
         entry: python
         args:
           - "-c"
           - >-
-            import run_all_tests as r; result = r._check_runner_requests_import_typing();
+            import run_all_tests as r; result = r._check_optional_import_typing();
             print(f"{result.status}: {result.detail}");
             raise SystemExit(0 if result.status == "PASS" else 1)
         pass_filenames: false
-        files: '(^run_all_tests\.py$|^tests/test_root_runner\.py$|^OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_CSharp_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Console_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Test_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests\.py$|^OPC_UA_Servers/Release2/run_all_tests\.py$)'
+        files: '(^run_all_tests\.py$|^tests/test_root_runner\.py$|^OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_CSharp_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Console_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Test_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Test_Client/scripts/(make_ci_summary|make_excel_report)\.py$|^OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests\.py$|^OPC_UA_Servers/Release2/run_all_tests\.py$)'

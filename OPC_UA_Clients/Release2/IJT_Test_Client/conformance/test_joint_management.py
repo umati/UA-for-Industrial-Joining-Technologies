@@ -1526,13 +1526,6 @@ async def test_select_joint_with_nonexistent_id_returns_bad_status(opcua_client,
         logger.info("Correctly raised ua.UaError for non-existent joint ID: %s", exc)
 
 
-@pytest.mark.requires_cu(CU.SELECT_JOINT)
-@pytest.mark.negative
-async def test_select_joint_during_active_joining_returns_bad_invalid_state(opcua_client, ns_indices):
-    """SelectJoint during active joining should return Bad_InvalidState — not reproducible in conformance test."""
-    pytest.skip("Cannot reproduce active joining state in conformance test environment")
-
-
 # ---------------------------------------------------------------------------
 # ─── get_joint additional round-trip tests ───
 # ---------------------------------------------------------------------------

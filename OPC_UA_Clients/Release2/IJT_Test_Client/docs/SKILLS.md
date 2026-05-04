@@ -21,9 +21,10 @@ Use `run_all_tests.py` as the only test runner entry point.
 
 See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail explanations, and Excel output details.
 
-Reference workflow walkthroughs are separate from conformance evidence. They are
-driven by YAML under `reference_workflows/`, render Markdown tables for review
-or Teams demos, and are not collected by default Phase 2 runs.
+Reference workflow walkthroughs are separate from conformance compliance
+validation. They are driven by YAML under `reference_workflows/`, render
+Markdown tables for review or Teams demos, and are not collected by default
+Phase 2 runs.
 
 `python run_all_tests.py` is the full orchestrator. Phase 1 runs static,
 security, unit, type, and formatting checks. Phase 2 runs the live

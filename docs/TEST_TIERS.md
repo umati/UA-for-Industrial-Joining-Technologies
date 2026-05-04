@@ -165,6 +165,7 @@ To run on a different port, the copy-patch mechanism:
 
 **C# client** (`OpcUaServerFixture.cs`): temp dir in `{TEMP}/opcua_csharp_{port}_{guid}/`
 - Triggered automatically when `OPCUA_SERVER_PORT != 40451`
+- Phase 2 passes `IJT_PHASE1_ONLY=false`; an all-skipped managed live run is a failure, not accepted as a valid live result
 - Cleaned up in `Dispose()` — works for both local dev and CI
 
 - **CI** (`scripts/start_server_on_port.py`): temp dir in `tmp/server_{port}/`

@@ -667,6 +667,7 @@ def _step_live_tests(server_url: str, verbose: bool = False) -> StepResult:
         ],
         env={
             "IJT_AUTO_ACCEPT": "true",
+            "IJT_PHASE1_ONLY": "false",
             "OPCUA_SERVER_URL": server_url,
         },
         capture_stdout=True,
@@ -679,6 +680,26 @@ def _step_live_tests(server_url: str, verbose: bool = False) -> StepResult:
     if rc != 0 or failed > 0:
         return StepResult(label, "PHASE 2", "FAIL", detail, dur, passed, failed, skipped, total)
     return StepResult(label, "PHASE 2", "PASS", detail, dur, passed, failed, skipped, total)
+
+
+def _enforce_managed_live_coverage(result: StepResult, port_override: str) -> StepResult:
+    """Fail runner-managed live testing when the fixture skipped every test."""
+    if port_override and result.status == "PASS" and result.passed == 0 and result.total > 0:
+        detail = (
+            f"{result.passed}/{result.total}, {result.skipped} skipped (managed server unavailable)"
+        )
+        return StepResult(
+            result.label,
+            result.phase,
+            "FAIL",
+            detail,
+            result.duration,
+            result.passed,
+            result.failed,
+            result.skipped,
+            result.total,
+        )
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -826,13 +847,15 @@ def main() -> int:
                     print(f"[PHASE 2] OPC UA server reachable at {server_url}")
                 r = _step_live_tests(server_url, verbose=args.verbose)
                 # If fixture silently set IsAvailable=false, all tests skip — surface that.
-                if port_override and r.status == "PASS" and r.passed == 0 and r.total > 0:
+                enforced = _enforce_managed_live_coverage(r, port_override)
+                if enforced.status == "FAIL" and enforced is not r:
                     print(
-                        f"[PHASE 2] WARNING: all {r.total} C# live tests were skipped (0 passed). "
-                        f"OpcUaServerFixture could not start the server on port {port_override}. "
-                        f"Check stderr above for [OpcUaServerFixture] lines.",
+                        f"[PHASE 2] ERROR: all {r.total} C# live tests were skipped (0 passed). "
+                        f"The runner-managed server on port {port_override} was unavailable. "
+                        f"Check fixture diagnostics above for [OpcUaServerFixture] lines.",
                         flush=True,
                     )
+                r = enforced
             else:
                 print(
                     f"[PHASE 2] OPC UA server not reachable at {server_url} — skipping live tests"

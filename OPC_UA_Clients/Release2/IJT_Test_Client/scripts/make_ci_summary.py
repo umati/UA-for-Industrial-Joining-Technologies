@@ -13,6 +13,7 @@ Called automatically by the CI workflow after the test run. Safe to run locally 
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import re
@@ -25,11 +26,10 @@ from typing import Any
 
 # Bandit B405/B314 suppressions are limited to trusted JUnit XML from pytest.
 
-yaml: Any
 try:
-    import yaml
+    import yaml  # type: ignore[import-untyped]
 except ImportError:
-    yaml = None
+    yaml = None  # type: ignore[assignment]
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _PROFILES_DIR = _PROJECT_ROOT / "profiles"
@@ -192,7 +192,7 @@ def _count_outcomes(cu_keys: list[str], by_cu: dict[str, Any]) -> Counter[str]:
     for cu_key in cu_keys:
         data_raw = by_cu.get(cu_key)
         data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
-        counts[_cu_evidence_key(data)] += 1
+        counts[_cu_compliance_key(data)] += 1
     return counts
 
 
@@ -203,13 +203,19 @@ def _supported_set(cu_payload: dict[str, Any]) -> set[str] | None:
     return {str(cu) for cu in supported}
 
 
-def _declared_count(cu_keys: list[str], supported: set[str] | None) -> int | str:
+def _server_profile_cu_count(cu_keys: list[str], supported: set[str] | None) -> int | str:
     if supported is None:
-        return "not declared"
+        return "n/a"
     return len([cu for cu in cu_keys if cu in supported])
 
 
-def _cu_evidence_key(data: dict[str, Any]) -> str:
+def _in_server_profile(cu_key: str, supported: set[str] | None) -> str:
+    if supported is None:
+        return "n/a"
+    return "Yes" if cu_key in supported else "No"
+
+
+def _cu_compliance_key(data: dict[str, Any]) -> str:
     passed = int(data.get("passed", 0) or 0)
     failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
     not_supported = int(data.get("not_supported", 0) or 0)
@@ -233,18 +239,18 @@ def _cu_evidence_key(data: dict[str, Any]) -> str:
     return "unknown"
 
 
-def _evidence_label(counts: Counter[str], total: int) -> str:
+def _compliance_label(counts: Counter[str], total: int) -> str:
     if counts["action_needed"]:
         return "🔴 Action needed"
     if counts["blocked"]:
         return "🟠 Blocked"
     if counts["partial"] or counts["not_supported"]:
-        return "🟡 Partial"
+        return "🟡 Supported with notes"
     if total and counts["supported"] == total:
         return "🟢 Supported"
     if counts["supported"]:
-        return "🟡 Partial"
-    return "⚪ No evidence"
+        return "🟡 Supported with notes"
+    return "⚪ No compliance result"
 
 
 def _cu_display_name(cu_key: str) -> str:
@@ -275,7 +281,7 @@ def _ordered_cu_keys(by_cu: dict[str, Any], facets: dict[str, dict[str, Any]]) -
 def _outcome_label(outcome: str) -> str:
     labels = {
         "supported": "🟢 Supported",
-        "partial": "🟡 Partial",
+        "partial": "🟡 Supported with notes",
         "not_supported": "🟡 Not Supported",
         "blocked": "🟠 Blocked",
         "action_needed": "🔴 Action needed",
@@ -288,6 +294,13 @@ def _skip_reason_bucket(message: str) -> str:
     msg = re.sub(r"\s+", " ", message.strip())
     if not msg:
         return "no reason"
+    if msg.startswith("("):
+        try:
+            longrepr = ast.literal_eval(msg)
+        except (SyntaxError, ValueError):
+            longrepr = None
+        if isinstance(longrepr, tuple) and longrepr and isinstance(longrepr[-1], str):
+            msg = re.sub(r"\s+", " ", longrepr[-1].strip())
     msg = re.sub(r"^Skipped:\s*", "", msg, flags=re.IGNORECASE)
     msg = re.split(r"\s+-\s+CU:\s*", msg, maxsplit=1)[0].strip()
     msg = re.split(r"\.\s+To enable:\s*", msg, maxsplit=1)[0].strip()
@@ -301,6 +314,49 @@ def _skip_reason_bucket(message: str) -> str:
     if len(msg) > 140:
         return f"{msg[:137].rstrip()}..."
     return msg
+
+
+def _cu_test_index(cu_payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    indexed: dict[str, list[dict[str, Any]]] = {}
+    tests = cu_payload.get("tests")
+    if not isinstance(tests, list):
+        return indexed
+    for test in tests:
+        if not isinstance(test, dict):
+            continue
+        for cu_key in test.get("cus", []):
+            indexed.setdefault(str(cu_key), []).append(test)
+    return indexed
+
+
+def _cu_note_summary(cu_key: str, tests_by_cu: dict[str, list[dict[str, Any]]]) -> str:
+    tests = tests_by_cu.get(cu_key, [])
+    priority = [
+        ("failed", "Failed"),
+        ("error", "Error"),
+        ("blocked", "Blocked"),
+        ("not_supported", "Not Supported"),
+        ("skipped", "Skipped"),
+        ("xfailed", "Expected Failure"),
+        ("untested", "Untested"),
+    ]
+    notes: list[str] = []
+    for outcome, label in priority:
+        matching = [test for test in tests if str(test.get("outcome") or "") == outcome]
+        if not matching:
+            continue
+        reason = next(
+            (_skip_reason_bucket(str(test.get("reason") or "")) for test in matching if test.get("reason")), ""
+        )
+        if reason and reason != "no reason":
+            notes.append(f"{label}: {reason}")
+        else:
+            notes.append(f"{label}: {len(matching)} test(s)")
+    if not notes:
+        return ""
+    if len(notes) > 2:
+        return "; ".join(notes[:2]) + f"; {len(notes) - 2} more"
+    return "; ".join(notes)
 
 
 def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str]:
@@ -320,53 +376,68 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
     all_cu_keys = _ordered_cu_keys(by_cu, facets)
     all_counts = _count_outcomes(all_cu_keys, by_cu)
     facet_map = _cu_facet_map(facets)
+    tests_by_cu = _cu_test_index(cu_payload)
 
     lines: list[str] = []
     lines.append("## IJT CS Profile / Facet Coverage")
     lines.append("")
     lines.append(
         f"**Server profile source:** {server_name}  |  "
-        f"**CU evidence:** {all_counts['supported']} supported, {all_counts['partial']} partial, "
+        f"**CU compliance:** {all_counts['supported']} supported, {all_counts['partial']} supported with notes, "
         f"{all_counts['not_supported']} not supported, {all_counts['blocked']} blocked, "
         f"{all_counts['action_needed']} action needed"
+    )
+    lines.append("")
+    lines.append(
+        "_Legend: Supported with notes means at least one test path passed and the remaining "
+        "non-passing rows are accepted skips, Not Supported methods/CUs from the server profile, or environment/precondition notes; "
+        "failures and errors are reported separately as Action needed._"
+    )
+    lines.append(
+        "_Server Profile CUs and In Server Profile come from the active server capability file; "
+        "Compliance comes from this test run._"
+    )
+    lines.append(
+        "_How to read this section: start with the Server Profile row. Reference Only profile rows are comparison views "
+        "against other IJT CS profiles; they are not additional pass/fail requirements for this server._"
     )
     lines.append("")
     if active:
         active_cus = _profile_cus(active, facets)
         active_counts = _count_outcomes(active_cus, by_cu)
-        declared = _declared_count(active_cus, supported)
+        server_profile_cus = _server_profile_cu_count(active_cus, supported)
         lines.append(
-            f"**Active profile:** {active['name']}  |  "
-            f"**Declared support:** {declared}/{len(active_cus)} CUs  |  "
-            f"**Evidence:** {_evidence_label(active_counts, len(active_cus))}"
+            f"**Server profile:** {active['name']}  |  "
+            f"**Server profile support:** {server_profile_cus}/{len(active_cus)} CUs  |  "
+            f"**Compliance:** {_compliance_label(active_counts, len(active_cus))}"
         )
     else:
-        lines.append("**Active profile:** not declared in available capabilities file")
+        lines.append("**Server profile:** no server profile found in available capabilities file")
     lines.append("")
 
     lines.append("### Profiles")
     lines.append("")
     lines.append(
-        "| Profile | Scope | Facets | CUs | Declared | Supported | Partial | Not Supported | Blocked | Action Needed | Evidence |"
+        "| Profile | Profile Role | Facets | CUs | Server Profile CUs | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
     )
     lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|")
     for key, profile in profiles.items():
         cu_keys = _profile_cus(profile, facets)
         counts = _count_outcomes(cu_keys, by_cu)
-        scope = "Active" if key == active_profile else "Reference"
+        profile_role = "Server Profile" if key == active_profile else "Reference Only"
         lines.append(
-            f"| {_md_cell(str(profile.get('name', _title_from_key(key))))} | {scope} | "
-            f"{len(profile.get('facets', []))} | {len(cu_keys)} | {_declared_count(cu_keys, supported)} | "
+            f"| {_md_cell(str(profile.get('name', _title_from_key(key))))} | {profile_role} | "
+            f"{len(profile.get('facets', []))} | {len(cu_keys)} | {_server_profile_cu_count(cu_keys, supported)} | "
             f"{counts['supported']} | {counts['partial']} | {counts['not_supported']} | "
             f"{counts['blocked']} | {counts['action_needed']} | "
-            f"{_evidence_label(counts, len(cu_keys))} |"
+            f"{_compliance_label(counts, len(cu_keys))} |"
         )
     lines.append("")
 
     lines.append("### Facets")
     lines.append("")
     lines.append(
-        "| Facet | CUs | Declared | Supported | Partial | Not Supported | Blocked | Action Needed | Evidence |"
+        "| Facet | CUs | Server Profile CUs | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
     )
     lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---|")
     for facet in facets.values():
@@ -374,10 +445,10 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
         counts = _count_outcomes(cu_keys, by_cu)
         lines.append(
             f"| {_md_cell(str(facet.get('display_name', 'Facet')))} "
-            f"| {len(cu_keys)} | {_declared_count(cu_keys, supported)} | {counts['supported']} | "
+            f"| {len(cu_keys)} | {_server_profile_cu_count(cu_keys, supported)} | {counts['supported']} | "
             f"{counts['partial']} | {counts['not_supported']} | {counts['blocked']} | "
             f"{counts['action_needed']} | "
-            f"{_evidence_label(counts, len(cu_keys))} |"
+            f"{_compliance_label(counts, len(cu_keys))} |"
         )
     lines.append("")
 
@@ -385,43 +456,44 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
     for cu_key in all_cu_keys:
         data_raw = by_cu.get(cu_key)
         data = data_raw if isinstance(data_raw, dict) else {}
-        if _cu_evidence_key(data) in {"partial", "not_supported", "blocked", "action_needed"}:
+        if _cu_compliance_key(data) in {"partial", "not_supported", "blocked", "action_needed"}:
             attention_cus.append((cu_key, data))
     if attention_cus:
-        lines.append("### CUs Requiring Attention")
+        lines.append("### CUs With Notes / Not Supported")
         lines.append("")
         lines.append(
-            "| CU | Facet(s) | Declared | Evidence | Tests | Passed | Not Supported | Blocked | Failed/Error |"
+            "| CU | Facet(s) | In Server Profile | Compliance | Why Listed | Tests | Passed | Not Supported | Blocked | Failed/Error |"
         )
-        lines.append("|---|---|---|---|---:|---:|---:|---:|---:|")
+        lines.append("|---|---|---|---|---|---:|---:|---:|---:|---:|")
         for cu_key, data in attention_cus[:40]:
             failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
-            declared = "Yes" if supported is None or cu_key in supported else "No"
+            in_server_profile = _in_server_profile(cu_key, supported)
             lines.append(
                 f"| {_md_cell(_cu_display_name(cu_key))} | {_md_cell(', '.join(facet_map.get(cu_key, [])))} | "
-                f"{declared} | {_outcome_label(_cu_evidence_key(data))} | "
+                f"{in_server_profile} | {_outcome_label(_cu_compliance_key(data))} | "
+                f"{_md_cell(_cu_note_summary(cu_key, tests_by_cu))} | "
                 f"{int(data.get('test_count', 0) or 0)} | {int(data.get('passed', 0) or 0)} | "
                 f"{int(data.get('not_supported', 0) or 0)} | {int(data.get('blocked', 0) or 0)} | {failed} |"
             )
         if len(attention_cus) > 40:
-            lines.append(f"| ... | ... | ... | ... | ... | ... | ... | ... | {len(attention_cus) - 40} more |")
+            lines.append(f"| ... | ... | ... | ... | ... | ... | ... | ... | ... | {len(attention_cus) - 40} more |")
         lines.append("")
 
     lines.append("<details>")
     lines.append("<summary>Full CU coverage table</summary>")
     lines.append("")
     lines.append(
-        "| CU | Facet(s) | Declared | Evidence | Tests | Passed | Not Supported | Blocked | Failed/Error | Workbook Cases |"
+        "| CU | Facet(s) | In Server Profile | Compliance | Tests | Passed | Not Supported | Blocked | Failed/Error | Workbook Cases |"
     )
     lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|")
     for cu_key in all_cu_keys:
         data_raw = by_cu.get(cu_key)
         data = data_raw if isinstance(data_raw, dict) else {}
         failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
-        declared = "Yes" if supported is None or cu_key in supported else "No"
+        in_server_profile = _in_server_profile(cu_key, supported)
         lines.append(
             f"| {_md_cell(_cu_display_name(cu_key))} | {_md_cell(', '.join(facet_map.get(cu_key, [])))} | "
-            f"{declared} | {_outcome_label(_cu_evidence_key(data))} | "
+            f"{in_server_profile} | {_outcome_label(_cu_compliance_key(data))} | "
             f"{int(data.get('test_count', 0) or 0)} | {int(data.get('passed', 0) or 0)} | "
             f"{int(data.get('not_supported', 0) or 0)} | {int(data.get('blocked', 0) or 0)} | {failed} | "
             f"{int(data.get('workbook_case_count', 0) or 0)} |"

@@ -87,6 +87,9 @@ pytest OPC_UA_Clients/Release2/IJT_Web_Client/tests OPC_UA_Clients/Release2/IJT_
 Running multiple Python clients together in a single root `pytest` invocation causes `ImportPathMismatchError` because both trees have `tests/conftest.py`. The CI workflows and `run_all_tests.py` both enforce per-project `working-directory`.
 
 **For local full-suite runs**: Use each project's `run_all_tests.py` from its own directory, or the repo root orchestrator which delegates each runner with the correct `cwd`.
+The root orchestrator forces Python child runners to UTF-8 output so nested
+runner banners, skip reasons, and advisory tool messages render consistently on
+Windows terminals and captured logs.
 
 ---
 
@@ -171,7 +174,7 @@ All Python runner scripts (`run_all_tests.py`) use a `_StepResult` class with fo
 
 **Advisory tool rule**: Tools whose failures are inherently non-actionable on the local/CI environment (Semgrep SSL, pyright advisory, pip-audit network) must use `result.warn = True` — **never** `result.ok = False`. Setting `ok=False` converts an advisory observation into a suite-blocking failure.
 
-**Semgrep preflight rule**: When a runner uses `--config=p/default`, the network preflight must probe `https://semgrep.dev/c/p/default`, not only `https://semgrep.dev/`. Use `requests` when available so the preflight follows the same certifi/TLS trust path as Semgrep and pip-audit. Keep `requests` optional inside the helper and annotate that import with `# type: ignore[import-untyped]` unless `types-requests` is a required dev dependency. The root host can be reachable while the rule download path fails TLS/auth, which otherwise costs roughly 100 seconds and emits traceback noise before producing the same advisory WARN.
+**Semgrep preflight rule**: When a runner uses `--config=p/default`, the network preflight must probe `https://semgrep.dev/c/p/default`, not only `https://semgrep.dev/`. Use `requests` when available so the preflight follows the same certifi/TLS trust path as Semgrep and pip-audit. Keep `requests` optional inside the helper and annotate that import with `# type: ignore[import-untyped]` unless `types-requests` is a required dev dependency. Optional imports used by runner/report tooling are covered by the root optional-import typing guard, including untyped imports and forward-annotation/reimport patterns that mypy flags as `no-redef`. The root host can be reachable while the rule download path fails TLS/auth, which otherwise costs roughly 100 seconds and emits traceback noise before producing the same advisory WARN.
 
 The invariant is unit-tested in `tests/unit/test_runner_step_result.py` in both Console Client and Test Client:
 - `test_semgrep_parse_failure_sets_warn_not_fail` — parse failure must set `warn=True`

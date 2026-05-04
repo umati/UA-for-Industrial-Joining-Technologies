@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import logging
+import subprocess
 import sys
 from pathlib import Path
 
@@ -130,14 +131,14 @@ def test_all_runner_https_preflights_fail_fast_on_requests_tls_error(monkeypatch
     assert seen == ["https://semgrep.dev/c/p/default"] * len(_RUNNER_PATHS)
 
 
-def test_all_runner_optional_requests_imports_are_mypy_suppressed() -> None:
-    result = _runner._check_runner_requests_import_typing()
+def test_optional_import_typing_guard_passes_current_files() -> None:
+    result = _runner._check_optional_import_typing()
 
     assert result.status == "PASS"
-    assert result.detail == "6 runner(s) verified"
+    assert result.detail == "8 file(s) verified"
 
 
-def test_runner_requests_typing_guard_detects_unsuppressed_import(monkeypatch) -> None:
+def test_optional_import_typing_guard_detects_unsuppressed_requests(monkeypatch) -> None:
     class _FakeRunnerPath:
         def exists(self) -> bool:
             return True
@@ -148,9 +149,102 @@ def test_runner_requests_typing_guard_detects_unsuppressed_import(monkeypatch) -
         def read_text(self, encoding: str) -> str:
             return "def check():\n    import requests\n"
 
-    monkeypatch.setattr(_runner, "_RUNNER_SCRIPT_PATHS", (_FakeRunnerPath(),))
+    monkeypatch.setattr(_runner, "_OPTIONAL_IMPORT_GUARD_PATHS", (_FakeRunnerPath(),))
 
-    result = _runner._check_runner_requests_import_typing()
+    result = _runner._check_optional_import_typing()
 
     assert result.status == "FAIL"
-    assert result.detail == "1 optional requests import(s) need type ignore"
+    assert result.detail == "1 optional import typing issue(s)"
+
+
+def test_optional_import_typing_guard_detects_forward_annotation_reimport(monkeypatch) -> None:
+    class _FakeScriptPath:
+        def exists(self) -> bool:
+            return True
+
+        def relative_to(self, root):
+            return Path("fake/make_ci_summary.py")
+
+        def read_text(self, encoding: str) -> str:
+            return "yaml: Any\ntry:\n    import yaml\nexcept ImportError:\n    yaml = None\n"
+
+    monkeypatch.setattr(_runner, "_OPTIONAL_IMPORT_GUARD_PATHS", (_FakeScriptPath(),))
+
+    result = _runner._check_optional_import_typing()
+
+    assert result.status == "FAIL"
+    assert result.detail == "1 optional import typing issue(s)"
+
+
+def test_run_capture_forces_child_python_utf8(monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    class _FakeProc:
+        returncode = 0
+        pid = 123
+
+        def communicate(self, timeout=None):
+            return b"ok", b""
+
+    def _fake_popen(cmd, *, cwd, stdout, stderr, text, env, **kwargs):
+        captured.update(env)
+        assert stdout is subprocess.PIPE
+        assert stderr is subprocess.PIPE
+        assert text is False
+        return _FakeProc()
+
+    monkeypatch.setattr(_runner.subprocess, "Popen", _fake_popen)
+
+    rc, output = _runner._run_captured(
+        [sys.executable, "-c", "print('ok')"],
+        cwd=_runner.REPO_ROOT,
+    )
+
+    assert rc == 0
+    assert "ok" in output
+    assert captured["PYTHONIOENCODING"] == "utf-8"
+    assert captured["PYTHONUTF8"] == "1"
+
+
+def test_csharp_phase2_live_tests_clear_phase1_only_flag(monkeypatch) -> None:
+    module = _load_runner_at(
+        "OPC_UA_Clients/Release2/IJT_CSharp_Client/run_all_tests.py",
+        "ijt_csharp_runner_phase2_env",
+    )
+    captured: dict[str, dict[str, str]] = {}
+
+    def _fake_run(cmd, *, cwd=module._PROJECT_DIR, env=None, capture_stdout=False):
+        captured["env"] = env or {}
+        return 0, ""
+
+    monkeypatch.setattr(module, "_run", _fake_run)
+    monkeypatch.setattr(module, "_parse_trx", lambda path: (1, 0, 0, 1))
+
+    result = module._step_live_tests("opc.tcp://localhost:40464")
+
+    assert result.status == "PASS"
+    assert captured["env"]["IJT_PHASE1_ONLY"] == "false"
+    assert captured["env"]["OPCUA_SERVER_URL"] == "opc.tcp://localhost:40464"
+
+
+def test_csharp_managed_live_all_skipped_is_failure() -> None:
+    module = _load_runner_at(
+        "OPC_UA_Clients/Release2/IJT_CSharp_Client/run_all_tests.py",
+        "ijt_csharp_runner_managed_live",
+    )
+    result = module.StepResult(
+        "Live Tests",
+        "PHASE 2",
+        "PASS",
+        "0/110, 110 skipped",
+        1.0,
+        passed=0,
+        failed=0,
+        skipped=110,
+        total=110,
+    )
+
+    enforced = module._enforce_managed_live_coverage(result, "40464")
+
+    assert enforced.status == "FAIL"
+    assert enforced.detail == "0/110, 110 skipped (managed server unavailable)"
