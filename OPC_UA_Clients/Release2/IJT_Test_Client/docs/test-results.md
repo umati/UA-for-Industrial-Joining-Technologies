@@ -153,35 +153,36 @@ that need manual classification.
 | **Failures (N)** | Failed tests only — with full failure message |
 | **Skipped (N)** | Skipped tests only — with skip reason |
 | **Expected Fail (N)** | Xfailed/xpassed — expected failures with reason |
-| **Profile Coverage** | User-facing IJT Base profile summary: active capability profile, declared-supported CU count, compliance status, and profile-level CU counts |
-| **Facet Coverage** | IJT Base 11.2.2 facet table with spec section, CU counts, declared-supported CU count, pass/not-supported/blocked/fail status, and facet descriptions |
-| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, whether it is declared supported by the active capability file, compliance outcome, workbook case counts, and example test |
+| **Profile Coverage** | User-facing IJT high-level coverage summary: active server declaration, reference IJT facets, optional full CU-set view, declared-by-server CU count, run compliance, and coverage-view CU counts |
+| **Facet Coverage** | IJT facet table with CU counts, declared-by-server CU count, validated support/not-supported/blocked/action-needed status, and facet descriptions |
+| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, whether it is declared by the active server declaration, run compliance outcome, workbook case counts, and example test |
 
 Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠 orange = xfailed.
 
 The profile/facet/CU sheets are generated when
 `test-results/cu-compliance-report.json` is present. CI Integration also adds a
-compact **IJT Base Profile / Facet Coverage** table to `summary.md` and the
-GitHub Actions step summary, so users can see the active capability profile,
-reference profile views, IJT Base 11.2.2 facet coverage, CUs with notes or Not Supported declarations, and a collapsible full CU coverage
-table without downloading the Excel file first.
-`Declared Supported CUs` and `Declared Supported` are read from the active server
-capability file (`n/a` when no capability file was loaded); `Compliance` is
-calculated from the current test run. Start with the `Active Capability Profile` row.
-`Reference Profile View` rows are comparison views against other configured IJT
-profile YAML files, not additional pass/fail requirements for this server.
-The `Reason Shown` / `Notes` fields explain why a supported CU still appears in
-the notes table, such as a dependency on an optional method or a true runtime
-precondition that prevented coverage.
+compact **IJT Profiles, Facets, and Conformance Units Coverage** table to
+`summary.md` and the GitHub Actions step summary, so users can see the active
+server declaration, reference IJT facets, facet coverage, CU attention
+items, and a collapsible full CU coverage table without downloading the Excel
+file first.
+`Declared by Server` is read from the active server declaration (`n/a` when
+no capability declaration was loaded); `Run Compliance` and validated counts are
+calculated from the current test run. Start with the `Active server declaration` row.
+`Reference IJT facet` and `Reference full CU set` rows are comparison views, not
+additional pass/fail requirements for this server.
+The `Primary Reason` / `Notes` fields explain why a CU appears in the attention
+table, such as a dependency on an optional method or a true runtime precondition
+that prevented coverage.
 Profile and facet tables distinguish fully supported CUs from CUs supported
 with notes. "Supported with notes" means at least one test path passed and
 the remaining non-passing rows are accepted skips, Not Supported methods/CUs
 from the server profile, or environment/precondition notes; failures and errors
 are reported separately as action needed.
 Accepted policy and environment/tooling limitation skips remain visible in the
-raw skip summary, but they do not reduce CU compliance when the CU also has
-passing support coverage. In Excel, `Supported with Notes` uses a light-green
-fill so it is visually distinct from yellow `Not Supported`.
+raw skip reason summary as diagnostics, but they do not reduce CU compliance
+when the CU also has passing support coverage. In Excel, `Supported with Notes`
+uses a light-green fill so it is visually distinct from yellow `Not Supported`.
 
 ---
 

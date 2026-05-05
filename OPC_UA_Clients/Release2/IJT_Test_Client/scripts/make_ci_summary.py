@@ -402,32 +402,19 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
     tests_by_cu = _cu_test_index(cu_payload)
 
     lines: list[str] = []
-    lines.append("## IJT Base Profile / Facet Coverage")
+    lines.append("## IJT Profiles, Facets, and Conformance Units Coverage")
     lines.append("")
-    lines.append(
-        f"**Capability source:** {server_name}  |  "
-        f"**CU compliance:** {all_counts['supported']} supported, {all_counts['partial']} supported with notes, "
-        f"{all_counts['not_supported']} not supported, {all_counts['blocked']} blocked, "
-        f"{all_counts['action_needed']} action needed"
-    )
+    lines.append("### Executive Summary")
     lines.append("")
+    active_label = str(active.get("name") or _title_from_key(active_profile)) if active else "No active profile found"
+    lines.append("| Item | Value |")
+    lines.append("|---|---|")
+    lines.append(f"| Server under test | {_md_cell(server_name)} |")
+    lines.append(f"| Active server declaration | {_md_cell(active_label)} |")
     lines.append(
-        "_Legend: Supported with notes means at least one test path passed and the remaining "
-        "non-passing rows are accepted skips, Not Supported methods/CUs from the server profile, or environment/precondition notes; "
-        "failures and errors are reported separately as Action needed._"
-    )
-    lines.append(
-        "_Accepted policy and environment/tooling limitation skips are kept in the raw skip summary, "
-        "but they do not reduce CU compliance when the CU also has passing support coverage._"
-    )
-    lines.append(
-        "_Declared Supported CUs and Declared Supported come from the active server capability file; "
-        "Compliance comes from this test run._"
-    )
-    lines.append(
-        "_How to read this section: start with the Active Capability Profile row. Reference Profile View rows are "
-        "comparison views against other configured IJT profile YAML files; they are not extra pass/fail requirements "
-        "for this server._"
+        f"| Validated CU outcome | {all_counts['supported']} supported, "
+        f"{all_counts['partial']} supported with notes, {all_counts['not_supported']} not supported, "
+        f"{all_counts['blocked']} blocked, {all_counts['action_needed']} action needed |"
     )
     lines.append("")
     if active:
@@ -435,27 +422,76 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
         active_counts = _count_outcomes(active_cus, by_cu)
         server_profile_cus = _server_profile_cu_count(active_cus, supported)
         lines.append(
-            f"**Active capability profile:** {active['name']}  |  "
-            f"**Declared supported CUs:** {server_profile_cus}/{len(active_cus)}  |  "
-            f"**Compliance:** {_compliance_label(active_counts, len(active_cus))}"
+            f"**Active server declaration:** {active['name']}  |  "
+            f"**Declared by server:** {server_profile_cus}/{len(active_cus)} CUs  |  "
+            f"**Run compliance:** {_compliance_label(active_counts, len(active_cus))}"
         )
     else:
-        lines.append("**Active capability profile:** no active profile found in available capabilities file")
+        lines.append("**Active server declaration:** no active profile found in available capabilities file")
+    lines.append("")
+    lines.append("### How to Read This Coverage")
+    lines.append("")
+    lines.append("- **Active server declaration** is the active profile selected by the server capability YAML.")
+    lines.append(
+        "- **Reference IJT facet** and **Reference full CU set** rows are comparison views only; "
+        "they are not extra pass/fail requirements."
+    )
+    lines.append("- **Declared by server** means the CU is claimed by the active capability declaration.")
+    lines.append("- **Validated** columns come from this test run.")
+    lines.append(
+        "- **Supported with notes** means at least one support path passed and remaining non-passing rows are "
+        "accepted policy, Not Supported declarations, or environment/precondition notes."
+    )
+    lines.append("- Failures and errors are reported as **Action needed**.")
+    lines.append("- Raw skip reasons are listed later as diagnostics and may overlap with CU attention items.")
     lines.append("")
 
-    lines.append("### Profiles")
+    lines.append("### High-Level Coverage Views")
     lines.append("")
     lines.append(
-        "| Profile | Scope | Facets | CUs | Declared Supported CUs | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
+        "_These rows separate the active server declaration from the main IJT facet rollups and the complete CU set._"
+    )
+    lines.append("")
+    lines.append(
+        "| View | Role | Facet Count | CUs in View | Declared by Server | Validated Supported | Validated with Notes | Not Supported | Blocked | Action Needed | Run Compliance |"
     )
     lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|")
-    for key, profile in profiles.items():
-        cu_keys = _profile_cus(profile, facets)
+    view_rows: list[tuple[str, str, int, list[str]]] = []
+    if active:
+        view_rows.append(
+            (
+                str(active.get("name", _title_from_key(active_profile))),
+                "Active server declaration",
+                len(active.get("facets", [])),
+                _profile_cus(active, facets),
+            )
+        )
+
+    for facet_key in (
+        "basic_joining_system_server_facet",
+        "general_joining_system_server_facet",
+        "joining_system_selectable_features_server_facet",
+    ):
+        facet = facets.get(facet_key)
+        if not facet:
+            continue
+        view_rows.append(
+            (
+                str(facet.get("display_name") or _title_from_key(facet_key)),
+                "Reference IJT facet",
+                1,
+                list(facet.get("conformance_units", [])),
+            )
+        )
+
+    if active_profile != "full_conformance":
+        view_rows.append(("Full IJT Base CU Set", "Reference full CU set", len(facets), all_cu_keys))
+
+    for view_name, profile_role, facet_count, cu_keys in view_rows:
         counts = _count_outcomes(cu_keys, by_cu)
-        profile_role = "Active Capability Profile" if key == active_profile else "Reference Profile View"
         lines.append(
-            f"| {_md_cell(str(profile.get('name', _title_from_key(key))))} | {profile_role} | "
-            f"{len(profile.get('facets', []))} | {len(cu_keys)} | {_server_profile_cu_count(cu_keys, supported)} | "
+            f"| {_md_cell(view_name)} | {profile_role} | "
+            f"{facet_count} | {len(cu_keys)} | {_server_profile_cu_count(cu_keys, supported)} | "
             f"{counts['supported']} | {counts['partial']} | {counts['not_supported']} | "
             f"{counts['blocked']} | {counts['action_needed']} | "
             f"{_compliance_label(counts, len(cu_keys))} |"
@@ -465,16 +501,15 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
     lines.append("### Facets")
     lines.append("")
     lines.append(
-        "| Spec Section | Facet | Type | CUs | Declared Supported CUs | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
+        "| Facet | Type | CUs in Facet | Declared by Server | Validated Supported | Validated with Notes | Not Supported | Blocked | Action Needed | Run Compliance |"
     )
-    lines.append("|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|")
+    lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---|")
     for facet in facets.values():
         cu_keys = list(facet.get("conformance_units", []))
         counts = _count_outcomes(cu_keys, by_cu)
         facet_kind = "Rollup" if str(facet.get("kind") or "") == "rollup" else "Facet"
         lines.append(
-            f"| {_md_cell(str(facet.get('spec_section') or ''))} | "
-            f"{_md_cell(str(facet.get('display_name', 'Facet')))} | {facet_kind} "
+            f"| {_md_cell(str(facet.get('display_name', 'Facet')))} | {facet_kind} "
             f"| {len(cu_keys)} | {_server_profile_cu_count(cu_keys, supported)} | {counts['supported']} | "
             f"{counts['partial']} | {counts['not_supported']} | {counts['blocked']} | "
             f"{counts['action_needed']} | "
@@ -489,10 +524,15 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
         if _cu_compliance_key(data) in {"partial", "not_supported", "blocked", "action_needed"}:
             attention_cus.append((cu_key, data))
     if attention_cus:
-        lines.append("### CUs With Notes / Not Supported")
+        lines.append("### CU Attention Items")
         lines.append("")
         lines.append(
-            "| CU | Facet(s) | Declared Supported | Compliance | Reason Shown | Tests | Passed | Not Supported | Blocked | Failed/Error |"
+            "_Support-level detail for CUs that are supported with notes, Not Supported, blocked, or action needed. "
+            "Use this section for stakeholder follow-up; raw skip buckets below are diagnostics._"
+        )
+        lines.append("")
+        lines.append(
+            "| CU | Facet(s) | Declared by Server | Run Compliance | Primary Reason | Tests | Passed | Not Supported | Blocked | Failed/Error |"
         )
         lines.append("|---|---|---|---|---|---:|---:|---:|---:|---:|")
         for cu_key, data in attention_cus[:40]:
@@ -510,10 +550,10 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
         lines.append("")
 
     lines.append("<details>")
-    lines.append("<summary>Full CU coverage table</summary>")
+    lines.append("<summary>Full CU coverage details</summary>")
     lines.append("")
     lines.append(
-        "| CU | Facet(s) | Declared Supported | Compliance | Tests | Passed | Not Supported | Blocked | Failed/Error | Workbook Cases |"
+        "| CU | Facet(s) | Declared by Server | Run Compliance | Tests | Passed | Not Supported | Blocked | Failed/Error | Workbook Cases |"
     )
     lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|")
     for cu_key in all_cu_keys:
@@ -583,7 +623,12 @@ def _render(data: dict, server_url: str, run_ts: str, cu_payload: dict[str, Any]
 
     # ── Skip reason buckets ──
     if data["skip_reasons"]:
-        lines.append("## ⏭️ Skip Reasons (top categories)")
+        lines.append("## ⏭️ Raw Skip Reason Summary")
+        lines.append("")
+        lines.append(
+            "Diagnostic skip buckets from pytest. These may overlap with CU attention items and do not "
+            "by themselves reduce CU compliance when the CU also has passing support coverage."
+        )
         lines.append("")
         lines.append("| Reason | Count |")
         lines.append("|--------|------:|")

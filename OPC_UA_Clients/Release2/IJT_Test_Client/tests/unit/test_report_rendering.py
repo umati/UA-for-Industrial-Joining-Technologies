@@ -85,7 +85,11 @@ def test_ci_summary_renders_profile_facet_and_full_cu_tables(monkeypatch):
             "basic_facet": {
                 "display_name": "Basic Facet",
                 "conformance_units": ["joining_system_base", "state_policy_note", "optional_feature"],
-            }
+            },
+            "basic_joining_system_server_facet": {
+                "display_name": "Basic Joining System Server Facet",
+                "conformance_units": ["joining_system_base"],
+            },
         },
     )
     monkeypatch.setattr(
@@ -95,7 +99,7 @@ def test_ci_summary_renders_profile_facet_and_full_cu_tables(monkeypatch):
             "full_conformance": {
                 "name": "Full Conformance",
                 "facets": ["basic_facet"],
-            }
+            },
         },
     )
     monkeypatch.setattr(
@@ -144,17 +148,24 @@ def test_ci_summary_renders_profile_facet_and_full_cu_tables(monkeypatch):
 
     rendered = "\n".join(_ci_summary._render_profile_facet_summary(payload))
 
-    assert "### Profiles" in rendered
+    assert "## IJT Profiles, Facets, and Conformance Units Coverage" in rendered
+    assert "### Executive Summary" in rendered
+    assert "### How to Read This Coverage" in rendered
+    assert "### High-Level Coverage Views" in rendered
     assert "### Facets" in rendered
-    assert "### CUs With Notes / Not Supported" in rendered
-    assert "Scope" in rendered
-    assert "Declared Supported CUs" in rendered
-    assert "Declared Supported" in rendered
-    assert "Reason Shown" in rendered
+    assert "### CU Attention Items" in rendered
+    assert "Role" in rendered
+    assert "Reference IJT facet" in rendered
+    assert "Declared by Server" in rendered
+    assert "Run Compliance" in rendered
+    assert "Primary Reason" in rendered
     assert "OptionalFeature: Not Supported" in rendered
-    assert "<summary>Full CU coverage table</summary>" in rendered
+    assert "<summary>Full CU coverage details</summary>" in rendered
     assert "Report Test Server" in rendered
-    assert "| IJT Joining System Base | Basic Facet | Yes | 🟢 Supported | 2 | 2 | 0 | 0 | 0 | 3 |" in rendered
+    assert (
+        "| IJT Joining System Base | Basic Facet, Basic Joining System Server Facet "
+        "| Yes | 🟢 Supported | 2 | 2 | 0 | 0 | 0 | 3 |"
+    ) in rendered
     assert "| IJT State Policy Note | Basic Facet | Yes | 🟢 Supported | 2 | 1 | 0 | 0 | 0 | 1 |" in rendered
     assert "| IJT Optional Feature | Basic Facet | No | 🟡 Not Supported | 1 | 0 | 1 | 0 | 0 | 2 |" in rendered
     assert "Accepted Policy: ACCEPTED POLICY - Method: SelectJoiningProcess - state not ready" not in rendered

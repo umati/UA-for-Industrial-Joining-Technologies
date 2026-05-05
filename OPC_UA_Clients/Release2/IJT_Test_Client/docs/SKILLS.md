@@ -44,7 +44,7 @@ unit stage and is currently 95%.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
 - Local default is `on-success`; CI default is `always`.
 - Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
-- Excel and GitHub Actions summaries include IJT Base profile, 11.2.2 facet, and CU coverage tables when the live CU compliance report is present; report wording uses `Active Capability Profile`, `Reference Profile View`, `Declared Supported CUs`, and `Reason Shown` for public clarity.
+- Excel and GitHub Actions summaries include IJT high-level coverage views, facet, and CU coverage tables when the live CU compliance report is present; report wording separates `Active server declaration`, `Reference IJT facet`, `Reference full CU set`, `Declared by Server`, `Run Compliance`, and `Primary Reason` for public clarity.
 - Missing phase1 tools are auto-installed locally by default; CI keeps auto-install off by default for reproducibility.
 - Use `--no-auto-install-tools` to disable local auto-install, or `--auto-install-tools` to force-enable it.
 

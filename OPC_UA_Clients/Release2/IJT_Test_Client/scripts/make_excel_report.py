@@ -11,8 +11,8 @@ Sheets produced:
   Failures         — only failed tests with full message
   Skipped          — only skipped tests with reason
   Expected Fail    — xfailed and xpassed tests with reason
-  Profile Coverage — IJT CS profile-level coverage, when CU JSON is present
-  Facet Coverage   — IJT CS facet-level coverage, when CU JSON is present
+  Profile Coverage — IJT high-level coverage views, when CU JSON is present
+  Facet Coverage   — IJT facet coverage, when CU JSON is present
   CU Coverage      — one row per conformance unit, when CU JSON is present
 
 Usage:
@@ -671,15 +671,15 @@ def _build_profile_coverage(
     by_cu = cu_payload.get("by_cu", {}) if isinstance(cu_payload.get("by_cu"), dict) else {}
     supported = _supported_set(cu_payload)
     summary = cu_payload.get("summary", {}) if isinstance(cu_payload.get("summary"), dict) else {}
+    all_cu_keys = _ordered_cu_keys(by_cu, facets)
 
-    ws["A1"] = "IJT Base Profile / Facet Coverage"
+    ws["A1"] = "IJT Profiles, Facets, and Conformance Units Coverage"
     ws["A1"].font = Font(bold=True, size=14)
     ws["A2"] = (
-        "This sheet maps the current test run to the IJT Base profile and 11.2.2 facet model. "
-        "Start with the Active Capability Profile row; Reference Profile View rows are comparison views against other configured IJT profile YAML files, not extra pass/fail requirements. "
-        "Declared Supported CUs and Declared Supported come from the active server capability file. "
-        "Compliance comes from this test run. Accepted policy and environment/tooling limitation skips remain visible in "
-        "raw skip reports, but they do not reduce CU compliance when the CU also has passing support coverage."
+        "This sheet maps the current test run to IJT high-level coverage views, facets, and conformance units. "
+        "Start with the Active Server Declaration row; Reference IJT Facet and Reference Full CU Set rows are comparison views only, not extra pass/fail requirements. "
+        "Declared by Server comes from the active server declaration. Run Compliance and validated counts come from this test run. "
+        "Raw skip reports remain diagnostic and may overlap with CU attention items."
     )
     ws["A2"].alignment = Alignment(wrap_text=True)
 
@@ -690,42 +690,83 @@ def _build_profile_coverage(
         4,
         [
             ("Server", server),
-            ("Active capability profile", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
+            ("Active server declaration", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
             ("Official IJT CUs", summary.get("official_cu_count", len(by_cu))),
-            ("Declared supported CUs", len(supported) if supported is not None else "n/a"),
+            ("Declared by server", len(supported) if supported is not None else "n/a"),
             ("Workbook test cases", summary.get("workbook_case_count", "n/a")),
         ],
     )
 
     headers = [
-        "Profile",
-        "Scope",
-        "Facets",
-        "CUs",
-        "Declared Supported CUs",
-        "Supported",
-        "With Notes",
+        "View",
+        "Role",
+        "Facet Count",
+        "CUs in View",
+        "Declared by Server",
+        "Validated Supported",
+        "Validated with Notes",
         "Not Supported",
         "Blocked",
         "Action Needed",
         "Untested",
-        "Declared Supported %",
-        "Compliance",
+        "Declared by Server %",
+        "Run Compliance",
         "Description",
     ]
-    widths = [28, 12, 8, 8, 14, 10, 8, 14, 9, 13, 9, 10, 16, 70]
+    widths = [34, 28, 12, 10, 14, 12, 12, 14, 9, 13, 9, 12, 16, 70]
     _apply_header(ws, next_row, headers, widths)
 
+    view_rows: list[tuple[str, str, int, list[str], str]] = []
+    if active in profiles:
+        profile = profiles[active]
+        view_rows.append(
+            (
+                profile.name,
+                "Active Server Declaration",
+                len(profile.facets),
+                _cus_for_profile(profile, facets),
+                profile.description,
+            )
+        )
+
+    for facet_key in (
+        "basic_joining_system_server_facet",
+        "general_joining_system_server_facet",
+        "joining_system_selectable_features_server_facet",
+    ):
+        facet = facets.get(facet_key)
+        if facet is None:
+            continue
+        view_rows.append(
+            (
+                facet.display_name,
+                "Reference IJT Facet",
+                1,
+                facet.conformance_units,
+                facet.description,
+            )
+        )
+
+    if active != "full_conformance":
+        view_rows.append(
+            (
+                "Full IJT Base CU Set",
+                "Reference Full CU Set",
+                len(facets),
+                all_cu_keys,
+                "Flat reference view of all unique IJT Base conformance units.",
+            )
+        )
+
     row = next_row + 1
-    for profile in profiles.values():
-        cu_keys = _cus_for_profile(profile, facets)
+    for view_name, role, facet_count, cu_keys, description in view_rows:
         counts = _count_cu_outcomes(cu_keys, by_cu)
         server_profile_cus = _server_profile_cu_count(cu_keys, supported)
         compliance = _compliance_status(counts, len(cu_keys))
         values = [
-            profile.name,
-            "Active Capability Profile" if profile.key == active else "Reference Profile View",
-            len(profile.facets),
+            view_name,
+            role,
+            facet_count,
             len(cu_keys),
             server_profile_cus,
             counts["supported"],
@@ -736,12 +777,12 @@ def _build_profile_coverage(
             counts["untested"],
             _server_profile_pct(server_profile_cus, len(cu_keys)),
             compliance,
-            profile.description,
+            description,
         ]
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            if col == 2 and value == "Active Capability Profile":
+            if col == 2 and value == "Active Server Declaration":
                 cell.fill = _fill(_LIGHT_BLUE)
                 cell.font = Font(bold=True)
             if col == 13:
@@ -767,23 +808,22 @@ def _build_facet_coverage(
     active_extra_facets = set(capabilities.supported_facets if capabilities else [])
 
     headers = [
-        "Spec Section",
         "Facet",
         "Facet Key",
         "Facet Type",
-        "CUs",
-        "Declared Supported CUs",
-        "Supported",
-        "With Notes",
+        "CUs in Facet",
+        "Declared by Server",
+        "Validated Supported",
+        "Validated with Notes",
         "Not Supported",
         "Blocked",
         "Action Needed",
         "Untested",
-        "Declared Supported %",
-        "Compliance",
+        "Declared by Server %",
+        "Run Compliance",
         "Description",
     ]
-    widths = [14, 34, 34, 12, 8, 14, 10, 8, 14, 9, 13, 9, 10, 16, 70]
+    widths = [34, 34, 12, 10, 14, 12, 12, 14, 9, 13, 9, 12, 16, 70]
     _apply_header(ws, 1, headers, widths)
 
     for row, facet in enumerate(facets.values(), start=2):
@@ -795,7 +835,6 @@ def _build_facet_coverage(
         if facet.key in active_extra_facets:
             facet_type = f"Additional {facet_type}"
         values = [
-            facet.spec_section,
             facet.display_name,
             facet.key,
             facet_type,
@@ -814,11 +853,11 @@ def _build_facet_coverage(
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            if col == 14:
+            if col == 13:
                 cell.fill = _status_fill(str(value))
                 cell.font = Font(bold=True)
 
-    ws.auto_filter.ref = f"A1:O{max(1, len(facets) + 1)}"
+    ws.auto_filter.ref = f"A1:N{max(1, len(facets) + 1)}"
 
 
 def _build_cu_coverage(
@@ -842,8 +881,8 @@ def _build_cu_coverage(
         "CU",
         "CU Key",
         "Facet(s)",
-        "Declared Supported",
-        "Compliance",
+        "Declared by Server",
+        "Run Compliance",
         "Tests",
         "Passed",
         "Not Supported",
