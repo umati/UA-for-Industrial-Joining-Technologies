@@ -172,6 +172,16 @@ def _first_method_output(output):
     return output
 
 
+def _method_status_code(output) -> int | None:
+    if not output:
+        return None
+    raw = getattr(output[0], "Value", output[0])
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -239,6 +249,37 @@ async def _first_joining_process_identification_arg(client, ns_indices, jpm_node
     jp_arg = _jp_identification_from_entry(programs[0])
     if jp_arg is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — cannot build method arguments")
+    return jp_arg
+
+
+async def _select_first_joining_process(client, ns_indices, jpm_node, pi_uri: str):
+    ns_ijt = _require_ns_ijt(ns_indices)
+    jp_arg = await _first_joining_process_identification_arg(client, ns_indices, jpm_node, pi_uri)
+    select_node = await _find_method_node(jpm_node, BN.SELECT_JOINING_PROCESS, ns_ijt)
+    if select_node is None:
+        pytest.skip(f"'{BN.SELECT_JOINING_PROCESS}' method not found — cannot establish selection precondition")
+    select_result = await call_method(
+        jpm_node,
+        select_node,
+        _piu_arg(pi_uri),
+        jp_arg,
+        timeout=15.0,
+        method_name=BN.SELECT_JOINING_PROCESS,
+    )
+    if not select_result.success:
+        err_str = str(select_result.error) if select_result.error else "unknown"
+        skip_accepted_policy(
+            "selection precondition could not be established for current controller/tool state",
+            method=BN.SELECT_JOINING_PROCESS,
+            status=err_str,
+        )
+    status_code = _method_status_code(select_result.output_list)
+    if status_code not in (None, 0):
+        skip_accepted_policy(
+            "selection precondition was rejected for current controller/tool state",
+            method=BN.SELECT_JOINING_PROCESS,
+            status=str(status_code),
+        )
     return jp_arg
 
 
@@ -335,7 +376,7 @@ async def test_select_joining_process_with_valid_program_succeeds(opcua_client, 
     list_result = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(pi_uri), timeout=15.0)
     if not list_result.success:
         pytest.skip("GetJoiningProcessList unavailable — cannot determine valid program ID")
-    programs = list_result.output_list
+    programs = _unwrap_method_array_output(list_result.output_list)
     if not programs:
         pytest.skip("GetJoiningProcessList returned an empty list — no program available to select")
 
@@ -423,31 +464,30 @@ async def test_start_selected_joining_triggers_result_ready_event(subscription_c
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
 
     list_result = await find_and_call_method(
         jpm,
         BN.GET_JOINING_PROCESS_LIST,
         ns_ijt,
-        _piu_arg(),
+        _piu_arg(pi_uri),
         timeout=15.0,
     )
     if list_result.success:
-        programs = list_result.output_list
+        programs = _unwrap_method_array_output(list_result.output_list)
         if programs:
             first_program = programs[0]
-            program_id = _joining_process_id_from_entry(first_program)
+            jp_arg = _jp_identification_from_entry(first_program)
             select_method = await _find_method_node(jpm, BN.SELECT_JOINING_PROCESS, ns_ijt)
-            if select_method is not None:
-                jp_arg = _jp_identification_arg(process_id=program_id)
-                if jp_arg is not None:
-                    await call_method(
-                        jpm,
-                        select_method,
-                        _piu_arg(),
-                        jp_arg,
-                        timeout=15.0,
-                        method_name=BN.SELECT_JOINING_PROCESS,
-                    )
+            if select_method is not None and jp_arg is not None:
+                await call_method(
+                    jpm,
+                    select_method,
+                    _piu_arg(pi_uri),
+                    jp_arg,
+                    timeout=15.0,
+                    method_name=BN.SELECT_JOINING_PROCESS,
+                )
 
     start_method = await _find_method_node(jpm, BN.START_SELECTED_JOINING, ns_ijt)
     if start_method is None:
@@ -461,7 +501,7 @@ async def test_start_selected_joining_triggers_result_ready_event(subscription_c
         start_result = await call_method(
             jpm,
             start_method,
-            _piu_arg(),
+            _piu_arg(pi_uri),
             ua.Variant(False, ua.VariantType.Boolean),
             timeout=15.0,
             method_name=BN.START_SELECTED_JOINING,
@@ -751,12 +791,13 @@ async def test_get_selected_joining_program_method_present(joining_process_manag
 @pytest.mark.requires_cu(CU.GET_SELECTED_JOINING_PROGRAM)
 async def test_get_selected_joining_program_returns_program(opcua_client, ns_indices):
     """
-    GetSelectedJoiningProgram must return a value without raising an error (value
-    may be None or empty if no program is currently selected).
+    GetSelectedJoiningProgram must return the selected value after a valid
+    SelectJoiningProcess precondition has been established.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
+    await _select_first_joining_process(opcua_client, ns_indices, jpm, pi_uri)
     result = await find_and_call_method(
         jpm,
         BN.GET_SELECTED_JOINING_PROGRAM,
@@ -1486,8 +1527,8 @@ async def test_abort_joining_process_is_executable_if_present(joining_process_ma
 @pytest.mark.requires_cu(CU.ABORT_JOINING_PROCESS)
 async def test_abort_joining_process_generates_event_if_present(subscription_client, opcua_client, ns_indices):
     """
-    AbortJoiningProcess should generate a JoiningSystemEventType event.
-    The test is skipped when the method is absent or no process is active to abort.
+    AbortJoiningProcess should generate a JoiningSystemEventType event for an
+    explicit valid joining process.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
@@ -1496,20 +1537,16 @@ async def test_abort_joining_process_generates_event_if_present(subscription_cli
         pytest.skip(f"Optional method '{BN.ABORT_JOINING_PROCESS}': Not Supported — skipping")
     server_node = subscription_client.nodes.server
     event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt))
-    ns_di_idx = ns_indices.get(NS_DI)
-    ns_app_idx = ns_indices.get(NS_APP)
-    pi_uri = await read_tool_product_instance_uri(subscription_client, ns_ijt, ns_di_idx, ns_app_idx)
-    jp = _make_jp_identification()
-    if jp is None:
-        pytest.skip("JoiningProcessIdentificationDataType not available — load_data_type_definitions() may have failed")
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
+    jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
         call_result = await call_method(
             jpm,
             method_node,
-            ua.Variant(pi_uri, ua.VariantType.String),
-            ua.Variant(jp, ua.VariantType.ExtensionObject),
-            ua.Variant(ua.LocalizedText(Text="", Locale="en"), ua.VariantType.LocalizedText),
+            _piu_arg(pi_uri),
+            jp_arg,
+            ua.Variant(ua.LocalizedText(Text="Test abort", Locale="en"), ua.VariantType.LocalizedText),
             timeout=30.0,
             method_name=BN.ABORT_JOINING_PROCESS,
         )
@@ -1525,11 +1562,16 @@ async def test_abort_joining_process_generates_event_if_present(subscription_cli
                     "BadInvalidArgument",
                 )
             ):
-                pytest.skip(f"AbortJoiningProcess returned {err_str} — no active process to abort")
+                skip_accepted_policy(
+                    "explicit abort request was rejected for the current controller/tool state",
+                    method=BN.ABORT_JOINING_PROCESS,
+                    status=err_str,
+                )
+            pytest.fail(f"AbortJoiningProcess failed unexpectedly: {err_str}")
         events = await collector.collect(count=1, timeout_s=30.0)
     if not events:
         skip_accepted_policy(
-            "no active joining-process execution was available to produce an abort event",
+            "explicit abort request produced no event; server may require an active long-running joining-process execution",
             method=BN.ABORT_JOINING_PROCESS,
             status="No event within timeout",
         )
@@ -1555,9 +1597,10 @@ async def test_start_selected_joining_after_select_returns_good(opcua_client, ns
     if not list_result.success:
         err_str = str(list_result.error) if list_result.error else "unknown"
         pytest.skip(f"GetJoiningProcessList failed ({err_str}) — cannot establish SelectJoiningProcess precondition")
-    if not list_result.output_list:
+    programs = _unwrap_method_array_output(list_result.output_list)
+    if not programs:
         pytest.skip("GetJoiningProcessList returned empty list — no programs configured; cannot establish precondition")
-    first_program = list_result.output_list[0]
+    first_program = programs[0]
     jp_arg = _jp_identification_from_entry(first_program)
     if jp_arg is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — cannot select a joining process")
@@ -1584,7 +1627,7 @@ async def test_start_selected_joining_after_select_returns_good(opcua_client, ns
     start_result = await call_method(
         jpm,
         start_node,
-        _piu_arg(),
+        _piu_arg(pi_uri),
         ua.Variant(False, ua.VariantType.Boolean),
         timeout=15.0,
         method_name=BN.START_SELECTED_JOINING,
@@ -1627,11 +1670,12 @@ async def test_select_joining_process_state_reflected_after_select(opcua_client,
     if not list_result.success:
         err_str = str(list_result.error) if list_result.error else "unknown"
         pytest.skip(f"GetJoiningProcessList failed ({err_str}) — cannot determine a valid program ID")
-    if not list_result.output_list:
+    programs = _unwrap_method_array_output(list_result.output_list)
+    if not programs:
         pytest.skip(
             "GetJoiningProcessList returned empty list — no programs configured; cannot determine a valid program ID"
         )
-    first_program = list_result.output_list[0]
+    first_program = programs[0]
     jp_arg = _jp_identification_from_entry(first_program)
     if jp_arg is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — cannot select a joining process")

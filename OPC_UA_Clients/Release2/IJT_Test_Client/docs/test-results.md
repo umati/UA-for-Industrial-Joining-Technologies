@@ -153,23 +153,23 @@ that need manual classification.
 | **Failures (N)** | Failed tests only — with full failure message |
 | **Skipped (N)** | Skipped tests only — with skip reason |
 | **Expected Fail (N)** | Xfailed/xpassed — expected failures with reason |
-| **Profile Coverage** | User-facing IJT CS profile summary: tested profile, CU count in the tested profile, compliance status, and profile-level CU counts |
-| **Facet Coverage** | IJT CS facet table with CU counts, tested-profile CU count, pass/not-supported/blocked/fail status, and facet descriptions |
-| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, whether it is in the tested profile, compliance outcome, workbook case counts, and example test |
+| **Profile Coverage** | User-facing IJT Base profile summary: active capability profile, declared-supported CU count, compliance status, and profile-level CU counts |
+| **Facet Coverage** | IJT Base 11.2.2 facet table with spec section, CU counts, declared-supported CU count, pass/not-supported/blocked/fail status, and facet descriptions |
+| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, whether it is declared supported by the active capability file, compliance outcome, workbook case counts, and example test |
 
 Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠 orange = xfailed.
 
 The profile/facet/CU sheets are generated when
 `test-results/cu-compliance-report.json` is present. CI Integration also adds a
-compact **IJT CS Profile / Facet Coverage** table to `summary.md` and the
-GitHub Actions step summary, so users can see the tested profile, reference
-comparison profiles, facet coverage, CUs with notes or Not Supported declarations, and a collapsible full CU coverage
+compact **IJT Base Profile / Facet Coverage** table to `summary.md` and the
+GitHub Actions step summary, so users can see the active capability profile,
+reference profile views, IJT Base 11.2.2 facet coverage, CUs with notes or Not Supported declarations, and a collapsible full CU coverage
 table without downloading the Excel file first.
-`CUs in Tested Profile` and `In Tested Profile` are read from the active server
+`Declared Supported CUs` and `Declared Supported` are read from the active server
 capability file (`n/a` when no capability file was loaded); `Compliance` is
-calculated from the current test run. Start with the `Tested Profile` row.
-`Reference Comparison` profile rows are comparison views against other IJT CS
-profiles, not additional pass/fail requirements for this server.
+calculated from the current test run. Start with the `Active Capability Profile` row.
+`Reference Profile View` rows are comparison views against other configured IJT
+profile YAML files, not additional pass/fail requirements for this server.
 The `Reason Shown` / `Notes` fields explain why a supported CU still appears in
 the notes table, such as a dependency on an optional method or a true runtime
 precondition that prevented coverage.
@@ -212,15 +212,15 @@ fill so it is visually distinct from yellow `Not Supported`.
 
 | Category | Example Reason | Meaning |
 |---|---|---|
-| Unsupported CU / optional method | `IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED` | Server profile or address space does not support this optional CU/method; skip is correct |
-| Blocked runtime precondition | `BLOCKED - Method: AbortJoiningProcess - no active process is available` | The test path is valid, but the current server state cannot satisfy the setup precondition |
-| Accepted policy outcome | `ACCEPTED POLICY - Method: GetSelectedJoiningProgram - Status: Uncertain - no program is currently selected` | The server returned a documented simulator/domain policy result that should not fail the run |
+| Unsupported CU / optional method / server feature | `IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED`; `IJT JoiningSystemConditionType NOT SUPPORTED` | Server profile or address space does not support this optional CU, method, or feature; skip is correct. For `JoiningSystemConditionType`, this means Acknowledgeable Events/Conditions such as `JoiningSystemConditionType` and advanced OPC UA Alarms are not supported; ConditionClass fields on `JoiningSystemEventType` remain supported. |
+| Blocked runtime precondition | `BLOCKED - Method: StartSelectedJoining - tool/controller state is not ready` | The test path is valid, but the current server state cannot satisfy the setup precondition |
+| Accepted policy outcome | `ACCEPTED POLICY - Method: SelectJoiningProcess - selection precondition could not be established for current controller/tool state` | The server returned a documented simulator/domain policy result that should not fail the run |
 | Environment condition | `ENVIRONMENT - Docker backend not reachable` | Local tooling, port, browser, Docker, client-library, or network condition prevented the test path |
 | Optional/deprecated path absent | `Deprecated direct Asset.Health.DeviceHealth absent ...` | Server omits an older or optional address-space path; use the replacement path when applicable |
 | Trace data absent | `No trace values in result` | Server/device did not populate `JoiningResultDataType.Trace` for this run; verify trigger settings (`includeTraces`) and server profile |
 | Missing prerequisite | `SetCalibration absent — cannot test downstream behaviour` | Cascading skip: an earlier optional feature was absent |
 | Namespace absent | `App namespace not registered` | Server does not expose the simulation namespace (expected for non-simulators) |
-| Event source unavailable | `Condition event not generated by current trigger/server ...` | The test needs a real event source or active fault condition; absence is a precondition gap, not a failed assertion |
+| Event source unavailable | `Representative event not generated by current trigger/server ...` | The test needs a real event source or active runtime trigger. If the server does not support that event type, classify it as Not Supported rather than Accepted Policy. |
 | Result classification unavailable | `INTERVENTION_RESULT not generated by current trigger/server ...` | Current trigger/server did not produce that classification, so classification-specific assertions cannot run |
 | Domain precondition failed | `SelectJoiningProcess precondition failed (...)` | A listed process exists but the server cannot select it in the current state |
 

@@ -266,6 +266,14 @@ def test_skip_summary_leaves_non_method_not_supported_reason():
     assert _mod._summarize_skip_reason(reason) == reason
 
 
+def test_skip_summary_trims_feature_not_supported_reason():
+    reason = (
+        "Skipped: IJT JoiningSystemConditionType NOT SUPPORTED - "
+        "Acknowledgeable Events/Conditions such as JoiningSystemConditionType are not supported"
+    )
+    assert _mod._summarize_skip_reason(reason) == "IJT JoiningSystemConditionType NOT SUPPORTED"
+
+
 # ---------------------------------------------------------------------------
 # Semgrep parse-failure path: non-blocking by contract
 # ---------------------------------------------------------------------------

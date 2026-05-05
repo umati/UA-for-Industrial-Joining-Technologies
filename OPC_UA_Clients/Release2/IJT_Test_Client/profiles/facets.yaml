@@ -1,67 +1,43 @@
 # OPC UA IJT Facets Definition
 #
-# This file maps OPC UA IJT profile facet names to their constituent
-# conformance unit keys. Facet names match the official OPC UA IJT
-# specification profile catalogue.
+# The report-facing facet catalogue follows OPC 40450-1 IJT Base 11.2.2,
+# ordered by spec section 11.2.2.2 through 11.2.2.22. Conformance unit keys
+# remain the stable snake_case names from helpers/cu_registry.py.
 #
-# All CU keys are meaningful names — no spec sequence numbers.
-# See helpers/cu_registry.py for the full CU key list.
-#
-# ─── Inheritance note ─────────────────────────────────────────────────────────
-# Facets are additive sets of CU keys. Profiles (in the other YAML files)
-# combine facets. profile_loader.py resolves the union of all selected facets.
+# Some IJT Base facets are profile-style rollups that reference other facets.
+# Those rows intentionally repeat CUs already present in their child facets so
+# the report matches the specification headings without changing the unique
+# 123-CU full-conformance set.
 
 facets:
 
-  # ── Baseline: present in every IJT server ─────────────────────────────────
-  basic_joining_system_server_facet:
-    display_name: "Basic Joining System Server Facet"
+  result_server_facet:
+    display_name: "IJT Result Server Facet"
+    spec_section: "11.2.2.2"
     description: >
-      Minimum conformance requirement for any OPC UA IJT server.
-      Covers the JoiningSystem node structure, mandatory identification
-      component, and machinery building blocks.
-    conformance_units:
-      - joining_system_base
-      - joining_system_identification
-      - joining_system_machinery_building_blocks
-
-  # ── General Joining System ──────────────────────────────────────────────────
-  general_joining_system_server_facet:
-    display_name: "General Joining System Server Facet"
-    description: >
-      Extends the basic facet with result management, result content,
-      and identifier tracking — the core of a useful joining server.
+      Result management baseline: result objects, result access methods, result
+      event access, and basic result metadata.
     conformance_units:
       - result_management
       - single_result
       - basic_result
-      - result_additional_data
-      - result_extended_meta_data
+      - result_event_access
       - result_processing_times
       - result_processing_times_durations
-      - result_event_access
       - get_latest_result
       - get_result_by_id
-      - result_variable_access
-      - result_internal_identifiers
-      - result_external_identifiers
-      - result_content
-      - method_input_argument
-
-  # ── Result Management ───────────────────────────────────────────────────────
-  result_management_server_facet:
-    display_name: "Result Management Server Facet"
-    description: >
-      Full result access including filter-based queries, result requests,
-      acknowledgement, joining result payload details, trace data, and
-      all consolidated result types.
-    conformance_units:
       - get_result_with_filter_criteria
-      - request_results
-      - requested_result_variable_access
-      - requested_result_event_access
-      - acknowledge_results
-      - request_unacknowledged_results
+      - result_variable_access
+      - result_additional_data
+      - result_extended_meta_data
+
+  joining_result_server_facet:
+    display_name: "IJT Joining Result Server Facet"
+    spec_section: "11.2.2.3"
+    description: >
+      Joining-result payload details such as failure reason, result values,
+      step results, errors, and trace data.
+    conformance_units:
       - joining_result_failure_reason
       - joining_result_overall_result_values
       - joining_result_step_results
@@ -69,25 +45,46 @@ facets:
       - joining_result_trace
       - result_value_trace_point_time_offset
       - result_value_trace_point_index
+
+  sync_result_server_facet:
+    display_name: "IJT Sync Result Server Facet"
+    spec_section: "11.2.2.4"
+    description: >
+      Synchronisation result support and related result counters.
+    conformance_units:
       - sync_result
       - sync_result_counters
+
+  batch_result_server_facet:
+    display_name: "IJT Batch Result Server Facet"
+    spec_section: "11.2.2.5"
+    description: >
+      Batch and intervention result support with related result counters.
+    conformance_units:
       - batch_result
       - batch_result_counters
       - intervention_result
-      - job_result
-      - result_value_final_tag
-      - self_contained_consolidated_result
-      - consolidated_result_with_references
-      - partial_consolidated_result
-      - engineering_units
 
-  # ── Asset Management ────────────────────────────────────────────────────────
-  asset_management_assets_server_facet:
-    display_name: "Asset Management Assets Server Facet"
+  stored_result_server_facet:
+    display_name: "IJT Stored Result Server Facet"
+    spec_section: "11.2.2.6"
     description: >
-      Asset topology: asset folder presence, identification properties,
-      machinery building blocks, health and service nodes, and all
-      individual asset type conformance units.
+      Stored/requested result workflows including result requests,
+      requested-result access, acknowledgements, and unacknowledged-result
+      requests.
+    conformance_units:
+      - request_results
+      - requested_result_variable_access
+      - requested_result_event_access
+      - acknowledge_results
+      - request_unacknowledged_results
+
+  asset_management_assets_server_facet:
+    display_name: "IJT Asset Management Assets Server Facet"
+    spec_section: "11.2.2.7"
+    description: >
+      Asset topology, asset identification, Machinery building blocks, health,
+      service, calibration, and individual IJT asset type coverage.
     conformance_units:
       - asset_management
       - asset_management_controller
@@ -112,36 +109,25 @@ facets:
       - asset_management_calibration
       - asset_management_additional_information
       - asset_management_machinery_building_blocks
-      - enable_tool
 
-  # ── Disconnect Asset ─────────────────────────────────────────────────────────
-  disconnect_asset_facet:
-    display_name: "Disconnect Asset Facet"
-    description: >
-      Adds the DisconnectAsset method to the AssetManagement MethodSet,
-      enabling controlled asset disconnection workflows.
-    conformance_units:
-      - disconnect_asset
-
-  # ── Identifiers Methods ──────────────────────────────────────────────────────
   identifiers_methods_server_facet:
-    display_name: "Identifiers Methods Server Facet"
+    display_name: "IJT Identifiers Methods Server Facet"
+    spec_section: "11.2.2.8"
     description: >
-      SendIdentifiers, GetIdentifiers and ResetIdentifiers methods for
-      attaching external entity identifiers (VIN, part ID, etc.) to results.
+      SendIdentifiers, GetIdentifiers, and ResetIdentifiers methods for
+      attaching external entity identifiers to results.
     conformance_units:
       - send_identifiers
       - get_identifiers
       - reset_identifiers
 
-  # ── Extended Asset Operations ────────────────────────────────────────────────
-  extended_asset_operations_server_facet:
-    display_name: "Extended Asset Operations Server Facet"
+  additional_asset_methods_server_facet:
+    display_name: "IJT Additional Asset Methods Server Facet"
+    spec_section: "11.2.2.9"
     description: >
-      Optional asset operation methods beyond the baseline: calibration,
-      reboot, feedback, time synchronisation, offline timer, I/O signals,
-      error information retrieval, and execute operation.
+      Optional asset operation methods beyond the asset topology baseline.
     conformance_units:
+      - disconnect_asset
       - set_calibration
       - reboot_asset
       - feedback_methods
@@ -151,57 +137,98 @@ facets:
       - get_error_information
       - execute_operation
 
-  # ── Event Management ─────────────────────────────────────────────────────────
   event_management_server_facet:
-    display_name: "Event Management Server Facet"
+    display_name: "IJT Event Management Server Facet"
+    spec_section: "11.2.2.10"
     description: >
-      OPC UA event and condition subscriptions: event payload structure,
-      condition classes, asset connection/enable state events, associated
-      entities, reported values, identifier events, and process select events.
+      Joining system event payload, condition classes, asset connection events,
+      identifier events, process selection events, and event content fields.
     conformance_units:
       - event_payload
       - event_condition_classes
       - asset_connection_event
       - asset_connection_state_event
-      - asset_enable_state_event
       - event_payload_associated_entities
       - event_payload_reported_values
       - identifiers_event
       - select_process_event
 
-  # ── Joining Process Management ───────────────────────────────────────────────
-  joining_process_management_server_facet:
-    display_name: "Joining Process Management Server Facet"
+  enable_tool_server_facet:
+    display_name: "IJT Enable Tool Server Facet"
+    spec_section: "11.2.2.11"
     description: >
-      Full joining process lifecycle: selecting, starting, aborting, resetting
-      processes, managing counters, sending/retrieving process definitions,
-      and revision tracking.
+      EnableAsset/enable-tool workflow support and corresponding asset enable
+      state event coverage.
+    conformance_units:
+      - enable_tool
+      - asset_enable_state_event
+
+  asset_connection_server_facet:
+    display_name: "IJT Asset Connection Server Facet"
+    spec_section: "11.2.2.12"
+    description: >
+      Asset connection facet for DisconnectAsset and asset connection event
+      coverage.
+    conformance_units:
+      - disconnect_asset
+      - asset_connection_event
+      - asset_connection_state_event
+
+  joining_process_base_server_facet:
+    display_name: "IJT Joining Process Base Server Facet"
+    spec_section: "11.2.2.13"
+    description: >
+      JoiningProcessManagement base object and list access for joining process
+      definitions.
     conformance_units:
       - joining_process_management
       - get_joining_process_list
+
+  general_process_operations_server_facet:
+    display_name: "IJT General Process Operations Server Facet"
+    spec_section: "11.2.2.14"
+    description: >
+      Selecting, starting, aborting, resetting, and reading the selected joining
+      process.
+    conformance_units:
       - abort_joining_process
       - start_selected_joining
       - select_joining_process
       - deselect_joining_process
       - reset_joining_process
+      - get_selected_joining_program
+
+  sequential_process_operations_server_facet:
+    display_name: "IJT Sequential Process Operations Server Facet"
+    spec_section: "11.2.2.15"
+    description: >
+      Sequential joining process execution and process counter/size operations.
+    conformance_units:
       - increment_joining_process_counter
       - decrement_joining_process_counter
       - set_joining_process_size
       - start_joining_process
+
+  additional_process_methods_server_facet:
+    display_name: "IJT Additional Process Methods Server Facet"
+    spec_section: "11.2.2.16"
+    description: >
+      Optional joining process definition, mapping, counter, delete, and
+      revision-list methods.
+    conformance_units:
       - delete_joining_process
-      - get_selected_joining_program
       - send_joining_process
       - get_joining_process
       - set_joining_process_counter
       - set_joining_process_mapping
       - get_joining_process_revision_list
 
-  # ── Joint Management ─────────────────────────────────────────────────────────
-  joint_management_server_facet:
-    display_name: "Joint Management Server Facet"
+  joint_server_facet:
+    display_name: "IJT Joint Server Facet"
+    spec_section: "11.2.2.17"
     description: >
-      Joint topology management: sending, retrieving, selecting and deleting
-      joints, joint designs, and joint components; plus revision list access.
+      Joint management base object and methods for sending, listing, selecting,
+      reading, deleting, and revising joints.
     conformance_units:
       - joint_management
       - send_joint
@@ -210,6 +237,168 @@ facets:
       - get_joint
       - joint_data
       - delete_joint
+      - get_joint_revision_list
+
+  joint_design_server_facet:
+    display_name: "IJT Joint Design Server Facet"
+    spec_section: "11.2.2.18"
+    description: >
+      Joint design send, list, read, data, and delete coverage.
+    conformance_units:
+      - send_joint_design
+      - get_joint_design_list
+      - get_joint_design
+      - joint_design_data
+      - delete_joint_design
+
+  joint_component_server_facet:
+    display_name: "IJT Joint Component Server Facet"
+    spec_section: "11.2.2.19"
+    description: >
+      Joint component send, list, read, data, and delete coverage.
+    conformance_units:
+      - send_joint_component
+      - get_joint_component_list
+      - get_joint_component
+      - joint_component_data
+      - delete_joint_component
+
+  basic_joining_system_server_facet:
+    display_name: "Basic Joining System Server Facet"
+    spec_section: "11.2.2.20"
+    description: >
+      Minimum conformance requirement for any OPC UA IJT server: JoiningSystem
+      structure, identification, and Machinery building blocks.
+    conformance_units:
+      - joining_system_base
+      - joining_system_identification
+      - joining_system_machinery_building_blocks
+
+  general_joining_system_server_facet:
+    display_name: "General Joining System Server Facet"
+    spec_section: "11.2.2.21"
+    kind: "rollup"
+    description: >
+      General joining system rollup combining the basic, result, event,
+      identifier, and joining-process-base facets with result identifiers,
+      result content, and method input argument coverage.
+    conformance_units:
+      - joining_system_base
+      - joining_system_identification
+      - joining_system_machinery_building_blocks
+      - result_management
+      - single_result
+      - basic_result
+      - result_event_access
+      - result_processing_times
+      - result_processing_times_durations
+      - get_latest_result
+      - get_result_by_id
+      - get_result_with_filter_criteria
+      - result_variable_access
+      - result_additional_data
+      - result_extended_meta_data
+      - joining_result_failure_reason
+      - joining_result_overall_result_values
+      - joining_result_step_results
+      - joining_result_errors
+      - joining_result_trace
+      - result_value_trace_point_time_offset
+      - result_value_trace_point_index
+      - event_payload
+      - event_condition_classes
+      - asset_connection_event
+      - asset_connection_state_event
+      - event_payload_associated_entities
+      - event_payload_reported_values
+      - identifiers_event
+      - select_process_event
+      - joining_process_management
+      - get_joining_process_list
+      - send_identifiers
+      - get_identifiers
+      - reset_identifiers
+      - result_internal_identifiers
+      - result_external_identifiers
+      - result_content
+      - method_input_argument
+
+  joining_system_selectable_features_server_facet:
+    display_name: "Joining System Selectable Features Server Facet"
+    spec_section: "11.2.2.22"
+    kind: "rollup"
+    description: >
+      Rollup of selectable/optional IJT feature facets beyond the general
+      joining system baseline.
+    conformance_units:
+      - sync_result
+      - sync_result_counters
+      - batch_result
+      - batch_result_counters
+      - intervention_result
+      - request_results
+      - requested_result_variable_access
+      - requested_result_event_access
+      - acknowledge_results
+      - request_unacknowledged_results
+      - asset_management
+      - asset_management_controller
+      - asset_management_tool
+      - asset_management_servo
+      - asset_management_memory_device
+      - asset_management_cable
+      - asset_management_power_supply
+      - asset_management_feeder
+      - asset_management_battery
+      - asset_management_sensor
+      - asset_management_accessory
+      - asset_management_software
+      - asset_management_sub_component
+      - asset_management_virtual_station
+      - asset_management_operation_counters
+      - asset_management_tool_operation_cycle_counter
+      - asset_management_battery_operation_cycle_counter
+      - asset_management_health
+      - asset_management_monitoring_health
+      - asset_management_service
+      - asset_management_calibration
+      - asset_management_additional_information
+      - asset_management_machinery_building_blocks
+      - disconnect_asset
+      - set_calibration
+      - reboot_asset
+      - feedback_methods
+      - set_time
+      - set_offline_timer
+      - io_signals_methods
+      - get_error_information
+      - execute_operation
+      - enable_tool
+      - asset_enable_state_event
+      - abort_joining_process
+      - start_selected_joining
+      - select_joining_process
+      - deselect_joining_process
+      - reset_joining_process
+      - get_selected_joining_program
+      - increment_joining_process_counter
+      - decrement_joining_process_counter
+      - set_joining_process_size
+      - start_joining_process
+      - delete_joining_process
+      - send_joining_process
+      - get_joining_process
+      - set_joining_process_counter
+      - set_joining_process_mapping
+      - get_joining_process_revision_list
+      - joint_management
+      - send_joint
+      - get_joint_list
+      - select_joint
+      - get_joint
+      - joint_data
+      - delete_joint
+      - get_joint_revision_list
       - send_joint_design
       - get_joint_design_list
       - get_joint_design
@@ -220,4 +409,9 @@ facets:
       - get_joint_component
       - joint_component_data
       - delete_joint_component
-      - get_joint_revision_list
+      - job_result
+      - result_value_final_tag
+      - self_contained_consolidated_result
+      - consolidated_result_with_references
+      - partial_consolidated_result
+      - engineering_units

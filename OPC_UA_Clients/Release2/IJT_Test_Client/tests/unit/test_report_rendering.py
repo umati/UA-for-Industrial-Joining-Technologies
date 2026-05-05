@@ -147,9 +147,9 @@ def test_ci_summary_renders_profile_facet_and_full_cu_tables(monkeypatch):
     assert "### Profiles" in rendered
     assert "### Facets" in rendered
     assert "### CUs With Notes / Not Supported" in rendered
-    assert "Profile View" in rendered
-    assert "CUs in Tested Profile" in rendered
-    assert "In Tested Profile" in rendered
+    assert "Scope" in rendered
+    assert "Declared Supported CUs" in rendered
+    assert "Declared Supported" in rendered
     assert "Reason Shown" in rendered
     assert "OptionalFeature: Not Supported" in rendered
     assert "<summary>Full CU coverage table</summary>" in rendered

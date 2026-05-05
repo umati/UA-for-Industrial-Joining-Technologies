@@ -1,21 +1,19 @@
 # Asset Management Profile
 #
-# Extends the general joining system profile with full asset management:
-# all asset type conformance units, identification properties, health/service
-# nodes, and asset operation methods.
+# Extends the general joining system profile with asset-related IJT Base facets:
+# asset topology, optional asset operations, enable-tool, and asset connection.
 
 profile:
   name: "Asset Management"
   description: >
-    Full asset management implementation on top of general joining system.
-    Covers all 22 asset type CUs, identification (manufacturer, serial number,
-    product code, software revision), machinery building blocks per asset,
-    health and service monitoring, and the enable/disconnect asset methods.
-    Suitable for a complete tightening controller implementation.
+    Full asset management implementation on top of the general joining system.
+    Covers asset topology, identification, Machinery building blocks, health and
+    service monitoring, optional asset operation methods, enable-tool, and asset
+    connection coverage.
 
   facets:
-    - basic_joining_system_server_facet
     - general_joining_system_server_facet
     - asset_management_assets_server_facet
-    - disconnect_asset_facet
-    - identifiers_methods_server_facet
+    - additional_asset_methods_server_facet
+    - enable_tool_server_facet
+    - asset_connection_server_facet

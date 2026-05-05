@@ -26,6 +26,11 @@ def not_supported_reason(cu_or_method: str, *, detail: str | None = None, is_cu:
     return _with_detail(summary, detail)
 
 
+def feature_not_supported_reason(feature: str, *, detail: str | None = None) -> str:
+    """Return a NOT SUPPORTED reason for a named non-method server feature."""
+    return _with_detail(f"IJT {feature.strip()} NOT SUPPORTED", detail)
+
+
 def blocked_reason(precondition: str, *, method: str | None = None, status: str | None = None) -> str:
     """Return a BLOCKED reason for missing runtime preconditions."""
     parts = ["BLOCKED"]
@@ -56,6 +61,11 @@ def environment_reason(reason: str) -> str:
 def skip_not_supported(cu_or_method: str, *, detail: str | None = None, is_cu: bool | None = None) -> None:
     """Skip because the server profile/address space does not support a CU or method."""
     pytest.skip(not_supported_reason(cu_or_method, detail=detail, is_cu=is_cu))
+
+
+def skip_feature_not_supported(feature: str, *, detail: str | None = None) -> None:
+    """Skip because the server profile/address space does not support a non-method feature."""
+    pytest.skip(feature_not_supported_reason(feature, detail=detail))
 
 
 def skip_blocked(precondition: str, *, method: str | None = None, status: str | None = None) -> None:

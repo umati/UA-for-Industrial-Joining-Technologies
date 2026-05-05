@@ -20,6 +20,7 @@ from helpers.method_signature import JOINT_METHOD_INPUTS, assert_input_argument_
 from helpers.namespaces import NS_APP, NS_DI, NS_IJT_BASE, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system, read_tool_product_instance_uri
 from helpers.result_collector import ResultCollector
+from helpers.result_navigation import collect_result_values, unwrap_variant
 from helpers.result_validator import (
     ResultValueValidator,
     ValidationContext,
@@ -81,73 +82,21 @@ async def _trigger_and_get_result(subscription_client, result_trigger, ns_indice
         return await rc.collect_single()
 
 
-def _unwrap_variant(value):
-    """Unwrap asyncua Variant containers used for nested ExtensionObjects."""
-    return getattr(value, "Value", value)
-
-
 def _collect_all_result_values(result_data) -> list:
-    """Return every ResultValueDataType from a result and its sub-results.
-
-    ResultDataType structure:
-      - ResultContent: list of Variant, each wrapping a JoiningResultDataType
-      - ResultMetaData
-
-    Each JoiningResultDataType (inside Variant.Value) has:
-      - OverallResultValues: list[ResultValueDataType]
-      - StepResults: list[StepResultDataType]
-        - StepResultValues: list[ResultValueDataType]
-
-    The top-level checks (lines 147-157) handle the defensive case where result_data
-    itself is already a JoiningResultDataType (e.g. passed directly from a sub-result).
-    """
-    values: list = []
-
-    # Top-level OverallResultValues (on JoiningResultDataType, not on ResultMetaData)
-    ovr = getattr(result_data, "OverallResultValues", None)
-    if isinstance(ovr, (list, tuple)):
-        values.extend(_unwrap_variant(v) for v in ovr)
-
-    # Top-level StepResults → StepResultValues
-    steps = getattr(result_data, "StepResults", None)
-    if isinstance(steps, (list, tuple)):
-        for step in steps:
-            step = _unwrap_variant(step)
-            step_vals = getattr(step, "StepResultValues", None)
-            if isinstance(step_vals, (list, tuple)):
-                values.extend(_unwrap_variant(v) for v in step_vals)
-
-    # Sub-results in ResultContent (batch/sync/job combined results carry sub-results here)
-    # Each item is a Variant wrapping a JoiningResultDataType — unwrap via .Value first.
-    content = getattr(result_data, "ResultContent", None)
-    if isinstance(content, (list, tuple)):
-        for item in content:
-            inner = getattr(item, "Value", item)  # unwrap Variant → JoiningResultDataType
-            item_ovr = getattr(inner, "OverallResultValues", None)
-            if isinstance(item_ovr, (list, tuple)):
-                values.extend(_unwrap_variant(v) for v in item_ovr)
-
-            item_steps = getattr(inner, "StepResults", None)
-            if isinstance(item_steps, (list, tuple)):
-                for step in item_steps:
-                    step = _unwrap_variant(step)
-                    step_vals = getattr(step, "StepResultValues", None)
-                    if isinstance(step_vals, (list, tuple)):
-                        values.extend(_unwrap_variant(v) for v in step_vals)
-
-    return values
+    """Return every ResultValueDataType from a result and its sub-results."""
+    return collect_result_values(result_data)
 
 
 def _values_with_eu(all_values: list) -> list:
     """Filter to only ResultValueDataType entries that carry EngineeringUnits."""
-    return [v for v in (_unwrap_variant(v) for v in all_values) if getattr(v, "EngineeringUnits", None) is not None]
+    return [v for v in (unwrap_variant(v) for v in all_values) if getattr(v, "EngineeringUnits", None) is not None]
 
 
 def _values_for_quantity(all_values: list, physical_quantity_int: int) -> list:
     """Filter to values whose PhysicalQuantity matches the given integer."""
     result = []
     for v in all_values:
-        v = _unwrap_variant(v)
+        v = unwrap_variant(v)
         pq = getattr(v, "PhysicalQuantity", None)
         if pq is None:
             continue
@@ -446,15 +395,15 @@ async def test_trace_content_data_type_has_engineering_units(subscription_client
         if not isinstance(step_results, (list, tuple)):
             continue
         for step in step_results:
-            step = _unwrap_variant(step)
+            step = unwrap_variant(step)
             step_traces = getattr(step, "StepTraces", None)
             if not isinstance(step_traces, (list, tuple)):
                 continue
             for trace in step_traces:
-                trace = _unwrap_variant(trace)
+                trace = unwrap_variant(trace)
                 trace_content = getattr(trace, "StepTraceContent", None)
                 if isinstance(trace_content, (list, tuple)):
-                    trace_values.extend(_unwrap_variant(tc) for tc in trace_content)
+                    trace_values.extend(unwrap_variant(tc) for tc in trace_content)
 
     if not trace_values:
         skip_accepted_policy(
@@ -496,14 +445,14 @@ async def test_reported_value_data_type_in_event_has_engineering_units(subscript
     for attr in ("ReportedValues", "OverallReportedValues"):
         vals = getattr(result_data, attr, None)
         if isinstance(vals, (list, tuple)):
-            reported_values.extend(_unwrap_variant(v) for v in vals)
+            reported_values.extend(unwrap_variant(v) for v in vals)
 
     meta = getattr(result_data, "ResultMetaData", None)
     if meta is not None:
         for attr in ("ReportedValues", "OverallReportedValues"):
             vals = getattr(meta, attr, None)
             if isinstance(vals, (list, tuple)):
-                reported_values.extend(_unwrap_variant(v) for v in vals)
+                reported_values.extend(unwrap_variant(v) for v in vals)
 
     content = getattr(result_data, "ResultContent", None)
     if isinstance(content, (list, tuple)):
@@ -512,7 +461,7 @@ async def test_reported_value_data_type_in_event_has_engineering_units(subscript
             for attr in ("ReportedValues",):
                 vals = getattr(item, attr, None)
                 if isinstance(vals, (list, tuple)):
-                    reported_values.extend(_unwrap_variant(v) for v in vals)
+                    reported_values.extend(unwrap_variant(v) for v in vals)
 
     if not reported_values:
         logger.info("No ReportedValueDataType entries found in result — optional field absent")

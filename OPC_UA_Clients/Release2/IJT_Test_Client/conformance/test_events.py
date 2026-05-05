@@ -68,12 +68,21 @@ from helpers.namespaces import (
     ResultType,
     SimulateEventType,
 )
-from helpers.skip_reasons import skip_accepted_policy
+from helpers.skip_reasons import skip_feature_not_supported
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
 
-_CONDITION_EVENT_POLICY = "current trigger/server did not produce a JoiningSystemConditionType event within timeout"
+_CONDITION_EVENT_UNSUPPORTED_DETAIL = (
+    "Acknowledgeable Events/Conditions such as JoiningSystemConditionType "
+    "and advanced OPC UA Alarms are not supported; "
+    "ConditionClass fields on JoiningSystemEventType events remain supported"
+)
+
+
+def _skip_condition_event_not_supported() -> None:
+    skip_feature_not_supported("JoiningSystemConditionType", detail=_CONDITION_EVENT_UNSUPPORTED_DETAIL)
+
 
 # Representative cross-section of event types used for parametrized payload checks.
 # Each tuple: (SimulateEventType constant, human-readable label).
@@ -138,8 +147,8 @@ async def _collect_condition_events(
     timeout_s=45.0,
 ):
     """
-    Subscribe to JoiningSystemConditionType, trigger TOOL_MISSING_ERROR (which
-    raises a condition on most simulators), and return collected events.
+    Subscribe to JoiningSystemConditionType, trigger TOOL_MISSING_ERROR, and
+    return collected events when the server supports state-based Conditions.
     """
     server_node = subscription_client.nodes.server
     condition_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_CONDITION_TYPE, ns_ijt))
@@ -499,7 +508,7 @@ async def test_condition_has_condition_class_id(subscription_client, opcua_clien
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_condition_events(subscription_client, event_trigger, ns_ijt)
     if not events:
-        skip_accepted_policy(_CONDITION_EVENT_POLICY, method="JoiningSystemConditionType")
+        _skip_condition_event_not_supported()
     condition = events[0]
     class_id = getattr(condition, "ConditionClassId", None)
     assert class_id is not None, "JoiningSystemConditionType.ConditionClassId must not be None"
@@ -514,7 +523,7 @@ async def test_condition_has_condition_class_name(subscription_client, opcua_cli
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_condition_events(subscription_client, event_trigger, ns_ijt)
     if not events:
-        skip_accepted_policy(_CONDITION_EVENT_POLICY, method="JoiningSystemConditionType")
+        _skip_condition_event_not_supported()
     condition = events[0]
     class_name = getattr(condition, "ConditionClassName", None)
     if class_name is None:
@@ -532,7 +541,7 @@ async def test_condition_has_condition_subclass_as_list(subscription_client, opc
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_condition_events(subscription_client, event_trigger, ns_ijt)
     if not events:
-        skip_accepted_policy(_CONDITION_EVENT_POLICY, method="JoiningSystemConditionType")
+        _skip_condition_event_not_supported()
     condition = events[0]
     sub_class_ids = getattr(condition, "ConditionSubClassId", None)
     if sub_class_ids is None:
@@ -552,7 +561,7 @@ async def test_condition_event_is_fully_valid(subscription_client, opcua_client,
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_condition_events(subscription_client, event_trigger, ns_ijt)
     if not events:
-        skip_accepted_policy(_CONDITION_EVENT_POLICY, method="JoiningSystemConditionType")
+        _skip_condition_event_not_supported()
     assert_condition_valid(events[0], context="event_condition_classes:JoiningSystemConditionType")
 
 
@@ -1014,7 +1023,7 @@ async def test_condition_class_id_references_object_type_node(
     ns_ijt = _require_ns_ijt(ns_indices)
     events = await _collect_condition_events(subscription_client, event_trigger, ns_ijt)
     if not events:
-        skip_accepted_policy(_CONDITION_EVENT_POLICY, method="JoiningSystemConditionType")
+        _skip_condition_event_not_supported()
     event = events[0]
     class_id = getattr(event, "ConditionClassId", None)
     if class_id is None:

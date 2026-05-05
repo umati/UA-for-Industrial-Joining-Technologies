@@ -44,7 +44,7 @@ unit stage and is currently 95%.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
 - Local default is `on-success`; CI default is `always`.
 - Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
-- Excel and GitHub Actions summaries include IJT CS profile, facet, and CU coverage tables when the live CU compliance report is present; report wording uses `Tested Profile`, `Reference Comparison`, `CUs in Tested Profile`, and `Reason Shown` for public clarity.
+- Excel and GitHub Actions summaries include IJT Base profile, 11.2.2 facet, and CU coverage tables when the live CU compliance report is present; report wording uses `Active Capability Profile`, `Reference Profile View`, `Declared Supported CUs`, and `Reason Shown` for public clarity.
 - Missing phase1 tools are auto-installed locally by default; CI keeps auto-install off by default for reproducibility.
 - Use `--no-auto-install-tools` to disable local auto-install, or `--auto-install-tools` to force-enable it.
 
@@ -176,6 +176,8 @@ IJT_Test_Client/
 │   ├── identifier_utils.py       ← shared identifier conformance helpers
 │   ├── node_discovery.py         ← async browse helpers (_browse_refs, find_child_by_browse_name)
 │   ├── event_collector.py        ← EventCollector for subscription tests
+│   ├── result_collector.py       ← events-primary result delivery
+│   ├── result_navigation.py      ← Variant unwrap + ResultContent traversal helpers
 │   └── server_manager.py         ← auto-start simulator if not running
 ├── common/                       ← connection + namespace registration tests
 ├── assets/                       ← asset structure, interfaces, health, counters
@@ -194,6 +196,7 @@ IJT_Test_Client/
         ├── test_event_validator.py
         ├── test_method_caller.py
         ├── test_result_collector.py  ← covers ResultCollector + unwrap_result / get_classification / is_partial
+        ├── test_result_navigation.py
         ├── test_node_discovery.py
         ├── test_trigger.py
         ├── test_cu_registry.py
@@ -313,10 +316,16 @@ method name, and actual exception/status so CI skip summaries are diagnostic.
 Unsupported CU/optional-method skips should summarize as
 `IJT <CU Name> - Method: <BrowseName> NOT SUPPORTED` when the CU maps to a
 method, for example `IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED`.
-Use `helpers.skip_reasons.skip_not_supported(...)`, `skip_blocked(...)`,
-`skip_accepted_policy(...)`, or `skip_environment(...)` instead of hand-written
-generic text. JUnit summary normalization accepts direct `Not Supported`
-messages for compatibility, but new skip sites should use the helper APIs.
+Use `helpers.skip_reasons.skip_not_supported(...)`,
+`skip_feature_not_supported(...)`, `skip_blocked(...)`,
+`skip_accepted_policy(...)`, or `skip_environment(...)` instead of
+hand-written generic text. JUnit summary normalization accepts direct
+`Not Supported` messages for compatibility, but new skip sites should use the
+helper APIs.
+`JoiningSystemConditionType` Not Supported wording is reserved for
+Acknowledgeable Events/Conditions such as `JoiningSystemConditionType` and
+advanced OPC UA Alarms. It must not imply that `JoiningSystemEventType`
+ConditionClass fields are unsupported.
 
 ### GetLatestResult Return Convention
 `GetLatestResult` returns **three** output arguments: `[ResultHandle: UInt32, Result: ResultDataType, Error: Int32]`.

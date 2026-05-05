@@ -122,6 +122,8 @@ class FacetInfo:
     key: str
     display_name: str
     description: str
+    spec_section: str
+    kind: str
     conformance_units: list[str]
 
 
@@ -235,6 +237,8 @@ def _load_facets() -> dict[str, FacetInfo]:
             key=str(key),
             display_name=str(data.get("display_name") or _title_from_key(str(key))),
             description=str(data.get("description") or "").strip(),
+            spec_section=str(data.get("spec_section") or ""),
+            kind=str(data.get("kind") or "facet"),
             conformance_units=units,
         )
     return facets
@@ -309,7 +313,7 @@ def _cus_for_profile(profile: ProfileInfo, facets: dict[str, FacetInfo]) -> list
     seen: set[str] = set()
     ordered: list[str] = []
     for facet_key in profile.facets:
-        for cu_key in facets.get(facet_key, FacetInfo(facet_key, facet_key, "", [])).conformance_units:
+        for cu_key in facets.get(facet_key, FacetInfo(facet_key, facet_key, "", "", "facet", [])).conformance_units:
             if cu_key not in seen:
                 seen.add(cu_key)
                 ordered.append(cu_key)
@@ -318,9 +322,17 @@ def _cus_for_profile(profile: ProfileInfo, facets: dict[str, FacetInfo]) -> list
 
 def _cu_to_facets(facets: dict[str, FacetInfo]) -> dict[str, list[str]]:
     mapping: dict[str, list[str]] = {}
+    rollups: list[FacetInfo] = []
     for facet in facets.values():
+        if facet.kind == "rollup":
+            rollups.append(facet)
+            continue
         for cu_key in facet.conformance_units:
             mapping.setdefault(cu_key, []).append(facet.display_name)
+    for facet in rollups:
+        for cu_key in facet.conformance_units:
+            if cu_key not in mapping:
+                mapping.setdefault(cu_key, []).append(facet.display_name)
     return mapping
 
 
@@ -660,12 +672,12 @@ def _build_profile_coverage(
     supported = _supported_set(cu_payload)
     summary = cu_payload.get("summary", {}) if isinstance(cu_payload.get("summary"), dict) else {}
 
-    ws["A1"] = "IJT Profile / Facet Coverage"
+    ws["A1"] = "IJT Base Profile / Facet Coverage"
     ws["A1"].font = Font(bold=True, size=14)
     ws["A2"] = (
-        "This sheet maps the current test run to the IJT CS profile and facet model. "
-        "Start with the Tested Profile row; Reference Comparison rows are shown for orientation against other IJT CS profiles, not extra pass/fail requirements. "
-        "CUs in Tested Profile and In Tested Profile come from the active server capability file. "
+        "This sheet maps the current test run to the IJT Base profile and 11.2.2 facet model. "
+        "Start with the Active Capability Profile row; Reference Profile View rows are comparison views against other configured IJT profile YAML files, not extra pass/fail requirements. "
+        "Declared Supported CUs and Declared Supported come from the active server capability file. "
         "Compliance comes from this test run. Accepted policy and environment/tooling limitation skips remain visible in "
         "raw skip reports, but they do not reduce CU compliance when the CU also has passing support coverage."
     )
@@ -678,26 +690,26 @@ def _build_profile_coverage(
         4,
         [
             ("Server", server),
-            ("Tested profile", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
+            ("Active capability profile", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
             ("Official IJT CUs", summary.get("official_cu_count", len(by_cu))),
-            ("CUs in tested profile", len(supported) if supported is not None else "n/a"),
+            ("Declared supported CUs", len(supported) if supported is not None else "n/a"),
             ("Workbook test cases", summary.get("workbook_case_count", "n/a")),
         ],
     )
 
     headers = [
         "Profile",
-        "Profile View",
+        "Scope",
         "Facets",
         "CUs",
-        "CUs in Tested Profile",
+        "Declared Supported CUs",
         "Supported",
         "With Notes",
         "Not Supported",
         "Blocked",
         "Action Needed",
         "Untested",
-        "Tested Profile %",
+        "Declared Supported %",
         "Compliance",
         "Description",
     ]
@@ -712,7 +724,7 @@ def _build_profile_coverage(
         compliance = _compliance_status(counts, len(cu_keys))
         values = [
             profile.name,
-            "Tested Profile" if profile.key == active else "Reference Comparison",
+            "Active Capability Profile" if profile.key == active else "Reference Profile View",
             len(profile.facets),
             len(cu_keys),
             server_profile_cus,
@@ -729,7 +741,7 @@ def _build_profile_coverage(
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            if col == 2 and value == "Tested Profile":
+            if col == 2 and value == "Active Capability Profile":
                 cell.fill = _fill(_LIGHT_BLUE)
                 cell.font = Font(bold=True)
             if col == 13:
@@ -755,22 +767,23 @@ def _build_facet_coverage(
     active_extra_facets = set(capabilities.supported_facets if capabilities else [])
 
     headers = [
+        "Spec Section",
         "Facet",
         "Facet Key",
-        "Facet Role",
+        "Facet Type",
         "CUs",
-        "CUs in Tested Profile",
+        "Declared Supported CUs",
         "Supported",
         "With Notes",
         "Not Supported",
         "Blocked",
         "Action Needed",
         "Untested",
-        "Tested Profile %",
+        "Declared Supported %",
         "Compliance",
         "Description",
     ]
-    widths = [34, 34, 12, 8, 14, 10, 8, 14, 9, 13, 9, 10, 16, 70]
+    widths = [14, 34, 34, 12, 8, 14, 10, 8, 14, 9, 13, 9, 10, 16, 70]
     _apply_header(ws, 1, headers, widths)
 
     for row, facet in enumerate(facets.values(), start=2):
@@ -778,11 +791,14 @@ def _build_facet_coverage(
         counts = _count_cu_outcomes(cu_keys, by_cu)
         server_profile_cus = _server_profile_cu_count(cu_keys, supported)
         compliance = _compliance_status(counts, len(cu_keys))
-        facet_role = "Additional Server Facet" if facet.key in active_extra_facets else "Profile Facet"
+        facet_type = "Rollup" if facet.kind == "rollup" else "Facet"
+        if facet.key in active_extra_facets:
+            facet_type = f"Additional {facet_type}"
         values = [
+            facet.spec_section,
             facet.display_name,
             facet.key,
-            facet_role,
+            facet_type,
             len(cu_keys),
             server_profile_cus,
             counts["supported"],
@@ -798,11 +814,11 @@ def _build_facet_coverage(
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            if col == 13:
+            if col == 14:
                 cell.fill = _status_fill(str(value))
                 cell.font = Font(bold=True)
 
-    ws.auto_filter.ref = f"A1:N{max(1, len(facets) + 1)}"
+    ws.auto_filter.ref = f"A1:O{max(1, len(facets) + 1)}"
 
 
 def _build_cu_coverage(
@@ -826,7 +842,7 @@ def _build_cu_coverage(
         "CU",
         "CU Key",
         "Facet(s)",
-        "In Tested Profile",
+        "Declared Supported",
         "Compliance",
         "Tests",
         "Passed",

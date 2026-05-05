@@ -1,26 +1,38 @@
 # Full Conformance Profile
 #
-# Declares all 123 conformance units as supported.
-# Use this profile only for a server that claims complete IJT Base
-# implementation. The checked-in Release 2 simulator uses
-# server_capabilities.simulator.yaml to declare unsupported optional CUs.
+# Declares all 123 conformance units as supported. Facet rows follow the
+# official IJT Base 11.2.2 catalogue. Use this profile only for a server that
+# claims complete IJT Base implementation. The checked-in Release 2 simulator
+# uses server_capabilities.simulator.yaml to declare unsupported optional CUs.
 
 profile:
   name: "Full IJT Base Conformance"
   description: >
-    All 123 conformance units from OPC 40450-1 IJT Base Companion Specification.
-    Use for full-featured servers that claim all CUs. Simulators or controllers
-    with unsupported optional features should provide a capability file with
-    cu_overrides so those tests are reported as Not Supported instead of failed.
+    All 123 conformance units from OPC 40450-1 IJT Base Companion Specification
+    across the IJT Base 11.2.2 server-facet catalogue. Use for full-featured
+    servers that claim all CUs. Simulators or controllers with unsupported
+    optional features should provide a capability file with cu_overrides so
+    those tests are reported as Not Supported instead of failed.
 
   facets:
+    - result_server_facet
+    - joining_result_server_facet
+    - sync_result_server_facet
+    - batch_result_server_facet
+    - stored_result_server_facet
+    - asset_management_assets_server_facet
+    - identifiers_methods_server_facet
+    - additional_asset_methods_server_facet
+    - event_management_server_facet
+    - enable_tool_server_facet
+    - asset_connection_server_facet
+    - joining_process_base_server_facet
+    - general_process_operations_server_facet
+    - sequential_process_operations_server_facet
+    - additional_process_methods_server_facet
+    - joint_server_facet
+    - joint_design_server_facet
+    - joint_component_server_facet
     - basic_joining_system_server_facet
     - general_joining_system_server_facet
-    - result_management_server_facet
-    - asset_management_assets_server_facet
-    - disconnect_asset_facet
-    - identifiers_methods_server_facet
-    - extended_asset_operations_server_facet
-    - event_management_server_facet
-    - joining_process_management_server_facet
-    - joint_management_server_facet
+    - joining_system_selectable_features_server_facet

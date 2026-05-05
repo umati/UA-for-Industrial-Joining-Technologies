@@ -259,11 +259,11 @@ class TestLoadSupportedCusSupportedFacets:
             """\
             active_profile: basic_joining_system
             supported_facets:
-              - result_management_server_facet
+              - sync_result_server_facet
             """,
         )
         supported = load_supported_cus(capabilities_path=caps_file)
-        # result_management_server_facet includes sync_result, batch_result, etc.
+        # sync_result_server_facet adds sync result support on top of the base profile.
         assert "sync_result" in supported
 
     def test_unknown_extra_facet_does_not_crash(self, profile_tmp_path, caplog):

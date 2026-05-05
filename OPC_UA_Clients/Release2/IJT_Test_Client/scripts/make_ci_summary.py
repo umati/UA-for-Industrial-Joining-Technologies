@@ -147,6 +147,8 @@ def _load_facets() -> dict[str, dict[str, Any]]:
             continue
         facets[str(key)] = {
             "display_name": str(data.get("display_name") or _title_from_key(str(key))),
+            "spec_section": str(data.get("spec_section") or ""),
+            "kind": str(data.get("kind") or "facet"),
             "conformance_units": [str(cu) for cu in data.get("conformance_units", [])],
         }
     return facets
@@ -268,9 +270,19 @@ def _cu_display_name(cu_key: str) -> str:
 
 def _cu_facet_map(facets: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
     mapping: dict[str, list[str]] = {}
+    rollups: list[dict[str, Any]] = []
     for facet in facets.values():
+        if str(facet.get("kind") or "") == "rollup":
+            rollups.append(facet)
+            continue
         for cu_key in facet.get("conformance_units", []):
             mapping.setdefault(str(cu_key), []).append(str(facet.get("display_name") or _title_from_key(str(cu_key))))
+    for facet in rollups:
+        for cu_key in facet.get("conformance_units", []):
+            if str(cu_key) not in mapping:
+                mapping.setdefault(str(cu_key), []).append(
+                    str(facet.get("display_name") or _title_from_key(str(cu_key)))
+                )
     return mapping
 
 
@@ -390,7 +402,7 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
     tests_by_cu = _cu_test_index(cu_payload)
 
     lines: list[str] = []
-    lines.append("## IJT CS Profile / Facet Coverage")
+    lines.append("## IJT Base Profile / Facet Coverage")
     lines.append("")
     lines.append(
         f"**Capability source:** {server_name}  |  "
@@ -409,12 +421,13 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
         "but they do not reduce CU compliance when the CU also has passing support coverage._"
     )
     lines.append(
-        "_CUs in Tested Profile and In Tested Profile come from the active server capability file; "
+        "_Declared Supported CUs and Declared Supported come from the active server capability file; "
         "Compliance comes from this test run._"
     )
     lines.append(
-        "_How to read this section: start with the Tested Profile row. Reference Comparison profile rows are shown "
-        "only for orientation against other IJT CS profiles; they are not extra pass/fail requirements for this server._"
+        "_How to read this section: start with the Active Capability Profile row. Reference Profile View rows are "
+        "comparison views against other configured IJT profile YAML files; they are not extra pass/fail requirements "
+        "for this server._"
     )
     lines.append("")
     if active:
@@ -422,24 +435,24 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
         active_counts = _count_outcomes(active_cus, by_cu)
         server_profile_cus = _server_profile_cu_count(active_cus, supported)
         lines.append(
-            f"**Tested profile:** {active['name']}  |  "
-            f"**Tested profile support:** {server_profile_cus}/{len(active_cus)} CUs  |  "
+            f"**Active capability profile:** {active['name']}  |  "
+            f"**Declared supported CUs:** {server_profile_cus}/{len(active_cus)}  |  "
             f"**Compliance:** {_compliance_label(active_counts, len(active_cus))}"
         )
     else:
-        lines.append("**Tested profile:** no active profile found in available capabilities file")
+        lines.append("**Active capability profile:** no active profile found in available capabilities file")
     lines.append("")
 
     lines.append("### Profiles")
     lines.append("")
     lines.append(
-        "| Profile | Profile View | Facets | CUs | CUs in Tested Profile | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
+        "| Profile | Scope | Facets | CUs | Declared Supported CUs | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
     )
     lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|")
     for key, profile in profiles.items():
         cu_keys = _profile_cus(profile, facets)
         counts = _count_outcomes(cu_keys, by_cu)
-        profile_role = "Tested Profile" if key == active_profile else "Reference Comparison"
+        profile_role = "Active Capability Profile" if key == active_profile else "Reference Profile View"
         lines.append(
             f"| {_md_cell(str(profile.get('name', _title_from_key(key))))} | {profile_role} | "
             f"{len(profile.get('facets', []))} | {len(cu_keys)} | {_server_profile_cu_count(cu_keys, supported)} | "
@@ -452,14 +465,16 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
     lines.append("### Facets")
     lines.append("")
     lines.append(
-        "| Facet | CUs | CUs in Tested Profile | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
+        "| Spec Section | Facet | Type | CUs | Declared Supported CUs | Supported | With Notes | Not Supported | Blocked | Action Needed | Compliance |"
     )
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---|")
+    lines.append("|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|")
     for facet in facets.values():
         cu_keys = list(facet.get("conformance_units", []))
         counts = _count_outcomes(cu_keys, by_cu)
+        facet_kind = "Rollup" if str(facet.get("kind") or "") == "rollup" else "Facet"
         lines.append(
-            f"| {_md_cell(str(facet.get('display_name', 'Facet')))} "
+            f"| {_md_cell(str(facet.get('spec_section') or ''))} | "
+            f"{_md_cell(str(facet.get('display_name', 'Facet')))} | {facet_kind} "
             f"| {len(cu_keys)} | {_server_profile_cu_count(cu_keys, supported)} | {counts['supported']} | "
             f"{counts['partial']} | {counts['not_supported']} | {counts['blocked']} | "
             f"{counts['action_needed']} | "
@@ -477,7 +492,7 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
         lines.append("### CUs With Notes / Not Supported")
         lines.append("")
         lines.append(
-            "| CU | Facet(s) | In Tested Profile | Compliance | Reason Shown | Tests | Passed | Not Supported | Blocked | Failed/Error |"
+            "| CU | Facet(s) | Declared Supported | Compliance | Reason Shown | Tests | Passed | Not Supported | Blocked | Failed/Error |"
         )
         lines.append("|---|---|---|---|---|---:|---:|---:|---:|---:|")
         for cu_key, data in attention_cus[:40]:
@@ -498,7 +513,7 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
     lines.append("<summary>Full CU coverage table</summary>")
     lines.append("")
     lines.append(
-        "| CU | Facet(s) | In Tested Profile | Compliance | Tests | Passed | Not Supported | Blocked | Failed/Error | Workbook Cases |"
+        "| CU | Facet(s) | Declared Supported | Compliance | Tests | Passed | Not Supported | Blocked | Failed/Error | Workbook Cases |"
     )
     lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|")
     for cu_key in all_cu_keys:

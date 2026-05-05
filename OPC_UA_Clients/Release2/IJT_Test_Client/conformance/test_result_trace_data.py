@@ -38,6 +38,7 @@ from helpers.method_caller import call_method
 from helpers.namespaces import BN, NS_MACH_RESULT, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
 from helpers.result_collector import ResultCollector
+from helpers.result_navigation import collect_trace_entries_from_content, unwrap_sequence, unwrap_variant
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -60,53 +61,9 @@ def _skip_if_no_result(result_data, result_trigger) -> None:
             pytest.skip("No result received from external trigger within timeout")
 
 
-def _unwrap_sub_result(item):
-    """Unwrap ua.Variant wrapper that asyncua adds when it cannot deserialize a nested
-    ExtensionObject (e.g. JoiningResultDataType inside ResultContent).
-    Returns the inner struct, or the original item if no wrapping is detected.
-    """
-    try:
-        if isinstance(item, ua.Variant):
-            inner = item.Value
-            if inner is None:
-                return None
-            if isinstance(inner, ua.Variant):
-                inner = inner.Value
-            return inner
-    except Exception:  # noqa: BLE001
-        return item
-    return item
-
-
-def _unwrap_sequence(items):
-    """Return a list with asyncua Variant wrappers removed from sequence entries."""
-    if not isinstance(items, (list, tuple)):
-        return []
-    unwrapped = []
-    for item in items:
-        value = _unwrap_sub_result(item)
-        if value is not None:
-            unwrapped.append(value)
-    return unwrapped
-
-
-def _collect_trace_data(content):
-    """Return a list of (joining_result_index, trace_data) pairs from ResultContent.
-
-    Unwraps ua.Variant wrappers before reading the Trace field — asyncua may wrap
-    nested ExtensionObjects when type definitions have not been loaded.
-    The IJT Base NodeSet field is "Trace" (JoiningResultDataType.Trace).
-    """
-    traces = []
-    for i, jr in enumerate(content):
-        jr = _unwrap_sub_result(jr)
-        if jr is None:
-            continue
-        td = getattr(jr, "Trace", None)
-        td = _unwrap_sub_result(td)
-        if td is not None:
-            traces.append((i, td))
-    return traces
+_unwrap_sub_result = unwrap_variant
+_unwrap_sequence = unwrap_sequence
+_collect_trace_data = collect_trace_entries_from_content
 
 
 async def _get_single_result_with_traces(subscription_client, result_trigger, ns_indices):

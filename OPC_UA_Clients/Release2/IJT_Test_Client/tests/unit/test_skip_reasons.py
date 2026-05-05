@@ -5,10 +5,12 @@ from helpers.skip_reasons import (
     accepted_policy_reason,
     blocked_reason,
     environment_reason,
+    feature_not_supported_reason,
     not_supported_reason,
     skip_accepted_policy,
     skip_blocked,
     skip_environment,
+    skip_feature_not_supported,
     skip_not_supported,
 )
 
@@ -30,6 +32,22 @@ def test_not_supported_reason_for_method_name():
 def test_not_supported_reason_with_detail():
     assert not_supported_reason("SetCalibration", detail="method node absent").endswith(
         "NOT SUPPORTED - method node absent"
+    )
+
+
+def test_feature_not_supported_reason_with_detail():
+    assert (
+        feature_not_supported_reason(
+            "JoiningSystemConditionType",
+            detail=(
+                "Acknowledgeable Events/Conditions such as JoiningSystemConditionType "
+                "and advanced OPC UA Alarms are not supported; "
+                "ConditionClass fields on JoiningSystemEventType events remain supported"
+            ),
+        )
+        == "IJT JoiningSystemConditionType NOT SUPPORTED - Acknowledgeable Events/Conditions such as "
+        "JoiningSystemConditionType and advanced OPC UA Alarms are not supported; "
+        "ConditionClass fields on JoiningSystemEventType events remain supported"
     )
 
 
@@ -59,6 +77,12 @@ def test_skip_not_supported_raises_pytest_skip():
     assert "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED" in str(exc.value)
 
 
+def test_skip_feature_not_supported_raises_pytest_skip():
+    with pytest.raises(pytest.skip.Exception) as exc:
+        skip_feature_not_supported("JoiningSystemConditionType", detail="event was not generated")
+    assert "IJT JoiningSystemConditionType NOT SUPPORTED - event was not generated" in str(exc.value)
+
+
 def test_skip_blocked_raises_pytest_skip():
     with pytest.raises(pytest.skip.Exception) as exc:
         skip_blocked("no active process is available", method="AbortJoiningProcess")
@@ -67,7 +91,11 @@ def test_skip_blocked_raises_pytest_skip():
 
 def test_skip_accepted_policy_raises_pytest_skip():
     with pytest.raises(pytest.skip.Exception) as exc:
-        skip_accepted_policy("no program is currently selected", method="GetSelectedJoiningProgram", status="Uncertain")
+        skip_accepted_policy(
+            "no program is currently selected",
+            method="GetSelectedJoiningProgram",
+            status="Uncertain",
+        )
     assert "ACCEPTED POLICY - Method: GetSelectedJoiningProgram - Status: Uncertain" in str(exc.value)
 
 
