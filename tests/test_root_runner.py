@@ -743,6 +743,33 @@ def test_integration_web_client_features_are_sharded() -> None:
     assert "live-webclient-shard" not in workflow["jobs"]["report"]["needs"]
 
 
+def test_integration_playwright_install_is_skipped_on_cache_hit() -> None:
+    """The Playwright browsers cache step must expose an id so the install step
+    can skip on cache hit. Re-running ``playwright install`` on a warm cache
+    costs ~3 min per shard and dwarfs the actual sharding benefit.
+    """
+    import yaml
+
+    workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    live_webclient = workflow["jobs"]["live-webclient"]
+    steps = live_webclient["steps"]
+
+    cache_step = next(s for s in steps if s.get("name") == "Cache Playwright browsers")
+    install_step = next(s for s in steps if s.get("name") == "Install Playwright browsers")
+
+    assert cache_step.get("id") == "pw-cache", (
+        "Cache step must expose id=pw-cache so install can reference its outputs"
+    )
+    if_clause = install_step.get("if", "")
+    assert "steps.pw-cache.outputs.cache-hit != 'true'" in if_clause, (
+        f"Install step must skip when cache hit; got if={if_clause!r}"
+    )
+    assert "startsWith(matrix.suite, 'web-client-e2e-')" in if_clause, (
+        "Install step must remain gated to e2e matrix rows"
+    )
+
+
 def test_ci_report_steps_skip_missing_artifacts_for_skipped_jobs() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 

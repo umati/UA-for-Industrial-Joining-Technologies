@@ -463,6 +463,7 @@ jobs:
           cache-dependency-path: OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json
 
       - name: Cache Playwright browsers
+        id: pw-cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         if: startsWith(matrix.suite, 'web-client-e2e-')
         with:
@@ -472,7 +473,7 @@ jobs:
             playwright-${{ runner.os }}-
 
       - name: Install Playwright browsers
-        if: startsWith(matrix.suite, 'web-client-e2e-')
+        if: startsWith(matrix.suite, 'web-client-e2e-') && steps.pw-cache.outputs.cache-hit != 'true'
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
         run: npx playwright install --with-deps chromium
 
