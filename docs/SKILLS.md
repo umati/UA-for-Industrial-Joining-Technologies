@@ -286,7 +286,7 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vitest, ESLint, Docker
-- **Tests**: Python unit (`tests/python/unit/`), JS unit (`src/javascripts/`), and split live suites for Python OPC UA, Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and Playwright regression. Each live/browser suite owns its own OPC UA/WS/UI ports; root Phase 2 runs Docker as a separate `webclient-docker-smoke` suite.
+- **Tests**: Python unit (`tests/python/unit/`), JS unit (`src/javascripts/`), and split live suites for Python OPC UA, Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and Playwright regression. Each live/browser suite owns its own OPC UA/WS/UI ports; root Phase 2 runs Docker as a separate `web-client-docker-smoke` suite.
 - **One test command**: `python run_all_tests.py`
 - **Docker**: healthy on HTTP:3000 + WS:8001
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md`
@@ -383,29 +383,29 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `server-smoke-windows` | `ci.yml` | 40451 | Windows native EXE (server self-test) |
 | `server-smoke-docker` | `integration.yml` | 40451 | Docker Linux (server self-test) |
 | `server-linux-package-smoke` | local root runner | 40465 | Docker image built from Linux package ZIP |
-| `webclient-live-python-opcua` | local root runner + `integration.yml` | OPC UA 40463 | Direct Python OPC UA and method tests |
-| `webclient-live-python-backend` | local root runner + `integration.yml` | OPC UA 40466 / WS 8002 | Python WebSocket backend contract and integration tests |
-| `webclient-live-python-lifecycle` | local root runner + `integration.yml` | OPC UA 40467 / WS 8003 | WebSocket lifecycle tests isolated from backend contract tests |
-| `webclient-live-e2e-smoke` | local root runner + `integration.yml` | HTTP 3004 | Playwright smoke project |
-| `webclient-live-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs, four isolated browser workers locally and two workers in GitHub Actions |
-| `webclient-live-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec |
-| `webclient-docker-smoke` | local root runner | HTTP 3000 / WS 8001 | Web Client production Docker image/readiness smoke |
+| `web-client-live-opcua-direct` | local root runner + `integration.yml` | OPC UA 40463 | Direct Python OPC UA and method tests |
+| `web-client-live-websocket-api` | local root runner + `integration.yml` | OPC UA 40466 / WS 8002 | Python WebSocket backend contract and integration tests |
+| `web-client-live-websocket-connection` | local root runner + `integration.yml` | OPC UA 40467 / WS 8003 | WebSocket lifecycle tests isolated from backend contract tests |
+| `web-client-e2e-smoke` | local root runner + `integration.yml` | HTTP 3004 | Playwright smoke project |
+| `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs, four isolated browser workers locally and two workers in GitHub Actions |
+| `web-client-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec |
+| `web-client-docker-smoke` | local root runner | HTTP 3000 / WS 8001 | Web Client production Docker image/readiness smoke |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
 | `live-webclient` | `integration.yml` | **40463** | Windows native EXE |
 | `live-console` | `integration.yml` | **40461** | Windows native EXE |
 | `csharp-live` (nightly) | `integration.yml` | **40464** | Windows native EXE |
 
-Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation exercises the native/default server package path on port 40451. When Docker is running, it also runs `server-linux-package-smoke` on port 40465 to build the Docker image from the Linux ZIP package and smoke-test it, plus `webclient-docker-smoke` for the Web Client production image/readiness check. If Docker is unavailable, the root runner marks those Docker suites skipped instead of launching child runners that would fail on Docker daemon startup. Set `IJT_DOCKER_BUILD_TIMEOUT` if a cold Docker/network environment needs more than the default 1200 seconds.
+Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation exercises the native/default server package path on port 40451. When Docker is running, it also runs `server-linux-package-smoke` on port 40465 to build the Docker image from the Linux ZIP package and smoke-test it, plus `web-client-docker-smoke` for the Web Client production image/readiness check. If Docker is unavailable, the root runner marks those Docker suites skipped instead of launching child runners that would fail on Docker daemon startup. Set `IJT_DOCKER_BUILD_TIMEOUT` if a cold Docker/network environment needs more than the default 1200 seconds.
 The root runner splits Web Client live/browser validation by test type instead
-of using one broad `webclient-live` suite. Python OPC UA, Python WebSocket
+of using one broad Web Client live suite. Python OPC UA, Python WebSocket
 backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and
 Playwright regression are separate suites with owned service ports. Docker
-validation remains `webclient-docker-smoke` with its own timeout when Docker is
+validation remains `web-client-docker-smoke` with its own timeout when Docker is
 running.
 The Playwright feature suite is parallelized across four owned backend/server
 pairs. Worker 0 uses the base ports, and workers 1–3 use the next contiguous
 ports, so browser workers never share a WebSocket backend or OPC UA simulator.
-GitHub integration runs the same `webclient-live-*` suites through the root
+GitHub integration runs the same Web Client live/e2e suites through the root
 runner matrix. The features job uses two Playwright workers on GitHub-hosted
 Windows runners, while local root runs keep the default four-worker feature
 pool.
@@ -421,7 +421,7 @@ Triggers on: `OPC_UA_Servers/**`, all Web Client files, `IJT_Test_Client/**`, Co
 | `server-smoke-docker` | Full Docker build + server smoke (10/10) |
 | `webclient-docker` | Web Client Docker test image (Python unit + JS unit) + HTTP:3000 production health |
 | `int-testclient` | Windows live: Test Client full suite against server on port 40462 |
-| `live-webclient` | Windows live matrix: root-runner `webclient-live-python-*` and `webclient-live-e2e-*` suites with owned services and per-suite artifacts |
+| `live-webclient` | Windows live matrix: root-runner Web Client live/e2e suites with owned services and per-suite artifacts |
 | `live-console` | Windows live: Console Client live tests — server on port 40461 |
 | `csharp-live` | Windows live: C# xUnit live tests (nightly drift detection) — server on port 40464 |
 

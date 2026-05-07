@@ -14,7 +14,7 @@
  *      CI-level defence for that class of bug (commit 9598856) is the
  *      Playwright smoke test suite: if a required JS module is absent the
  *      browser fails to load the page, causing the smoke tests to fail.
- *      The local developer guardrail is `run_all_tests.py --suite git-sanity`
+ *      The local developer guardrail is `run_all_tests.py --suite repo-static-gitignore-check`
  *      which uses `git check-ignore` on all files present in the working tree.
  *
  * No new dependencies — uses only Node built-ins (fs, child_process, path).

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import logging
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +30,168 @@ def setup_function() -> None:
 
 def teardown_function() -> None:
     _runner._server_smoke_requirements_ready = False
+
+
+def test_suite_ids_match_naming_pattern() -> None:
+    suite_id_pattern = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)+$")
+    focus_pattern = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+    components = tuple(
+        sorted(
+            (
+                "repo",
+                "server",
+                "csharp-client",
+                "console-client",
+                "node-client",
+                "web-client",
+                "test-client",
+            ),
+            key=len,
+            reverse=True,
+        )
+    )
+    tier_phrases = tuple(
+        sorted(
+            (
+                "static",
+                "live",
+                "e2e",
+                "smoke",
+                "docker-smoke",
+                "linux-package-smoke",
+            ),
+            key=len,
+            reverse=True,
+        )
+    )
+
+    def parse_suite_id(suite_id: str) -> tuple[str, str, str]:
+        component = next(
+            (candidate for candidate in components if suite_id.startswith(f"{candidate}-")),
+            None,
+        )
+        assert component is not None, suite_id
+
+        rest = suite_id[len(component) + 1 :]
+        tier = next(
+            (
+                candidate
+                for candidate in tier_phrases
+                if rest == candidate or rest.startswith(f"{candidate}-")
+            ),
+            None,
+        )
+        assert tier is not None, suite_id
+
+        focus = "" if rest == tier else rest[len(tier) + 1 :]
+        return component, tier, focus
+
+    assert parse_suite_id("web-client-e2e-smoke") == ("web-client", "e2e", "smoke")
+    assert parse_suite_id("web-client-docker-smoke") == (
+        "web-client",
+        "docker-smoke",
+        "",
+    )
+    assert parse_suite_id("server-linux-package-smoke") == (
+        "server",
+        "linux-package-smoke",
+        "",
+    )
+    assert parse_suite_id("server-smoke") == ("server", "smoke", "")
+
+    expected_components = {
+        "repo",
+        "server",
+        "csharp-client",
+        "console-client",
+        "node-client",
+        "web-client",
+        "test-client",
+    }
+    expected_tiers = {
+        "static",
+        "live",
+        "e2e",
+        "smoke",
+        "docker-smoke",
+        "linux-package-smoke",
+    }
+
+    for suite_id, spec in _runner.SUITE_REGISTRY.items():
+        assert suite_id == spec.id
+        assert suite_id_pattern.fullmatch(suite_id)
+
+        component, tier, focus = parse_suite_id(suite_id)
+        assert component in expected_components
+        assert tier in expected_tiers
+        if focus:
+            assert focus_pattern.fullmatch(focus), suite_id
+
+
+def test_suite_groups_are_known_enum_values() -> None:
+    assert {group.value for group in _runner.SuiteGroup} == {
+        "repo-checks",
+        "phase1-static",
+        "phase2-live",
+        "phase2-package",
+        "phase2-web-live",
+    }
+    assert all(
+        isinstance(spec.group, _runner.SuiteGroup) for spec in _runner.SUITE_REGISTRY.values()
+    )
+
+
+def test_suite_registry_has_no_duplicate_ids() -> None:
+    assert len(_runner.SUITE_REGISTRY) == 20
+    assert len(set(_runner.SUITE_REGISTRY)) == len(_runner.SUITE_REGISTRY)
+
+    runners = [spec.runner for spec in _runner.SUITE_REGISTRY.values()]
+    assert len(set(runners)) == len(runners)
+
+
+def test_workflow_matrix_uses_only_known_suite_ids() -> None:
+    import yaml
+
+    workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    known_suite_ids = set(_runner.SUITE_REGISTRY)
+    referenced_suite_ids: list[str] = []
+
+    for job_name, job in workflow.get("jobs", {}).items():
+        steps = job.get("steps", [])
+        for step in steps:
+            run = step.get("run") if isinstance(step, dict) else None
+            if not isinstance(run, str) or "--suite" not in run:
+                continue
+
+            referenced_suite_ids.extend(re.findall(r"--suite\s+[\"']?([a-z][a-z0-9-]+)[\"']?", run))
+
+            if "matrix.suite" in run:
+                matrix = job.get("strategy", {}).get("matrix", {})
+                matrix_suite_ids: list[str] = []
+                if isinstance(matrix.get("suite"), list):
+                    matrix_suite_ids.extend(matrix["suite"])
+                for entry in matrix.get("include", []):
+                    if isinstance(entry, dict) and isinstance(entry.get("suite"), str):
+                        matrix_suite_ids.append(entry["suite"])
+                assert matrix_suite_ids, f"{job_name} uses matrix.suite without suite values"
+                referenced_suite_ids.extend(matrix_suite_ids)
+
+    assert referenced_suite_ids
+    assert set(referenced_suite_ids) <= known_suite_ids
+
+
+def test_unknown_legacy_suite_id_prints_slice1_guidance(capsys) -> None:
+    parser = _runner._build_parser()
+    args = parser.parse_args(["--suite", "webclient-live-e2e-features"])
+
+    with pytest.raises(SystemExit) as excinfo:
+        _runner._validate_suite_arg(parser, args)
+
+    assert excinfo.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "unknown suite: webclient-live-e2e-features" in stderr
+    assert _runner.SUITE_RENAMED_GUIDANCE in stderr
 
 
 def _load_runner_at(relative_path: str, module_name: str):
@@ -102,9 +265,10 @@ def test_wait_for_port_missing_ok_logs_non_error(caplog) -> None:
 
 
 def test_server_linux_package_smoke_is_default_phase2_suite() -> None:
-    assert "server-linux-package-smoke" in _runner.PHASE2_SUITES
+    phase2_specs = _runner.phase2_specs()
+    assert "server-linux-package-smoke" in phase2_specs
     assert (
-        _runner.PHASE2_SUITES["server-linux-package-smoke"]
+        phase2_specs["server-linux-package-smoke"].runner
         is _runner._suite_server_linux_package_smoke
     )
 
@@ -132,16 +296,16 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
 
     assert all(result.ok for result in results)
     expected_suites = {
-        "webclient-live-python-opcua",
-        "webclient-live-python-backend",
-        "webclient-live-python-lifecycle",
-        "webclient-live-e2e-smoke",
-        "webclient-live-e2e-features",
-        "webclient-live-e2e-regression",
-        "webclient-docker-smoke",
+        "web-client-live-opcua-direct",
+        "web-client-live-websocket-api",
+        "web-client-live-websocket-connection",
+        "web-client-e2e-smoke",
+        "web-client-e2e-features",
+        "web-client-e2e-regression",
+        "web-client-docker-smoke",
     }
-    assert expected_suites <= set(_runner.PHASE2_SUITES)
-    assert "webclient-live" not in _runner.PHASE2_SUITES
+    assert expected_suites <= set(_runner.phase2_specs())
+    assert "webclient-live" not in _runner.SUITE_REGISTRY
     assert [call["phase_args"] for call in calls] == [
         ["--python-opcua-only"],
         ["--python-backend-only"],
@@ -182,7 +346,7 @@ def test_delegate_to_runner_reports_child_failure(monkeypatch, capsys) -> None:
     monkeypatch.setattr(_runner, "_run_captured", _fake_run_captured)
 
     result = _runner._delegate_to_runner(
-        name="webclient-live-e2e-features",
+        name="web-client-e2e-features",
         runner_dir=Path(__file__).resolve().parents[1],
         phase_args=["--playwright-features-only"],
         label="webclient runner (e2e-features)",
@@ -193,7 +357,7 @@ def test_delegate_to_runner_reports_child_failure(monkeypatch, capsys) -> None:
     assert result.ok is False
     assert result.skipped is False
     assert rc == 1
-    assert "webclient-live-e2e-features" in output
+    assert "Release2 Web Client - Browser feature coverage" in output
     assert "FAIL" in output
     assert "ONE OR MORE SUITES FAILED" in output
 
@@ -535,12 +699,12 @@ def test_integration_web_client_uses_local_live_suite_matrix() -> None:
         encoding="utf-8"
     )
     expected_suites = {
-        "webclient-live-python-opcua",
-        "webclient-live-python-backend",
-        "webclient-live-python-lifecycle",
-        "webclient-live-e2e-smoke",
-        "webclient-live-e2e-features",
-        "webclient-live-e2e-regression",
+        "web-client-live-opcua-direct",
+        "web-client-live-websocket-api",
+        "web-client-live-websocket-connection",
+        "web-client-e2e-smoke",
+        "web-client-e2e-features",
+        "web-client-e2e-regression",
     }
 
     for suite in expected_suites:
@@ -632,7 +796,7 @@ def test_ci_mode_flag_sets_ci_env_for_child_runners(monkeypatch, capsys) -> None
     assert rc == 0
     assert _os.environ.get("CI") == "1"
     # --list still works in ci-mode
-    assert "Phase 1 suites" in captured.out
+    assert "Phase 1 static suites" in captured.out
 
     monkeypatch.delenv("CI", raising=False)
 

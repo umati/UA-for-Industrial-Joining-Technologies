@@ -12,7 +12,8 @@ Architecture: Two-phase execution
                             - ESLint, npm audit (Node/JS projects)
                             - dotnet format, NuGet vulnerability scan (C# project)
                             - hadolint, yamllint (Server / Docker)
-                          Extra root-level checks: git-sanity, md-hygiene, GHA workflow validation.
+                          Extra root-level checks: repo-static-gitignore-check,
+                          repo-static-markdown-leak-check, GHA workflow validation.
   Phase 2 (PARALLEL)   -- live integration tests, no shared server.
                           Each sub-runner owns its server on a dedicated port
                           and manages its full lifecycle independently:
@@ -28,7 +29,7 @@ Usage:
   python run_all_tests.py                    # full run (Phase 1 + Phase 2)
   python run_all_tests.py --phase1           # static + unit tests only (no server)
   python run_all_tests.py --phase2           # server smoke + live tests
-  python run_all_tests.py --suite md-hygiene # single suite by name
+  python run_all_tests.py --suite repo-static-markdown-leak-check # single suite by name
   python run_all_tests.py --suite server-smoke  # focused server smoke on port 40451
   python run_all_tests.py --suite server-linux-package-smoke  # Docker smoke on port 40465
   python run_all_tests.py --ci-mode         # force child runners through CI codepaths
@@ -56,8 +57,10 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -1095,7 +1098,7 @@ def _suite_csharp_unit() -> SuiteResult:
     Covers: dotnet format, NuGet vulnerability scan, build, unit tests.
     """
     return _delegate_to_runner(
-        name="csharp",
+        name="csharp-client-static",
         runner_dir=CSHARP_DIR,
         phase_args=["--phase1"],
         label="csharp runner (phase1)",
@@ -1108,7 +1111,7 @@ def _suite_console_unit() -> SuiteResult:
     Covers: ruff, mypy, bandit, pytest unit tests.
     """
     return _delegate_to_runner(
-        name="console",
+        name="console-client-static",
         runner_dir=CONSOLE_DIR,
         phase_args=["--phase1"],
         label="console runner (phase1)",
@@ -1121,7 +1124,7 @@ def _suite_webclient_unit() -> SuiteResult:
     Covers: ruff, mypy, bandit, pytest unit tests, ESLint, npm audit, vitest.
     """
     return _delegate_to_runner(
-        name="webclient",
+        name="web-client-static",
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--phase1"],
         label="webclient runner (phase1)",
@@ -1134,7 +1137,7 @@ def _suite_testclient_phase1() -> SuiteResult:
     Covers: ruff, mypy, bandit, pytest tests/unit/ (real unit test run).
     """
     return _delegate_to_runner(
-        name="testclient",
+        name="test-client-static",
         runner_dir=TEST_CLIENT_DIR,
         phase_args=["--phase1"],
         label="testclient runner (phase1)",
@@ -1147,7 +1150,7 @@ def _suite_node_unit() -> SuiteResult:
     Covers: npm ci, ESLint, npm audit, vitest unit tests.
     """
     return _delegate_to_runner(
-        name="node",
+        name="node-client-static",
         runner_dir=NODE_CLIENT_DIR,
         phase_args=["--phase1"],
         label="node runner (phase1)",
@@ -1263,7 +1266,7 @@ def _suite_gitignore_sanity() -> SuiteResult:
     the smoke tests to fail.  Together the two layers cover both local and CI
     scenarios.
     """
-    name = "git-sanity"
+    name = "repo-static-gitignore-check"
     t0 = time.monotonic()
 
     source_files = _collect_source_files(REPO_ROOT / "OPC_UA_Clients")
@@ -1331,7 +1334,7 @@ def _suite_md_hygiene() -> SuiteResult:
     paths, internal repo names, personal workflow rules) before it reaches the
     public repo.
     """
-    name = "md-hygiene"
+    name = "repo-static-markdown-leak-check"
     t0 = time.monotonic()
 
     md_files = sorted(REPO_ROOT.rglob("*.md"))
@@ -1608,7 +1611,7 @@ def _suite_csharp_live() -> SuiteResult:
     branch which skips live tests when 40464 isn't already reachable.
     """
     return _delegate_to_runner(
-        name="csharp-live",
+        name="csharp-client-live",
         runner_dir=CSHARP_DIR,
         phase_args=["--phase2"],
         label="csharp runner (phase2)",
@@ -1624,7 +1627,7 @@ def _suite_console_live() -> SuiteResult:
     No OPCUA_SERVER_URL passed — the Console runner owns its server on port 40461.
     """
     return _delegate_to_runner(
-        name="console-live",
+        name="console-client-live",
         runner_dir=CONSOLE_DIR,
         phase_args=["--phase2"],
         label="console runner (phase2)",
@@ -1638,7 +1641,7 @@ def _suite_testclient_full() -> SuiteResult:
     Uses 1200s timeout — conformance tests span many OPC UA round-trips.
     """
     return _delegate_to_runner(
-        name="testclient-full",
+        name="test-client-live-conformance",
         runner_dir=TEST_CLIENT_DIR,
         phase_args=["--phase2"],
         label="testclient runner (phase2)",
@@ -1676,7 +1679,7 @@ def _webclient_live_env(
 def _suite_webclient_live_python_opcua() -> SuiteResult:
     """Web Client direct OPC UA and method tests with an owned simulator."""
     return _delegate_to_runner(
-        name="webclient-live-python-opcua",
+        name="web-client-live-opcua-direct",
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--python-opcua-only"],
         label="webclient runner (python-opcua)",
@@ -1690,7 +1693,7 @@ def _suite_webclient_live_python_opcua() -> SuiteResult:
 def _suite_webclient_live_python_backend() -> SuiteResult:
     """Web Client Python WebSocket backend contract tests with owned services."""
     return _delegate_to_runner(
-        name="webclient-live-python-backend",
+        name="web-client-live-websocket-api",
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--python-backend-only"],
         label="webclient runner (python-backend)",
@@ -1705,7 +1708,7 @@ def _suite_webclient_live_python_backend() -> SuiteResult:
 def _suite_webclient_live_python_lifecycle() -> SuiteResult:
     """Web Client Python WebSocket lifecycle tests with owned services."""
     return _delegate_to_runner(
-        name="webclient-live-python-lifecycle",
+        name="web-client-live-websocket-connection",
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--python-lifecycle-only"],
         label="webclient runner (python-lifecycle)",
@@ -1720,7 +1723,7 @@ def _suite_webclient_live_python_lifecycle() -> SuiteResult:
 def _suite_webclient_live_e2e_smoke() -> SuiteResult:
     """Web Client Playwright smoke tests with owned runtime ports."""
     return _delegate_to_runner(
-        name="webclient-live-e2e-smoke",
+        name="web-client-e2e-smoke",
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--playwright-smoke-only"],
         label="webclient runner (e2e-smoke)",
@@ -1736,7 +1739,7 @@ def _suite_webclient_live_e2e_smoke() -> SuiteResult:
 def _suite_webclient_live_e2e_features() -> SuiteResult:
     """Web Client Playwright feature specs with owned runtime ports."""
     return _delegate_to_runner(
-        name="webclient-live-e2e-features",
+        name="web-client-e2e-features",
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--playwright-features-only"],
         label="webclient runner (e2e-features)",
@@ -1753,7 +1756,7 @@ def _suite_webclient_live_e2e_features() -> SuiteResult:
 def _suite_webclient_live_e2e_regression() -> SuiteResult:
     """Web Client Playwright regression spec with owned runtime ports."""
     return _delegate_to_runner(
-        name="webclient-live-e2e-regression",
+        name="web-client-e2e-regression",
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--playwright-regression-only"],
         label="webclient runner (e2e-regression)",
@@ -1768,7 +1771,7 @@ def _suite_webclient_live_e2e_regression() -> SuiteResult:
 
 def _suite_webclient_docker_smoke() -> SuiteResult:
     """Web Client container build/readiness smoke with an independent timeout."""
-    name = "webclient-docker-smoke"
+    name = "web-client-docker-smoke"
     docker = _find_cmd(["docker", "docker.exe"])
     if not docker:
         return SuiteResult(name, True, skipped=True, notes=["docker not in PATH"])
@@ -1786,47 +1789,193 @@ def _suite_webclient_docker_smoke() -> SuiteResult:
 
 
 # ---------------------------------------------------------------------------
-# Suite registries
+# Suite registry
 # ---------------------------------------------------------------------------
 
-PHASE1_SUITES: dict[str, object] = {
-    "csharp": _suite_csharp_unit,
-    "console": _suite_console_unit,
-    "webclient": _suite_webclient_unit,
-    "testclient": _suite_testclient_phase1,
-    "node": _suite_node_unit,
-    "server-static": _suite_server_static,
-    "git-sanity": _suite_gitignore_sanity,
-    "md-hygiene": _suite_md_hygiene,
+
+class SuiteGroup(StrEnum):
+    """Closed scheduling buckets for root-runner suites.
+
+    The suite ID tier is the primary validation mode. Static means no live
+    infrastructure is required: no server process, no Docker, and no port
+    binding. SuiteGroup is the orthogonal scheduling axis, so repo-level static
+    checks can belong to REPO_CHECKS while still using the `repo-static-*` ID
+    shape.
+    """
+
+    REPO_CHECKS = "repo-checks"
+    PHASE1_STATIC = "phase1-static"
+    PHASE2_LIVE = "phase2-live"
+    PHASE2_PACKAGE = "phase2-package"
+    PHASE2_WEB_LIVE = "phase2-web-live"
+
+
+@dataclass(frozen=True)
+class SuiteSpec:
+    id: str
+    display_name: str
+    group: SuiteGroup
+    runner: Callable[[], SuiteResult]
+
+
+SUITE_RENAMED_GUIDANCE = "Suite IDs were renamed in Slice 1. Run --list for current IDs."
+
+# Suite IDs follow <component>-<tier>[-<focus>...]. Match the longest known
+# component first, then the longest tier phrase immediately after it. The tier
+# is the primary validation mode; static means no live infrastructure. Repo
+# checks use repo-static-* for that reason, while their SuiteGroup remains
+# REPO_CHECKS.
+SUITE_REGISTRY: dict[str, SuiteSpec] = {
+    "repo-static-gitignore-check": SuiteSpec(
+        id="repo-static-gitignore-check",
+        display_name="Repo - Gitignore vs disk consistency",
+        group=SuiteGroup.REPO_CHECKS,
+        runner=_suite_gitignore_sanity,
+    ),
+    "repo-static-markdown-leak-check": SuiteSpec(
+        id="repo-static-markdown-leak-check",
+        display_name="Repo - Markdown private-content leak check",
+        group=SuiteGroup.REPO_CHECKS,
+        runner=_suite_md_hygiene,
+    ),
+    "server-static": SuiteSpec(
+        id="server-static",
+        display_name="Server - Lint, unit, and type checks",
+        group=SuiteGroup.PHASE1_STATIC,
+        runner=_suite_server_static,
+    ),
+    "node-client-static": SuiteSpec(
+        id="node-client-static",
+        display_name="Release1 Node Client - Lint and unit",
+        group=SuiteGroup.PHASE1_STATIC,
+        runner=_suite_node_unit,
+    ),
+    "test-client-static": SuiteSpec(
+        id="test-client-static",
+        display_name="Release2 Test Client - Lint and collection",
+        group=SuiteGroup.PHASE1_STATIC,
+        runner=_suite_testclient_phase1,
+    ),
+    "console-client-static": SuiteSpec(
+        id="console-client-static",
+        display_name="Release2 Console Client - Lint and unit",
+        group=SuiteGroup.PHASE1_STATIC,
+        runner=_suite_console_unit,
+    ),
+    "web-client-static": SuiteSpec(
+        id="web-client-static",
+        display_name="Release2 Web Client - Lint and unit (Python + JS)",
+        group=SuiteGroup.PHASE1_STATIC,
+        runner=_suite_webclient_unit,
+    ),
+    "csharp-client-static": SuiteSpec(
+        id="csharp-client-static",
+        display_name="Release2 C# Client - Lint and unit",
+        group=SuiteGroup.PHASE1_STATIC,
+        runner=_suite_csharp_unit,
+    ),
+    "server-smoke": SuiteSpec(
+        id="server-smoke",
+        display_name="Server - Native EXE startup smoke (port 40451)",
+        group=SuiteGroup.PHASE2_LIVE,
+        runner=_suite_server_smoke,
+    ),
+    "server-linux-package-smoke": SuiteSpec(
+        id="server-linux-package-smoke",
+        display_name="Server - Released Linux package smoke (Docker, port 40465)",
+        group=SuiteGroup.PHASE2_PACKAGE,
+        runner=_suite_server_linux_package_smoke,
+    ),
+    "csharp-client-live": SuiteSpec(
+        id="csharp-client-live",
+        display_name="Release2 C# Client - OPC UA integration vs live server",
+        group=SuiteGroup.PHASE2_LIVE,
+        runner=_suite_csharp_live,
+    ),
+    "console-client-live": SuiteSpec(
+        id="console-client-live",
+        display_name="Release2 Console Client - OPC UA integration vs live server",
+        group=SuiteGroup.PHASE2_LIVE,
+        runner=_suite_console_live,
+    ),
+    "test-client-live-conformance": SuiteSpec(
+        id="test-client-live-conformance",
+        display_name="Release2 Test Client - OPC UA IJT Companion Spec conformance",
+        group=SuiteGroup.PHASE2_LIVE,
+        runner=_suite_testclient_full,
+    ),
+    "web-client-live-opcua-direct": SuiteSpec(
+        id="web-client-live-opcua-direct",
+        display_name="Release2 Web Client - Python OPC UA to Server (WebSocket layer bypassed)",
+        group=SuiteGroup.PHASE2_WEB_LIVE,
+        runner=_suite_webclient_live_python_opcua,
+    ),
+    "web-client-live-websocket-api": SuiteSpec(
+        id="web-client-live-websocket-api",
+        display_name="Release2 Web Client - Python to WebSocket API",
+        group=SuiteGroup.PHASE2_WEB_LIVE,
+        runner=_suite_webclient_live_python_backend,
+    ),
+    "web-client-live-websocket-connection": SuiteSpec(
+        id="web-client-live-websocket-connection",
+        display_name="Release2 Web Client - Python to WebSocket connection handling",
+        group=SuiteGroup.PHASE2_WEB_LIVE,
+        runner=_suite_webclient_live_python_lifecycle,
+    ),
+    "web-client-e2e-smoke": SuiteSpec(
+        id="web-client-e2e-smoke",
+        display_name="Release2 Web Client - Browser smoke static UI gate",
+        group=SuiteGroup.PHASE2_WEB_LIVE,
+        runner=_suite_webclient_live_e2e_smoke,
+    ),
+    "web-client-e2e-features": SuiteSpec(
+        id="web-client-e2e-features",
+        display_name="Release2 Web Client - Browser feature coverage",
+        group=SuiteGroup.PHASE2_WEB_LIVE,
+        runner=_suite_webclient_live_e2e_features,
+    ),
+    "web-client-e2e-regression": SuiteSpec(
+        id="web-client-e2e-regression",
+        display_name="Release2 Web Client - Browser end-to-end regression journey",
+        group=SuiteGroup.PHASE2_WEB_LIVE,
+        runner=_suite_webclient_live_e2e_regression,
+    ),
+    "web-client-docker-smoke": SuiteSpec(
+        id="web-client-docker-smoke",
+        display_name="Release2 Web Client - Container image build and readiness smoke",
+        group=SuiteGroup.PHASE2_WEB_LIVE,
+        runner=_suite_webclient_docker_smoke,
+    ),
 }
 
-PHASE2_SUITES: dict[str, object] = {
-    "server-smoke": _suite_server_smoke,
-    "server-linux-package-smoke": _suite_server_linux_package_smoke,
-    "csharp-live": _suite_csharp_live,
-    "console-live": _suite_console_live,
-    "testclient-full": _suite_testclient_full,
-    "webclient-live-python-opcua": _suite_webclient_live_python_opcua,
-    "webclient-live-python-backend": _suite_webclient_live_python_backend,
-    "webclient-live-python-lifecycle": _suite_webclient_live_python_lifecycle,
-    "webclient-live-e2e-smoke": _suite_webclient_live_e2e_smoke,
-    "webclient-live-e2e-features": _suite_webclient_live_e2e_features,
-    "webclient-live-e2e-regression": _suite_webclient_live_e2e_regression,
-    "webclient-docker-smoke": _suite_webclient_docker_smoke,
-}
+ALL_SUITE_KEYS: list[str] = list(SUITE_REGISTRY)
 
-# Utility suites — not part of the default parallel Phase 2 run.
-# Keep this registry for focused future checks that should not run by default.
-_UTILITY_SUITES: dict[str, object] = {}
 
-ALL_SUITE_KEYS: list[str] = list(PHASE1_SUITES) + list(PHASE2_SUITES) + list(_UTILITY_SUITES)
+def _specs_for_groups(groups: set[SuiteGroup]) -> dict[str, SuiteSpec]:
+    return {suite_id: spec for suite_id, spec in SUITE_REGISTRY.items() if spec.group in groups}
+
+
+def phase1_specs() -> dict[str, SuiteSpec]:
+    return _specs_for_groups({SuiteGroup.REPO_CHECKS, SuiteGroup.PHASE1_STATIC})
+
+
+def phase2_specs() -> dict[str, SuiteSpec]:
+    return _specs_for_groups(
+        {SuiteGroup.PHASE2_LIVE, SuiteGroup.PHASE2_PACKAGE, SuiteGroup.PHASE2_WEB_LIVE}
+    )
+
+
+def _suite_display_name(suite_id: str) -> str:
+    spec = SUITE_REGISTRY.get(suite_id)
+    return spec.display_name if spec else suite_id
+
 
 # ---------------------------------------------------------------------------
 # Phase runners
 # ---------------------------------------------------------------------------
 
 
-def run_phase1(suites: dict) -> list[SuiteResult]:
+def run_phase1(suites: dict[str, SuiteSpec]) -> list[SuiteResult]:
     """Run all Phase 1 suites in parallel; emit each result atomically as it completes."""
     _banner("PHASE 1 \u2014 Unit / Static tests  (parallel, no server required)")
     log.info(
@@ -1837,10 +1986,7 @@ def run_phase1(suites: dict) -> list[SuiteResult]:
     results: list[SuiteResult] = []
 
     with ThreadPoolExecutor(max_workers=len(suites), thread_name_prefix="phase1") as ex:
-        future_to_key = {
-            ex.submit(fn): key  # type: ignore[operator]
-            for key, fn in suites.items()
-        }
+        future_to_key = {ex.submit(spec.runner): key for key, spec in suites.items()}
         for future in as_completed(future_to_key):
             key = future_to_key[future]
             try:
@@ -1853,7 +1999,7 @@ def run_phase1(suites: dict) -> list[SuiteResult]:
     return results
 
 
-def run_phase2(suites: dict) -> list[SuiteResult]:
+def run_phase2(suites: dict[str, SuiteSpec]) -> list[SuiteResult]:
     """Run Phase 2 suites in parallel.
 
     Phase 1 completes before Phase 2 starts, so the Release 1 Node Client's
@@ -1884,7 +2030,7 @@ def run_phase2(suites: dict) -> list[SuiteResult]:
     WEB_CLIENT_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     with ThreadPoolExecutor(max_workers=len(suites), thread_name_prefix="phase2") as ex:
-        future_to_key: dict = {ex.submit(fn): key for key, fn in suites.items()}  # type: ignore[arg-type]
+        future_to_key = {ex.submit(spec.runner): key for key, spec in suites.items()}
         for future in as_completed(future_to_key):
             key = future_to_key[future]
             log.info("\u25c0 Phase 2 suite completed: %s", key)
@@ -1925,15 +2071,25 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
     """
     _banner("FINAL SUMMARY")
 
-    phase1_names = set(PHASE1_SUITES.keys())
-    phase2_names = set(PHASE2_SUITES.keys())
+    repo_check_names = {
+        suite_id
+        for suite_id, spec in SUITE_REGISTRY.items()
+        if spec.group is SuiteGroup.REPO_CHECKS
+    }
+    phase1_names = {
+        suite_id
+        for suite_id, spec in SUITE_REGISTRY.items()
+        if spec.group is SuiteGroup.PHASE1_STATIC
+    }
+    phase2_names = set(phase2_specs())
+    registered_names = set(SUITE_REGISTRY)
 
-    gha_rows = [r for r in results if r.name not in phase1_names and r.name not in phase2_names]
+    gha_rows = [r for r in results if r.name not in registered_names or r.name in repo_check_names]
     p1_rows = [r for r in results if r.name in phase1_names]
     p2_rows = [r for r in results if r.name in phase2_names]
 
     # ── Column content widths (each cell = " {content} " → adds 2 chars) ──────
-    nw = max(max((len(r.name) for r in results), default=14), 18)
+    nw = max(max((len(_suite_display_name(r.name)) for r in results), default=14), 18)
     sw = 6  # "Status" / center-padded "PASS" etc. → 8 chars per cell total
     tw = 8  # time right-aligned                   → 10 chars per cell total
     # Detail column: auto-sized to fit the longest detail string (min 38)
@@ -2020,7 +2176,7 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
                 overall = 1
             t = f"{r.duration:.1f}s"
             det = r.counts or (r.notes[0] if r.notes else "")
-            out(_row(r.name, _scell(r), t, det) + "\n")
+            out(_row(_suite_display_name(r.name), _scell(r), t, det) + "\n")
             # Show extra notes as indented continuation rows
             extra = r.notes if r.counts else r.notes[1:]
             for note in extra:
@@ -2078,7 +2234,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     group.add_argument(
         "--suite",
-        choices=ALL_SUITE_KEYS,
         metavar="{" + "|".join(ALL_SUITE_KEYS) + "}",
         help="Run a single named suite and exit",
     )
@@ -2105,6 +2260,43 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _print_suite_list() -> None:
+    groups = [
+        (
+            SuiteGroup.REPO_CHECKS,
+            "Repo checks suites (Phase 1 static, no live infrastructure):",
+        ),
+        (
+            SuiteGroup.PHASE1_STATIC,
+            "Phase 1 static suites (parallel, no server):",
+        ),
+        (
+            SuiteGroup.PHASE2_LIVE,
+            "Phase 2 live suites (parallel, dedicated ports per suite):",
+        ),
+        (
+            SuiteGroup.PHASE2_PACKAGE,
+            "Phase 2 package suites (parallel, Docker/package validation):",
+        ),
+        (
+            SuiteGroup.PHASE2_WEB_LIVE,
+            "Phase 2 Web live suites (parallel, isolated Web runtime ports):",
+        ),
+    ]
+    for group, label in groups:
+        specs = [spec for spec in SUITE_REGISTRY.values() if spec.group is group]
+        if not specs:
+            continue
+        print(label)
+        for spec in specs:
+            print(f"  {spec.id:<38} {spec.display_name}")
+
+
+def _validate_suite_arg(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if args.suite and args.suite not in SUITE_REGISTRY:
+        parser.error(f"unknown suite: {args.suite}\n{SUITE_RENAMED_GUIDANCE}")
+
+
 def _configure_stdio_utf8() -> None:
     """Use UTF-8 for runner output before argparse can print help text."""
     for stream in (sys.stdout, sys.stderr):
@@ -2119,6 +2311,7 @@ def main() -> int:
     _cleanup_caches(REPO_ROOT)  # pre-run: clear stale caches from interrupted runs
     parser = _build_parser()
     args = parser.parse_args()
+    _validate_suite_arg(parser, args)
 
     if args.ci_mode:
         # Force the CI codepath in every child runner (venv relaunch skipped,
@@ -2127,16 +2320,7 @@ def main() -> int:
         os.environ["CI"] = "1"
 
     if args.list:
-        print("Phase 1 suites (parallel, no server):")
-        for k in PHASE1_SUITES:
-            print(f"  {k}")
-        print("Phase 2 suites (parallel, server smoke on 40451; Docker smoke on 40465):")
-        for k in PHASE2_SUITES:
-            print(f"  {k}")
-        if _UTILITY_SUITES:
-            print("Utility suites (run manually with --suite <name>):")
-            for k in _UTILITY_SUITES:
-                print(f"  {k}")
+        _print_suite_list()
         return 0
 
     _setup_logging(verbose=args.verbose)
@@ -2169,9 +2353,9 @@ def main() -> int:
     try:
         # -- Single-suite shortcut -------------------------------------------
         if args.suite:
-            fn = {**PHASE1_SUITES, **PHASE2_SUITES, **_UTILITY_SUITES}[args.suite]  # type: ignore[index]
+            spec = SUITE_REGISTRY[args.suite]
             log.info("Running single suite: %s", args.suite)
-            result = fn()  # type: ignore[operator]
+            result = spec.runner()
             _emit_suite_output(result)
             return 0 if (result.ok or result.skipped) else 1
 
@@ -2180,12 +2364,12 @@ def main() -> int:
             _banner("PHASE 1 \u2014 GHA Workflow Validation  (root-level checks)")
             gha_results = _run_gha_checks()
             all_results.extend(gha_results)
-            p1 = run_phase1(PHASE1_SUITES)
+            p1 = run_phase1(phase1_specs())
             all_results.extend(p1)
 
         # -- Phase 2 (parallel — each sub-runner owns its server) ------------
         if not args.phase1:
-            p2 = run_phase2(PHASE2_SUITES)
+            p2 = run_phase2(phase2_specs())
             all_results.extend(p2)
 
     finally:

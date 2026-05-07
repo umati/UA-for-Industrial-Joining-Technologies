@@ -9,7 +9,7 @@
 #   server-smoke-docker  Release2 / OPC UA Server        Linux native Docker build + smoke
 #   webclient-docker     Release2 / IJT Web Client        Docker unit/prod tests
 #   int-testclient       Release2 / Test Client           Windows: OPC UA server (port 40462) + Test Client full suite
-#   live-webclient       Release2 / IJT Web Client        Windows: local runner webclient-live-* matrix
+#   live-webclient       Release2 / IJT Web Client        Windows: local runner web-client-live-* / web-client-e2e-* matrix
 #   live-console         Release2 / IJT Console Client   Windows: Console Client live tests (port 40461)
 #   csharp-live          Release2 / IJT C# Client         Windows: xUnit live tests (port 40464) — nightly
 #   report               Combined summary                 Always runs after all jobs
@@ -402,7 +402,7 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Release2 / IJT Web Client — Windows Live Runner Matrix
-  #   Runs the same webclient-live-* suites as the local root runner.
+  #   Runs the same Web Client live/e2e suites as the local root runner.
   #   Each suite owns its OPC UA server, WebSocket backend, UI port, and results directory.
   # ───────────────────────────────────────────────────────────────────────────
   live-webclient:
@@ -415,22 +415,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - suite: webclient-live-python-opcua
+          - suite: web-client-live-opcua-direct
             label: "Python OPC UA"
             feature_workers: ""
-          - suite: webclient-live-python-backend
-            label: "Python Backend"
+          - suite: web-client-live-websocket-api
+            label: "Python WebSocket API"
             feature_workers: ""
-          - suite: webclient-live-python-lifecycle
-            label: "Python Lifecycle"
+          - suite: web-client-live-websocket-connection
+            label: "Python WebSocket Connection"
             feature_workers: ""
-          - suite: webclient-live-e2e-smoke
+          - suite: web-client-e2e-smoke
             label: "E2E Smoke"
             feature_workers: ""
-          - suite: webclient-live-e2e-features
+          - suite: web-client-e2e-features
             label: "E2E Features"
             feature_workers: "2"
-          - suite: webclient-live-e2e-regression
+          - suite: web-client-e2e-regression
             label: "E2E Regression"
             feature_workers: ""
 

@@ -389,13 +389,13 @@ Every runner invocation writes `test-results/timing-latest.json` and
 `test-results/timing-history.jsonl`, then appends the same payload to
 `.state/timing-history.jsonl`. Use those files for Phase 1 drift analysis
 instead of guessing from wall-clock totals.
-Root Phase 2 no longer delegates one broad `webclient-live` suite. It invokes
+Root Phase 2 no longer delegates one broad Web Client live suite. It invokes
 separate Web Client suites for Python OPC UA, Python WebSocket backend, Python
 WebSocket lifecycle, Playwright smoke, Playwright features, Playwright
 regression, and Docker smoke. Each live/browser suite owns its own OPC UA,
 WebSocket, and UI ports, so failures are localized to one test type and service
 lifecycle.
-At the root-runner level, `webclient-docker-smoke` is prechecked like the server
+At the root-runner level, `web-client-docker-smoke` is prechecked like the server
 Docker smoke: missing Docker or a stopped daemon is reported as a skipped suite.
 Calling this Web runner directly with `--docker-only` remains an explicit Docker
 validation request and fails if Docker cannot run.
@@ -419,7 +419,7 @@ python run_all_tests.py --docker-only
 
 GitHub `ci.yml` runs this runner with `--phase1`; it no longer duplicates the
 individual pytest, Vitest, ESLint, mypy, Bandit, and audit commands. GitHub
-`integration.yml` runs the same root-runner `webclient-live-*` suite matrix as
+`integration.yml` runs the same root-runner Web Client live/e2e suite matrix as
 local validation, with two Playwright feature workers on GitHub-hosted Windows
 runners. Each suite receives an isolated `IJT_WEB_TEST_RESULTS_DIR`, so JUnit,
 coverage, Playwright, and timing artifacts cannot overwrite another suite's
@@ -504,7 +504,7 @@ and `SimulateBulkEvents` defaults to event type `1` and count `3`.
 10. **Never** assert raw arrays for backend WS `namespaces` / `browse`; assert `data.namespaces` / `data.nodes`.
 11. **Never** send empty numeric simulator method arguments from the Web UI; define a valid default or require user input before calling.
 12. **Never** include local virtualenvs or generated test artifacts in Docker build context; keep `.venv_test/`, `.venv/`, `node_modules/`, `test-results/`, and `tmp/` ignored by `.dockerignore`.
-13. **Never** reintroduce a broad root `webclient-live` suite; add or adjust the narrow live/browser suite that owns the affected test type and service lifecycle.
+13. **Never** reintroduce a broad root Web Client live suite; add or adjust the narrow live/browser suite that owns the affected test type and service lifecycle.
 
 
 ## Environment Variables
