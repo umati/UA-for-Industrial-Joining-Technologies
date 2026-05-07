@@ -1,5 +1,15 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-05-06
+
+1. Updated the simulator version to 1.13.0.
+2. Added retained `JoiningSystemConditionType` simulation through the new `SimulateConditions(EventType)` method under `SimulateEventsAndConditions`.
+3. Added support for standard OPC UA condition method flows on simulated conditions, including Acknowledge, Confirm, AddComment, Enable, Disable, and ConditionRefresh.
+4. Improved event and condition simulation coverage so the simulator event type catalogue can be raised as simple `JoiningSystemEventType` events or retained `JoiningSystemConditionType` conditions.
+5. Improved condition class and subclass metadata handling for condition notifications.
+6. Added local root-runner Docker smoke coverage for the Linux package ZIP.
+7. Multiple bug fixes and optimizations.
+
 ## 2026-05-04
 
 1. Improved joining process simulation so select, start, abort, reset, and counter operations use the configured simulated joining process data more consistently.

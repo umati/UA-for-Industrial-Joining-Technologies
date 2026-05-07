@@ -87,6 +87,10 @@ describe('ConnectionManager — constructor', () => {
   it('exposes socketHandler on the instance', () => {
     expect(manager.socketHandler).toBe(mockSocket)
   })
+
+  it('creates a stable session id for endpoint readiness tracking', () => {
+    expect(manager.sessionId).toMatch(/^session-|^[0-9a-f-]{36}$/)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -178,6 +182,77 @@ describe('ConnectionManager — close()', () => {
   it('calls socketHandler.close()', () => {
     manager.close()
     expect(mockSocket.close).toHaveBeenCalledOnce()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// WebSocket lifecycle
+// ---------------------------------------------------------------------------
+
+describe('ConnectionManager — WebSocket lifecycle', () => {
+  it('marks endpoint states disconnected when the browser websocket disconnects', () => {
+    MockSocketHandler.instances = []
+    let websocketStateCallback = null
+    const webSocketManager = {
+      subscribeConnectionState: vi.fn((callback) => {
+        websocketStateCallback = callback
+        return vi.fn()
+      })
+    }
+    const localManager = new ConnectionManager(webSocketManager, 'opc.tcp://test:4840')
+    const localSocket = MockSocketHandler.instances[0]
+
+    localSocket.simulateEvent('connection established', {})
+    localSocket.simulateEvent('subscribe', {})
+
+    websocketStateCallback(false)
+
+    expect(localManager[CONNECTION_STATES.CONNECTION]).toBe(false)
+    expect(localManager[CONNECTION_STATES.SUBSCRIPTION]).toBe(false)
+  })
+
+  it('reissues endpoint connect when the browser websocket reconnects', () => {
+    MockSocketHandler.instances = []
+    let websocketStateCallback = null
+    const webSocketManager = {
+      subscribeConnectionState: vi.fn((callback) => {
+        websocketStateCallback = callback
+        return vi.fn()
+      })
+    }
+    const localManager = new ConnectionManager(webSocketManager, 'opc.tcp://test:4840')
+    const localSocket = MockSocketHandler.instances[0]
+
+    localSocket.simulateEvent('connection established', {})
+    localSocket.simulateEvent('subscribe', {})
+    localSocket.connect.mockClear()
+
+    websocketStateCallback(false)
+    websocketStateCallback(true)
+
+    expect(localSocket.connect).toHaveBeenCalledOnce()
+    expect(localManager[CONNECTION_STATES.ATTEMPT_CONNECTION]).toBe(true)
+  })
+
+  it('does not reconnect closed endpoints after browser websocket reconnect', () => {
+    MockSocketHandler.instances = []
+    let websocketStateCallback = null
+    const unsubscribe = vi.fn()
+    const webSocketManager = {
+      subscribeConnectionState: vi.fn((callback) => {
+        websocketStateCallback = callback
+        return unsubscribe
+      })
+    }
+    const localManager = new ConnectionManager(webSocketManager, 'opc.tcp://test:4840')
+    const localSocket = MockSocketHandler.instances[0]
+
+    localSocket.connect.mockClear()
+    localManager.close()
+    websocketStateCallback(true)
+
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(localSocket.connect).not.toHaveBeenCalled()
   })
 })
 

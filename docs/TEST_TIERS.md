@@ -124,10 +124,17 @@ it.skipIf(!gitAvailable, 'git not available — skip source-coverage checks (zip
 Each Python client runner reserves a dedicated server port so that multiple clients can
 run their live/integration tests in parallel without port conflicts.
 
-> **Root runner Phase 2:** The root-level `run_all_tests.py` runs server smoke plus
-> all 4 client suites **simultaneously** via `ThreadPoolExecutor` — not sequentially.
+> **Root runner Phase 2:** The root-level `run_all_tests.py` runs server smoke,
+> client live suites, and dedicated Docker smoke suites **simultaneously** via `ThreadPoolExecutor` — not sequentially.
 > The server smoke suite validates the native/default server package on port 40451.
+> When Docker is running, the Linux package smoke suite also builds the server image
+> from `OPC_UA_IJT_Server_Simulator_Linux.zip` and validates it on port 40465.
 > Each client sub-runner auto-launches its own server on its dedicated port.
+> Web Client live validation is split by test type: direct Python OPC UA,
+> Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke,
+> Playwright features, and Playwright regression each run as separate root
+> suites with their own service ports. Web Client Docker build/readiness stays
+> in the separate `webclient-docker-smoke` suite.
 
 ### Port Assignment
 
@@ -136,14 +143,26 @@ run their live/integration tests in parallel without port conflicts.
 | IJT_CSharp_Client  | **40464** | N/A (.NET)   | Dedicated port — copy-patch mechanism in `OpcUaServerFixture.cs` |
 | IJT_Console_Client | 40461     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
 | IJT_Test_Client    | 40462     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
-| IJT_Web_Client     | 40463     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
+| Web Client Python OPC UA | 40463 | `.venv_test` | Direct OPC UA and method tests; no WebSocket backend |
+| Web Client Python backend | OPC UA 40466 / WS 8002 | `.venv_test` | WebSocket backend contract and Python integration tests |
+| Web Client Python lifecycle | OPC UA 40467 / WS 8003 | `.venv_test` | WebSocket connection lifecycle tests isolated from backend contract tests |
+| Web Client Playwright smoke | HTTP 3004 | `.venv_test` + Playwright | Browser smoke project only |
+| Web Client Playwright features | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | `.venv_test` + Playwright | Feature specs with four owned backend/server worker pairs |
+| Web Client Playwright regression | OPC UA 40480 / WS 8010 / HTTP 3006 | `.venv_test` + Playwright | Regression spec with owned backend and UI ports |
+| Web Client Docker smoke | HTTP 3000 / WS 8001 | Docker | Builds the Web Client production image through `--docker-only`; independent from live/browser suites |
 | IJT_Node_Client    | **40451** (fixed) | N/A (Node) | **Release 1 legacy** — server port is hardcoded, dynamic isolation not supported |
 | Server smoke/native default | 40451  | —            | Built-in default (from `server_configuration.json`); root runner Phase 2 validates this package path |
+| Server Linux package smoke | 40465  | Docker       | Builds the Docker image from the Linux ZIP package and runs `smoke_test.py` |
 
 The root runner runs Phase 1 to completion before starting Phase 2. The Release 1
 Node Client is included only in Phase 1 (`--phase1` delegated runner), so the
 default root run does not overlap Node Client activity with `server-smoke` on
 port 40451.
+
+Set `IJT_DOCKER_BUILD_TIMEOUT` to raise the Linux package Docker build timeout
+or Web Client Docker image build timeout when a cold Docker/network environment
+needs more than the default 1200 seconds. Set `IJT_DOCKER_TIMEOUT` to raise the
+Web Client Docker HTTP readiness wait when the container starts slowly.
 
 > **Rule:** Release 2 clients MUST NOT use port 40451. That port is reserved as the server's native
 > default and must remain free for direct development work and monorepo tests.

@@ -21,6 +21,21 @@ Conformance test client for validating OPC UA IJT servers against the Industrial
 - **Generate an Excel report:** `python run_all_tests.py --excel=always`
 - **Generate a reference workflow walkthrough:** `python scripts/run_reference_workflow.py --output test-results/reference-workflows/reference_joining_process_workflow.md`
 
+## Event And Condition Coverage
+
+For servers that expose simulator triggers, the Test Client covers all 60
+`SimulateEvents` event ids and all 60 `SimulateConditions` condition ids by
+use-case category. It also samples standard OPC UA condition methods for
+`JoiningSystemConditionType`: Acknowledge, Confirm, AddComment, Enable/Disable,
+invalid EventId rejection, and ConditionRefresh.
+
+Focused Debug-server checks:
+
+```bash
+python -m pytest conformance/test_event_condition_catalog.py conformance/test_joining_system_condition_methods.py -q
+python -m pytest conformance/test_events.py events -q
+```
+
 ## Test Reports
 
 - [Test report formats](docs/test-results.md)

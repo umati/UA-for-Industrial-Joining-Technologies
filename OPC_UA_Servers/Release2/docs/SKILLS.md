@@ -61,7 +61,7 @@ docker compose down        # stop
 ## Test Commands
 
 ```bash
-# Full test suite: hadolint (Docker lint) + trivy (vulnerability scan) + smoke test
+# Full test suite: hadolint, package checks, Docker/trivy when available, and smoke test
 python run_all_tests.py
 
 # Smoke test only — server must already be running on port 40451
@@ -104,6 +104,7 @@ All simulation methods require a boolean `IsSimulated` input argument.
 | `SimulateBulkResults` | Simulate multiple results in a detached thread |
 | `SendSimulatedBulkResults` | Send bulk results without recreating them |
 | `SimulateEvents` | Simulate system events |
+| `SimulateConditions` | Simulate retained `JoiningSystemConditionType` conditions |
 | `SimulateBulkEvents` | Simulate multiple system events |
 | `SendJoint` / `GetJoint` / `GetJointList` | Joint Management MVP |
 | `SelectJoint` / `DeleteJoint` | Joint Management MVP |

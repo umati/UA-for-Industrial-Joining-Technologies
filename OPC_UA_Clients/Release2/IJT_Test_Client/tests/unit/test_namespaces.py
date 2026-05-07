@@ -433,7 +433,31 @@ class TestSimulateEventType:
 
         for name, value in inspect.getmembers(SimulateEventType):
             if not name.startswith("_") and isinstance(value, int):
+                if name == "GENERIC_EVENT":
+                    assert value == 0
+                    continue
                 assert value > 0, f"SimulateEventType.{name} = {value} is not positive"
+
+    def test_catalog_covers_every_server_event_type(self):
+        values = [value for value, _ in SimulateEventType.ALL_KNOWN]
+        labels = [label for _, label in SimulateEventType.ALL_KNOWN]
+
+        assert values == list(range(1, 61))
+        assert len(labels) == len(set(labels))
+
+    def test_use_case_groups_cover_catalog_once(self):
+        grouped = [value for events in SimulateEventType.USE_CASES.values() for value, _ in events]
+        catalog = [value for value, _ in SimulateEventType.ALL_KNOWN]
+
+        assert sorted(grouped) == catalog
+        assert len(grouped) == len(set(grouped))
+
+    def test_legacy_aliases_match_canonical_names(self):
+        assert SimulateEventType.TOOL_CONNECTED == SimulateEventType.ASSET_CONNECTED
+        assert SimulateEventType.TOOL_SOFTWARE_INVALID == SimulateEventType.SOFTWARE_INVALID_ERROR
+        assert SimulateEventType.PROGRAM_SELECTED == SimulateEventType.SELECTED_PROCESS
+        assert SimulateEventType.RECEIVED_IDENTIFIER == SimulateEventType.RECEIVED_ENTITY
+        assert SimulateEventType.CAPABILITY_TEST_ACTIVATED == SimulateEventType.TESTING_MODE
 
 
 # ---------------------------------------------------------------------------

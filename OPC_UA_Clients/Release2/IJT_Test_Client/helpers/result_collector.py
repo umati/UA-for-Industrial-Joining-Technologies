@@ -207,7 +207,7 @@ class ResultCollector:
         if self._collector is None:
             raise RuntimeError("ResultCollector is not active — use as async context manager")
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
 
         while True:

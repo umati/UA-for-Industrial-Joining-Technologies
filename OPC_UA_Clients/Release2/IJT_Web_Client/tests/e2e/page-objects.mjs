@@ -11,10 +11,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Selector constants — single source of truth for every CSS class / value
 // ─────────────────────────────────────────────────────────────────────────────
+function cssAttr (value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
 export const SEL = {
   // Navigation
-  MAIN_DROPDOWN: '.mainDropDown',
+  MAIN_DROPDOWN: 'select.mainDropDown',
+  SETTINGS_SCREEN: '.settingsScreen',
   TAB_BUTTON: (name) => `input.tabButton[value="${name}"]`,
+  ENDPOINT_STATE: (name, state, value) => `input.tabButton[value="${name}"][data-opcua-${state}-state="${value}"]`,
 
   // Connection status bar
   STATUS_LABEL: (text) => `.connection-label:has-text("${text}")`,
@@ -33,8 +39,8 @@ export const SEL = {
 
   // Consolidated Result view
   RESULT_HEADER: '.resultheader',
-  RESULT_TYPE_SELECT: '.resultheader select:first-of-type',
-  RESULT_ITEM_SELECT: '.resultheader select:nth-of-type(2)',
+  RESULT_TYPE_SELECT: '.resultheader select[data-ijt-result-control="type"]',
+  RESULT_ITEM_SELECT: '.resultheader select[data-ijt-result-control="result"]',
   RESULT_IMPORT_MODE_SELECT: '.resultImportMode select',
   RESULT_IMPORT_STRICT_CHECKBOX: '.resultImportStrictInput',
   RESULT_IMPORT_FILE_INPUT: '.resultImportInput',
@@ -62,10 +68,13 @@ export const SEL = {
 
   // Address Space view
   TREE_BUTTON: '.treeButton',
+  TREE_BUTTON_BY_BROWSE_NAME: (name) => `button.treeButton[data-opcua-browse-name="${cssAttr(name)}"]`,
+  TREE_BUTTON_BY_NODE_ID: (nodeId) => `button.treeButton[data-opcua-node-id="${cssAttr(nodeId)}"]`,
   BUTTON_AREA: '.buttonArea',
 
   // Servers view
   SERVER_ROW: '.serverRow',
+  SERVER_ROWS: '.serversRows',
   SERVER_ADD_BTN: 'button:has-text("Add new server")',
   SERVER_SAVE_BTN: 'button:has-text("Save")',
 
@@ -100,13 +109,14 @@ export const VIEW_LEVEL = {
 // AppPage — top-level page helper
 // ─────────────────────────────────────────────────────────────────────────────
 export class AppPage {
-  constructor (page) {
+  constructor (page, appUrl = '/') {
     this.page = page
+    this.appUrl = appUrl
   }
 
   /** Navigate to the app root and wait for basic render. */
   async goto () {
-    await this.page.goto('/')
+    await this.page.goto(this.appUrl)
     await this.page.waitForLoadState('domcontentloaded')
     // Give JS time to bootstrap
     await this.page.waitForTimeout(500)
@@ -115,7 +125,15 @@ export class AppPage {
   /** Switch the main view-level dropdown (1=Basic … 5=Settings). */
   async setViewLevel (level) {
     await this.page.selectOption(SEL.MAIN_DROPDOWN, level)
-    await this.page.waitForTimeout(300)
+    if (String(level) === '5') {
+      await this.page.locator(SEL.SETTINGS_SCREEN).waitFor({ state: 'visible', timeout: 5_000 })
+      return
+    }
+    await this.page.waitForFunction(
+      ([selector, expected]) => document.querySelector(selector)?.value === expected,
+      [SEL.MAIN_DROPDOWN, level],
+      { timeout: 5_000 }
+    )
   }
 
   /** Click a top-level tab by its display name. */
@@ -123,22 +141,22 @@ export class AppPage {
     const tab = this.page.locator(SEL.TAB_BUTTON(tabName)).first()
     await tab.waitFor({ state: 'visible', timeout })
     await tab.click()
-    await this.page.waitForTimeout(300)
+    await this.page.waitForFunction(
+      (selector) => document.querySelector(selector)?.getAttribute('aria-selected') === 'true',
+      SEL.TAB_BUTTON(tabName),
+      { timeout }
+    )
   }
 
   /** Connect to the LOCAL server endpoint tab. */
   async connectToLocal ({ timeout = 90_000 } = {}) {
-    // The LOCAL tab connects automatically when clicked
     await this.clickTab('LOCAL', { timeout })
-    // Wait for connection status to turn "on" (ESTABLISHED) or subscription
-    await this.page
-      .locator(SEL.ON_COLOR)
+    await this.page.locator(SEL.ENDPOINT_STATE('LOCAL', 'connection', 'connected'))
       .first()
       .waitFor({ state: 'visible', timeout })
-      .catch(() => {
-        // Connection status may render differently; not fatal for all tests
-      })
-    await this.page.waitForTimeout(1000)
+    await this.page.locator(SEL.ENDPOINT_STATE('LOCAL', 'subscription', 'connected'))
+      .first()
+      .waitFor({ state: 'visible', timeout })
   }
 
   /** Assert the page title matches the expected pattern. */
@@ -180,7 +198,7 @@ export class AppPage {
   }
 
   async openAddressSpace () {
-    await this.clickTab('AddressSpace')
+    await this.clickTab('Address Space')
     return new AddressSpacePage(this.page)
   }
 
@@ -487,11 +505,69 @@ export class AddressSpacePage {
     return this.page.locator(SEL.TREE_BUTTON).count()
   }
 
-  /** Expand the first tree node. */
-  async expandFirstNode () {
-    const btn = this.page.locator(SEL.TREE_BUTTON).first()
-    await btn.click()
-    await this.page.waitForTimeout(800)
+  treeButtonByBrowseName (name) {
+    return this.page.locator(SEL.TREE_BUTTON_BY_BROWSE_NAME(name)).first()
+  }
+
+  async waitForBrowseName (name, { timeout = 15_000 } = {}) {
+    const btn = this.treeButtonByBrowseName(name)
+    await btn.waitFor({ state: 'visible', timeout })
+    return btn
+  }
+
+  async hasBrowseName (name) {
+    return (await this.page.locator(SEL.TREE_BUTTON_BY_BROWSE_NAME(name)).count()) > 0
+  }
+
+  async isBrowseNameOpen (name) {
+    const btn = await this.waitForBrowseName(name)
+    return btn.evaluate((button) => button.parentElement?.classList.contains('is-open') ?? false)
+  }
+
+  async expandBrowseName (name, { expectedChild, timeout = 15_000 } = {}) {
+    const btn = await this.waitForBrowseName(name, { timeout })
+    const isOpen = await btn.evaluate((button) => button.parentElement?.classList.contains('is-open') ?? false)
+    if (!isOpen) {
+      await btn.click()
+    }
+
+    if (expectedChild) {
+      await this.waitForBrowseName(expectedChild, { timeout })
+      return
+    }
+
+    await this.page.waitForFunction(
+      (selector) => {
+        const button = document.querySelector(selector)
+        return !!button?.parentElement?.classList.contains('is-open')
+      },
+      SEL.TREE_BUTTON_BY_BROWSE_NAME(name),
+      { timeout }
+    )
+  }
+
+  async collapseBrowseName (name, { timeout = 15_000 } = {}) {
+    const btn = await this.waitForBrowseName(name, { timeout })
+    const isOpen = await btn.evaluate((button) => button.parentElement?.classList.contains('is-open') ?? false)
+    if (isOpen) {
+      await btn.click()
+    }
+    await this.page.waitForFunction(
+      (selector) => {
+        const button = document.querySelector(selector)
+        return !!button && !button.parentElement?.classList.contains('is-open')
+      },
+      SEL.TREE_BUTTON_BY_BROWSE_NAME(name),
+      { timeout }
+    )
+  }
+
+  async expandByBrowseName (path, { expectedChild, timeout = 15_000 } = {}) {
+    for (let i = 0; i < path.length; i++) {
+      const current = path[i]
+      const childToWaitFor = path[i + 1] ?? (i === path.length - 1 ? expectedChild : undefined)
+      await this.expandBrowseName(current, { expectedChild: childToWaitFor, timeout })
+    }
   }
 }
 
@@ -504,12 +580,20 @@ export class ServersPage {
   }
 
   async waitForServerList ({ timeout = 30_000 } = {}) {
-    // The server list may be empty; just wait for DOM paint
-    await this.page.waitForTimeout(500)
+    await this.page.locator(SEL.SERVER_ROWS).waitFor({ state: 'visible', timeout })
   }
 
   async getServerRowCount () {
-    return this.page.locator(SEL.SERVER_ROW).count()
+    return this.page.locator(`${SEL.SERVER_ROWS} ${SEL.SERVER_ROW}`).count()
+  }
+
+  async hasServerName (name) {
+    const rows = this.page.locator(SEL.SERVER_ROWS)
+    await rows.waitFor({ state: 'visible' })
+    return rows.locator('input').evaluateAll(
+      (inputs, expected) => inputs.some((input) => input.value === expected),
+      name
+    )
   }
 
   async clickAddServer () {

@@ -26,6 +26,11 @@ import TabGenerator from 'views/graphic-support/tab-generator.mjs'
 import BasicScreen from 'views/graphic-support/basic-screen.mjs'
 import { createDemoTabs } from 'views/tab-setup/demo-tabs.mjs'
 import { createDetailsTabs } from 'views/tab-setup/details-tabs.mjs'
+import {
+  initializeEndpointTabState,
+  markEndpointTabClosing,
+  setEndpointTabState
+} from './endpoint-tab-state.mjs'
 
 /** Default view level shown when a new endpoint tab is opened (Detailed = 3). */
 const DEFAULT_VIEW_LEVEL = 3
@@ -49,6 +54,26 @@ export default class EndpointGraphics extends BasicScreen {
 
   changeViewLevel (newLevel) {
     this.tabGenerator.changeViewLevel(newLevel)
+  }
+
+  bindEndpointTab (tab) {
+    const button = tab?.button
+    const states = this.connectionManager?.CONNECTION_STATES
+    if (!button || !states) {
+      return
+    }
+
+    initializeEndpointTabState(button, this.endpointUrl, this.connectionManager.sessionId)
+
+    this.connectionManager.subscribe(states.CONNECTION, (connected) => {
+      setEndpointTabState(button, 'connection', connected)
+    })
+    this.connectionManager.subscribe(states.SUBSCRIPTION, (connected) => {
+      setEndpointTabState(button, 'subscription', connected)
+    })
+    this.connectionManager.subscribe(states.ATTEMPT_CLOSE, () => {
+      markEndpointTabClosing(button)
+    })
   }
 
   async loadOptionalEnvelopeTab (tabGenerator, resultManager, methodManager, addressSpace) {

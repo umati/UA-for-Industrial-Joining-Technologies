@@ -19,8 +19,8 @@
 ```
 IJT_Web_Client/
 ├── index.html              # Browser entry point — loads src/javascripts/ijt-support/ijt-support.mjs
-├── index.py                # Python WebSocket backend (asyncio + websockets, port 8001)
-├── config.js               # Shared JS config (WS_PORT, endpoints, timeouts)
+├── index.py                # Python WebSocket backend (asyncio + websockets, default port 8001)
+├── config.js               # Browser runtime WS config (window.__IJT_RUNTIME__ / query params)
 ├── run_all_tests.py        # PRIMARY TEST RUNNER — one command for everything
 ├── pyproject.toml          # pytest settings: asyncio_mode=auto, timeout=30 (+ ruff, coverage, bandit, mypy)
 ├── vitest.config.mjs       # Vitest config for JS unit tests
@@ -87,7 +87,7 @@ IJT_Web_Client/
 │   │   │   ├── test_opcua_integration.py
 │   │   │   ├── test_shared_client_contract.py
 │   │   │   └── test_index_handler.py
-│   │   └── live/                   # Needs real OPC UA server on :40451 (marker: live)
+│   │   └── live/                   # Needs OPC UA server; runner injects OPCUA_TEST_ENDPOINT (marker: live)
 │   │       ├── test_opcua_methods.py   # 70 method tests (asyncua monkey-patch)
 │   │       └── test_opcua_live.py      # Event subscription tests
 │   ├── js/unit/                    # Vitest JS unit tests (25 files, 570 tests in the current full JS run)
@@ -143,7 +143,7 @@ python scripts/run_docker_tests.py --live-docker
 
 All auto-detected — present=run, absent=skip with install hint.
 Network-backed advisory tools fail fast: pip-audit uses the PyPI JSON endpoint preflight, local cache, spinner disabled, and short timeouts; Semgrep uses the real `p/default` rules endpoint. `mypy` scans explicit Python source roots instead of `.` so runner temp/state directories cannot break local checks on Windows.
-Runner-managed `npm install` uses `--no-audit --no-fund` to keep repeated local/CI logs readable; JS CVEs are still checked by the separate explicit `npm audit` step.
+Runner-managed and Dockerfile `npm install` / `npm ci` commands use `--no-audit --no-fund`, disable the npm update notifier, and keep direct runner npm subprocesses on project `tmp/npm-cache` so repeated local/CI logs stay readable; JS CVEs are still checked by the separate explicit `npm audit` step.
 
 | Tool | What it checks |
 |------|---------------|
@@ -385,7 +385,88 @@ Expected results:
 python run_all_tests.py
 ```
 Runs Python unit + integration tests, JS unit tests, ESLint, Bandit, mypy, pip-audit.
-(Live OPC UA tests in `tests/python/live/test_opcua_methods.py` require a running server on `opc.tcp://localhost:40451`.)
+Root Phase 2 no longer delegates one broad `webclient-live` suite. It invokes
+separate Web Client suites for Python OPC UA, Python WebSocket backend, Python
+WebSocket lifecycle, Playwright smoke, Playwright features, Playwright
+regression, and Docker smoke. Each live/browser suite owns its own OPC UA,
+WebSocket, and UI ports, so failures are localized to one test type and service
+lifecycle.
+The Playwright feature suite runs with `IJT_PLAYWRIGHT_FEATURE_WORKERS=4` in
+the root runner. Each worker gets a dedicated WebSocket backend and OPC UA
+simulator by offsetting the base `WS_TEST_URL` and `OPCUA_TEST_ENDPOINT` ports;
+the browser URL carries the worker-specific WebSocket port through query
+parameters.
+
+Focused live-suite commands used by the root runner:
+
+```bash
+python run_all_tests.py --python-opcua-only
+python run_all_tests.py --python-backend-only
+python run_all_tests.py --python-lifecycle-only
+python run_all_tests.py --playwright-smoke-only
+python run_all_tests.py --playwright-features-only
+python run_all_tests.py --playwright-regression-only
+python run_all_tests.py --docker-only
+```
+
+### Browser Runtime WebSocket Config
+
+`config.js` must not hardcode service port `8001`. The hosting page supplies
+the production default through `window.__IJT_RUNTIME__`, and tests can override
+`wsHost`, `wsPort`, or `wsProtocol` through the page URL. This is required for
+the Playwright feature worker pool; do not replace it with static service ports.
+
+### Web Test Backend Manager
+
+`tests/test_infra/backend_manager.py` is the foundation for managed live-suite
+service ownership. It fails on already-open managed ports instead of silently
+adopting shared services, emits backend lifecycle events, and probes health
+through the full WebSocket -> OPC UA contract: handshake, `connect to`,
+`namespaces` envelope validation, and `terminate connection`. The current root
+split already applies owned ports at the runner level; future work can migrate
+per-test lifecycle internals to this manager without returning to a monolithic
+suite.
+
+### Playwright Endpoint Readiness
+
+Endpoint tab buttons expose durable readiness attributes:
+`data-opcua-connection-state` and `data-opcua-subscription-state`.
+Playwright helpers must wait on those attributes becoming `connected`.
+Browser WebSocket disconnects mark existing endpoint tabs disconnected; when
+the WebSocket reconnects, active endpoint managers reissue their OPC UA connect
+request and drive the same attributes back to `connected` after the backend
+confirms connection and subscription.
+Do not use visual CSS classes such as `.onColor` as connection readiness
+signals; those classes are presentation details for the status display.
+
+### Playwright Selector Contracts
+
+Use semantic selectors for controls that can move inside reusable header
+widgets. The Consolidated Result dropdowns expose
+`data-ijt-result-control="type"`, `"result"`, and `"view"`; Playwright tests
+must use those hooks instead of positional selectors such as
+`.resultheader select:first-of-type`.
+
+Use the rendered tab label exactly. The address-space tab is `Address Space`
+with a space, not `AddressSpace`.
+Address-space expansion tests must use stable node identity metadata:
+`data-opcua-node-id`, `data-opcua-browse-name`, and normalized
+`data-opcua-node-class`. The first visible tree button may already be open or
+may be a leaf, so treating the first button click as "expand" is incorrect.
+Use explicit browse-name/node-id helpers such as `expandByBrowseName(['Server'])`
+and assert named children such as `ServerStatus`.
+
+Direct backend WebSocket E2E tests validate the backend response envelope. The
+`namespaces` command returns `data.namespaces`; the `browse` command returns
+`data.nodes`. Do not assert that `resp.data` itself is the array.
+Namespace assertions must use real namespace URIs such as
+`http://opcfoundation.org/UA/`, `http://opcfoundation.org/UA/IJT/Base/`, and
+`http://opcfoundation.org/UA/IJT/Tightening/`; do not assert the non-URI token
+`OpcUa`.
+
+Simulator method buttons must render valid default values for required numeric
+arguments. `SimulateEvents` and `SimulateConditions` default to event type `1`,
+and `SimulateBulkEvents` defaults to event type `1` and count `3`.
 
 ---
 
@@ -398,23 +479,39 @@ Runs Python unit + integration tests, JS unit tests, ESLint, Bandit, mypy, pip-a
 5. **Never** use raw string connection states in JS — use `CONNECTION_STATES` enum.
 6. **Never** change linked-value object shape `{ type, value, link }`.
 7. Treat `scripts/create_structure.py` as scaffolding only; do not run it as part of normal development.
+8. **Never** use visual CSS classes such as `.onColor` as Playwright endpoint readiness; use endpoint tab `data-opcua-*` state attributes.
+9. **Never** use positional result-header selectors in Playwright; use `data-ijt-result-control`.
+10. **Never** assert raw arrays for backend WS `namespaces` / `browse`; assert `data.namespaces` / `data.nodes`.
+11. **Never** send empty numeric simulator method arguments from the Web UI; define a valid default or require user input before calling.
+12. **Never** include local virtualenvs or generated test artifacts in Docker build context; keep `.venv_test/`, `.venv/`, `node_modules/`, `test-results/`, and `tmp/` ignored by `.dockerignore`.
+13. **Never** reintroduce a broad root `webclient-live` suite; add or adjust the narrow live/browser suite that owns the affected test type and service lifecycle.
 
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPCUA_TEST_ENDPOINT` | `opc.tcp://localhost:40451` | OPC UA server endpoint for live tests |
+| `OPCUA_TEST_ENDPOINT` | `opc.tcp://localhost:40451` | OPC UA server endpoint for direct live tests; runner auto-launch uses `opc.tcp://localhost:40463` |
 | `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | Runtime OPC UA server override; when set, auto-launch is skipped |
 | `WS_PORT` | `8001` | WebSocket backend port |
+| `WS_TEST_URL` | `ws://localhost:8001` | Test WebSocket URL; root split suites override this per suite |
+| `UI_TEST_PORT` | `3000` | Playwright static UI server port; root split suites override this per browser suite |
+| `UI_TEST_BASE_URL` | `http://127.0.0.1:3000` | Playwright base URL; root split suites override this per browser suite |
 | `IS_DOCKER` | (unset) | Set to `true` inside Docker containers; skips venv creation |
 | `OPCUA_SIMULATOR_EXE` | (unset) | Path to simulator binary for auto-launch |
+| `IJT_DOCKER_BUILD_TIMEOUT` | `1200` | Docker image build timeout in seconds |
+| `IJT_DOCKER_TIMEOUT` | `90` | Docker HTTP readiness timeout in seconds |
 
 ### Server Auto-Launch & Port Isolation
 
-This client's test runner auto-launches a dedicated server instance on port **40463** (copy-and-patch
-mechanism — copies the binary, patches `server_configuration.json`, and manages the full lifecycle).
-Port 40451 is never used by this test runner.
+This client's split live suites auto-launch dedicated server instances on
+assigned root-runner ports (starting at **40463**) through the copy-and-patch
+mechanism: copy the binary, patch `server_configuration.json`, and manage the
+process lifecycle. Port 40451 is never used by this test runner.
+When the runner sets `OPCUA_TEST_ENDPOINT`, the WebSocket backend serves that endpoint as the browser
+`LOCAL` connection point for Playwright so UI tests connect to the same isolated server as direct tests.
+`OPCUA_SERVER_URL` follows the same runtime override path for local validation; leave it unset for normal
+production/browser use unless you intentionally want to replace the served `LOCAL` endpoint.
 
 For the full port assignment table, auto-launch mechanics, and venv rationale, see
 [`docs/TEST_TIERS.md`](../../../../docs/TEST_TIERS.md).

@@ -29,7 +29,7 @@ function valuesMatch (left, right, caseInsensitive = false) {
  */
 export default class ServerGraphics extends BasicScreen {
   constructor (webSocketManager, endpointTabGenerator, settings) {
-    super('+')
+    super('Servers')
     this.tabHelpText = 'Manage OPC UA server endpoints. Add, edit, save, and connect to server profiles.'
     this.backGround.classList.add('serversScreen')
     this.webSocketManager = webSocketManager
@@ -146,7 +146,8 @@ export default class ServerGraphics extends BasicScreen {
       }
       const newConnection = new EndpointGraphics(point.name, settings)
       newConnection.instantiate(point.address, socket)
-      endpointTabGenerator.generateTab(newConnection, 1, true)
+      const endpointTab = endpointTabGenerator.generateTab(newConnection, 1, true)
+      newConnection.bindEndpointTab(endpointTab)
     }
 
     const disconnect = (point, endpointTabGenerator) => {

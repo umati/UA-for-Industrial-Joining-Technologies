@@ -17,6 +17,7 @@ const MAX_SEND_QUEUE = 500  // cap outbound buffer to prevent unbounded memory g
 export class WebSocketManager {
   constructor (establishedCallback, websocketUrl) {
     this.subscribers = {}
+    this.connectionStateSubscribers = []
     this.connection = false
     this.websocketUrl = websocketUrl || 'ws://localhost:8001/'
     this.establishedCallback = establishedCallback
@@ -39,9 +40,9 @@ export class WebSocketManager {
 
     this.websocket.onopen = () => {
       ijtLog.info('WebSocket connected')
-      this.connection = true
       this._reconnectAttempt = 0
       this._reconnecting = false
+      this._setConnectionState(true)
       establishedCallback(this)
       // Flush messages that were queued during reconnect
       while (this._sendQueue.length > 0) {
@@ -52,13 +53,13 @@ export class WebSocketManager {
 
     this.websocket.onclose = (evt) => {
       ijtLog.warn(`WebSocket closed (code=${evt.code})`)
-      this.connection = false
+      this._setConnectionState(false)
       this._scheduleReconnect()
     }
 
     this.websocket.onerror = (err) => {
       ijtLog.error('WebSocket error', err)
-      this.connection = false
+      this._setConnectionState(false)
       // onclose will fire after onerror — reconnect is handled there
     }
 
@@ -122,6 +123,34 @@ export class WebSocketManager {
       this.subscribers[ep][type] = []
     }
     this.subscribers[ep][type].push(callback)
+  }
+
+  subscribeConnectionState (callback) {
+    if (typeof callback !== 'function') {
+      return () => {}
+    }
+    this.connectionStateSubscribers.push(callback)
+    return () => {
+      this.connectionStateSubscribers = this.connectionStateSubscribers.filter((cb) => cb !== callback)
+    }
+  }
+
+  _setConnectionState (connected) {
+    if (this.connection === connected) {
+      return
+    }
+    this.connection = connected
+    this._notifyConnectionState(connected)
+  }
+
+  _notifyConnectionState (connected) {
+    for (const callback of [...this.connectionStateSubscribers]) {
+      try {
+        callback(connected)
+      } catch (error) {
+        ijtLog.error('WebSocket connection-state subscriber failed:', error)
+      }
+    }
   }
 
   unsubscribe (endpoint, type, callback) {

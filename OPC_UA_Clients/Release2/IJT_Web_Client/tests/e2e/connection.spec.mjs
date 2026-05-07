@@ -5,7 +5,7 @@
  * Verifies every command the frontend sends: connect, namespaces, read,
  * browse, pathtoid, subscribe, methodcall, terminate.
  *
- * Requires: backend on ws://localhost:8001 + OPC UA server on port 40451.
+ * Requires: backend on WS_TEST_URL + OPC UA server on OPCUA_TEST_ENDPOINT.
  */
 import { test, expect } from './e2e-fixtures.mjs'
 
@@ -28,7 +28,7 @@ test('WS: terminate connection closes without error', async ({ ws }) => {
   await ws.send('connect to')
   // terminate is fire-and-forget — just verify it doesn't throw
   ws.sendNoWait('terminate connection')
-  await new Promise((r) => setTimeout(r, 500))
+  await new Promise((resolve) => setTimeout(resolve, 500))
 })
 
 // ── namespace discovery ───────────────────────────────────────────────────────
@@ -37,11 +37,14 @@ test('WS: namespaces returns array containing UA and IJT namespace', async ({ ws
   await ws.send('connect to')
   const resp = await ws.send('namespaces')
   expect(resp.data?.exception).toBeUndefined()
-  const ns = resp.data
+  const ns = resp.data?.namespaces
   expect(Array.isArray(ns)).toBe(true)
-  const flat = ns.map((n) => String(n)).join(',')
-  expect(flat).toContain('OpcUa')            // standard UA namespace
-  expect(flat.toLowerCase()).toContain('urn') // at minimum one URN
+  const namespaceUris = ns.map((n) => String(n))
+  // Release2 simulator contract: the live server must expose OPC UA plus IJT companion namespaces.
+  expect(namespaceUris).toContain('http://opcfoundation.org/UA/')
+  expect(namespaceUris).toContain('http://opcfoundation.org/UA/IJT/Base/')
+  expect(namespaceUris).toContain('http://opcfoundation.org/UA/IJT/Tightening/')
+  expect(namespaceUris.some((uri) => uri.startsWith('urn:'))).toBe(true)
 })
 
 // ── node read ─────────────────────────────────────────────────────────────────
@@ -71,8 +74,8 @@ test('WS: browse Objects node returns child nodes', async ({ ws }) => {
   await ws.send('connect to')
   const resp = await ws.send('browse', { nodeid: 'ns=0;i=85' })
   expect(resp.data?.exception).toBeUndefined()
-  expect(Array.isArray(resp.data)).toBe(true)
-  expect(resp.data.length).toBeGreaterThan(0)
+  expect(Array.isArray(resp.data?.nodes)).toBe(true)
+  expect(resp.data.nodes.length).toBeGreaterThan(0)
 })
 
 test('WS: browse with details=true returns richer data', async ({ ws }) => {
@@ -101,7 +104,7 @@ test('WS: full simulation flow — all 4 methods succeed', async ({ ws }) => {
   expect(browseResp.data?.exception).toBeUndefined()
 
   // Let results/events propagate after subscription
-  await new Promise((r) => setTimeout(r, 2_000))
+  await new Promise((resolve) => setTimeout(resolve, 2_000))
 
   const events = ws.events
   expect(events.length, 'Expected at least one OPC UA event after connecting').toBeGreaterThanOrEqual(0)

@@ -21,7 +21,8 @@ RUN pip install --upgrade pip --no-cache-dir && \
 ENV IS_DOCKER=true \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app/src
+    PYTHONPATH=/app/src \
+    npm_config_update_notifier=false
 
 # Copy dependency manifests first for better layer caching
 COPY requirements.txt requirements-dev.txt* ./
@@ -35,7 +36,7 @@ FROM base AS test
 ENV NODE_ENV=development
 
 RUN pip install --no-cache-dir -r requirements-dev.txt && \
-    (npm ci || npm install --legacy-peer-deps)
+    (npm ci --no-audit --no-fund || npm install --legacy-peer-deps --no-audit --no-fund)
 
 COPY . .
 
@@ -46,7 +47,7 @@ FROM base AS production
 
 ENV NODE_ENV=production
 
-RUN npm ci --omit=dev || npm install --legacy-peer-deps --omit=dev
+RUN npm ci --omit=dev --no-audit --no-fund || npm install --legacy-peer-deps --omit=dev --no-audit --no-fund
 
 # Copy the rest of the project
 COPY . .

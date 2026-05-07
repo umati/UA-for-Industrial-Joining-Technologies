@@ -1,5 +1,5 @@
 """
-Live OPC UA method-call tests — IJT Tightening Server (opc.tcp://localhost:40451)
+Live OPC UA method-call tests — IJT Tightening Server (OPCUA_TEST_ENDPOINT)
 
 Infrastructure mirrors IJT_Console_Client/opcua_client.py exactly:
   * load_type_definitions() then load_data_type_definitions() (same order)
@@ -49,7 +49,7 @@ apply_send_request_timeout_patch()
 
 # asyncio_default_fixture_loop_scope = module is set in pyproject.toml for all async tests
 
-OPCUA_URL = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
+OPCUA_URL = os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{os.getenv('OPCUA_SERVER_PORT', '40451')}")
 NS = 1
 NS_MACHINERY = "http://opcfoundation.org/UA/Machinery/Result/"
 NS_IJT_BASE = "http://opcfoundation.org/UA/IJT/Base/"

@@ -63,6 +63,7 @@ unit stage and is currently 95%.
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
 `semgrep` (static analysis), `pyright` (strict type checking — **advisory, non-blocking**), `detect-secrets` (secrets).
 pip-audit uses the PyPI JSON endpoint preflight, local project cache, spinner disabled, and short timeouts; network/TLS/timeout outcomes are SKIP, not PASS/FAIL.
+The runner refreshes `pip` before the requirements-hash fast path so stale bootstrap tooling does not create false CVE failures.
 Pyright is configured in `pyproject.toml` to use `.venv_test` so installed project dependencies are resolved consistently during local runner checks.
 
 A **Python pytest suite** that validates an OPC UA server implementing the
@@ -154,7 +155,24 @@ Objects/
         │   └── SendSimulatedBulkResults(...)
         └── SimulateEventsAndConditions/
             ├── SimulateEvents(eventType:UInt32)          ← 1-60, fires 1 event
+            ├── SimulateConditions(eventType:UInt32)      ← 1-60, raises retained condition
             └── SimulateBulkEvents(eventType:UInt32, count:UInt32)
+```
+
+Event and condition validation has two layers:
+- `conformance/test_event_condition_catalog.py` walks every simulator id
+  `1..60` by use-case category and verifies each id as a
+  `JoiningSystemEventType` and as a retained `JoiningSystemConditionType`.
+- `conformance/test_joining_system_condition_methods.py` samples standard OPC
+  UA condition methods against received `JoiningSystemConditionType`
+  notifications: Acknowledge, Confirm, AddComment, Enable/Disable, invalid
+  EventId rejection, and ConditionRefresh.
+
+Focused checks against a locally running Debug server:
+
+```bash
+python -m pytest conformance/test_event_condition_catalog.py conformance/test_joining_system_condition_methods.py -q
+python -m pytest conformance/test_events.py events -q
 ```
 
 ---
@@ -322,10 +340,11 @@ Use `helpers.skip_reasons.skip_not_supported(...)`,
 hand-written generic text. JUnit summary normalization accepts direct
 `Not Supported` messages for compatibility, but new skip sites should use the
 helper APIs.
-`JoiningSystemConditionType` Not Supported wording is reserved for
-Acknowledgeable Events/Conditions such as `JoiningSystemConditionType` and
-advanced OPC UA Alarms. It must not imply that `JoiningSystemEventType`
-ConditionClass fields are unsupported.
+`JoiningSystemConditionType` Not Supported wording is reserved for servers or
+packages that do not expose retained Acknowledgeable Conditions. It must not
+imply that `JoiningSystemEventType` ConditionClass fields are unsupported. When
+`SimulateConditions` is present, condition tests should use that trigger and
+validate the received condition `NodeId` plus `EventId` method flow.
 
 ### GetLatestResult Return Convention
 `GetLatestResult` returns **three** output arguments: `[ResultHandle: UInt32, Result: ResultDataType, Error: Int32]`.

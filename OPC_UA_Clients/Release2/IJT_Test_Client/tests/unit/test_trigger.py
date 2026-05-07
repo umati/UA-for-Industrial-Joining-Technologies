@@ -187,6 +187,12 @@ class TestExternalEventTrigger:
         )
         assert outcome.triggered is False
 
+    @pytest.mark.asyncio
+    async def test_trigger_condition_returns_not_triggered(self, trigger):
+        outcome = await trigger.trigger_condition(event_type=10)
+        assert outcome.triggered is False
+        assert outcome.method == "SimulateConditions"
+
 
 # ---------------------------------------------------------------------------
 # Factory helpers
@@ -419,6 +425,20 @@ class TestSimulatorEventTrigger:
             outcome = await trigger.trigger_bulk_events(event_type=1, count=10, from_seq=1, to_seq=10)
 
         assert outcome.triggered is True
+
+    @pytest.mark.asyncio
+    async def test_trigger_condition_success(self):
+        folder = AsyncMock()
+        folder.call_method = AsyncMock(return_value=[])
+
+        with patch("helpers.trigger.find_child_by_browse_name", new_callable=AsyncMock) as mock_find:
+            mock_find.return_value = _make_mock_method_node()
+            trigger = SimulatorEventTrigger(None, folder, ns_app=2)
+            outcome = await trigger.trigger_condition(event_type=10)
+
+        assert outcome.triggered is True
+        call_args = folder.call_method.call_args[0]
+        assert call_args[1].Value == 10
 
     @pytest.mark.asyncio
     async def test_trigger_event_ua_error(self):

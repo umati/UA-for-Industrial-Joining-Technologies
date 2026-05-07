@@ -145,6 +145,8 @@ export default class ResultGraphics extends BasicScreen {
     this.selectResultType.classList.add('resultHeaderItem')
     this.selectResultType.title = 'Filter results by classification.'
     this.selectResultType.select.title = 'Choose which result type to list.'
+    // E2E selectors consume these stable control hooks; keep them with the rendered controls.
+    this.selectResultType.select.setAttribute('data-ijt-result-control', 'type')
     this.headerLeft.appendChild(this.selectResultType)
 
     // Result selection dropdown
@@ -157,6 +159,7 @@ export default class ResultGraphics extends BasicScreen {
     this.selectResultDropdown.classList.add('resultHeaderItem')
     this.selectResultDropdown.title = 'Choose which result root to render.'
     this.selectResultDropdown.select.title = 'Select unresolved, latest, or a specific result.'
+    this.selectResultDropdown.select.setAttribute('data-ijt-result-control', 'result')
     this.headerLeft.appendChild(this.selectResultDropdown)
 
     // display type dummy selection dropdown
@@ -170,6 +173,7 @@ export default class ResultGraphics extends BasicScreen {
     this.dummyDropdown.classList.add('resultHeaderItem')
     this.dummyDropdown.title = 'Change how nested result hierarchy is displayed.'
     this.dummyDropdown.select.title = 'Hierarchical shows tree branches. Enveloped shows full-width nested boxes.'
+    this.dummyDropdown.select.setAttribute('data-ijt-result-control', 'view')
     this.headerLeft.appendChild(this.dummyDropdown)
 
     this.display = document.createElement('div')

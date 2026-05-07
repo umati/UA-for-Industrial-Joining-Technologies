@@ -33,6 +33,11 @@ class EventCollector:
         )  # bounded; prevents unbounded memory growth in long sessions
         self._subscription: Optional[Any] = None
 
+    @property
+    def subscription_id(self) -> int | None:
+        """Return the server-assigned subscription id, if subscribed."""
+        return getattr(self._subscription, "subscription_id", None)
+
     # ── asyncua handler interface ──────────────────────────────────────────
     def event_notification(self, event) -> None:
         """
@@ -138,7 +143,7 @@ class EventCollector:
         if the timeout elapses before enough events arrive).
         """
         results: List = []
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout_s
         while len(results) < count:
             remaining = deadline - loop.time()

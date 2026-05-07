@@ -5,7 +5,7 @@
  * already requires Node >= 24 (package.json engines field).
  *
  * Usage:
- *   const client = new WsTestClient('ws://localhost:8001', 'opc.tcp://localhost:40451')
+ *   const client = new WsTestClient(process.env.WS_TEST_URL, process.env.OPCUA_TEST_ENDPOINT)
  *   await client.connect()
  *   const resp = await client.send('namespaces')
  *   await client.close()

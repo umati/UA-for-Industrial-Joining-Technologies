@@ -100,6 +100,34 @@ describe('WebSocketManager', () => {
     expect(cb2).toHaveBeenCalledOnce()
   })
 
+  it('notifies websocket connection-state subscribers on state changes only', () => {
+    const manager = new WebSocketManager(() => {}, 'ws://test')
+    const ws = MockWebSocket.instances[0]
+    const callback = vi.fn()
+
+    manager.subscribeConnectionState(callback)
+
+    ws.open()
+    ws.onerror?.(new Error('socket error'))
+    ws.onclose?.({ code: 1006 })
+
+    expect(callback).toHaveBeenCalledTimes(2)
+    expect(callback).toHaveBeenNthCalledWith(1, true)
+    expect(callback).toHaveBeenNthCalledWith(2, false)
+  })
+
+  it('unsubscribes websocket connection-state callbacks', () => {
+    const manager = new WebSocketManager(() => {}, 'ws://test')
+    const ws = MockWebSocket.instances[0]
+    const callback = vi.fn()
+    const unsubscribe = manager.subscribeConnectionState(callback)
+
+    unsubscribe()
+    ws.open()
+
+    expect(callback).not.toHaveBeenCalled()
+  })
+
   it('unsubscribe is a no-op for unknown endpoint or type', () => {
     const manager = new WebSocketManager(() => {}, 'ws://test')
     expect(() => manager.unsubscribe('unknown-ep', 'unknown-cmd', vi.fn())).not.toThrow()
@@ -150,6 +178,7 @@ describe('WebSocketManager', () => {
 
     // Message without a command field
     expect(() => ws.emitMessage({ data: 'no-command-field' })).not.toThrow()
+    expect(manager.connection).toBe(true)
   })
 
   it('emitting invalid JSON does not crash the manager', () => {

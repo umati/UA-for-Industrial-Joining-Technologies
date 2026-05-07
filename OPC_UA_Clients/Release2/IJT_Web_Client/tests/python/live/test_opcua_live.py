@@ -2,8 +2,8 @@
 Live functional tests against the running OPC UA IJT Server and Python backend.
 
 These tests verify the complete stack:
-  1. OPC UA layer  — direct asyncua connection to opc.tcp://localhost:40451
-  2. WebSocket layer — Python backend at ws://localhost:8001
+  1. OPC UA layer  — direct asyncua connection to OPCUA_TEST_ENDPOINT
+  2. WebSocket layer — Python backend at WS_TEST_URL
   3. Integration   — full simulation→event→serialization pipeline
 
 Both servers are auto-started by conftest.py if not already running.
@@ -54,10 +54,8 @@ apply_send_request_timeout_patch()
 # Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-OPCUA_ENDPOINT = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
-WS_URL = os.getenv("WS_TEST_URL", "ws://localhost:8001")
-
-_OPCUA_HOST, _OPCUA_PORT = "localhost", 40451
+OPCUA_ENDPOINT = os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{os.getenv('OPCUA_SERVER_PORT', '40451')}")
+WS_URL = os.getenv("WS_TEST_URL", f"ws://localhost:{os.getenv('WS_PORT', '8001')}")
 
 IJT_NAMESPACE_URI = "http://opcfoundation.org/UA/IJT/Base/"
 

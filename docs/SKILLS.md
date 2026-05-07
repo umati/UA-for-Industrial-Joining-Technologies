@@ -181,9 +181,9 @@ All Python runner scripts (`run_all_tests.py`) use a `_StepResult` class with fo
 
 **pip-audit preflight rule**: pip-audit must preflight `https://pypi.org/pypi/pip/json`, not the PyPI root page, and must use `--progress-spinner off`, `--timeout 5`, and a project-local `--cache-dir`. Local parent-process timeout should be short (30s); CI can be longer (90s). Network/TLS/timeout outcomes are advisory skips, not PASS and not FAIL.
 
-**npm install noise rule**: Runner-managed dependency installs must pass `--no-audit --no-fund` to `npm ci` / `npm install` so repeated local and CI runs do not print funding/audit summaries. Keep `npm audit` as a separate explicit security step; do not rely on install-time audit output.
+**npm install noise rule**: Runner-managed and Dockerfile dependency installs must pass `--no-audit --no-fund` to `npm ci` / `npm install` so repeated local and CI runs do not print funding/audit summaries. Dockerfile npm commands should also disable the npm update notifier. Child runners that invoke npm directly should use a repo-local npm cache and disable the npm update notifier when they own the subprocess environment. Keep `npm audit` as a separate explicit security step; do not rely on install-time audit output.
 
-**Root child environment rule**: The root orchestrator sets repo-local defaults for Python/npm child-process caches (`PIP_CACHE_DIR`, `npm_config_cache`) under `tmp/runner-env/`, plus UTF-8 Python output. Do not override `DOTNET_CLI_HOME` or `NUGET_PACKAGES` by default: local/offline runs should keep using standard .NET/NuGet behavior unless the caller explicitly chooses another location. Explicit caller-provided environment variables still win.
+**Root child environment rule**: The root orchestrator sets repo-local defaults for Python/npm child-process caches (`PIP_CACHE_DIR`, `npm_config_cache`) under `tmp/runner-env/`, disables the npm update notifier, and forces UTF-8 Python output. Do not override `DOTNET_CLI_HOME` or `NUGET_PACKAGES` by default: local/offline runs should keep using standard .NET/NuGet behavior unless the caller explicitly chooses another location. Explicit caller-provided environment variables still win.
 
 The invariant is unit-tested in `tests/unit/test_runner_step_result.py` in both Console Client and Test Client:
 - `test_semgrep_parse_failure_sets_warn_not_fail` — parse failure must set `warn=True`
@@ -284,7 +284,7 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
 - **Stack**: Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vitest, ESLint, Docker
-- **Tests**: Python unit (`tests/python/unit/`), JS unit (`src/javascripts/`), live (`tests/python/live/` — excluded from default run, requires OPC UA server)
+- **Tests**: Python unit (`tests/python/unit/`), JS unit (`src/javascripts/`), and split live suites for Python OPC UA, Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and Playwright regression. Each live/browser suite owns its own OPC UA/WS/UI ports; root Phase 2 runs Docker as a separate `webclient-docker-smoke` suite.
 - **One test command**: `python run_all_tests.py`
 - **Docker**: healthy on HTTP:3000 + WS:8001
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md`
@@ -380,12 +380,28 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `csharp-vuln` | `ci.yml` | — | No server (NuGet scan only) |
 | `server-smoke-windows` | `ci.yml` | 40451 | Windows native EXE (server self-test) |
 | `server-smoke-docker` | `integration.yml` | 40451 | Docker Linux (server self-test) |
+| `server-linux-package-smoke` | local root runner | 40465 | Docker image built from Linux package ZIP |
+| `webclient-live-python-opcua` | local root runner | OPC UA 40463 | Direct Python OPC UA and method tests |
+| `webclient-live-python-backend` | local root runner | OPC UA 40466 / WS 8002 | Python WebSocket backend contract and integration tests |
+| `webclient-live-python-lifecycle` | local root runner | OPC UA 40467 / WS 8003 | WebSocket lifecycle tests isolated from backend contract tests |
+| `webclient-live-e2e-smoke` | local root runner | HTTP 3004 | Playwright smoke project |
+| `webclient-live-e2e-features` | local root runner | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs, four isolated browser workers |
+| `webclient-live-e2e-regression` | local root runner | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec |
+| `webclient-docker-smoke` | local root runner | HTTP 3000 / WS 8001 | Web Client production Docker image/readiness smoke |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
 | `live-webclient` | `integration.yml` | **40463** | Windows native EXE |
 | `live-console` | `integration.yml` | **40461** | Windows native EXE |
 | `csharp-live` (nightly) | `integration.yml` | **40464** | Windows native EXE |
 
-Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation also exercises the native/default server package path on port 40451.
+Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation exercises the native/default server package path on port 40451. When Docker is running, it also runs `server-linux-package-smoke` on port 40465 to build the Docker image from the Linux ZIP package and smoke-test it. Set `IJT_DOCKER_BUILD_TIMEOUT` if a cold Docker/network environment needs more than the default 1200 seconds.
+The root runner splits Web Client live/browser validation by test type instead
+of using one broad `webclient-live` suite. Python OPC UA, Python WebSocket
+backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and
+Playwright regression are separate suites with owned service ports. Docker
+validation remains `webclient-docker-smoke` with its own timeout.
+The Playwright feature suite is parallelized across four owned backend/server
+pairs. Worker 0 uses the base ports, and workers 1–3 use the next contiguous
+ports, so browser workers never share a WebSocket backend or OPC UA simulator.
 
 > Release 1 Node Client always uses 40451 (fixed — no dynamic port support).
 > Server self-tests (smoke) correctly use 40451 — they test the server in its native configuration.

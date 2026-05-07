@@ -19,8 +19,9 @@ Architecture: Two-phase execution
                             - Server smoke    -> native/default server port (40451)
                             - Console Client  → OPCUA_SERVER_PORT_CONSOLE_CLIENT (40461)
                             - Test Client     → OPCUA_SERVER_PORT_TEST_CLIENT    (40462)
-                            - Web Client      → OPCUA_SERVER_PORT_WEB_CLIENT     (40463)
+                            - Web Client      → dedicated per-suite ports        (40463+)
                             - C# Client       → OPCUA_SERVER_PORT_CSHARP_CLIENT  (40464)
+                            - Linux package   → Docker smoke port (40465)
                           Release 2 clients do not share 40451.
 
 Usage:
@@ -29,11 +30,14 @@ Usage:
   python run_all_tests.py --phase2           # server smoke + live tests
   python run_all_tests.py --suite md-hygiene # single suite by name
   python run_all_tests.py --suite server-smoke  # focused server smoke on port 40451
+  python run_all_tests.py --suite server-linux-package-smoke  # Docker smoke on port 40465
   python run_all_tests.py --verbose          # DEBUG-level logging
   python run_all_tests.py --help
 
 Environment variables:
   IJT_SUITE_TIMEOUT     Per-suite timeout in seconds (default: 600)
+  IJT_DOCKER_BUILD_TIMEOUT
+                        Docker image build timeout in seconds (default: 1200)
 """
 
 from __future__ import annotations
@@ -49,6 +53,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -169,6 +174,7 @@ _NATIVE_BINARY_WIN = SERVER_DIR / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_dem
 _NATIVE_BINARY_LINUX = (
     SERVER_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
 )
+_LINUX_PACKAGE_ZIP = SERVER_DIR / "OPC_UA_IJT_Server_Simulator_Linux.zip"
 CSHARP_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_CSharp_Client"
 CONSOLE_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Console_Client"
 TEST_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Test_Client"
@@ -194,8 +200,24 @@ _OPTIONAL_IMPORT_GUARD_PATHS: tuple[Path, ...] = _RUNNER_SCRIPT_PATHS + (
 # ---------------------------------------------------------------------------
 OPCUA_SERVER_PORT_CONSOLE_CLIENT = 40461  # server port the Console Client connects to
 OPCUA_SERVER_PORT_TEST_CLIENT = 40462  # server port the Test Client connects to
-OPCUA_SERVER_PORT_WEB_CLIENT = 40463  # server port the Web Client connects to
+OPCUA_SERVER_PORT_WEB_CLIENT = 40463  # first Web Client live-suite server port
 OPCUA_SERVER_PORT_CSHARP_CLIENT = 40464  # server port the C# Client connects to
+OPCUA_SERVER_PORT_SERVER_DOCKER = 40465  # Docker/Linux package smoke test
+OPCUA_SERVER_PORT_WEB_CLIENT_BACKEND = 40466
+OPCUA_SERVER_PORT_WEB_CLIENT_LIFECYCLE = 40467
+OPCUA_SERVER_PORT_WEB_CLIENT_E2E_SMOKE = 40468
+OPCUA_SERVER_PORT_WEB_CLIENT_E2E_FEATURES = 40469
+OPCUA_SERVER_PORT_WEB_CLIENT_E2E_REGRESSION = 40480
+WEB_CLIENT_WS_PORT_BACKEND = 8002
+WEB_CLIENT_WS_PORT_LIFECYCLE = 8003
+WEB_CLIENT_WS_PORT_E2E_SMOKE = 8004
+WEB_CLIENT_WS_PORT_E2E_FEATURES = 8005
+WEB_CLIENT_WS_PORT_E2E_REGRESSION = 8010
+WEB_CLIENT_UI_PORT_E2E_SMOKE = 3004
+WEB_CLIENT_UI_PORT_E2E_FEATURES = 3005
+WEB_CLIENT_UI_PORT_E2E_REGRESSION = 3006
+WEB_CLIENT_E2E_FEATURE_WORKERS = 4
+WEB_CLIENT_RESULTS_DIR = WEB_CLIENT_DIR / "test-results"
 
 # Release 1 / Node client — legacy default, unchanged for backward compatibility.
 # Smoke / utility suites also use this port: they specifically test the server's
@@ -207,7 +229,10 @@ IS_WINDOWS = sys.platform == "win32"
 IS_CI = bool(os.getenv("CI"))
 
 SUITE_TIMEOUT = int(os.getenv("IJT_SUITE_TIMEOUT", "600"))  # 10 min default
+DOCKER_BUILD_TIMEOUT = int(os.getenv("IJT_DOCKER_BUILD_TIMEOUT", "1200"))
 _RUNNER_ENV_DIR = REPO_ROOT / "tmp" / "runner-env"
+_SERVER_SMOKE_REQUIREMENTS_LOCK = threading.Lock()
+_server_smoke_requirements_ready = False
 
 # ---------------------------------------------------------------------------
 # Suite result
@@ -332,6 +357,7 @@ def _run_captured(
     run_env.setdefault("DOTNET_ADD_GLOBAL_TOOLS_TO_PATH", "0")
     run_env.setdefault("DOTNET_GENERATE_ASPNET_CERTIFICATE", "false")
     run_env.setdefault("npm_config_cache", str(_RUNNER_ENV_DIR / "npm-cache"))
+    run_env.setdefault("npm_config_update_notifier", "false")
     run_env.setdefault("PIP_CACHE_DIR", str(_RUNNER_ENV_DIR / "pip-cache"))
 
     # On Unix, place the child in its own session so killpg can reach the tree.
@@ -589,6 +615,21 @@ def _ensure_docker_running() -> None:
 
     log.error("Docker Desktop did not start within 60s.")
     sys.exit(1)
+
+
+def _docker_daemon_running(docker: str) -> bool:
+    try:
+        return (
+            subprocess.run(
+                [docker, "info"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=20,
+            ).returncode
+            == 0
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
 
 
 def _start_server(no_rebuild: bool = False) -> bool:
@@ -1318,6 +1359,34 @@ def _suite_md_hygiene() -> SuiteResult:
 # ---------------------------------------------------------------------------
 
 
+def _ensure_server_smoke_requirements(python: str, outputs: list[str], label: str) -> bool:
+    """Install smoke-test requirements once across parallel server smoke suites."""
+    global _server_smoke_requirements_ready
+    smoke_reqs = SERVER_DIR / "tests" / "requirements.txt"
+    if not smoke_reqs.exists():
+        return True
+    with _SERVER_SMOKE_REQUIREMENTS_LOCK:
+        if _server_smoke_requirements_ready:
+            return True
+        rc_pip, out = _run_captured(
+            [
+                python,
+                "-m",
+                "pip",
+                "install",
+                "-q",
+                "--disable-pip-version-check",
+                "-r",
+                str(smoke_reqs),
+            ],
+            cwd=SERVER_DIR,
+            label=label,
+        )
+        outputs.append(out)
+        _server_smoke_requirements_ready = rc_pip == 0
+        return _server_smoke_requirements_ready
+
+
 def _suite_server_smoke() -> SuiteResult:
     """OPC UA server smoke test (TCP connection + basic node browse).
 
@@ -1338,31 +1407,14 @@ def _suite_server_smoke() -> SuiteResult:
     try:
         started_server = _start_server()
 
-        smoke_reqs = SERVER_DIR / "tests" / "requirements.txt"
-        if smoke_reqs.exists():
-            rc_pip, out = _run_captured(
-                [
-                    python,
-                    "-m",
-                    "pip",
-                    "install",
-                    "-q",
-                    "--disable-pip-version-check",
-                    "-r",
-                    str(smoke_reqs),
-                ],
-                cwd=SERVER_DIR,
-                label="pip install (smoke)",
+        if not _ensure_server_smoke_requirements(python, outputs, "pip install (smoke)"):
+            return SuiteResult(
+                name,
+                False,
+                time.monotonic() - t0,
+                output="\n".join(outputs),
+                notes=["pip install failed"],
             )
-            outputs.append(out)
-            if rc_pip != 0:
-                return SuiteResult(
-                    name,
-                    False,
-                    time.monotonic() - t0,
-                    output="\n".join(outputs),
-                    notes=["pip install failed"],
-                )
 
         rc, out = _run_captured(
             [python, str(SMOKE_TEST), "--tcp-timeout", "30"],
@@ -1374,6 +1426,155 @@ def _suite_server_smoke() -> SuiteResult:
     finally:
         if started_server:
             _stop_server()
+
+
+def _suite_server_linux_package_smoke() -> SuiteResult:
+    """Build the Docker image from the Linux ZIP package and smoke-test it."""
+    name = "server-linux-package-smoke"
+    t0 = time.monotonic()
+    outputs: list[str] = []
+    notes: list[str] = []
+
+    docker = _find_cmd(["docker", "docker.exe"])
+    if not docker:
+        return SuiteResult(name, True, skipped=True, notes=["docker not in PATH"])
+    if not _docker_daemon_running(docker):
+        return SuiteResult(name, True, skipped=True, notes=["Docker daemon not running"])
+    if not _LINUX_PACKAGE_ZIP.exists():
+        return SuiteResult(
+            name,
+            False,
+            time.monotonic() - t0,
+            notes=[f"missing package: {_LINUX_PACKAGE_ZIP.name}"],
+        )
+    if not SMOKE_TEST.exists():
+        return SuiteResult(name, True, skipped=True, notes=["smoke_test.py not found"])
+
+    image = "opcua-ijt-server:linux-package-smoke"
+    container = "opcua_ijt_server_linux_package_smoke"
+    port = OPCUA_SERVER_PORT_SERVER_DOCKER
+    endpoint = f"opc.tcp://localhost:{port}"
+
+    subprocess.run(
+        [docker, "rm", "-f", container],
+        cwd=str(SERVER_DIR),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+
+    ok = False
+    try:
+        rc_build, out = _run_captured(
+            [docker, "build", "-t", image, "."],
+            cwd=SERVER_DIR,
+            label="docker build (Linux package smoke)",
+            timeout=DOCKER_BUILD_TIMEOUT,
+        )
+        outputs.append(out)
+        if rc_build != 0:
+            notes.append("docker build failed")
+            return SuiteResult(
+                name,
+                False,
+                time.monotonic() - t0,
+                output="\n".join(outputs),
+                notes=notes,
+            )
+
+        rc_run, out = _run_captured(
+            [
+                docker,
+                "run",
+                "-d",
+                "--rm",
+                "--name",
+                container,
+                "-p",
+                f"{port}:{port}",
+                "-e",
+                f"OPCUA_SERVER_PORT={port}",
+                "-e",
+                "OPCUA_HOSTNAME=localhost",
+                image,
+            ],
+            cwd=SERVER_DIR,
+            label="docker run (Linux package smoke)",
+            timeout=120,
+        )
+        outputs.append(out)
+        if rc_run != 0:
+            notes.append("docker run failed")
+            return SuiteResult(
+                name,
+                False,
+                time.monotonic() - t0,
+                output="\n".join(outputs),
+                notes=notes,
+            )
+
+        if not _wait_for_port(port, timeout=90):
+            rc_logs, out = _run_captured(
+                [docker, "logs", container],
+                cwd=SERVER_DIR,
+                label="docker logs (Linux package smoke)",
+                timeout=60,
+            )
+            outputs.append(out)
+            notes.append(f"server did not open port {port}; docker logs exit={rc_logs}")
+            return SuiteResult(
+                name,
+                False,
+                time.monotonic() - t0,
+                output="\n".join(outputs),
+                notes=notes,
+            )
+
+        python = _current_python()
+        if not _ensure_server_smoke_requirements(
+            python,
+            outputs,
+            "pip install (Linux package smoke)",
+        ):
+            notes.append("pip install failed")
+            return SuiteResult(
+                name,
+                False,
+                time.monotonic() - t0,
+                output="\n".join(outputs),
+                notes=notes,
+            )
+
+        rc_smoke, out = _run_captured(
+            [python, str(SMOKE_TEST), "--endpoint", endpoint, "--tcp-timeout", "30"],
+            cwd=SERVER_DIR,
+            label="smoke_test.py (Linux package Docker)",
+        )
+        outputs.append(out)
+        ok = rc_smoke == 0
+        if not ok:
+            notes.append("smoke test failed")
+            rc_logs, out = _run_captured(
+                [docker, "logs", container],
+                cwd=SERVER_DIR,
+                label="docker logs (Linux package smoke)",
+                timeout=60,
+            )
+            outputs.append(out)
+            notes.append(f"docker logs exit={rc_logs}")
+    finally:
+        rc_rm, out = _run_captured(
+            [docker, "rm", "-f", container],
+            cwd=SERVER_DIR,
+            label="docker cleanup (Linux package smoke)",
+            timeout=60,
+        )
+        outputs.append(out)
+        if rc_rm != 0:
+            notes.append("docker cleanup failed")
+            ok = False
+
+    return SuiteResult(name, ok, time.monotonic() - t0, output="\n".join(outputs), notes=notes)
 
 
 def _suite_csharp_live() -> SuiteResult:
@@ -1424,16 +1625,135 @@ def _suite_testclient_full() -> SuiteResult:
     )
 
 
-def _suite_webclient_live() -> SuiteResult:
-    """Web Client -- Phase 2 (live + integration).  Delegates to sub-project runner.
+def _webclient_live_env(
+    *,
+    suite_name: str,
+    opcua_port: int,
+    ws_port: int | None = None,
+    ui_port: int | None = None,
+    feature_workers: int | None = None,
+) -> dict[str, str]:
+    """Environment for one isolated Web Client live suite.
 
-    No OPCUA_SERVER_URL passed — the WebClient runner owns its server on port 40463.
+    Pass OPCUA_SERVER_PORT, not OPCUA_TEST_ENDPOINT, so the Web Client runner
+    owns server startup and then exports the endpoint to child test processes.
     """
+    env = {
+        "OPCUA_SERVER_PORT": str(opcua_port),
+        "IJT_WEB_TEST_RESULTS_DIR": str(WEB_CLIENT_RESULTS_DIR / suite_name),
+    }
+    if ws_port is not None:
+        env["WS_TEST_URL"] = f"ws://localhost:{ws_port}"
+    if ui_port is not None:
+        env["UI_TEST_PORT"] = str(ui_port)
+        env["UI_TEST_BASE_URL"] = f"http://127.0.0.1:{ui_port}"
+    if feature_workers is not None:
+        env["IJT_PLAYWRIGHT_FEATURE_WORKERS"] = str(feature_workers)
+    return env
+
+
+def _suite_webclient_live_python_opcua() -> SuiteResult:
+    """Web Client direct OPC UA and method tests with an owned simulator."""
     return _delegate_to_runner(
-        name="webclient-live",
+        name="webclient-live-python-opcua",
         runner_dir=WEB_CLIENT_DIR,
-        phase_args=["--phase2"],
-        label="webclient runner (phase2)",
+        phase_args=["--python-opcua-only"],
+        label="webclient runner (python-opcua)",
+        extra_env=_webclient_live_env(
+            suite_name="python-opcua",
+            opcua_port=OPCUA_SERVER_PORT_WEB_CLIENT,
+        ),
+    )
+
+
+def _suite_webclient_live_python_backend() -> SuiteResult:
+    """Web Client Python WebSocket backend contract tests with owned services."""
+    return _delegate_to_runner(
+        name="webclient-live-python-backend",
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--python-backend-only"],
+        label="webclient runner (python-backend)",
+        extra_env=_webclient_live_env(
+            suite_name="python-backend",
+            opcua_port=OPCUA_SERVER_PORT_WEB_CLIENT_BACKEND,
+            ws_port=WEB_CLIENT_WS_PORT_BACKEND,
+        ),
+    )
+
+
+def _suite_webclient_live_python_lifecycle() -> SuiteResult:
+    """Web Client Python WebSocket lifecycle tests with owned services."""
+    return _delegate_to_runner(
+        name="webclient-live-python-lifecycle",
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--python-lifecycle-only"],
+        label="webclient runner (python-lifecycle)",
+        extra_env=_webclient_live_env(
+            suite_name="python-lifecycle",
+            opcua_port=OPCUA_SERVER_PORT_WEB_CLIENT_LIFECYCLE,
+            ws_port=WEB_CLIENT_WS_PORT_LIFECYCLE,
+        ),
+    )
+
+
+def _suite_webclient_live_e2e_smoke() -> SuiteResult:
+    """Web Client Playwright smoke tests with owned runtime ports."""
+    return _delegate_to_runner(
+        name="webclient-live-e2e-smoke",
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--playwright-smoke-only"],
+        label="webclient runner (e2e-smoke)",
+        extra_env=_webclient_live_env(
+            suite_name="e2e-smoke",
+            opcua_port=OPCUA_SERVER_PORT_WEB_CLIENT_E2E_SMOKE,
+            ws_port=WEB_CLIENT_WS_PORT_E2E_SMOKE,
+            ui_port=WEB_CLIENT_UI_PORT_E2E_SMOKE,
+        ),
+    )
+
+
+def _suite_webclient_live_e2e_features() -> SuiteResult:
+    """Web Client Playwright feature specs with owned runtime ports."""
+    return _delegate_to_runner(
+        name="webclient-live-e2e-features",
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--playwright-features-only"],
+        label="webclient runner (e2e-features)",
+        extra_env=_webclient_live_env(
+            suite_name="e2e-features",
+            opcua_port=OPCUA_SERVER_PORT_WEB_CLIENT_E2E_FEATURES,
+            ws_port=WEB_CLIENT_WS_PORT_E2E_FEATURES,
+            ui_port=WEB_CLIENT_UI_PORT_E2E_FEATURES,
+            feature_workers=WEB_CLIENT_E2E_FEATURE_WORKERS,
+        ),
+    )
+
+
+def _suite_webclient_live_e2e_regression() -> SuiteResult:
+    """Web Client Playwright regression spec with owned runtime ports."""
+    return _delegate_to_runner(
+        name="webclient-live-e2e-regression",
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--playwright-regression-only"],
+        label="webclient runner (e2e-regression)",
+        extra_env=_webclient_live_env(
+            suite_name="e2e-regression",
+            opcua_port=OPCUA_SERVER_PORT_WEB_CLIENT_E2E_REGRESSION,
+            ws_port=WEB_CLIENT_WS_PORT_E2E_REGRESSION,
+            ui_port=WEB_CLIENT_UI_PORT_E2E_REGRESSION,
+        ),
+    )
+
+
+def _suite_webclient_docker_smoke() -> SuiteResult:
+    """Web Client container build/readiness smoke with an independent timeout."""
+    return _delegate_to_runner(
+        name="webclient-docker-smoke",
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--docker-only"],
+        label="webclient runner (docker-only)",
+        extra_env={"IJT_WEB_TEST_RESULTS_DIR": str(WEB_CLIENT_RESULTS_DIR / "docker-smoke")},
+        timeout=DOCKER_BUILD_TIMEOUT + 180,
     )
 
 
@@ -1454,10 +1774,17 @@ PHASE1_SUITES: dict[str, object] = {
 
 PHASE2_SUITES: dict[str, object] = {
     "server-smoke": _suite_server_smoke,
+    "server-linux-package-smoke": _suite_server_linux_package_smoke,
     "csharp-live": _suite_csharp_live,
     "console-live": _suite_console_live,
     "testclient-full": _suite_testclient_full,
-    "webclient-live": _suite_webclient_live,
+    "webclient-live-python-opcua": _suite_webclient_live_python_opcua,
+    "webclient-live-python-backend": _suite_webclient_live_python_backend,
+    "webclient-live-python-lifecycle": _suite_webclient_live_python_lifecycle,
+    "webclient-live-e2e-smoke": _suite_webclient_live_e2e_smoke,
+    "webclient-live-e2e-features": _suite_webclient_live_e2e_features,
+    "webclient-live-e2e-regression": _suite_webclient_live_e2e_regression,
+    "webclient-docker-smoke": _suite_webclient_docker_smoke,
 }
 
 # Utility suites — not part of the default parallel Phase 2 run.
@@ -1505,6 +1832,8 @@ def run_phase2(suites: dict) -> list[SuiteResult]:
     Phase 1-only suite cannot overlap with server-smoke on port 40451.
 
     server-smoke validates the native/default server package on port 40451.
+    server-linux-package-smoke validates the Linux ZIP through Docker on port
+    40465 when Docker is running.
     Each Release 2 client suite delegates to its sub-project runner, which fully
     owns its OPC UA server lifecycle on a dedicated port:
 
@@ -1512,6 +1841,7 @@ def run_phase2(suites: dict) -> list[SuiteResult]:
         Test Client      → OPCUA_SERVER_PORT_TEST_CLIENT    (40462)
         Web Client       → OPCUA_SERVER_PORT_WEB_CLIENT     (40463)
         C# Client        → OPCUA_SERVER_PORT_CSHARP_CLIENT  (40464)
+        Linux package    → OPCUA_SERVER_PORT_SERVER_DOCKER  (40465)
 
     Results are emitted as each suite completes; order is non-deterministic
     (fastest finishes first).
@@ -1523,6 +1853,7 @@ def run_phase2(suites: dict) -> list[SuiteResult]:
         ", ".join(suites.keys()),
     )
     results: list[SuiteResult] = []
+    WEB_CLIENT_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     with ThreadPoolExecutor(max_workers=len(suites), thread_name_prefix="phase2") as ex:
         future_to_key: dict = {ex.submit(fn): key for key, fn in suites.items()}  # type: ignore[arg-type]
@@ -1715,7 +2046,7 @@ def _build_parser() -> argparse.ArgumentParser:
     group.add_argument(
         "--phase2",
         action="store_true",
-        help="Phase 2 only: server smoke on 40451 plus live client tests on dedicated ports",
+        help="Phase 2 only: server smoke, Linux package Docker smoke, and live client tests",
     )
     group.add_argument(
         "--suite",
@@ -1756,7 +2087,7 @@ def main() -> int:
         print("Phase 1 suites (parallel, no server):")
         for k in PHASE1_SUITES:
             print(f"  {k}")
-        print("Phase 2 suites (parallel, server smoke on 40451; clients own dedicated ports):")
+        print("Phase 2 suites (parallel, server smoke on 40451; Docker smoke on 40465):")
         for k in PHASE2_SUITES:
             print(f"  {k}")
         if _UTILITY_SUITES:

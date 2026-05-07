@@ -19,12 +19,24 @@ Force flags (override auto-detection):
   --integration  force live OPC UA stage even if server unreachable
   --e2e          force Playwright E2E stage even if WS backend unreachable
   --all          force every optional stage
+  --docker-only  run only Docker smoke
+  --skip-docker  do not run Docker smoke
+  --python-opcua-only          root-runner target: direct OPC UA live tests
+  --python-backend-only        root-runner target: WebSocket backend tests
+  --python-lifecycle-only      root-runner target: WebSocket lifecycle tests
+  --playwright-smoke-only      root-runner target: browser smoke tests
+  --playwright-features-only   root-runner target: browser feature specs
+  --playwright-regression-only root-runner target: browser regression spec
 
 Environment variables (all optional):
   OPCUA_TEST_ENDPOINT   default: opc.tcp://localhost:40463
   WS_TEST_URL           default: ws://localhost:8001
   UI_TEST_BASE_URL      default: http://127.0.0.1:3000
+  IJT_PLAYWRIGHT_FEATURE_WORKERS
+                         feature-suite Playwright worker count (default: 4)
   IJT_DOCKER_TIMEOUT    seconds to wait for Docker HTTP readiness (default: 90)
+  IJT_DOCKER_BUILD_TIMEOUT
+                         seconds to wait for Docker image build (default: 1200)
 """
 
 from __future__ import annotations
@@ -41,6 +53,8 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
+from urllib.parse import urlparse
 
 # Ensure stdout/stderr use UTF-8 on Windows (cp1252 can't encode box-drawing chars)
 if hasattr(sys.stdout, "reconfigure"):
@@ -60,9 +74,22 @@ IS_CI = bool(os.getenv("CI"))
 # running tests never alters the launch environment and vice versa.
 _VENV = ROOT / ".venv_test"
 _TMP_DIR = ROOT / "tmp"
+_NPM_CACHE = _TMP_DIR / "npm-cache"
+_PIP_CACHE = _TMP_DIR / "pip-cache"
 _REQUIREMENTS = ROOT / "requirements.txt"
 _REQUIREMENTS_DEV = ROOT / "requirements-dev.txt"
 _NPM_INSTALL_FLAGS = ["--legacy-peer-deps", "--no-audit", "--no-fund"]
+
+
+def _path_from_env(name: str, default: Path) -> Path:
+    value = os.getenv(name)
+    if not value:
+        return default
+    path = Path(value)
+    return path if path.is_absolute() else ROOT / path
+
+
+_RESULTS_DIR = _path_from_env("IJT_WEB_TEST_RESULTS_DIR", ROOT / "test-results")
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +213,16 @@ def _banner(title: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _subprocess_env(env: dict | None = None) -> dict:
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
+    _NPM_CACHE.mkdir(parents=True, exist_ok=True)
+    run_env.setdefault("npm_config_cache", str(_NPM_CACHE))
+    run_env.setdefault("npm_config_update_notifier", "false")
+    return run_env
+
+
 def _kill_proc_tree(pid: int) -> None:
     """Kill *pid* and all its descendants.
 
@@ -224,7 +261,7 @@ def _run(
         with subprocess.Popen(
             [str(c) for c in cmd],
             cwd=str(cwd),
-            env=env or os.environ.copy(),
+            env=_subprocess_env(env),
             stdin=subprocess.DEVNULL,
         ) as proc:
             try:
@@ -258,7 +295,7 @@ def _run_captured(
         with subprocess.Popen(
             [str(c) for c in cmd],
             cwd=str(cwd),
-            env=env or os.environ.copy(),
+            env=_subprocess_env(env),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -299,7 +336,7 @@ def _run_to_file(
             with subprocess.Popen(
                 [str(c) for c in cmd],
                 cwd=str(cwd),
-                env=env or os.environ.copy(),
+                env=_subprocess_env(env),
                 stdout=fh,
                 stdin=subprocess.DEVNULL,
             ) as proc:
@@ -400,9 +437,14 @@ def _prepare_tmp_dir() -> None:
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
     for child in _TMP_DIR.iterdir():
         name = child.name
-        managed = name in {"pytest", "pytest_tmp", "pip-audit-cache", "ruff-cache"} or name.startswith(
-            "server_instance_"
-        )
+        managed = name in {
+            "pytest",
+            "pytest_tmp",
+            "pip-audit-cache",
+            "pip-cache",
+            "npm-cache",
+            "ruff-cache",
+        } or name.startswith("server_instance_")
         if not managed:
             continue
         with contextlib.suppress(OSError):
@@ -445,6 +487,83 @@ def _parse_ws_host_port(url: str) -> tuple[str, int]:
         host, port_str = clean.rsplit(":", 1)
         return host, int(port_str)
     return clean, 80  # ws default port when none specified
+
+
+def _parse_http_port(url: str) -> int:
+    parsed = urlparse(url)
+    if parsed.port:
+        return parsed.port
+    return 443 if parsed.scheme == "https" else 80
+
+
+def _wait_for_port(host: str, port: int, timeout: int = 30) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _port_open(host, port, timeout=1.0):
+            return True
+        time.sleep(1)
+    return False
+
+
+def _local_host(host: str) -> bool:
+    return host in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+
+
+def _maybe_start_websocket_backend(
+    python: Path,
+    host: str,
+    port: int,
+    *,
+    opcua_endpoint: str | None = None,
+    log_name: str = "websocket-backend.log",
+) -> tuple[bool, bool, subprocess.Popen | None]:
+    """Ensure the local WebSocket backend is listening for Playwright E2E."""
+    if _port_open(host, port, timeout=1.0):
+        return False, True, None
+    if not _local_host(host):
+        _warn(f"Cannot auto-start non-local WebSocket backend at {host}:{port}")
+        return False, False, None
+    if not (ROOT / "index.py").exists():
+        _warn("index.py not found — cannot auto-start WebSocket backend")
+        return False, False, None
+
+    results_dir = _RESULTS_DIR
+    results_dir.mkdir(parents=True, exist_ok=True)
+    log_path = results_dir / log_name
+    env = _subprocess_env({"WS_PORT": str(port)})
+    if opcua_endpoint:
+        env["OPCUA_TEST_ENDPOINT"] = opcua_endpoint
+    _info(f"Starting WebSocket backend for Playwright E2E on :{port}")
+    with open(log_path, "w", encoding="utf-8") as log_file:
+        proc = subprocess.Popen(
+            [str(python), "index.py"],
+            cwd=str(ROOT),
+            env=env,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+        )
+
+    ready_host = "127.0.0.1" if host in {"localhost", "0.0.0.0"} else host
+    if _wait_for_port(ready_host, port, timeout=30):
+        _ok(f"WebSocket backend ready on :{port}")
+        return True, True, proc
+
+    _warn(f"WebSocket backend did not open port {port}; see {log_path}")
+    _stop_websocket_backend(proc)
+    return True, False, None
+
+
+def _stop_websocket_backend(proc: subprocess.Popen | None) -> None:
+    if proc is None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except Exception:
+        proc.kill()
+        with contextlib.suppress(Exception):
+            proc.wait(timeout=5)
 
 
 # ---------------------------------------------------------------------------
@@ -505,20 +624,28 @@ def _stage_pip_install(python: Path) -> StageResult:
         _info("SKIP_VENV_INSTALL=1 — skipping pip install")
         _ensure_precommit_hooks()
         return StageResult("pip-install", 0, duration=time.monotonic() - t0, notes=["skipped via SKIP_VENV_INSTALL"])
+    _PIP_CACHE.mkdir(parents=True, exist_ok=True)
+    pip_env = {**os.environ, "PIP_CACHE_DIR": str(_PIP_CACHE)}
+    # Keep bootstrap tooling current even when dependency files are unchanged.
+    # pip-audit scans the active environment, so stale pip can fail a clean run.
+    _run(
+        [python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
+        label="pip self-upgrade",
+        env=pip_env,
+    )
     hash_file = _VENV / ".req-hash"
     current_hash = _requirements_hash()
     if hash_file.exists() and hash_file.read_text().strip() == current_hash:
         _info("Requirements unchanged — skipping pip install")
         _ensure_precommit_hooks()
         return StageResult("pip-install", 0, duration=time.monotonic() - t0, notes=["requirements unchanged"])
-    # Upgrade pip first to ensure latest version (avoids stale CVE warnings)
-    _run([python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"], label="pip self-upgrade")
     overall_rc = 0
     for req in (_REQUIREMENTS, _REQUIREMENTS_DEV):
         if req.exists():
             rc = _run(
                 [python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--pre", "-r", str(req)],
                 label=f"pip install {req.name}",
+                env=pip_env,
             )
             if rc != 0:
                 overall_rc = rc
@@ -531,7 +658,7 @@ def _stage_pip_install(python: Path) -> StageResult:
 def _stage_python_lint(python: Path) -> StageResult:
     _banner("STAGE 1b  Python static analysis")
     t0 = time.monotonic()
-    results_dir = ROOT / "test-results"
+    results_dir = _RESULTS_DIR
     overall_rc = 0
     notes: list[str] = []
 
@@ -763,7 +890,7 @@ def _stage_python_lint(python: Path) -> StageResult:
 def _stage_python_unit(python: Path) -> StageResult:
     _banner("STAGE 2  Python unit tests (no server needed)")
     t0 = time.monotonic()
-    results_dir = ROOT / "test-results"
+    results_dir = _RESULTS_DIR
     cmd: list = [
         python,
         "-m",
@@ -799,7 +926,7 @@ def _stage_js_lint() -> StageResult:
         _skip("node_modules not found — run npm install first")
         return StageResult("js-lint", 0, skipped=True, notes=["run npm install"])
 
-    results_dir = ROOT / "test-results"
+    results_dir = _RESULTS_DIR
     overall_rc = 0
     notes: list[str] = []
 
@@ -887,7 +1014,7 @@ def _stage_js_unit() -> StageResult:
             return StageResult("js-unit", rc, duration=time.monotonic() - t0, notes=["npm install failed"])
 
     npx = shutil.which("npx") or shutil.which("npx.cmd")
-    results_dir = ROOT / "test-results"
+    results_dir = _RESULTS_DIR
     has_coverage = (ROOT / "node_modules" / "@vitest" / "coverage-v8").exists() or (
         ROOT / "node_modules" / "@vitest" / "coverage-istanbul"
     ).exists()
@@ -935,40 +1062,141 @@ def _stage_python_live(python: Path) -> StageResult:
     return StageResult("python-live", rc, duration=time.monotonic() - t0)
 
 
+def _stage_pytest_group(
+    python: Path,
+    *,
+    name: str,
+    title: str,
+    targets: list[str],
+    timeout: int = 300,
+) -> StageResult:
+    _banner(title)
+    t0 = time.monotonic()
+    results_dir = _RESULTS_DIR
+    results_dir.mkdir(parents=True, exist_ok=True)
+    rc = _run(
+        [
+            python,
+            "-m",
+            "pytest",
+            *targets,
+            "-v",
+            "--tb=short",
+            "--no-header",
+            "--timeout=120",
+            f"--junitxml={results_dir / (name + '.xml')}",
+        ],
+        label=f"pytest {name}",
+        timeout=timeout,
+    )
+    return StageResult(name, rc, duration=time.monotonic() - t0)
+
+
+def _stage_python_opcua(python: Path) -> StageResult:
+    return _stage_pytest_group(
+        python,
+        name="python-opcua",
+        title="STAGE 4a  Python OPC UA live tests",
+        targets=[
+            "tests/python/live/test_opcua_live.py::TestOpcuaDirectConnection",
+            "tests/python/live/test_opcua_live.py::TestOpcuaSubscription",
+            "tests/python/live/test_opcua_methods.py",
+        ],
+        timeout=420,
+    )
+
+
+def _stage_python_backend(python: Path) -> StageResult:
+    return _stage_pytest_group(
+        python,
+        name="python-backend",
+        title="STAGE 4b  Python WebSocket backend contract tests",
+        targets=[
+            "tests/python/live/test_opcua_live.py::TestBackendWebSocket",
+            "tests/python/live/test_opcua_live.py::TestResponseTimeSLA",
+            "tests/python/integration/",
+        ],
+        timeout=360,
+    )
+
+
+def _stage_python_lifecycle(python: Path) -> StageResult:
+    return _stage_pytest_group(
+        python,
+        name="python-lifecycle",
+        title="STAGE 4c  Python WebSocket lifecycle tests",
+        targets=[
+            "tests/python/live/test_opcua_live.py::TestWebSocketLifecycle",
+        ],
+        timeout=240,
+    )
+
+
 def _stage_playwright_install() -> StageResult:
     _banner("STAGE 5  Install Playwright browsers")
     t0 = time.monotonic()
     npx = shutil.which("npx") or shutil.which("npx.cmd")
     if not npx:
-        _warn("npx not found — skipping Playwright stages")
-        return StageResult("playwright-install", 0, skipped=True)
+        _warn("npx not found - Playwright stages cannot run")
+        return StageResult("playwright-install", 1, duration=time.monotonic() - t0, notes=["npx not found"])
+
+    if _playwright_chromium_available():
+        return StageResult(
+            "playwright-install",
+            0,
+            duration=time.monotonic() - t0,
+            notes=["chromium browser already installed"],
+        )
 
     env = os.environ.copy()
 
-    # Try with --with-deps first (Linux CI); fall back without it (Windows, no admin)
-    rc = _run(
-        [npx, "playwright", "install", "chromium", "--with-deps"],
-        label="playwright install chromium --with-deps",
-        env=env,
-    )
-    if rc != 0:
-        _warn("--with-deps failed, retrying without it")
+    if IS_WINDOWS:
         rc = _run(
             [npx, "playwright", "install", "chromium"],
             label="playwright install chromium",
             env=env,
         )
-    if rc != 0:
-        # Network or environment issue — skip Playwright smoke tests without blocking others.
-        # To resolve: configure system/npm proxy settings or a trusted CA bundle, then run:
-        #   npx playwright install chromium
-        _warn("Playwright browser install failed (network issue) — smoke tests will be skipped")
-        result = StageResult("playwright-install", 0, skipped=True)
-        result.notes.append(
-            "Browser download failed — configure proxy/CA certs and run 'npx playwright install chromium' manually"
+    else:
+        rc = _run(
+            [npx, "playwright", "install", "chromium", "--with-deps"],
+            label="playwright install chromium --with-deps",
+            env=env,
         )
-        return result
+        if rc != 0:
+            _warn("--with-deps failed, retrying without it")
+            rc = _run(
+                [npx, "playwright", "install", "chromium"],
+                label="playwright install chromium",
+                env=env,
+            )
+    if rc != 0:
+        _warn("Playwright browser install failed")
+        return StageResult(
+            "playwright-install",
+            rc if rc > 0 else 1,
+            duration=time.monotonic() - t0,
+            notes=[
+                "Browser download failed - configure proxy/CA certs and run 'npx playwright install chromium' manually"
+            ],
+        )
     return StageResult("playwright-install", rc, duration=time.monotonic() - t0)
+
+
+def _playwright_chromium_available() -> bool:
+    node = shutil.which("node") or shutil.which("node.exe")
+    if not node:
+        return False
+    script = (
+        "const { chromium } = require('playwright');"
+        "const fs = require('fs');"
+        "process.exit(fs.existsSync(chromium.executablePath()) ? 0 : 1);"
+    )
+    rc, _output = _run_captured(
+        [node, "-e", script],
+        label="playwright chromium availability",
+        timeout=15,
+    )
+    return rc == 0
 
 
 def _stage_playwright_smoke() -> StageResult:
@@ -984,38 +1212,109 @@ def _stage_playwright_smoke() -> StageResult:
     return StageResult("playwright-smoke", rc, duration=time.monotonic() - t0)
 
 
-def _stage_playwright_e2e(ws_url: str, ui_url: str) -> StageResult:
-    _banner("STAGE 7  Playwright E2E — features + regression")
+def _stage_playwright_project(
+    *,
+    project: str,
+    name: str,
+    title: str,
+    ws_url: str,
+    ui_url: str,
+    timeout: int = 600,
+    workers: int | None = None,
+    extra_env: dict[str, str] | None = None,
+) -> StageResult:
+    _banner(title)
     t0 = time.monotonic()
     npx = shutil.which("npx") or shutil.which("npx.cmd")
     if not npx:
-        return StageResult("playwright-e2e", 0, skipped=True)
+        return StageResult(name, 0, skipped=True)
 
-    results_dir = ROOT / "test-results"
+    results_dir = _RESULTS_DIR
     results_dir.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["WS_TEST_URL"] = ws_url
     env["PLAYWRIGHT_TEST_BASE_URL"] = ui_url
+    env["UI_TEST_BASE_URL"] = ui_url
+    env.setdefault("UI_TEST_PORT", str(_parse_http_port(ui_url)))
+    if workers is not None:
+        env["IJT_PLAYWRIGHT_WORKERS"] = str(workers)
+    if extra_env:
+        env.update(extra_env)
 
-    env1 = {**env, "PLAYWRIGHT_JUNIT_OUTPUT_FILE": str(results_dir / "playwright-features.xml")}
-    rc1 = _run(
-        [npx, "playwright", "test", "--project=features", "--reporter=line", "--reporter=junit"],
-        env=env1,
-        label="playwright features",
+    run_env = {**env, "PLAYWRIGHT_JUNIT_OUTPUT_FILE": str(results_dir / f"{name}.xml")}
+    cmd = [npx, "playwright", "test", f"--project={project}", "--reporter=line", "--reporter=junit"]
+    if workers is not None:
+        cmd.append(f"--workers={workers}")
+    rc = _run(
+        cmd,
+        env=run_env,
+        label=f"playwright {project}",
+        timeout=timeout,
     )
-    env2 = {**env, "PLAYWRIGHT_JUNIT_OUTPUT_FILE": str(results_dir / "playwright-regression.xml")}
-    rc2 = _run(
-        [npx, "playwright", "test", "--project=regression", "--reporter=line", "--reporter=junit"],
-        env=env2,
-        label="playwright regression",
+    return StageResult(name, rc, duration=time.monotonic() - t0)
+
+
+def _stage_playwright_e2e(ws_url: str, ui_url: str) -> StageResult:
+    _banner("STAGE 7  Playwright E2E — features + regression")
+    t0 = time.monotonic()
+    features = _stage_playwright_project(
+        project="features",
+        name="playwright-features",
+        title="STAGE 7a  Playwright E2E — features",
+        ws_url=ws_url,
+        ui_url=ui_url,
+        timeout=480,
     )
-    return StageResult("playwright-e2e", max(rc1, rc2), duration=time.monotonic() - t0)
+    regression = _stage_playwright_project(
+        project="regression",
+        name="playwright-regression",
+        title="STAGE 7b  Playwright E2E — regression",
+        ws_url=ws_url,
+        ui_url=ui_url,
+        timeout=360,
+    )
+    rc = max(features.rc, regression.rc)
+    skipped = features.skipped and regression.skipped
+    return StageResult("playwright-e2e", rc, skipped=skipped, duration=time.monotonic() - t0)
+
+
+def _stage_playwright_features(
+    ws_url: str,
+    ui_url: str,
+    *,
+    workers: int | None = None,
+    extra_env: dict[str, str] | None = None,
+) -> StageResult:
+    feature_env = dict(extra_env or {})
+    if workers:
+        feature_env.setdefault("IJT_E2E_BACKEND_WORKERS", str(workers))
+    return _stage_playwright_project(
+        project="features",
+        name="playwright-features",
+        title="STAGE 7a  Playwright E2E — features",
+        ws_url=ws_url,
+        ui_url=ui_url,
+        timeout=600,
+        workers=workers,
+        extra_env=feature_env,
+    )
+
+
+def _stage_playwright_regression(ws_url: str, ui_url: str) -> StageResult:
+    return _stage_playwright_project(
+        project="regression",
+        name="playwright-regression",
+        title="STAGE 7b  Playwright E2E — regression",
+        ws_url=ws_url,
+        ui_url=ui_url,
+        timeout=360,
+    )
 
 
 def _stage_infra_lint() -> StageResult:
     _banner("STAGE Infra  Dockerfile / YAML / Compose linting")
     t0 = time.monotonic()
-    results_dir = ROOT / "test-results"
+    results_dir = _RESULTS_DIR
     overall_rc = 0
     notes: list[str] = []
 
@@ -1100,21 +1399,30 @@ def _parse_int_env(name: str, default: int) -> int:
 # Configurable Docker readiness timeout (seconds).  90 s is ample for most
 # environments; override with IJT_DOCKER_TIMEOUT=<seconds> for slow CI runners.
 _DOCKER_TIMEOUT = _parse_int_env("IJT_DOCKER_TIMEOUT", 90)
+_DOCKER_BUILD_TIMEOUT = _parse_int_env("IJT_DOCKER_BUILD_TIMEOUT", 1200)
+_PLAYWRIGHT_FEATURE_WORKERS = _parse_int_env("IJT_PLAYWRIGHT_FEATURE_WORKERS", 4)
+
+
+@dataclass
+class _OpcuaServerInstance:
+    port: int
+    proc: subprocess.Popen | None
+    tmp_dir: Path | None
 
 
 def _opcua_server_port() -> int:
     return int(os.getenv("OPCUA_SERVER_PORT", str(_OPCUA_SERVER_PORT)))
 
 
-def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
+def _set_opcua_test_endpoint(port: int) -> None:
+    os.environ["OPCUA_TEST_ENDPOINT"] = f"opc.tcp://localhost:{port}"
+
+
+def _launch_simulator_instance(port: int, exe: str) -> _OpcuaServerInstance | None:
     """Copy the binary dir to a temp location, patch the port config, and launch.
 
-    Stores the temp dir in the module-global ``_server_tmp_dir`` so
-    ``_stop_opcua_server`` can remove it on teardown.
-    Returns the Popen handle on success, None on failure (temp dir cleaned on failure).
+    Returns an owned process/temp-dir pair on success, or None on failure.
     """
-    global _server_tmp_dir
-
     exe_path = Path(exe)
     if not exe_path.exists():
         _warn(f"Binary not found: {exe}")
@@ -1161,14 +1469,44 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
     for _ in range(30):
         if _port_open("localhost", port, timeout=1.0):
             _ok(f"OPC UA server ready on :{port}")
-            os.environ["OPCUA_TEST_ENDPOINT"] = f"opc.tcp://localhost:{port}"
-            _server_tmp_dir = tmp_dir
-            return proc
+            return _OpcuaServerInstance(port=port, proc=proc, tmp_dir=tmp_dir)
         time.sleep(1)
 
     _warn(f"Binary did not open port {port} within 30s")
     proc.terminate()
     shutil.rmtree(tmp_dir, ignore_errors=True)
+    return None
+
+
+def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
+    """Launch one simulator and bind it to the legacy single-server globals."""
+    global _server_tmp_dir
+
+    instance = _launch_simulator_instance(port, exe)
+    if instance is None:
+        return None
+    _set_opcua_test_endpoint(port)
+    _server_tmp_dir = instance.tmp_dir
+    return instance.proc
+
+
+def _stop_opcua_server_instance(instance: _OpcuaServerInstance) -> None:
+    if instance.proc is not None:
+        instance.proc.terminate()
+        try:
+            instance.proc.wait(timeout=10)
+        except Exception:
+            instance.proc.kill()
+    shutil.rmtree(instance.tmp_dir, ignore_errors=True) if instance.tmp_dir else None
+
+
+def _find_simulator_executable() -> str | None:
+    exe = os.getenv("OPCUA_SIMULATOR_EXE")
+    if exe:
+        return exe
+    for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
+        if candidate.exists():
+            return str(candidate)
     return None
 
 
@@ -1183,6 +1521,7 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
     if os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL"):
         port = _opcua_server_port()
         endpoint = os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL") or ""
+        os.environ.setdefault("OPCUA_TEST_ENDPOINT", endpoint)
         host, srv_port = _parse_opcua_host_port(endpoint)
         open_ = _port_open(host, srv_port)
         return False, open_, None
@@ -1190,15 +1529,11 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
     port = _opcua_server_port()
     if _port_open("localhost", port):
         _info(f"OPC UA server already listening on port {port}")
+        _set_opcua_test_endpoint(port)
         return False, True, None
 
     # Try binary launch first
-    exe: str | None = os.getenv("OPCUA_SIMULATOR_EXE")
-    if not exe:
-        for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
-            if candidate.exists():
-                exe = str(candidate)
-                break
+    exe = _find_simulator_executable()
 
     if exe:
         proc = _launch_simulator_on_port(port, exe)
@@ -1226,6 +1561,7 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
     for _ in range(30):
         if _port_open("localhost", port, timeout=1.0):
             _ok(f"OPC UA server ready on :{port}")
+            _set_opcua_test_endpoint(port)
             return True, True, None
         time.sleep(2)
 
@@ -1266,7 +1602,7 @@ def _stage_python_integration(
     """
     _banner("STAGE 4b  Python integration tests (Phase 2 — live OPC UA)")
     t0 = time.monotonic()
-    results_dir = ROOT / "test-results"
+    results_dir = _RESULTS_DIR
     results_dir.mkdir(parents=True, exist_ok=True)
 
     if prestarted is not None:
@@ -1295,6 +1631,125 @@ def _stage_python_integration(
     finally:
         if started:
             _stop_opcua_server(server_proc)
+
+
+def _run_with_owned_services(
+    *,
+    python: Path,
+    name: str,
+    need_ws: bool,
+    ws_url: str,
+    stage: Callable[[], StageResult],
+) -> StageResult:
+    """Run one live stage with an OPC UA server and optional WS backend owned here."""
+    if not os.getenv("OPCUA_TEST_ENDPOINT") and not os.getenv("OPCUA_SERVER_URL"):
+        opcua_port = _opcua_server_port()
+        if _port_open("localhost", opcua_port, timeout=1.0):
+            return StageResult(name, 1, notes=[f"OPC UA port {opcua_port} is already in use"])
+
+    if need_ws:
+        ws_host, ws_port = _parse_ws_host_port(ws_url)
+        if _port_open(ws_host, ws_port, timeout=1.0):
+            return StageResult(name, 1, notes=[f"WebSocket port {ws_port} is already in use"])
+
+    srv_started, srv_open, srv_proc = _maybe_start_opcua_server()
+    ws_started = False
+    ws_proc: subprocess.Popen | None = None
+    try:
+        if not srv_open:
+            return StageResult(name, 1, notes=["OPC UA server not available"])
+
+        if need_ws:
+            ws_host, ws_port = _parse_ws_host_port(ws_url)
+            ws_started, ws_ready, ws_proc = _maybe_start_websocket_backend(python, ws_host, ws_port)
+            if not ws_ready:
+                return StageResult(name, 1, notes=["WebSocket backend not reachable"])
+
+        return stage()
+    finally:
+        if ws_started:
+            _stop_websocket_backend(ws_proc)
+        if srv_started:
+            _stop_opcua_server(srv_proc)
+
+
+def _run_playwright_features_with_owned_pool(
+    *,
+    python: Path,
+    name: str,
+    ws_url: str,
+    ui_url: str,
+    workers: int,
+) -> StageResult:
+    """Run Playwright feature specs against one owned backend/server pair per worker."""
+    workers = max(1, workers)
+    if workers == 1 or os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL"):
+        return _run_with_owned_services(
+            python=python,
+            name=name,
+            need_ws=True,
+            ws_url=ws_url,
+            stage=lambda: _stage_playwright_features(ws_url, ui_url, workers=1),
+        )
+
+    ws_host, ws_base_port = _parse_ws_host_port(ws_url)
+    if not _local_host(ws_host):
+        return StageResult(name, 1, notes=[f"Cannot auto-start non-local WebSocket backend at {ws_host}"])
+
+    opcua_base_port = _opcua_server_port()
+    blocked_ports: list[str] = []
+    for index in range(workers):
+        opcua_port = opcua_base_port + index
+        ws_port = ws_base_port + index
+        if _port_open("localhost", opcua_port, timeout=1.0):
+            blocked_ports.append(f"OPC UA {opcua_port}")
+        if _port_open(ws_host, ws_port, timeout=1.0):
+            blocked_ports.append(f"WS {ws_port}")
+    if blocked_ports:
+        return StageResult(name, 1, notes=["Worker pool ports already in use: " + ", ".join(blocked_ports)])
+
+    exe = _find_simulator_executable()
+    if not exe:
+        return StageResult(name, 1, notes=["OPC UA simulator binary not found for worker pool"])
+
+    servers: list[_OpcuaServerInstance] = []
+    ws_procs: list[subprocess.Popen | None] = []
+    try:
+        for index in range(workers):
+            opcua_port = opcua_base_port + index
+            instance = _launch_simulator_instance(opcua_port, exe)
+            if instance is None:
+                return StageResult(name, 1, notes=[f"OPC UA worker {index} failed to start on port {opcua_port}"])
+            servers.append(instance)
+
+        for index in range(workers):
+            ws_port = ws_base_port + index
+            opcua_endpoint = f"opc.tcp://localhost:{opcua_base_port + index}"
+            started, ready, proc = _maybe_start_websocket_backend(
+                python,
+                ws_host,
+                ws_port,
+                opcua_endpoint=opcua_endpoint,
+                log_name=f"websocket-backend-{ws_port}.log",
+            )
+            if not started or not ready:
+                return StageResult(name, 1, notes=[f"WebSocket worker {index} failed to start on port {ws_port}"])
+            ws_procs.append(proc)
+
+        return _stage_playwright_features(
+            ws_url,
+            ui_url,
+            workers=workers,
+            extra_env={
+                "OPCUA_TEST_ENDPOINT": f"opc.tcp://localhost:{opcua_base_port}",
+                "IJT_E2E_BACKEND_WORKERS": str(workers),
+            },
+        )
+    finally:
+        for proc in reversed(ws_procs):
+            _stop_websocket_backend(proc)
+        for instance in reversed(servers):
+            _stop_opcua_server_instance(instance)
 
 
 # ---------------------------------------------------------------------------
@@ -1356,7 +1811,12 @@ def _stage_docker_smoke() -> StageResult:
         "ijt_web_client",
         ".",
     ]
-    rc = _run(build_cmd, label="docker build (BuildKit)", env=build_env)
+    rc = _run(
+        build_cmd,
+        label="docker build (BuildKit)",
+        env=build_env,
+        timeout=_DOCKER_BUILD_TIMEOUT,
+    )
     if rc != 0:
         return StageResult("docker-smoke", rc, duration=time.monotonic() - t0, notes=["docker build failed"])
 
@@ -1403,7 +1863,8 @@ def _print_summary(results: list[StageResult], total_time: float) -> int:
             tag = f"{_C.GREEN}[PASS]{_C.RESET}"
         else:
             tag = f"{_C.RED}[FAIL]{_C.RESET}"
-            overall = max(overall, r.rc)
+            if overall == 0:
+                overall = r.rc if r.rc > 0 else 1
         dur = f"  {r.duration:.1f}s" if r.duration else ""
         print(f"  {tag}  {r.name:<35} exit={r.rc}{dur}")
         for note in r.notes:
@@ -1430,9 +1891,14 @@ STAGES = [
     "js-unit",
     "infra-lint",
     "python-live",
+    "python-opcua",
+    "python-backend",
+    "python-lifecycle",
     "python-integration",
     "playwright-install",
     "playwright-smoke",
+    "playwright-features",
+    "playwright-regression",
     "playwright-e2e",
     "docker-smoke",
 ]
@@ -1454,13 +1920,36 @@ def main() -> int:
     # CI-compatible phase flags (mirrors other project runners)
     parser.add_argument("--phase1", action="store_true", help="Static/unit tests only — no live/E2E stages (CI use)")
     parser.add_argument("--phase2", action="store_true", help="Live/E2E stages only — skip static analysis (CI use)")
+    parser.add_argument("--docker-only", action="store_true", help="Docker smoke only — skip static/live/E2E stages")
+    parser.add_argument("--skip-docker", action="store_true", help="Skip Docker smoke even when Docker is available")
+    parser.add_argument("--python-opcua-only", action="store_true", help="Run only direct OPC UA Python live tests")
+    parser.add_argument("--python-backend-only", action="store_true", help="Run only Python WebSocket backend tests")
+    parser.add_argument(
+        "--python-lifecycle-only", action="store_true", help="Run only Python WebSocket lifecycle tests"
+    )
+    parser.add_argument("--playwright-smoke-only", action="store_true", help="Run only Playwright smoke tests")
+    parser.add_argument("--playwright-features-only", action="store_true", help="Run only Playwright feature E2E tests")
+    parser.add_argument(
+        "--playwright-regression-only", action="store_true", help="Run only Playwright regression E2E tests"
+    )
     parser.add_argument("--list", action="store_true", help="Print available stages and exit")
     parser.add_argument(
-        "--opcua-endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{_OPCUA_SERVER_PORT}")
+        "--opcua-endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{_opcua_server_port()}")
     )
     parser.add_argument("--ws-url", default=os.getenv("WS_TEST_URL", "ws://localhost:8001"))
     parser.add_argument("--ui-url", default=os.getenv("UI_TEST_BASE_URL", "http://127.0.0.1:3000"))
     args = parser.parse_args()
+
+    targeted_flags = [
+        args.python_opcua_only,
+        args.python_backend_only,
+        args.python_lifecycle_only,
+        args.playwright_smoke_only,
+        args.playwright_features_only,
+        args.playwright_regression_only,
+    ]
+    if sum(1 for flag in targeted_flags if flag) > 1:
+        parser.error("choose only one targeted live-suite flag")
 
     # Bootstrap: run inside isolated .venv (skipped when already in venv, CI, or Docker)
     if not IS_CI and not IS_DOCKER and not _inside_venv():
@@ -1475,7 +1964,8 @@ def main() -> int:
 
     run_live = args.integration or args.all or args.phase2
     run_e2e = args.e2e or args.all or args.phase2
-    skip_static = args.phase2  # --phase2: live/E2E only, skip static analysis
+    target_only = any(targeted_flags)
+    skip_static = args.phase2 or args.docker_only or target_only
 
     python = Path(sys.executable)
     t_start = time.monotonic()
@@ -1485,7 +1975,7 @@ def main() -> int:
     ws_host, ws_port = _parse_ws_host_port(args.ws_url)
     opcua_up = _port_open(opcua_host, opcua_port)
     ws_up = _port_open(ws_host, ws_port)
-    docker_up = _docker_available()
+    docker_up = False if target_only else _docker_available()
 
     # Auto-detect optional stages when not explicitly requested
     # --phase1: force off all live/docker stages
@@ -1493,10 +1983,14 @@ def main() -> int:
         run_live = False
         run_e2e = False
         run_docker = False
+    elif args.docker_only:
+        run_live = False
+        run_e2e = False
+        run_docker = not args.skip_docker
     else:
         run_live = run_live or opcua_up
         run_e2e = run_e2e or ws_up
-        run_docker = args.all or docker_up
+        run_docker = (args.all or docker_up) and not args.skip_docker
 
     _banner("IJT Web Client — Cross-Platform Test Runner")
     _info(f"Python  : {python}")
@@ -1509,13 +2003,80 @@ def main() -> int:
     if (args.integration or args.all) and not opcua_up:
         _warn(f"OPC UA server NOT reachable at {args.opcua_endpoint} — live tests will be skipped")
     if (args.e2e or args.all) and not ws_up:
-        _warn(f"WebSocket backend NOT reachable at {args.ws_url} — E2E tests will be skipped")
+        _warn(f"WebSocket backend NOT reachable at {args.ws_url} — runner will try to auto-start it for E2E")
 
     results: list[StageResult] = []
 
     # Wipe previous run's results so the local copy always reflects the latest run only
-    shutil.rmtree(ROOT / "test-results", ignore_errors=True)
-    (ROOT / "test-results").mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
+    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if target_only:
+        if args.python_opcua_only:
+            results.append(
+                _run_with_owned_services(
+                    python=python,
+                    name="python-opcua",
+                    need_ws=False,
+                    ws_url=args.ws_url,
+                    stage=lambda: _stage_python_opcua(python),
+                )
+            )
+        elif args.python_backend_only:
+            results.append(
+                _run_with_owned_services(
+                    python=python,
+                    name="python-backend",
+                    need_ws=True,
+                    ws_url=args.ws_url,
+                    stage=lambda: _stage_python_backend(python),
+                )
+            )
+        elif args.python_lifecycle_only:
+            results.append(
+                _run_with_owned_services(
+                    python=python,
+                    name="python-lifecycle",
+                    need_ws=True,
+                    ws_url=args.ws_url,
+                    stage=lambda: _stage_python_lifecycle(python),
+                )
+            )
+        elif args.playwright_smoke_only:
+            pw_install = _stage_playwright_install()
+            results.append(pw_install)
+            if not pw_install.skipped and pw_install.rc == 0:
+                results.append(_stage_playwright_smoke())
+        elif args.playwright_features_only:
+            pw_install = _stage_playwright_install()
+            results.append(pw_install)
+            if not pw_install.skipped and pw_install.rc == 0:
+                results.append(
+                    _run_playwright_features_with_owned_pool(
+                        python=python,
+                        name="playwright-features",
+                        ws_url=args.ws_url,
+                        ui_url=args.ui_url,
+                        workers=_PLAYWRIGHT_FEATURE_WORKERS,
+                    )
+                )
+        elif args.playwright_regression_only:
+            pw_install = _stage_playwright_install()
+            results.append(pw_install)
+            if not pw_install.skipped and pw_install.rc == 0:
+                results.append(
+                    _run_with_owned_services(
+                        python=python,
+                        name="playwright-regression",
+                        need_ws=True,
+                        ws_url=args.ws_url,
+                        stage=lambda: _stage_playwright_regression(args.ws_url, args.ui_url),
+                    )
+                )
+
+        rc = _print_summary(results, time.monotonic() - t_start)
+        _cleanup_caches(ROOT)
+        return rc
 
     # ── Static / unit stages (skipped when --phase2) ──────────────────────────
     if not skip_static:
@@ -1532,9 +2093,12 @@ def main() -> int:
     # Auto-launch server ONCE and share it between live and integration stages.
     # This ensures live tests are not skipped just because the server was not
     # running at startup — the same auto-launch logic that integration uses.
-    if not args.phase1:
-        _srv_started, _srv_port_open, _srv_proc = _maybe_start_opcua_server()
-        try:
+    _srv_started = False
+    _srv_port_open = False
+    _srv_proc: subprocess.Popen | None = None
+    try:
+        if not args.phase1 and not args.docker_only:
+            _srv_started, _srv_port_open, _srv_proc = _maybe_start_opcua_server()
             if run_live:
                 if _srv_port_open:
                     results.append(_stage_python_live(python))
@@ -1543,7 +2107,8 @@ def main() -> int:
                     results.append(StageResult("python-live", 0, skipped=True, notes=["OPC UA server not available"]))
 
             if run_live or docker_up or _srv_port_open:
-                # Pass prestarted so integration stage re-uses the running server
+                # Pass prestarted so integration stage re-uses the running server.
+                # Keep this same server alive through Playwright E2E below.
                 results.append(_stage_python_integration(python, prestarted=(_srv_started, _srv_port_open, _srv_proc)))
             else:
                 _skip("python-integration: OPC UA server not available and Docker not running")
@@ -1555,29 +2120,47 @@ def main() -> int:
                         notes=["start OPC UA server or Docker to enable"],
                     )
                 )
-        finally:
-            if _srv_started:
-                _stop_opcua_server(_srv_proc)
 
-    # Hint: multi-version testing via pyenv
-    if _cmd_available("pyenv"):
-        _info("pyenv detected — multi-version testing available: pyenv local X.Y.Z && python run_all_tests.py")
+        # Hint: multi-version testing via pyenv
+        if _cmd_available("pyenv"):
+            _info("pyenv detected — multi-version testing available: pyenv local X.Y.Z && python run_all_tests.py")
 
-    # ── Playwright (smoke always runs; E2E auto-detected or explicit) ─────────
-    if not args.phase1:
-        pw_install = _stage_playwright_install()
-        results.append(pw_install)
+        # ── Playwright (smoke always runs; E2E auto-detected or explicit) ─────────
+        if not args.phase1 and not args.docker_only:
+            pw_install = _stage_playwright_install()
+            results.append(pw_install)
 
-        if not pw_install.skipped and pw_install.rc == 0:
-            # Smoke always runs — catches 404s, JS errors, missing assets
-            results.append(_stage_playwright_smoke())
+            if not pw_install.skipped and pw_install.rc == 0:
+                # Smoke always runs — catches 404s, JS errors, missing assets
+                results.append(_stage_playwright_smoke())
 
-            if run_e2e:
-                if ws_up:
-                    results.append(_stage_playwright_e2e(args.ws_url, args.ui_url))
-                else:
-                    _skip("playwright-e2e: WebSocket backend not reachable")
-                    results.append(StageResult("playwright-e2e", 0, skipped=True))
+                if run_e2e:
+                    ws_ready = _port_open(ws_host, ws_port, timeout=1.0)
+                    ws_started = False
+                    ws_proc: subprocess.Popen | None = None
+                    if not ws_ready:
+                        ws_started, ws_ready, ws_proc = _maybe_start_websocket_backend(python, ws_host, ws_port)
+                    try:
+                        if not _srv_port_open:
+                            _skip("playwright-e2e: OPC UA server not available")
+                            results.append(
+                                StageResult("playwright-e2e", 0, skipped=True, notes=["OPC UA server not available"])
+                            )
+                        elif ws_ready:
+                            results.append(_stage_playwright_e2e(args.ws_url, args.ui_url))
+                        else:
+                            _skip("playwright-e2e: WebSocket backend not reachable")
+                            results.append(
+                                StageResult(
+                                    "playwright-e2e", 0, skipped=True, notes=["WebSocket backend not reachable"]
+                                )
+                            )
+                    finally:
+                        if ws_started:
+                            _stop_websocket_backend(ws_proc)
+    finally:
+        if _srv_started:
+            _stop_opcua_server(_srv_proc)
 
     # ── Docker smoke (auto-detected; skipped if Docker unavailable) ───────────
     if not args.phase1 and run_docker:

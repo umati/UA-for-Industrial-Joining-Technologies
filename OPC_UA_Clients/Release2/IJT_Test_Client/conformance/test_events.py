@@ -57,6 +57,8 @@ from asyncua import ua
 
 from helpers.cu_registry import CU
 from helpers.event_collector import EventCollector
+from helpers.event_payload import event_payload_field as _event_payload_field
+from helpers.event_payload import unwrap_variant as _unwrap_variant
 from helpers.event_validator import (
     assert_condition_valid,
     assert_joining_system_event_valid,
@@ -74,8 +76,7 @@ logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
 
 _CONDITION_EVENT_UNSUPPORTED_DETAIL = (
-    "Acknowledgeable Events/Conditions such as JoiningSystemConditionType "
-    "and advanced OPC UA Alarms are not supported; "
+    "retained Acknowledgeable Conditions are not exposed by this server/package; "
     "ConditionClass fields on JoiningSystemEventType events remain supported"
 )
 
@@ -144,59 +145,22 @@ async def _collect_condition_events(
     subscription_client,
     event_trigger,
     ns_ijt,
+    event_type=SimulateEventType.TOOL_MISSING_ERROR,
     timeout_s=45.0,
 ):
     """
-    Subscribe to JoiningSystemConditionType, trigger TOOL_MISSING_ERROR, and
+    Subscribe to JoiningSystemConditionType, trigger a retained condition, and
     return collected events when the server supports state-based Conditions.
     """
     server_node = subscription_client.nodes.server
     condition_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_CONDITION_TYPE, ns_ijt))
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, condition_type_node)
-        outcome = await event_trigger.trigger_event(SimulateEventType.TOOL_MISSING_ERROR, count=1)
+        outcome = await event_trigger.trigger_condition(event_type)
         if not outcome.triggered and event_trigger.is_simulator:
             pytest.skip(outcome.skip_reason or "Simulator event trigger failed")
         events = await collector.collect(count=1, timeout_s=timeout_s)
     return events
-
-
-def _event_payload_field(event, field_name: str):
-    """
-    Read JoiningSystemEventContent fields across asyncua decoding variants.
-
-    Supported representations:
-      - event.<Field>
-      - event.EventContent.<Field>
-      - event.__dict__['JoiningSystemEventContent/<Field>']
-    """
-    value = _unwrap_variant(getattr(event, field_name, None))
-    if value is not None:
-        return value
-
-    content = _unwrap_variant(getattr(event, "EventContent", None))
-    if content is not None:
-        cval = _unwrap_variant(getattr(content, field_name, None))
-        if cval is not None:
-            return cval
-
-    edict = getattr(event, "__dict__", {})
-    slash_key = f"JoiningSystemEventContent/{field_name}"
-    if slash_key in edict:
-        return _unwrap_variant(edict.get(slash_key))
-
-    nested = _unwrap_variant(edict.get("JoiningSystemEventContent"))
-    if nested is not None:
-        nval = _unwrap_variant(getattr(nested, field_name, None))
-        if nval is not None:
-            return nval
-
-    return None
-
-
-def _unwrap_variant(value):
-    """Unwrap asyncua Variant containers used for nested ExtensionObjects."""
-    return getattr(value, "Value", value)
 
 
 def _joining_technology_text_or_none(value):

@@ -269,7 +269,7 @@ def test_skip_summary_leaves_non_method_not_supported_reason():
 def test_skip_summary_trims_feature_not_supported_reason():
     reason = (
         "Skipped: IJT JoiningSystemConditionType NOT SUPPORTED - "
-        "Acknowledgeable Events/Conditions such as JoiningSystemConditionType are not supported"
+        "retained Acknowledgeable Conditions are not exposed by this server/package"
     )
     assert _mod._summarize_skip_reason(reason) == "IJT JoiningSystemConditionType NOT SUPPORTED"
 

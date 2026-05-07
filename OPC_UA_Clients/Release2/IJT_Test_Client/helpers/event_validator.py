@@ -501,11 +501,30 @@ class ConditionClassValidator:
     """
 
     VALID_CONDITION_CLASSES: set[str] = {
+        "BaseConditionClassType",
         "ProcessConditionClassType",
         "MaintenanceConditionClassType",
         "SystemConditionClassType",
         "SafetyConditionClassType",
         "CheckFunctionConditionClassType",
+        "HighlyManagedAlarmConditionClassType",
+        "TrainingConditionClassType",
+        "StatisticalConditionClassType",
+        "TestingConditionClassType",
+        "ConnectionFailureConditionClassType",
+        "OverTemperatureConditionClassType",
+        "CalibrationDueConditionClassType",
+        "SelfTestFailureConditionClassType",
+        "FlashUpdateInProgressConditionClassType",
+        "FlashUpdatedFailedConditionClassType",
+        "BadConfigurationConditionClassType",
+        "OutOfResourcesConditionClassType",
+        "OutOfMemoryConditionClassType",
+        "InspectionConditionClassType",
+        "ExternalCheckConditionClassType",
+        "ServicingConditionClassType",
+        "ImprovementConditionClassType",
+        "RepairConditionClassType",
     }
 
     VALID_CONDITION_SUBCLASSES: set[str] = {

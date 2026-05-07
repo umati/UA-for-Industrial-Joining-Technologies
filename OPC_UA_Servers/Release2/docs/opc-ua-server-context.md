@@ -114,6 +114,7 @@ Objects/
         │   └── SendSimulatedBulkResults(...)
         └── SimulateEventsAndConditions/  [App ns]
             ├── SimulateEvents(eventType: UInt32)           fires exactly 1 event
+            ├── SimulateConditions(eventType: UInt32)       raises retained condition
             └── SimulateBulkEvents(eventType: UInt32, count: UInt32)  max count=1000
 ```
 
@@ -216,6 +217,23 @@ Representative values for testing:
 | 47 | CONFIGURATION_CHANGED | System |
 
 Full list (1–60): see `helpers/namespaces.py` `SimulateEventType` class.
+
+---
+
+## Condition Simulation
+
+`SimulateConditions(eventType: UInt32)` raises a retained
+`JoiningSystemConditionType` notification for the selected simulator event type.
+The condition is delivered through event subscriptions and is not mounted as a
+browseable address-space node. OPC UA clients use the received condition
+`ConditionId` as the method call object and the received `EventId` as the input
+argument for standard condition methods such as Acknowledge, Confirm, and
+AddComment.
+
+The simulator uses the same event type catalogue as `SimulateEvents`. Use
+`SimulateEvents` for fire-and-forget `JoiningSystemEventType` notifications and
+`SimulateConditions` when retained condition state and condition methods are
+required.
 
 ---
 

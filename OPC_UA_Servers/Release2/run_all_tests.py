@@ -13,7 +13,7 @@ Phase 1 (static — always runs):
   7.  pip-audit           — tests/requirements.txt CVE scan  (skipped if not installed)
   8.  docker validate     — docker compose config --quiet  (skipped if Docker offline)
   9.  trivy               — container image scan  (skipped if trivy absent)
-  10. binaries check      — report Windows ZIP / Linux binary presence (informational)
+  10. packages check      — require Windows and Linux package ZIPs
 
 Phase 2 (live smoke test — needs a running OPC UA server):
   - Auto-detect/launch server (in order):
@@ -70,6 +70,7 @@ RESULTS_DIR = PROJ_DIR / "test-results"
 _IS_WINDOWS = sys.platform == "win32"
 
 _LINUX_BINARY = PROJ_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
+_LINUX_ZIP = PROJ_DIR / "OPC_UA_IJT_Server_Simulator_Linux.zip"
 _WINDOWS_ZIP = PROJ_DIR / "OPC_UA_IJT_Server_Simulator.zip"
 
 _DEFAULT_PORT = 40451
@@ -531,12 +532,17 @@ def _check_trivy(results: list) -> None:
 
 
 def _check_binaries(results: list) -> None:
-    """Informational: report which distributable binaries are present."""
-    label = "Binaries present"
-    parts = [
-        f"Linux extracted binary {'✓' if _LINUX_BINARY.exists() else '✗'}",
-        f"Windows package zip {'✓' if _WINDOWS_ZIP.exists() else '✗'}",
+    """Require the distributable package ZIPs used by native and Docker tests."""
+    label = "Packages present"
+    required = [
+        ("Linux package zip", _LINUX_ZIP),
+        ("Windows package zip", _WINDOWS_ZIP),
     ]
+    missing = [name for name, path in required if not path.exists()]
+    parts = [f"{name} {'✓' if path.exists() else '✗'}" for name, path in required]
+    if missing:
+        _record(results, 1, label, False, f"FAIL (missing {', '.join(missing)})")
+        return
     _record(results, 1, label, True, f"PASS ({', '.join(parts)})")
 
 

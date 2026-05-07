@@ -213,7 +213,7 @@ uses a light-green fill so it is visually distinct from yellow `Not Supported`.
 
 | Category | Example Reason | Meaning |
 |---|---|---|
-| Unsupported CU / optional method / server feature | `IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED`; `IJT JoiningSystemConditionType NOT SUPPORTED` | Server profile or address space does not support this optional CU, method, or feature; skip is correct. For `JoiningSystemConditionType`, this means Acknowledgeable Events/Conditions such as `JoiningSystemConditionType` and advanced OPC UA Alarms are not supported; ConditionClass fields on `JoiningSystemEventType` remain supported. |
+| Unsupported CU / optional method / server feature | `IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED`; `IJT JoiningSystemConditionType NOT SUPPORTED` | Server profile or address space does not support this optional CU, method, or feature; skip is correct. For `JoiningSystemConditionType`, this means the current server/package does not expose retained Acknowledgeable Conditions. ConditionClass fields on `JoiningSystemEventType` remain supported and are separate from retained condition support. |
 | Blocked runtime precondition | `BLOCKED - Method: StartSelectedJoining - tool/controller state is not ready` | The test path is valid, but the current server state cannot satisfy the setup precondition |
 | Accepted policy outcome | `ACCEPTED POLICY - Method: SelectJoiningProcess - selection precondition could not be established for current controller/tool state` | The server returned a documented simulator/domain policy result that should not fail the run |
 | Environment condition | `ENVIRONMENT - Docker backend not reachable` | Local tooling, port, browser, Docker, client-library, or network condition prevented the test path |
@@ -230,6 +230,15 @@ uses a light-green fill so it is visually distinct from yellow `Not Supported`.
 - Generic skip text such as `No event received` or `ua.UaError` without context → include the missing precondition, method, and actual exception/status
 - Timing race / stale result after trigger → retry up to 4× then `pytest.fail` (real server) or `return None` → caller `pytest.skip` (known simulator limitation)
 - Wrong result type returned after trigger → retry up to 4× then: real server = `pytest.fail`; simulator = `return None` (caller skips)
+
+---
+
+## Event And Condition Catalogue Coverage
+
+The Test Client includes focused conformance coverage for IJT events and conditions:
+- `conformance/test_event_condition_catalog.py` validates every simulator event id `1..60` as both `JoiningSystemEventType` and retained `JoiningSystemConditionType`, grouped by use case.
+- `conformance/test_joining_system_condition_methods.py` validates sample condition method flows using received condition `NodeId` plus received `EventId`: Acknowledge, Confirm, AddComment, Enable/Disable, invalid EventId rejection, and ConditionRefresh.
+- These tests prove Debug-server behavior when `SimulateEvents` and `SimulateConditions` are available. Package validation must be recorded only after refreshed Release 2 Windows/Linux packages are copied into the repo and the same tests are rerun.
 
 ---
 

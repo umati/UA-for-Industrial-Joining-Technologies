@@ -131,6 +131,9 @@ the full Phase 2 suite (server auto-launched if binary is present).
 Runner-managed `npm ci` uses `--no-audit --no-fund` to keep repeated local/CI
 logs readable; JS CVEs are still checked by the separate explicit `npm audit`
 step.
+Runner-owned npm subprocesses use the project-local `tmp/npm-cache` and set
+`npm_config_update_notifier=false` so standalone and root-delegated runs do not
+print npm update notices.
 
 `eslint` (lint), `prettier` (format), `npm audit` (CVE scan), `depcheck` (unused deps),
 `semgrep` (AI security rules), `detect-secrets` (hardcoded secrets).

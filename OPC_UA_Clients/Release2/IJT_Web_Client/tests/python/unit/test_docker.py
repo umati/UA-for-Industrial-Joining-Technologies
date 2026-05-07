@@ -23,6 +23,7 @@ _YAML_AVAILABLE = importlib.util.find_spec("yaml") is not None
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _DOCKERFILE = _PROJECT_ROOT / "Dockerfile"
+_DOCKERIGNORE = _PROJECT_ROOT / ".dockerignore"
 _COMPOSE_FILE = _PROJECT_ROOT / "docker-compose.yml"
 
 
@@ -35,6 +36,16 @@ def _dockerfile_lines() -> list[str]:
     if not _DOCKERFILE.exists():
         pytest.fail(f"Dockerfile not found at {_DOCKERFILE}")
     return _DOCKERFILE.read_text(encoding="utf-8").splitlines()
+
+
+def _dockerignore_lines() -> list[str]:
+    if not _DOCKERIGNORE.exists():
+        pytest.fail(f".dockerignore not found at {_DOCKERIGNORE}")
+    return [
+        line.strip()
+        for line in _DOCKERIGNORE.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
 
 
 def _get_instructions(keyword: str) -> list[str]:
@@ -112,6 +123,36 @@ class TestDockerfileInstructions:
         stages_text = " ".join(froms).lower()
         assert "test" in stages_text, "No 'test' stage found in multi-stage build"
         assert "production" in stages_text, "No 'production' stage found in multi-stage build"
+
+    def test_npm_installs_suppress_audit_and_funding_noise(self):
+        """Docker npm install steps must not emit install-time audit/funding noise."""
+        text = _DOCKERFILE.read_text(encoding="utf-8")
+        npm_install_lines = [line.strip() for line in text.splitlines() if "npm ci" in line or "npm install" in line]
+        assert npm_install_lines, "No npm install step found in Dockerfile"
+        for line in npm_install_lines:
+            assert "--no-audit" in line, f"Docker npm install must pass --no-audit: {line}"
+            assert "--no-fund" in line, f"Docker npm install must pass --no-fund: {line}"
+
+    def test_npm_update_notifier_disabled(self):
+        """Docker npm commands must not print update-notifier messages."""
+        text = _DOCKERFILE.read_text(encoding="utf-8")
+        assert "npm_config_update_notifier=false" in text
+
+
+class TestDockerIgnore:
+    def test_local_runtime_directories_are_excluded_from_build_context(self):
+        """Local virtualenvs and generated test output must stay out of Docker context."""
+        ignored = set(_dockerignore_lines())
+        for pattern in {
+            ".venv/",
+            ".venv_test/",
+            "venv/",
+            "venv_test/",
+            "node_modules/",
+            "test-results/",
+            "tmp/",
+        }:
+            assert pattern in ignored
 
 
 # ===========================================================================

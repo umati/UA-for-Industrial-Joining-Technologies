@@ -19,17 +19,13 @@ test('AddressSpace: tree renders with at least one node button', async ({ connec
   expect(count).toBeGreaterThan(0)
 })
 
-test('AddressSpace: expanding the first node loads children', async ({ connected: app }) => {
+test('AddressSpace: expanding Server by browse name loads ServerStatus', async ({ connected: app }) => {
   test.setTimeout(90_000)
   const aspace = await openAddressSpace(app)
   await aspace.waitForTree({ timeout: 30_000 })
 
-  const initialCount = await aspace.getVisibleNodeCount()
-  await aspace.expandFirstNode()
-
-  const afterCount = await aspace.getVisibleNodeCount()
-  // Expanding should add child nodes
-  expect(afterCount).toBeGreaterThanOrEqual(initialCount)
+  await aspace.expandByBrowseName(['Server'], { expectedChild: 'ServerStatus' })
+  expect(await aspace.hasBrowseName('ServerStatus')).toBe(true)
 })
 
 test('AddressSpace: no page crash after rapid expand/collapse', async ({ connected: app }) => {
@@ -38,9 +34,11 @@ test('AddressSpace: no page crash after rapid expand/collapse', async ({ connect
   await aspace.waitForTree({ timeout: 30_000 })
 
   for (let i = 0; i < 3; i++) {
-    await aspace.expandFirstNode()
+    await aspace.expandByBrowseName(['Server'], { expectedChild: 'ServerStatus' })
+    await aspace.collapseBrowseName('Server')
   }
-  await expect(app.page.locator('.treeButton').first()).toBeVisible()
+  await aspace.expandByBrowseName(['Server'], { expectedChild: 'ServerStatus' })
+  expect(await aspace.hasBrowseName('ServerStatus')).toBe(true)
 })
 
 // ── WS: browse specific IJT nodes ─────────────────────────────────────────────
@@ -52,7 +50,7 @@ test('WS: browse returns IJT TighteningSystem node in address space', async ({ w
 
   const resp = await ws.send('browse', { nodeid: 'ns=0;i=85' })
   expect(resp.data?.exception).toBeUndefined()
-  const nodes = resp.data ?? []
+  const nodes = resp.data?.nodes ?? []
   expect(nodes.length).toBeGreaterThan(0)
 
   // Each node must have at minimum a nodeId or BrowseName

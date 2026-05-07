@@ -5,7 +5,7 @@
  * Requires: backend + OPC UA server running.
  */
 import { test, expect } from './e2e-fixtures.mjs'
-import { RESULT_TYPE } from './page-objects.mjs'
+import { RESULT_TYPE, SEL } from './page-objects.mjs'
 
 // ─── Setup helper — run simulations once then open results ────────────────────
 async function setupWithSimulations (app) {
@@ -22,8 +22,8 @@ test('Results: header with both dropdowns is visible after connect', async ({ co
   const results = await setupWithSimulations(app)
   await results.waitForHeader({ timeout: 60_000 })
 
-  const typeSelect = app.page.locator('.resultheader select:first-of-type')
-  const itemSelect = app.page.locator('.resultheader select:nth-of-type(2)')
+  const typeSelect = app.page.locator(SEL.RESULT_TYPE_SELECT)
+  const itemSelect = app.page.locator(SEL.RESULT_ITEM_SELECT)
   await expect(typeSelect).toBeVisible()
   await expect(itemSelect).toBeVisible()
 })

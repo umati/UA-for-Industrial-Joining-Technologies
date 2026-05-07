@@ -196,6 +196,17 @@ class EventTrigger(ABC):
             TriggerOutcome with triggered=True on success.
         """
 
+    @abstractmethod
+    async def trigger_condition(self, event_type: int) -> TriggerOutcome:
+        """Trigger a retained condition for the given event type.
+
+        Args:
+            event_type: SimulateEventType enum value (UInt32).
+
+        Returns:
+            TriggerOutcome with triggered=True on success.
+        """
+
 
 # ---------------------------------------------------------------------------
 # Simulator implementations
@@ -401,6 +412,13 @@ class SimulatorEventTrigger(EventTrigger):
             ua.Variant(count, ua.VariantType.UInt32),
         )
 
+    async def trigger_condition(self, event_type: int) -> TriggerOutcome:
+        """Call SimulateConditions(event_type)."""
+        return await self._call(
+            BN.SIMULATE_CONDITIONS,
+            ua.Variant(event_type, ua.VariantType.UInt32),
+        )
+
 
 # ---------------------------------------------------------------------------
 # External (real controller) implementations
@@ -498,6 +516,10 @@ class ExternalEventTrigger(EventTrigger):
     ) -> TriggerOutcome:
         """Return skip outcome — external trigger required."""
         return self._skip(BN.SIMULATE_BULK_EVENTS)
+
+    async def trigger_condition(self, event_type: int) -> TriggerOutcome:
+        """Return skip outcome — external trigger required."""
+        return self._skip(BN.SIMULATE_CONDITIONS)
 
 
 # ---------------------------------------------------------------------------

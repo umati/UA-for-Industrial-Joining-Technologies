@@ -40,13 +40,12 @@ def test_feature_not_supported_reason_with_detail():
         feature_not_supported_reason(
             "JoiningSystemConditionType",
             detail=(
-                "Acknowledgeable Events/Conditions such as JoiningSystemConditionType "
-                "and advanced OPC UA Alarms are not supported; "
+                "retained Acknowledgeable Conditions are not exposed by this server/package; "
                 "ConditionClass fields on JoiningSystemEventType events remain supported"
             ),
         )
-        == "IJT JoiningSystemConditionType NOT SUPPORTED - Acknowledgeable Events/Conditions such as "
-        "JoiningSystemConditionType and advanced OPC UA Alarms are not supported; "
+        == "IJT JoiningSystemConditionType NOT SUPPORTED - retained Acknowledgeable Conditions are "
+        "not exposed by this server/package; "
         "ConditionClass fields on JoiningSystemEventType events remain supported"
     )
 

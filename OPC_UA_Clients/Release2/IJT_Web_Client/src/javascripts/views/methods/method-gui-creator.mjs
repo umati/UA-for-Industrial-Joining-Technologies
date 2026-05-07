@@ -72,7 +72,7 @@ export default class MethodGUICreator {
         const lineArea = this.screen.createArea()
         lineArea.classList.add('methodRowDistance')
         area.appendChild(lineArea)
-        listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, defaults?.arguments[index], undefined, methodData.methodNode.displayName, index))
+        listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, defaults?.arguments?.[index], undefined, methodData.methodNode.displayName, index))
       }
 
       // Create the actual button for the call
@@ -97,13 +97,19 @@ export default class MethodGUICreator {
    * Apply well-known default values by argument name when no explicit default is provided.
    * All Boolean arguments implicitly default to true (handled in the Boolean case below).
    */
-  _applyNamedDefaults (arg, defaultValue) {
+  _applyNamedDefaults (arg, defaultValue, methodName = '', argumentIndex = 0) {
     if (defaultValue !== '' && typeof defaultValue !== 'undefined') return defaultValue
     const name = arg?.Name ?? ''
+    const normalizedName = String(name).replace(/\s+/g, '').toLowerCase()
+    const normalizedMethod = String(methodName).replace(/[_\s]+/g, '').toLowerCase()
     // Simulation — result type & traces
     if (name === 'Result Type') return 2
+    if (name === 'Classification') return 3
     if (name === 'Include Traces') return true
     if (name === 'Include Traces For Child Results') return true
+    if (normalizedName === 'eventtype') return 1
+    if ((normalizedMethod === 'simulateevents' || normalizedMethod === 'simulateconditions') && argumentIndex === 0) return 1
+    if (normalizedMethod === 'simulatebulkevents') return argumentIndex === 0 ? 1 : 3
     // Batch/Sync/Job — child count & references
     if (name === 'Number Of Child Results') return 3
     if (name === 'Send Child Results as References (Recommended)') return true
@@ -128,9 +134,9 @@ export default class MethodGUICreator {
    * @param {*} callback optional onchange callback
    * @returns a function that returns {value, type} when called
    */
-  createMethodInput (arg, area, defaultValue = '', callback) {
+  createMethodInput (arg, area, defaultValue = '', callback, methodName = '', argumentIndex = 0) {
     const dataTypeId = String(arg?.DataType?.Identifier ?? '')
-    defaultValue = this._applyNamedDefaults(arg, defaultValue)
+    defaultValue = this._applyNamedDefaults(arg, defaultValue, methodName, argumentIndex)
 
     // Argument label
     if (arg.Name && arg.Name.length > 0) {

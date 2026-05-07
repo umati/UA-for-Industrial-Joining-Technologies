@@ -7,6 +7,57 @@ const nodeClassColor = {
   'NodeClass.Variable': 'red'
 }
 
+function nodeIdToText (nodeId) {
+  if (nodeId === undefined || nodeId === null) {
+    return ''
+  }
+  if (typeof nodeId === 'string') {
+    return nodeId
+  }
+  const namespaceIndex = nodeId.NamespaceIndex ?? nodeId.namespaceIndex
+  const identifier = nodeId.Identifier ?? nodeId.identifier
+  if (namespaceIndex !== undefined && identifier !== undefined) {
+    const idPrefix = /^-?\d+$/.test(String(identifier)) ? 'i' : 's'
+    return `ns=${namespaceIndex};${idPrefix}=${identifier}`
+  }
+  return String(nodeId)
+}
+
+function browseNameToText (browseName) {
+  if (browseName === undefined || browseName === null) {
+    return ''
+  }
+  if (typeof browseName === 'string') {
+    const separatorIndex = browseName.indexOf(':')
+    return separatorIndex >= 0 ? browseName.slice(separatorIndex + 1) : browseName
+  }
+  return String(browseName.Name ?? browseName.name ?? browseName)
+}
+
+function nodeClassToText (nodeClass) {
+  if (nodeClass === undefined || nodeClass === null) {
+    return ''
+  }
+  const text = String(nodeClass)
+  if (text.startsWith('NodeClass.')) {
+    return text
+  }
+  if (text === '1' || text === 'Object') return 'NodeClass.Object'
+  if (text === '2' || text === 'Variable') return 'NodeClass.Variable'
+  if (text === '4' || text === 'Method') return 'NodeClass.Method'
+  return text
+}
+
+function setTreeButtonIdentity (button, { node, relation }) {
+  // Consumed by E2E tests; keep in sync with tests/e2e/page-objects.mjs::expandByBrowseName.
+  const sourceNodeId = relation?.NodeId ?? node?.nodeId
+  const sourceBrowseName = relation?.BrowseName ?? node?.browseName
+  const sourceNodeClass = relation?.NodeClass_ ?? node?.nodeClass
+  button.setAttribute('data-opcua-node-id', nodeIdToText(sourceNodeId))
+  button.setAttribute('data-opcua-browse-name', browseNameToText(sourceBrowseName))
+  button.setAttribute('data-opcua-node-class', nodeClassToText(sourceNodeClass))
+}
+
 /**
  * This class is a simple example of a graphical representation of address space
  */
@@ -128,9 +179,9 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
       browse.classList.add('treeButton')
       browse.classList.add('treeButtonPlace')
       browse.title = 'Browse this node from the server'
-      if (relation) {
-        browse.style.color = nodeClassColor[relation.NodeClass_]
-      }
+      const nodeClass = nodeClassToText(relation?.NodeClass_ ?? node.nodeClass)
+      browse.style.color = nodeClassColor[nodeClass]
+      setTreeButtonIdentity(browse, { node, relation })
       browse.buttonArea = buttonArea
       browse.onclick = () => {
         return this.toggleNodeContent(node, buttonArea)
@@ -166,7 +217,9 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     browse.classList.add('pointer')
     browse.classList.add('treeButton')
     browse.title = 'Browse this node from the server'
-    browse.style.color = nodeClassColor[relation.NodeClass_]
+    browse.style.color = nodeClassColor[nodeClassToText(relation.NodeClass_)]
+    setTreeButtonIdentity(browse, { relation })
+    browse.setAttribute('data-opcua-reference-type', relation.referenceTypeName)
 
     browse.onclick = () => {
       browse.callback()
@@ -201,6 +254,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
     if (buttonArea.children.length > 1) {
       this.cleanse(buttonArea)
       buttonArea.classList.remove('is-open')
+      return
     } else {
       const enumRelation = node.getNamedRelation('EnumStrings')
 
@@ -276,7 +330,7 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
    * @param {*} subscriberArea is where the result should be put
    */
   convertRelationToNode (relation, subscriberArea) {
-    switch (relation.NodeClass_) {
+    switch (nodeClassToText(relation.NodeClass_)) {
       case 'NodeClass.Method':
 
         break

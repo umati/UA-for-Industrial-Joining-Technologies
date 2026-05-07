@@ -791,6 +791,75 @@ async def test_handle_get_connection_points_returns_data_when_file_exists(tmp_pa
     assert result["connectionpoint1"]["name"] == "Test"
 
 
+@pytest.mark.asyncio
+async def test_handle_get_connection_points_uses_runtime_local_endpoint(tmp_path, monkeypatch):
+    """OPCUA_TEST_ENDPOINT makes the browser LOCAL tab match the runner server."""
+    cp_data = {
+        "connectionpoints": [
+            {
+                "name": "LOCAL",
+                "address": "opc.tcp://127.0.0.1:40451",
+                "autoconnect": True,
+            }
+        ]
+    }
+    cp_file = tmp_path / "connectionpoints.json"
+    cp_file.write_text(json.dumps(cp_data), encoding="utf-8")
+    monkeypatch.setenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40463")
+
+    interface = IJTInterface()
+    interface._resource_path = lambda _: cp_file  # type: ignore[method-assign]
+
+    result = await interface.handle_get_connection_points()
+
+    assert result["connectionpoints"] == [
+        {
+            "name": "LOCAL",
+            "address": "opc.tcp://localhost:40463",
+            "autoconnect": True,
+        }
+    ]
+
+
+def test_runtime_local_endpoint_is_inserted_when_missing(monkeypatch):
+    monkeypatch.setenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40463")
+
+    result = IJTInterface._apply_runtime_local_endpoint(
+        {
+            "connectionpoints": [
+                {
+                    "name": "REMOTE",
+                    "address": "opc.tcp://example.com:4840",
+                    "autoconnect": False,
+                }
+            ]
+        }
+    )
+
+    assert result["connectionpoints"][0] == {
+        "name": "LOCAL",
+        "address": "opc.tcp://localhost:40463",
+        "autoconnect": True,
+    }
+    assert result["connectionpoints"][1]["name"] == "REMOTE"
+
+
+def test_runtime_local_endpoint_handles_non_dict_payload(monkeypatch):
+    monkeypatch.setenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40463")
+
+    result = IJTInterface._apply_runtime_local_endpoint([])
+
+    assert result == {
+        "connectionpoints": [
+            {
+                "name": "LOCAL",
+                "address": "opc.tcp://localhost:40463",
+                "autoconnect": True,
+            }
+        ]
+    }
+
+
 # ===========================================================================
 # handle_get_settings — FileNotFoundError path (line 170)
 # ===========================================================================

@@ -11,6 +11,7 @@ __all__ = ["IJTInterface"]
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -63,6 +64,37 @@ class IJTInterface:
         if isinstance(payload, list):
             return [cls._normalize_json_keys_lower(item) for item in payload]
         return payload
+
+    @classmethod
+    def _apply_runtime_local_endpoint(cls, payload: Any) -> Any:
+        endpoint = os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL")
+        if not endpoint:
+            return payload
+
+        if not isinstance(payload, dict):
+            payload = {}
+
+        updated_payload = dict(payload)
+        points = updated_payload.get("connectionpoints")
+        if not isinstance(points, list):
+            points = []
+
+        local_point = {"name": "LOCAL", "address": endpoint, "autoconnect": True}
+        updated_points: list[Any] = []
+        replaced = False
+
+        for point in points:
+            if isinstance(point, dict) and str(point.get("name", "")).lower() in {"local", "localhost"}:
+                updated_points.append(local_point)
+                replaced = True
+            else:
+                updated_points.append(point)
+
+        if not replaced:
+            updated_points.insert(0, local_point)
+
+        updated_payload["connectionpoints"] = updated_points
+        return updated_payload
 
     async def ensure_connection_open(self, connection: Connection) -> bool:
         """Coroutine. Ensure a connection is open, reconnecting if necessary.
@@ -136,7 +168,8 @@ class IJTInterface:
         path = self._resource_path("connectionpoints.json")
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            return self._normalize_json_keys_lower(payload)
+            payload = self._normalize_json_keys_lower(payload)
+            return self._apply_runtime_local_endpoint(payload)
         except Exception as exc:
             ijt_log.error(f"Error reading connection points: {exc}")
             return {"exception": str(exc)}

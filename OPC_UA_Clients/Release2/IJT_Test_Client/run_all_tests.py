@@ -142,7 +142,7 @@ def _prepare_tmp_dir() -> None:
         return
     for child in _TMP_DIR.iterdir():
         name = child.name
-        managed = name in {"pytest", "pytest_tmp", "pip-audit-cache", "ruff-cache"} or name.startswith(
+        managed = name in {"pytest", "pytest_tmp", "pip-audit-cache", "pip-cache", "ruff-cache"} or name.startswith(
             "server_instance_"
         )
         if not managed:
@@ -494,21 +494,30 @@ def install_requirements() -> None:
     if os.environ.get("SKIP_VENV_INSTALL") == "1":
         logger.info("Skipping pip install (SKIP_VENV_INSTALL=1)")
         return
+    pip = str(_venv_pip(VENV))
+    python = str(_venv_python(VENV))
+    pip_cache = _TMP_DIR / "pip-cache"
+    pip_cache.mkdir(parents=True, exist_ok=True)
+    pip_env = {**os.environ, "PIP_CACHE_DIR": str(pip_cache)}
+    # Keep the bootstrap installer current even when dependency files are unchanged.
+    # pip-audit scans the active environment, so stale pip can fail an otherwise clean run.
+    subprocess.run(
+        [python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
+        check=False,
+        env=pip_env,
+    )
     hash_file = VENV / ".req-hash"
     current_hash = _requirements_hash()
     if hash_file.exists() and hash_file.read_text().strip() == current_hash:
         logger.info("Requirements unchanged — skipping pip install")
         return
-    pip = str(_venv_pip(VENV))
-    python = str(_venv_python(VENV))
-    # Use python -m pip for self-upgrade (newer pip requires this on Windows)
-    subprocess.run([python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"], check=False)
     for req_file in (REQUIREMENTS, _REQUIREMENTS_DEV):
         if req_file.exists():
             logger.info("Installing requirements from %s...", req_file.name)
             subprocess.run(
                 [pip, "install", "--quiet", "-r", str(req_file)],
                 check=False,
+                env=pip_env,
             )
         else:
             logger.info("No %s found — skipping", req_file.name)

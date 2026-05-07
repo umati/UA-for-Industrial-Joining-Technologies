@@ -20,9 +20,21 @@ export const CONNECTION_STATES = Object.freeze({
   ATTEMPT_CLOSE: 'attemptclose'
 })
 
+function createSessionId () {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID()
+  }
+  return `session-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 export class ConnectionManager extends ObservableManagerBase {
   constructor (webSocketManager, endpointUrl) {
     super('ConnectionManager')
+    this.webSocketManager = webSocketManager
+    this.endpointUrl = endpointUrl
+    this.sessionId = createSessionId()
+    this.connectionWanted = true
+    this.closing = false
     this.socketHandler = new SocketHandler(webSocketManager, endpointUrl)
 
     this.socketHandler.registerMandatory('connection established', (_msg) => {
@@ -36,13 +48,34 @@ export class ConnectionManager extends ObservableManagerBase {
 
     // Auto-subscribe to events once connection is established
     this.subscribe(CONNECTION_STATES.CONNECTION, (_connected) => {
-      this.socketHandler.subscribeEvent()
+      if (_connected) {
+        this.socketHandler.subscribeEvent()
+      }
     })
+
+    this.subscribeToWebSocketState()
 
     this.trigger(CONNECTION_STATES.ATTEMPT_CONNECTION, true)
     this.socketHandler.connect()
 
     this.CONNECTION_STATES = CONNECTION_STATES
+  }
+
+  subscribeToWebSocketState () {
+    if (typeof this.webSocketManager?.subscribeConnectionState !== 'function') {
+      return
+    }
+    this.unsubscribeWebSocketState = this.webSocketManager.subscribeConnectionState((connected) => {
+      if (!connected) {
+        this.trigger(CONNECTION_STATES.SUBSCRIPTION, false)
+        this.trigger(CONNECTION_STATES.CONNECTION, false)
+        return
+      }
+      if (this.connectionWanted && !this.closing && !this[CONNECTION_STATES.CONNECTION]) {
+        this.trigger(CONNECTION_STATES.ATTEMPT_CONNECTION, true)
+        this.socketHandler.connect()
+      }
+    })
   }
 
   /**
@@ -72,6 +105,12 @@ export class ConnectionManager extends ObservableManagerBase {
 
   /** Initiate a graceful close of the underlying socket. */
   close () {
+    this.connectionWanted = false
+    this.closing = true
+    if (typeof this.unsubscribeWebSocketState === 'function') {
+      this.unsubscribeWebSocketState()
+      this.unsubscribeWebSocketState = null
+    }
     this.trigger(CONNECTION_STATES.ATTEMPT_CLOSE, true)
     this.socketHandler.close()
   }

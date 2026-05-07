@@ -99,7 +99,9 @@ def _prepare_tmp_dir() -> None:
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
     for child in _TMP_DIR.iterdir():
         name = child.name
-        managed = name in {"pytest", "pip-audit-cache", "ruff-cache"} or name.startswith("server_instance_")
+        managed = name in {"pytest", "pip-audit-cache", "pip-cache", "ruff-cache"} or name.startswith(
+            "server_instance_"
+        )
         if not managed:
             continue
         with contextlib.suppress(OSError):
@@ -253,18 +255,28 @@ def _install_requirements() -> None:
     if _env_bool("SKIP_VENV_INSTALL"):
         _log("  Skipping pip install (SKIP_VENV_INSTALL=1)")
         return
+    pip_cache = _TMP_DIR / "pip-cache"
+    pip_cache.mkdir(parents=True, exist_ok=True)
+    pip_env = {**os.environ, "PIP_CACHE_DIR": str(pip_cache)}
+    pip = str(_venv_pip(_VENV))
+    python = str(_venv_python(_VENV))
+    # Keep bootstrap tooling current even when dependency files are unchanged.
+    subprocess.check_call(
+        [python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
+        env=pip_env,
+    )
     hash_file = _VENV / ".req-hash"
     current_hash = _requirements_hash()
     if hash_file.exists() and hash_file.read_text().strip() == current_hash:
         _log("  Requirements unchanged — skipping pip install")
         return
-    pip = str(_venv_pip(_VENV))
-    python = str(_venv_python(_VENV))
-    subprocess.check_call([python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"])
     for req in (_REQUIREMENTS, _REQUIREMENTS_DEV):
         if req.exists():
             _log(f"  Installing {req.name} …")
-            subprocess.check_call([pip, "install", "--quiet", "--pre", "-r", str(req)])
+            subprocess.check_call(
+                [pip, "install", "--quiet", "--pre", "-r", str(req)],
+                env=pip_env,
+            )
     hash_file.write_text(current_hash)
 
 

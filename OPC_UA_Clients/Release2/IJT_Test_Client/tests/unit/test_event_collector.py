@@ -20,6 +20,15 @@ class TestEventCollectorInit:
         assert collector._subscription is None
         assert collector._client is client
 
+    def test_subscription_id_is_none_before_subscribe(self):
+        collector = EventCollector(MagicMock())
+        assert collector.subscription_id is None
+
+    def test_subscription_id_returns_active_subscription_id(self):
+        collector = EventCollector(MagicMock())
+        collector._subscription = MagicMock(subscription_id=123)
+        assert collector.subscription_id == 123
+
 
 class TestEventNotification:
     def test_event_notification_puts_event_in_queue(self):

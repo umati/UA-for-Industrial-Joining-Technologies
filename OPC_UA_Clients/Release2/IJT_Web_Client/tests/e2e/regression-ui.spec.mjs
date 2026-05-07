@@ -6,8 +6,8 @@
  * Consolidated Result view.
  *
  * Requires:
- *   - Python backend running on ws://localhost:8001
- *   - OPC UA IJT Server running on opc.tcp://localhost:40451
+ *   - Python backend running on WS_TEST_URL
+ *   - OPC UA IJT Server running on OPCUA_TEST_ENDPOINT
  *
  * Run: npx playwright test --project=regression
  */

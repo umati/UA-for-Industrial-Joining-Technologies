@@ -32,6 +32,7 @@ import sys
 import time
 import zipfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 
@@ -47,8 +48,34 @@ _SERVER_ZIP = _SERVER_RELEASE2 / "OPC_UA_IJT_Server_Simulator.zip"
 _SERVER_DIR = _SERVER_RELEASE2 / "OPC_UA_IJT_Server_Simulator"
 _SERVER_EXE = _SERVER_DIR / "opcua_ijt_demo_application.exe"
 
-_OPCUA_PORT = 40451
-_WS_PORT = 8001
+_OPCUA_ENDPOINT = os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{os.getenv('OPCUA_SERVER_PORT', '40451')}")
+_WS_URL = os.getenv("WS_TEST_URL", f"ws://localhost:{os.getenv('WS_PORT', '8001')}")
+
+
+def _parse_endpoint(endpoint: str) -> tuple[str, int]:
+    parsed = urlparse(endpoint)
+    if parsed.hostname and parsed.port:
+        return parsed.hostname, parsed.port
+    clean = endpoint.replace("opc.tcp://", "").replace("opc.tcp//", "")
+    if ":" in clean:
+        host, port = clean.rsplit(":", 1)
+        return host.strip("[]"), int(port)
+    return clean or "localhost", 4840
+
+
+def _parse_ws_url(url: str) -> tuple[str, int]:
+    parsed = urlparse(url)
+    if parsed.hostname and parsed.port:
+        return parsed.hostname, parsed.port
+    clean = url.replace("wss://", "").replace("ws://", "").split("/")[0]
+    if ":" in clean:
+        host, port = clean.rsplit(":", 1)
+        return host.strip("[]"), int(port)
+    return clean or "localhost", 80
+
+
+_OPCUA_HOST, _OPCUA_PORT = _parse_endpoint(_OPCUA_ENDPOINT)
+_WS_HOST, _WS_PORT = _parse_ws_url(_WS_URL)
 
 
 # ── Port utilities ─────────────────────────────────────────────────────────────
@@ -96,9 +123,13 @@ def _start_opcua_server() -> "subprocess.Popen | None":
 
 def _start_web_server() -> "subprocess.Popen":
     """Start the Web Client WebSocket + HTTP server (python index.py)."""
+    env = os.environ.copy()
+    env["OPCUA_TEST_ENDPOINT"] = _OPCUA_ENDPOINT
+    env["WS_PORT"] = str(_WS_PORT)
     return subprocess.Popen(
         [sys.executable, "index.py"],
         cwd=str(_WEB_CLIENT_ROOT),
+        env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -106,7 +137,7 @@ def _start_web_server() -> "subprocess.Popen":
 
 # ── Session fixture: guarantee both servers are up before any test runs ────────
 @pytest.fixture(scope="session", autouse=True)
-def ensure_live_servers():
+def ensure_live_servers(request):
     """Auto-start OPC UA server and Web Client WebSocket server for live tests.
 
     Never silently skips — calls pytest.fail() if a required server cannot start.
@@ -114,14 +145,15 @@ def ensure_live_servers():
     Cleanup runs in a finally block so no process leaks even if startup fails.
     """
     started: list[tuple[str, subprocess.Popen]] = []
+    needs_ws = any(item.get_closest_marker("live_ws") for item in request.session.items)
 
     try:
         # ── 1. OPC UA Server ──────────────────────────────────────────────────
-        if not _port_open("localhost", _OPCUA_PORT):
+        if not _port_open(_OPCUA_HOST, _OPCUA_PORT):
             proc = _start_opcua_server()
             if proc:
                 started.append(("opcua-server", proc))
-                if not _wait_for_port("localhost", _OPCUA_PORT, timeout=60):
+                if not _wait_for_port(_OPCUA_HOST, _OPCUA_PORT, timeout=60):
                     pytest.fail(
                         f"OPC UA server process started (PID {proc.pid}) but port "
                         f"{_OPCUA_PORT} did not open within 60 s. "
@@ -134,20 +166,21 @@ def ensure_live_servers():
                     f"Start it manually or via Docker before running live tests."
                 )
 
-        os.environ.setdefault("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{_OPCUA_PORT}")
+        os.environ.setdefault("OPCUA_TEST_ENDPOINT", _OPCUA_ENDPOINT)
 
         # ── 2. Web Client WebSocket server ────────────────────────────────────
-        if not _port_open("localhost", _WS_PORT):
-            proc = _start_web_server()
-            started.append(("web-server", proc))
-            if not _wait_for_port("localhost", _WS_PORT, timeout=30):
-                pytest.fail(
-                    f"Web Client server process started (PID {proc.pid}) but port "
-                    f"{_WS_PORT} did not open within 30 s. "
-                    f"Check python index.py in {_WEB_CLIENT_ROOT}."
-                )
+        if needs_ws:
+            if not _port_open(_WS_HOST, _WS_PORT):
+                proc = _start_web_server()
+                started.append(("web-server", proc))
+                if not _wait_for_port(_WS_HOST, _WS_PORT, timeout=30):
+                    pytest.fail(
+                        f"Web Client server process started (PID {proc.pid}) but port "
+                        f"{_WS_PORT} did not open within 30 s. "
+                        f"Check python index.py in {_WEB_CLIENT_ROOT}."
+                    )
 
-        os.environ.setdefault("WS_TEST_URL", f"ws://localhost:{_WS_PORT}")
+            os.environ.setdefault("WS_TEST_URL", _WS_URL)
 
         yield
 

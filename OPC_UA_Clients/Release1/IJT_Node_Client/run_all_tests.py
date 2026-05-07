@@ -68,6 +68,17 @@ _WELL_KNOWN_SIMULATOR_PATHS = [
 ]
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40451"
 _NPM_INSTALL_FLAGS = ["--no-audit", "--no-fund"]
+_TMP_DIR = _PROJECT_DIR / "tmp"
+_NPM_CACHE = _TMP_DIR / "npm-cache"
+
+
+def _subprocess_env(env: dict | None = None) -> dict:
+    """Return a stable subprocess environment for runner-owned commands."""
+    run_env = {**os.environ, **(env or {})}
+    _NPM_CACHE.mkdir(parents=True, exist_ok=True)
+    run_env.setdefault("npm_config_cache", str(_NPM_CACHE))
+    run_env.setdefault("npm_config_update_notifier", "false")
+    return run_env
 
 
 def _cmd_available(cmd: str) -> bool:
@@ -185,11 +196,10 @@ def _run(
     stderr is inherited (visible in terminal).  stdout is captured when
     *capture_stdout* is True, otherwise also inherited.
     """
-    merged_env = {**os.environ, **(env or {})}
     result = subprocess.run(
         cmd,
         cwd=str(cwd),
-        env=merged_env,
+        env=_subprocess_env(env),
         check=False,
         stdout=subprocess.PIPE if capture_stdout else None,
         text=True,
@@ -314,7 +324,13 @@ def _check_prerequisites() -> bool:
         return False
 
     node_ver_str = (
-        subprocess.run([_NODE, "--version"], capture_output=True, text=True, check=False)
+        subprocess.run(
+            [_NODE, "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=_subprocess_env(),
+        )
         .stdout.strip()
         .lstrip("v")
     )
@@ -330,7 +346,11 @@ def _check_prerequisites() -> bool:
         )
 
     npm_ver_str = subprocess.run(
-        [_NPM, "--version"], capture_output=True, text=True, check=False
+        [_NPM, "--version"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_subprocess_env(),
     ).stdout.strip()
     print(f"npm  {npm_ver_str}")
     try:
