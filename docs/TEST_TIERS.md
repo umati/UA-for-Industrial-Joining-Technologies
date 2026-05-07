@@ -190,7 +190,7 @@ To run on a different port, the copy-patch mechanism:
 4. Captures simulator stdout/stderr to `test-results/opcua-server-<port>.out.log` and `.err.log`
 5. Waits up to 30–60 s for `localhost:{port}` to become reachable
 6. Sets the session endpoint (`OPCUA_TEST_ENDPOINT` or `OPCUA_SERVER_URL`, depending on runner)
-7. Runs a short OPC UA protocol probe before tests start, because a listening TCP port is not enough
+7. Runs an OPC UA protocol probe before tests start, because a listening TCP port is not enough
 8. On teardown: terminates the process, then removes the temp dir
 
 **Web Client runner-owned servers** (`OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py`):
@@ -217,8 +217,10 @@ safe path-length threshold.
 live/integration pytest fixtures treat a matching marker plus a closed port as a
 runner-owned server failure and fail with the `opcua-server-<port>` log paths
 instead of starting the packaged default-port EXE as a fallback. WebSocket live
-fixtures run a short WebSocket ping probe after the backend port opens, so the
-first protocol operation is not racing backend startup.
+fixtures run a WebSocket ping probe after the backend port opens, so the first
+protocol operation is not racing backend startup. The shared Web Client probe
+defaults allow roughly 38 seconds for slow GitHub-hosted Windows simulator
+startup measured after the short-path fix.
 
 ### `.venv_test` Isolation Pattern
 

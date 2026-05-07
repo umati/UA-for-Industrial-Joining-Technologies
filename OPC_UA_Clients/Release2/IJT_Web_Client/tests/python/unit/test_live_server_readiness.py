@@ -75,11 +75,22 @@ def test_protocol_warmup_retries_first_opcua_connect(monkeypatch):
     monkeypatch.setitem(sys.modules, "asyncua", SimpleNamespace(Client=FakeClient))
     monkeypatch.setattr(readiness.time, "sleep", lambda seconds: sleeps.append(seconds))
 
-    error = readiness.wait_for_opcua_protocol_ready("opc.tcp://localhost:40463")
+    error = readiness.wait_for_opcua_protocol_ready(
+        "opc.tcp://localhost:40463",
+        attempts=3,
+        interval=1.0,
+        connect_timeout=1.25,
+    )
 
     assert error is None
     assert attempts == ["connect", "disconnect", "connect", "disconnect", "connect", "disconnect"]
     assert sleeps == [1.0, 1.0]
+
+
+def test_protocol_warmup_defaults_match_ci_startup_budget():
+    assert readiness.DEFAULT_PROTOCOL_READY_ATTEMPTS == 10
+    assert readiness.DEFAULT_PROTOCOL_READY_INTERVAL == 1.5
+    assert readiness.DEFAULT_PROTOCOL_READY_TIMEOUT == 2.5
 
 
 def test_protocol_warmup_retries_first_websocket_ping(monkeypatch):
@@ -108,7 +119,13 @@ def test_protocol_warmup_retries_first_websocket_ping(monkeypatch):
     monkeypatch.setitem(sys.modules, "websockets", SimpleNamespace(connect=FakeConnect))
     monkeypatch.setattr(readiness.time, "sleep", lambda seconds: sleeps.append(seconds))
 
-    error = readiness.wait_for_websocket_protocol_ready("ws://localhost:8001", "opc.tcp://localhost:40463")
+    error = readiness.wait_for_websocket_protocol_ready(
+        "ws://localhost:8001",
+        "opc.tcp://localhost:40463",
+        attempts=3,
+        interval=1.0,
+        response_timeout=1.25,
+    )
 
     assert error is None
     assert attempts == ["ping", "ping", "ping"]

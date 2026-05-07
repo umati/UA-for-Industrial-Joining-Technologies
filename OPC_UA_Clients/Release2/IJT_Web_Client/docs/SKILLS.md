@@ -540,9 +540,10 @@ when set). The runner also exports `IJT_OPCUA_PRESTARTED_PORT=<port>` after an
 owned simulator reaches TCP readiness. Live/integration pytest fixtures use that
 marker to fail fast with the captured log paths if the runner-owned port closes
 before fixture startup; they do not spawn a fallback EXE on a different,
-unpatched port. Fixtures also run short OPC UA and WebSocket protocol probes
-after TCP ports open so first tests do not consume the simulator/backend warmup
-window.
+unpatched port. Fixtures also run OPC UA and WebSocket protocol probes after
+TCP ports open so first tests do not consume the simulator/backend warmup
+window. The default probe budget is about 38 seconds, sized from GitHub-hosted
+Windows startup evidence.
 
 On Windows, runner-owned simulator copies live under a short temp root
 (`RUNNER_TEMP\ijt-sim\<port>` on GitHub Actions, the system temp fallback, or

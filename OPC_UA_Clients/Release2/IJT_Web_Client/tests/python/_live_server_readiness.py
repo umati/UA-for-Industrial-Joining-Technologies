@@ -11,6 +11,9 @@ import time
 from pathlib import Path
 
 OPCUA_PRESTARTED_PORT_ENV = "IJT_OPCUA_PRESTARTED_PORT"
+DEFAULT_PROTOCOL_READY_ATTEMPTS = 10
+DEFAULT_PROTOCOL_READY_INTERVAL = 1.5
+DEFAULT_PROTOCOL_READY_TIMEOUT = 2.5
 
 
 def web_client_results_dir(web_client_root: Path) -> Path:
@@ -79,9 +82,9 @@ async def _probe_opcua_protocol(endpoint: str, connect_timeout: float) -> None:
 def wait_for_opcua_protocol_ready(
     endpoint: str,
     *,
-    attempts: int = 3,
-    interval: float = 1.0,
-    connect_timeout: float = 1.25,
+    attempts: int = DEFAULT_PROTOCOL_READY_ATTEMPTS,
+    interval: float = DEFAULT_PROTOCOL_READY_INTERVAL,
+    connect_timeout: float = DEFAULT_PROTOCOL_READY_TIMEOUT,
 ) -> str | None:
     last_error = "no OPC UA protocol probe attempted"
     for attempt in range(attempts):
@@ -110,9 +113,9 @@ def wait_for_websocket_protocol_ready(
     ws_url: str,
     opcua_endpoint: str,
     *,
-    attempts: int = 3,
-    interval: float = 1.0,
-    response_timeout: float = 1.25,
+    attempts: int = DEFAULT_PROTOCOL_READY_ATTEMPTS,
+    interval: float = DEFAULT_PROTOCOL_READY_INTERVAL,
+    response_timeout: float = DEFAULT_PROTOCOL_READY_TIMEOUT,
 ) -> str | None:
     last_error = "no WebSocket protocol probe attempted"
     for attempt in range(attempts):
