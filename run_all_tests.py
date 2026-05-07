@@ -31,6 +31,7 @@ Usage:
   python run_all_tests.py --suite md-hygiene # single suite by name
   python run_all_tests.py --suite server-smoke  # focused server smoke on port 40451
   python run_all_tests.py --suite server-linux-package-smoke  # Docker smoke on port 40465
+  python run_all_tests.py --ci-mode         # force child runners through CI codepaths
   python run_all_tests.py --verbose          # DEBUG-level logging
   python run_all_tests.py --help
 
@@ -216,7 +217,27 @@ WEB_CLIENT_WS_PORT_E2E_REGRESSION = 8010
 WEB_CLIENT_UI_PORT_E2E_SMOKE = 3004
 WEB_CLIENT_UI_PORT_E2E_FEATURES = 3005
 WEB_CLIENT_UI_PORT_E2E_REGRESSION = 3006
-WEB_CLIENT_E2E_FEATURE_WORKERS = int(os.getenv("IJT_PLAYWRIGHT_FEATURE_WORKERS", "4"))
+
+
+def _int_env(name: str, default: int) -> int:
+    """Read an integer env var, treating unset/empty/whitespace as default.
+
+    ``os.getenv(name, default)`` returns an empty string when the variable is
+    set-but-empty (a common case in CI matrices that pass blank values for
+    optional inputs). Plain ``int(os.getenv(...))`` raises ValueError on those
+    blanks; this helper falls back to the default instead. Non-empty invalid
+    values fail loudly because they indicate a misconfigured caller.
+    """
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return int(raw.strip())
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from exc
+
+
+WEB_CLIENT_E2E_FEATURE_WORKERS = _int_env("IJT_PLAYWRIGHT_FEATURE_WORKERS", 4)
 WEB_CLIENT_RESULTS_DIR = WEB_CLIENT_DIR / "test-results"
 
 # Release 1 / Node client — legacy default, unchanged for backward compatibility.
@@ -228,8 +249,8 @@ OPCUA_PORT = 40451
 IS_WINDOWS = sys.platform == "win32"
 IS_CI = bool(os.getenv("CI"))
 
-SUITE_TIMEOUT = int(os.getenv("IJT_SUITE_TIMEOUT", "600"))  # 10 min default
-DOCKER_BUILD_TIMEOUT = int(os.getenv("IJT_DOCKER_BUILD_TIMEOUT", "1200"))
+SUITE_TIMEOUT = _int_env("IJT_SUITE_TIMEOUT", 600)  # 10 min default
+DOCKER_BUILD_TIMEOUT = _int_env("IJT_DOCKER_BUILD_TIMEOUT", 1200)
 _RUNNER_ENV_DIR = REPO_ROOT / "tmp" / "runner-env"
 _SERVER_SMOKE_REQUIREMENTS_LOCK = threading.Lock()
 _server_smoke_requirements_ready = False
@@ -2065,6 +2086,15 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="List all available suite names and exit",
     )
+    parser.add_argument(
+        "--ci-mode",
+        action="store_true",
+        help=(
+            "Run as if executing in GitHub CI: sets CI=1 in the environment "
+            "before any suite runs, so client runners take their CI codepath "
+            "(skip venv relaunch, etc.). Use locally to surface CI-only bugs."
+        ),
+    )
     return parser
 
 
@@ -2082,6 +2112,12 @@ def main() -> int:
     _cleanup_caches(REPO_ROOT)  # pre-run: clear stale caches from interrupted runs
     parser = _build_parser()
     args = parser.parse_args()
+
+    if args.ci_mode:
+        # Force the CI codepath in every child runner (venv relaunch skipped,
+        # CI-equivalent commands chosen, etc.) so local runs surface bugs that
+        # would otherwise only show up in GitHub Actions.
+        os.environ["CI"] = "1"
 
     if args.list:
         print("Phase 1 suites (parallel, no server):")
@@ -2105,7 +2141,9 @@ def main() -> int:
     log.info("Python    : %s", sys.version.split()[0])
     log.info("Platform  : %s", platform.platform())
     log.info("Repo root : %s", REPO_ROOT)
-    log.info("CI        : %s", IS_CI)
+    ci_active = IS_CI or bool(os.getenv("CI"))
+    ci_note = " (forced via --ci-mode)" if args.ci_mode else ""
+    log.info("CI        : %s%s", ci_active, ci_note)
     log.info("Timeout   : %ds per suite", SUITE_TIMEOUT)
 
     # Pre-flight tool checks -- warn only, suites fail naturally if tools missing

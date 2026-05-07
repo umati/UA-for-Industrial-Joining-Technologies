@@ -69,9 +69,12 @@ test('JointDemo: results from demo cycle appear in Consolidated Result view', as
   await results.waitForHeader({ timeout: 60_000 })
 
   await results.selectResultType(RESULT_TYPE.TIGHTENING)
-  const count = await results.getResultOptionCount()
+  // The result option list refreshes from subscription updates after the
+  // demo cycle completes; wait until both demo results are visible.
   // At minimum: Unresolved + Latest + the 2 demo results
-  expect(count).toBeGreaterThanOrEqual(4)
+  await expect
+    .poll(async () => results.getResultOptionCount(), { timeout: 30_000 })
+    .toBeGreaterThanOrEqual(4)
 })
 
 test('JointDemo: repeated demo cycles accumulate results', async ({ connected: app }) => {

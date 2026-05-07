@@ -90,6 +90,8 @@ Running multiple Python clients together in a single root `pytest` invocation ca
 The root orchestrator forces Python child runners to UTF-8 output so nested
 runner banners, skip reasons, and advisory tool messages render consistently on
 Windows terminals and captured logs.
+Use `python run_all_tests.py --ci-mode` when a local run must exercise the same
+CI codepaths as GitHub Actions; the flag sets `CI=1` before child runners start.
 
 ---
 

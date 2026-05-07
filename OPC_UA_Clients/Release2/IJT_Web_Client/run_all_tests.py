@@ -660,6 +660,7 @@ def _stage_pip_install(python: Path) -> StageResult:
             if rc != 0:
                 overall_rc = rc
     if overall_rc == 0:
+        hash_file.parent.mkdir(parents=True, exist_ok=True)
         hash_file.write_text(current_hash)
     _ensure_precommit_hooks()
     return StageResult("pip-install", overall_rc, duration=time.monotonic() - t0)

@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _load_root_runner():
     root = Path(__file__).resolve().parents[1]
@@ -466,6 +468,31 @@ def test_root_feature_worker_count_can_be_overridden_for_ci(monkeypatch) -> None
     assert runner.WEB_CLIENT_E2E_FEATURE_WORKERS == 2
 
 
+def test_root_feature_worker_count_handles_empty_env_var(monkeypatch) -> None:
+    """Regression: integration.yml matrix passes IJT_PLAYWRIGHT_FEATURE_WORKERS=''
+    for non-feature suites (e.g. ``${{ matrix.feature_workers || '' }}``).
+    ``int(os.getenv(name, default))`` returns '' on set-but-empty vars and
+    crashes the module at import time, taking down every Web Client live job."""
+    monkeypatch.setenv("IJT_PLAYWRIGHT_FEATURE_WORKERS", "")
+    runner = _load_runner_at("run_all_tests.py", "ijt_root_runner_feature_workers_empty")
+
+    assert runner.WEB_CLIENT_E2E_FEATURE_WORKERS == 4
+
+
+def test_root_feature_worker_count_handles_whitespace_env_var(monkeypatch) -> None:
+    monkeypatch.setenv("IJT_PLAYWRIGHT_FEATURE_WORKERS", "   ")
+    runner = _load_runner_at("run_all_tests.py", "ijt_root_runner_feature_workers_ws")
+
+    assert runner.WEB_CLIENT_E2E_FEATURE_WORKERS == 4
+
+
+def test_root_int_env_helper_rejects_garbage(monkeypatch) -> None:
+    monkeypatch.setenv("IJT_SUITE_TIMEOUT", "not-a-number")
+
+    with pytest.raises(ValueError, match="IJT_SUITE_TIMEOUT must be an integer"):
+        _load_runner_at("run_all_tests.py", "ijt_root_runner_int_env_garbage")
+
+
 def test_ci_web_client_uses_local_phase1_runner() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     web_job = workflow.split("  web-client:", 1)[1].split("  console-client:", 1)[0]
@@ -540,3 +567,78 @@ def test_csharp_managed_live_all_skipped_is_failure() -> None:
 
     assert enforced.status == "FAIL"
     assert enforced.detail == "0/110, 110 skipped (managed server unavailable)"
+
+
+def test_ci_mode_flag_is_advertised_in_help() -> None:
+    parser = _runner._build_parser()
+    help_text = parser.format_help()
+
+    assert "--ci-mode" in help_text
+    assert "CI=1" in help_text
+
+
+def test_ci_mode_flag_parses_independently_of_phase_flags() -> None:
+    parser = _runner._build_parser()
+
+    args = parser.parse_args(["--ci-mode"])
+    assert args.ci_mode is True
+    assert args.phase1 is False
+    assert args.phase2 is False
+
+    args = parser.parse_args(["--ci-mode", "--phase1"])
+    assert args.ci_mode is True
+    assert args.phase1 is True
+
+
+def test_ci_mode_flag_sets_ci_env_for_child_runners(monkeypatch, capsys) -> None:
+    """--ci-mode must inject CI=1 into the environment so client subrunners
+    take their CI codepath (skip venv relaunch, etc.). Without this, bugs
+    that only fail in GitHub Actions cannot be reproduced locally."""
+    import os as _os
+
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--ci-mode", "--list"])
+
+    rc = _runner.main()
+    captured = capsys.readouterr()
+
+    assert rc == 0
+    assert _os.environ.get("CI") == "1"
+    # --list still works in ci-mode
+    assert "Phase 1 suites" in captured.out
+
+    monkeypatch.delenv("CI", raising=False)
+
+
+def test_delegate_to_runner_inherits_forced_ci_env(monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    def _fake_run_captured(cmd, *, cwd, timeout, env, label):
+        captured.update(env)
+        return 0, "child ok\n"
+
+    monkeypatch.setenv("CI", "1")
+    monkeypatch.setattr(_runner, "_run_captured", _fake_run_captured)
+
+    result = _runner._delegate_to_runner(
+        name="repo-hygiene",
+        runner_dir=_runner.REPO_ROOT,
+        phase_args=["--list"],
+        label="root runner probe",
+    )
+
+    assert result.ok is True
+    assert captured["CI"] == "1"
+
+
+def test_ci_mode_not_set_without_flag(monkeypatch, capsys) -> None:
+    import os as _os
+
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--list"])
+
+    rc = _runner.main()
+    capsys.readouterr()
+
+    assert rc == 0
+    assert _os.environ.get("CI") is None

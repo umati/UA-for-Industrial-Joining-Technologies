@@ -33,6 +33,30 @@ def test_subprocess_env_uses_project_npm_cache(monkeypatch):
     assert env["npm_config_update_notifier"] == "false"
 
 
+def test_pip_install_creates_venv_dir_for_hash_file_in_ci(monkeypatch, tmp_path):
+    """Regression: in CI, .venv_test/ does not exist (relaunch is skipped),
+    so the hash file write must create the parent directory first."""
+    runner = _load_runner()
+    venv_dir = tmp_path / ".venv_test"
+    pip_cache = tmp_path / "pip-cache"
+    monkeypatch.setattr(runner, "_VENV", venv_dir)
+    monkeypatch.setattr(runner, "_PIP_CACHE", pip_cache)
+    monkeypatch.setattr(runner, "_REQUIREMENTS", tmp_path / "missing-requirements.txt")
+    monkeypatch.setattr(runner, "_REQUIREMENTS_DEV", tmp_path / "missing-requirements-dev.txt")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_info", lambda msg: None)
+    monkeypatch.setattr(runner, "_run", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(runner, "_requirements_hash", lambda: "abc123")
+    monkeypatch.setattr(runner, "_ensure_precommit_hooks", lambda: None)
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+
+    assert not venv_dir.exists()
+    result = runner._stage_pip_install(Path(sys.executable))
+
+    assert result.rc == 0
+    assert (venv_dir / ".req-hash").read_text() == "abc123"
+
+
 def test_npm_install_uses_ci_in_ci_when_lockfile_exists(monkeypatch):
     runner = _load_runner()
     monkeypatch.setattr(runner, "IS_CI", True)
