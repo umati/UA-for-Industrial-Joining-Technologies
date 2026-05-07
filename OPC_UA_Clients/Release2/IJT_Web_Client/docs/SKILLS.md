@@ -533,5 +533,15 @@ When the runner sets `OPCUA_TEST_ENDPOINT`, the WebSocket backend serves that en
 `OPCUA_SERVER_URL` follows the same runtime override path for local validation; leave it unset for normal
 production/browser use unless you intentionally want to replace the served `LOCAL` endpoint.
 
+Runner-owned OPC UA simulator launches write `opcua-server-<port>.out.log` and
+`opcua-server-<port>.err.log` under `test-results/` (or `IJT_WEB_TEST_RESULTS_DIR`
+when set). The runner also exports `IJT_OPCUA_PRESTARTED_PORT=<port>` after an
+owned simulator reaches TCP readiness. Live/integration pytest fixtures use that
+marker to fail fast with the captured log paths if the runner-owned port closes
+before fixture startup; they do not spawn a fallback EXE on a different,
+unpatched port. Fixtures also run short OPC UA and WebSocket protocol probes
+after TCP ports open so first tests do not consume the simulator/backend warmup
+window.
+
 For the full port assignment table, auto-launch mechanics, and venv rationale, see
 [`docs/TEST_TIERS.md`](../../../../docs/TEST_TIERS.md).

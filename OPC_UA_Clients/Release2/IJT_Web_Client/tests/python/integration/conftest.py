@@ -25,6 +25,14 @@ from urllib.parse import urlparse
 import pytest
 
 from .._asyncua_compat import apply_send_request_timeout_patch
+from .._live_server_readiness import (
+    opcua_server_log_hint,
+    prestarted_port_closed_message,
+    prestarted_port_matches,
+    start_process_with_opcua_logs,
+    wait_for_opcua_protocol_ready,
+    wait_for_websocket_protocol_ready,
+)
 
 # ── Path constants ─────────────────────────────────────────────────────────────
 _INTEGRATION_DIR = Path(__file__).resolve().parent
@@ -105,11 +113,11 @@ def _start_opcua_server() -> "subprocess.Popen | None":
     if not _SERVER_EXE.exists():
         return None
 
-    return subprocess.Popen(
+    return start_process_with_opcua_logs(
         [str(_SERVER_EXE)],
-        cwd=str(_SERVER_DIR),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        cwd=_SERVER_DIR,
+        web_client_root=_WEB_CLIENT_ROOT,
+        port=_OPCUA_PORT,
     )
 
 
@@ -145,6 +153,8 @@ def ensure_integration_servers():
 
     # ── 1. OPC UA Server ──────────────────────────────────────────────────────
     if not _port_open(_OPCUA_HOST, _OPCUA_PORT):
+        if prestarted_port_matches(_OPCUA_PORT):
+            pytest.fail(prestarted_port_closed_message(_WEB_CLIENT_ROOT, _OPCUA_PORT))
         proc = _start_opcua_server()
         if proc:
             started.append(("opcua-server", proc))
@@ -153,7 +163,7 @@ def ensure_integration_servers():
                 pytest.fail(
                     f"OPC UA server process started (PID {proc.pid}) but port "
                     f"{_OPCUA_PORT} did not open within 60 s.  "
-                    f"Check opcua_ijt_demo_application.exe output."
+                    f"{opcua_server_log_hint(_WEB_CLIENT_ROOT, _OPCUA_PORT)}"
                 )
         else:
             pytest.fail(
@@ -164,6 +174,13 @@ def ensure_integration_servers():
             )
 
     os.environ.setdefault("OPCUA_TEST_ENDPOINT", _OPCUA_ENDPOINT)
+    opcua_probe_error = wait_for_opcua_protocol_ready(_OPCUA_ENDPOINT)
+    if opcua_probe_error is not None:
+        pytest.fail(
+            f"OPC UA server port {_OPCUA_PORT} is open, but the OPC UA protocol "
+            f"did not become ready after 3 attempts. Last error: {opcua_probe_error}. "
+            f"{opcua_server_log_hint(_WEB_CLIENT_ROOT, _OPCUA_PORT)}"
+        )
 
     # ── 2. Web Client WebSocket server ────────────────────────────────────────
     if not _port_open(_WS_HOST, _WS_PORT):
@@ -179,6 +196,13 @@ def ensure_integration_servers():
 
     os.environ.setdefault("OPCUA_WS_URL", _WS_URL)
     os.environ.setdefault("WS_TEST_URL", _WS_URL)
+    websocket_probe_error = wait_for_websocket_protocol_ready(_WS_URL, _OPCUA_ENDPOINT)
+    if websocket_probe_error is not None:
+        pytest.fail(
+            f"Web Client server port {_WS_PORT} is open, but the WebSocket "
+            f"ping probe did not become ready after 3 attempts. "
+            f"Last error: {websocket_probe_error}."
+        )
 
     # ── 3. Console Client path ────────────────────────────────────────────────
     if not os.environ.get("OPCUA_CONSOLE_CLIENT_DIR"):

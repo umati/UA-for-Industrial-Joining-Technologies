@@ -187,9 +187,11 @@ To run on a different port, the copy-patch mechanism:
 1. Copies the **entire binary directory** to a temp location
 2. Patches `serverConfigurationData.serverEndpointTCPPort` in the **copy's** `server_configuration.json`
 3. Launches the binary **with `cwd=<copied dir>/`** so it reads the patched config
-4. Waits up to 30–60 s for `localhost:{port}` to become reachable
-5. Sets `OPCUA_SERVER_URL=opc.tcp://localhost:{port}` for the test session
-6. On teardown: terminates the process, then removes the temp dir
+4. Captures simulator stdout/stderr to `test-results/opcua-server-<port>.out.log` and `.err.log`
+5. Waits up to 30–60 s for `localhost:{port}` to become reachable
+6. Sets the session endpoint (`OPCUA_TEST_ENDPOINT` or `OPCUA_SERVER_URL`, depending on runner)
+7. Runs a short OPC UA protocol probe before tests start, because a listening TCP port is not enough
+8. On teardown: terminates the process, then removes the temp dir
 
 **Python clients** (`run_all_tests.py`): temp dir in `{client}/tmp/server_instance_{port}/`
 
@@ -203,6 +205,14 @@ To run on a different port, the copy-patch mechanism:
 - **CI** (`scripts/start_server_on_port.py`): temp dir in `tmp/server_{port}/`
 - Cross-platform Python script that handles copy, patch, start, port-wait, and GITHUB_ENV export
 - Used in all Windows live test jobs in `ci.yml` and `integration.yml`
+
+**Web Client runner-owned servers** also export
+`IJT_OPCUA_PRESTARTED_PORT=<port>` after successful startup. The Web Client
+live/integration pytest fixtures treat a matching marker plus a closed port as a
+runner-owned server failure and fail with the `opcua-server-<port>` log paths
+instead of starting the packaged default-port EXE as a fallback. WebSocket live
+fixtures run a short WebSocket ping probe after the backend port opens, so the
+first protocol operation is not racing backend startup.
 
 ### `.venv_test` Isolation Pattern
 

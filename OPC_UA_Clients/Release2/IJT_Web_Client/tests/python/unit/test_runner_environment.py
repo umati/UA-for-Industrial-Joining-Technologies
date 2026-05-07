@@ -34,6 +34,15 @@ def test_subprocess_env_uses_project_npm_cache(monkeypatch):
     assert env["npm_config_update_notifier"] == "false"
 
 
+def test_subprocess_env_inherits_opcua_prestarted_marker(monkeypatch):
+    runner = _load_runner()
+    monkeypatch.setenv("IJT_OPCUA_PRESTARTED_PORT", "40463")
+
+    env = runner._subprocess_env({})
+
+    assert env["IJT_OPCUA_PRESTARTED_PORT"] == "40463"
+
+
 def test_pip_install_creates_venv_dir_for_hash_file_in_ci(monkeypatch, tmp_path):
     """Regression: in CI, .venv_test/ does not exist (relaunch is skipped),
     so the hash file write must create the parent directory first."""
@@ -320,6 +329,7 @@ def test_existing_opcua_port_sets_test_endpoint(monkeypatch):
     monkeypatch.delenv("OPCUA_TEST_ENDPOINT", raising=False)
     monkeypatch.delenv("OPCUA_SERVER_URL", raising=False)
     monkeypatch.delenv("OPCUA_SERVER_PORT", raising=False)
+    monkeypatch.setenv("IJT_OPCUA_PRESTARTED_PORT", "40463")
     monkeypatch.setattr(runner, "_port_open", lambda host, port, timeout=1.0: True)
 
     started, ready, proc = runner._maybe_start_opcua_server()
@@ -328,6 +338,60 @@ def test_existing_opcua_port_sets_test_endpoint(monkeypatch):
     assert ready is True
     assert proc is None
     assert runner.os.environ["OPCUA_TEST_ENDPOINT"] == "opc.tcp://localhost:40463"
+    assert "IJT_OPCUA_PRESTARTED_PORT" not in runner.os.environ
+
+
+def test_opcua_log_process_uses_append_logs_and_closes_parent_handles(monkeypatch, tmp_path):
+    runner = _load_runner()
+    captured = {}
+
+    class FakeProc:
+        pass
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["cwd"] = kwargs["cwd"]
+        captured["stdout"] = kwargs["stdout"]
+        captured["stderr"] = kwargs["stderr"]
+        captured["stdin"] = kwargs["stdin"]
+        captured["stdout_name"] = kwargs["stdout"].name
+        captured["stderr_name"] = kwargs["stderr"].name
+        return FakeProc()
+
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "results")
+    monkeypatch.setattr(runner.subprocess, "Popen", fake_popen)
+
+    proc = runner._start_process_with_opcua_logs(["simulator.exe"], cwd=tmp_path, port=40463)
+
+    assert isinstance(proc, FakeProc)
+    assert captured["cmd"] == ["simulator.exe"]
+    assert captured["cwd"] == str(tmp_path)
+    assert captured["stdin"] is runner.subprocess.DEVNULL
+    assert Path(captured["stdout_name"]) == tmp_path / "results" / "opcua-server-40463.out.log"
+    assert Path(captured["stderr_name"]) == tmp_path / "results" / "opcua-server-40463.err.log"
+    assert captured["stdout"].closed is True
+    assert captured["stderr"].closed is True
+
+
+def test_owned_opcua_launch_sets_endpoint_and_prestarted_marker(monkeypatch, tmp_path):
+    runner = _load_runner()
+
+    class FakeProc:
+        pass
+
+    monkeypatch.delenv("OPCUA_TEST_ENDPOINT", raising=False)
+    monkeypatch.delenv("IJT_OPCUA_PRESTARTED_PORT", raising=False)
+    monkeypatch.setattr(
+        runner,
+        "_launch_simulator_instance",
+        lambda port, exe: runner._OpcuaServerInstance(port=port, proc=FakeProc(), tmp_dir=tmp_path),
+    )
+
+    proc = runner._launch_simulator_on_port(40466, "simulator.exe")
+
+    assert isinstance(proc, FakeProc)
+    assert runner.os.environ["OPCUA_TEST_ENDPOINT"] == "opc.tcp://localhost:40466"
+    assert runner.os.environ["IJT_OPCUA_PRESTARTED_PORT"] == "40466"
 
 
 def test_simulator_package_is_extracted_when_binary_is_missing(monkeypatch, tmp_path):

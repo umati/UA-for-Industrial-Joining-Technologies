@@ -110,6 +110,7 @@ def _path_from_env(name: str, default: Path) -> Path:
 
 
 _RESULTS_DIR = _path_from_env("IJT_WEB_TEST_RESULTS_DIR", ROOT / "test-results")
+_OPCUA_PRESTARTED_PORT_ENV = "IJT_OPCUA_PRESTARTED_PORT"
 
 
 # ---------------------------------------------------------------------------
@@ -1546,6 +1547,46 @@ def _set_opcua_test_endpoint(port: int) -> None:
     os.environ["OPCUA_TEST_ENDPOINT"] = f"opc.tcp://localhost:{port}"
 
 
+def _set_opcua_prestarted_port(port: int) -> None:
+    os.environ[_OPCUA_PRESTARTED_PORT_ENV] = str(port)
+
+
+def _clear_opcua_runner_env() -> None:
+    os.environ.pop("OPCUA_TEST_ENDPOINT", None)
+    os.environ.pop(_OPCUA_PRESTARTED_PORT_ENV, None)
+
+
+def _opcua_server_log_paths(port: int) -> tuple[Path, Path]:
+    return (
+        _RESULTS_DIR / f"opcua-server-{port}.out.log",
+        _RESULTS_DIR / f"opcua-server-{port}.err.log",
+    )
+
+
+def _opcua_server_log_hint(port: int) -> str:
+    out_log, err_log = _opcua_server_log_paths(port)
+    return f"see {out_log} and {err_log}"
+
+
+def _start_process_with_opcua_logs(command: list[str], *, cwd: Path, port: int) -> subprocess.Popen:
+    """Start an OPC UA simulator process and capture its output by port."""
+    out_log, err_log = _opcua_server_log_paths(port)
+    out_log.parent.mkdir(parents=True, exist_ok=True)
+    out_file = out_log.open("ab")
+    err_file = err_log.open("ab")
+    try:
+        return subprocess.Popen(
+            command,
+            stdout=out_file,
+            stderr=err_file,
+            stdin=subprocess.DEVNULL,
+            cwd=str(cwd),
+        )
+    finally:
+        out_file.close()
+        err_file.close()
+
+
 def _launch_simulator_instance(port: int, exe: str) -> _OpcuaServerInstance | None:
     """Copy the binary dir to a temp location, patch the port config, and launch.
 
@@ -1582,14 +1623,9 @@ def _launch_simulator_instance(port: int, exe: str) -> _OpcuaServerInstance | No
             return None
 
     try:
-        proc = subprocess.Popen(
-            [str(tmp_dir / exe_path.name)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            cwd=str(tmp_dir),
-        )
+        proc = _start_process_with_opcua_logs([str(tmp_dir / exe_path.name)], cwd=tmp_dir, port=port)
     except OSError as exc:
-        _warn(f"Failed to launch binary: {exc}")
+        _warn(f"Failed to launch binary: {exc}; {_opcua_server_log_hint(port)}")
         shutil.rmtree(tmp_dir, ignore_errors=True)
         return None
 
@@ -1600,7 +1636,7 @@ def _launch_simulator_instance(port: int, exe: str) -> _OpcuaServerInstance | No
             return _OpcuaServerInstance(port=port, proc=proc, tmp_dir=tmp_dir)
         time.sleep(1)
 
-    _warn(f"Binary did not open port {port} within 30s")
+    _warn(f"Binary did not open port {port} within 30s; {_opcua_server_log_hint(port)}")
     proc.terminate()
     shutil.rmtree(tmp_dir, ignore_errors=True)
     return None
@@ -1614,6 +1650,7 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
     if instance is None:
         return None
     _set_opcua_test_endpoint(port)
+    _set_opcua_prestarted_port(port)
     _server_tmp_dir = instance.tmp_dir
     return instance.proc
 
@@ -1660,6 +1697,7 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
     """
     # If user explicitly set the endpoint, don't auto-launch
     if os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL"):
+        os.environ.pop(_OPCUA_PRESTARTED_PORT_ENV, None)
         port = _opcua_server_port()
         endpoint = os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL") or ""
         os.environ.setdefault("OPCUA_TEST_ENDPOINT", endpoint)
@@ -1669,6 +1707,7 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
 
     port = _opcua_server_port()
     if _port_open("localhost", port):
+        os.environ.pop(_OPCUA_PRESTARTED_PORT_ENV, None)
         _info(f"OPC UA server already listening on port {port}")
         _set_opcua_test_endpoint(port)
         return False, True, None
@@ -1703,6 +1742,7 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
         if _port_open("localhost", port, timeout=1.0):
             _ok(f"OPC UA server ready on :{port}")
             _set_opcua_test_endpoint(port)
+            _set_opcua_prestarted_port(port)
             return True, True, None
         time.sleep(2)
 
@@ -1712,13 +1752,13 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
 
 def _stop_opcua_server(proc: subprocess.Popen | None = None) -> None:
     global _server_tmp_dir
+    _clear_opcua_runner_env()
     if proc is not None:
         proc.terminate()
         try:
             proc.wait(timeout=10)
         except Exception:
             proc.kill()
-        os.environ.pop("OPCUA_TEST_ENDPOINT", None)
         shutil.rmtree(_server_tmp_dir, ignore_errors=True) if _server_tmp_dir else None
         _server_tmp_dir = None
         return

@@ -6,14 +6,14 @@
 # of known expected skips.
 #
 # Jobs:
-#   web-client           Release2 / IJT Web Client    Python pytest · Vitest · ESLint · Bandit · npm audit
-#   console-client       Release2 / IJT Console Client Python pytest · Bandit
-#   node-client          Release1 / IJT Node Client   Vitest · ESLint · npm audit
-#   docker-smoke         Release2 / IJT Web Client    Docker build + HTTP/WS readiness
-#   test-client          Release2 / IJT Test Client   pytest unit (tests/unit/) · Bandit · Ruff · mypy
-#   server-smoke-windows Release2 / OPC UA Server     Windows native smoke (10 checks)
-#   csharp-unit          Release2 / IJT C# Client     dotnet build · xUnit (Category!=Live) · format
-#   csharp-vuln          Release2 / IJT C# Client     NuGet vulnerability scan
+#   web-client           Web Client             Python pytest · Vitest · ESLint · Bandit · npm audit
+#   console-client       Console Client         Python pytest · Bandit
+#   node-client          Node Client            Vitest · ESLint · npm audit
+#   docker-smoke         Web Client Docker      Docker build + HTTP/WS readiness
+#   test-client          Test Client            pytest unit (tests/unit/) · Bandit · Ruff · mypy
+#   server-smoke-windows OPC UA Server          Windows native smoke (10 checks)
+#   csharp-unit          C# Client              dotnet build · xUnit (Category!=Live) · format
+#   csharp-vuln          C# Client              NuGet vulnerability scan
 #   actionlint           GHA workflow lint             actionlint (all .github/workflows/*.yml)
 #   zizmor               GHA security audit            zizmor → SARIF upload (skipped on fork PRs)
 #   report               Combined summary (always runs after all jobs)
@@ -125,11 +125,11 @@ jobs:
               - '.github/workflows/**'
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT Web Client
+  # Web Client
   #   Runs the same local Phase 1 runner used by developers.
   # ───────────────────────────────────────────────────────────────────────────
   web-client:
-    name: "Release2 / IJT Web Client"
+    name: "Web Client"
     runs-on: ubuntu-latest
     needs: [changes]
     if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
@@ -209,11 +209,11 @@ jobs:
 
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT Console Client
+  # Console Client
   #   Python: pytest + bandit (pyproject.toml)
   # ───────────────────────────────────────────────────────────────────────────
   console-client:
-    name: "Release2 / IJT Console Client"
+    name: "Console Client"
     runs-on: ubuntu-latest
     needs: [changes]
     if: needs.changes.outputs.console == 'true' || github.event_name == 'workflow_dispatch'
@@ -311,11 +311,11 @@ jobs:
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release1 / IJT Node Client
+  # Node Client
   #   JS: vitest + eslint (JSON) + npm audit
   # ───────────────────────────────────────────────────────────────────────────
   node-client:
-    name: "Release1 / IJT Node Client"
+    name: "Node Client"
     runs-on: ubuntu-latest
     needs: [changes]
     if: needs.changes.outputs.node == 'true' || github.event_name == 'workflow_dispatch'
@@ -395,11 +395,11 @@ jobs:
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT Web Client — Docker Smoke
+  # Web Client - Docker Smoke
   # Builds the image, starts the Compose stack, verifies HTTP + WebSocket.
   # ───────────────────────────────────────────────────────────────────────────
   docker-smoke:
-    name: "Release2 / IJT Web Client — Docker Smoke"
+    name: "Web Client - Docker Smoke"
     runs-on: ubuntu-latest
     needs: [changes]
     if: needs.changes.outputs.docker == 'true' || github.event_name == 'workflow_dispatch'
@@ -465,15 +465,15 @@ jobs:
         run: docker compose down -v
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT C# Client
+  # C# Client
   #   dotnet build (warnaserror) + dotnet test (xUnit) + format check
   # ───────────────────────────────────────────────────────────────────────────
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT C# Client — Unit Tests (no server required)
+  # C# Client - Unit Tests (no server required)
   #   dotnet build + xUnit (Category!=Live) + format check
   # ───────────────────────────────────────────────────────────────────────────
   csharp-unit:
-    name: "Release2 / IJT C# Client — Unit Tests"
+    name: "C# Client - Unit Tests"
     runs-on: windows-latest
     needs: [changes]
     # Runs when C# client paths or ci.yml changed (push or PR), or on manual dispatch.
@@ -643,11 +643,11 @@ jobs:
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT Test Client
+  # Test Client
   #   Python: pytest unit tests (tests/unit/ — no server) + bandit + ruff + mypy
   # ───────────────────────────────────────────────────────────────────────────
   test-client:
-    name: "Release2 / IJT Test Client"
+    name: "Test Client"
     runs-on: ubuntu-latest
     needs: [changes]
     if: needs.changes.outputs.testclient == 'true' || github.event_name == 'workflow_dispatch'
@@ -747,7 +747,7 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
 
   server-smoke-windows:
-    name: "Release2 / OPC UA Server — Windows Smoke"
+    name: "OPC UA Server - Windows Smoke"
     runs-on: windows-latest
     needs: [changes]
     if: needs.changes.outputs.server == 'true' || github.event_name == 'workflow_dispatch'
@@ -898,7 +898,7 @@ jobs:
 
       - name: "Report — Test Client Python Tests"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
-        if: always()
+        if: always() && needs.test-client.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
           name: "Test Client — Python Tests (Unit)"
@@ -909,7 +909,7 @@ jobs:
 
       - name: "Report — C# Client Unit Tests"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
-        if: always()
+        if: always() && needs.csharp-unit.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
           name: "C# Client — Unit Tests (xUnit)"
@@ -1406,7 +1406,7 @@ jobs:
   #   No build needed — just restore + scan.
   # ───────────────────────────────────────────────────────────────────────────
   csharp-vuln:
-    name: "Release2 / IJT C# Client — NuGet Vuln Scan"
+    name: "C# Client - NuGet Vuln Scan"
     runs-on: windows-latest
     needs: [changes]
     if: needs.changes.outputs.csharp == 'true' || github.event_name == 'workflow_dispatch'

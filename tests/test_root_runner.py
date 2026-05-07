@@ -357,7 +357,7 @@ def test_delegate_to_runner_reports_child_failure(monkeypatch, capsys) -> None:
     assert result.ok is False
     assert result.skipped is False
     assert rc == 1
-    assert "Release2 Web Client - Browser feature coverage" in output
+    assert "Web Client - Browser feature coverage" in output
     assert "FAIL" in output
     assert "ONE OR MORE SUITES FAILED" in output
 
@@ -714,6 +714,16 @@ def test_integration_web_client_uses_local_live_suite_matrix() -> None:
     assert "OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/" not in workflow
     assert "results-live-webclient-${{ matrix.suite }}" in workflow
     assert "all-results/results-live-webclient-*/**/*.xml" in workflow
+    assert "Cache Playwright browsers" in workflow
+    assert "npx playwright install --with-deps chromium" in workflow
+    assert "if: startsWith(matrix.suite, 'web-client-e2e-')" in workflow
+
+
+def test_ci_report_steps_skip_missing_artifacts_for_skipped_jobs() -> None:
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "if: always() && needs.test-client.result != 'skipped'" in workflow
+    assert "if: always() && needs.csharp-unit.result != 'skipped'" in workflow
 
 
 def test_csharp_phase2_live_tests_clear_phase1_only_flag(monkeypatch) -> None:

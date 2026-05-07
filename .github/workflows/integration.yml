@@ -6,12 +6,12 @@
 # known-expected-skips table.
 #
 # Jobs:
-#   server-smoke-docker  Release2 / OPC UA Server        Linux native Docker build + smoke
-#   webclient-docker     Release2 / IJT Web Client        Docker unit/prod tests
-#   int-testclient       Release2 / Test Client           Windows: OPC UA server (port 40462) + Test Client full suite
-#   live-webclient       Release2 / IJT Web Client        Windows: local runner web-client-live-* / web-client-e2e-* matrix
-#   live-console         Release2 / IJT Console Client   Windows: Console Client live tests (port 40461)
-#   csharp-live          Release2 / IJT C# Client         Windows: xUnit live tests (port 40464) — nightly
+#   server-smoke-docker  OPC UA Server          Linux native Docker build + smoke
+#   webclient-docker     Web Client             Docker unit/prod tests
+#   int-testclient       Test Client            Windows: OPC UA server (port 40462) + Test Client full suite
+#   live-webclient       Web Client             Windows: local runner web-client-live-* / web-client-e2e-* matrix
+#   live-console         Console Client         Windows: Console Client live tests (port 40461)
+#   csharp-live          C# Client              Windows: xUnit live tests (port 40464) - nightly
 #   report               Combined summary                 Always runs after all jobs
 # (zizmor promoted to ci.yml — removed from integration)
 #
@@ -78,13 +78,13 @@ concurrency:
 jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / OPC UA Server — Docker Smoke
+  # OPC UA Server - Docker Smoke
   #   Extract the Linux ZIP to satisfy the COPY instructions in the Dockerfile,
   #   build the native Linux Docker image (layer-cached via GitHub Actions cache),
   #   start the container, wait for TCP 40451, run all 10 smoke checks, tear down.
   # ───────────────────────────────────────────────────────────────────────────
   server-smoke-docker:
-    name: "Release2 / OPC UA Server — Docker Smoke"
+    name: "OPC UA Server - Docker Smoke"
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: docker-hub
@@ -193,12 +193,12 @@ jobs:
         run: docker rm -f opcua-server || true
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT Web Client — Docker Tests
+  # Web Client - Docker Tests
   #   Builds both the 'test' target (Python unit + JS vitest inside container)
   #   and the 'production' target (HTTP health check on port 3000).
   # ───────────────────────────────────────────────────────────────────────────
   webclient-docker:
-    name: "Release2 / IJT Web Client — Docker Tests"
+    name: "Web Client - Docker Tests"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: docker-hub
@@ -292,13 +292,13 @@ jobs:
         run: docker rm -f ijt-web-prod || true
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / Test Client — Windows Live Tests
+  # Test Client - Windows Live Tests
   #   Runs the full IJT Test Client suite against the native Windows OPC UA
   #   server binary.  Split from the old monolithic integration-tests job so
   #   it runs in parallel with int-live-others (Web Client + Console).
   # ───────────────────────────────────────────────────────────────────────────
   int-testclient:
-    name: "Release2 / Test Client (Windows Live, port 40462)"
+    name: "Test Client - Windows Live (port 40462)"
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -401,12 +401,12 @@ jobs:
         run: python scripts/start_server_on_port.py --port 40462 --stop
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT Web Client — Windows Live Runner Matrix
+  # Web Client - Windows Live Runner Matrix
   #   Runs the same Web Client live/e2e suites as the local root runner.
   #   Each suite owns its OPC UA server, WebSocket backend, UI port, and results directory.
   # ───────────────────────────────────────────────────────────────────────────
   live-webclient:
-    name: "Release2 / IJT Web Client — ${{ matrix.label }}"
+    name: "Web Client - ${{ matrix.label }}"
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
@@ -416,22 +416,22 @@ jobs:
       matrix:
         include:
           - suite: web-client-live-opcua-direct
-            label: "Python OPC UA"
+            label: "Direct OPC UA"
             feature_workers: ""
           - suite: web-client-live-websocket-api
-            label: "Python WebSocket API"
+            label: "WebSocket API"
             feature_workers: ""
           - suite: web-client-live-websocket-connection
-            label: "Python WebSocket Connection"
+            label: "WebSocket Connection"
             feature_workers: ""
           - suite: web-client-e2e-smoke
-            label: "E2E Smoke"
+            label: "Browser Smoke"
             feature_workers: ""
           - suite: web-client-e2e-features
-            label: "E2E Features"
+            label: "Browser Features"
             feature_workers: "2"
           - suite: web-client-e2e-regression
-            label: "E2E Regression"
+            label: "Browser Regression"
             feature_workers: ""
 
     steps:
@@ -453,6 +453,20 @@ jobs:
           cache: npm
           cache-dependency-path: OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        if: startsWith(matrix.suite, 'web-client-e2e-')
+        with:
+          path: ~\AppData\Local\ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright browsers
+        if: startsWith(matrix.suite, 'web-client-e2e-')
+        working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
+        run: npx playwright install --with-deps chromium
+
       - name: Run Web Client local live suite
         env:
           IJT_PLAYWRIGHT_FEATURE_WORKERS: ${{ matrix.feature_workers || '' }}
@@ -467,12 +481,12 @@ jobs:
           retention-days: 14
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT Console Client — Windows Live Tests (port 40461)
+  # Console Client - Windows Live Tests (port 40461)
   #   Runs Console Client live test suite against a dedicated server instance.
   #   Uses dedicated port 40461 — safe to run in parallel with other live jobs.
   # ───────────────────────────────────────────────────────────────────────────
   live-console:
-    name: "Release2 / IJT Console Client — Windows Live Tests (port 40461)"
+    name: "Console Client - Windows Live Tests (port 40461)"
     runs-on: windows-latest
     timeout-minutes: 25
     permissions:
@@ -533,13 +547,13 @@ jobs:
         run: python scripts/start_server_on_port.py --port 40461 --stop
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT C# Client — Live Tests (nightly, port 40464)
+  # C# Client - Live Tests (nightly, port 40464)
   #   Nightly drift detection for live C# behavior outside fast CI.
   #   Non-blocking: failures are visible but do not gate merges.
   #   Port 40464 is the C# client's dedicated port — see docs/TEST_TIERS.md.
   # ───────────────────────────────────────────────────────────────────────────
   csharp-live:
-    name: "Release2 / IJT C# Client — Live Tests (port 40464)"
+    name: "C# Client - Live Tests (port 40464)"
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
