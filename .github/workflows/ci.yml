@@ -6,7 +6,8 @@
 # of known expected skips.
 #
 # Jobs:
-#   web-client           Web Client             Python pytest · Vitest · ESLint · Bandit · npm audit
+#   web-client-python    Web Client Python      pytest · Ruff · mypy · Bandit · infra lint
+#   web-client-js        Web Client JavaScript  Vitest · ESLint · npm audit
 #   console-client       Console Client         Python pytest · Bandit
 #   node-client          Node Client            Vitest · ESLint · npm audit
 #   docker-smoke         Web Client Docker      Docker build + HTTP/WS readiness
@@ -28,7 +29,7 @@
 #   Summary table   : $GITHUB_STEP_SUMMARY (Actions Summary tab)
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: CI
+name: "CI — Fast Checks"
 
 on:
   push:
@@ -125,11 +126,11 @@ jobs:
               - '.github/workflows/**'
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Web Client
-  #   Runs the same local Phase 1 runner used by developers.
+  # Web Client — Python lane
+  #   Runs the Python/static half of the local Phase 1 runner.
   # ───────────────────────────────────────────────────────────────────────────
-  web-client:
-    name: "Web Client"
+  web-client-python:
+    name: "Web Client - Python"
     runs-on: ubuntu-latest
     needs: [changes]
     if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
@@ -138,9 +139,9 @@ jobs:
       contents: read
       checks: write
     outputs:
-      mypy_result:   ${{ steps.web_runner.outcome }} # zizmor: ignore[template-injection]
-      ruff_result:   ${{ steps.web_runner.outcome }} # zizmor: ignore[template-injection]
-      eslint_result: ${{ steps.web_runner.outcome }} # zizmor: ignore[template-injection]
+      mypy_result:   ${{ steps.web_python_runner.outcome }} # zizmor: ignore[template-injection]
+      ruff_result:   ${{ steps.web_python_runner.outcome }} # zizmor: ignore[template-injection]
+      bandit_result: ${{ steps.web_python_runner.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
@@ -158,16 +159,10 @@ jobs:
             OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
             OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json
-
-      - name: Run Web Client Phase 1 runner
-        id: web_runner
+      - name: Run Web Client Python Phase 1 runner
+        id: web_python_runner
         continue-on-error: true
-        run: python run_all_tests.py --phase1
+        run: python run_all_tests.py --phase1-python
 
       - name: "Publish Test Reports — Python"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
@@ -179,6 +174,61 @@ jobs:
           reporter: java-junit
           fail-on-error: false
           fail-on-empty: false
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        if: always()
+        with:
+          name: results-web-client-python
+          path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
+          retention-days: 14
+
+      - name: Fail if Runner Failed
+        if: always() && steps.web_python_runner.outcome == 'failure'
+        env:
+          WEB_RUNNER_OUTCOME: ${{ steps.web_python_runner.outcome }}
+        run: |
+          echo "Web Client Python Phase 1 runner failed: $WEB_RUNNER_OUTCOME"
+          exit 1
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Web Client — JavaScript lane
+  #   Runs the JavaScript/static half of the local Phase 1 runner.
+  # ───────────────────────────────────────────────────────────────────────────
+  web-client-js:
+    name: "Web Client - JavaScript"
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+    outputs:
+      eslint_result: ${{ steps.web_js_runner.outcome }} # zizmor: ignore[template-injection]
+    defaults:
+      run:
+        working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.14"
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json
+
+      - name: Run Web Client JavaScript Phase 1 runner
+        id: web_js_runner
+        continue-on-error: true
+        run: python run_all_tests.py --phase1-js
 
       - name: "Publish Test Reports — JS"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
@@ -195,16 +245,16 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
-          name: results-web-client
+          name: results-web-client-js
           path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
           retention-days: 14
 
       - name: Fail if Runner Failed
-        if: always() && steps.web_runner.outcome == 'failure'
+        if: always() && steps.web_js_runner.outcome == 'failure'
         env:
-          WEB_RUNNER_OUTCOME: ${{ steps.web_runner.outcome }}
+          WEB_RUNNER_OUTCOME: ${{ steps.web_js_runner.outcome }}
         run: |
-          echo "Web Client Phase 1 runner failed: $WEB_RUNNER_OUTCOME"
+          echo "Web Client JavaScript Phase 1 runner failed: $WEB_RUNNER_OUTCOME"
           exit 1
 
 
@@ -797,6 +847,8 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.14"
+          cache: pip
+          cache-dependency-path: OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Install smoke test dependencies
         run: pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
@@ -832,7 +884,7 @@ jobs:
     name: "📋 Test Report"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [changes, web-client, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor]
+    needs: [changes, web-client-python, web-client-js, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor]
     if: always()
     permissions:
       contents: read
@@ -854,22 +906,22 @@ jobs:
 
       - name: "Report — Web Client Python Tests"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
-        if: always()
+        if: always() && needs.web-client-python.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
           name: "Web Client — Python Tests"
-          path: all-results/results-web-client/pytest.xml
+          path: all-results/results-web-client-python/pytest.xml
           reporter: java-junit
           fail-on-error: false
           fail-on-empty: false
 
       - name: "Report — Web Client JS Tests"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
-        if: always()
+        if: always() && needs.web-client-js.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
           name: "Web Client — JS Tests (Vitest)"
-          path: all-results/results-web-client/vitest.xml
+          path: all-results/results-web-client-js/vitest.xml
           reporter: java-junit
           fail-on-error: false
           fail-on-empty: false
@@ -932,7 +984,8 @@ jobs:
       - name: Generate Summary Table
         env:
           # ── Job-level results ──────────────────────────────────
-          WEB_RESULT:      ${{ needs.web-client.result }}
+          WEB_PY_RESULT:   ${{ needs.web-client-python.result }}
+          WEB_JS_RESULT:   ${{ needs.web-client-js.result }}
           CONSOLE_RESULT:  ${{ needs.console-client.result }}
           NODE_RESULT:     ${{ needs.node-client.result }}
           DOCKER_RESULT:   ${{ needs.docker-smoke.result }}
@@ -943,9 +996,9 @@ jobs:
           AL_RESULT:       ${{ needs.actionlint.result }}
           ZZ_RESULT:       ${{ needs.zizmor.result }}
           # ── Per-tool step outcomes ─────────────────────────────
-          WEB_RUFF:        ${{ needs.web-client.outputs.ruff_result }}
-          WEB_ESLINT:      ${{ needs.web-client.outputs.eslint_result }}
-          WEB_MYPY:        ${{ needs.web-client.outputs.mypy_result }}
+          WEB_PY_RUFF:     ${{ needs.web-client-python.outputs.ruff_result }}
+          WEB_PY_MYPY:     ${{ needs.web-client-python.outputs.mypy_result }}
+          WEB_JS_ESLINT:   ${{ needs.web-client-js.outputs.eslint_result }}
           CONSOLE_RUFF:    ${{ needs.console-client.outputs.ruff_result }}
           CONSOLE_MYPY:    ${{ needs.console-client.outputs.mypy_result }}
           NODE_ESLINT:     ${{ needs.node-client.outputs.eslint_result }}
@@ -1128,7 +1181,8 @@ jobs:
 
           E = os.environ.get
 
-          web_r    = E("WEB_RESULT",     "unknown")
+          web_py_r = E("WEB_PY_RESULT",  "unknown")
+          web_js_r = E("WEB_JS_RESULT",  "unknown")
           con_r    = E("CONSOLE_RESULT", "unknown")
           nod_r    = E("NODE_RESULT",    "unknown")
           dck_r    = E("DOCKER_RESULT",  "unknown")
@@ -1139,9 +1193,9 @@ jobs:
           al_r     = E("AL_RESULT",      "unknown")
           zz_r     = E("ZZ_RESULT",      "unknown")
 
-          web_ruff   = E("WEB_RUFF",    "")
-          web_eslint = E("WEB_ESLINT",  "")
-          web_mypy   = E("WEB_MYPY",    "")
+          web_ruff   = E("WEB_PY_RUFF",   "")
+          web_eslint = E("WEB_JS_ESLINT", "")
+          web_mypy   = E("WEB_PY_MYPY",   "")
           con_ruff   = E("CONSOLE_RUFF","")
           con_mypy   = E("CONSOLE_MYPY","")
           nod_eslint = E("NODE_ESLINT", "")
@@ -1158,13 +1212,13 @@ jobs:
 
           # ── Parse artifacts ──────────────────────────────────────────────────
 
-          web_py_t = parse_junit("all-results/results-web-client/pytest.xml")
-          web_js_t = parse_junit("all-results/results-web-client/vitest.xml")
-          web_esl  = parse_eslint("all-results/results-web-client/eslint.json")
-          web_ban  = parse_bandit("all-results/results-web-client/bandit.json")
-          web_npm  = parse_npm_audit("all-results/results-web-client/npm-audit.json")
-          web_cov  = parse_coverage("all-results/results-web-client/coverage.xml")
-          web_js_cov = parse_coverage("all-results/results-web-client/coverage/cobertura-coverage.xml")
+          web_py_t = parse_junit("all-results/results-web-client-python/pytest.xml")
+          web_js_t = parse_junit("all-results/results-web-client-js/vitest.xml")
+          web_esl  = parse_eslint("all-results/results-web-client-js/eslint.json")
+          web_ban  = parse_bandit("all-results/results-web-client-python/bandit.json")
+          web_npm  = parse_npm_audit("all-results/results-web-client-js/npm-audit.json")
+          web_cov  = parse_coverage("all-results/results-web-client-python/coverage.xml")
+          web_js_cov = parse_coverage("all-results/results-web-client-js/coverage/cobertura-coverage.xml")
 
           con_py_t = parse_junit("all-results/results-console-client/pytest.xml")
           con_ban  = parse_bandit("all-results/results-console-client/bandit.json")
@@ -1187,8 +1241,8 @@ jobs:
 
           # ── Collect skip details from JUnit XML ──────────────────────────
 
-          web_py_skips = collect_skips("all-results/results-web-client/pytest.xml")
-          web_js_skips = collect_skips("all-results/results-web-client/vitest.xml")
+          web_py_skips = collect_skips("all-results/results-web-client-python/pytest.xml")
+          web_js_skips = collect_skips("all-results/results-web-client-js/vitest.xml")
           con_py_skips = collect_skips("all-results/results-console-client/pytest.xml")
           nod_js_skips = collect_skips("all-results/results-node-client/vitest.xml")
           cs_unit_skips = collect_skips("all-results/results-csharp-unit/tests.xml")
@@ -1203,9 +1257,9 @@ jobs:
                   artifact_warnings.append(
                       f"⚠️ **{job_name}**: job succeeded but `{artifact}` not found — possible silent failure"
                   )
-          _warn(web_r,  web_py_t[0], "web-client",           "pytest.xml")
-          _warn(web_r,  web_js_t[0], "web-client",           "vitest.xml")
-          _warn(web_r,  web_js_cov,  "web-client",           "coverage/cobertura-coverage.xml")
+          _warn(web_py_r, web_py_t[0], "web-client-python", "pytest.xml")
+          _warn(web_js_r, web_js_t[0], "web-client-js",     "vitest.xml")
+          _warn(web_js_r, web_js_cov,  "web-client-js",     "coverage/cobertura-coverage.xml")
           _warn(con_r,  con_py_t[0], "console-client",       "pytest.xml")
           _warn(nod_r,  nod_js_t[0], "node-client",          "vitest.xml")
           _warn(cs_u_r, cs_unit_t[0],"csharp-unit",          "tests.xml")
@@ -1217,7 +1271,7 @@ jobs:
 
           # ── Overall status ────────────────────────────────────────────────────
 
-          all_jobs = [web_r, con_r, nod_r, dck_r, cs_u_r, cs_v_r, tc_r, ss_r, al_r, zz_r]
+          all_jobs = [web_py_r, web_js_r, con_r, nod_r, dck_r, cs_u_r, cs_v_r, tc_r, ss_r, al_r, zz_r]
           n_pass  = sum(1 for r in all_jobs if r == "success")
           n_fail  = sum(1 for r in all_jobs if r == "failure")
           n_total = len(all_jobs)
@@ -1460,7 +1514,7 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   # Branch-protection aggregator — converts path-filtered "skipped" jobs to
   # "success" so the branch protection rule can check a single status name
-  # instead of tracking all 10 individual jobs.
+  # instead of tracking all 11 individual jobs.
   #
   # Rule: configure branch protection to require only "All checks passed".
   # "skipped" is treated as success (path filter didn't touch that component).
@@ -1468,14 +1522,15 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   all-required:
     name: "All checks passed"
-    needs: [web-client, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor]
+    needs: [web-client-python, web-client-js, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed (skipped = success)
         env:
           RESULTS: >-
-            ${{ needs.web-client.result }}
+            ${{ needs.web-client-python.result }}
+            ${{ needs.web-client-js.result }}
             ${{ needs.console-client.result }}
             ${{ needs.node-client.result }}
             ${{ needs.docker-smoke.result }}

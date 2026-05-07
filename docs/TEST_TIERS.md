@@ -19,10 +19,13 @@ Fast and deterministic on GitHub-hosted runners. **Must pass before any merge.**
 `csharp-vuln` runs the C# NuGet vulnerability scan as a separate CI gate.
 Live C# coverage is tracked by the `csharp-live` integration job on a
 dedicated server instance (port 40464).
-The Web Client CI job delegates to `OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py --phase1`
-instead of duplicating pytest, Vitest, ESLint, mypy, Bandit, and audit commands
-inside the workflow. The runner writes the JUnit, coverage, JSON tool reports,
-and timing artifacts consumed by CI.
+The Web Client CI lane is split into `web-client-python` and `web-client-js`.
+Both delegate to `OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py`
+(`--phase1-python` and `--phase1-js`) instead of duplicating pytest, Vitest,
+ESLint, mypy, Bandit, and audit commands inside the workflow. The runner writes
+the JUnit, coverage, JSON tool reports, and timing artifacts consumed by CI;
+the split gives Python and JavaScript independent wall-clock timing and failure
+isolation.
 
 ### Jobs
 

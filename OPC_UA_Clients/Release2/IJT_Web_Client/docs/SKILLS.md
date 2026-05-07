@@ -385,6 +385,10 @@ Expected results:
 python run_all_tests.py
 ```
 Runs Python unit + integration tests, JS unit tests, ESLint, Bandit, mypy, pip-audit.
+For CI lane parity, run `python run_all_tests.py --phase1-python` for the
+Python/static lane and `python run_all_tests.py --phase1-js` for the
+JavaScript/static lane. The original `--phase1` flag still runs both lanes
+together for local convenience.
 Every runner invocation writes `test-results/timing-latest.json` and
 `test-results/timing-history.jsonl`, then appends the same payload to
 `.state/timing-history.jsonl`. Use those files for Phase 1 drift analysis
@@ -417,13 +421,15 @@ python run_all_tests.py --playwright-regression-only
 python run_all_tests.py --docker-only
 ```
 
-GitHub `ci.yml` runs this runner with `--phase1`; it no longer duplicates the
-individual pytest, Vitest, ESLint, mypy, Bandit, and audit commands. GitHub
-`integration.yml` runs the same root-runner Web Client live/e2e suite matrix as
-local validation, with two Playwright feature workers on GitHub-hosted Windows
-runners. Each suite receives an isolated `IJT_WEB_TEST_RESULTS_DIR`, so JUnit,
-coverage, Playwright, and timing artifacts cannot overwrite another suite's
-files.
+GitHub `ci.yml` runs this runner in two Phase 1 lanes: `web-client-python`
+delegates to `--phase1-python`, and `web-client-js` delegates to
+`--phase1-js`. The workflow no longer duplicates the individual pytest,
+Vitest, ESLint, mypy, Bandit, and audit commands, and the split gives each
+language stack its own timing and failure surface. GitHub `integration.yml`
+runs the same root-runner Web Client live/e2e suite matrix as local validation,
+with two Playwright feature workers on GitHub-hosted Windows runners. Each
+suite receives an isolated `IJT_WEB_TEST_RESULTS_DIR`, so JUnit, coverage,
+Playwright, and timing artifacts cannot overwrite another suite's files.
 
 If the checked-in simulator binary directory is absent in CI, the runner
 extracts the Release 2 Windows/Linux simulator ZIP from `OPC_UA_Servers/Release2`

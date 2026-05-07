@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Integration — Live / Integration / Docker Tests
+# Integration — Live System Tests
 #
 # TIER: integration (non-blocking) — skips and failures are tracked but do
 # not gate merges. See docs/TEST_TIERS.md for the full tier policy and the
@@ -21,7 +21,7 @@
 #   - Push / PR touching server or client code paths (see path filters below)
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: Integration
+name: "Integration — Live System Tests"
 
 on:
   schedule:
@@ -163,6 +163,8 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.14"
+          cache: pip
+          cache-dependency-path: OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Install smoke test dependencies
         run: |

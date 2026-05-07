@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _RUNNER_PATH = _PROJECT_ROOT / "run_all_tests.py"
 
@@ -664,6 +666,107 @@ def test_target_only_dependency_failure_stops_before_live_stage(monkeypatch, tmp
     monkeypatch.setattr(runner, "_run_with_owned_services", fail_if_live_stage_runs)
 
     assert runner.main() == 1
+
+
+def _phase1_lane_runner(monkeypatch, tmp_path, argv):
+    runner = _load_runner()
+    calls = []
+
+    monkeypatch.setattr(sys, "argv", ["run_all_tests.py", *argv])
+    monkeypatch.setattr(runner, "IS_CI", True)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "results")
+    monkeypatch.setattr(runner, "_cleanup_caches", lambda root: None)
+    monkeypatch.setattr(runner, "_prepare_tmp_dir", lambda: None)
+    monkeypatch.setattr(runner, "_port_open", lambda *args, **kwargs: False)
+    monkeypatch.setattr(runner, "_docker_available", lambda: False)
+    monkeypatch.setattr(runner, "_write_timing_artifacts", lambda *args, **kwargs: None)
+
+    def stage(name):
+        return lambda *args, **kwargs: calls.append(name) or runner.StageResult(name, 0)
+
+    monkeypatch.setattr(runner, "_stage_versions", stage("versions"))
+    monkeypatch.setattr(runner, "_stage_pip_install", stage("pip-install"))
+    monkeypatch.setattr(runner, "_stage_npm_install", stage("npm-install"))
+    monkeypatch.setattr(runner, "_stage_python_lint", stage("python-lint"))
+    monkeypatch.setattr(runner, "_stage_python_unit", stage("python-unit"))
+    monkeypatch.setattr(runner, "_stage_js_lint", stage("js-lint"))
+    monkeypatch.setattr(runner, "_stage_js_unit", stage("js-unit"))
+    monkeypatch.setattr(runner, "_stage_infra_lint", stage("infra-lint"))
+    return runner, calls
+
+
+def test_phase1_python_runs_python_lane_without_js(monkeypatch, tmp_path):
+    runner, calls = _phase1_lane_runner(monkeypatch, tmp_path, ["--phase1-python"])
+
+    assert runner.main() == 0
+    assert calls == ["versions", "pip-install", "python-lint", "python-unit", "infra-lint"]
+
+
+def test_phase1_js_runs_js_lane_without_python(monkeypatch, tmp_path):
+    runner, calls = _phase1_lane_runner(monkeypatch, tmp_path, ["--phase1-js"])
+
+    assert runner.main() == 0
+    assert calls == ["versions", "npm-install", "js-lint", "js-unit"]
+
+
+def test_phase1_lane_flags_reject_conflicting_modes(monkeypatch, tmp_path):
+    cases = [
+        ["--phase1", "--phase1-python"],
+        ["--phase1-python", "--phase1-js"],
+        ["--phase2", "--phase1-js"],
+        ["--docker-only", "--phase1-python"],
+        ["--all", "--phase1-python"],
+        ["--integration", "--phase1-python"],
+        ["--e2e", "--phase1-js"],
+        ["--python-opcua-only", "--phase1-python"],
+    ]
+
+    for argv in cases:
+        runner, _calls = _phase1_lane_runner(monkeypatch, tmp_path, argv)
+        with pytest.raises(SystemExit) as excinfo:
+            runner.main()
+        assert excinfo.value.code == 2
+
+
+def test_phase1_lane_mode_names_are_distinct():
+    runner = _load_runner()
+    base = {
+        "phase1": False,
+        "phase1_python": False,
+        "phase1_js": False,
+        "phase2": False,
+        "docker_only": False,
+    }
+
+    assert runner._mode_name(SimpleNamespace(**{**base, "phase1_python": True}), False) == "phase1-python"
+    assert runner._mode_name(SimpleNamespace(**{**base, "phase1_js": True}), False) == "phase1-js"
+
+
+def test_parse_int_env_treats_empty_and_whitespace_as_unset(monkeypatch, recwarn):
+    """Regression: integration.yml passes IJT_PLAYWRIGHT_FEATURE_WORKERS='' when
+    a matrix row omits feature_workers.  That deliberate empty-string fallback
+    must not emit a UserWarning — treat it the same as an unset variable.
+    """
+    runner = _load_runner()
+    monkeypatch.delenv("_IJT_RELAUNCHED", raising=False)
+
+    monkeypatch.setenv("IJT_X_PARSE_INT_TEST", "")
+    assert runner._parse_int_env("IJT_X_PARSE_INT_TEST", 7) == 7
+
+    monkeypatch.setenv("IJT_X_PARSE_INT_TEST", "   ")
+    assert runner._parse_int_env("IJT_X_PARSE_INT_TEST", 7) == 7
+
+    assert not [w for w in recwarn.list if issubclass(w.category, UserWarning)]
+
+
+def test_parse_int_env_warns_on_garbage_value(monkeypatch):
+    """Non-empty, non-numeric values still warn so misconfiguration is visible."""
+    runner = _load_runner()
+    monkeypatch.delenv("_IJT_RELAUNCHED", raising=False)
+    monkeypatch.setenv("IJT_X_PARSE_INT_TEST", "abc")
+
+    with pytest.warns(UserWarning, match="not a valid integer"):
+        assert runner._parse_int_env("IJT_X_PARSE_INT_TEST", 7) == 7
 
 
 def test_playwright_config_uses_runtime_ui_port_and_no_retries():

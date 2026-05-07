@@ -1512,7 +1512,7 @@ def _parse_int_env(name: str, default: int) -> int:
     this script under the isolated venv.
     """
     raw = os.environ.get(name)
-    if raw is None:
+    if raw is None or not raw.strip():
         return default
     try:
         return int(raw)
@@ -1522,7 +1522,7 @@ def _parse_int_env(name: str, default: int) -> int:
             import warnings
 
             warnings.warn(
-                f"IJT: {name}={raw!r} is not a valid integer — using default {default}s",
+                f"IJT: {name}={raw!r} is not a valid integer — using default {default}",
                 stacklevel=2,
             )
         return default
@@ -2166,6 +2166,10 @@ STAGES = [
 def _mode_name(args: argparse.Namespace, target_only: bool) -> str:
     if target_only:
         return "target-only"
+    if args.phase1_python:
+        return "phase1-python"
+    if args.phase1_js:
+        return "phase1-js"
     if args.phase1:
         return "phase1"
     if args.phase2:
@@ -2234,6 +2238,16 @@ def main() -> int:
     parser.add_argument("--e2e", action="store_true", help="Include Playwright smoke + E2E tests")
     # CI-compatible phase flags (mirrors other project runners)
     parser.add_argument("--phase1", action="store_true", help="Static/unit tests only — no live/E2E stages (CI use)")
+    parser.add_argument(
+        "--phase1-python",
+        action="store_true",
+        help="Python Phase 1 lane only — versions, pip install, Python lint/unit tests, and infra lint",
+    )
+    parser.add_argument(
+        "--phase1-js",
+        action="store_true",
+        help="JavaScript Phase 1 lane only — versions, npm install, JS lint, and JS unit tests",
+    )
     parser.add_argument("--phase2", action="store_true", help="Live/E2E stages only — skip static analysis (CI use)")
     parser.add_argument("--docker-only", action="store_true", help="Docker smoke only — skip static/live/E2E stages")
     parser.add_argument("--skip-docker", action="store_true", help="Skip Docker smoke even when Docker is available")
@@ -2266,6 +2280,28 @@ def main() -> int:
     if sum(1 for flag in targeted_flags if flag) > 1:
         parser.error("choose only one targeted live-suite flag")
 
+    phase1_lane_flags = [args.phase1_python, args.phase1_js]
+    if any(phase1_lane_flags):
+        conflicts = []
+        if args.all:
+            conflicts.append("--all")
+        if args.integration:
+            conflicts.append("--integration")
+        if args.e2e:
+            conflicts.append("--e2e")
+        if args.phase1:
+            conflicts.append("--phase1")
+        if args.phase2:
+            conflicts.append("--phase2")
+        if args.docker_only:
+            conflicts.append("--docker-only")
+        if sum(1 for flag in phase1_lane_flags if flag) > 1:
+            conflicts.append("--phase1-python/--phase1-js")
+        if any(targeted_flags):
+            conflicts.append("targeted live-suite flags")
+        if conflicts:
+            parser.error(f"--phase1-python/--phase1-js cannot be combined with {', '.join(conflicts)}")
+
     # Bootstrap: run inside isolated .venv (skipped when already in venv, CI, or Docker)
     if not IS_CI and not IS_DOCKER and not _inside_venv():
         _relaunch_under_venv()
@@ -2282,6 +2318,7 @@ def main() -> int:
     target_only = any(targeted_flags)
     mode = _mode_name(args, target_only)
     skip_static = args.phase2 or args.docker_only or target_only
+    phase1_only = args.phase1 or args.phase1_python or args.phase1_js
 
     python = Path(sys.executable)
     t_start = time.monotonic()
@@ -2295,7 +2332,7 @@ def main() -> int:
 
     # Auto-detect optional stages when not explicitly requested
     # --phase1: force off all live/docker stages
-    if args.phase1:
+    if phase1_only:
         run_live = False
         run_e2e = False
         run_docker = False
@@ -2406,13 +2443,23 @@ def main() -> int:
     # ── Static / unit stages (skipped when --phase2) ──────────────────────────
     if not skip_static:
         results.append(_stage_versions())
-        results.append(_stage_pip_install(python))
-        results.append(_stage_npm_install())
-        results.append(_stage_python_lint(python))
-        results.append(_stage_python_unit(python))
-        results.append(_stage_js_lint())
-        results.append(_stage_js_unit())
-        results.append(_stage_infra_lint())
+        if args.phase1_js:
+            results.append(_stage_npm_install())
+            results.append(_stage_js_lint())
+            results.append(_stage_js_unit())
+        elif args.phase1_python:
+            results.append(_stage_pip_install(python))
+            results.append(_stage_python_lint(python))
+            results.append(_stage_python_unit(python))
+            results.append(_stage_infra_lint())
+        else:
+            results.append(_stage_pip_install(python))
+            results.append(_stage_npm_install())
+            results.append(_stage_python_lint(python))
+            results.append(_stage_python_unit(python))
+            results.append(_stage_js_lint())
+            results.append(_stage_js_unit())
+            results.append(_stage_infra_lint())
 
     # ── Live + Integration tests (Phase 2 — skipped when --phase1) ────────────
     # Auto-launch server ONCE and share it between live and integration stages.
@@ -2422,7 +2469,7 @@ def main() -> int:
     _srv_port_open = False
     _srv_proc: subprocess.Popen | None = None
     try:
-        if not args.phase1 and not args.docker_only:
+        if not phase1_only and not args.docker_only:
             _srv_started, _srv_port_open, _srv_proc = _maybe_start_opcua_server()
             if run_live:
                 if _srv_port_open:
@@ -2451,7 +2498,7 @@ def main() -> int:
             _info("pyenv detected — multi-version testing available: pyenv local X.Y.Z && python run_all_tests.py")
 
         # ── Playwright (smoke always runs; E2E auto-detected or explicit) ─────────
-        if not args.phase1 and not args.docker_only:
+        if not phase1_only and not args.docker_only:
             pw_install = _stage_playwright_install()
             results.append(pw_install)
 
@@ -2488,9 +2535,9 @@ def main() -> int:
             _stop_opcua_server(_srv_proc)
 
     # ── Docker smoke (auto-detected; skipped if Docker unavailable) ───────────
-    if not args.phase1 and run_docker:
+    if not phase1_only and run_docker:
         results.append(_stage_docker_smoke())
-    elif not args.phase1:
+    elif not phase1_only:
         _skip(f"docker-smoke: {_docker_skip_reason()}")
         results.append(StageResult("docker-smoke", 0, skipped=True))
 

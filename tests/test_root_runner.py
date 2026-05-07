@@ -684,14 +684,18 @@ def test_root_int_env_helper_rejects_garbage(monkeypatch) -> None:
         _load_runner_at("run_all_tests.py", "ijt_root_runner_int_env_garbage")
 
 
-def test_ci_web_client_uses_local_phase1_runner() -> None:
+def test_ci_web_client_splits_local_phase1_runner_by_language_lane() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    web_job = workflow.split("  web-client:", 1)[1].split("  console-client:", 1)[0]
+    web_jobs = workflow.split("  web-client-python:", 1)[1].split("  console-client:", 1)[0]
 
-    assert "python run_all_tests.py --phase1" in web_job
-    assert "python -m pytest tests/python/unit" not in web_job
-    assert "npx vitest run --coverage" not in web_job
-    assert "steps.web_runner.outcome" in web_job
+    assert "python run_all_tests.py --phase1-python" in web_jobs
+    assert "python run_all_tests.py --phase1-js" in web_jobs
+    assert "results-web-client-python" in workflow
+    assert "results-web-client-js" in workflow
+    assert "python -m pytest tests/python/unit" not in web_jobs
+    assert "npx vitest run --coverage" not in web_jobs
+    assert "steps.web_python_runner.outcome" in web_jobs
+    assert "steps.web_js_runner.outcome" in web_jobs
 
 
 def test_integration_web_client_uses_local_live_suite_matrix() -> None:
@@ -722,6 +726,8 @@ def test_integration_web_client_uses_local_live_suite_matrix() -> None:
 def test_ci_report_steps_skip_missing_artifacts_for_skipped_jobs() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
+    assert "if: always() && needs.web-client-python.result != 'skipped'" in workflow
+    assert "if: always() && needs.web-client-js.result != 'skipped'" in workflow
     assert "if: always() && needs.test-client.result != 'skipped'" in workflow
     assert "if: always() && needs.csharp-unit.result != 'skipped'" in workflow
 
