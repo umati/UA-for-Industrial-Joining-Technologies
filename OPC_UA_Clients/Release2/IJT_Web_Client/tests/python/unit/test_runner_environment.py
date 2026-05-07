@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -371,6 +372,20 @@ def test_opcua_log_process_uses_append_logs_and_closes_parent_handles(monkeypatc
     assert Path(captured["stderr_name"]) == tmp_path / "results" / "opcua-server-40463.err.log"
     assert captured["stdout"].closed is True
     assert captured["stderr"].closed is True
+
+
+def test_simulator_instance_dir_uses_short_temp_root(monkeypatch):
+    runner = _load_runner()
+    github_runner_temp = r"D:\a\_temp" if runner.IS_WINDOWS else "/home/runner/work/_temp"
+    monkeypatch.setenv("RUNNER_TEMP", github_runner_temp)
+    monkeypatch.delenv("IJT_SIMULATOR_INSTANCE_ROOT", raising=False)
+
+    instance_dir = runner._simulator_instance_dir(40466)
+
+    assert instance_dir.name == "40466"
+    assert "ijt-sim" in instance_dir.parts
+    assert len(os.fspath(instance_dir)) <= runner._MAX_SIMULATOR_INSTANCE_PATH
+    assert _PROJECT_ROOT not in instance_dir.parents
 
 
 def test_owned_opcua_launch_sets_endpoint_and_prestarted_marker(monkeypatch, tmp_path):

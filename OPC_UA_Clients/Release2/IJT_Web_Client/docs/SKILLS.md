@@ -519,6 +519,7 @@ and `SimulateBulkEvents` defaults to event type `1` and count `3`.
 | `UI_TEST_BASE_URL` | `http://127.0.0.1:3000` | Playwright base URL; root split suites override this per browser suite |
 | `IS_DOCKER` | (unset) | Set to `true` inside Docker containers; skips venv creation |
 | `OPCUA_SIMULATOR_EXE` | (unset) | Path to simulator binary for auto-launch |
+| `IJT_SIMULATOR_INSTANCE_ROOT` | `{RUNNER_TEMP or temp}/ijt-sim` | Optional short root for runner-owned simulator copies; each port gets its own child directory |
 | `IJT_DOCKER_BUILD_TIMEOUT` | `1200` | Docker image build timeout in seconds |
 | `IJT_DOCKER_TIMEOUT` | `90` | Docker HTTP readiness timeout in seconds |
 
@@ -542,6 +543,15 @@ before fixture startup; they do not spawn a fallback EXE on a different,
 unpatched port. Fixtures also run short OPC UA and WebSocket protocol probes
 after TCP ports open so first tests do not consume the simulator/backend warmup
 window.
+
+On Windows, runner-owned simulator copies live under a short temp root
+(`RUNNER_TEMP\ijt-sim\<port>` on GitHub Actions, the system temp fallback, or
+`<SystemDrive>\ijt-sim\<port>` if the temp root is still too long) instead of
+`tmp\server_instance_<port>` inside the repository. The simulator generates
+long PKI certificate filenames and rejects install paths that exceed its own
+safe path-length threshold. Logs stay under `test-results/` so CI artifacts
+still capture startup failures; only the short-lived simulator copy moves to
+temp.
 
 For the full port assignment table, auto-launch mechanics, and venv rationale, see
 [`docs/TEST_TIERS.md`](../../../../docs/TEST_TIERS.md).

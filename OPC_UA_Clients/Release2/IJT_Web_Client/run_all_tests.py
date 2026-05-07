@@ -50,6 +50,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import zipfile
 from dataclasses import dataclass, field
@@ -1497,6 +1498,8 @@ _SIMULATOR_PACKAGE_ZIPS: list[Path] = [
 # The OPC UA server port this client connects to.  Defined once here so every
 # reference below derives from it — change the port in one place only.
 _OPCUA_SERVER_PORT = 40463
+_MAX_SIMULATOR_INSTANCE_PATH = 100
+_SIMULATOR_INSTANCE_ROOT_ENV = "IJT_SIMULATOR_INSTANCE_ROOT"
 _server_tmp_dir: Path | None = None  # set by _launch_simulator_on_port; cleared in _stop_opcua_server
 
 
@@ -1568,6 +1571,34 @@ def _opcua_server_log_hint(port: int) -> str:
     return f"see {out_log} and {err_log}"
 
 
+def _absolute_path_text(path: Path) -> str:
+    return os.fspath(path if path.is_absolute() else path.resolve())
+
+
+def _short_windows_simulator_root() -> Path:
+    system_drive = os.getenv("SystemDrive", "C:")
+    return Path(f"{system_drive.rstrip(':\\\\')}:\\") / "ijt-sim"
+
+
+def _simulator_instance_dir(port: int) -> Path:
+    """Return a short per-port simulator copy directory.
+
+    The Windows simulator creates PKI certificate filenames up to roughly 110
+    chars long and rejects install roots above its own 145-char safety
+    threshold. GitHub-hosted Windows checkouts are long, so runner-owned
+    simulator copies must live under a short temp root, not inside the repo.
+    """
+    configured_root = os.getenv(_SIMULATOR_INSTANCE_ROOT_ENV)
+    if configured_root:
+        return Path(configured_root) / str(port)
+
+    base_root = Path(os.getenv("RUNNER_TEMP") or tempfile.gettempdir()) / "ijt-sim"
+    candidate = base_root / str(port)
+    if IS_WINDOWS and len(_absolute_path_text(candidate)) > _MAX_SIMULATOR_INSTANCE_PATH:
+        candidate = _short_windows_simulator_root() / str(port)
+    return candidate
+
+
 def _start_process_with_opcua_logs(command: list[str], *, cwd: Path, port: int) -> subprocess.Popen:
     """Start an OPC UA simulator process and capture its output by port."""
     out_log, err_log = _opcua_server_log_paths(port)
@@ -1598,7 +1629,15 @@ def _launch_simulator_instance(port: int, exe: str) -> _OpcuaServerInstance | No
         return None
 
     src_dir = exe_path.parent
-    tmp_dir = _TMP_DIR / f"server_instance_{port}"
+    tmp_dir = _simulator_instance_dir(port)
+    tmp_dir_text = _absolute_path_text(tmp_dir)
+    if IS_WINDOWS and len(tmp_dir_text) > _MAX_SIMULATOR_INSTANCE_PATH:
+        _warn(
+            f"Simulator temp path is too long for Windows certificate generation "
+            f"({len(tmp_dir_text)} > {_MAX_SIMULATOR_INSTANCE_PATH}): {tmp_dir_text}"
+        )
+        return None
+
     _info(f"[server] Launching simulator on port {port} (copied to {tmp_dir})")
     try:
         if tmp_dir.exists():

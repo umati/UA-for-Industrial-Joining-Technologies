@@ -193,7 +193,13 @@ To run on a different port, the copy-patch mechanism:
 7. Runs a short OPC UA protocol probe before tests start, because a listening TCP port is not enough
 8. On teardown: terminates the process, then removes the temp dir
 
-**Python clients** (`run_all_tests.py`): temp dir in `{client}/tmp/server_instance_{port}/`
+**Web Client runner-owned servers** (`OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py`):
+temp dir in `{RUNNER_TEMP or system temp}/ijt-sim/{port}/` (override with
+`IJT_SIMULATOR_INSTANCE_ROOT`; on Windows the runner falls back to
+`<SystemDrive>/ijt-sim/{port}/` if the temp root is still too long). This
+intentionally keeps the Windows simulator copy path short; the simulator
+creates long PKI certificate filenames and rejects install roots above its own
+safe path-length threshold.
 
 **C# client** (`OpcUaServerFixture.cs`): temp dir in `{TEMP}/opcua_csharp_{port}_{guid}/`
 - Triggered automatically when `OPCUA_SERVER_PORT != 40451`
