@@ -75,6 +75,22 @@ def test_wait_for_port_returns_minus_one_on_timeout(monkeypatch: pytest.MonkeyPa
     assert sleeps == [2]
 
 
+def test_default_tmp_base_uses_runner_temp(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNNER_TEMP", r"D:\a\_temp")
+
+    tmp_base = _mod._default_tmp_base()
+
+    assert tmp_base == Path(r"D:\a\_temp") / "ijt-sim"
+    assert len(str(tmp_base / "server_40464")) <= 100
+
+
+def test_default_tmp_base_falls_back_to_system_temp(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RUNNER_TEMP", raising=False)
+    monkeypatch.setattr(_mod.tempfile, "gettempdir", lambda: r"C:\Temp")
+
+    assert _mod._default_tmp_base() == Path(r"C:\Temp") / "ijt-sim"
+
+
 def test_start_server_patches_config_and_exports_env(monkeypatch: pytest.MonkeyPatch) -> None:
     workdir = _make_repo_temp_dir()
     try:

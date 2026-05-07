@@ -208,9 +208,10 @@ safe path-length threshold.
 - Native and Docker launch paths both require an OPC UA readiness probe after TCP opens, so tests do not start against a listener whose OPC UA stack is still initialising.
 - Cleaned up in `Dispose()` — works for both local dev and CI
 
-- **CI** (`scripts/start_server_on_port.py`): temp dir in `tmp/server_{port}/`
+- **CI non-Web live jobs** (`scripts/start_server_on_port.py`): temp dir in `{RUNNER_TEMP or system temp}/ijt-sim/server_{port}/`
 - Cross-platform Python script that handles copy, patch, start, port-wait, and GITHUB_ENV export
-- Used in all Windows live test jobs in `ci.yml` and `integration.yml`
+- Used by the Test Client, Console Client, and C# Windows live jobs in `integration.yml`
+- The short default copy root avoids depending on the repository checkout depth for simulator PKI/certificate path headroom
 
 **Web Client runner-owned servers** also export
 `IJT_OPCUA_PRESTARTED_PORT=<port>` after successful startup. The Web Client

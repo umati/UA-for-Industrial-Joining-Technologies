@@ -6,7 +6,8 @@ The server EXE reads ``serverEndpointTCPPort`` from its own
 non-default port without modifying source files, this script:
 
 Start mode (default)
-    1. Copies the entire server binary directory to ``tmp/server_<port>/``
+    1. Copies the entire server binary directory to a short temp path
+       (``RUNNER_TEMP/ijt-sim/server_<port>/`` on GitHub-hosted runners)
     2. Patches ``serverEndpointTCPPort`` in the copy's
        ``server_configuration.json``
     3. Starts the executable from the copied directory
@@ -16,7 +17,7 @@ Start mode (default)
 
 Stop mode (``--stop``)
     Reads ``SERVER_PID`` from the environment to terminate the server process.
-    Uses ``--port`` to locate and remove the temp directory (``tmp/server_<port>/``).
+    Uses ``--port`` to locate and remove the temp directory.
 
 This is the same copy-patch pattern used by:
   - Python clients  via ``run_all_tests.py``
@@ -47,11 +48,11 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 DEFAULT_SERVER_DIR = Path("OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator")
-DEFAULT_TMP_BASE = Path("tmp")
 DEFAULT_TIMEOUT = 60
 
 
@@ -73,6 +74,12 @@ def _wait_for_port(port: int, timeout: int) -> float:
         except OSError:
             time.sleep(2)
     return -1.0
+
+
+def _default_tmp_base() -> Path:
+    """Return the short default root for copied simulator instances."""
+    base = os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()
+    return Path(base) / "ijt-sim"
 
 
 def start_server(port: int, server_dir: Path, tmp_base: Path, timeout: int) -> None:
@@ -196,9 +203,9 @@ def main() -> None:
     parser.add_argument(
         "--tmp-base",
         type=Path,
-        default=DEFAULT_TMP_BASE,
+        default=None,
         metavar="DIR",
-        help=f"Base temp directory for copies (default: {DEFAULT_TMP_BASE})",
+        help="Base temp directory for copies (default: RUNNER_TEMP/ijt-sim or system temp/ijt-sim)",
     )
     parser.add_argument(
         "--timeout",
@@ -214,9 +221,9 @@ def main() -> None:
         sys.exit(1)
 
     if args.stop:
-        stop_server(args.port, args.tmp_base)
+        stop_server(args.port, args.tmp_base or _default_tmp_base())
     else:
-        start_server(args.port, args.server_dir, args.tmp_base, args.timeout)
+        start_server(args.port, args.server_dir, args.tmp_base or _default_tmp_base(), args.timeout)
 
 
 if __name__ == "__main__":

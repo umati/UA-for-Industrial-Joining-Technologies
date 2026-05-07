@@ -402,6 +402,9 @@ If the selected port is already open, the fixture first probes OPC UA readiness 
 only when the OPC UA stack answers. Runner-managed runs kill and relaunch a process on that port only
 when the readiness probe fails. Fresh native and Docker launches also require the OPC UA readiness
 probe after TCP opens, which prevents all-skipped live runs caused by cold server initialisation.
+GitHub integration starts the managed port through the root `scripts/start_server_on_port.py`
+launcher, which keeps the copied simulator under a short `RUNNER_TEMP/ijt-sim` root before
+the xUnit fixture connects.
 
 Runner-managed Phase 2 must produce real live-test evidence. If every live test is skipped while
 `OPCUA_SERVER_PORT` is set, the runner treats that as a failure because the managed server was

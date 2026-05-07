@@ -456,6 +456,8 @@ All tests call `result_trigger.trigger_single(...)` and skip gracefully if no tr
 This client's test runner auto-launches a dedicated server instance on port **40462** (copy-and-patch
 mechanism — copies the binary, patches `server_configuration.json`, and manages the full lifecycle).
 Port 40451 is never used by this test runner.
+GitHub integration uses the root `scripts/start_server_on_port.py` launcher,
+which keeps the copied simulator under a short `RUNNER_TEMP/ijt-sim` root.
 
 For the full port assignment table, auto-launch mechanics, and venv rationale, see
 [`docs/TEST_TIERS.md`](../../../../docs/TEST_TIERS.md).
