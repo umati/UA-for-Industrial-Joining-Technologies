@@ -430,8 +430,15 @@ jobs:
             label: "Browser Smoke"
             feature_workers: ""
           - suite: web-client-e2e-features
-            label: "Browser Features"
+            label: "Browser Features (1/2)"
             feature_workers: "2"
+            feature_shard: "1/2"
+            shard_suffix: "-shard-1of2"
+          - suite: web-client-e2e-features
+            label: "Browser Features (2/2)"
+            feature_workers: "2"
+            feature_shard: "2/2"
+            shard_suffix: "-shard-2of2"
           - suite: web-client-e2e-regression
             label: "Browser Regression"
             feature_workers: ""
@@ -472,13 +479,14 @@ jobs:
       - name: Run Web Client local live suite
         env:
           IJT_PLAYWRIGHT_FEATURE_WORKERS: ${{ matrix.feature_workers || '' }}
+          IJT_PLAYWRIGHT_SHARD: ${{ matrix.feature_shard || '' }}
         run: python run_all_tests.py --suite "${{ matrix.suite }}" --verbose
 
       - name: Upload Web Client results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
-          name: results-live-webclient-${{ matrix.suite }}
+          name: results-live-webclient-${{ matrix.suite }}${{ matrix.shard_suffix || '' }}
           path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
           retention-days: 14
 

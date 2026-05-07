@@ -34,6 +34,10 @@ Environment variables (all optional):
   UI_TEST_BASE_URL      default: http://127.0.0.1:3000
   IJT_PLAYWRIGHT_FEATURE_WORKERS
                          feature-suite Playwright worker count (default: 4)
+  IJT_PLAYWRIGHT_SHARD   "N/M" to run only shard N of M (passed to playwright
+                         --shard=N/M); empty/unset disables sharding.  When set,
+                         the JUnit output filename gets a "-shard-NofM" suffix
+                         so multiple shards can co-exist in the same artifact.
   IJT_DOCKER_TIMEOUT    seconds to wait for Docker HTTP readiness (default: 90)
   IJT_DOCKER_BUILD_TIMEOUT
                          seconds to wait for Docker image build (default: 1200)
@@ -1367,14 +1371,22 @@ def _stage_playwright_project(
     if extra_env:
         env.update(extra_env)
 
-    run_env = {**env, "PLAYWRIGHT_JUNIT_OUTPUT_FILE": str(results_dir / f"{name}.xml")}
+    try:
+        shard_arg, shard_label = _parse_playwright_shard(env.get("IJT_PLAYWRIGHT_SHARD"))
+    except ValueError as exc:
+        return StageResult(name, 1, notes=[str(exc)])
+    junit_name = f"{name}{shard_label}.xml" if shard_label else f"{name}.xml"
+
+    run_env = {**env, "PLAYWRIGHT_JUNIT_OUTPUT_FILE": str(results_dir / junit_name)}
     cmd = [playwright, "test", f"--project={project}", "--reporter=line", "--reporter=junit"]
     if workers is not None:
         cmd.append(f"--workers={workers}")
+    if shard_arg:
+        cmd.append(shard_arg)
     rc = _run(
         cmd,
         env=run_env,
-        label=f"playwright {project}",
+        label=f"playwright {project}{shard_label}",
         timeout=timeout,
     )
     return StageResult(name, rc, duration=time.monotonic() - t0)
@@ -1533,6 +1545,33 @@ def _parse_int_env(name: str, default: int) -> int:
 _DOCKER_TIMEOUT = _parse_int_env("IJT_DOCKER_TIMEOUT", 90)
 _DOCKER_BUILD_TIMEOUT = _parse_int_env("IJT_DOCKER_BUILD_TIMEOUT", 1200)
 _PLAYWRIGHT_FEATURE_WORKERS = _parse_int_env("IJT_PLAYWRIGHT_FEATURE_WORKERS", 4)
+
+
+def _parse_playwright_shard(raw: str | None) -> tuple[str | None, str]:
+    """Parse ``IJT_PLAYWRIGHT_SHARD`` (``"N/M"``) into a Playwright CLI flag.
+
+    Returns ``(shard_arg, shard_label)`` where ``shard_arg`` is either
+    ``"--shard=N/M"`` or ``None`` when unset, and ``shard_label`` is
+    ``"-shard-NofM"`` (suitable for filenames) or ``""`` when no shard is
+    requested.
+
+    Empty/whitespace input is treated as unset. Non-empty invalid input fails
+    closed so a misconfigured CI shard cannot silently run the full suite and
+    distort coverage or timing data.
+    """
+    if raw is None or not raw.strip():
+        return (None, "")
+    text = raw.strip()
+    parts = text.split("/")
+    if len(parts) == 2:
+        try:
+            shard = int(parts[0])
+            total = int(parts[1])
+        except ValueError:
+            shard = total = 0
+        if shard >= 1 and total >= 1 and shard <= total:
+            return (f"--shard={shard}/{total}", f"-shard-{shard}of{total}")
+    raise ValueError(f"IJT_PLAYWRIGHT_SHARD must be 'N/M' with integers satisfying 1 <= N <= M; got {raw!r}")
 
 
 @dataclass

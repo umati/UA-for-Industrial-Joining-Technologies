@@ -723,6 +723,26 @@ def test_integration_web_client_uses_local_live_suite_matrix() -> None:
     assert "if: startsWith(matrix.suite, 'web-client-e2e-')" in workflow
 
 
+def test_integration_web_client_features_are_sharded() -> None:
+    import yaml
+
+    workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    live_webclient = workflow["jobs"]["live-webclient"]
+    rows = live_webclient["strategy"]["matrix"]["include"]
+    feature_rows = [row for row in rows if row.get("suite") == "web-client-e2e-features"]
+
+    assert [row.get("feature_shard") for row in feature_rows] == ["1/2", "2/2"]
+    assert [row.get("shard_suffix") for row in feature_rows] == ["-shard-1of2", "-shard-2of2"]
+    assert [row.get("label") for row in feature_rows] == [
+        "Browser Features (1/2)",
+        "Browser Features (2/2)",
+    ]
+    assert len({row["shard_suffix"] for row in feature_rows}) == 2
+    assert workflow["jobs"]["report"]["needs"].count("live-webclient") == 1
+    assert "live-webclient-shard" not in workflow["jobs"]["report"]["needs"]
+
+
 def test_ci_report_steps_skip_missing_artifacts_for_skipped_jobs() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 

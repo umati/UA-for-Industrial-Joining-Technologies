@@ -769,6 +769,180 @@ def test_parse_int_env_warns_on_garbage_value(monkeypatch):
         assert runner._parse_int_env("IJT_X_PARSE_INT_TEST", 7) == 7
 
 
+def test_parse_playwright_shard_returns_none_when_unset():
+    runner = _load_runner()
+    assert runner._parse_playwright_shard(None) == (None, "")
+    assert runner._parse_playwright_shard("") == (None, "")
+    assert runner._parse_playwright_shard("   ") == (None, "")
+
+
+def test_parse_playwright_shard_valid_value():
+    runner = _load_runner()
+    assert runner._parse_playwright_shard("1/2") == ("--shard=1/2", "-shard-1of2")
+    assert runner._parse_playwright_shard(" 2/3 ") == ("--shard=2/3", "-shard-2of3")
+    assert runner._parse_playwright_shard("1/1") == ("--shard=1/1", "-shard-1of1")
+
+
+def test_parse_playwright_shard_invalid_fails_closed():
+    runner = _load_runner()
+
+    for bad in ["abc", "1", "1/2/3", "0/2", "3/2", "1/0", "-1/2"]:
+        with pytest.raises(ValueError, match="IJT_PLAYWRIGHT_SHARD"):
+            runner._parse_playwright_shard(bad)
+
+
+def test_playwright_project_passes_shard_arg_and_renames_junit(monkeypatch, tmp_path):
+    runner = _load_runner()
+    captured = {}
+
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path)
+    monkeypatch.setenv("IJT_PLAYWRIGHT_SHARD", "1/2")
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["env"] = kwargs["env"]
+        captured["label"] = kwargs.get("label")
+        return 0
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_playwright_project(
+        project="features",
+        name="playwright-features",
+        title="test",
+        ws_url="ws://localhost:8005",
+        ui_url="http://127.0.0.1:3005",
+        workers=2,
+    )
+
+    assert result.rc == 0
+    assert "--shard=1/2" in captured["cmd"]
+    assert "--workers=2" in captured["cmd"]
+    expected_junit = str(tmp_path / "playwright-features-shard-1of2.xml")
+    assert captured["env"]["PLAYWRIGHT_JUNIT_OUTPUT_FILE"] == expected_junit
+    assert "shard-1of2" in (captured["label"] or "")
+
+
+def test_playwright_project_reads_shard_from_extra_env(monkeypatch, tmp_path):
+    runner = _load_runner()
+    captured = {}
+
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path)
+    monkeypatch.delenv("IJT_PLAYWRIGHT_SHARD", raising=False)
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["env"] = kwargs["env"]
+        return 0
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    runner._stage_playwright_project(
+        project="features",
+        name="playwright-features",
+        title="test",
+        ws_url="ws://localhost:8005",
+        ui_url="http://127.0.0.1:3005",
+        workers=2,
+        extra_env={"IJT_PLAYWRIGHT_SHARD": "2/2"},
+    )
+
+    assert "--shard=2/2" in captured["cmd"]
+    assert captured["env"]["PLAYWRIGHT_JUNIT_OUTPUT_FILE"].endswith("playwright-features-shard-2of2.xml")
+
+
+def test_playwright_project_invalid_shard_fails_before_running(monkeypatch, tmp_path):
+    runner = _load_runner()
+    calls = []
+
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path)
+    monkeypatch.setenv("IJT_PLAYWRIGHT_SHARD", "2/1")
+    monkeypatch.setattr(runner, "_run", lambda *args, **kwargs: calls.append(args) or 0)
+
+    result = runner._stage_playwright_project(
+        project="features",
+        name="playwright-features",
+        title="test",
+        ws_url="ws://localhost:8005",
+        ui_url="http://127.0.0.1:3005",
+        workers=2,
+    )
+
+    assert result.rc == 1
+    assert any("IJT_PLAYWRIGHT_SHARD" in note for note in result.notes)
+    assert calls == []
+
+
+def test_playwright_project_unset_shard_keeps_old_filename(monkeypatch, tmp_path):
+    runner = _load_runner()
+    captured = {}
+
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path)
+    monkeypatch.delenv("IJT_PLAYWRIGHT_SHARD", raising=False)
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["env"] = kwargs["env"]
+        return 0
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    runner._stage_playwright_project(
+        project="features",
+        name="playwright-features",
+        title="test",
+        ws_url="ws://localhost:8005",
+        ui_url="http://127.0.0.1:3005",
+        workers=2,
+    )
+
+    assert not any(arg.startswith("--shard=") for arg in captured["cmd"])
+    expected_junit = str(tmp_path / "playwright-features.xml")
+    assert captured["env"]["PLAYWRIGHT_JUNIT_OUTPUT_FILE"] == expected_junit
+
+
+def test_playwright_project_empty_shard_env_is_treated_as_unset(monkeypatch, tmp_path, recwarn):
+    """Regression: integration.yml passes IJT_PLAYWRIGHT_SHARD='' on non-sharded
+    matrix rows; the runner must accept that without warning or sharding."""
+    runner = _load_runner()
+    captured = {}
+
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path)
+    monkeypatch.setenv("IJT_PLAYWRIGHT_SHARD", "")
+    monkeypatch.delenv("_IJT_RELAUNCHED", raising=False)
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["env"] = kwargs["env"]
+        return 0
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    recwarn.clear()
+
+    runner._stage_playwright_project(
+        project="features",
+        name="playwright-features",
+        title="test",
+        ws_url="ws://localhost:8005",
+        ui_url="http://127.0.0.1:3005",
+        workers=2,
+    )
+
+    assert not any(arg.startswith("--shard=") for arg in captured["cmd"])
+    assert captured["env"]["PLAYWRIGHT_JUNIT_OUTPUT_FILE"].endswith("playwright-features.xml")
+    assert not any("IJT_PLAYWRIGHT_SHARD" in str(w.message) for w in recwarn.list), "Empty shard env must not warn"
+
+
 def test_playwright_config_uses_runtime_ui_port_and_no_retries():
     source = (_PROJECT_ROOT / "playwright.config.mjs").read_text(encoding="utf-8")
 
