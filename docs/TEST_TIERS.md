@@ -147,8 +147,8 @@ run their live/integration tests in parallel without port conflicts.
 > in the separate `web-client-docker-smoke` suite.
 > GitHub integration runs that same local root-runner suite matrix instead of
 > a separate raw pytest-only Web integration command. The Web Client feature
-> matrix uses two Playwright workers on GitHub-hosted Windows runners; local
-> root validation defaults to four workers.
+> matrix uses two shards with one Playwright worker per GitHub-hosted Windows
+> runner; local root validation defaults to four workers.
 
 ### Port Assignment
 

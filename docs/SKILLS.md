@@ -406,12 +406,14 @@ The Playwright feature suite is parallelized across four owned backend/server
 pairs. Worker 0 uses the base ports, and workers 1–3 use the next contiguous
 ports, so browser workers never share a WebSocket backend or OPC UA simulator.
 GitHub integration runs the same Web Client live/e2e suites through the root
-runner matrix. The features job uses two Playwright workers on GitHub-hosted
-Windows runners, while local root runs keep the default four-worker feature
-pool. Web Client e2e matrix rows cache Playwright browser binaries under the
-Windows runner profile and run `npx playwright install --with-deps chromium` as
-a separate step before the suite timer starts; this keeps browser download time
-out of the 600 s root-runner suite budget.
+runner matrix. Browser Features is split into two Playwright shards in GitHub
+integration, with one Playwright worker per Windows runner to keep the local
+browser/backend/socket load bounded. Local root runs keep the default
+four-worker feature pool. Web Client e2e matrix rows cache Playwright browser
+binaries under the Windows runner profile and run
+`npx playwright install --with-deps chromium` only when the exact browser cache
+key misses; this keeps browser download time out of the 600 s root-runner suite
+budget.
 
 > Release 1 Node Client always uses 40451 (fixed — no dynamic port support).
 > Server self-tests (smoke) correctly use 40451 — they test the server in its native configuration.

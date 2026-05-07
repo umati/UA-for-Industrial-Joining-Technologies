@@ -734,6 +734,7 @@ def test_integration_web_client_features_are_sharded() -> None:
 
     assert [row.get("feature_shard") for row in feature_rows] == ["1/2", "2/2"]
     assert [row.get("shard_suffix") for row in feature_rows] == ["-shard-1of2", "-shard-2of2"]
+    assert [row.get("feature_workers") for row in feature_rows] == ["1", "1"]
     assert [row.get("label") for row in feature_rows] == [
         "Browser Features (1/2)",
         "Browser Features (2/2)",
