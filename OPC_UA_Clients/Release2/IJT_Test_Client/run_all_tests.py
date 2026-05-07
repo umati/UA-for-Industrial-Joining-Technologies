@@ -861,6 +861,26 @@ def _step_ruff_format() -> _StepResult:
     return result
 
 
+def _step_mypy() -> _StepResult:
+    """Run mypy with the same strict command CI uses for Test Client."""
+    result = _StepResult("[PHASE 1] mypy")
+    t0 = time.monotonic()
+    ok, note = _ensure_python_tool(module_name="mypy", pip_package="mypy", label="mypy")
+    if not ok:
+        result.skipped = True
+        result.note = note
+        result.duration = time.monotonic() - t0
+        return result
+    rc, output = _run([sys.executable, "-m", "mypy", ".", "--ignore-missing-imports", "--no-error-summary"])
+    result.duration = time.monotonic() - t0
+    result.ok = rc == 0
+    (_RESULTS_DIR / "mypy.txt").write_text(output, encoding="utf-8")
+    if not result.ok:
+        result.note = "mypy exited with code %d — see test-results/mypy.txt" % rc
+        _log(output)
+    return result
+
+
 def _step_bandit() -> _StepResult:
     """Run bandit security linter; write JSON report to test-results/bandit.json."""
     result = _StepResult("[PHASE 1] bandit")
@@ -1596,6 +1616,7 @@ def main() -> int:
             _section("Phase 1: Static / Quality")
             results.append(_step_ruff_lint())
             results.append(_step_ruff_format())
+            results.append(_step_mypy())
             results.append(_step_bandit())
             results.append(_step_pip_audit())
             results.append(_step_detect_secrets())

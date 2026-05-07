@@ -385,6 +385,10 @@ Expected results:
 python run_all_tests.py
 ```
 Runs Python unit + integration tests, JS unit tests, ESLint, Bandit, mypy, pip-audit.
+Every runner invocation writes `test-results/timing-latest.json` and
+`test-results/timing-history.jsonl`, then appends the same payload to
+`.state/timing-history.jsonl`. Use those files for Phase 1 drift analysis
+instead of guessing from wall-clock totals.
 Root Phase 2 no longer delegates one broad `webclient-live` suite. It invokes
 separate Web Client suites for Python OPC UA, Python WebSocket backend, Python
 WebSocket lifecycle, Playwright smoke, Playwright features, Playwright
@@ -408,6 +412,18 @@ python run_all_tests.py --playwright-features-only
 python run_all_tests.py --playwright-regression-only
 python run_all_tests.py --docker-only
 ```
+
+GitHub `ci.yml` runs this runner with `--phase1`; it no longer duplicates the
+individual pytest, Vitest, ESLint, mypy, Bandit, and audit commands. GitHub
+`integration.yml` runs the same root-runner `webclient-live-*` suite matrix as
+local validation, with two Playwright feature workers on GitHub-hosted Windows
+runners. Each suite receives an isolated `IJT_WEB_TEST_RESULTS_DIR`, so JUnit,
+coverage, Playwright, and timing artifacts cannot overwrite another suite's
+files.
+
+If the checked-in simulator binary directory is absent in CI, the runner
+extracts the Release 2 Windows/Linux simulator ZIP from `OPC_UA_Servers/Release2`
+before launching owned live-suite servers.
 
 ### Browser Runtime WebSocket Config
 

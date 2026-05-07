@@ -51,7 +51,9 @@ import socket
 import subprocess
 import sys
 import time
+import zipfile
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
@@ -76,6 +78,8 @@ _VENV = ROOT / ".venv_test"
 _TMP_DIR = ROOT / "tmp"
 _NPM_CACHE = _TMP_DIR / "npm-cache"
 _PIP_CACHE = _TMP_DIR / "pip-cache"
+_STATE_DIR = ROOT / ".state"
+_TIMING_HISTORY = _STATE_DIR / "timing-history.jsonl"
 _REQUIREMENTS = ROOT / "requirements.txt"
 _REQUIREMENTS_DEV = ROOT / "requirements-dev.txt"
 _NPM_INSTALL_FLAGS = ["--legacy-peer-deps", "--no-audit", "--no-fund"]
@@ -221,6 +225,12 @@ def _subprocess_env(env: dict | None = None) -> dict:
     run_env.setdefault("npm_config_cache", str(_NPM_CACHE))
     run_env.setdefault("npm_config_update_notifier", "false")
     return run_env
+
+
+def _npm_install_args(npm: str) -> list[str]:
+    """Return deterministic install args for CI and developer-friendly args locally."""
+    command = "ci" if IS_CI and (ROOT / "package-lock.json").exists() else "install"
+    return [npm, command, *_NPM_INSTALL_FLAGS]
 
 
 def _kill_proc_tree(pid: int) -> None:
@@ -613,7 +623,7 @@ def _stage_npm_install() -> StageResult:
             "npm-install", 0, skipped=True, duration=time.monotonic() - t0, notes=["node_modules already present"]
         )
     _banner("STAGE 1c  npm install (node_modules missing or empty)")
-    rc = _run([npm, "install", *_NPM_INSTALL_FLAGS], label="npm install")
+    rc = _run(_npm_install_args(npm), label="npm dependencies")
     return StageResult("npm-install", rc, duration=time.monotonic() - t0)
 
 
@@ -891,6 +901,7 @@ def _stage_python_unit(python: Path) -> StageResult:
     _banner("STAGE 2  Python unit tests (no server needed)")
     t0 = time.monotonic()
     results_dir = _RESULTS_DIR
+    results_dir.mkdir(parents=True, exist_ok=True)
     cmd: list = [
         python,
         "-m",
@@ -899,12 +910,12 @@ def _stage_python_unit(python: Path) -> StageResult:
         "-v",
         "--tb=short",
         "--no-header",
+        f"--junitxml={results_dir / 'pytest.xml'}",
     ]
     if _py_module_available("pytest_cov"):
-        results_dir.mkdir(parents=True, exist_ok=True)
         cmd += [
             "--cov=.",
-            f"--cov-report=xml:{results_dir / 'coverage-py.xml'}",
+            f"--cov-report=xml:{results_dir / 'coverage.xml'}",
             f"--cov-report=html:{results_dir / 'htmlcov-py'}",
             # fail_under threshold is in [tool.coverage.report] in pyproject.toml
         ]
@@ -1009,7 +1020,7 @@ def _stage_js_unit() -> StageResult:
 
     if not (ROOT / "node_modules").exists():
         _info("node_modules not found — running npm install")
-        rc = _run([npm, "install", *_NPM_INSTALL_FLAGS], label="npm install")
+        rc = _run(_npm_install_args(npm), label="npm dependencies")
         if rc != 0:
             return StageResult("js-unit", rc, duration=time.monotonic() - t0, notes=["npm install failed"])
 
@@ -1033,6 +1044,7 @@ def _stage_js_unit() -> StageResult:
                 "--coverage",
                 "--coverage.reporter=lcov",
                 "--coverage.reporter=json",
+                "--coverage.reporter=cobertura",
             ],
             label="vitest --coverage",
         )
@@ -1365,6 +1377,10 @@ _WELL_KNOWN_SIMULATOR_PATHS: list[Path] = [
     _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe",
     _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application",
 ]
+_SIMULATOR_PACKAGE_ZIPS: list[Path] = [
+    _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator.zip",
+    _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator_Linux.zip",
+]
 # The OPC UA server port this client connects to.  Defined once here so every
 # reference below derives from it — change the port in one place only.
 _OPCUA_SERVER_PORT = 40463
@@ -1507,6 +1523,19 @@ def _find_simulator_executable() -> str | None:
     for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
         if candidate.exists():
             return str(candidate)
+    for package in _SIMULATOR_PACKAGE_ZIPS:
+        if not package.exists():
+            continue
+        _info(f"[server] Extracting simulator package: {package.name}")
+        try:
+            with zipfile.ZipFile(package) as archive:
+                archive.extractall(_SERVER_COMPOSE_DIR)
+        except (OSError, zipfile.BadZipFile) as exc:
+            _warn(f"[server] Could not extract {package.name}: {exc}")
+            continue
+        for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
+            if candidate.exists():
+                return str(candidate)
     return None
 
 
@@ -1853,6 +1882,45 @@ def _stage_docker_smoke() -> StageResult:
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
+def _stage_status(result: StageResult) -> str:
+    if result.skipped:
+        return "skipped"
+    return "passed" if result.rc == 0 else "failed"
+
+
+def _timing_payload(results: list[StageResult], total_time: float, mode: str) -> dict:
+    return {
+        "generated_utc": datetime.now(timezone.utc).isoformat(),
+        "mode": mode,
+        "total_seconds": round(total_time, 3),
+        "results_dir": str(_RESULTS_DIR),
+        "stages": [
+            {
+                "name": result.name,
+                "status": _stage_status(result),
+                "exit_code": result.rc,
+                "duration_seconds": round(result.duration, 3),
+                "notes": list(result.notes),
+            }
+            for result in results
+        ],
+    }
+
+
+def _write_timing_artifacts(results: list[StageResult], total_time: float, mode: str) -> None:
+    payload = _timing_payload(results, total_time, mode)
+    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    latest_json = json.dumps(payload, indent=2, sort_keys=True)
+    latest_line = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+    (_RESULTS_DIR / "timing-latest.json").write_text(latest_json + "\n", encoding="utf-8")
+    (_RESULTS_DIR / "timing-history.jsonl").write_text(latest_line + "\n", encoding="utf-8")
+
+    _STATE_DIR.mkdir(parents=True, exist_ok=True)
+    with _TIMING_HISTORY.open("a", encoding="utf-8") as history:
+        history.write(latest_line + "\n")
+
+
 def _print_summary(results: list[StageResult], total_time: float) -> int:
     _banner("TEST SUMMARY")
     overall = 0
@@ -1902,6 +1970,18 @@ STAGES = [
     "playwright-e2e",
     "docker-smoke",
 ]
+
+
+def _mode_name(args: argparse.Namespace, target_only: bool) -> str:
+    if target_only:
+        return "target-only"
+    if args.phase1:
+        return "phase1"
+    if args.phase2:
+        return "phase2"
+    if args.docker_only:
+        return "docker-only"
+    return "full"
 
 
 def main() -> int:
@@ -1965,6 +2045,7 @@ def main() -> int:
     run_live = args.integration or args.all or args.phase2
     run_e2e = args.e2e or args.all or args.phase2
     target_only = any(targeted_flags)
+    mode = _mode_name(args, target_only)
     skip_static = args.phase2 or args.docker_only or target_only
 
     python = Path(sys.executable)
@@ -2074,7 +2155,9 @@ def main() -> int:
                     )
                 )
 
-        rc = _print_summary(results, time.monotonic() - t_start)
+        total_time = time.monotonic() - t_start
+        _write_timing_artifacts(results, total_time, mode)
+        rc = _print_summary(results, total_time)
         _cleanup_caches(ROOT)
         return rc
 
@@ -2169,7 +2252,9 @@ def main() -> int:
         _skip(f"docker-smoke: {_docker_skip_reason()}")
         results.append(StageResult("docker-smoke", 0, skipped=True))
 
-    rc = _print_summary(results, time.monotonic() - t_start)
+    total_time = time.monotonic() - t_start
+    _write_timing_artifacts(results, total_time, mode)
+    rc = _print_summary(results, total_time)
     _cleanup_caches(ROOT)
     return rc
 

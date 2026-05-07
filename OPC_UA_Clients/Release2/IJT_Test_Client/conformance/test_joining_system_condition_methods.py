@@ -26,12 +26,17 @@ pytestmark = [pytest.mark.live, pytest.mark.conformance, pytest.mark.events, pyt
 _METHOD_TIMEOUT = 20.0
 _EVENT_TIMEOUT = 45.0
 
-_ACKNOWLEDGE_METHOD = ua.NodeId(ua.ObjectIds.AcknowledgeableConditionType_Acknowledge, 0)
-_CONFIRM_METHOD = ua.NodeId(ua.ObjectIds.AcknowledgeableConditionType_Confirm, 0)
-_ADD_COMMENT_METHOD = ua.NodeId(ua.ObjectIds.ConditionType_AddComment, 0)
-_ENABLE_METHOD = ua.NodeId(ua.ObjectIds.ConditionType_Enable, 0)
-_DISABLE_METHOD = ua.NodeId(ua.ObjectIds.ConditionType_Disable, 0)
-_CONDITION_REFRESH_METHOD = ua.NodeId(ua.ObjectIds.ConditionType_ConditionRefresh, 0)
+
+def _node_id(identifier: int, namespace_idx: int) -> ua.NodeId:
+    return ua.NodeId(identifier, namespace_idx)  # type: ignore[arg-type]
+
+
+_ACKNOWLEDGE_METHOD = _node_id(ua.ObjectIds.AcknowledgeableConditionType_Acknowledge, 0)
+_CONFIRM_METHOD = _node_id(ua.ObjectIds.AcknowledgeableConditionType_Confirm, 0)
+_ADD_COMMENT_METHOD = _node_id(ua.ObjectIds.ConditionType_AddComment, 0)
+_ENABLE_METHOD = _node_id(ua.ObjectIds.ConditionType_Enable, 0)
+_DISABLE_METHOD = _node_id(ua.ObjectIds.ConditionType_Disable, 0)
+_CONDITION_REFRESH_METHOD = _node_id(ua.ObjectIds.ConditionType_ConditionRefresh, 0)
 
 
 def _require_ns_ijt(ns_indices):
@@ -93,7 +98,7 @@ async def _collect_until(
 
 
 async def _subscribe_to_conditions(collector: EventCollector, subscription_client, ns_ijt: int) -> None:
-    condition_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_CONDITION_TYPE, ns_ijt))
+    condition_type_node = subscription_client.get_node(_node_id(IJTTypes.JOINING_SYSTEM_CONDITION_TYPE, ns_ijt))
     await collector.subscribe(subscription_client.nodes.server, condition_type_node, queue_size=500)
 
 
@@ -301,7 +306,7 @@ async def test_condition_refresh_replays_retained_condition(
     async with EventCollector(subscription_client) as collector:
         await _subscribe_to_conditions(collector, subscription_client, ns_ijt)
         assert collector.subscription_id is not None
-        refresh_object = opcua_client.get_node(ua.NodeId(ua.ObjectIds.ConditionType, 0))
+        refresh_object = opcua_client.get_node(_node_id(ua.ObjectIds.ConditionType, 0))
         await _call_condition_method(
             refresh_object,
             _CONDITION_REFRESH_METHOD,

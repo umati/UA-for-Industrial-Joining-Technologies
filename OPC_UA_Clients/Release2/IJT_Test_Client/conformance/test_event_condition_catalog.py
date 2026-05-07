@@ -40,6 +40,10 @@ def _require_ns_ijt(ns_indices):
     return ns_ijt
 
 
+def _node_id(identifier: int, namespace_idx: int) -> ua.NodeId:
+    return ua.NodeId(identifier, namespace_idx)  # type: ignore[arg-type]
+
+
 def _localized_text_text(value: object | None) -> str:
     if value is None:
         return ""
@@ -142,6 +146,13 @@ async def _collect_until(
     return None, seen
 
 
+def _event_code_matches(expected: int) -> Callable[[object], bool]:
+    def _predicate(item: object) -> bool:
+        return _event_payload_field(item, "EventCode") == expected
+
+    return _predicate
+
+
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD, CU.EVENT_CONDITION_CLASSES)
 async def test_simulated_event_catalog_has_expected_shape():
     values = [value for value, _ in SimulateEventType.ALL_KNOWN]
@@ -162,7 +173,7 @@ async def test_all_simulated_event_use_cases_raise_joining_system_events(
     ns_indices,
 ):
     ns_ijt = _require_ns_ijt(ns_indices)
-    event_type_node_id = ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt)
+    event_type_node_id = _node_id(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt)
 
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(
@@ -193,7 +204,7 @@ async def test_all_simulated_event_use_cases_raise_joining_system_conditions(
     ns_indices,
 ):
     ns_ijt = _require_ns_ijt(ns_indices)
-    condition_type_node_id = ua.NodeId(IJTTypes.JOINING_SYSTEM_CONDITION_TYPE, ns_ijt)
+    condition_type_node_id = _node_id(IJTTypes.JOINING_SYSTEM_CONDITION_TYPE, ns_ijt)
 
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(
@@ -207,7 +218,7 @@ async def test_all_simulated_event_use_cases_raise_joining_system_conditions(
                 pytest.skip(outcome.skip_reason or "Simulator condition trigger failed")
             event, seen = await _collect_until(
                 collector,
-                lambda item, expected=event_type: _event_payload_field(item, "EventCode") == expected,
+                _event_code_matches(event_type),
             )
             if event is None:
                 pytest.skip(f"No JoiningSystemConditionType received for {use_case}:{label}; saw {len(seen)} events")

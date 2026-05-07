@@ -10,6 +10,7 @@ After a `run_all_tests.py` run the following files are produced:
 |---|---|---|
 | `test-results/pytest-live.xml` | JUnit XML | Live test results from `run_all_tests.py` Phase 2 (default XML input for Excel) |
 | `test-results/pytest-unit.xml` | JUnit XML | Unit test results from `run_all_tests.py` Phase 1 |
+| `test-results/mypy.txt` | Text | Blocking local Phase 1 type-check output from `python -m mypy . --ignore-missing-imports --no-error-summary` |
 | `test-results/report.xlsx` | Excel | Human-readable coloured summary by test area, full detail, filtered views |
 | `test-results/smoke-sanity.xml` | JUnit XML | Quick server reachability smoke test (CI only) |
 | `test-results/cu-compliance-report.json` | JSON | Machine-readable CU compliance report by test, conformance unit, raw support outcome, conservative compliance status, and workbook row traceability |
@@ -118,6 +119,10 @@ unit-stage quality gate, while Phase 2 is compliance validation against a live
 server.
 Passing explicit pytest paths or explicit coverage arguments after the runner
 arguments remains supported for targeted diagnostic runs.
+Local Phase 1 includes blocking mypy with the same command used by CI:
+`python -m mypy . --ignore-missing-imports --no-error-summary`. This keeps
+typed conformance helpers and asyncua stub suppressions from escaping to CI
+only.
 
 Default raw pytest collection is `tests/unit` and `conformance`. Older root
 suites such as `assets`, `results`, `joint`, and `events` are still runnable by

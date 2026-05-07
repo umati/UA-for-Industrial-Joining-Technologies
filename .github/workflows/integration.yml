@@ -9,7 +9,7 @@
 #   server-smoke-docker  Release2 / OPC UA Server        Linux native Docker build + smoke
 #   webclient-docker     Release2 / IJT Web Client        Docker unit/prod tests
 #   int-testclient       Release2 / Test Client           Windows: OPC UA server (port 40462) + Test Client full suite
-#   live-webclient       Release2 / IJT Web Client        Windows: Web Client live integration (port 40463)
+#   live-webclient       Release2 / IJT Web Client        Windows: local runner webclient-live-* matrix
 #   live-console         Release2 / IJT Console Client   Windows: Console Client live tests (port 40461)
 #   csharp-live          Release2 / IJT C# Client         Windows: xUnit live tests (port 40464) — nightly
 #   report               Combined summary                 Always runs after all jobs
@@ -36,15 +36,8 @@ on:
       - 'OPC_UA_Servers/Release2/tests/**'
       - 'OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/**'
       - 'OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_Linux/**'
-      # Web Client — only OPC UA backend, Docker config, integration tests, and dependencies
-      # GUI/JS/unit-test changes are covered by fast CI and do NOT need live OPC UA testing
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/src/python/**'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/**'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/tests/shared_opcua/**'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/index.py'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/docker-compose.yml'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements*.txt'
+      # Web Client — local live suites cover Python backend contracts and Playwright E2E.
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
       # Test Client — every change is an OPC UA conformance test change
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
       # Console Client — live tests run here (not in fast CI)
@@ -63,13 +56,7 @@ on:
       - 'OPC_UA_Servers/Release2/tests/**'
       - 'OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/**'
       - 'OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_Linux/**'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/src/python/**'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/**'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/tests/shared_opcua/**'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/index.py'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/docker-compose.yml'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements*.txt'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/*.py'
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/tests/live/**'
@@ -414,16 +401,38 @@ jobs:
         run: python scripts/start_server_on_port.py --port 40462 --stop
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Release2 / IJT Web Client — Windows Live Integration (port 40463)
-  #   Runs Web Client Python integration tests against a live OPC UA server.
-  #   Uses dedicated port 40463 — safe to run in parallel with other live jobs.
+  # Release2 / IJT Web Client — Windows Live Runner Matrix
+  #   Runs the same webclient-live-* suites as the local root runner.
+  #   Each suite owns its OPC UA server, WebSocket backend, UI port, and results directory.
   # ───────────────────────────────────────────────────────────────────────────
   live-webclient:
-    name: "Release2 / IJT Web Client — Windows Live Integration (port 40463)"
+    name: "Release2 / IJT Web Client — ${{ matrix.label }}"
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: webclient-live-python-opcua
+            label: "Python OPC UA"
+            feature_workers: ""
+          - suite: webclient-live-python-backend
+            label: "Python Backend"
+            feature_workers: ""
+          - suite: webclient-live-python-lifecycle
+            label: "Python Lifecycle"
+            feature_workers: ""
+          - suite: webclient-live-e2e-smoke
+            label: "E2E Smoke"
+            feature_workers: ""
+          - suite: webclient-live-e2e-features
+            label: "E2E Features"
+            feature_workers: "2"
+          - suite: webclient-live-e2e-regression
+            label: "E2E Regression"
+            feature_workers: ""
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -438,46 +447,24 @@ jobs:
             OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
             OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
 
-      - name: Install Web Client dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install `
-            -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt `
-            -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json
 
-      - name: Extract server ZIP
-        run: |
-          Expand-Archive `
-            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
-            -DestinationPath "OPC_UA_Servers\Release2\" `
-            -Force
-
-      - name: Start OPC UA server on port 40463
-        working-directory: ${{ github.workspace }}
-        run: python scripts/start_server_on_port.py --port 40463
-
-      - name: Run Web Client integration tests
+      - name: Run Web Client local live suite
         env:
-          OPCUA_TEST_ENDPOINT: opc.tcp://localhost:40463
-          OPCUA_WS_URL: ws://localhost:8001
-        run: |
-          New-Item -ItemType Directory -Force -Path OPC_UA_Clients/Release2/IJT_Web_Client/test-results | Out-Null
-          python -m pytest OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/ `
-            -v --tb=short --timeout=60 `
-            --junitxml=OPC_UA_Clients/Release2/IJT_Web_Client/test-results/pytest-integration.xml
+          IJT_PLAYWRIGHT_FEATURE_WORKERS: ${{ matrix.feature_workers || '' }}
+        run: python run_all_tests.py --suite "${{ matrix.suite }}" --verbose
 
       - name: Upload Web Client results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
-          name: results-live-webclient
+          name: results-live-webclient-${{ matrix.suite }}
           path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
           retention-days: 14
-
-      - name: Stop OPC UA server
-        if: always()
-        working-directory: ${{ github.workspace }}
-        run: python scripts/start_server_on_port.py --port 40463 --stop
 
   # ───────────────────────────────────────────────────────────────────────────
   # Release2 / IJT Console Client — Windows Live Tests (port 40461)
@@ -788,8 +775,8 @@ jobs:
         if: always()
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
-          name: "Web Client — Integration Tests (Live)"
-          path: all-results/results-live-webclient/**/pytest-integration.xml
+          name: "Web Client — Local Live Suites"
+          path: all-results/results-live-webclient-*/**/*.xml
           reporter: java-junit
           fail-on-error: false
           fail-on-empty: false
@@ -840,6 +827,8 @@ jobs:
               return [root] if root.tag == "testsuite" else root.findall(".//testsuite")
 
           def parse_junit(pattern):
+              total = passed = failed = skipped = 0
+              found = False
               for path in glob.glob(pattern, recursive=True):
                   try:
                       root   = ET.parse(path).getroot()
@@ -847,9 +836,15 @@ jobs:
                       t  = sum(int(s.get("tests",    0)) for s in suites)
                       f  = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
                       sk = sum(int(s.get("skipped",  0)) for s in suites)
-                      return t, t - f - sk, f, sk
+                      total += t
+                      passed += t - f - sk
+                      failed += f
+                      skipped += sk
+                      found = True
                   except Exception as exc:
                       print(f"[WARN] parse_junit({path}): {exc}")
+              if found:
+                  return total, passed, failed, skipped
               return None, None, None, None
 
           def collect_skips(pattern):
@@ -945,7 +940,7 @@ jobs:
           wd_js     = parse_junit("all-results/results-webclient-docker/vitest.xml")
           tc_smoke  = parse_junit("all-results/results-testclient/smoke-sanity.xml")
           tc_tests  = parse_junit("all-results/results-testclient/pytest.xml")
-          wc_web    = parse_junit("all-results/results-live-webclient/**/pytest-integration.xml")
+          wc_web    = parse_junit("all-results/results-live-webclient-*/**/*.xml")
           con_live  = parse_junit("all-results/results-live-console/**/pytest-live.xml")
           cs_live   = parse_junit("all-results/results-csharp-live/tests.xml")
 
@@ -957,7 +952,7 @@ jobs:
           tc_smoke_skips = collect_skips("all-results/results-testclient/smoke-sanity.xml")
           tc_conf_skips = collect_skips("all-results/results-testclient/pytest.xml")
           con_live_skips = collect_skips("all-results/results-live-console/**/pytest-live.xml")
-          wc_web_skips  = collect_skips("all-results/results-live-webclient/**/pytest-integration.xml")
+          wc_web_skips  = collect_skips("all-results/results-live-webclient-*/**/*.xml")
           cs_live_skips = collect_skips("all-results/results-csharp-live/tests.xml")
 
           # ── Artifact sanity gate ─────────────────────────────────────────
@@ -973,7 +968,7 @@ jobs:
           _warn(wd_r,  wd_js[0],     "webclient-docker",    "vitest.xml")
           _warn(tc_r,  tc_smoke[0],  "int-testclient",      "smoke-sanity.xml")
           _warn(tc_r,  tc_tests[0],  "int-testclient",      "pytest.xml")
-          _warn(wc_r,  wc_web[0],    "live-webclient",      "pytest-integration.xml")
+          _warn(wc_r,  wc_web[0],    "live-webclient",      "JUnit XML")
           _warn(con_r, con_live[0],  "live-console",        "pytest-live.xml")
           _warn(cs_r,  cs_live[0],   "csharp-live",         "tests.xml")
 

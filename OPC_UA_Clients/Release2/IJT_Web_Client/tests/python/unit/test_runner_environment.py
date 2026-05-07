@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import sys
 from pathlib import Path
@@ -32,6 +33,17 @@ def test_subprocess_env_uses_project_npm_cache(monkeypatch):
     assert env["npm_config_update_notifier"] == "false"
 
 
+def test_npm_install_uses_ci_in_ci_when_lockfile_exists(monkeypatch):
+    runner = _load_runner()
+    monkeypatch.setattr(runner, "IS_CI", True)
+
+    args = runner._npm_install_args("npm")
+
+    assert args[:2] == ["npm", "ci"]
+    assert "--no-audit" in args
+    assert "--no-fund" in args
+
+
 def test_runner_results_dir_can_be_isolated_per_parallel_suite(monkeypatch):
     isolated = _PROJECT_ROOT / "test-results" / "webclient-live-e2e-smoke"
     monkeypatch.setenv("IJT_WEB_TEST_RESULTS_DIR", str(isolated))
@@ -39,6 +51,89 @@ def test_runner_results_dir_can_be_isolated_per_parallel_suite(monkeypatch):
     runner = _load_runner()
 
     assert runner._RESULTS_DIR == isolated
+
+
+def test_python_unit_stage_writes_ci_junit_and_coverage_paths(monkeypatch, tmp_path):
+    runner = _load_runner()
+    captured = {}
+
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_py_module_available", lambda name: name == "pytest_cov")
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = [str(part) for part in cmd]
+        captured["label"] = kwargs["label"]
+        return 0
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_python_unit(Path("python"))
+
+    assert result.rc == 0
+    assert captured["label"] == "pytest unit"
+    assert f"--junitxml={tmp_path / 'pytest.xml'}" in captured["cmd"]
+    assert f"--cov-report=xml:{tmp_path / 'coverage.xml'}" in captured["cmd"]
+    assert f"--cov-report=html:{tmp_path / 'htmlcov-py'}" in captured["cmd"]
+
+
+def test_js_unit_stage_writes_ci_junit_and_cobertura_coverage(monkeypatch):
+    runner = _load_runner()
+    captured = {}
+    original_exists = Path.exists
+
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner.shutil, "which", lambda name: name)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", _PROJECT_ROOT / "test-results")
+
+    def fake_exists(self):
+        if "node_modules" in str(self):
+            return True
+        return original_exists(self)
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return 0
+
+    monkeypatch.setattr(Path, "exists", fake_exists)
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_js_unit()
+
+    assert result.rc == 0
+    assert "--coverage.reporter=cobertura" in captured["cmd"]
+    assert any(str(part).endswith("vitest.xml") for part in captured["cmd"])
+
+
+def test_timing_artifacts_are_written_to_results_and_persistent_history(monkeypatch, tmp_path):
+    runner = _load_runner()
+    results_dir = tmp_path / "results"
+    state_dir = tmp_path / "state"
+    monkeypatch.setattr(runner, "_RESULTS_DIR", results_dir)
+    monkeypatch.setattr(runner, "_STATE_DIR", state_dir)
+    monkeypatch.setattr(runner, "_TIMING_HISTORY", state_dir / "timing-history.jsonl")
+
+    runner._write_timing_artifacts(
+        [
+            runner.StageResult("python-lint", 0, duration=1.25),
+            runner.StageResult("playwright-features", 1, duration=2.5, notes=["failed"]),
+        ],
+        total_time=3.75,
+        mode="phase1",
+    )
+
+    latest = json.loads((results_dir / "timing-latest.json").read_text(encoding="utf-8"))
+    result_history = (results_dir / "timing-history.jsonl").read_text(encoding="utf-8").splitlines()
+    persistent_history = (state_dir / "timing-history.jsonl").read_text(encoding="utf-8").splitlines()
+
+    assert latest["mode"] == "phase1"
+    assert latest["total_seconds"] == 3.75
+    assert latest["stages"][0]["name"] == "python-lint"
+    assert latest["stages"][0]["status"] == "passed"
+    assert latest["stages"][1]["status"] == "failed"
+    assert len(result_history) == 1
+    assert len(persistent_history) == 1
+    assert json.loads(result_history[0]) == json.loads(persistent_history[0])
 
 
 def test_subprocess_env_preserves_explicit_npm_cache(monkeypatch):
@@ -123,6 +218,40 @@ def test_existing_opcua_port_sets_test_endpoint(monkeypatch):
     assert ready is True
     assert proc is None
     assert runner.os.environ["OPCUA_TEST_ENDPOINT"] == "opc.tcp://localhost:40463"
+
+
+def test_simulator_package_is_extracted_when_binary_is_missing(monkeypatch, tmp_path):
+    runner = _load_runner()
+    server_dir = tmp_path / "Release2"
+    package = server_dir / "OPC_UA_IJT_Server_Simulator.zip"
+    executable = server_dir / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe"
+    package.parent.mkdir(parents=True)
+    package.write_text("zip placeholder", encoding="utf-8")
+    extracted = {}
+
+    class FakeZipFile:
+        def __init__(self, path):
+            extracted["path"] = path
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def extractall(self, destination):
+            extracted["destination"] = destination
+            executable.parent.mkdir(parents=True)
+            executable.write_text("exe", encoding="utf-8")
+
+    monkeypatch.delenv("OPCUA_SIMULATOR_EXE", raising=False)
+    monkeypatch.setattr(runner, "_SERVER_COMPOSE_DIR", server_dir)
+    monkeypatch.setattr(runner, "_WELL_KNOWN_SIMULATOR_PATHS", [executable])
+    monkeypatch.setattr(runner, "_SIMULATOR_PACKAGE_ZIPS", [package])
+    monkeypatch.setattr(runner.zipfile, "ZipFile", FakeZipFile)
+
+    assert runner._find_simulator_executable() == str(executable)
+    assert extracted == {"path": package, "destination": server_dir}
 
 
 def test_playwright_install_skips_with_deps_on_windows(monkeypatch):
@@ -263,6 +392,7 @@ def test_playwright_config_uses_runtime_ui_port_and_no_retries():
     assert "outputDir: `${TEST_RESULTS_DIR}/artifacts`" in source
     assert "outputFolder: `${TEST_RESULTS_DIR}/html`" in source
     assert "outputFile: `${TEST_RESULTS_DIR}/results.json`" in source
+    assert "outputFile: `${TEST_RESULTS_DIR}/playwright.xml`" in source
     assert "const PLAYWRIGHT_WORKERS" in source
     assert "process.env.IJT_PLAYWRIGHT_WORKERS" in source
     assert "baseURL: UI_BASE_URL" in source

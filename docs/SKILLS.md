@@ -351,7 +351,7 @@ UA-for-Industrial-Joining-Technologies/
 ### CI (`ci.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
 |-----|--------------|
-| `web-client` | Python unit tests, JS unit tests, ESLint, Bandit, npm audit |
+| `web-client` | Web Client local Phase 1 runner: Python unit/type/security, JS unit/lint/security, and runner timing artifacts |
 | `console-client` | Python unit tests (`tests/unit/`), Bandit, Ruff, mypy |
 | `node-client` | JS unit tests, ESLint, npm audit |
 | `test-client` | pytest unit tests (`tests/unit/`) + Bandit, Ruff, mypy |
@@ -381,12 +381,12 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `server-smoke-windows` | `ci.yml` | 40451 | Windows native EXE (server self-test) |
 | `server-smoke-docker` | `integration.yml` | 40451 | Docker Linux (server self-test) |
 | `server-linux-package-smoke` | local root runner | 40465 | Docker image built from Linux package ZIP |
-| `webclient-live-python-opcua` | local root runner | OPC UA 40463 | Direct Python OPC UA and method tests |
-| `webclient-live-python-backend` | local root runner | OPC UA 40466 / WS 8002 | Python WebSocket backend contract and integration tests |
-| `webclient-live-python-lifecycle` | local root runner | OPC UA 40467 / WS 8003 | WebSocket lifecycle tests isolated from backend contract tests |
-| `webclient-live-e2e-smoke` | local root runner | HTTP 3004 | Playwright smoke project |
-| `webclient-live-e2e-features` | local root runner | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs, four isolated browser workers |
-| `webclient-live-e2e-regression` | local root runner | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec |
+| `webclient-live-python-opcua` | local root runner + `integration.yml` | OPC UA 40463 | Direct Python OPC UA and method tests |
+| `webclient-live-python-backend` | local root runner + `integration.yml` | OPC UA 40466 / WS 8002 | Python WebSocket backend contract and integration tests |
+| `webclient-live-python-lifecycle` | local root runner + `integration.yml` | OPC UA 40467 / WS 8003 | WebSocket lifecycle tests isolated from backend contract tests |
+| `webclient-live-e2e-smoke` | local root runner + `integration.yml` | HTTP 3004 | Playwright smoke project |
+| `webclient-live-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs, four isolated browser workers locally and two workers in GitHub Actions |
+| `webclient-live-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec |
 | `webclient-docker-smoke` | local root runner | HTTP 3000 / WS 8001 | Web Client production Docker image/readiness smoke |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
 | `live-webclient` | `integration.yml` | **40463** | Windows native EXE |
@@ -402,23 +402,27 @@ validation remains `webclient-docker-smoke` with its own timeout.
 The Playwright feature suite is parallelized across four owned backend/server
 pairs. Worker 0 uses the base ports, and workers 1–3 use the next contiguous
 ports, so browser workers never share a WebSocket backend or OPC UA simulator.
+GitHub integration runs the same `webclient-live-*` suites through the root
+runner matrix. The features job uses two Playwright workers on GitHub-hosted
+Windows runners, while local root runs keep the default four-worker feature
+pool.
 
 > Release 1 Node Client always uses 40451 (fixed — no dynamic port support).
 > Server self-tests (smoke) correctly use 40451 — they test the server in its native configuration.
 > All Release 2 client jobs now use dedicated isolated ports.
 
 ### Integration (`integration.yml`) — nightly + path-triggered
-Triggers on: `OPC_UA_Servers/**`, Web Client Python/integration/Docker/deps, `IJT_Test_Client/**`, Console Client live/deps, or workflow file change.
+Triggers on: `OPC_UA_Servers/**`, all Web Client files, `IJT_Test_Client/**`, Console Client live/deps, or workflow file change.
 | Job | What it tests |
 |-----|--------------|
 | `server-smoke-docker` | Full Docker build + server smoke (10/10) |
 | `webclient-docker` | Web Client Docker test image (Python unit + JS unit) + HTTP:3000 production health |
 | `int-testclient` | Windows live: Test Client full suite against server on port 40462 |
-| `live-webclient` | Windows live: Web Client integration tests (13 tests) — server on port 40463 |
+| `live-webclient` | Windows live matrix: root-runner `webclient-live-python-*` and `webclient-live-e2e-*` suites with owned services and per-suite artifacts |
 | `live-console` | Windows live: Console Client live tests — server on port 40461 |
 | `csharp-live` | Windows live: C# xUnit live tests (nightly drift detection) — server on port 40464 |
 
-Runtime: ~10–15 minutes (int-testclient, live-webclient, live-console, csharp-live all run in parallel). NOT triggered on GUI/JS-only changes (deliberate — keep fast CI fast).
+Runtime: ~10–15 minutes (int-testclient, live-webclient matrix jobs, live-console, csharp-live all run in parallel). Web Client GUI/JS changes now trigger integration because the live matrix includes Playwright smoke/features/regression suites.
 All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents: read`.
 
 ---

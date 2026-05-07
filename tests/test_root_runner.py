@@ -459,6 +459,45 @@ def test_node_runner_subprocess_env_disables_npm_update_notifier(monkeypatch) ->
     assert captured["npm_config_update_notifier"] == "false"
 
 
+def test_root_feature_worker_count_can_be_overridden_for_ci(monkeypatch) -> None:
+    monkeypatch.setenv("IJT_PLAYWRIGHT_FEATURE_WORKERS", "2")
+    runner = _load_runner_at("run_all_tests.py", "ijt_root_runner_feature_workers")
+
+    assert runner.WEB_CLIENT_E2E_FEATURE_WORKERS == 2
+
+
+def test_ci_web_client_uses_local_phase1_runner() -> None:
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    web_job = workflow.split("  web-client:", 1)[1].split("  console-client:", 1)[0]
+
+    assert "python run_all_tests.py --phase1" in web_job
+    assert "python -m pytest tests/python/unit" not in web_job
+    assert "npx vitest run --coverage" not in web_job
+    assert "steps.web_runner.outcome" in web_job
+
+
+def test_integration_web_client_uses_local_live_suite_matrix() -> None:
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
+        encoding="utf-8"
+    )
+    expected_suites = {
+        "webclient-live-python-opcua",
+        "webclient-live-python-backend",
+        "webclient-live-python-lifecycle",
+        "webclient-live-e2e-smoke",
+        "webclient-live-e2e-features",
+        "webclient-live-e2e-regression",
+    }
+
+    for suite in expected_suites:
+        assert suite in workflow
+
+    assert 'python run_all_tests.py --suite "${{ matrix.suite }}" --verbose' in workflow
+    assert "OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/" not in workflow
+    assert "results-live-webclient-${{ matrix.suite }}" in workflow
+    assert "all-results/results-live-webclient-*/**/*.xml" in workflow
+
+
 def test_csharp_phase2_live_tests_clear_phase1_only_flag(monkeypatch) -> None:
     module = _load_runner_at(
         "OPC_UA_Clients/Release2/IJT_CSharp_Client/run_all_tests.py",

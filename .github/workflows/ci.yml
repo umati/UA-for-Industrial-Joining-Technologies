@@ -126,8 +126,7 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Release2 / IJT Web Client
-  #   Python: pytest + bandit (pyproject.toml)
-  #   JS:     vitest + eslint (JSON) + npm audit
+  #   Runs the same local Phase 1 runner used by developers.
   # ───────────────────────────────────────────────────────────────────────────
   web-client:
     name: "Release2 / IJT Web Client"
@@ -139,9 +138,9 @@ jobs:
       contents: read
       checks: write
     outputs:
-      mypy_result:   ${{ steps.mypy.outcome }}      # zizmor: ignore[template-injection]
-      ruff_result:   ${{ steps.pylint.outcome }}    # zizmor: ignore[template-injection]
-      eslint_result: ${{ steps.eslint.outcome }}    # zizmor: ignore[template-injection]
+      mypy_result:   ${{ steps.web_runner.outcome }} # zizmor: ignore[template-injection]
+      ruff_result:   ${{ steps.web_runner.outcome }} # zizmor: ignore[template-injection]
+      eslint_result: ${{ steps.web_runner.outcome }} # zizmor: ignore[template-injection]
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
@@ -165,55 +164,10 @@ jobs:
           cache: npm
           cache-dependency-path: OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json
 
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
-
-      - name: Install JS Dependencies
-        run: npm ci
-
-      - name: Python Unit Tests
-        id: pytest
+      - name: Run Web Client Phase 1 runner
+        id: web_runner
         continue-on-error: true
-        run: |
-          mkdir -p "$(pwd)/test-results"
-          python -m pytest tests/python/unit -q \
-            --rootdir=. \
-            --junitxml="$(pwd)/test-results/pytest.xml" \
-            --cov=. \
-            --cov-report=xml:"$(pwd)/test-results/coverage.xml" \
-            --cov-report=term-missing
-
-      - name: JS Unit Tests
-        id: vitest
-        continue-on-error: true
-        run: npx vitest run --coverage --reporter=verbose --reporter=junit --outputFile.junit=test-results/vitest.xml
-
-      - name: ESLint
-        id: eslint
-        continue-on-error: true
-        run: npx eslint src/javascripts --format json --output-file test-results/eslint.json
-
-      - name: Bandit (Python Security)
-        id: bandit
-        continue-on-error: true
-        run: python -m bandit -r . -c pyproject.toml --severity-level medium -f json -o test-results/bandit.json
-
-      - name: Ruff (Python Linting)
-        id: pylint
-        continue-on-error: true
-        run: python -m ruff check . --output-format=github
-
-      - name: mypy (Type Checking)
-        id: mypy
-        continue-on-error: true
-        run: python -m mypy . --ignore-missing-imports --no-error-summary
-
-      - name: npm Audit (JS Security)
-        id: npm_audit
-        continue-on-error: true
-        run: npm audit --audit-level=high --json > test-results/npm-audit.json
+        run: python run_all_tests.py --phase1
 
       - name: "Publish Test Reports — Python"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
@@ -245,32 +199,12 @@ jobs:
           path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
           retention-days: 14
 
-      - name: Fail if Any Check Failed
-        if: always() && (
-          steps.pytest.outcome    == 'failure' ||
-          steps.vitest.outcome    == 'failure' ||
-          steps.eslint.outcome    == 'failure' ||
-          steps.bandit.outcome    == 'failure' ||
-          steps.pylint.outcome    == 'failure' ||
-          steps.mypy.outcome      == 'failure' ||
-          steps.npm_audit.outcome == 'failure')
+      - name: Fail if Runner Failed
+        if: always() && steps.web_runner.outcome == 'failure'
         env:
-          PYTEST_OUTCOME:    ${{ steps.pytest.outcome }}
-          VITEST_OUTCOME:    ${{ steps.vitest.outcome }}
-          ESLINT_OUTCOME:    ${{ steps.eslint.outcome }}
-          BANDIT_OUTCOME:    ${{ steps.bandit.outcome }}
-          PYLINT_OUTCOME:    ${{ steps.pylint.outcome }}
-          MYPY_OUTCOME:      ${{ steps.mypy.outcome }}
-          NPM_AUDIT_OUTCOME: ${{ steps.npm_audit.outcome }}
+          WEB_RUNNER_OUTCOME: ${{ steps.web_runner.outcome }}
         run: |
-          echo "One or more checks failed:"
-          echo "  pytest     -> $PYTEST_OUTCOME"
-          echo "  vitest     -> $VITEST_OUTCOME"
-          echo "  eslint     -> $ESLINT_OUTCOME"
-          echo "  bandit     -> $BANDIT_OUTCOME"
-          echo "  ruff       -> $PYLINT_OUTCOME"
-          echo "  mypy       -> $MYPY_OUTCOME"
-          echo "  npm audit  -> $NPM_AUDIT_OUTCOME"
+          echo "Web Client Phase 1 runner failed: $WEB_RUNNER_OUTCOME"
           exit 1
 
 

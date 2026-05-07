@@ -129,6 +129,41 @@ def test_pip_audit_timeout_is_advisory_skip():
     assert run_cmd.call_args.kwargs["timeout_label"] == "pip-audit"
 
 
+def test_phase1_mypy_runs_ci_equivalent_command():
+    with (
+        patch.object(_mod, "_ensure_python_tool", return_value=(True, "")),
+        patch.object(Path, "write_text", return_value=None),
+        patch.object(_mod, "_run", return_value=(0, "Success: no issues found")) as run_cmd,
+    ):
+        result = _mod._step_mypy()
+
+    assert result.ok
+    command = run_cmd.call_args.args[0]
+    assert command == [
+        sys.executable,
+        "-m",
+        "mypy",
+        ".",
+        "--ignore-missing-imports",
+        "--no-error-summary",
+    ]
+
+
+def test_phase1_mypy_blocks_on_type_errors():
+    with (
+        patch.object(_mod, "_ensure_python_tool", return_value=(True, "")),
+        patch.object(Path, "write_text", return_value=None),
+        patch.object(_mod, "_run", return_value=(1, "type error")) as run_cmd,
+    ):
+        result = _mod._step_mypy()
+
+    assert not result.ok
+    assert "mypy exited with code 1" in result.note
+    command = run_cmd.call_args.args[0]
+    assert "--ignore-missing-imports" in command
+    assert "--no-error-summary" in command
+
+
 # ---------------------------------------------------------------------------
 # Suite counter logic — mirrors the counters in main()
 # ---------------------------------------------------------------------------

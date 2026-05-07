@@ -18,6 +18,10 @@ Fast and deterministic on GitHub-hosted runners. **Must pass before any merge.**
 `csharp-unit` runs build, format, and all non-live xUnit tests.
 `csharp-vuln` runs the C# NuGet vulnerability scan as a separate CI gate.
 `csharp-live` runs the 110 live xUnit tests in `integration.yml` on a dedicated server instance (port 40464).
+The Web Client CI job delegates to `OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py --phase1`
+instead of duplicating pytest, Vitest, ESLint, mypy, Bandit, and audit commands
+inside the workflow. The runner writes the JUnit, coverage, JSON tool reports,
+and timing artifacts consumed by CI.
 
 ### Jobs
 
@@ -135,6 +139,10 @@ run their live/integration tests in parallel without port conflicts.
 > Playwright features, and Playwright regression each run as separate root
 > suites with their own service ports. Web Client Docker build/readiness stays
 > in the separate `webclient-docker-smoke` suite.
+> GitHub integration runs that same local root-runner suite matrix instead of
+> a separate raw pytest-only Web integration command. The Web Client feature
+> matrix uses two Playwright workers on GitHub-hosted Windows runners; local
+> root validation defaults to four workers.
 
 ### Port Assignment
 

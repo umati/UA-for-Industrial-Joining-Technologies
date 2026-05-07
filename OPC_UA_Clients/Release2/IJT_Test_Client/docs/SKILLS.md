@@ -65,6 +65,10 @@ unit stage and is currently 95%.
 pip-audit uses the PyPI JSON endpoint preflight, local project cache, spinner disabled, and short timeouts; network/TLS/timeout outcomes are SKIP, not PASS/FAIL.
 The runner refreshes `pip` before the requirements-hash fast path so stale bootstrap tooling does not create false CVE failures.
 Pyright is configured in `pyproject.toml` to use `.venv_test` so installed project dependencies are resolved consistently during local runner checks.
+`mypy` is blocking in local Phase 1 and uses the same command as CI:
+`python -m mypy . --ignore-missing-imports --no-error-summary`. Its output is
+written to `test-results/mypy.txt`, so strict type issues in conformance files
+are caught before CI.
 
 A **Python pytest suite** that validates an OPC UA server implementing the
 [OPC UA Industrial Joining Technologies (IJT)](https://reference.opcfoundation.org/IJT/Base/v100/)
