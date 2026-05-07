@@ -133,6 +133,8 @@ run their live/integration tests in parallel without port conflicts.
 > The server smoke suite validates the native/default server package on port 40451.
 > When Docker is running, the Linux package smoke suite also builds the server image
 > from `OPC_UA_IJT_Server_Simulator_Linux.zip` and validates it on port 40465.
+> Docker-dependent root suites are skipped when Docker is missing or the daemon
+> is not running.
 > Each client sub-runner auto-launches its own server on its dedicated port.
 > Web Client live validation is split by test type: direct Python OPC UA,
 > Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke,
@@ -157,7 +159,7 @@ run their live/integration tests in parallel without port conflicts.
 | Web Client Playwright smoke | HTTP 3004 | `.venv_test` + Playwright | Browser smoke project only |
 | Web Client Playwright features | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | `.venv_test` + Playwright | Feature specs with four owned backend/server worker pairs |
 | Web Client Playwright regression | OPC UA 40480 / WS 8010 / HTTP 3006 | `.venv_test` + Playwright | Regression spec with owned backend and UI ports |
-| Web Client Docker smoke | HTTP 3000 / WS 8001 | Docker | Builds the Web Client production image through `--docker-only`; independent from live/browser suites |
+| Web Client Docker smoke | HTTP 3000 / WS 8001 | Docker | Builds the Web Client production image through `--docker-only`; independent from live/browser suites; root runner skips when Docker is unavailable |
 | IJT_Node_Client    | **40451** (fixed) | N/A (Node) | **Release 1 legacy** — server port is hardcoded, dynamic isolation not supported |
 | Server smoke/native default | 40451  | —            | Built-in default (from `server_configuration.json`); root runner Phase 2 validates this package path |
 | Server Linux package smoke | 40465  | Docker       | Builds the Docker image from the Linux ZIP package and runs `smoke_test.py` |

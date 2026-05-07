@@ -395,6 +395,10 @@ WebSocket lifecycle, Playwright smoke, Playwright features, Playwright
 regression, and Docker smoke. Each live/browser suite owns its own OPC UA,
 WebSocket, and UI ports, so failures are localized to one test type and service
 lifecycle.
+At the root-runner level, `webclient-docker-smoke` is prechecked like the server
+Docker smoke: missing Docker or a stopped daemon is reported as a skipped suite.
+Calling this Web runner directly with `--docker-only` remains an explicit Docker
+validation request and fails if Docker cannot run.
 The Playwright feature suite runs with `IJT_PLAYWRIGHT_FEATURE_WORKERS=4` in
 the root runner. Each worker gets a dedicated WebSocket backend and OPC UA
 simulator by offsetting the base `WS_TEST_URL` and `OPCUA_TEST_ENDPOINT` ports;

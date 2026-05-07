@@ -83,6 +83,22 @@ _TIMING_HISTORY = _STATE_DIR / "timing-history.jsonl"
 _REQUIREMENTS = ROOT / "requirements.txt"
 _REQUIREMENTS_DEV = ROOT / "requirements-dev.txt"
 _NPM_INSTALL_FLAGS = ["--legacy-peer-deps", "--no-audit", "--no-fund"]
+# Minimum smoke-import contract for focused live/browser targets. Keep this
+# aligned with requirements.txt and requirements-dev.txt when target deps change.
+_PYTHON_TARGET_REQUIRED_MODULES = (
+    "pytest",
+    "pytest_asyncio",
+    "pytest_timeout",
+    "asyncua",
+    "websockets",
+    "dotenv",
+    "aiofiles",
+    "pytz",
+)
+# Minimum local Playwright contract for focused browser targets. Keep this
+# aligned with package.json/package-lock.json when Playwright deps change.
+_PLAYWRIGHT_REQUIRED_PACKAGES = ("@playwright/test", "playwright")
+_PLAYWRIGHT_REQUIRED_BINS = ("playwright",)
 
 
 def _path_from_env(name: str, default: Path) -> Path:
@@ -233,6 +249,33 @@ def _npm_install_args(npm: str) -> list[str]:
     return [npm, command, *_NPM_INSTALL_FLAGS]
 
 
+def _node_package_path(package: str) -> Path:
+    if package.startswith("@"):
+        scope, name = package.split("/", 1)
+        return ROOT / "node_modules" / scope / name
+    return ROOT / "node_modules" / package
+
+
+def _node_bin_path(name: str) -> Path | None:
+    bin_dir = ROOT / "node_modules" / ".bin"
+    candidates = [f"{name}.cmd", f"{name}.exe", name] if IS_WINDOWS else [name]
+    for candidate in candidates:
+        path = bin_dir / candidate
+        if path.exists():
+            return path
+    return None
+
+
+def _missing_node_requirements(
+    *,
+    packages: tuple[str, ...] = (),
+    bins: tuple[str, ...] = (),
+) -> list[str]:
+    missing = [f"package:{package}" for package in packages if not _node_package_path(package).exists()]
+    missing.extend(f"bin:{name}" for name in bins if _node_bin_path(name) is None)
+    return missing
+
+
 def _kill_proc_tree(pid: int) -> None:
     """Kill *pid* and all its descendants.
 
@@ -375,6 +418,27 @@ def _py_module_available(mod: str) -> bool:
         ).returncode
         == 0
     )
+
+
+def _missing_py_modules(python: Path, modules: tuple[str, ...]) -> list[str]:
+    """Return required Python modules that cannot be imported by *python*."""
+    if not modules:
+        return []
+    script = (
+        "import importlib.util, sys\n"
+        "missing = [m for m in sys.argv[1:] if importlib.util.find_spec(m) is None]\n"
+        "print('\\n'.join(missing))\n"
+        "raise SystemExit(1 if missing else 0)\n"
+    )
+    rc, output = _run_captured(
+        [python, "-c", script, *modules],
+        label="python dependency probe",
+        timeout=30,
+    )
+    if rc == 0:
+        return []
+    missing = [line.strip() for line in output.splitlines() if line.strip()]
+    return missing or list(modules)
 
 
 def _cmd_available(cmd: str) -> bool:
@@ -611,28 +675,62 @@ def _stage_versions() -> StageResult:
     return StageResult("versions", 0, duration=time.monotonic() - t0)
 
 
-def _stage_npm_install() -> StageResult:
+def _stage_npm_install(
+    *,
+    required: bool = False,
+    required_packages: tuple[str, ...] = (),
+    required_bins: tuple[str, ...] = (),
+) -> StageResult:
     """Ensure node_modules are installed before any stage that depends on them."""
     t0 = time.monotonic()
     npm = shutil.which("npm") or shutil.which("npm.cmd")
     if not npm:
-        return StageResult("npm-install", 0, skipped=True, duration=time.monotonic() - t0, notes=["npm not found"])
+        _warn("npm not found")
+        return StageResult(
+            "npm-install",
+            1 if required else 0,
+            skipped=not required,
+            duration=time.monotonic() - t0,
+            notes=["npm not found"],
+        )
     nm = ROOT / "node_modules"
-    if nm.exists() and any(nm.iterdir()):
+    missing = _missing_node_requirements(packages=required_packages, bins=required_bins)
+    if nm.exists() and any(nm.iterdir()) and not missing:
         return StageResult(
             "npm-install", 0, skipped=True, duration=time.monotonic() - t0, notes=["node_modules already present"]
         )
-    _banner("STAGE 1c  npm install (node_modules missing or empty)")
+    reason = "node_modules missing or empty" if not nm.exists() or not any(nm.iterdir()) else "missing npm deps"
+    _banner(f"STAGE 1c  npm install ({reason})")
+    if missing:
+        _info("Missing npm requirements: " + ", ".join(missing))
     rc = _run(_npm_install_args(npm), label="npm dependencies")
-    return StageResult("npm-install", rc, duration=time.monotonic() - t0)
+    if rc != 0:
+        return StageResult("npm-install", rc, duration=time.monotonic() - t0, notes=["npm install failed"])
+    missing = _missing_node_requirements(packages=required_packages, bins=required_bins)
+    if missing:
+        return StageResult(
+            "npm-install",
+            1,
+            duration=time.monotonic() - t0,
+            notes=["missing npm requirements after install: " + ", ".join(missing)],
+        )
+    return StageResult("npm-install", 0, duration=time.monotonic() - t0)
 
 
-def _stage_pip_install(python: Path) -> StageResult:
+def _stage_pip_install(python: Path, *, required_modules: tuple[str, ...] = ()) -> StageResult:
     _banner("STAGE 1  Install / verify Python test dependencies")
     t0 = time.monotonic()
     if os.getenv("SKIP_VENV_INSTALL") == "1":
         _info("SKIP_VENV_INSTALL=1 — skipping pip install")
         _ensure_precommit_hooks()
+        missing = _missing_py_modules(python, required_modules)
+        if missing:
+            return StageResult(
+                "pip-install",
+                1,
+                duration=time.monotonic() - t0,
+                notes=["missing Python requirements: " + ", ".join(missing)],
+            )
         return StageResult("pip-install", 0, duration=time.monotonic() - t0, notes=["skipped via SKIP_VENV_INSTALL"])
     _PIP_CACHE.mkdir(parents=True, exist_ok=True)
     pip_env = {**os.environ, "PIP_CACHE_DIR": str(_PIP_CACHE)}
@@ -646,9 +744,12 @@ def _stage_pip_install(python: Path) -> StageResult:
     hash_file = _VENV / ".req-hash"
     current_hash = _requirements_hash()
     if hash_file.exists() and hash_file.read_text().strip() == current_hash:
-        _info("Requirements unchanged — skipping pip install")
-        _ensure_precommit_hooks()
-        return StageResult("pip-install", 0, duration=time.monotonic() - t0, notes=["requirements unchanged"])
+        missing = _missing_py_modules(python, required_modules)
+        if not missing:
+            _info("Requirements unchanged — skipping pip install")
+            _ensure_precommit_hooks()
+            return StageResult("pip-install", 0, duration=time.monotonic() - t0, notes=["requirements unchanged"])
+        _info("Requirements hash unchanged but required modules are missing: " + ", ".join(missing))
     overall_rc = 0
     for req in (_REQUIREMENTS, _REQUIREMENTS_DEV):
         if req.exists():
@@ -660,8 +761,13 @@ def _stage_pip_install(python: Path) -> StageResult:
             if rc != 0:
                 overall_rc = rc
     if overall_rc == 0:
-        hash_file.parent.mkdir(parents=True, exist_ok=True)
-        hash_file.write_text(current_hash)
+        missing = _missing_py_modules(python, required_modules)
+        if missing:
+            overall_rc = 1
+            _warn("Missing Python requirements after install: " + ", ".join(missing))
+        else:
+            hash_file.parent.mkdir(parents=True, exist_ok=True)
+            hash_file.write_text(current_hash)
     _ensure_precommit_hooks()
     return StageResult("pip-install", overall_rc, duration=time.monotonic() - t0)
 
@@ -1148,10 +1254,15 @@ def _stage_python_lifecycle(python: Path) -> StageResult:
 def _stage_playwright_install() -> StageResult:
     _banner("STAGE 5  Install Playwright browsers")
     t0 = time.monotonic()
-    npx = shutil.which("npx") or shutil.which("npx.cmd")
-    if not npx:
-        _warn("npx not found - Playwright stages cannot run")
-        return StageResult("playwright-install", 1, duration=time.monotonic() - t0, notes=["npx not found"])
+    playwright = _node_bin_path("playwright")
+    if playwright is None:
+        _warn("local Playwright CLI not found - run npm install first")
+        return StageResult(
+            "playwright-install",
+            1,
+            duration=time.monotonic() - t0,
+            notes=["local Playwright CLI not found"],
+        )
 
     if _playwright_chromium_available():
         return StageResult(
@@ -1165,20 +1276,20 @@ def _stage_playwright_install() -> StageResult:
 
     if IS_WINDOWS:
         rc = _run(
-            [npx, "playwright", "install", "chromium"],
+            [playwright, "install", "chromium"],
             label="playwright install chromium",
             env=env,
         )
     else:
         rc = _run(
-            [npx, "playwright", "install", "chromium", "--with-deps"],
+            [playwright, "install", "chromium", "--with-deps"],
             label="playwright install chromium --with-deps",
             env=env,
         )
         if rc != 0:
             _warn("--with-deps failed, retrying without it")
             rc = _run(
-                [npx, "playwright", "install", "chromium"],
+                [playwright, "install", "chromium"],
                 label="playwright install chromium",
                 env=env,
             )
@@ -1189,7 +1300,7 @@ def _stage_playwright_install() -> StageResult:
             rc if rc > 0 else 1,
             duration=time.monotonic() - t0,
             notes=[
-                "Browser download failed - configure proxy/CA certs and run 'npx playwright install chromium' manually"
+                "Browser download failed - configure proxy/CA certs and run 'npm install' then 'npm run test:e2e:smoke'"
             ],
         )
     return StageResult("playwright-install", rc, duration=time.monotonic() - t0)
@@ -1215,11 +1326,11 @@ def _playwright_chromium_available() -> bool:
 def _stage_playwright_smoke() -> StageResult:
     _banner("STAGE 6  Playwright smoke tests (static HTML, no server needed)")
     t0 = time.monotonic()
-    npx = shutil.which("npx") or shutil.which("npx.cmd")
-    if not npx:
-        return StageResult("playwright-smoke", 0, skipped=True)
+    playwright = _node_bin_path("playwright")
+    if playwright is None:
+        return StageResult("playwright-smoke", 1, notes=["local Playwright CLI not found"])
     rc = _run(
-        [npx, "playwright", "test", "--project=smoke", "--reporter=line"],
+        [playwright, "test", "--project=smoke", "--reporter=line"],
         label="playwright smoke",
     )
     return StageResult("playwright-smoke", rc, duration=time.monotonic() - t0)
@@ -1238,9 +1349,9 @@ def _stage_playwright_project(
 ) -> StageResult:
     _banner(title)
     t0 = time.monotonic()
-    npx = shutil.which("npx") or shutil.which("npx.cmd")
-    if not npx:
-        return StageResult(name, 0, skipped=True)
+    playwright = _node_bin_path("playwright")
+    if playwright is None:
+        return StageResult(name, 1, notes=["local Playwright CLI not found"])
 
     results_dir = _RESULTS_DIR
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -1255,7 +1366,7 @@ def _stage_playwright_project(
         env.update(extra_env)
 
     run_env = {**env, "PLAYWRIGHT_JUNIT_OUTPUT_FILE": str(results_dir / f"{name}.xml")}
-    cmd = [npx, "playwright", "test", f"--project={project}", "--reporter=line", "--reporter=junit"]
+    cmd = [playwright, "test", f"--project={project}", "--reporter=line", "--reporter=junit"]
     if workers is not None:
         cmd.append(f"--workers={workers}")
     rc = _run(
@@ -1985,6 +2096,50 @@ def _mode_name(args: argparse.Namespace, target_only: bool) -> str:
     return "full"
 
 
+@dataclass(frozen=True)
+class TargetDependencyRequirements:
+    python: bool
+    npm: bool
+
+
+def _target_only_dependency_requirements(args: argparse.Namespace) -> TargetDependencyRequirements:
+    """Return dependency families required before a focused live-suite target."""
+    return TargetDependencyRequirements(
+        python=bool(
+            args.python_opcua_only
+            or args.python_backend_only
+            or args.python_lifecycle_only
+            or args.playwright_features_only
+            or args.playwright_regression_only
+        ),
+        npm=bool(args.playwright_smoke_only or args.playwright_features_only or args.playwright_regression_only),
+    )
+
+
+def _run_target_dependency_stages(
+    args: argparse.Namespace,
+    python: Path,
+    results: list[StageResult],
+) -> bool:
+    """Run prerequisite install/verification stages for focused live-suite targets."""
+    requirements = _target_only_dependency_requirements(args)
+    if requirements.python:
+        result = _stage_pip_install(python, required_modules=_PYTHON_TARGET_REQUIRED_MODULES)
+        results.append(result)
+        if result.rc != 0:
+            return False
+    if requirements.npm:
+        result = _stage_npm_install(
+            required=True,
+            required_packages=_PLAYWRIGHT_REQUIRED_PACKAGES,
+            required_bins=_PLAYWRIGHT_REQUIRED_BINS,
+        )
+        results.append(result)
+        if result.rc != 0:
+            return False
+    return True
+
+
 def main() -> int:
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     _cleanup_caches(ROOT)  # pre-run: clear stale caches from interrupted runs
@@ -2094,6 +2249,13 @@ def main() -> int:
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     if target_only:
+        if not _run_target_dependency_stages(args, python, results):
+            total_time = time.monotonic() - t_start
+            _write_timing_artifacts(results, total_time, mode)
+            rc = _print_summary(results, total_time)
+            _cleanup_caches(ROOT)
+            return rc
+
         if args.python_opcua_only:
             results.append(
                 _run_with_owned_services(

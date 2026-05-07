@@ -7,6 +7,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _RUNNER_PATH = _PROJECT_ROOT / "run_all_tests.py"
@@ -57,6 +58,59 @@ def test_pip_install_creates_venv_dir_for_hash_file_in_ci(monkeypatch, tmp_path)
     assert (venv_dir / ".req-hash").read_text() == "abc123"
 
 
+def test_pip_install_reinstalls_when_hash_matches_but_required_modules_missing(monkeypatch, tmp_path):
+    runner = _load_runner()
+    venv_dir = tmp_path / ".venv_test"
+    venv_dir.mkdir()
+    (venv_dir / ".req-hash").write_text("abc123", encoding="utf-8")
+    req = tmp_path / "requirements.txt"
+    req.write_text("pytest\n", encoding="utf-8")
+    calls = []
+    missing_sequence = iter([["pytest"], []])
+
+    monkeypatch.setattr(runner, "_VENV", venv_dir)
+    monkeypatch.setattr(runner, "_PIP_CACHE", tmp_path / "pip-cache")
+    monkeypatch.setattr(runner, "_REQUIREMENTS", req)
+    monkeypatch.setattr(runner, "_REQUIREMENTS_DEV", tmp_path / "missing-requirements-dev.txt")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_info", lambda msg: None)
+    monkeypatch.setattr(runner, "_run", lambda *args, **kwargs: calls.append(args[0]) or 0)
+    monkeypatch.setattr(runner, "_requirements_hash", lambda: "abc123")
+    monkeypatch.setattr(runner, "_ensure_precommit_hooks", lambda: None)
+    monkeypatch.setattr(runner, "_missing_py_modules", lambda python, modules: next(missing_sequence))
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+
+    result = runner._stage_pip_install(Path(sys.executable), required_modules=("pytest",))
+
+    assert result.rc == 0
+    assert any("-r" in cmd for cmd in calls)
+
+
+def test_pip_install_does_not_mark_hash_current_when_required_modules_remain_missing(monkeypatch, tmp_path):
+    runner = _load_runner()
+    venv_dir = tmp_path / ".venv_test"
+    req = tmp_path / "requirements.txt"
+    req.write_text("pytest\n", encoding="utf-8")
+
+    monkeypatch.setattr(runner, "_VENV", venv_dir)
+    monkeypatch.setattr(runner, "_PIP_CACHE", tmp_path / "pip-cache")
+    monkeypatch.setattr(runner, "_REQUIREMENTS", req)
+    monkeypatch.setattr(runner, "_REQUIREMENTS_DEV", tmp_path / "missing-requirements-dev.txt")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_info", lambda msg: None)
+    monkeypatch.setattr(runner, "_warn", lambda msg: None)
+    monkeypatch.setattr(runner, "_run", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(runner, "_requirements_hash", lambda: "abc123")
+    monkeypatch.setattr(runner, "_ensure_precommit_hooks", lambda: None)
+    monkeypatch.setattr(runner, "_missing_py_modules", lambda python, modules: ["pytest"])
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+
+    result = runner._stage_pip_install(Path(sys.executable), required_modules=("pytest",))
+
+    assert result.rc == 1
+    assert not (venv_dir / ".req-hash").exists()
+
+
 def test_npm_install_uses_ci_in_ci_when_lockfile_exists(monkeypatch):
     runner = _load_runner()
     monkeypatch.setattr(runner, "IS_CI", True)
@@ -66,6 +120,38 @@ def test_npm_install_uses_ci_in_ci_when_lockfile_exists(monkeypatch):
     assert args[:2] == ["npm", "ci"]
     assert "--no-audit" in args
     assert "--no-fund" in args
+
+
+def test_npm_install_repairs_incomplete_node_modules(monkeypatch, tmp_path):
+    runner = _load_runner()
+    node_modules = tmp_path / "node_modules"
+    node_modules.mkdir()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        (node_modules / "@playwright" / "test").mkdir(parents=True)
+        (node_modules / "playwright").mkdir()
+        bin_dir = node_modules / ".bin"
+        bin_dir.mkdir()
+        (bin_dir / ("playwright.cmd" if runner.IS_WINDOWS else "playwright")).write_text("", encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    monkeypatch.setattr(runner, "_NPM_CACHE", tmp_path / "npm-cache")
+    monkeypatch.setattr(runner.shutil, "which", lambda name: "npm" if name in {"npm", "npm.cmd"} else None)
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_info", lambda msg: None)
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_npm_install(
+        required=True,
+        required_packages=("@playwright/test", "playwright"),
+        required_bins=("playwright",),
+    )
+
+    assert result.rc == 0
+    assert calls
 
 
 def test_runner_results_dir_can_be_isolated_per_parallel_suite(monkeypatch):
@@ -283,9 +369,10 @@ def test_playwright_install_skips_with_deps_on_windows(monkeypatch):
     calls = []
 
     monkeypatch.setattr(runner, "IS_WINDOWS", True)
-    monkeypatch.setattr(runner.shutil, "which", lambda name: "npx.cmd" if name in {"npx", "npx.cmd"} else None)
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner, "_warn", lambda message: None)
+    monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
 
     def fake_run(cmd, **kwargs):
         calls.append(cmd)
@@ -296,7 +383,7 @@ def test_playwright_install_skips_with_deps_on_windows(monkeypatch):
     result = runner._stage_playwright_install()
 
     assert result.rc == 0
-    assert calls == [["npx.cmd", "playwright", "install", "chromium"]]
+    assert calls == [["playwright.cmd", "install", "chromium"]]
 
 
 def test_e2e_local_connection_waits_for_endpoint_state_not_visual_status():
@@ -407,6 +494,99 @@ def test_targeted_live_suite_flags_are_available():
         assert flag in source
 
 
+def _target_args(**enabled):
+    names = [
+        "python_opcua_only",
+        "python_backend_only",
+        "python_lifecycle_only",
+        "playwright_smoke_only",
+        "playwright_features_only",
+        "playwright_regression_only",
+    ]
+    values = {name: False for name in names}
+    values.update(enabled)
+    return SimpleNamespace(**values)
+
+
+def test_target_only_dependency_requirements_are_explicit():
+    runner = _load_runner()
+
+    cases = [
+        (_target_args(python_opcua_only=True), (True, False)),
+        (_target_args(python_backend_only=True), (True, False)),
+        (_target_args(python_lifecycle_only=True), (True, False)),
+        (_target_args(playwright_smoke_only=True), (False, True)),
+        (_target_args(playwright_features_only=True), (True, True)),
+        (_target_args(playwright_regression_only=True), (True, True)),
+    ]
+
+    for args, expected in cases:
+        requirements = runner._target_only_dependency_requirements(args)
+        assert (requirements.python, requirements.npm) == expected
+
+
+def test_target_only_dependencies_run_before_target_stage(monkeypatch, tmp_path):
+    runner = _load_runner()
+    calls = []
+
+    monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--playwright-features-only"])
+    monkeypatch.setattr(runner, "IS_CI", True)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "results")
+    monkeypatch.setattr(runner, "_cleanup_caches", lambda root: None)
+    monkeypatch.setattr(runner, "_prepare_tmp_dir", lambda: None)
+    monkeypatch.setattr(runner, "_port_open", lambda *args, **kwargs: False)
+    monkeypatch.setattr(runner, "_docker_available", lambda: False)
+    monkeypatch.setattr(runner, "_write_timing_artifacts", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        runner,
+        "_stage_pip_install",
+        lambda python, required_modules=(): calls.append("pip") or runner.StageResult("pip-install", 0),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_stage_npm_install",
+        lambda **kwargs: calls.append("npm") or runner.StageResult("npm-install", 0),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_stage_playwright_install",
+        lambda: calls.append("playwright-install") or runner.StageResult("playwright-install", 0),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_run_playwright_features_with_owned_pool",
+        lambda **kwargs: calls.append("playwright-features") or runner.StageResult("playwright-features", 0),
+    )
+
+    assert runner.main() == 0
+    assert calls == ["pip", "npm", "playwright-install", "playwright-features"]
+
+
+def test_target_only_dependency_failure_stops_before_live_stage(monkeypatch, tmp_path):
+    runner = _load_runner()
+
+    monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--python-opcua-only"])
+    monkeypatch.setattr(runner, "IS_CI", True)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "results")
+    monkeypatch.setattr(runner, "_cleanup_caches", lambda root: None)
+    monkeypatch.setattr(runner, "_prepare_tmp_dir", lambda: None)
+    monkeypatch.setattr(runner, "_port_open", lambda *args, **kwargs: False)
+    monkeypatch.setattr(runner, "_docker_available", lambda: False)
+    monkeypatch.setattr(runner, "_write_timing_artifacts", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        runner,
+        "_stage_pip_install",
+        lambda python, required_modules=(): runner.StageResult("pip-install", 1, notes=["missing pytest"]),
+    )
+
+    def fail_if_live_stage_runs(**kwargs):
+        raise AssertionError("live stage must not run when dependency setup fails")
+
+    monkeypatch.setattr(runner, "_run_with_owned_services", fail_if_live_stage_runs)
+
+    assert runner.main() == 1
+
+
 def test_playwright_config_uses_runtime_ui_port_and_no_retries():
     source = (_PROJECT_ROOT / "playwright.config.mjs").read_text(encoding="utf-8")
 
@@ -443,7 +623,7 @@ def test_playwright_feature_stage_passes_worker_pool_environment(monkeypatch):
     runner = _load_runner()
     captured = {}
 
-    monkeypatch.setattr(runner.shutil, "which", lambda name: "npx.cmd" if name in {"npx", "npx.cmd"} else None)
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
     monkeypatch.setattr(runner, "_banner", lambda title: None)
 
     def fake_run(cmd, **kwargs):
@@ -567,7 +747,7 @@ def test_runner_summary_treats_negative_stage_rc_as_failure(capsys):
 def test_playwright_install_passes_without_network_when_chromium_exists(monkeypatch):
     runner = _load_runner()
 
-    monkeypatch.setattr(runner.shutil, "which", lambda name: "npx.cmd" if name in {"npx", "npx.cmd"} else None)
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
     monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: True)
 
     def fail_if_install_runs(*_args, **_kwargs):
@@ -585,7 +765,7 @@ def test_playwright_install_passes_without_network_when_chromium_exists(monkeypa
 def test_playwright_install_failure_is_not_reported_as_skip(monkeypatch):
     runner = _load_runner()
 
-    monkeypatch.setattr(runner.shutil, "which", lambda name: "npx.cmd" if name in {"npx", "npx.cmd"} else None)
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
     monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
     monkeypatch.setattr(runner, "_run", lambda *_args, **_kwargs: -1)
 

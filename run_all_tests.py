@@ -1768,8 +1768,15 @@ def _suite_webclient_live_e2e_regression() -> SuiteResult:
 
 def _suite_webclient_docker_smoke() -> SuiteResult:
     """Web Client container build/readiness smoke with an independent timeout."""
+    name = "webclient-docker-smoke"
+    docker = _find_cmd(["docker", "docker.exe"])
+    if not docker:
+        return SuiteResult(name, True, skipped=True, notes=["docker not in PATH"])
+    if not _docker_daemon_running(docker):
+        return SuiteResult(name, True, skipped=True, notes=["Docker daemon not running"])
+
     return _delegate_to_runner(
-        name="webclient-docker-smoke",
+        name=name,
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--docker-only"],
         label="webclient runner (docker-only)",

@@ -395,12 +395,13 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `live-console` | `integration.yml` | **40461** | Windows native EXE |
 | `csharp-live` (nightly) | `integration.yml` | **40464** | Windows native EXE |
 
-Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation exercises the native/default server package path on port 40451. When Docker is running, it also runs `server-linux-package-smoke` on port 40465 to build the Docker image from the Linux ZIP package and smoke-test it. Set `IJT_DOCKER_BUILD_TIMEOUT` if a cold Docker/network environment needs more than the default 1200 seconds.
+Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation exercises the native/default server package path on port 40451. When Docker is running, it also runs `server-linux-package-smoke` on port 40465 to build the Docker image from the Linux ZIP package and smoke-test it, plus `webclient-docker-smoke` for the Web Client production image/readiness check. If Docker is unavailable, the root runner marks those Docker suites skipped instead of launching child runners that would fail on Docker daemon startup. Set `IJT_DOCKER_BUILD_TIMEOUT` if a cold Docker/network environment needs more than the default 1200 seconds.
 The root runner splits Web Client live/browser validation by test type instead
 of using one broad `webclient-live` suite. Python OPC UA, Python WebSocket
 backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and
 Playwright regression are separate suites with owned service ports. Docker
-validation remains `webclient-docker-smoke` with its own timeout.
+validation remains `webclient-docker-smoke` with its own timeout when Docker is
+running.
 The Playwright feature suite is parallelized across four owned backend/server
 pairs. Worker 0 uses the base ports, and workers 1–3 use the next contiguous
 ports, so browser workers never share a WebSocket backend or OPC UA simulator.

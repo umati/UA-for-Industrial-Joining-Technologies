@@ -117,6 +117,8 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
         return _runner.SuiteResult(kwargs["name"], True, 0.0)
 
     monkeypatch.setattr(_runner, "_delegate_to_runner", _fake_delegate_to_runner)
+    monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
+    monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: True)
 
     results = [
         _runner._suite_webclient_live_python_opcua(),
@@ -204,6 +206,31 @@ def test_server_linux_package_smoke_skips_without_docker(monkeypatch) -> None:
     assert result.ok
     assert result.skipped
     assert result.notes == ["docker not in PATH"]
+
+
+def test_webclient_docker_smoke_skips_without_docker(monkeypatch) -> None:
+    monkeypatch.setattr(_runner, "_find_cmd", lambda names: None)
+
+    result = _runner._suite_webclient_docker_smoke()
+
+    assert result.ok
+    assert result.skipped
+    assert result.notes == ["docker not in PATH"]
+
+
+def test_webclient_docker_smoke_skips_when_docker_daemon_is_not_running(monkeypatch) -> None:
+    def fail_if_delegated(**_kwargs):
+        raise AssertionError("webclient docker smoke should skip before delegating")
+
+    monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
+    monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: False)
+    monkeypatch.setattr(_runner, "_delegate_to_runner", fail_if_delegated)
+
+    result = _runner._suite_webclient_docker_smoke()
+
+    assert result.ok
+    assert result.skipped
+    assert result.notes == ["Docker daemon not running"]
 
 
 def test_server_linux_package_smoke_fails_when_package_missing(monkeypatch) -> None:
