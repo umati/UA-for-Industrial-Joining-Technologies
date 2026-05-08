@@ -405,6 +405,9 @@ probe after TCP opens, which prevents all-skipped live runs caused by cold serve
 GitHub integration starts the managed port through the root `scripts/start_server_on_port.py`
 launcher, which keeps the copied simulator under a short `RUNNER_TEMP/ijt-sim` root before
 the xUnit fixture connects.
+The Integration summary parses `results-csharp-live/tests.trx` and publishes C# Live timing by
+test class plus the slowest individual tests; use that data before changing live-test sharding or
+filter topology.
 
 Runner-managed Phase 2 must produce real live-test evidence. If every live test is skipped while
 `OPCUA_SERVER_PORT` is set, the runner treats that as a failure because the managed server was

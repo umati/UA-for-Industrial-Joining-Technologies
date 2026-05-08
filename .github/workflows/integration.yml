@@ -984,6 +984,74 @@ jobs:
                   )
               return rows
 
+          def trx_duration_seconds(value):
+              """Parse TRX duration strings such as 00:00:05.1234567."""
+              text = str(value or "").strip()
+              if not text:
+                  return 0.0
+              try:
+                  parts = text.split(":")
+                  if len(parts) == 3:
+                      hours, minutes, secs = parts
+                      return (int(hours) * 3600) + (int(minutes) * 60) + float(secs)
+                  return float(text)
+              except (TypeError, ValueError):
+                  return 0.0
+
+          def split_csharp_test_name(name):
+              """Return class and method from a fully qualified xUnit test name."""
+              text = str(name or "unknown")
+              if "." not in text:
+                  return "unknown", text
+              return text.rsplit(".", 1)
+
+          def short_csharp_class(name):
+              """Keep C# timing tables compact in the Actions summary."""
+              return str(name or "unknown").rsplit(".", 1)[-1]
+
+          def csharp_live_timings(pattern):
+              """Load C# Live per-test timings from TRX artifacts."""
+              results = []
+              for path in sorted(glob.glob(pattern, recursive=True)):
+                  try:
+                      root = ET.parse(path).getroot()
+                  except Exception as exc:
+                      print(f"[WARN] csharp_live_timings({path}): {exc}")
+                      continue
+
+                  for node in root.iter():
+                      if not str(node.tag).endswith("UnitTestResult"):
+                          continue
+                      test_name = node.get("testName") or "unknown"
+                      class_name, method_name = split_csharp_test_name(test_name)
+                      results.append(
+                          {
+                              "class": class_name,
+                              "method": method_name,
+                              "duration": trx_duration_seconds(node.get("duration")),
+                              "outcome": node.get("outcome") or "unknown",
+                          }
+                      )
+
+              if not results:
+                  return None
+
+              classes = {}
+              for row in results:
+                  bucket = classes.setdefault(
+                      row["class"],
+                      {"class": row["class"], "tests": 0, "total": 0.0, "max": 0.0},
+                  )
+                  bucket["tests"] += 1
+                  bucket["total"] += row["duration"]
+                  bucket["max"] = max(bucket["max"], row["duration"])
+              class_rows = sorted(
+                  classes.values(),
+                  key=lambda row: (-row["total"], short_csharp_class(row["class"])),
+              )
+              top_rows = sorted(results, key=lambda row: row["duration"], reverse=True)[:10]
+              return {"classes": class_rows, "top": top_rows}
+
           # ── Formatters ───────────────────────────────────────────────────
 
           def job_icon(r):
@@ -1028,6 +1096,7 @@ jobs:
           wc_feature_timings = browser_feature_timings(
               "all-results/results-live-webclient-web-client-e2e-features*/**/timing-latest.json"
           )
+          cs_live_timings = csharp_live_timings("all-results/results-csharp-live/**/*.trx")
 
           # ── Collect skip details from JUnit XML ───────────────────────
 
@@ -1136,6 +1205,37 @@ jobs:
                       f"{format_duration(row['playwright_install'])} | "
                       f"{format_duration(row['playwright_features'])} | "
                       f"{format_duration(row['other'])} |"
+                  )
+
+          if cs_live_timings:
+              out += [
+                  "",
+                  "### C# Live Timing",
+                  "",
+                  "> Source: C# Live `tests.trx`; timings exclude restore, build, and server startup.",
+                  "",
+                  "| Class | Tests | Total | Avg | Max |",
+                  "|:------|------:|------:|----:|----:|",
+              ]
+              for row in cs_live_timings["classes"]:
+                  avg = row["total"] / row["tests"] if row["tests"] else 0.0
+                  out.append(
+                      f"| {md_cell(short_csharp_class(row['class']))} | {row['tests']} | "
+                      f"{format_duration(row['total'])} | {format_duration(avg)} | "
+                      f"{format_duration(row['max'])} |"
+                  )
+
+              out += [
+                  "",
+                  "#### Top C# Live Tests",
+                  "",
+                  "| Test | Duration | Outcome |",
+                  "|:-----|---------:|:--------|",
+              ]
+              for row in cs_live_timings["top"]:
+                  out.append(
+                      f"| {md_cell(row['method'])} | {format_duration(row['duration'])} | "
+                      f"{md_cell(row['outcome'])} |"
                   )
 
           # ── Inline skip details (collapsible) ──────────────────────────

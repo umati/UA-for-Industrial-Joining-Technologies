@@ -429,8 +429,10 @@ Triggers on: `OPC_UA_Servers/**`, all Web Client files, `IJT_Test_Client/**`, Co
 | `live-webclient` | Windows live matrix: root-runner Web Client live/e2e suites with owned services and per-suite artifacts |
 | `live-console` | Windows live: Console Client live tests — server on port 40461 |
 | `csharp-live` | Windows live: C# xUnit live tests (nightly drift detection) — server on port 40464 |
+| `report` | Downloads integration artifacts and publishes pass/fail/skip totals plus Browser Features and C# Live timing tables |
 
 Runtime: ~10–15 minutes (int-testclient, live-webclient matrix jobs, live-console, csharp-live all run in parallel). Web Client GUI/JS changes now trigger integration because the live matrix includes Playwright smoke/features/regression suites.
+Use the report timing tables for CI performance decisions: Browser Features comes from Web Client `timing-latest.json` artifacts, and C# Live comes from `results-csharp-live/tests.trx` per-test durations.
 All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents: read`.
 
 ---

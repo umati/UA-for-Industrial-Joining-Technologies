@@ -785,6 +785,18 @@ def test_integration_report_surfaces_browser_feature_timings() -> None:
     assert "playwright-features" in workflow
 
 
+def test_integration_report_surfaces_csharp_live_timings() -> None:
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "csharp_live_timings(" in workflow
+    assert "results-csharp-live/**/*.trx" in workflow
+    assert "UnitTestResult" in workflow
+    assert "### C# Live Timing" in workflow
+    assert "#### Top C# Live Tests" in workflow
+
+
 def test_ci_report_steps_skip_missing_artifacts_for_skipped_jobs() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
