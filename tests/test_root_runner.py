@@ -797,6 +797,69 @@ def test_integration_report_surfaces_csharp_live_timings() -> None:
     assert "#### Top C# Live Tests" in workflow
 
 
+def test_integration_report_surfaces_job_durations() -> None:
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "actions: read" in workflow
+    assert "GH_REPOSITORY:  ${{ github.repository }}" in workflow
+    assert "GH_RUN_ID:      ${{ github.run_id }}" in workflow
+    assert "GH_TOKEN:       ${{ github.token }}" in workflow
+    assert "def job_durations(path):" in workflow
+    assert "the report job is still running, so its row shows" in workflow
+    assert "### ⏱️ Job Durations" in workflow
+    assert "current workflow run jobs API" in workflow
+    assert "format_optional_duration(duration)" in workflow
+    assert "🏁" in workflow
+
+
+def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> None:
+    import json
+
+    baseline_path = _runner.REPO_ROOT / "tests" / "baselines" / "integration-test-counts.json"
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert baseline["schema_version"] == 1
+    assert set(baseline["suites"]) == {
+        "sd_smoke",
+        "wd_py",
+        "wd_js",
+        "tc_smoke",
+        "tc_tests",
+        "wc_web",
+        "con_live",
+        "cs_live",
+    }
+    assert baseline["suites"]["tc_tests"]["skip_tolerance"] == 10
+    assert "load_integration_baseline(" in workflow
+    assert "format_count_delta(" in workflow
+    assert 'return "" if delta == 0 else f" ({delta:+d})"' in workflow
+    assert "integration_drift_warnings(" in workflow
+    assert "tests/baselines/integration-test-counts.json" in workflow
+    assert "### ⚠️ Report Warnings" in workflow
+    assert "skip drift" in workflow
+    assert "suite collection drift" in workflow
+
+
+def test_ci_report_uses_declared_coverage_thresholds() -> None:
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "| Component | Platform | Tests | Skipped | Coverage / Threshold |" in workflow
+    assert "def cov(pct, threshold=None):" in workflow
+    assert "cov(web_cov, 95)" in workflow
+    assert "cov(web_js_cov, 95)" in workflow
+    assert "cov(con_cov, 95)" in workflow
+    assert "cov(nod_cov, 95)" in workflow
+    assert "cov(cs_cov, 95)" in workflow
+    assert "cov(tc_cov, 95)" in workflow
+    assert "coverage_warnings" in workflow
+    assert "### ⚠️ Coverage Threshold Warnings" in workflow
+
+
 def test_ci_report_steps_skip_missing_artifacts_for_skipped_jobs() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 

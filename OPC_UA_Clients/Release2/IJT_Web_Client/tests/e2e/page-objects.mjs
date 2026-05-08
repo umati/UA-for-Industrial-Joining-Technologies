@@ -57,6 +57,7 @@ export const SEL = {
   DEMO_SELECT_JOINT2: '.demoActionSelectJoint2',
   DEMO_SIMULATE_TIGHTEN: '.demoActionSimulateTightening',
   DEMO_MAIN_AREA: '.demoMainArea',
+  DEMO_ACTIVE_URI: '.jointDemoActiveUriLabel',
 
   // OK Rate view
   OK_RATE_VIEW: '.okRateView',
@@ -424,17 +425,33 @@ export class JointDemoPage {
     await this.page.locator(SEL.DEMO_SELECT_JOINT1).first().waitFor({ state: 'visible', timeout })
   }
 
+  async waitForResolvedProductUri ({ timeout = 60_000 } = {}) {
+    await this.page.locator(SEL.DEMO_ACTIVE_URI).first().waitFor({ state: 'visible', timeout })
+    await this.page.waitForFunction(
+      (selector) => {
+        const text = document.querySelector(selector)?.textContent || ''
+        return text.includes('Active ProductInstanceUri:')
+          && (text.includes('(auto-detected)') || text.includes('(selected from server)') || text.includes('(from Settings)'))
+      },
+      SEL.DEMO_ACTIVE_URI,
+      { timeout }
+    )
+  }
+
   async selectJoint1 () {
+    await this.waitForResolvedProductUri()
     await this.page.locator(SEL.DEMO_SELECT_JOINT1).first().click()
     await this.page.waitForTimeout(300)
   }
 
   async selectJoint2 () {
+    await this.waitForResolvedProductUri()
     await this.page.locator(SEL.DEMO_SELECT_JOINT2).first().click()
     await this.page.waitForTimeout(300)
   }
 
   async simulateTightening () {
+    await this.waitForResolvedProductUri()
     await this.page.locator(SEL.DEMO_SIMULATE_TIGHTEN).first().click()
     await this.page.waitForTimeout(800)
   }

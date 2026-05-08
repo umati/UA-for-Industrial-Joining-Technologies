@@ -360,7 +360,7 @@ UA-for-Industrial-Joining-Technologies/
 | `csharp-unit` | dotnet restore (locked mode) + build (`-warnaserror`) + xUnit unit tests (`Category!=Live`, `--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
 | `csharp-vuln` | NuGet vulnerability scan (`--vulnerable --include-transitive`); fails on known CVEs |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
-| `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |
+| `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · coverage/threshold cells from each client gate · skip-budget and coverage-threshold warnings · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |
 
 Runtime: ~5–7 minutes. Python 3.14, Node.js 24, .NET 10 everywhere.
 Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `setup-dotnet@v5`, `upload-artifact@v7`, `download-artifact@v8`
@@ -414,6 +414,9 @@ binaries under the Windows runner profile and run
 `npx playwright install --with-deps chromium` only when the exact browser cache
 key misses; this keeps browser download time out of the 600 s root-runner suite
 budget.
+Joint Demo feature tests wait for the active `ProductInstanceUri` to resolve
+before calling demo methods; the Web UI does not fire Joint Demo methods while
+only a bundled sample Settings URI is available.
 
 > Release 1 Node Client always uses 40451 (fixed — no dynamic port support).
 > Server self-tests (smoke) correctly use 40451 — they test the server in its native configuration.
@@ -429,10 +432,13 @@ Triggers on: `OPC_UA_Servers/**`, all Web Client files, `IJT_Test_Client/**`, Co
 | `live-webclient` | Windows live matrix: root-runner Web Client live/e2e suites with owned services and per-suite artifacts |
 | `live-console` | Windows live: Console Client live tests — server on port 40461 |
 | `csharp-live` | Windows live: C# xUnit live tests (nightly drift detection) — server on port 40464 |
-| `report` | Downloads integration artifacts and publishes pass/fail/skip totals plus Browser Features and C# Live timing tables |
+| `report` | Downloads integration artifacts and publishes pass/fail/skip totals, test-count deltas from `tests/baselines/integration-test-counts.json`, non-failing skip/test drift warnings, per-job wall-clock durations from the current run jobs API, and Browser Features / C# Live timing tables |
 
 Runtime: ~10–15 minutes (int-testclient, live-webclient matrix jobs, live-console, csharp-live all run in parallel). Web Client GUI/JS changes now trigger integration because the live matrix includes Playwright smoke/features/regression suites.
 Use the report timing tables for CI performance decisions: Browser Features comes from Web Client `timing-latest.json` artifacts, and C# Live comes from `results-csharp-live/tests.trx` per-test durations.
+The `Job Durations` section is best-effort and non-failing; it uses the GitHub Actions jobs API for the current run, marks the longest completed job, and leaves the still-running report job duration as `—`.
+Update `tests/baselines/integration-test-counts.json` manually in a normal code review when an intentional suite count or expected skip-count change lands; drift is reported loudly but never fails the report job.
+Skip tolerance is zero by default; only high-volume or matrix-aggregated live suites get a small explicit tolerance so routine skip churn stays visible without hiding real drift. The `wc_web` baseline aggregates every Web live/e2e matrix XML, so any new XML-producing Web matrix row must update the baseline in the same review.
 All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents: read`.
 
 ---

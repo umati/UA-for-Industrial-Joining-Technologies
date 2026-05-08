@@ -2,6 +2,11 @@ import BasicScreen from '../graphic-support/basic-screen.mjs' // Basic functiona
 import CommonPropertyView from './common-property-view.mjs' // The machine properties view
 import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
 
+const SAMPLE_PRODUCT_INSTANCE_URIS = new Set([
+  'www.company.com/ProductABC123',
+  'www.atlascopco.com/CABLE-B0000000-',
+])
+
 /**
  * The purpose of this class is to generate an HTML representation of tightening selection and basic
  * display of a result for OPC UA Industrial Joining Technologies communication
@@ -44,18 +49,44 @@ export default class JointDemo extends BasicScreen {
   /**
    * Priority resolution for ProductInstanceUri:
    *   1. Row explicitly selected by the user in the tools table
-   *   2. Manual value from Settings (if not the placeholder '-')
-   *   3. First auto-detected tool URI (fallback)
+   *   2. Manual non-sample value from Settings
+   *   3. First server-detected tool URI
+   *   4. Sample Settings value as last-resort fallback
    */
   _getProductUri () {
     if (this._selectedProductInstanceUri) {
       return this._selectedProductInstanceUri
     }
-    const manual = this.settings.productId
-    if (manual && manual !== '-') {
+    const manual = this._manualProductUri()
+    if (manual && !this._isSampleProductUri(manual)) {
       return manual
     }
-    return (this._detectedTools[0] && this._detectedTools[0].productInstanceUri) || manual || ''
+    return this._detectedProductUri() || manual || ''
+  }
+
+  _manualProductUri () {
+    return String(this.settings?.productId || '').trim()
+  }
+
+  _detectedProductUri () {
+    return String((this._detectedTools[0] && this._detectedTools[0].productInstanceUri) || '').trim()
+  }
+
+  _isSampleProductUri (uri) {
+    const value = String(uri || '').trim()
+    return !value || value === '-' || SAMPLE_PRODUCT_INSTANCE_URIS.has(value)
+  }
+
+  _callableProductUri () {
+    const uri = this._getProductUri()
+    if (!uri || this._isSampleProductUri(uri)) {
+      ijtLog.warn(
+        '[JointDemo] ProductInstanceUri is not resolved; skipping demo method call until a server tool or explicit Settings URI is available.'
+      )
+      this._updateActiveUriLabel()
+      return ''
+    }
+    return uri
   }
 
   /**
@@ -74,6 +105,7 @@ export default class JointDemo extends BasicScreen {
     }).catch(err => {
       ijtLog.warn('[JointDemo] Could not read tool ProductInstanceUris:', err)
       this._renderToolsTable() // render empty / error state
+      this._updateActiveUriLabel()
     })
   }
 
@@ -156,11 +188,15 @@ export default class JointDemo extends BasicScreen {
   _updateActiveUriLabel () {
     if (!this._activeUriLabel) return
     const uri = this._getProductUri()
-    const source = this._selectedProductInstanceUri
-      ? '(selected from server)'
-      : (this.settings.productId && this.settings.productId !== '-')
-          ? '(from Settings)'
-          : '(auto-detected)'
+    const manual = this._manualProductUri()
+    let source = '(sample setting fallback)'
+    if (this._selectedProductInstanceUri) {
+      source = '(selected from server)'
+    } else if (manual && !this._isSampleProductUri(manual)) {
+      source = '(from Settings)'
+    } else if (this._detectedProductUri()) {
+      source = '(auto-detected)'
+    }
     this._activeUriLabel.textContent = `Active ProductInstanceUri: ${uri || '—'}  ${source}`
   }
 
@@ -290,17 +326,22 @@ export default class JointDemo extends BasicScreen {
 
   /**
    * Call StartSelectedJoining.
-   * ProductInstanceUri priority: selected-from-table → Settings → auto-detected first tool.
+   * ProductInstanceUri must resolve to a selected row, manual non-sample Settings
+   * value, or server-detected tool URI before the call is sent.
    */
   simulateTightening () {
     const selectJoiningProcessMethod = this.methodManager.getMethod('StartSelectedJoining')
     if (!selectJoiningProcessMethod) {
       return
     }
+    const productUri = this._callableProductUri()
+    if (!productUri) {
+      return
+    }
 
     const values = [
       {
-        value: this._getProductUri(),
+        value: productUri,
         type: {
           pythonclass: 'NodeId',
           Identifier: '12',
@@ -324,7 +365,8 @@ export default class JointDemo extends BasicScreen {
 
   /**
    * Call SelectJoint.
-   * ProductInstanceUri priority: selected-from-table → Settings → auto-detected first tool.
+   * ProductInstanceUri must resolve to a selected row, manual non-sample Settings
+   * value, or server-detected tool URI before the call is sent.
    * @param {string} jointName  The JointId to select (e.g. 'Joint_1').
    */
   selectJoint (jointName) {
@@ -332,10 +374,14 @@ export default class JointDemo extends BasicScreen {
     if (!selectJointMethod) {
       return
     }
+    const productUri = this._callableProductUri()
+    if (!productUri) {
+      return
+    }
 
     const values = [
       {
-        value: this._getProductUri(),
+        value: productUri,
         type: {
           pythonclass: 'NodeId',
           Identifier: '12',

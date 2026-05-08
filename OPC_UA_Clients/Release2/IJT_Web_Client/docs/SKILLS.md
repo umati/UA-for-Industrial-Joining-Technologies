@@ -90,7 +90,7 @@ IJT_Web_Client/
 │   │   └── live/                   # Needs OPC UA server; runner injects OPCUA_TEST_ENDPOINT (marker: live)
 │   │       ├── test_opcua_methods.py   # 70 method tests (asyncua monkey-patch)
 │   │       └── test_opcua_live.py      # Event subscription tests
-│   ├── js/unit/                    # Vitest JS unit tests (25 files, 570 tests in the current full JS run)
+│   ├── js/unit/                    # Vitest JS unit tests (26 files, 577 tests in the current full JS run)
 │   ├── e2e/                        # Playwright E2E specs
 │   ├── shared_opcua/               # Shared OPC UA adapters (cross-client contracts)
 │   └── legacy/                     # Compatibility test material only
@@ -219,6 +219,7 @@ sim_node = client.get_node('ns=1;s=TighteningSystem/Simulations/SimulateResults'
 
 - **Never hardcode `"joint1"`** — the real server joint ID is `"Joint_1"` (capital J, underscore).
 - **Always call `GetJointList(ProductInstanceUri)` first** to get actual joint IDs from the server.
+- Joint Demo treats bundled sample `ProductInstanceUri` values as display fallback only; `SelectJoint` and `StartSelectedJoining` require a selected server row, an explicit non-sample Settings value, or a server-detected URI before sending a method call.
 - Extract `JointId` from returned objects: `getattr(joint, "JointId", None) or getattr(joint, "Id", None)`.
 - `GetJoint(ProductInstanceUri, JointId)` returns Uncertain/error for non-existent IDs (acceptable — just catch).
 - `SelectJoint` joint ID configurable via `REGRESSION_JOINT_1` / `REGRESSION_JOINT_2` env vars; defaults: `"Joint_1"`, `"Joint_2"`.
@@ -465,6 +466,11 @@ request and drive the same attributes back to `connected` after the backend
 confirms connection and subscription.
 Do not use visual CSS classes such as `.onColor` as connection readiness
 signals; those classes are presentation details for the status display.
+Joint Demo Playwright actions must also wait until the active
+`ProductInstanceUri` label is resolved from server discovery, a selected server
+tool, or an explicit non-sample Settings value before clicking `SelectJoint` or
+`StartSelectedJoining`; bundled sample fallback labels do not satisfy this
+readiness contract.
 
 ### Playwright Selector Contracts
 

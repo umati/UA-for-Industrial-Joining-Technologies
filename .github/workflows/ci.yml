@@ -1136,11 +1136,14 @@ jobs:
           def skips(sk):
               return "—" if sk is None else str(sk)
 
-          def cov(pct):
+          def cov(pct, threshold=None):
               if pct is None:
                   return "—"
-              icon = "✅" if pct >= 90 else ("⚠️" if pct >= 70 else "❌")
-              return f"{pct:.0f}% {icon}"
+              if threshold is None:
+                  icon = "✅" if pct >= 90 else ("⚠️" if pct >= 70 else "❌")
+                  return f"{pct:.1f}% {icon}"
+              icon = "✅" if pct >= threshold else ("⚠️" if pct >= 80 else "❌")
+              return f"{pct:.1f}% / {threshold:.0f}% {icon}"
 
           def tool(r, label):
               if not r or r in ("", "unknown"):
@@ -1258,16 +1261,34 @@ jobs:
                       f"⚠️ **{job_name}**: job succeeded but `{artifact}` not found — possible silent failure"
                   )
           _warn(web_py_r, web_py_t[0], "web-client-python", "pytest.xml")
+          _warn(web_py_r, web_cov,    "web-client-python", "coverage.xml")
           _warn(web_js_r, web_js_t[0], "web-client-js",     "vitest.xml")
           _warn(web_js_r, web_js_cov,  "web-client-js",     "coverage/cobertura-coverage.xml")
           _warn(con_r,  con_py_t[0], "console-client",       "pytest.xml")
+          _warn(con_r,  con_cov,     "console-client",       "coverage.xml")
           _warn(nod_r,  nod_js_t[0], "node-client",          "vitest.xml")
+          _warn(nod_r,  nod_cov,     "node-client",          "coverage/cobertura-coverage.xml")
           _warn(cs_u_r, cs_unit_t[0],"csharp-unit",          "tests.xml")
           _warn(cs_u_r, cs_cov,      "csharp-unit",          "coverage/cobertura.xml")
           _warn(tc_r,   tc_py_t[0],  "test-client",          "pytest.xml")
           _warn(tc_r,   tc_ban[0],   "test-client",          "bandit.json")
           _warn(tc_r,   tc_cov,      "test-client",          "coverage.xml")
           _warn(ss_r,   ss_smoke[0], "server-smoke-windows", "smoke.xml")
+
+          coverage_checks = [
+              ("Web Client — Python", web_cov, 95.0),
+              ("Web Client — JavaScript", web_js_cov, 95.0),
+              ("Console Client — Python", con_cov, 95.0),
+              ("Node Client — JavaScript", nod_cov, 95.0),
+              ("C# Client — Unit", cs_cov, 95.0),
+              ("Test Client — Python", tc_cov, 95.0),
+          ]
+          coverage_warnings = []
+          for label, pct, threshold in coverage_checks:
+              if pct is not None and pct < threshold:
+                  coverage_warnings.append(
+                      f"⚠️ **{label}**: {pct:.1f}% coverage is below the declared {threshold:.0f}% threshold."
+                  )
 
           # ── Overall status ────────────────────────────────────────────────────
 
@@ -1308,14 +1329,14 @@ jobs:
               "",
               "### 🧪 Test Results",
               "",
-              "| Component | Platform | Tests | Skipped | Coverage |",
+              "| Component | Platform | Tests | Skipped | Coverage / Threshold |",
               "|:----------|:--------:|------:|--------:|:--------:|",
-              f"| Web Client — Python      | Ubuntu  | {tests(*web_py_t)} | {skips(web_py_t[3])} | {cov(web_cov)} |",
-              f"| Web Client — JavaScript  | Ubuntu  | {tests(*web_js_t)} | {skips(web_js_t[3])} | {cov(web_js_cov)} |",
-              f"| Console Client — Python  | Ubuntu  | {tests(*con_py_t)} | {skips(con_py_t[3])} | {cov(con_cov)} |",
-              f"| Node Client — JavaScript | Ubuntu  | {tests(*nod_js_t)} | {skips(nod_js_t[3])} | {cov(nod_cov)} |",
-              f"| C# Client — Unit (xUnit) | Windows | {tests(*cs_unit_t)} | {skips(cs_unit_t[3])} | {cov(cs_cov)} |",
-              f"| Test Client — Python (Unit) | Ubuntu | {tests(*tc_py_t)} | {skips(tc_py_t[3])} | {cov(tc_cov)} |",
+              f"| Web Client — Python      | Ubuntu  | {tests(*web_py_t)} | {skips(web_py_t[3])} | {cov(web_cov, 95)} |",
+              f"| Web Client — JavaScript  | Ubuntu  | {tests(*web_js_t)} | {skips(web_js_t[3])} | {cov(web_js_cov, 95)} |",
+              f"| Console Client — Python  | Ubuntu  | {tests(*con_py_t)} | {skips(con_py_t[3])} | {cov(con_cov, 95)} |",
+              f"| Node Client — JavaScript | Ubuntu  | {tests(*nod_js_t)} | {skips(nod_js_t[3])} | {cov(nod_cov, 95)} |",
+              f"| C# Client — Unit (xUnit) | Windows | {tests(*cs_unit_t)} | {skips(cs_unit_t[3])} | {cov(cs_cov, 95)} |",
+              f"| Test Client — Python (Unit) | Ubuntu | {tests(*tc_py_t)} | {skips(tc_py_t[3])} | {cov(tc_cov, 95)} |",
               f"| OPC UA Server — Smoke    | Windows | {tests(*ss_smoke)} | {skips(ss_smoke[3])} | Not Applicable |",
               "",
               "---",
@@ -1343,7 +1364,7 @@ jobs:
               "---",
               "",
               "> 📦 **Artifacts** — JUnit XML · Coverage XML · ESLint JSON · Bandit JSON &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down",
-              "> Coverage key: ✅ ≥ 90% &nbsp;·&nbsp; ⚠️ 70–89% (improvement needed) &nbsp;·&nbsp; ❌ < 70% (critical) &nbsp;·&nbsp; Per-component thresholds in `pyproject.toml` / `vitest.config.mjs`",
+              "> Coverage key: ✅ meets declared threshold &nbsp;·&nbsp; ⚠️ below threshold but ≥ 80% &nbsp;·&nbsp; ❌ < 80% &nbsp;·&nbsp; thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage gate",
           ]
 
           # ── Inline skip details (collapsible) ─────────────────────────────
@@ -1391,6 +1412,10 @@ jobs:
           if budget_warnings:
               out += ["", "---", "", "### ⏭️ Skip Budget Exceeded", ""]
               out += budget_warnings
+
+          if coverage_warnings:
+              out += ["", "---", "", "### ⚠️ Coverage Threshold Warnings", ""]
+              out += coverage_warnings
 
           if artifact_warnings:
               out += ["", "---", "", "### ⚠️ Artifact Warnings", ""]
