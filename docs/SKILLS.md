@@ -387,7 +387,7 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `web-client-live-websocket-api` | local root runner + `integration.yml` | OPC UA 40466 / WS 8002 | Python WebSocket backend contract and integration tests |
 | `web-client-live-websocket-connection` | local root runner + `integration.yml` | OPC UA 40467 / WS 8003 | WebSocket lifecycle tests isolated from backend contract tests |
 | `web-client-e2e-smoke` | local root runner + `integration.yml` | HTTP 3004 | Playwright smoke project |
-| `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs, four isolated browser workers locally and two workers in GitHub Actions |
+| `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs, four isolated browser workers locally; GitHub Integration uses two Browser Features shards with one Playwright worker per shard |
 | `web-client-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec |
 | `web-client-docker-smoke` | local root runner | HTTP 3000 / WS 8001 | Web Client production Docker image/readiness smoke |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |

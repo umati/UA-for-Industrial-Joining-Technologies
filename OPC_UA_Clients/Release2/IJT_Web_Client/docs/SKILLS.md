@@ -426,10 +426,11 @@ delegates to `--phase1-python`, and `web-client-js` delegates to
 `--phase1-js`. The workflow no longer duplicates the individual pytest,
 Vitest, ESLint, mypy, Bandit, and audit commands, and the split gives each
 language stack its own timing and failure surface. GitHub `integration.yml`
-runs the same root-runner Web Client live/e2e suite matrix as local validation,
-with two Playwright feature workers on GitHub-hosted Windows runners. Each
-suite receives an isolated `IJT_WEB_TEST_RESULTS_DIR`, so JUnit, coverage,
-Playwright, and timing artifacts cannot overwrite another suite's files.
+runs the same root-runner Web Client live/e2e suite matrix as local validation.
+Browser Features uses two Playwright shards on GitHub-hosted Windows runners
+with one Playwright worker per shard. Each suite receives an isolated
+`IJT_WEB_TEST_RESULTS_DIR`, so JUnit, coverage, Playwright, and timing artifacts
+cannot overwrite another suite's files.
 
 If the checked-in simulator binary directory is absent in CI, the runner
 extracts the Release 2 Windows/Linux simulator ZIP from `OPC_UA_Servers/Release2`

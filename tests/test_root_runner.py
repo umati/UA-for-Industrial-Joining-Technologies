@@ -771,6 +771,20 @@ def test_integration_playwright_install_is_skipped_on_cache_hit() -> None:
     )
 
 
+def test_integration_report_surfaces_browser_feature_timings() -> None:
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "browser_feature_timings(" in workflow
+    assert "results-live-webclient-web-client-e2e-features*/**/timing-latest.json" in workflow
+    assert "### Browser Features Timing" in workflow
+    assert "pip-install" in workflow
+    assert "npm-install" in workflow
+    assert "playwright-install" in workflow
+    assert "playwright-features" in workflow
+
+
 def test_ci_report_steps_skip_missing_artifacts_for_skipped_jobs() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 

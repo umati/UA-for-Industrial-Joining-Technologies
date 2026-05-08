@@ -842,7 +842,7 @@ jobs:
           GH_RUN_URL:     ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           python3 - << 'PYEOF'
-          import xml.etree.ElementTree as ET, os, glob
+          import xml.etree.ElementTree as ET, os, glob, json
           from collections import Counter
 
           # ── Parsers ──────────────────────────────────────────────────────
@@ -927,6 +927,63 @@ jobs:
                   return "Skip details unavailable in JUnit XML"
               return default
 
+          def seconds(value):
+              """Parse a timing-artifact duration as float seconds."""
+              try:
+                  return float(value or 0.0)
+              except (TypeError, ValueError):
+                  return 0.0
+
+          def format_duration(value):
+              """Format seconds compactly for the GitHub Actions summary."""
+              value = seconds(value)
+              if value >= 60.0:
+                  return f"{value / 60.0:.1f} min"
+              return f"{value:.1f} s"
+
+          def browser_feature_timings(pattern):
+              """Load Web Client Browser Features stage timing artifacts."""
+              rows = []
+              for path in sorted(glob.glob(pattern, recursive=True)):
+                  try:
+                      with open(path, encoding="utf-8") as fh:
+                          payload = json.load(fh)
+                  except Exception as exc:
+                      print(f"[WARN] browser_feature_timings({path}): {exc}")
+                      continue
+
+                  artifact = os.path.basename(os.path.dirname(path))
+                  if artifact.endswith("-shard-1of2"):
+                      shard = "1/2"
+                  elif artifact.endswith("-shard-2of2"):
+                      shard = "2/2"
+                  else:
+                      shard = "full"
+
+                  stages = {
+                      stage.get("name", ""): seconds(stage.get("duration_seconds"))
+                      for stage in payload.get("stages", [])
+                      if isinstance(stage, dict)
+                  }
+                  total = seconds(payload.get("total_seconds"))
+                  setup = sum(
+                      stages.get(name, 0.0)
+                      for name in ("pip-install", "npm-install", "playwright-install")
+                  )
+                  body = stages.get("playwright-features", 0.0)
+                  rows.append(
+                      {
+                          "shard": shard,
+                          "total": total,
+                          "pip": stages.get("pip-install", 0.0),
+                          "npm": stages.get("npm-install", 0.0),
+                          "playwright_install": stages.get("playwright-install", 0.0),
+                          "playwright_features": body,
+                          "other": max(total - setup - body, 0.0),
+                      }
+                  )
+              return rows
+
           # ── Formatters ───────────────────────────────────────────────────
 
           def job_icon(r):
@@ -968,6 +1025,9 @@ jobs:
           wc_web    = parse_junit("all-results/results-live-webclient-*/**/*.xml")
           con_live  = parse_junit("all-results/results-live-console/**/pytest-live.xml")
           cs_live   = parse_junit("all-results/results-csharp-live/tests.xml")
+          wc_feature_timings = browser_feature_timings(
+              "all-results/results-live-webclient-web-client-e2e-features*/**/timing-latest.json"
+          )
 
           # ── Collect skip details from JUnit XML ───────────────────────
 
@@ -1058,6 +1118,25 @@ jobs:
               f"| Console Client — Live            | 40461 | {tests(*con_live)} | {skips(con_live[3])} | {skip_note_inline(con_live_skips, con_live[3])} |",
               f"| C# Client — Live (xUnit)         | 40464 | {tests(*cs_live)} | {skips(cs_live[3])} | {skip_note_inline(cs_live_skips, cs_live[3], 'Nightly drift detection')} |",
           ]
+
+          if wc_feature_timings:
+              out += [
+                  "",
+                  "### Browser Features Timing",
+                  "",
+                  "> Source: Web Client `timing-latest.json` artifacts for the Browser Features matrix rows.",
+                  "",
+                  "| Shard | Total | pip-install | npm-install | Playwright install | Playwright features | Other |",
+                  "|:------|------:|------------:|------------:|-------------------:|--------------------:|------:|",
+              ]
+              for row in wc_feature_timings:
+                  out.append(
+                      f"| {row['shard']} | {format_duration(row['total'])} | "
+                      f"{format_duration(row['pip'])} | {format_duration(row['npm'])} | "
+                      f"{format_duration(row['playwright_install'])} | "
+                      f"{format_duration(row['playwright_features'])} | "
+                      f"{format_duration(row['other'])} |"
+                  )
 
           # ── Inline skip details (collapsible) ──────────────────────────
 
