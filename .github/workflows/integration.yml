@@ -845,6 +845,7 @@ jobs:
           GH_RUN_ID:      ${{ github.run_id }}
           GH_API_URL:     ${{ github.api_url }}
           GH_TOKEN:       ${{ github.token }}
+          REPORT_JOB_NAME: "📋 Extended Test Report"
         run: |
           python3 - << 'PYEOF'
           import datetime, glob, json, os, urllib.request
@@ -1033,10 +1034,11 @@ jobs:
               return None
 
           def job_durations(path):
-              """Load current-run job durations; the report job is still running, so its row shows —."""
+              """Load completed current-run job durations, excluding this report job."""
               token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
               if not path or not token:
                   return []
+              report_job_name = os.environ.get("REPORT_JOB_NAME", "").strip()
               api_root = (
                   os.environ.get("GH_API_URL")
                   or os.environ.get("GITHUB_API_URL")
@@ -1056,14 +1058,19 @@ jobs:
                       with urllib.request.urlopen(request, timeout=20) as response:
                           payload = json.load(response)
                           for job in payload.get("jobs", []):
+                              name = str(job.get("name") or "unknown")
+                              if report_job_name and name == report_job_name:
+                                  continue
                               started = parse_actions_time(job.get("started_at"))
                               completed = parse_actions_time(job.get("completed_at"))
                               duration = None
                               if started and completed:
                                   duration = max((completed - started).total_seconds(), 0.0)
+                              if duration is None and job.get("status") != "completed":
+                                  continue
                               rows.append(
                                   (
-                                      str(job.get("name") or "unknown"),
+                                      name,
                                       duration,
                                       str(job.get("conclusion") or job.get("status") or "unknown"),
                                   )
@@ -1193,8 +1200,6 @@ jobs:
                   "failure": "❌",
                   "cancelled": "🚫",
                   "skipped": "⏭️",
-                  "in_progress": "⏳",
-                  "queued": "⏳",
               }.get(r, "⚠️")
 
           def tests(total, passed, failed, skipped=0, baseline=None):
@@ -1333,7 +1338,7 @@ jobs:
               out += [
                   "### ⏱️ Job Durations",
                   "",
-                  "> Source: current workflow run jobs API. The report job is still running, so its row shows —.",
+                  "> Source: current workflow run jobs API. Report job duration is excluded because a report cannot measure its own completed duration; see the workflow run page for its time.",
                   "",
                   "| Job | Duration | Status |",
                   "|:----|---------:|:-------|",

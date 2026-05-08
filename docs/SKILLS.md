@@ -436,7 +436,7 @@ Triggers on: `OPC_UA_Servers/**`, all Web Client files, `IJT_Test_Client/**`, Co
 
 Runtime: ~10–15 minutes (int-testclient, live-webclient matrix jobs, live-console, csharp-live all run in parallel). Web Client GUI/JS changes now trigger integration because the live matrix includes Playwright smoke/features/regression suites.
 Use the report timing tables for CI performance decisions: Browser Features comes from Web Client `timing-latest.json` artifacts, and C# Live comes from `results-csharp-live/tests.trx` per-test durations.
-The `Job Durations` section is best-effort and non-failing; it uses the GitHub Actions jobs API for the current run, marks the longest completed job, and leaves the still-running report job duration as `—`.
+The `Job Durations` section is best-effort and non-failing; it uses the GitHub Actions jobs API for the current run, marks the longest completed job, and excludes the report job itself because a report cannot measure its own completed duration.
 Update `tests/baselines/integration-test-counts.json` manually in a normal code review when an intentional suite count or expected skip-count change lands; drift is reported loudly but never fails the report job.
 Skip tolerance is zero by default; only high-volume or matrix-aggregated live suites get a small explicit tolerance so routine skip churn stays visible without hiding real drift. The `wc_web` baseline aggregates every Web live/e2e matrix XML, so any new XML-producing Web matrix row must update the baseline in the same review.
 All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents: read`.

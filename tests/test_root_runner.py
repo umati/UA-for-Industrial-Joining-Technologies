@@ -806,8 +806,11 @@ def test_integration_report_surfaces_job_durations() -> None:
     assert "GH_REPOSITORY:  ${{ github.repository }}" in workflow
     assert "GH_RUN_ID:      ${{ github.run_id }}" in workflow
     assert "GH_TOKEN:       ${{ github.token }}" in workflow
+    assert 'REPORT_JOB_NAME: "📋 Extended Test Report"' in workflow
     assert "def job_durations(path):" in workflow
-    assert "the report job is still running, so its row shows" in workflow
+    assert "excluding this report job" in workflow
+    assert "name == report_job_name" in workflow
+    assert "Report job duration is excluded" in workflow
     assert "### ⏱️ Job Durations" in workflow
     assert "current workflow run jobs API" in workflow
     assert "format_optional_duration(duration)" in workflow
@@ -858,6 +861,18 @@ def test_ci_report_uses_declared_coverage_thresholds() -> None:
     assert "cov(tc_cov, 95)" in workflow
     assert "coverage_warnings" in workflow
     assert "### ⚠️ Coverage Threshold Warnings" in workflow
+
+
+def test_ci_report_web_python_skip_budget_uses_expected_skip_identities() -> None:
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert '"web-client (Python)":      2' in workflow
+    assert "expected_skip_names" in workflow
+    assert "test_required_static_asset_exists[node_modules/chart.js/dist/chart.umd.js]" in workflow
+    assert "test_eslint_passes" in workflow
+    assert "unexpected skips detected" in workflow
+    assert "missing_expected_names" in workflow
+    assert "expected skips not observed" in workflow
 
 
 def test_ci_report_steps_skip_missing_artifacts_for_skipped_jobs() -> None:

@@ -1385,13 +1385,19 @@ jobs:
           # ── Skip budget check ─────────────────────────────────────────────────
           # Known expected skips per TEST_TIERS.md; any extra skip is a warning.
           skip_budget = {
-              "web-client (Python)":      1,  # Windows-only _SetupLock test
+              "web-client (Python)":      2,  # Split Python lane delegates JS/npm checks to web-client-js
               "web-client (JS)":          0,
               "console-client (Python)":  0,
               "node-client (JS)":         1,  # git unavailable in CI (vitest)
               "csharp-unit":             15,  # IJT_PHASE1_ONLY filter
               "test-client (Python)":     0,
               "server-smoke (Windows)":   0,
+          }
+          expected_skip_names = {
+              "web-client (Python)": {
+                  "test_required_static_asset_exists[node_modules/chart.js/dist/chart.umd.js]",
+                  "test_eslint_passes",
+              },
           }
           actual_skips = {
               "web-client (Python)":      web_py_t[3],
@@ -1402,9 +1408,40 @@ jobs:
               "test-client (Python)":     tc_py_t[3],
               "server-smoke (Windows)":   ss_smoke[3],
           }
+          skip_details_by_suite = {
+              "web-client (Python)":      web_py_skips,
+              "web-client (JS)":          web_js_skips,
+              "console-client (Python)":  con_py_skips,
+              "node-client (JS)":         nod_js_skips,
+              "csharp-unit":              cs_unit_skips,
+              "test-client (Python)":     tc_py_skips,
+              "server-smoke (Windows)":   ss_smoke_skips,
+          }
           budget_warnings = []
           for suite, budget in skip_budget.items():
               actual = actual_skips[suite]
+              expected_names = expected_skip_names.get(suite)
+              if actual is not None and expected_names is not None:
+                  actual_names = {name for name, _ in skip_details_by_suite[suite]}
+                  unexpected_names = sorted(actual_names - expected_names)
+                  missing_expected_names = sorted(expected_names - actual_names)
+                  if unexpected_names:
+                      budget_warnings.append(
+                          f"⚠️ **{suite}**: unexpected skips detected: "
+                          + ", ".join(f"`{name}`" for name in unexpected_names)
+                      )
+                  if missing_expected_names:
+                      budget_warnings.append(
+                          f"⚠️ **{suite}**: expected skips not observed; remove or update the "
+                          "documented skip budget if these gates no longer skip: "
+                          + ", ".join(f"`{name}`" for name in missing_expected_names)
+                      )
+                  elif not unexpected_names and actual > len(expected_names):
+                      budget_warnings.append(
+                          f"⚠️ **{suite}**: {actual} skips but only {len(expected_names)} "
+                          "expected skip identities are documented"
+                      )
+                  continue
               if actual is not None and actual > budget:
                   budget_warnings.append(
                       f"⚠️ **{suite}**: {actual} skips (budget: {budget}) — unexpected skips detected"
