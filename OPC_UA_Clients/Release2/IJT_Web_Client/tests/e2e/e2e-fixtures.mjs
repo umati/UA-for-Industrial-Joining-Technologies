@@ -57,7 +57,7 @@ function runtimeAppUrl (wsUrl) {
 
 export const test = base.extend({
   /** True when the Python backend WebSocket is reachable. */
-  backendUp: async ({}, use, testInfo) => {
+  backendUp: async (_, use, testInfo) => {
     const runtime = runtimeForWorker(testInfo)
     const up = await isBackendReachable(runtime.wsUrl)
     await use(up)
@@ -73,14 +73,11 @@ export const test = base.extend({
 
   /**
    * AppPage already connected to the LOCAL endpoint.
-   * Automatically skips the test when the backend is not running.
+   * Fails the test when the backend is not running.
    */
   connected: async ({ page, backendUp }, use, testInfo) => {
     const runtime = runtimeForWorker(testInfo)
-    if (!backendUp) {
-      test.skip(true, `Backend WebSocket not reachable at ${runtime.wsUrl}`)
-      return
-    }
+    expect(backendUp, `Backend WebSocket must be reachable at ${runtime.wsUrl}`).toBe(true)
     const app = new AppPage(page, runtime.appUrl)
     await app.goto()
     await app.connectToLocal()
@@ -89,14 +86,11 @@ export const test = base.extend({
 
   /**
    * A live WebSocket test client connected to the backend.
-   * Automatically skips the test when the backend is not running.
+   * Fails the test when the backend is not running.
    */
   ws: async ({ backendUp }, use, testInfo) => {
     const runtime = runtimeForWorker(testInfo)
-    if (!backendUp) {
-      test.skip(true, `Backend WebSocket not reachable at ${runtime.wsUrl}`)
-      return
-    }
+    expect(backendUp, `Backend WebSocket must be reachable at ${runtime.wsUrl}`).toBe(true)
     const client = new WsTestClient(runtime.wsUrl, runtime.opcuaEndpoint)
     await client.connect()
     await use(client)

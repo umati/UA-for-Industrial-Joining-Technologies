@@ -856,7 +856,7 @@ jobs:
           REPORT_JOB_NAME: "📋 Extended Test Report"
         run: |
           python3 - << 'PYEOF'
-          import datetime, glob, json, os, urllib.request
+          import datetime, glob, json, os, sys, urllib.request
           import xml.etree.ElementTree as ET
           from collections import Counter
 
@@ -1001,6 +1001,20 @@ jobs:
                           f"{int(expected_skips):,}; tolerance +{tolerance}) — investigate skip drift."
                       )
               return warnings
+
+          def non_test_client_skip_failures(suite_counts):
+              """Build hard failures for skips outside IJT Test Client conformance."""
+              failures = []
+              for key, label, counts in suite_counts:
+                  if key == "tc_tests" or counts[3] is None:
+                      continue
+                  skipped = int(counts[3])
+                  if skipped:
+                      failures.append(
+                          f"❌ **{label}**: {skipped:,} skipped — only IJT Test Client conformance "
+                          "may skip Not Implemented / Not Supported coverage."
+                      )
+              return failures
 
           def seconds(value):
               """Parse a timing-artifact duration as float seconds."""
@@ -1294,6 +1308,7 @@ jobs:
               ("con_live", "Console Client — Live", con_live),
               ("cs_live", "C# Client — Live", cs_live),
           ]
+          skip_policy_failures = non_test_client_skip_failures(suite_counts)
           report_warnings = integration_drift_warnings(integration_baseline, suite_counts)
           if baseline_warning:
               report_warnings.insert(0, baseline_warning)
@@ -1314,12 +1329,15 @@ jobs:
           n_fail  = sum(1 for r in core_jobs if r == "failure")
           n_total = len(core_jobs)
 
-          if n_fail == 0:
+          if n_fail == 0 and not skip_policy_failures:
               status_icon = "✅"
               status_msg  = f"All {n_pass} / {n_total} jobs passed &nbsp;·&nbsp; {totals_str}"
           else:
               status_icon = "❌"
-              status_msg  = f"{n_fail} / {n_total} jobs failed &nbsp;·&nbsp; {n_pass} passed &nbsp;·&nbsp; {totals_str}"
+              if skip_policy_failures and n_fail == 0:
+                  status_msg = f"Skip policy gate failed &nbsp;·&nbsp; {totals_str}"
+              else:
+                  status_msg = f"{n_fail} / {n_total} jobs failed &nbsp;·&nbsp; {n_pass} passed &nbsp;·&nbsp; {totals_str}"
 
           run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
           sha_str  = f"`{sha}`" if sha else "—"
@@ -1336,6 +1354,11 @@ jobs:
               "---",
               "",
           ]
+
+          if skip_policy_failures:
+              out += ["### ❌ Skip Policy Failures", ""]
+              out += skip_policy_failures
+              out += ["", "---", ""]
 
           if report_warnings:
               out += ["### ⚠️ Report Warnings", ""]
@@ -1470,4 +1493,6 @@ jobs:
           with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8") as fh:
               fh.write("\n".join(out) + "\n")
           print("Summary written.")
+          if skip_policy_failures:
+              sys.exit(1)
           PYEOF

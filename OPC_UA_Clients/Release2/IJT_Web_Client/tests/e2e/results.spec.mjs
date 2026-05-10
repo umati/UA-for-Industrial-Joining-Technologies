@@ -46,7 +46,7 @@ test('Results: latest single-tightening renders .resTightening nodes', async ({ 
   await results.waitForHeader()
 
   const ok = await results.viewLatestOfType(RESULT_TYPE.TIGHTENING)
-  if (!ok) { test.skip() }
+  expect(ok, 'Latest single-tightening result must be selectable after simulation').toBe(true)
   await results.waitForResultBox({ timeout: 60_000 })
   const nodes = await results.countResultNodes('.resTightening')
   expect(nodes).toBeGreaterThanOrEqual(1)
@@ -70,7 +70,7 @@ test('Results: latest job renders nested .resJob and .resTightening nodes', asyn
   await results.waitForHeader()
 
   const ok = await results.viewLatestOfType(RESULT_TYPE.JOB)
-  if (!ok) { test.skip() }
+  expect(ok, 'Latest job result must be selectable after simulation').toBe(true)
   await results.waitForResultBox({ timeout: 60_000 })
 
   const jobNodes = await results.countResultNodes('.resJob')
@@ -97,7 +97,7 @@ test('Results: latest batch renders .resBatch node', async ({ connected: app }) 
   await results.waitForHeader()
 
   const ok = await results.viewLatestOfType(RESULT_TYPE.BATCH)
-  if (!ok) { test.skip() }
+  expect(ok, 'Latest batch result must be selectable after simulation').toBe(true)
   await results.waitForResultBox({ timeout: 60_000 })
 
   const batchNodes = await results.countResultNodes('.resBatch')

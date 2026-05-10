@@ -892,14 +892,52 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
         "cs_live",
     }
     assert baseline["suites"]["tc_tests"]["skip_tolerance"] == 10
+    assert baseline["suites"]["wd_js"]["tests"] == 519
+    assert baseline["suites"]["wc_web"]["skipped"] == 0
+    assert baseline["suites"]["wc_web"]["skip_tolerance"] == 0
     assert "load_integration_baseline(" in workflow
     assert "format_count_delta(" in workflow
     assert 'return "" if delta == 0 else f" ({delta:+d})"' in workflow
     assert "integration_drift_warnings(" in workflow
+    assert "non_test_client_skip_failures(" in workflow
+    assert "skip_policy_failures" in workflow
+    assert "### ❌ Skip Policy Failures" in workflow
+    assert "only IJT Test Client conformance" in workflow
+    assert "sys.exit(1)" in workflow
     assert "tests/baselines/integration-test-counts.json" in workflow
     assert "### ⚠️ Report Warnings" in workflow
     assert "skip drift" in workflow
     assert "suite collection drift" in workflow
+
+
+def test_web_client_live_suite_has_no_runtime_skip_calls() -> None:
+    live_tests = (
+        _runner.REPO_ROOT
+        / "OPC_UA_Clients"
+        / "Release2"
+        / "IJT_Web_Client"
+        / "tests"
+        / "python"
+        / "live"
+        / "test_opcua_methods.py"
+    ).read_text(encoding="utf-8")
+
+    assert "pytest.skip(" not in live_tests
+    assert "REGRESSION_RESULT_EVENT_JOINT" in live_tests
+    assert "ResultMetaData.ProcessingTimes" in live_tests
+
+
+def test_web_client_e2e_suite_has_no_runtime_skip_calls() -> None:
+    e2e_root = (
+        _runner.REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "tests" / "e2e"
+    )
+    offenders = [
+        path.relative_to(e2e_root).as_posix()
+        for path in e2e_root.glob("*.mjs")
+        if "test.skip(" in path.read_text(encoding="utf-8")
+    ]
+
+    assert offenders == []
 
 
 def test_ci_report_uses_declared_coverage_thresholds() -> None:

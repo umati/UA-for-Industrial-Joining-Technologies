@@ -76,6 +76,7 @@ _SINGLE_EXPECT = {
 # Joint IDs — configurable via env vars; defaults match the simulator's factory config.
 _REGRESSION_JOINT_1 = os.getenv("REGRESSION_JOINT_1", "Joint_1")
 _REGRESSION_JOINT_2 = os.getenv("REGRESSION_JOINT_2", "Joint_2")
+_RESULT_EVENT_JOINT = os.getenv("REGRESSION_RESULT_EVENT_JOINT", _REGRESSION_JOINT_2)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -230,7 +231,7 @@ async def _pi_uri(c) -> str:
 async def _required_pi_uri(c) -> str:
     pi = await _pi_uri(c)
     if not pi.strip():
-        pytest.skip("Tool ProductInstanceUri not available — cannot call PIU-scoped live method")
+        pytest.fail("Tool ProductInstanceUri must be available for Web Client live OPC UA methods")
     return pi
 
 
@@ -793,13 +794,13 @@ class TestJoiningProcess:
         try:
             output = await _call(c, _JP, f"{_JP}/GetJoiningProcessList", _v(pi, ua.VariantType.String))
         except (OSError, ua.UaStatusCodeError) as exc:
-            pytest.skip(f"GetJoiningProcessList returned {exc} — cannot build JoiningProcessIdentification")
+            pytest.fail(f"GetJoiningProcessList must build JoiningProcessIdentification, got {exc}")
         programs = _method_items(output)
         if not programs:
-            pytest.skip("GetJoiningProcessList returned no programs — cannot build JoiningProcessIdentification")
+            pytest.fail("GetJoiningProcessList must return at least one program")
         process_id = _joining_process_id_from_entry(programs[0])
         if not process_id:
-            pytest.skip("First joining process has no usable JoiningProcessId")
+            pytest.fail("First joining process must have a usable JoiningProcessId")
         jp = ua.JoiningProcessIdentificationDataType()  # type: ignore[attr-defined]
         jp.JoiningProcessId = process_id
         jp.JoiningProcessOriginId = _joining_process_origin_id_from_entry(programs[0])
@@ -814,11 +815,19 @@ class TestJoiningProcess:
     async def test_get_selected_program(self, ijt_session):
         c, *_ = ijt_session
         pi = await _required_pi_uri(c)
+        jp = await self._jp(c, pi)
         try:
+            await _call(
+                c,
+                _JP,
+                f"{_JP}/SelectJoiningProcess",
+                _v(pi, ua.VariantType.String),
+                ua.Variant(jp, ua.VariantType.ExtensionObject),
+            )
             result = await _call(c, _JP, f"{_JP}/GetSelectedJoiningProgram", _v(pi, ua.VariantType.String))
             assert result is not None
         except (OSError, ua.UaStatusCodeError) as exc:
-            pytest.skip(f"GetSelectedJoiningProgram returned {exc} — no program is currently selected")
+            pytest.fail(f"GetSelectedJoiningProgram must succeed after SelectJoiningProcess, got {exc}")
 
     async def test_abort_with_localized_text(self, ijt_session):
         c, *_ = ijt_session
@@ -834,7 +843,7 @@ class TestJoiningProcess:
                 ua.Variant(ua.LocalizedText(Text="Test abort", Locale="en"), ua.VariantType.LocalizedText),
             )
         except (OSError, ua.UaStatusCodeError) as exc:
-            pytest.skip(f"AbortJoiningProcess returned {exc} — no active process is available to abort")
+            pytest.fail(f"AbortJoiningProcess must return a method result, got {exc}")
         assert result is not None
 
     async def test_increment_decrement_counter(self, ijt_session):
@@ -859,7 +868,7 @@ class TestJoiningProcess:
                 _v(1, ua.VariantType.UInt32),
             )
         except (OSError, ua.UaStatusCodeError) as exc:
-            pytest.skip(f"JoiningProcess counter update returned {exc}")
+            pytest.fail(f"JoiningProcess counter update must return method results, got {exc}")
 
     async def test_start_selected_joining(self, ijt_session):
         c, *_ = ijt_session
@@ -882,7 +891,7 @@ class TestJoiningProcess:
                 _v(True, ua.VariantType.Boolean),
             )
         except (OSError, ua.UaStatusCodeError) as exc:
-            pytest.skip(f"StartSelectedJoining returned {exc} after SelectJoiningProcess")
+            pytest.fail(f"StartSelectedJoining must return a method result after SelectJoiningProcess, got {exc}")
         assert result is not None
 
 
@@ -1048,14 +1057,50 @@ class TestAssetIdentifiers:
 class TestJointDemoWorkflow:
     """Full Joint Demo Page workflow: SelectJoint → StartSelectedJoining → result event.
 
-    Covers both joints shown on the Joint Demo page.  Uses the module-scoped
+    Covers the simulator joint known to fire a result event. Uses the module-scoped
     ijt_session fixture so no extra connections are created.
 
-    Joint IDs are read from REGRESSION_JOINT_1 / REGRESSION_JOINT_2 env vars
-    (defaults: "Joint_1" / "Joint_2" — capital J, underscore, no spaces).
+    The event-producing joint is read from REGRESSION_RESULT_EVENT_JOINT and
+    defaults to REGRESSION_JOINT_2. Joint_1 remains covered by
+    TestJointManagement.test_select_joint and joint-list enumeration because it
+    does not produce a simulator result event reliably.
     """
 
     pytestmark = pytest.mark.asyncio(loop_scope="module")
+
+    async def _start_selected_joining_events(self, c, result_h, pi: str, joint_id: str) -> list:
+        try:
+            await _call(
+                c,
+                _JT,
+                f"{_JT}/SelectJoint",
+                _v(pi, ua.VariantType.String),
+                _v(joint_id, ua.VariantType.String),
+                _v("", ua.VariantType.String),
+            )
+        except OSError as exc:
+            pytest.fail(f"SelectJoint({joint_id!r}) must succeed before StartSelectedJoining, got {exc}")
+
+        call_time = dt.datetime.now(dt.timezone.utc)
+        result_h.events.clear()
+        try:
+            await _call(
+                c,
+                _JP,
+                f"{_JP}/StartSelectedJoining",
+                _v(pi, ua.VariantType.String),
+                _v(True, ua.VariantType.Boolean),  # SimulateResult=True
+            )
+        except OSError as exc:
+            pytest.fail(f"StartSelectedJoining must succeed for joint={joint_id!r}, got {exc}")
+
+        raw = await _wait_events(result_h, 1, timeout=15.0)
+        events = [e for e in raw if getattr(e, "Time", call_time) >= call_time]
+        assert events, (
+            f"SelectJoint({joint_id!r}) + StartSelectedJoining produced no fresh result event within 15 s. "
+            "Use REGRESSION_RESULT_EVENT_JOINT to point this live test at an event-producing simulator joint."
+        )
+        return events
 
     async def test_select_joint_2_returns_status(self, ijt_session):
         """SelectJoint("Joint_2") must complete without raising.
@@ -1091,61 +1136,19 @@ class TestJointDemoWorkflow:
             )
             assert str(joint_id).strip(), f"Joint[{i}].JointId must not be empty"
 
-    @pytest.mark.parametrize("joint_id", [_REGRESSION_JOINT_1, _REGRESSION_JOINT_2])
-    async def test_select_then_start_fires_result_event(self, ijt_session, joint_id):
+    async def test_select_then_start_fires_result_event(self, ijt_session):
         """Select joint → start tightening → result event must arrive within 15 s.
 
         SelectJoint activates a joint; StartSelectedJoining(SimulateResult=True)
         runs a tightening cycle; the server fires a ResultReadyEvent when done.
-        The test skips (not fails) when the server returns Uncertain — that signals
-        a physical trigger is required on the simulator configuration.
         """
         c, result_h, _ = ijt_session
         pi = await _pi_uri(c)
 
-        # SelectJoint — Uncertain / URI_NOT_FOUND is acceptable; proceed regardless.
-        try:
-            await _call(
-                c,
-                _JT,
-                f"{_JT}/SelectJoint",
-                _v(pi, ua.VariantType.String),
-                _v(joint_id, ua.VariantType.String),
-                _v("", ua.VariantType.String),
-            )
-        except OSError:
-            pass
-
-        # StartSelectedJoining fires a result event on success.
-        # Record call time; events with Time < call_time are stale from prior tests.
-        call_time = dt.datetime.now(dt.timezone.utc)
-        result_h.events.clear()
-        try:
-            await _call(
-                c,
-                _JP,
-                f"{_JP}/StartSelectedJoining",
-                _v(pi, ua.VariantType.String),
-                _v(True, ua.VariantType.Boolean),  # SimulateResult=True
-            )
-        except OSError:
-            pytest.skip(
-                f"StartSelectedJoining returned Uncertain for joint={joint_id!r} — "
-                "server may require a physical trigger for this configuration"
-            )
-
-        raw = await _wait_events(result_h, 1, timeout=15.0)
-        events = [e for e in raw if getattr(e, "Time", call_time) >= call_time]
-        if not events and await _has_simulation_methods(c):
-            pytest.skip("No result event after StartSelectedJoining on simulator — method status path is covered")
-        assert events, (
-            f"SelectJoint({joint_id!r}) + StartSelectedJoining: no result event within 15 s. "
-            "Server must fire a ResultReadyEvent after a successful tightening cycle."
-        )
+        events = await self._start_selected_joining_events(c, result_h, pi, _RESULT_EVENT_JOINT)
         _assert_meta(events, cls=1, ev=1, code=0, simulated=None)  # IsSimulated varies: True on simulator, False on real controller
 
-    @pytest.mark.parametrize("joint_id", [_REGRESSION_JOINT_1, _REGRESSION_JOINT_2])
-    async def test_joint_workflow_result_payload_metadata(self, ijt_session, joint_id):
+    async def test_joint_workflow_result_payload_metadata(self, ijt_session):
         """After SelectJoint + StartSelectedJoining, result event metadata must be fully valid.
 
         Verifies: ResultState, OperationMode, AssemblyType, IsPartial, JoiningTechnology.
@@ -1153,37 +1156,7 @@ class TestJointDemoWorkflow:
         c, result_h, _ = ijt_session
         pi = await _pi_uri(c)
 
-        try:
-            await _call(
-                c,
-                _JT,
-                f"{_JT}/SelectJoint",
-                _v(pi, ua.VariantType.String),
-                _v(joint_id, ua.VariantType.String),
-                _v("", ua.VariantType.String),
-            )
-        except OSError:
-            pass
-
-        # Record call time; filter by event.Time so stale events from prior tests are excluded.
-        call_time = dt.datetime.now(dt.timezone.utc)
-        result_h.events.clear()
-        try:
-            await _call(
-                c,
-                _JP,
-                f"{_JP}/StartSelectedJoining",
-                _v(pi, ua.VariantType.String),
-                _v(True, ua.VariantType.Boolean),
-            )
-        except OSError:
-            pytest.skip(f"StartSelectedJoining Uncertain for joint={joint_id!r}")
-
-        raw = await _wait_events(result_h, 1, timeout=15.0)
-        events = [e for e in raw if getattr(e, "Time", call_time) >= call_time]
-        if not events:
-            pytest.skip("No result event — server may require a physical tightening trigger")
-
+        events = await self._start_selected_joining_events(c, result_h, pi, _RESULT_EVENT_JOINT)
         meta = _meta(events)
         assert int(meta.ResultState) == 1, f"ResultState must be COMPLETED(1), got {meta.ResultState}"
         assert int(meta.OperationMode) == 2, f"OperationMode must be MANUAL(2), got {meta.OperationMode}"
@@ -1278,12 +1251,9 @@ class TestResultPayloadDeepValidation:
         )
         assert events, "No event received"
 
-        content = events[-1].Result.ResultContent or []
-        assert content, "ResultContent must not be empty"
-        joining_result = getattr(content[0], "Value", content[0])
-        pt = getattr(joining_result, "ProcessingTimes", None)
-        if pt is None:
-            pytest.skip("ProcessingTimes not present in this result type — skipping datetime check")
+        meta = _meta(events)
+        pt = getattr(meta, "ProcessingTimes", None)
+        assert pt is not None, "ResultMetaData.ProcessingTimes must be present for simulated one-step results"
 
         start = getattr(pt, "StartTime", None)
         end = getattr(pt, "EndTime", None)

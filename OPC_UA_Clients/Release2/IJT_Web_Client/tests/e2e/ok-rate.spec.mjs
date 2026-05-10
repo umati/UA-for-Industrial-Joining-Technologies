@@ -57,13 +57,13 @@ test('OkRate: rate increases to 100% after clearing and simulating one OK', asyn
 
   // Clear first
   const clearBtn = app.page.locator('button:has-text("Clear counters")').first()
-  if ((await clearBtn.count()) === 0) { test.skip() }
+  await expect(clearBtn, 'Clear counters button must be available').toBeVisible()
   await clearBtn.click()
   await app.page.waitForTimeout(400)
 
   // Simulate one OK
   const okBtn = app.page.locator('button:has-text("Simulate OK result")').first()
-  if ((await okBtn.count()) === 0) { test.skip() }
+  await expect(okBtn, 'Simulate OK result button must be available').toBeVisible()
   await okBtn.click()
   await app.page.waitForTimeout(1_000)
 
@@ -77,13 +77,14 @@ test('OkRate: rate decreases after simulating a NOT OK result', async ({ connect
   const okRate = await openOkRate(app)
 
   const clearBtn = app.page.locator('button:has-text("Clear counters")').first()
-  if ((await clearBtn.count()) === 0) { test.skip() }
+  await expect(clearBtn, 'Clear counters button must be available').toBeVisible()
   await clearBtn.click()
   await app.page.waitForTimeout(300)
 
   const okBtn = app.page.locator('button:has-text("Simulate OK result")').first()
   const nokBtn = app.page.locator('button:has-text("Simulate NOT OK result")').first()
-  if ((await okBtn.count()) === 0 || (await nokBtn.count()) === 0) { test.skip() }
+  await expect(okBtn, 'Simulate OK result button must be available').toBeVisible()
+  await expect(nokBtn, 'Simulate NOT OK result button must be available').toBeVisible()
 
   // 1 OK + 1 NOK = 50%
   await okBtn.click()
@@ -100,7 +101,7 @@ test('OkRate: clear counters resets display', async ({ connected: app }) => {
   await openOkRate(app)
 
   const clearBtn = app.page.locator('button:has-text("Clear counters")').first()
-  if ((await clearBtn.count()) === 0) { test.skip() }
+  await expect(clearBtn, 'Clear counters button must be available').toBeVisible()
 
   await clearBtn.click()
   await app.page.waitForTimeout(500)
