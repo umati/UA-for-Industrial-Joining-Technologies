@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 _ROOT = Path(__file__).parents[2]
 _SCRIPTS = _ROOT / "scripts"
@@ -14,6 +18,41 @@ _ci_summary: Any = importlib.import_module("make_ci_summary")
 _excel_report: Any = importlib.import_module("make_excel_report")
 _git_info: Any = importlib.import_module("helpers.git_info")
 _report_scoring: Any = importlib.import_module("helpers.report_scoring")
+ACTION_NEEDED, BLOCKED, NOT_SUPPORTED, WITH_NOTES = _report_scoring.KPI_LABELS
+
+KPI_PATTERN = re.compile(
+    rf"{re.escape(_report_scoring.KPI_ICONS[ACTION_NEEDED])}\s+(\d+)\s+"
+    rf"{re.escape(ACTION_NEEDED)}"
+    rf"{re.escape(_report_scoring.KPI_SEPARATOR)}"
+    rf"{re.escape(_report_scoring.KPI_ICONS[BLOCKED])}\s+(\d+)\s+"
+    rf"{re.escape(BLOCKED)}"
+    rf"{re.escape(_report_scoring.KPI_SEPARATOR)}"
+    rf"{re.escape(_report_scoring.KPI_ICONS[NOT_SUPPORTED])}\s+(\d+)\s+"
+    rf"{re.escape(NOT_SUPPORTED)}"
+    rf"{re.escape(_report_scoring.KPI_SEPARATOR)}"
+    rf"{re.escape(_report_scoring.KPI_ICONS[WITH_NOTES])}\s+(\d+)\s+"
+    rf"{re.escape(WITH_NOTES)}"
+)
+
+
+def _expected_kpi_counts(counts: Mapping[str, int]) -> dict[str, int]:
+    return {
+        label: int(counts.get(_report_scoring.status_count_key(label), counts.get(label, 0)) or 0)
+        for label in _report_scoring.KPI_LABELS
+    }
+
+
+def _label_counts(action_needed: int, blocked: int, not_supported: int, with_notes: int) -> dict[str, int]:
+    values = (action_needed, blocked, not_supported, with_notes)
+    return dict(zip(_report_scoring.KPI_LABELS, values, strict=True))
+
+
+def _assert_kpi_strip(rendered: str, counts: Mapping[str, int]) -> str:
+    match = KPI_PATTERN.search(rendered)
+    assert match is not None, "KPI strip missing or format drifted"
+    observed = {label: int(value) for label, value in zip(_report_scoring.KPI_LABELS, match.groups(), strict=True)}
+    assert observed == _expected_kpi_counts(counts)
+    return match.group(0)
 
 
 def _sample_payload() -> dict[str, Any]:
@@ -36,6 +75,11 @@ def _sample_payload() -> dict[str, Any]:
                 "test_count": 1,
                 "workbook_case_count": 2,
             },
+            "outside_profile_note": {
+                "not_supported": 1,
+                "test_count": 1,
+                "workbook_case_count": 1,
+            },
         },
         "tests": [
             {
@@ -43,6 +87,12 @@ def _sample_payload() -> dict[str, Any]:
                 "nodeid": "conformance/test_optional.py::test_optional_feature",
                 "outcome": "not_supported",
                 "reason": "Skipped: OptionalFeature: Not Supported — cannot run optional feature",
+            },
+            {
+                "cus": ["outside_profile_note"],
+                "nodeid": "conformance/test_optional.py::test_outside_profile_note",
+                "outcome": "not_supported",
+                "reason": "Skipped: OutsideProfileNote: Not Supported — outside active profile",
             },
             {
                 "cus": ["state_policy_note"],
@@ -228,15 +278,66 @@ def test_conformance_score_formula():
 def test_markdown_and_excel_share_report_scoring_helpers():
     assert _ci_summary._conformance_score is _report_scoring.conformance_score
     assert _excel_report._conformance_score is _report_scoring.conformance_score
-    assert _ci_summary._severity_for is _report_scoring.severity_for
-    assert _excel_report._severity_for is _report_scoring.severity_for
+    assert _ci_summary._status_for is _report_scoring.status_for
+    assert _excel_report._status_for is _report_scoring.status_for
     assert _ci_summary._delta_symbol is _report_scoring.delta_symbol
     assert _excel_report._delta_symbol is _report_scoring.delta_symbol
+
+
+def test_markdown_and_excel_use_same_kpi_formatter():
+    assert _ci_summary._format_kpi_strip is _report_scoring.format_kpi_strip
+    assert _excel_report._format_kpi_strip is _report_scoring.format_kpi_strip
+
+
+def test_report_scoring_public_maps_are_immutable():
+    with pytest.raises(TypeError):
+        cast_icons: Any = _report_scoring.KPI_ICONS
+        cast_icons[ACTION_NEEDED] = "x"
+
+
+def test_status_colors_cover_all_kpi_labels():
+    assert set(_report_scoring.STATUS_COLORS_EXCEL) == set(_report_scoring.KPI_LABELS)
+    for label in _report_scoring.KPI_LABELS:
+        assert _report_scoring.status_color_excel(label) == _report_scoring.STATUS_COLORS_EXCEL[label]
 
 
 def test_markdown_and_excel_share_git_info_helper():
     assert _ci_summary._short_git_sha is _git_info.short_git_sha
     assert _excel_report._short_git_sha is _git_info.short_git_sha
+
+
+def test_format_kpi_strip_round_trip():
+    cases = [
+        _label_counts(0, 0, 0, 0),
+        _label_counts(1, 2, 3, 4),
+        _label_counts(99, 0, 0, 0),
+        {"action_needed": 1, "blocked": 0, "not_supported": 2, "with_notes": 3},
+    ]
+
+    for counts in cases:
+        rendered = _report_scoring.format_kpi_strip(counts)
+        assert _assert_kpi_strip(rendered, counts) == rendered
+
+
+def test_format_status_count_and_label_use_shared_icons():
+    supported = _report_scoring.outcome_label("supported")
+
+    assert _report_scoring.format_status_count(ACTION_NEEDED, 7) == (
+        f"{_report_scoring.KPI_ICONS[ACTION_NEEDED]} 7 {ACTION_NEEDED}"
+    )
+    assert (
+        _report_scoring.format_status_label(ACTION_NEEDED)
+        == f"{_report_scoring.KPI_ICONS[ACTION_NEEDED]} {ACTION_NEEDED}"
+    )
+    assert _report_scoring.format_status_label(supported) == f"{_report_scoring.NON_KPI_ICONS[supported]} {supported}"
+
+
+def test_format_delta_summary_uses_shared_separator_and_distinct_icons():
+    rendered = _report_scoring.format_delta_summary({"new": 1, "resolved": 2, "regressed": 3})
+
+    assert _report_scoring.KPI_SEPARATOR in rendered
+    assert _report_scoring.DELTA_ICONS["new"] in rendered
+    assert _report_scoring.KPI_ICONS[ACTION_NEEDED] not in rendered
 
 
 def test_delta_symbol_marks_new_cus_only_with_prior_baseline():
@@ -248,14 +349,29 @@ def test_delta_symbol_marks_new_cus_only_with_prior_baseline():
     assert _ci_summary._delta_symbol("worse_cu", "blocked", {"cu_outcomes": {"worse_cu": "supported"}}) == "↓"
 
 
-def test_severity_mapping():
+def test_status_mapping():
     active = {"in_profile"}
 
-    assert _ci_summary._severity_for("cu", "action_needed", active) == ("Critical", "🔴")
-    assert _ci_summary._severity_for("cu", "blocked", active) == ("Major", "🟠")
-    assert _ci_summary._severity_for("in_profile", "not_supported", active) == ("Minor", "🟡")
-    assert _ci_summary._severity_for("outside_profile", "not_supported", active) == ("Info", "ℹ️")
-    assert _ci_summary._severity_for("cu", "partial", active) == ("Info", "ℹ️")
+    assert _ci_summary._status_for("cu", "action_needed", active) == (
+        ACTION_NEEDED,
+        _report_scoring.KPI_ICONS[ACTION_NEEDED],
+    )
+    assert _ci_summary._status_for("cu", "blocked", active) == (
+        BLOCKED,
+        _report_scoring.KPI_ICONS[BLOCKED],
+    )
+    assert _ci_summary._status_for("in_profile", "not_supported", active) == (
+        NOT_SUPPORTED,
+        _report_scoring.KPI_ICONS[NOT_SUPPORTED],
+    )
+    assert _ci_summary._status_for("outside_profile", "not_supported", active) == (
+        WITH_NOTES,
+        _report_scoring.KPI_ICONS[WITH_NOTES],
+    )
+    assert _ci_summary._status_for("cu", "partial", active) == (
+        WITH_NOTES,
+        _report_scoring.KPI_ICONS[WITH_NOTES],
+    )
 
 
 def test_ci_summary_renders_audience_sections(monkeypatch):
@@ -269,14 +385,19 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
     assert context["score"] == 90
     assert "### Δ Since Last Run" in rendered
     assert "_No baseline yet — this run becomes the baseline._" in rendered
-    assert "## What this server supports" in rendered
-    assert "## Top Findings" in rendered
+    assert "## What This Server Supports" in rendered
+    assert "## Action Items" in rendered
+    assert "## Capability Notes" in rendered
+    assert "_No action items — server validation passed cleanly._" in rendered
     assert "<summary><b>Coverage Overview</b></summary>" in rendered
     assert "<summary><b>Facet Coverage</b></summary>" in rendered
-    assert "<summary><b>Conformance Findings</b></summary>" in rendered
-    assert "<summary><b>Full CU coverage</b></summary>" in rendered
-    assert "<summary><b>Test environment</b></summary>" in rendered
-    assert "<summary><b>How to read this report</b></summary>" in rendered
+    assert "<details open>\n<summary><b>Show capability notes</b></summary>" in rendered
+    assert "<summary><b>Conformance Status</b></summary>" in rendered
+    assert "<summary><b>Full CU Coverage</b></summary>" in rendered
+    assert "<summary><b>Test Environment</b></summary>" in rendered
+    assert "<summary><b>How to Read This Report</b></summary>" in rendered
+    assert rendered.count("# IJT Conformance Test Report") == 0
+    assert "## Coverage Overview" not in rendered
     assert "Purpose" in rendered
     assert "Reference IJT facet" in rendered
     assert "Server Supported CUs" in rendered
@@ -289,26 +410,76 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
         "Run " + "Status",
         "Run " + "Overview",
         "Validation " + "Status",
+        "Severity",
+        "Top " + "Findings",
+        "Critical",
+        "Major",
+        "Minor",
+        "Info",
     ):
         assert legacy_term not in rendered
+    supported_label = _report_scoring.outcome_label("supported")
+    supported_status = _report_scoring.format_outcome_label("supported")
+    supported_with_notes_status = _report_scoring.format_outcome_label("partial")
+    not_supported_status = _report_scoring.format_outcome_label("not_supported")
+
     assert "Primary Reason" in rendered
     assert "OptionalFeature: Not Supported" in rendered
-    assert "🟡 Minor" in rendered
+    assert not_supported_status in rendered
+    assert _report_scoring.format_status_count(WITH_NOTES, context["findings_count"]["with_notes"]) in rendered
     assert (
         "| Full Conformance | Server capability profile | 1 | 3 | 2 | 66.7% | 100.0% | "
-        "2 Supported<br>0 With notes<br>1 Not supported<br>0 Blocked<br>0 Action needed | "
-        "🟩 Supported with notes |" in rendered
+        f"2 {supported_label}<br>0 {WITH_NOTES}<br>1 {NOT_SUPPORTED}<br>"
+        f"0 {BLOCKED}<br>0 {ACTION_NEEDED} | "
+        f"{supported_with_notes_status} |" in rendered
     )
     assert (
         "| IJT Joining System Base | Basic Facet, Basic Joining System Server Facet "
-        "| Yes | 🟢 Supported | 2 | 2 | 0 | 0 | 0 | 3 |"
+        f"| Yes | {supported_status} | 2 | 2 | 0 | 0 | 0 | 3 |"
     ) in rendered
-    assert "| IJT State Policy Note | Basic Facet | Yes | 🟢 Supported | 2 | 1 | 0 | 0 | 0 | 1 |" in rendered
-    assert "| IJT Optional Feature | Basic Facet | No | 🟡 Not Supported | 1 | 0 | 1 | 0 | 0 | 2 |" in rendered
+    assert f"| IJT State Policy Note | Basic Facet | Yes | {supported_status} | 2 | 1 | 0 | 0 | 0 | 1 |" in rendered
+    assert f"| IJT Optional Feature | Basic Facet | No | {not_supported_status} | 1 | 0 | 1 | 0 | 0 | 2 |" in rendered
     assert "Accepted Policy: ACCEPTED POLICY - Method: SelectJoiningProcess - state not ready" not in rendered
 
 
-def test_top_findings_sort_order(monkeypatch):
+def test_full_markdown_uses_layered_headings(monkeypatch):
+    _patch_ci_metadata(monkeypatch)
+    data = {
+        "passed": 5,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "xfailed": 0,
+        "total": 5,
+        "duration_s": 12,
+        "failures": [],
+        "skip_reasons": {},
+        "xfail_reasons": {},
+    }
+
+    rendered, _context = _ci_summary._render(
+        data,
+        "opc.tcp://localhost:40462",
+        "2026-05-10 15:46 UTC",
+        _sample_payload(),
+    )
+    lines = rendered.splitlines()
+
+    assert lines.count("# IJT Conformance Test Report") == 1
+    assert "## At a Glance" in lines
+    assert "## What This Server Supports" in lines
+    assert "## Action Items" in lines
+    assert "## Capability Notes" in lines
+    assert "CU Status" in rendered
+    assert _assert_kpi_strip(rendered, _context["findings_count"]) == _report_scoring.format_kpi_strip(
+        _context["findings_count"]
+    )
+    assert "<summary><b>Full CU Coverage</b></summary>" in rendered
+    assert "<summary><b>Test Environment</b></summary>" in rendered
+    assert "<summary><b>Raw Skip Diagnostics</b></summary>" not in rendered
+
+
+def test_review_items_sort_order(monkeypatch):
     _patch_ci_metadata(monkeypatch)
     payload = _sample_payload()
     payload["by_cu"]["joining_system_base"] = {"failed": 1, "test_count": 1}
@@ -316,7 +487,11 @@ def test_top_findings_sort_order(monkeypatch):
 
     _lines, context = _ci_summary._render_profile_facet_summary(payload, baseline=None)
 
-    assert [finding["severity"] for finding in context["findings"][:3]] == ["Critical", "Major", "Minor"]
+    assert [finding["status"] for finding in context["findings"][:3]] == [
+        ACTION_NEEDED,
+        BLOCKED,
+        NOT_SUPPORTED,
+    ]
 
 
 def test_delta_block_present_when_baseline_exists(monkeypatch):
@@ -350,7 +525,7 @@ def test_baseline_written_after_render():
         "score": 94,
         "validation_health_value": 100.0,
         "spec_coverage_value": 79.7,
-        "findings_count": {"critical": 0, "major": 0, "minor": 25, "info": 3},
+        "findings_count": {"action_needed": 0, "blocked": 0, "not_supported": 25, "with_notes": 3},
         "cu_outcomes": {"joining_system_base": "supported"},
     }
 
@@ -377,9 +552,26 @@ def test_excel_cover_sheet_exists_and_first():
 
     assert wb.sheetnames[0] == "Cover"
     assert wb["Cover"]["A1"].value == "PASSED - Score 90 / 100"
+    assert wb["Cover"]["A8"].value == "CU Status"
+    assert _assert_kpi_strip(
+        str(wb["Cover"]["B8"].value), context["findings_count"]
+    ) == _report_scoring.format_kpi_strip(context["findings_count"])
 
 
-def test_excel_cu_severity_and_delta_columns_present():
+def test_excel_cover_uses_kpi_separator():
+    profiles, facets, capabilities = _excel_metadata()
+    context = _excel_report._build_report_context(_sample_payload(), profiles, facets, capabilities, baseline=None)
+    wb = _excel_report.openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    _excel_report._build_cover(wb, [], "2026-05-10 15:46:00", "passed", context, None, facets)
+
+    rendered = str(wb["Cover"]["B8"].value)
+    assert _report_scoring.KPI_SEPARATOR in rendered
+    assert "/" not in rendered
+
+
+def test_excel_cu_status_and_delta_columns_present():
     profiles, facets, capabilities = _excel_metadata()
     payload = _sample_payload()
     baseline = {"cu_outcomes": {"optional_feature": "supported"}}
@@ -390,7 +582,8 @@ def test_excel_cu_severity_and_delta_columns_present():
     _excel_report._build_cu_coverage(wb, payload, facets, capabilities, context, baseline)
     ws = wb["CU Coverage"]
 
-    assert ws["A1"].value == "Severity"
+    assert ws["A1"].value == "Status"
     assert ws["B1"].value == "Δ"
-    assert ws["A4"].value == "🟡 Minor"
+    assert ws["A4"].value == _report_scoring.format_status_label(NOT_SUPPORTED)
+    assert ws["A4"].fill.fgColor.rgb == _report_scoring.STATUS_COLORS_EXCEL[NOT_SUPPORTED]
     assert ws["B4"].value == "↓"

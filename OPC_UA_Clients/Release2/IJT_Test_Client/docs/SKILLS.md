@@ -44,8 +44,8 @@ unit stage and is currently 95%.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
 - Default is `always` locally and in CI; the Excel post-step is non-fatal. When tests fail, the workbook is diagnostic and includes a red warning banner.
 - Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
-- Excel and GitHub Actions summaries include a Conformance Score, at-a-glance KPIs, delta from `test-results/report-baseline.json`, server support summary, top findings, coverage overview, facet coverage, and CU coverage tables when the live CU compliance report is present.
-- Report wording separates `Server capability profile`, `Reference IJT facet`, `Reference full CU set`, `Server Supported CUs`, `Server Support %`, `Supported CUs Validated %`, `Result`, `Severity`, and `Primary Reason` for public clarity.
+- Excel and GitHub Actions summaries include a Conformance Score, at-a-glance KPIs, delta from `test-results/report-baseline.json`, server support summary, Action Items, Capability Notes, coverage overview, facet coverage, and CU coverage tables when the live CU compliance report is present.
+- Report wording separates `Server capability profile`, `Reference IJT facet`, `Reference full CU set`, `Server Supported CUs`, `Server Support %`, `Supported CUs Validated %`, `Result`, `Status`, and `Primary Reason` for public clarity.
 - `report-baseline.json` is local/job-local in this slice; do not add GitHub Actions cache or cross-run baseline download without a separate security review.
 - Missing phase1 tools are auto-installed locally by default; CI keeps auto-install off by default for reproducibility.
 - Use `--no-auto-install-tools` to disable local auto-install, or `--auto-install-tools` to force-enable it.

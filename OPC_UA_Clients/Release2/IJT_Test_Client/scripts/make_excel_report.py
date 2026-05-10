@@ -85,7 +85,7 @@ _CU_STATUS_COLOUR = {
     "passed": _LIGHT_GREEN,
     "failed": _LIGHT_RED,
     "error": _LIGHT_RED,
-    "not_supported": _LIGHT_YELLOW,
+    "not_supported": _GRAY,
     "blocked": _LIGHT_ORANGE,
     "untested": _GRAY,
     "skipped": _LIGHT_YELLOW,
@@ -104,11 +104,14 @@ if str(_PROJECT_ROOT) not in sys.path:
 # Shared report logic lives in helpers/*.py.
 # Markdown and Excel generators must use the same helpers to stay in sync.
 from helpers.git_info import short_git_sha as _short_git_sha  # noqa: E402
-from helpers.report_scoring import (  # noqa: E402,I001
+from helpers.report_scoring import (
+    CAPABILITY_SUPPORT_ICONS as _CAPABILITY_SUPPORT_ICONS,
+)
+from helpers.report_scoring import (
     OUTCOME_RANK as _OUTCOME_RANK,
 )
 from helpers.report_scoring import (
-    SEVERITY_ORDER as _SEVERITY_ORDER,
+    STATUS_ORDER as _STATUS_ORDER,
 )
 from helpers.report_scoring import (
     conformance_score as _conformance_score,
@@ -117,13 +120,28 @@ from helpers.report_scoring import (
     delta_symbol as _delta_symbol,
 )
 from helpers.report_scoring import (
+    format_delta_summary as _format_delta_summary,
+)
+from helpers.report_scoring import (
+    format_kpi_strip as _format_kpi_strip,
+)
+from helpers.report_scoring import (
     format_pct as _fmt_pct,
+)
+from helpers.report_scoring import (
+    outcome_label as _outcome_label,
 )
 from helpers.report_scoring import (
     pct_value as _pct_value,
 )
 from helpers.report_scoring import (
-    severity_for as _severity_for,
+    status_color_excel as _status_color_excel,
+)
+from helpers.report_scoring import (
+    status_count_key as _status_count_key,
+)
+from helpers.report_scoring import (
+    status_for as _status_for,
 )
 
 # ── Data model ────────────────────────────────────────────────────────────────
@@ -473,15 +491,7 @@ def _cu_compliance_key(data: dict[str, Any]) -> str:
 
 
 def _cu_compliance_label(status: str) -> str:
-    labels = {
-        "supported": "Supported",
-        "partial": "Supported with Notes",
-        "not_supported": "Not Supported",
-        "blocked": "Blocked",
-        "action_needed": "Action Needed",
-        "untested": "Untested",
-    }
-    return labels.get(status, status.replace("_", " ").title() or "Unknown")
+    return _outcome_label(status)
 
 
 def _count_cu_outcomes(cu_keys: list[str], by_cu: dict[str, Any]) -> Counter[str]:
@@ -535,13 +545,13 @@ def _cu_note_summary(cu_key: str, tests_by_cu: dict[str, list[dict[str, Any]]]) 
     priority = [
         ("failed", "Failed"),
         ("error", "Error"),
-        ("blocked", "Blocked"),
-        ("not_supported", "Not Supported"),
+        ("blocked", _outcome_label("blocked")),
+        ("not_supported", _outcome_label("not_supported")),
         ("accepted_policy", "Accepted Policy"),
         ("environment", "Environment"),
         ("skipped", "Skipped"),
         ("xfailed", "Expected Failure"),
-        ("untested", "Untested"),
+        ("untested", _outcome_label("untested")),
     ]
     notes: list[str] = []
     for outcome, label in priority:
@@ -595,7 +605,7 @@ def _build_report_context(
         cu_outcomes[cu_key] = outcome
         if outcome not in _FINDING_OUTCOMES:
             continue
-        severity, severity_icon = _severity_for(cu_key, outcome, active_cus_set)
+        status, status_icon = _status_for(cu_key, outcome, active_cus_set)
         findings.append(
             {
                 "cu_key": cu_key,
@@ -604,12 +614,12 @@ def _build_report_context(
                 "outcome": outcome,
                 "result": _cu_compliance_label(outcome),
                 "reason": _cu_note_summary(cu_key, tests_by_cu),
-                "severity": severity,
-                "severity_icon": severity_icon,
+                "status": status,
+                "status_icon": status_icon,
                 "delta": _delta_symbol(cu_key, outcome, baseline),
             }
         )
-    findings.sort(key=lambda item: (_SEVERITY_ORDER.get(str(item["severity"]), 99), str(item["cu_key"])))
+    findings.sort(key=lambda item: (_STATUS_ORDER.get(str(item["status"]), 99), str(item["cu_key"])))
     return {
         "by_cu": by_cu,
         "supported": supported,
@@ -622,7 +632,7 @@ def _build_report_context(
         "validation_health_value": validation_health_value,
         "spec_coverage_value": spec_coverage_value,
         "findings": findings,
-        "findings_count": Counter(str(item["severity"]).lower() for item in findings),
+        "findings_count": Counter(_status_count_key(str(item["status"])) for item in findings),
         "cu_outcomes": cu_outcomes,
     }
 
@@ -669,11 +679,11 @@ def _support_rows(context: dict[str, Any], facets: dict[str, FacetInfo], limit: 
         counts = _count_cu_outcomes(facet.conformance_units, by_cu)
         server_supported_count = _server_profile_cu_count(facet.conformance_units, supported)
         if counts["action_needed"] or counts["blocked"] or server_supported_count == 0:
-            icon, rank, label = "❌", 0, "not supported by this server"
+            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["not_supported"], 0, "not supported by this server"
         elif counts["partial"] or counts["not_supported"] or server_supported_count != len(facet.conformance_units):
-            icon, rank, label = "⚠️", 1, "partially supported"
+            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["partial"], 1, "partially supported"
         else:
-            icon, rank, label = "✅", 2, "supported"
+            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["supported"], 2, "supported"
         name = facet.display_name.removeprefix("IJT ").removesuffix(" Server Facet")
         rows.append((rank, name, f"{icon} {label}. {facet.description}"))
     rows.sort(key=lambda item: (item[0], item[1]))
@@ -703,6 +713,10 @@ def _status_fill(status: str) -> PatternFill:
         "NO COMPLIANCE RESULT": _GRAY,
     }.get(status, _WHITE)
     return _fill(colour)
+
+
+def _review_status_fill(status: str) -> PatternFill:
+    return _fill(_status_color_excel(status))
 
 
 def _percentage_fill(value: str | float | None) -> PatternFill:
@@ -829,17 +843,16 @@ def _build_cover(
                 f"{validated} / {supported} server-supported CUs validated",
             ),
             (
-                "Findings",
-                f"{findings_count['critical']} Critical / {findings_count['major']} Major / "
-                f"{findings_count['minor']} Minor / {findings_count['info']} Info",
-                "Sorted by severity in Conformance Findings",
+                "CU Status",
+                _format_kpi_strip(findings_count),
+                "Action Items and Capability Notes",
             ),
         ]
         for offset, (metric, value, note) in enumerate(metrics, start=1):
             ws.cell(row=row + offset, column=1, value=metric).font = Font(bold=True)
             value_cell = ws.cell(row=row + offset, column=2, value=value)
             value_cell.font = Font(bold=True)
-            if metric != "Findings":
+            if metric != "CU Status":
                 value_cell.fill = _percentage_fill(
                     context["spec_coverage_value" if metric == "Spec Coverage" else "validation_health_value"]
                 )
@@ -859,7 +872,7 @@ def _build_cover(
                 "Spec Coverage",
                 f"{_fmt_pct(baseline.get('spec_coverage_pct'))} -> {_fmt_pct(context['spec_coverage_value'])}",
             ),
-            ("Findings", f"{delta['new']} new / {delta['resolved']} resolved / {delta['regressed']} regressed"),
+            ("Review Items", _format_delta_summary(delta)),
         ]
     else:
         rows = [("Baseline", "No baseline yet - this run becomes the baseline.")]
@@ -1041,7 +1054,7 @@ def _build_profile_coverage(
         "Start with the Server Capability Profile row; Reference IJT Facet and Reference Full CU Set rows are comparison views only, not extra pass/fail requirements. "
         "Server Supported CUs comes from the server capability file. Result and validated counts come from this test run. "
         "Supported CUs Validated % is the main health signal and is color-coded; Server Support % is informational and is not color-coded. "
-        "Raw skip reports remain diagnostic and may overlap with conformance findings."
+        "Raw skip reports remain diagnostic and may overlap with conformance status items."
     )
     ws["A2"].alignment = Alignment(wrap_text=True)
     if run_result == "failed":
@@ -1069,10 +1082,10 @@ def _build_profile_coverage(
         "Server Supported CUs",
         "Validated Supported",
         "Validated with Notes",
-        "Not Supported",
-        "Blocked",
-        "Action Needed",
-        "Untested",
+        _outcome_label("not_supported"),
+        _outcome_label("blocked"),
+        _outcome_label("action_needed"),
+        _outcome_label("untested"),
         "Server Support %",
         "Supported CUs Validated %",
         "Result",
@@ -1185,10 +1198,10 @@ def _build_facet_coverage(
         "Server Supported CUs",
         "Validated Supported",
         "Validated with Notes",
-        "Not Supported",
-        "Blocked",
-        "Action Needed",
-        "Untested",
+        _outcome_label("not_supported"),
+        _outcome_label("blocked"),
+        _outcome_label("action_needed"),
+        _outcome_label("untested"),
         "Server Support %",
         "Supported CUs Validated %",
         "Result",
@@ -1257,7 +1270,7 @@ def _build_cu_coverage(
     active_cus = set(context["active_cus"]) if context else set()
 
     headers = [
-        "Severity",
+        "Status",
         "Δ",
         "CU",
         "CU Key",
@@ -1266,8 +1279,8 @@ def _build_cu_coverage(
         "Result",
         "Tests",
         "Passed",
-        "Not Supported",
-        "Blocked",
+        _outcome_label("not_supported"),
+        _outcome_label("blocked"),
         "Failed/Error",
         "Workbook Cases",
         "Positive",
@@ -1276,7 +1289,7 @@ def _build_cu_coverage(
         "Notes",
         "Example Test",
     ]
-    widths = [14, 8, 34, 34, 44, 18, 16, 8, 8, 14, 9, 12, 14, 9, 9, 14, 80, 80]
+    widths = [18, 8, 34, 34, 44, 18, 16, 8, 8, 14, 9, 12, 14, 9, 9, 14, 80, 80]
     _apply_header(ws, 1, headers, widths)
 
     for row, cu_key in enumerate(ordered_keys, start=2):
@@ -1286,9 +1299,9 @@ def _build_cu_coverage(
         failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
         tests = data.get("tests") if isinstance(data.get("tests"), list) else []
         support = _in_server_profile(cu_key, supported)
-        severity, severity_icon = _severity_for(cu_key, compliance, active_cus)
+        status, status_icon = _status_for(cu_key, compliance, active_cus)
         values = [
-            f"{severity_icon} {severity}",
+            f"{status_icon} {status}",
             _delta_symbol(cu_key, compliance, baseline),
             _cu_display_name(cu_key),
             cu_key,
@@ -1310,18 +1323,11 @@ def _build_cu_coverage(
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            if col == 1 and severity:
+            if col == 1 and status:
                 cell.font = Font(bold=True)
-                if severity == "Critical":
-                    cell.fill = _fill(_LIGHT_RED)
-                elif severity == "Major":
-                    cell.fill = _fill(_LIGHT_ORANGE)
-                elif severity == "Minor":
-                    cell.fill = _fill(_LIGHT_YELLOW)
-                else:
-                    cell.fill = _fill(_GRAY)
+                cell.fill = _review_status_fill(status)
             if col == 6 and value == "No":
-                cell.fill = _fill(_LIGHT_YELLOW)
+                cell.fill = _fill(_GRAY)
             if col == 7:
                 cell.fill = _fill(_CU_STATUS_COLOUR.get(compliance, _WHITE))
                 cell.font = Font(bold=True)

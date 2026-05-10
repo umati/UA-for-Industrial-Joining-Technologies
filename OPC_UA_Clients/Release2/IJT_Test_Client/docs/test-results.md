@@ -178,8 +178,8 @@ The profile/facet/CU sheets are generated when
 compact **IJT Profile, Facet, and Conformance Unit Coverage** table to
 `summary.md` and the GitHub Actions step summary, so users can see the active
 server capability profile, Conformance Score, at-a-glance KPIs, delta from the
-previous local/job baseline, server support summary, top findings, facet coverage, conformance findings
-items, and a collapsible full CU coverage table without downloading the Excel
+previous local/job baseline, server support summary, Action Items, Capability Notes,
+facet coverage, conformance status items, and a collapsible full CU coverage table without downloading the Excel
 file first.
 `Server Supported CUs` is read from the server capability file (`n/a` when
 no capability file was loaded); `Result` and validated counts are calculated
@@ -189,12 +189,13 @@ capability set was validated by the run. Start with the `Server capability
 profile` row.
 `Reference IJT facet` and `Reference full CU set` rows are comparison views, not
 additional pass/fail requirements for this server.
-The `Primary Reason` / `Notes` fields explain why a CU appears in the findings
+The `Primary Reason` / `Notes` fields explain why a CU appears in the status
 table, such as a dependency on an optional method or a true runtime precondition
 that prevented coverage.
-`Severity` is computed from the result: Critical means action needed, Major
-means blocked, Minor means a server-supported CU is not supported, and Info
-means supported with notes or outside server support.
+`Status` is computed from the result: Action Needed means a failure or error,
+Blocked means a missing runtime precondition, Not Supported means a
+server-supported CU is not supported, and With Notes means supported with notes
+or outside server support.
 Profile and facet tables distinguish fully supported CUs from CUs supported
 with notes. "Supported with notes" means at least one test path passed and
 the remaining non-passing rows are accepted skips, Not Supported methods/CUs
@@ -203,7 +204,8 @@ are reported separately as action needed.
 Accepted policy and environment/tooling limitation skips remain visible in the
 raw skip reason summary as diagnostics, but they do not reduce CU compliance
 when the CU also has passing support coverage. In Excel, `Supported with Notes`
-uses a light-green fill so it is visually distinct from yellow `Not Supported`.
+uses a light-green fill and `Not Supported` uses neutral gray so capability
+gaps are not presented as warnings.
 
 ---
 
