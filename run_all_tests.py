@@ -940,20 +940,23 @@ def _check_action_versions() -> StepResult:
 
 def _parse_zizmor_output(stdout: str, returncode: int) -> StepResult:
     """Parse zizmor JSON stdout and return a StepResult. Pure function — no I/O or subprocess."""
-    if returncode not in (0, 13):  # 0=clean, 13=findings present (zizmor v1.x); 1=tool error
+    finding_exit_codes = {13, 14}
+    if not stdout.strip():
+        if returncode == 0 or returncode in finding_exit_codes:
+            return StepResult("GHA zizmor (security)", "PASS", "0 finding(s), none high/critical")
         return StepResult("GHA zizmor (security)", "SKIP", "zizmor error — skipping")
     try:
-        data = json.loads(stdout or "[]")
+        data = json.loads(stdout)
         if not isinstance(data, list):
             return StepResult(
                 "GHA zizmor (security)", "SKIP", "Could not parse output — zizmor version mismatch"
             )
         findings = data
-        high = [
-            f
-            for f in findings
-            if f.get("determinations", {}).get("severity") in ("High", "Critical")
-        ]
+        high = []
+        for finding in findings:
+            severity = str(finding.get("determinations", {}).get("severity", "")).lower()
+            if severity in ("high", "critical"):
+                high.append(finding)
         if high:
             return StepResult(
                 "GHA zizmor (security)", "FAIL", f"{len(high)} high/critical finding(s)"

@@ -130,7 +130,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
 
-      - name: Build Docker image (Linux native binary)
+      - name: Build Docker image (Linux native binary, no cache write)
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
+        with:
+          context: OPC_UA_Servers/Release2
+          tags: opcua-ijt-server:ci
+          load: true
+          cache-from: type=gha
+
+      - name: Build Docker image (Linux native binary, trusted cache write)
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
         with:
           context: OPC_UA_Servers/Release2
@@ -163,8 +173,6 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.14"
-          cache: pip
-          cache-dependency-path: OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Install smoke test dependencies
         run: |

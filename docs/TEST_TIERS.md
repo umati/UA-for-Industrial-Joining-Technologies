@@ -26,6 +26,12 @@ ESLint, mypy, Bandit, and audit commands inside the workflow. The runner writes
 the JUnit, coverage, JSON tool reports, and timing artifacts consumed by CI;
 the split gives Python and JavaScript independent wall-clock timing and failure
 isolation.
+The Web JavaScript lint gate also owns the connection-layer randomness guard:
+`Math.random()` is forbidden in `connection-manager.mjs` and future
+`connection/auth/**`, `connection/token/**`, and `connection/nonce/**` modules.
+Connection/session identifiers must use Web Crypto APIs such as
+`crypto.randomUUID()` or `crypto.getRandomValues()`. Existing non-security uses
+such as WebSocket retry jitter remain outside this guard.
 
 ### Jobs
 
@@ -56,6 +62,10 @@ both produce a non-failing report warning so this table stays current.
 
 Live, integration, Docker, and optional security checks.
 **Failures and skips are tracked but do not block merges.**
+The `server-smoke-docker` job may restore Docker layer cache for speed, but
+cache writes are limited to trusted `main` runs. The smoke-test Python
+dependencies intentionally do not use `actions/setup-python` pip caching in
+this artifact-producing job.
 
 ### Jobs
 
@@ -84,7 +94,7 @@ fails with `pytest.fail()` (loud, never silent). This applies to:
 | Console `TestMethods` × 7 | `xfail` | `ProductInstanceUri` is NULL on demo server — tool identity not configured. Uses `pytest.xfail()` so the test runs and is reported as expected-failure, not silently skipped. |
 | Test Client conformance (optional/supplementary result APIs) | presence or skip/fail-by-design checks | `GetResultIdListFiltered` is optional/profile-dependent and is checked by node presence/Executable; `ReleaseResultHandle`, `AcknowledgeResults`, and `RequestUnacknowledgedResults` may be absent or return Bad-status in the simulator profile |
 | Test Client asset sub-type folders (controllers, tools, etc.) | pass | All asset category folders are required in the current server configuration; tests assert presence and fail on missing nodes |
-| `zizmor` job | promoted to ci | SARIF upload to Code Scanning (Security → Code scanning alerts). Skipped on fork PRs. Now **blocking** in ci. |
+| `zizmor` job | promoted to ci | SARIF upload to Code Scanning (Security → Code scanning alerts). Skipped on fork PRs. The CI job runs with workflow-file changes, but Code Scanning alert merge-blocking still depends on repo branch-protection / Code Scanning check-failure settings. The local root runner parses current zizmor v1 finding exit codes (`13` and `14`) plus any parseable JSON findings output, and fails High/Critical findings instead of treating tool-version exit-code drift as a silent skip. |
 
 ---
 
@@ -320,11 +330,11 @@ Promote a test from extended to required when all of the following are true:
 
 ## Rationale
 
-Environment-dependent tests (live server, Docker, security tools) cannot be made
+Environment-dependent tests (live server and full Docker integration) cannot be made
 deterministic without heavyweight infrastructure that slows every PR.
 Separating them into an extended tier:
 
 1. Keeps fast CI **deterministic and contributor-friendly**
 2. Makes skips **visible and auditable** — not silently ignored
 3. Allows **gradual promotion** of extended tests to required as infrastructure matures
-4. Matches industry standard: smoke/unit = blocking; integration/e2e/security = non-blocking but tracked
+4. Matches industry standard: smoke/unit and fast security gates are blocking; live integration/e2e remains tracked outside the required tier

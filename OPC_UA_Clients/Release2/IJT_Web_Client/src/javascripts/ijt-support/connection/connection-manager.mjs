@@ -21,10 +21,7 @@ export const CONNECTION_STATES = Object.freeze({
 })
 
 function createSessionId () {
-  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID()
-  }
-  return `session-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return globalThis.crypto.randomUUID()
 }
 
 export class ConnectionManager extends ObservableManagerBase {

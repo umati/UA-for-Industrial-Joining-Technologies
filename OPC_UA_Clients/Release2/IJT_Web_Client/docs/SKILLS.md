@@ -154,7 +154,7 @@ Runner-managed and Dockerfile `npm install` / `npm ci` commands use `--no-audit 
 | `semgrep` | Static analysis + security rules |
 | `pyright` | Strict type checking (stricter than mypy) |
 | `detect-secrets` | Hardcoded secrets/tokens |
-| `eslint` | JS lint |
+| `eslint` | JS lint, including the scoped guard that forbids `Math.random()` in `connection-manager.mjs` and future auth/token/nonce modules |
 | `prettier` | JS formatting |
 | `npm audit` | CVE scan of JS dependencies |
 | `depcheck` | Unused JS dependencies |

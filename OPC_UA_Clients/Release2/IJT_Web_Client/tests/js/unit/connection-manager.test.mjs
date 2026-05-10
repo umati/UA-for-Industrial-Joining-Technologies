@@ -7,7 +7,7 @@
  * WebSocket / OPC UA stack is never instantiated.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ---------------------------------------------------------------------------
 // MockSocketHandler — must be hoisted so vi.mock() can reference it.
@@ -60,11 +60,19 @@ import { ConnectionManager, CONNECTION_STATES } from '../../../src/javascripts/i
 
 let manager
 let mockSocket
+let randomUUIDSpy
 
 beforeEach(() => {
   MockSocketHandler.instances = []
+  randomUUIDSpy = vi
+    .spyOn(globalThis.crypto, 'randomUUID')
+    .mockReturnValue('123e4567-e89b-42d3-a456-426614174000')
   manager = new ConnectionManager(null, 'opc.tcp://test:4840')
   mockSocket = MockSocketHandler.instances[0]
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 // ---------------------------------------------------------------------------
@@ -89,7 +97,9 @@ describe('ConnectionManager — constructor', () => {
   })
 
   it('creates a stable session id for endpoint readiness tracking', () => {
-    expect(manager.sessionId).toMatch(/^session-|^[0-9a-f-]{36}$/)
+    expect(randomUUIDSpy).toHaveBeenCalledOnce()
+    expect(manager.sessionId).toBe('123e4567-e89b-42d3-a456-426614174000')
+    expect(manager.sessionId).toMatch(/^[0-9a-f-]{36}$/i)
   })
 })
 

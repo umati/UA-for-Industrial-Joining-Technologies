@@ -230,6 +230,27 @@ def test_zizmor_rc13_high_finding_is_fail() -> None:
     assert result.detail == "1 high/critical finding(s)"
 
 
+def test_zizmor_rc14_medium_findings_is_pass() -> None:
+    result = _runner._parse_zizmor_output(
+        '[{"determinations":{"severity":"Medium"}}]',
+        14,
+    )
+    assert result.status == "PASS"
+    assert result.detail == "1 finding(s), none high/critical"
+
+
+def test_zizmor_rc14_high_finding_is_fail() -> None:
+    result = _runner._parse_zizmor_output('[{"determinations":{"severity":"High"}}]', 14)
+    assert result.status == "FAIL"
+    assert result.detail == "1 high/critical finding(s)"
+
+
+def test_zizmor_parseable_json_fails_on_high_regardless_of_rc() -> None:
+    result = _runner._parse_zizmor_output('[{"determinations":{"severity":"Critical"}}]', 1)
+    assert result.status == "FAIL"
+    assert result.detail == "1 high/critical finding(s)"
+
+
 def test_zizmor_rc1_tool_error_is_skip() -> None:
     result = _runner._parse_zizmor_output("", 1)
     assert result.status == "SKIP"
@@ -253,6 +274,39 @@ def test_zizmor_clean_run_is_zero_findings_pass() -> None:
     result = _runner._parse_zizmor_output("", 0)
     assert result.status == "PASS"
     assert result.detail == "0 finding(s), none high/critical"
+
+
+def test_connection_manager_session_id_uses_web_crypto_only() -> None:
+    root = Path(__file__).resolve().parents[1]
+    connection_manager_path = (
+        root
+        / "OPC_UA_Clients"
+        / "Release2"
+        / "IJT_Web_Client"
+        / "src"
+        / "javascripts"
+        / "ijt-support"
+        / "connection"
+        / "connection-manager.mjs"
+    )
+    connection_manager = connection_manager_path.read_text(encoding="utf-8")
+    create_session_id = connection_manager.split("function createSessionId ()", 1)[1].split(
+        "export class ConnectionManager",
+        1,
+    )[0]
+    eslint_config = (root / "OPC_UA_Clients/Release2/IJT_Web_Client/eslint.config.mjs").read_text(
+        encoding="utf-8"
+    )
+
+    assert "globalThis.crypto.randomUUID()" in create_session_id
+    assert "Math.random" not in create_session_id
+    assert "Date.now" not in create_session_id
+    assert "src/javascripts/ijt-support/connection/connection-manager.mjs" in eslint_config
+    assert "src/javascripts/ijt-support/connection/auth/**/*.mjs" in eslint_config
+    assert "src/javascripts/ijt-support/connection/token/**/*.mjs" in eslint_config
+    assert "src/javascripts/ijt-support/connection/nonce/**/*.mjs" in eslint_config
+    assert 'callee.object.name="Math"' in eslint_config
+    assert 'callee.property.name="random"' in eslint_config
 
 
 def test_wait_for_port_missing_ok_logs_non_error(caplog) -> None:

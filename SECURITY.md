@@ -45,6 +45,9 @@ We aim to acknowledge reports within **5 business days** and provide a fix or mi
   `bandit` (Python), `npm audit` (Node.js), and CodeQL static analysis (C#, Python, JavaScript)
   using the `security-extended` query suite (`.github/workflows/codeql.yml`).
 - GitHub Actions workflow files are audited by [zizmor](https://woodruffw.github.io/zizmor/)
-  on push/PR touching `.github/workflows/` and nightly — findings are uploaded as SARIF to
-  GitHub Code Scanning (Security → Code scanning alerts). The audit job never fails CI;
-  it is skipped on fork PRs where `security-events: write` is unavailable.
+  in the CI workflow when `.github/workflows/` changes, or on manual dispatch. Findings are
+  uploaded as SARIF to GitHub Code Scanning (Security → Code scanning alerts). High/Critical
+  findings fail the local root-runner gate; repository branch protection or Code Scanning
+  check-failure settings are required if new Code Scanning alerts should also block merges.
+  The GitHub Actions zizmor job is skipped on fork PRs where `security-events: write` is
+  unavailable.

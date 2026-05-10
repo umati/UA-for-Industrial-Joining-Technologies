@@ -360,11 +360,19 @@ UA-for-Industrial-Joining-Technologies/
 | `csharp-unit` | dotnet restore (locked mode) + build (`-warnaserror`) + xUnit unit tests (`Category!=Live`, `--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
 | `csharp-vuln` | NuGet vulnerability scan (`--vulnerable --include-transitive`); fails on known CVEs |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
+| `actionlint` | GitHub Actions syntax/static validation for workflow changes |
+| `zizmor` | GitHub Actions security audit with SARIF upload to Code Scanning; local root-runner parsing fails High/Critical findings from current zizmor v1 JSON output |
 | `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · coverage/threshold cells from each client gate · skip-budget and coverage-threshold warnings · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |
 
 Runtime: ~5–7 minutes. Python 3.14, Node.js 24, .NET 10 everywhere.
 Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `setup-dotnet@v5`, `upload-artifact@v7`, `download-artifact@v8`
 All jobs have explicit `timeout-minutes` (5–30 min) and `permissions: contents: read` (plus `checks: write` where dorny/test-reporter runs inline).
+Connection-layer Web Client JavaScript is linted with a scoped security guard:
+`Math.random()` is forbidden in `connection-manager.mjs` and future
+`connection/auth/**`, `connection/token/**`, and `connection/nonce/**` modules;
+connection/session identifiers use Web Crypto (`crypto.randomUUID()` /
+`crypto.getRandomValues()`) instead. Existing non-security uses such as
+WebSocket retry jitter stay allowed outside the guard.
 
 ### CodeQL (`codeql.yml`) — triggers on every push/PR to `main` + weekly
 Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries.
