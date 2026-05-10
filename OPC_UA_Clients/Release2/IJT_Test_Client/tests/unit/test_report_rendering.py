@@ -12,6 +12,7 @@ sys.path.insert(0, str(_SCRIPTS))
 
 _ci_summary: Any = importlib.import_module("make_ci_summary")
 _excel_report: Any = importlib.import_module("make_excel_report")
+_git_info: Any = importlib.import_module("helpers.git_info")
 _report_scoring: Any = importlib.import_module("helpers.report_scoring")
 
 
@@ -231,6 +232,11 @@ def test_markdown_and_excel_share_report_scoring_helpers():
     assert _excel_report._severity_for is _report_scoring.severity_for
     assert _ci_summary._delta_symbol is _report_scoring.delta_symbol
     assert _excel_report._delta_symbol is _report_scoring.delta_symbol
+
+
+def test_markdown_and_excel_share_git_info_helper():
+    assert _ci_summary._short_git_sha is _git_info.short_git_sha
+    assert _excel_report._short_git_sha is _git_info.short_git_sha
 
 
 def test_delta_symbol_marks_new_cus_only_with_prior_baseline():

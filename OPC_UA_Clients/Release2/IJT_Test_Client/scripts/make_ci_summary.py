@@ -42,15 +42,28 @@ _FINDING_OUTCOMES = {"partial", "not_supported", "blocked", "action_needed"}
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-# Score / severity / delta logic lives in helpers/report_scoring.py.
-# Markdown and Excel generators must use the same helper to stay in sync.
+# Shared report logic lives in helpers/*.py.
+# Markdown and Excel generators must use the same helpers to stay in sync.
+from helpers.git_info import short_git_sha as _short_git_sha  # noqa: E402
 from helpers.report_scoring import (  # noqa: E402,I001
     OUTCOME_RANK as _OUTCOME_RANK,
+)
+from helpers.report_scoring import (
     SEVERITY_ORDER as _SEVERITY_ORDER,
+)
+from helpers.report_scoring import (
     conformance_score as _conformance_score,
+)
+from helpers.report_scoring import (
     delta_symbol as _delta_symbol,
+)
+from helpers.report_scoring import (
     format_pct as _fmt_pct,
+)
+from helpers.report_scoring import (
     pct_value as _pct_value,
+)
+from helpers.report_scoring import (
     severity_for as _severity_for,
 )
 
@@ -272,37 +285,6 @@ def _supported_cus_validated_pct_value(
     if not isinstance(server_supported_count, int) or not isinstance(validated_count, int):
         return None
     return _pct_value(validated_count, server_supported_count)
-
-
-def _short_git_sha() -> str:
-    sha = os.environ.get("GITHUB_SHA")
-    if sha:
-        return sha[:7]
-    repo_root = _PROJECT_ROOT.parents[2]
-    git_path = repo_root / ".git"
-    try:
-        if git_path.is_file():
-            gitdir_line = git_path.read_text(encoding="utf-8").strip()
-            gitdir = gitdir_line.removeprefix("gitdir:").strip()
-            git_path = Path(gitdir) if Path(gitdir).is_absolute() else (repo_root / gitdir).resolve()
-        head = (git_path / "HEAD").read_text(encoding="utf-8").strip()
-        if head.startswith("ref: "):
-            ref_name = head.removeprefix("ref: ").strip()
-            ref_path = git_path / ref_name
-            if ref_path.exists():
-                head = ref_path.read_text(encoding="utf-8").strip()
-            else:
-                packed_refs = git_path / "packed-refs"
-                for line in packed_refs.read_text(encoding="utf-8").splitlines():
-                    if not line or line.startswith("#") or line.startswith("^"):
-                        continue
-                    ref_sha, _, ref = line.partition(" ")
-                    if ref == ref_name:
-                        head = ref_sha
-                        break
-    except OSError:
-        return "unknown"
-    return head[:7] if re.fullmatch(r"[0-9a-fA-F]{7,40}", head) else "unknown"
 
 
 def _run_logs_url() -> str:
@@ -620,7 +602,7 @@ def _build_report_context(cu_payload: dict[str, Any] | None, baseline: dict[str,
 def _baseline_payload(context: dict[str, Any], run_ts_iso: str) -> dict[str, Any]:
     return {
         "run_ts": run_ts_iso,
-        "git_sha": _short_git_sha(),
+        "git_sha": _short_git_sha(_PROJECT_ROOT),
         "score": context["score"],
         "validation_health_pct": context["validation_health_value"],
         "spec_coverage_pct": context["spec_coverage_value"],
@@ -737,7 +719,7 @@ def _render_top_findings(context: dict[str, Any], limit: int = 10) -> list[str]:
 
 def _render_test_environment() -> list[str]:
     lines = ["| Item | Value |", "|---|---|"]
-    lines.append(f"| Test Client commit | `{_short_git_sha()}` |")
+    lines.append(f"| Test Client commit | `{_short_git_sha(_PROJECT_ROOT)}` |")
     lines.append(f"| Python | {platform.python_version()} |")
     lines.append(f"| asyncua | {_package_version('asyncua')} |")
     lines.append(f"| Host OS | {_md_cell(platform.platform())} |")
@@ -965,7 +947,7 @@ def _render(
     lines.append(f"| **Server** | {_md_cell(server_name)} (`{server_url}`) |")
     lines.append(f"| **Capability profile** | {_md_cell(active_label)} |")
     lines.append(f"| **Run** | {run_ts} · Duration {mins}m {secs}s |")
-    lines.append(f"| **Build** | commit `{_short_git_sha()}` · run logs: {_md_cell(_run_logs_url())} |")
+    lines.append(f"| **Build** | commit `{_short_git_sha(_PROJECT_ROOT)}` · run logs: {_md_cell(_run_logs_url())} |")
     lines.append("")
 
     if context:
