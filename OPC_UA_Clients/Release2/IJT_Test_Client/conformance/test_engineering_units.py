@@ -269,8 +269,8 @@ async def test_engineering_units_identifier_is_a_positive_integer(subscription_c
 
     if checked == 0:
         pytest.skip(
-            "CU.ENGINEERING_UNITS declared but EU field absent in ResultValues — "
-            "server declared CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
+            "CU.ENGINEERING_UNITS is server-supported but EU field is absent in ResultValues — "
+            "server supports CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
             "verify server populates EU on result values"
         )
 
@@ -292,8 +292,8 @@ async def test_all_result_value_eu_identifiers_pass_result_value_validator(
     values_with_eu = _values_with_eu(all_values)
     if not values_with_eu:
         pytest.skip(
-            "CU.ENGINEERING_UNITS declared but EU field absent in ResultValues — "
-            "server declared CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
+            "CU.ENGINEERING_UNITS is server-supported but EU field is absent in ResultValues — "
+            "server supports CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
             "verify server populates EU on result values"
         )
 
@@ -611,8 +611,8 @@ async def test_result_values_with_absent_eu_information_are_non_conformant(
 
     if not values_with_eu:
         pytest.skip(
-            "CU.ENGINEERING_UNITS declared but EU field absent in ResultValues — "
-            "server declared CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
+            "CU.ENGINEERING_UNITS is server-supported but EU field is absent in ResultValues — "
+            "server supports CU.ENGINEERING_UNITS but no ResultValues carry an EngineeringUnits field; "
             "negative check not applicable"
         )
 

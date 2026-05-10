@@ -10,7 +10,7 @@ Covered operations
 Connection    : connect / disconnect / browse root
 Subscriptions : subscribe_to_events, cleanup releases subscriptions
 Methods       : enable_asset (enable + disable), select_joint, start_selected_joining
-Joint workflow: SelectJoint(Joint_1/2) → StartSelectedJoining → status verified
+Joint workflow: SelectJoint(discovered JointId) → StartSelectedJoining → status verified
 
 Run all live tests:
     pytest tests/live/ -v -m live
@@ -29,8 +29,10 @@ from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
+from asyncua import ua
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from utils import read_tool_identifier  # noqa: E402
 
 _SERVER_URL = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
 
@@ -38,6 +40,7 @@ _SERVER_URL = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
 _ASSET_OBJECT = "ns=1;s=TighteningSystem/AssetManagement/MethodSet"
 _ASSET_ENABLE = "ns=1;s=TighteningSystem/AssetManagement/MethodSet/EnableAsset"
 _JOINT_OBJECT = "ns=1;s=TighteningSystem/JointManagement"
+_JOINT_GET_LIST = "ns=1;s=TighteningSystem/JointManagement/GetJointList"
 _JOINT_SELECT = "ns=1;s=TighteningSystem/JointManagement/SelectJoint"
 _JP_OBJECT = "ns=1;s=TighteningSystem/JoiningProcessManagement"
 _JP_START = "ns=1;s=TighteningSystem/JoiningProcessManagement/StartSelectedJoining"
@@ -46,6 +49,53 @@ _JP_START = "ns=1;s=TighteningSystem/JoiningProcessManagement/StartSelectedJoini
 # ---------------------------------------------------------------------------
 # Module-scoped fixture — single connection for all method tests
 # ---------------------------------------------------------------------------
+
+
+def _method_items(output: list) -> list:
+    if output and isinstance(output[0], list):
+        return output[0]
+    return output or []
+
+
+def _joint_id_from_entry(entry) -> str:
+    entry = getattr(entry, "Value", entry)
+    meta = getattr(entry, "JointMetaData", None)
+    for source in (entry, meta):
+        if source is None:
+            continue
+        value = getattr(source, "JointId", None) or getattr(source, "Id", None)
+        if value:
+            return str(value)
+    return entry if isinstance(entry, str) else ""
+
+
+def _fail_missing_tool_identity() -> None:
+    pytest.fail("ProductInstanceUri must be configured on this server for Console Client live method tests")
+
+
+async def _joint_ids(connected_client) -> list[str]:
+    pi = await read_tool_identifier(connected_client.client)
+    if not pi:
+        _fail_missing_tool_identity()
+
+    output = await connected_client.client.get_node(_JOINT_OBJECT).call_method(
+        connected_client.client.get_node(_JOINT_GET_LIST),
+        ua.Variant(str(pi), ua.VariantType.String),
+    )
+    ids = []
+    for joint in _method_items(output):
+        joint_id = _joint_id_from_entry(joint).strip()
+        if joint_id and joint_id not in ids:
+            ids.append(joint_id)
+    if not ids:
+        pytest.fail("GetJointList must return at least one usable JointId for Console Client joint workflow tests")
+    return ids
+
+
+async def _first_two_joint_ids(connected_client) -> tuple[str, str]:
+    ids = await _joint_ids(connected_client)
+    second = ids[1] if len(ids) > 1 else ids[0]
+    return ids[0], second
 
 
 @pytest_asyncio.fixture(scope="module")
@@ -182,7 +232,7 @@ class TestMethods:
             enable=True,
         )
         if result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in result, f"Result must contain 'status' key, got: {result}"
 
     @pytest.mark.asyncio(loop_scope="module")
@@ -194,7 +244,7 @@ class TestMethods:
             enable=False,
         )
         if result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in result, f"Result must contain 'status' key, got: {result}"
 
     @pytest.mark.asyncio(loop_scope="module")
@@ -204,43 +254,44 @@ class TestMethods:
             object_nodeid=_ASSET_OBJECT, method_nodeid=_ASSET_ENABLE, enable=False
         )
         if disable_result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         enable_result = await connected_client.methods.enable_asset(
             object_nodeid=_ASSET_OBJECT, method_nodeid=_ASSET_ENABLE, enable=True
         )
         if enable_result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in enable_result
 
     @pytest.mark.asyncio(loop_scope="module")
     async def test_select_joint_returns_status(self, connected_client):
         """SelectJoint must return a dict with a status code (any code is acceptable).
 
-        The server returns MethodStatusCode=2 (URI_NOT_FOUND) if the joint ID is
-        unknown — that is a valid server response, not a client error.  The important
-        assertion is that the method call completes without raising an exception.
+        The JointId is discovered from GetJointList instead of assuming the
+        simulator's default joint naming exists on every IJT server.
         """
+        joint_id = (await _joint_ids(connected_client))[0]
         result = await connected_client.methods.select_joint(
             object_nodeid=_JOINT_OBJECT,
             method_nodeid=_JOINT_SELECT,
-            joint_id="Joint_1",  # common simulator default; may return status 2 if not found
+            joint_id=joint_id,
             joint_origin_id="",
         )
         if result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in result, f"Result must have 'status' key, got: {result}"
 
     @pytest.mark.asyncio(loop_scope="module")
     async def test_select_joint_empty_origin_id(self, connected_client):
         """SelectJoint with an explicit empty origin ID must not raise."""
+        joint_id = (await _joint_ids(connected_client))[0]
         result = await connected_client.methods.select_joint(
             object_nodeid=_JOINT_OBJECT,
             method_nodeid=_JOINT_SELECT,
-            joint_id="Joint_1",
+            joint_id=joint_id,
             joint_origin_id=None,  # None → "" inside method_caller
         )
         if result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
 
     @pytest.mark.asyncio(loop_scope="module")
     async def test_start_selected_joining_deselect_true(self, connected_client):
@@ -251,7 +302,7 @@ class TestMethods:
             deselect_after_joining=True,
         )
         if result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in result, f"Result must contain 'status' key, got: {result}"
 
     @pytest.mark.asyncio(loop_scope="module")
@@ -263,17 +314,13 @@ class TestMethods:
             deselect_after_joining=False,
         )
         if result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in result
 
     @pytest.mark.asyncio(loop_scope="module")
-    async def test_select_joint_2_returns_status(self, connected_client):
-        """SelectJoint("Joint_2") must return a dict with a status code.
-
-        MethodStatusCode 2 (URI_NOT_FOUND) or 5 (INVALID_INPUT) are valid
-        server responses if "Joint_2" is not configured on this simulator instance.
-        """
-        joint_2 = os.environ.get("REGRESSION_JOINT_2", "Joint_2")
+    async def test_select_secondary_discovered_joint_returns_status(self, connected_client):
+        """SelectJoint with the second discovered JointId, or first if only one exists, must return status."""
+        _joint_1, joint_2 = await _first_two_joint_ids(connected_client)
         result = await connected_client.methods.select_joint(
             object_nodeid=_JOINT_OBJECT,
             method_nodeid=_JOINT_SELECT,
@@ -281,17 +328,16 @@ class TestMethods:
             joint_origin_id="",
         )
         if result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in result, f"Result must have 'status' key, got: {result}"
 
     @pytest.mark.asyncio(loop_scope="module")
-    async def test_select_joint_with_env_ids_joint_1_then_joint_2(self, connected_client):
-        """SelectJoint called twice — first Joint_1 then Joint_2 — must both return status.
+    async def test_select_first_two_discovered_joints(self, connected_client):
+        """SelectJoint called twice with discovered JointIds must return status both times.
 
         Exercises switching between joints as the user would on the Joint Demo page.
         """
-        joint_1 = os.environ.get("REGRESSION_JOINT_1", "Joint_1")
-        joint_2 = os.environ.get("REGRESSION_JOINT_2", "Joint_2")
+        joint_1, joint_2 = await _first_two_joint_ids(connected_client)
 
         r1 = await connected_client.methods.select_joint(
             object_nodeid=_JOINT_OBJECT,
@@ -300,8 +346,8 @@ class TestMethods:
             joint_origin_id="",
         )
         if r1 is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
-        assert "status" in r1, f"SelectJoint(Joint_1) must return status, got: {r1}"
+            _fail_missing_tool_identity()
+        assert "status" in r1, f"SelectJoint({joint_1!r}) must return status, got: {r1}"
 
         r2 = await connected_client.methods.select_joint(
             object_nodeid=_JOINT_OBJECT,
@@ -310,8 +356,8 @@ class TestMethods:
             joint_origin_id="",
         )
         if r2 is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
-        assert "status" in r2, f"SelectJoint(Joint_2) must return status, got: {r2}"
+            _fail_missing_tool_identity()
+        assert "status" in r2, f"SelectJoint({joint_2!r}) must return status, got: {r2}"
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +365,7 @@ class TestMethods:
 #
 # Tests the complete Joint Demo Page workflow through the Console Client's own
 # OPCUAMethodCaller — the same path the user exercises from the terminal.
-# Both joints are tested in separate test methods so failures are isolated.
+# Discovered joints are tested in separate test methods so failures are isolated.
 # ---------------------------------------------------------------------------
 
 
@@ -336,12 +382,12 @@ class TestJointWorkflow:
     """
 
     @pytest.mark.asyncio(loop_scope="module")
-    async def test_joint_1_select_then_start_returns_status(self, connected_client):
-        """SelectJoint(Joint_1) → StartSelectedJoining must both return a 'status' key.
+    async def test_primary_joint_select_then_start_returns_status(self, connected_client):
+        """SelectJoint(primary discovered JointId) → StartSelectedJoining must both return a 'status' key.
 
-        This mirrors the Joint Demo Page interaction for Joint_1.
+        This mirrors the Joint Demo Page interaction for the first server joint.
         """
-        joint_1 = os.environ.get("REGRESSION_JOINT_1", "Joint_1")
+        joint_1, _ = await _first_two_joint_ids(connected_client)
 
         select_result = await connected_client.methods.select_joint(
             object_nodeid=_JOINT_OBJECT,
@@ -350,7 +396,7 @@ class TestJointWorkflow:
             joint_origin_id="",
         )
         if select_result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in select_result, f"SelectJoint must return status, got: {select_result}"
 
         start_result = await connected_client.methods.start_selected_joining(
@@ -359,16 +405,17 @@ class TestJointWorkflow:
             deselect_after_joining=True,
         )
         if start_result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in start_result, f"StartSelectedJoining must return status, got: {start_result}"
 
     @pytest.mark.asyncio(loop_scope="module")
-    async def test_joint_2_select_then_start_returns_status(self, connected_client):
-        """SelectJoint(Joint_2) → StartSelectedJoining must both return a 'status' key.
+    async def test_secondary_joint_select_then_start_returns_status(self, connected_client):
+        """SelectJoint(second discovered JointId) → StartSelectedJoining must both return a 'status' key.
 
-        This mirrors the Joint Demo Page interaction for Joint_2.
+        This mirrors the Joint Demo Page interaction for the second server joint,
+        falling back to the first when the server exposes only one joint.
         """
-        joint_2 = os.environ.get("REGRESSION_JOINT_2", "Joint_2")
+        _joint_1, joint_2 = await _first_two_joint_ids(connected_client)
 
         select_result = await connected_client.methods.select_joint(
             object_nodeid=_JOINT_OBJECT,
@@ -377,8 +424,8 @@ class TestJointWorkflow:
             joint_origin_id="",
         )
         if select_result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
-        assert "status" in select_result, f"SelectJoint(Joint_2) must return status, got: {select_result}"
+            _fail_missing_tool_identity()
+        assert "status" in select_result, f"SelectJoint({joint_2!r}) must return status, got: {select_result}"
 
         start_result = await connected_client.methods.start_selected_joining(
             object_nodeid=_JP_OBJECT,
@@ -386,21 +433,20 @@ class TestJointWorkflow:
             deselect_after_joining=True,
         )
         if start_result is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in start_result, f"StartSelectedJoining must return status, got: {start_result}"
 
     @pytest.mark.asyncio(loop_scope="module")
-    async def test_sequential_joint_1_then_joint_2_full_workflow(self, connected_client):
-        """Run Joint_1 workflow then Joint_2 workflow in sequence — all calls must return status.
+    async def test_sequential_discovered_joint_workflow(self, connected_client):
+        """Run primary then secondary discovered joint workflow — all calls must return status.
 
         Exercises joint-switching as a user would: select first joint, run tightening,
         then switch to the second joint and run again.  Tests that the Console Client
         method caller handles the switch without state contamination.
         """
-        joint_1 = os.environ.get("REGRESSION_JOINT_1", "Joint_1")
-        joint_2 = os.environ.get("REGRESSION_JOINT_2", "Joint_2")
+        joint_1, joint_2 = await _first_two_joint_ids(connected_client)
 
-        # --- Joint_1 cycle ---
+        # --- Primary joint cycle ---
         r1_select = await connected_client.methods.select_joint(
             object_nodeid=_JOINT_OBJECT,
             method_nodeid=_JOINT_SELECT,
@@ -408,7 +454,7 @@ class TestJointWorkflow:
             joint_origin_id="",
         )
         if r1_select is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in r1_select
 
         r1_start = await connected_client.methods.start_selected_joining(
@@ -417,13 +463,13 @@ class TestJointWorkflow:
             deselect_after_joining=True,
         )
         if r1_start is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in r1_start
 
         # Brief pause to let the server finish the previous tightening cycle.
         await asyncio.sleep(0.5)
 
-        # --- Joint_2 cycle ---
+        # --- Secondary joint cycle ---
         r2_select = await connected_client.methods.select_joint(
             object_nodeid=_JOINT_OBJECT,
             method_nodeid=_JOINT_SELECT,
@@ -431,7 +477,7 @@ class TestJointWorkflow:
             joint_origin_id="",
         )
         if r2_select is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in r2_select
 
         r2_start = await connected_client.methods.start_selected_joining(
@@ -440,5 +486,5 @@ class TestJointWorkflow:
             deselect_after_joining=True,
         )
         if r2_start is None:
-            pytest.xfail("ProductInstanceUri is NULL on this server — tool identity not configured")
+            _fail_missing_tool_identity()
         assert "status" in r2_start

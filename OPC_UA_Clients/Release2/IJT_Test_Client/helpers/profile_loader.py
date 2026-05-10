@@ -128,7 +128,7 @@ def load_supported_cus(
             logger.warning("Unknown facet '%s' in profile '%s'", facet_name, active_profile)
         supported_cu_keys.update(keys)
 
-    # Add any explicitly declared extra facets
+    # Add any extra facets listed by the server capability file.
     for facet_name in caps.get("supported_facets", []):
         keys = all_facets.get(facet_name, [])
         if not keys and facet_name not in all_facets:
@@ -151,7 +151,7 @@ def load_supported_cus(
             )
 
     logger.info(
-        "Profile '%s': %d conformance units declared supported",
+        "Profile '%s': %d conformance units listed as supported",
         active_profile,
         len(supported_cu_keys),
     )

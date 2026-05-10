@@ -217,13 +217,14 @@ sim_node = client.get_node('ns=1;s=TighteningSystem/Simulations/SimulateResults'
 
 ## Joint Management Rules
 
-- **Never hardcode `"joint1"`** — the real server joint ID is `"Joint_1"` (capital J, underscore).
+- **Never hardcode joint IDs in live tests** — `Joint_1` / `Joint_2` are simulator defaults only.
+- **Never hardcode the test tool path as the primary ProductInstanceUri source** — browse `AssetManagement/Assets/Tools/*/Identification/ProductInstanceUri` first; simulator string paths are fallback only.
 - **Always call `GetJointList(ProductInstanceUri)` first** to get actual joint IDs from the server.
 - Joint Demo treats bundled sample `ProductInstanceUri` values as display fallback only; `SelectJoint` and `StartSelectedJoining` require a selected server row, an explicit non-sample Settings value, or a server-detected URI before sending a method call.
+- Joint Demo prefers server-discovered `GetJointList` IDs for its two buttons and falls back to Settings only when discovery is unavailable.
 - Extract `JointId` from returned objects: `getattr(joint, "JointId", None) or getattr(joint, "Id", None)`.
 - `GetJoint(ProductInstanceUri, JointId)` returns Uncertain/error for non-existent IDs (acceptable — just catch).
-- `SelectJoint` joint ID configurable via `REGRESSION_JOINT_1` / `REGRESSION_JOINT_2` env vars; defaults: `"Joint_1"`, `"Joint_2"`.
-- IJT Console Client: pass `--joint-id Joint_1` (not `joint1`) when calling `select_joint`.
+- IJT Console Client live tests also discover IDs via `GetJointList`; manual CLI calls may still pass `--joint-id` explicitly.
 
 ---
 

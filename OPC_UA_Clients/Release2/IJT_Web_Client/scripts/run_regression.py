@@ -55,13 +55,15 @@ CANONICAL_METHOD_ALIASES: dict[str, list[str]] = {
         "SimulateBatchOrSyncResult",
     ],
     "SimulateEvents": ["SimualteEvents", "SimulateEvents"],
+    "GetJointList": ["GetJointList"],
     "SelectJoint": ["SelectJoint"],
     "StartSelectedJoining": ["StartSelectedJoining"],
 }
 
-DEFAULT_PRODUCT_ID = os.getenv("REGRESSION_PRODUCT_ID", "www.atlascopco.com/CABLE-B0000000-")
-DEFAULT_JOINT_1 = os.getenv("REGRESSION_JOINT_1", "Joint_1")
-DEFAULT_JOINT_2 = os.getenv("REGRESSION_JOINT_2", "Joint_2")
+PRODUCT_ID_OVERRIDE = os.getenv("REGRESSION_PRODUCT_ID")
+DEFAULT_PRODUCT_ID = PRODUCT_ID_OVERRIDE or "www.atlascopco.com/CABLE-B0000000-"
+JOINT_1_OVERRIDE = os.getenv("REGRESSION_JOINT_1")
+JOINT_2_OVERRIDE = os.getenv("REGRESSION_JOINT_2")
 
 
 def nodeid_to_payload(nodeid: ua.NodeId) -> dict[str, Any]:
@@ -100,6 +102,13 @@ def _target_method_names() -> set[str]:
 
 def _build_method_arguments(method_name: str, default_arguments: list[dict[str, Any]]) -> list[dict[str, Any]]:
     # Joint demo flow methods need explicit argument payloads.
+    if method_name == "GetJointList":
+        return [
+            {
+                "value": DEFAULT_PRODUCT_ID,
+                "dataType": 12,  # String NodeId fallback used by current backend mapper
+            },
+        ]
     if method_name == "SelectJoint":
         return [
             {
@@ -107,7 +116,7 @@ def _build_method_arguments(method_name: str, default_arguments: list[dict[str, 
                 "dataType": 12,  # String NodeId fallback used by current backend mapper
             },
             {
-                "value": DEFAULT_JOINT_1,
+                "value": JOINT_1_OVERRIDE or "",
                 "dataType": 31918,  # TrimmedString
             },
             {
@@ -136,6 +145,44 @@ def _pick_method_for_alias(methods_by_name: dict[str, MethodSpec], canonical_nam
         if alias in methods_by_name:
             return methods_by_name[alias]
     return None
+
+
+def _joint_id_from_entry(entry: Any) -> str:
+    value = entry.get("Value", entry) if isinstance(entry, dict) else entry
+    sources = [value]
+    if isinstance(value, dict):
+        sources.append(value.get("JointMetaData"))
+    for source in sources:
+        if isinstance(source, dict):
+            joint_id = source.get("JointId") or source.get("Id")
+            if joint_id:
+                return str(joint_id).strip()
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _extract_joint_ids(output: Any) -> list[str]:
+    first = output[0] if isinstance(output, list) and output and isinstance(output[0], list) else output
+    entries = first if isinstance(first, list) else [first]
+    ids: list[str] = []
+    for entry in entries:
+        joint_id = _joint_id_from_entry(entry)
+        if joint_id and joint_id not in ids:
+            ids.append(joint_id)
+    return ids
+
+
+def _extract_product_instance_uri(response: dict[str, Any]) -> str:
+    data = response.get("data")
+    tools = data.get("tools") if isinstance(data, dict) else None
+    if not isinstance(tools, list):
+        return ""
+    for tool in tools:
+        if not isinstance(tool, dict):
+            continue
+        value = str(tool.get("productInstanceUri") or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _env_int(name: str, default: int) -> int:
@@ -462,6 +509,13 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
                 }
             )
 
+        def with_argument_values(arguments: list[dict[str, Any]], values: dict[int, Any]) -> list[dict[str, Any]]:
+            updated = [dict(arg) for arg in arguments]
+            for index, value in values.items():
+                if index < len(updated):
+                    updated[index]["value"] = value
+            return updated
+
         rsp = await send_recv("connect to")
         report["checks"].append({"connect": "exception" not in rsp.get("data", {})})
 
@@ -474,28 +528,65 @@ async def run_regression(opc_endpoint: str, ws_url: str) -> dict[str, Any]:
         rsp = await send_recv("subscribe")
         report["checks"].append({"subscribe": "exception" not in rsp.get("data", {})})
 
+        rsp = await send_recv("read product instance uri")
+        discovered_product_id = _extract_product_instance_uri(rsp)
+        active_product_id = PRODUCT_ID_OVERRIDE or discovered_product_id or DEFAULT_PRODUCT_ID
+        report["discovered_product_instance_uri"] = discovered_product_id
+        report["active_product_instance_uri"] = active_product_id
+
         # Method flow:
         # 1) Simulation methods
-        # 2) Joint Demo actions: Select joint 1 -> Simulate tightening -> Select joint 2 -> Simulate tightening
+        # 2) Joint Demo actions using server-discovered JointIds from GetJointList.
         await call_and_record("SimulateSingleResult")
         await call_and_record("SimulateJobResult")
         await call_and_record("Simulate_Batch_or_SYNC_Result")
         await call_and_record("SimulateEvents")
 
+        discovered_joint_ids: list[str] = []
+        get_joint_list = _pick_method_for_alias(methods_by_name, "GetJointList")
+        if get_joint_list:
+            get_joint_response = await call_method_with_fallback(
+                get_joint_list,
+                override_arguments=with_argument_values(get_joint_list.arguments, {0: active_product_id}),
+            )
+            ok = "exception" not in get_joint_response.get("data", {})
+            output = get_joint_response.get("data", {}).get("output")
+            discovered_joint_ids = _extract_joint_ids(output)
+            report["called_methods"].append(
+                {
+                    "name": "GetJointList",
+                    "resolved_method": get_joint_list.name,
+                    "status": "ok" if ok else "failed",
+                    "response": get_joint_response.get("data"),
+                    "joint_ids": discovered_joint_ids,
+                }
+            )
+        else:
+            report["called_methods"].append({"name": "GetJointList", "status": "not_found"})
+
+        joint_1 = JOINT_1_OVERRIDE or (discovered_joint_ids[0] if discovered_joint_ids else "")
+        joint_2 = JOINT_2_OVERRIDE or (discovered_joint_ids[1] if len(discovered_joint_ids) > 1 else joint_1)
+        report["discovered_joint_ids"] = discovered_joint_ids
+
         select_joint = _pick_method_for_alias(methods_by_name, "SelectJoint")
-        if select_joint:
-            select_joint_1_args = [dict(arg) for arg in select_joint.arguments]
-            if len(select_joint_1_args) > 1:
-                select_joint_1_args[1]["value"] = DEFAULT_JOINT_1
+        start_selected_joining = _pick_method_for_alias(methods_by_name, "StartSelectedJoining")
+        if select_joint and joint_1:
+            select_joint_1_args = with_argument_values(select_joint.arguments, {0: active_product_id, 1: joint_1})
             await call_and_record("SelectJoint", arguments=select_joint_1_args)
 
-            await call_and_record("StartSelectedJoining")
+            start_args = (
+                with_argument_values(start_selected_joining.arguments, {0: active_product_id})
+                if start_selected_joining
+                else None
+            )
+            await call_and_record("StartSelectedJoining", arguments=start_args)
 
-            select_joint_2_args = [dict(arg) for arg in select_joint.arguments]
-            if len(select_joint_2_args) > 1:
-                select_joint_2_args[1]["value"] = DEFAULT_JOINT_2
+            select_joint_2_args = with_argument_values(select_joint.arguments, {0: active_product_id, 1: joint_2})
             await call_and_record("SelectJoint", arguments=select_joint_2_args)
-            await call_and_record("StartSelectedJoining")
+            await call_and_record("StartSelectedJoining", arguments=start_args)
+        elif select_joint:
+            report["called_methods"].append({"name": "SelectJoint", "status": "not_run_without_joint_id"})
+            report["called_methods"].append({"name": "StartSelectedJoining", "status": "not_run_without_select_joint"})
         else:
             report["called_methods"].append({"name": "SelectJoint", "status": "not_found"})
             report["called_methods"].append({"name": "StartSelectedJoining", "status": "not_run_without_select_joint"})

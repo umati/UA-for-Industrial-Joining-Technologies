@@ -485,7 +485,7 @@ async def test_sync_result_counters_contains_channel_or_spindle_counter(
     counters = _get_result_counters(result_data)
     if not counters:
         pytest.skip(
-            "ResultCounters absent or empty in sync result — server declared CU but field is not populated in this result"
+            "ResultCounters absent or empty in sync result — server-supported CU but field is not populated in this result"
         )
 
     expected_types = {_COUNTER_TYPE_CHANNEL_NUMBER, _COUNTER_TYPE_SPINDLE_NUMBER}
@@ -586,7 +586,7 @@ async def test_batch_result_counters_contains_batch_size_or_count(subscription_c
     counters = _get_result_counters(result_data)
     if not counters:
         pytest.skip(
-            "ResultCounters absent or empty in batch result — server declared CU but field is not populated in this result"
+            "ResultCounters absent or empty in batch result — server-supported CU but field is not populated in this result"
         )
 
     expected_types = {_COUNTER_TYPE_BATCH_SIZE, _COUNTER_TYPE_BATCH_COUNT}
@@ -1048,7 +1048,7 @@ async def test_sync_result_counters_list_is_non_empty(subscription_client, resul
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent or empty — server declared CU but field is not populated in this result")
+        pytest.skip("ResultCounters absent or empty — server-supported CU but field is not populated in this result")
 
     assert len(counters) > 0, "SYNC_RESULT ResultCounters must contain at least one counter"
 
@@ -1063,7 +1063,7 @@ async def test_sync_result_counter_types_within_defined_range(subscription_clien
     counters = _get_result_counters(result_data)
     if not counters:
         pytest.skip(
-            "ResultCounters absent — cannot verify counter type range (server declared CU but field is not populated)"
+            "ResultCounters absent — cannot verify counter type range (server-supported CU but field is not populated)"
         )
 
     for idx, counter in enumerate(counters):
@@ -1086,7 +1086,7 @@ async def test_sync_result_channel_spindle_counter_value_is_positive(subscriptio
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent — server declared CU but field is not populated in this result")
+        pytest.skip("ResultCounters absent — server-supported CU but field is not populated in this result")
 
     checked = False
     for idx, counter in enumerate(counters):
@@ -1310,7 +1310,7 @@ async def test_batch_result_counters_list_is_non_empty(subscription_client, resu
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent or empty — server declared CU but field is not populated in this result")
+        pytest.skip("ResultCounters absent or empty — server-supported CU but field is not populated in this result")
 
     assert len(counters) > 0, "BATCH_RESULT ResultCounters must contain at least one counter"
 
@@ -1326,7 +1326,7 @@ async def test_batch_count_not_greater_than_batch_size(subscription_client, resu
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent — server declared CU but field is not populated in this result")
+        pytest.skip("ResultCounters absent — server-supported CU but field is not populated in this result")
 
     batch_size_val = None
     batch_count_val = None
@@ -1359,7 +1359,7 @@ async def test_batch_size_counter_value_is_positive(subscription_client, result_
 
     counters = _get_result_counters(result_data)
     if not counters:
-        pytest.skip("ResultCounters absent — server declared CU but field is not populated in this result")
+        pytest.skip("ResultCounters absent — server-supported CU but field is not populated in this result")
 
     for idx, counter in enumerate(counters):
         if not _counter_matches(counter, {_COUNTER_TYPE_BATCH_SIZE}, ("batch size",)):

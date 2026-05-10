@@ -969,10 +969,25 @@ def test_e2e_fixture_passes_runtime_websocket_query():
     assert "function withPortOffset" in source
     assert "testInfo.parallelIndex" in source
     assert "IJT_E2E_BACKEND_WORKERS" in source
+    assert "async function waitForBackendReachable" in source
+    assert "backendUp: async ({ browserName: _browserName }, use, testInfo)" in source
     assert "wsProtocol" in source
     assert "wsHost" in source
     assert "wsPort" in source
     assert "new AppPage(page, runtime.appUrl)" in source
+
+
+def test_joint_demo_uses_server_discovered_joint_ids():
+    source = (_PROJECT_ROOT / "src" / "javascripts" / "views" / "standard-demo" / "joint-demo.mjs").read_text(
+        encoding="utf-8"
+    )
+
+    assert "getMethod('GetJointList')" in source
+    assert "_detectedJoints" in source
+    assert "this._jointIdForButton(0)" in source
+    assert "this._jointIdForButton(1)" in source
+    assert "Joint_1" not in source
+    assert "Joint_2" not in source
 
 
 def test_playwright_feature_stage_passes_worker_pool_environment(monkeypatch):

@@ -12,6 +12,7 @@ After a `run_all_tests.py` run the following files are produced:
 | `test-results/pytest-unit.xml` | JUnit XML | Unit test results from `run_all_tests.py` Phase 1 |
 | `test-results/mypy.txt` | Text | Blocking local Phase 1 type-check output from `python -m mypy . --ignore-missing-imports --no-error-summary` |
 | `test-results/report.xlsx` | Excel | Human-readable coloured summary by test area, full detail, filtered views |
+| `test-results/report-baseline.json` | JSON | Previous-run baseline used for the next report's delta view; generated locally/job-locally and ignored by git |
 | `test-results/smoke-sanity.xml` | JUnit XML | Quick server reachability smoke test (CI only) |
 | `test-results/cu-compliance-report.json` | JSON | Machine-readable CU compliance report by test, conformance unit, raw support outcome, conservative compliance status, and workbook row traceability |
 | `test-results/cu-compliance-report-unit.json` | JSON | Unit-stage plugin output; kept separate so the main CU report name is reserved for live compliance/conformance runs |
@@ -42,15 +43,22 @@ python scripts/make_excel_report.py --xml test-results/pytest-live.xml --out tes
 
 **Generate Excel automatically from `run_all_tests.py` (non-fatal post-step):**
 ```bash
-# default local behavior: generate only when tests pass
+# default behavior: always generate report.xlsx when JUnit XML is available
 python run_all_tests.py
 
-# always generate (recommended when end users consume Excel)
-python run_all_tests.py --excel=always
+# disable Excel only for special local troubleshooting
+python run_all_tests.py --excel=never
 
 # custom Excel output path
-python run_all_tests.py --excel=always --excel-out test-results/my-report.xlsx
+python run_all_tests.py --excel-out test-results/my-report.xlsx
 ```
+
+If the test run fails, `report.xlsx` is still generated for diagnostics when
+JUnit XML is available. In that case the workbook includes a red warning banner
+and should not be treated as a clean conformance report.
+When report data is available, `report-baseline.json` is read before rendering
+and overwritten after rendering. The first run shows "No baseline yet"; the next
+run shows score, validation-health, spec-coverage, finding, and per-CU deltas.
 
 **Write the CU compliance report to a custom location:**
 ```bash
@@ -158,27 +166,35 @@ that need manual classification.
 | **Failures (N)** | Failed tests only — with full failure message |
 | **Skipped (N)** | Skipped tests only — with skip reason |
 | **Expected Fail (N)** | Xfailed/xpassed — expected failures with reason |
-| **Profile Coverage** | User-facing IJT high-level coverage summary: active server declaration, reference IJT facets, optional full CU-set view, declared-by-server CU count, run compliance, and coverage-view CU counts |
-| **Facet Coverage** | IJT facet table with CU counts, declared-by-server CU count, validated support/not-supported/blocked/action-needed status, and facet descriptions |
-| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, whether it is declared by the active server declaration, run compliance outcome, workbook case counts, and example test |
+| **Cover** | Audience-first summary with overall result, Conformance Score, KPI strip, delta, server support summary, and environment details |
+| **Profile Coverage** | User-facing IJT coverage overview: server capability profile, reference IJT facets, optional full CU-set view, server-supported CU count, server-support percentage, supported-CUs-validated percentage, result, and coverage counts |
+| **Facet Coverage** | IJT facet table with CU counts, server-supported CU count, server-support percentage, supported-CUs-validated percentage, support/not-supported/blocked/action-needed status, and facet descriptions |
+| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, whether it is supported by the server capability profile, result, workbook case counts, and example test |
 
 Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠 orange = xfailed.
 
 The profile/facet/CU sheets are generated when
 `test-results/cu-compliance-report.json` is present. CI Integration also adds a
-compact **IJT Profiles, Facets, and Conformance Units Coverage** table to
+compact **IJT Profile, Facet, and Conformance Unit Coverage** table to
 `summary.md` and the GitHub Actions step summary, so users can see the active
-server declaration, reference IJT facets, facet coverage, CU attention
+server capability profile, Conformance Score, at-a-glance KPIs, delta from the
+previous local/job baseline, server support summary, top findings, facet coverage, conformance findings
 items, and a collapsible full CU coverage table without downloading the Excel
 file first.
-`Declared by Server` is read from the active server declaration (`n/a` when
-no capability declaration was loaded); `Run Compliance` and validated counts are
-calculated from the current test run. Start with the `Active server declaration` row.
+`Server Supported CUs` is read from the server capability file (`n/a` when
+no capability file was loaded); `Result` and validated counts are calculated
+from the current test run. `Server Support %` is informational; `Supported CUs
+Validated %` is the health signal for how much of the server's supported
+capability set was validated by the run. Start with the `Server capability
+profile` row.
 `Reference IJT facet` and `Reference full CU set` rows are comparison views, not
 additional pass/fail requirements for this server.
-The `Primary Reason` / `Notes` fields explain why a CU appears in the attention
+The `Primary Reason` / `Notes` fields explain why a CU appears in the findings
 table, such as a dependency on an optional method or a true runtime precondition
 that prevented coverage.
+`Severity` is computed from the result: Critical means action needed, Major
+means blocked, Minor means a server-supported CU is not supported, and Info
+means supported with notes or outside server support.
 Profile and facet tables distinguish fully supported CUs from CUs supported
 with notes. "Supported with notes" means at least one test path passed and
 the remaining non-passing rows are accepted skips, Not Supported methods/CUs

@@ -16,11 +16,13 @@ import argparse
 import ast
 import json
 import os
+import platform
 import re
 import sys
 import xml.etree.ElementTree as ET  # nosec B405
 from collections import Counter
 from datetime import datetime, timezone
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +36,23 @@ except ImportError:
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _PROFILES_DIR = _PROJECT_ROOT / "profiles"
 _DEFAULT_CU_JSON = _PROJECT_ROOT / "test-results" / "cu-compliance-report.json"
+_DEFAULT_BASELINE_JSON = _PROJECT_ROOT / "test-results" / "report-baseline.json"
 _CU_COMPLIANCE_KEYS = {"supported", "partial", "not_supported", "blocked", "action_needed", "untested"}
+_FINDING_OUTCOMES = {"partial", "not_supported", "blocked", "action_needed"}
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+# Score / severity / delta logic lives in helpers/report_scoring.py.
+# Markdown and Excel generators must use the same helper to stay in sync.
+from helpers.report_scoring import (  # noqa: E402,I001
+    OUTCOME_RANK as _OUTCOME_RANK,
+    SEVERITY_ORDER as _SEVERITY_ORDER,
+    conformance_score as _conformance_score,
+    delta_symbol as _delta_symbol,
+    format_pct as _fmt_pct,
+    pct_value as _pct_value,
+    severity_for as _severity_for,
+)
 
 # ── Parse JUnit XML ───────────────────────────────────────────────────────────
 
@@ -147,6 +165,7 @@ def _load_facets() -> dict[str, dict[str, Any]]:
             continue
         facets[str(key)] = {
             "display_name": str(data.get("display_name") or _title_from_key(str(key))),
+            "description": str(data.get("description") or "").strip(),
             "spec_section": str(data.get("spec_section") or ""),
             "kind": str(data.get("kind") or "facet"),
             "conformance_units": [str(cu) for cu in data.get("conformance_units", [])],
@@ -210,6 +229,137 @@ def _server_profile_cu_count(cu_keys: list[str], supported: set[str] | None) -> 
     if supported is None:
         return "n/a"
     return len([cu for cu in cu_keys if cu in supported])
+
+
+def _pct(numerator: int, denominator: int) -> str:
+    if denominator <= 0:
+        return "n/a"
+    return f"{(numerator * 100 / denominator):.1f}%"
+
+
+def _server_profile_pct(server_profile_cus: int | str, total: int) -> str:
+    if not isinstance(server_profile_cus, int):
+        return "n/a"
+    return _pct(server_profile_cus, total)
+
+
+def _server_supported_cu_keys(cu_keys: list[str], supported: set[str] | None) -> list[str]:
+    if supported is None:
+        return []
+    return [cu for cu in cu_keys if cu in supported]
+
+
+def _supported_cus_validated_count(cu_keys: list[str], by_cu: dict[str, Any], supported: set[str] | None) -> int | str:
+    if supported is None:
+        return "n/a"
+    counts = _count_outcomes(_server_supported_cu_keys(cu_keys, supported), by_cu)
+    return counts["supported"] + counts["partial"]
+
+
+def _supported_cus_validated_pct(cu_keys: list[str], by_cu: dict[str, Any], supported: set[str] | None) -> str:
+    server_supported_count = _server_profile_cu_count(cu_keys, supported)
+    validated_count = _supported_cus_validated_count(cu_keys, by_cu, supported)
+    if not isinstance(server_supported_count, int) or not isinstance(validated_count, int):
+        return "n/a"
+    return _pct(validated_count, server_supported_count)
+
+
+def _supported_cus_validated_pct_value(
+    cu_keys: list[str], by_cu: dict[str, Any], supported: set[str] | None
+) -> float | None:
+    server_supported_count = _server_profile_cu_count(cu_keys, supported)
+    validated_count = _supported_cus_validated_count(cu_keys, by_cu, supported)
+    if not isinstance(server_supported_count, int) or not isinstance(validated_count, int):
+        return None
+    return _pct_value(validated_count, server_supported_count)
+
+
+def _short_git_sha() -> str:
+    sha = os.environ.get("GITHUB_SHA")
+    if sha:
+        return sha[:7]
+    repo_root = _PROJECT_ROOT.parents[2]
+    git_path = repo_root / ".git"
+    try:
+        if git_path.is_file():
+            gitdir_line = git_path.read_text(encoding="utf-8").strip()
+            gitdir = gitdir_line.removeprefix("gitdir:").strip()
+            git_path = Path(gitdir) if Path(gitdir).is_absolute() else (repo_root / gitdir).resolve()
+        head = (git_path / "HEAD").read_text(encoding="utf-8").strip()
+        if head.startswith("ref: "):
+            ref_name = head.removeprefix("ref: ").strip()
+            ref_path = git_path / ref_name
+            if ref_path.exists():
+                head = ref_path.read_text(encoding="utf-8").strip()
+            else:
+                packed_refs = git_path / "packed-refs"
+                for line in packed_refs.read_text(encoding="utf-8").splitlines():
+                    if not line or line.startswith("#") or line.startswith("^"):
+                        continue
+                    ref_sha, _, ref = line.partition(" ")
+                    if ref == ref_name:
+                        head = ref_sha
+                        break
+    except OSError:
+        return "unknown"
+    return head[:7] if re.fullmatch(r"[0-9a-fA-F]{7,40}", head) else "unknown"
+
+
+def _run_logs_url() -> str:
+    server = os.environ.get("GITHUB_SERVER_URL")
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    run_id = os.environ.get("GITHUB_RUN_ID")
+    if server and repo and run_id:
+        return f"{server}/{repo}/actions/runs/{run_id}"
+    return "n/a"
+
+
+def _package_version(package: str) -> str:
+    try:
+        return metadata.version(package)
+    except metadata.PackageNotFoundError:
+        return "not installed"
+
+
+def _load_baseline(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _write_baseline(path: Path, baseline: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _baseline_age(baseline: dict[str, Any]) -> str:
+    raw = str(baseline.get("run_ts") or "")
+    try:
+        previous = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return "previous run"
+    delta = datetime.now(timezone.utc) - previous
+    days = delta.days
+    if days > 0:
+        return f"{days} day{'s' if days != 1 else ''} ago"
+    hours = delta.seconds // 3600
+    if hours > 0:
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    minutes = max(1, delta.seconds // 60)
+    return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+
+
+def _outcomes_cell(counts: Counter[str]) -> str:
+    """Return compact Markdown for the coverage summary tables."""
+    return (
+        f"{counts['supported']} Supported<br>"
+        f"{counts['partial']} With notes<br>"
+        f"{counts['not_supported']} Not supported<br>"
+        f"{counts['blocked']} Blocked<br>"
+        f"{counts['action_needed']} Action needed"
+    )
 
 
 def _in_server_profile(cu_key: str, supported: set[str] | None) -> str:
@@ -382,9 +532,9 @@ def _cu_note_summary(cu_key: str, tests_by_cu: dict[str, list[dict[str, Any]]]) 
     return "; ".join(notes)
 
 
-def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str]:
+def _build_report_context(cu_payload: dict[str, Any] | None, baseline: dict[str, Any] | None) -> dict[str, Any] | None:
     if not cu_payload:
-        return []
+        return None
 
     facets = _load_facets()
     profiles = _load_profiles()
@@ -397,71 +547,242 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
     server: dict[str, Any] = server_raw if isinstance(server_raw, dict) else {}
     server_name = str(server.get("name") or "Server under test")
     all_cu_keys = _ordered_cu_keys(by_cu, facets)
-    all_counts = _count_outcomes(all_cu_keys, by_cu)
     facet_map = _cu_facet_map(facets)
     tests_by_cu = _cu_test_index(cu_payload)
+    active_label = str(active.get("name") or _title_from_key(active_profile)) if active else "No active profile found"
+    active_cus = _profile_cus(active, facets) if active else []
+    active_cus_set = set(active_cus)
+    active_counts = _count_outcomes(active_cus, by_cu) if active else Counter()
+    server_supported_count = _server_profile_cu_count(active_cus, supported)
+    score = _conformance_score(active_counts, server_supported_count, len(active_cus))
+    validation_health_value = _supported_cus_validated_pct_value(active_cus, by_cu, supported)
+    spec_coverage_value = (
+        _pct_value(server_supported_count, len(active_cus)) if isinstance(server_supported_count, int) else None
+    )
+
+    findings: list[dict[str, Any]] = []
+    cu_outcomes: dict[str, str] = {}
+    for cu_key in all_cu_keys:
+        data_raw = by_cu.get(cu_key)
+        data = data_raw if isinstance(data_raw, dict) else {}
+        outcome = _cu_compliance_key(data)
+        cu_outcomes[cu_key] = outcome
+        if outcome not in _FINDING_OUTCOMES:
+            continue
+        failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
+        severity, severity_icon = _severity_for(cu_key, outcome, active_cus_set)
+        findings.append(
+            {
+                "cu_key": cu_key,
+                "cu": _cu_display_name(cu_key),
+                "facets": ", ".join(facet_map.get(cu_key, [])),
+                "server_supported": _in_server_profile(cu_key, supported),
+                "outcome": outcome,
+                "result": _outcome_label(outcome),
+                "reason": _cu_note_summary(cu_key, tests_by_cu),
+                "tests": int(data.get("test_count", 0) or 0),
+                "passed": int(data.get("passed", 0) or 0),
+                "not_supported": int(data.get("not_supported", 0) or 0),
+                "blocked": int(data.get("blocked", 0) or 0),
+                "failed": failed,
+                "workbook_cases": int(data.get("workbook_case_count", 0) or 0),
+                "severity": severity,
+                "severity_icon": severity_icon,
+                "delta": _delta_symbol(cu_key, outcome, baseline),
+            }
+        )
+    findings.sort(key=lambda item: (_SEVERITY_ORDER.get(str(item["severity"]), 99), str(item["cu_key"])))
+    findings_count = Counter(str(item["severity"]).lower() for item in findings)
+
+    return {
+        "facets": facets,
+        "profiles": profiles,
+        "by_cu": by_cu,
+        "supported": supported,
+        "active_profile": active_profile,
+        "active": active,
+        "server_name": server_name,
+        "all_cu_keys": all_cu_keys,
+        "facet_map": facet_map,
+        "active_label": active_label,
+        "active_cus": active_cus,
+        "active_counts": active_counts,
+        "server_supported_count": server_supported_count,
+        "score": score,
+        "validation_health_value": validation_health_value,
+        "spec_coverage_value": spec_coverage_value,
+        "findings": findings,
+        "findings_count": findings_count,
+        "cu_outcomes": cu_outcomes,
+    }
+
+
+def _baseline_payload(context: dict[str, Any], run_ts_iso: str) -> dict[str, Any]:
+    return {
+        "run_ts": run_ts_iso,
+        "git_sha": _short_git_sha(),
+        "score": context["score"],
+        "validation_health_pct": context["validation_health_value"],
+        "spec_coverage_pct": context["spec_coverage_value"],
+        "findings_count": dict(context["findings_count"]),
+        "cu_outcomes": context["cu_outcomes"],
+    }
+
+
+def _delta_summary(context: dict[str, Any], baseline: dict[str, Any] | None) -> dict[str, int]:
+    if not baseline:
+        return {"new": 0, "resolved": 0, "regressed": 0}
+    raw_previous_outcomes = baseline.get("cu_outcomes")
+    previous_outcomes: dict[str, Any] = raw_previous_outcomes if isinstance(raw_previous_outcomes, dict) else {}
+    current_outcomes: dict[str, str] = context["cu_outcomes"]
+    new = resolved = regressed = 0
+    for cu_key, current in current_outcomes.items():
+        previous = str(previous_outcomes.get(cu_key) or "")
+        if current in _FINDING_OUTCOMES and previous not in _FINDING_OUTCOMES:
+            new += 1
+        if previous in _FINDING_OUTCOMES and current not in _FINDING_OUTCOMES:
+            resolved += 1
+        current_rank = _OUTCOME_RANK.get(current)
+        previous_rank = _OUTCOME_RANK.get(previous)
+        if current_rank is not None and previous_rank is not None and current_rank < previous_rank:
+            regressed += 1
+    return {"new": new, "resolved": resolved, "regressed": regressed}
+
+
+def _render_delta_block(context: dict[str, Any], baseline: dict[str, Any] | None) -> list[str]:
+    lines: list[str] = []
+    if not baseline:
+        lines.append("### Δ Since Last Run")
+        lines.append("")
+        lines.append("_No baseline yet — this run becomes the baseline._")
+        lines.append("")
+        return lines
+    previous_sha = str(baseline.get("git_sha") or "unknown")
+    lines.append(f"### Δ Since Last Run (commit `{previous_sha}`, {_baseline_age(baseline)})")
+    lines.append("")
+    delta = _delta_summary(context, baseline)
+    previous_score = baseline.get("score", "n/a")
+    previous_validation = baseline.get("validation_health_pct", "n/a")
+    previous_spec = baseline.get("spec_coverage_pct", "n/a")
+    current_validation = context["validation_health_value"]
+    current_spec = context["spec_coverage_value"]
+    lines.append(f"- Score **{previous_score} → {context['score']}**")
+    lines.append(f"- Validation Health {_fmt_pct(previous_validation)} → {_fmt_pct(current_validation)}")
+    lines.append(f"- Spec Coverage {_fmt_pct(previous_spec)} → {_fmt_pct(current_spec)}")
+    lines.append(
+        f"- Findings: 🔴 {delta['new']} new · ✅ {delta['resolved']} resolved · ⚠️ {delta['regressed']} regressed"
+    )
+    lines.append("")
+    return lines
+
+
+def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str]:
+    facets: dict[str, dict[str, Any]] = context["facets"]
+    by_cu: dict[str, Any] = context["by_cu"]
+    supported: set[str] | None = context["supported"]
+    rows: list[tuple[int, str]] = []
+    for facet in facets.values():
+        if str(facet.get("kind") or "") == "rollup":
+            continue
+        cu_keys = list(facet.get("conformance_units", []))
+        counts = _count_outcomes(cu_keys, by_cu)
+        server_supported_count = _server_profile_cu_count(cu_keys, supported)
+        if counts["action_needed"] or counts["blocked"] or server_supported_count == 0:
+            icon, rank, label = "❌", 0, "not supported by this server"
+        elif counts["partial"] or counts["not_supported"] or server_supported_count != len(cu_keys):
+            icon, rank, label = "⚠️", 1, "partially supported"
+        else:
+            icon, rank, label = "✅", 2, "supported"
+        name = str(facet.get("display_name") or "Facet").removeprefix("IJT ").removesuffix(" Server Facet")
+        description = str(facet.get("description") or "").strip().replace("\n", " ")
+        rows.append((rank, f"{icon} **{_md_cell(name)}** — {label}. {_md_cell(description)}"))
+    rows.sort(key=lambda item: (item[0], item[1]))
+    lines = ["## What this server supports", ""]
+    lines.append("_Auto-generated from facet outcomes. Full detail is in Facet Coverage._")
+    lines.append("")
+    for _rank, row in rows[:limit]:
+        lines.append(f"- {row}")
+    if len(rows) > limit:
+        lines.append(f"- … {len(rows) - limit} more capability areas in Facet Coverage")
+    lines.append("")
+    return lines
+
+
+def _render_top_findings(context: dict[str, Any], limit: int = 10) -> list[str]:
+    findings: list[dict[str, Any]] = context["findings"]
+    counts: Counter[str] = context["findings_count"]
+    lines = ["## Top Findings", ""]
+    lines.append(
+        f"**Critical ({counts['critical']})** · **Major ({counts['major']})** · "
+        f"**Minor ({counts['minor']})** · **Info ({counts['info']})**"
+    )
+    lines.append("")
+    if not findings:
+        lines.append("_No conformance findings._")
+        lines.append("")
+        return lines
+    lines.append("| Severity | CU | Result | Primary Reason | Δ |")
+    lines.append("|---|---|---|---|---|")
+    for finding in findings[:limit]:
+        severity = f"{finding['severity_icon']} {finding['severity']}"
+        lines.append(
+            f"| {severity} | `{_md_cell(str(finding['cu_key']))}` | {finding['result']} | "
+            f"{_md_cell(str(finding['reason']) or 'See CU details')} | {finding['delta']} |"
+        )
+    if len(findings) > limit:
+        lines.append(f"| … | … | … | {len(findings) - limit} more findings in Conformance Findings |  |")
+    lines.append("")
+    return lines
+
+
+def _render_test_environment() -> list[str]:
+    lines = ["| Item | Value |", "|---|---|"]
+    lines.append(f"| Test Client commit | `{_short_git_sha()}` |")
+    lines.append(f"| Python | {platform.python_version()} |")
+    lines.append(f"| asyncua | {_package_version('asyncua')} |")
+    lines.append(f"| Host OS | {_md_cell(platform.platform())} |")
+    lines.append("| Repro command | `python run_all_tests.py` |")
+    lines.append(f"| Run logs | {_md_cell(_run_logs_url())} |")
+    return lines
+
+
+def _render_profile_facet_summary(
+    cu_payload: dict[str, Any] | None, baseline: dict[str, Any] | None
+) -> tuple[list[str], dict[str, Any] | None]:
+    context = _build_report_context(cu_payload, baseline)
+    if context is None:
+        return [], None
+
+    facets: dict[str, dict[str, Any]] = context["facets"]
+    by_cu: dict[str, Any] = context["by_cu"]
+    supported: set[str] | None = context["supported"]
+    active_profile = str(context["active_profile"])
+    active = context["active"]
+    all_cu_keys: list[str] = context["all_cu_keys"]
+    facet_map: dict[str, list[str]] = context["facet_map"]
 
     lines: list[str] = []
-    lines.append("## IJT Profiles, Facets, and Conformance Units Coverage")
-    lines.append("")
-    lines.append("### Executive Summary")
-    lines.append("")
-    active_label = str(active.get("name") or _title_from_key(active_profile)) if active else "No active profile found"
-    lines.append("| Item | Value |")
-    lines.append("|---|---|")
-    lines.append(f"| Server under test | {_md_cell(server_name)} |")
-    lines.append(f"| Active server declaration | {_md_cell(active_label)} |")
-    lines.append(
-        f"| Validated CU outcome | {all_counts['supported']} supported, "
-        f"{all_counts['partial']} supported with notes, {all_counts['not_supported']} not supported, "
-        f"{all_counts['blocked']} blocked, {all_counts['action_needed']} action needed |"
-    )
-    lines.append("")
-    if active:
-        active_cus = _profile_cus(active, facets)
-        active_counts = _count_outcomes(active_cus, by_cu)
-        server_profile_cus = _server_profile_cu_count(active_cus, supported)
-        lines.append(
-            f"**Active server declaration:** {active['name']}  |  "
-            f"**Declared by server:** {server_profile_cus}/{len(active_cus)} CUs  |  "
-            f"**Run compliance:** {_compliance_label(active_counts, len(active_cus))}"
-        )
-    else:
-        lines.append("**Active server declaration:** no active profile found in available capabilities file")
-    lines.append("")
-    lines.append("### How to Read This Coverage")
-    lines.append("")
-    lines.append("- **Active server declaration** is the active profile selected by the server capability YAML.")
-    lines.append(
-        "- **Reference IJT facet** and **Reference full CU set** rows are comparison views only; "
-        "they are not extra pass/fail requirements."
-    )
-    lines.append("- **Declared by server** means the CU is claimed by the active capability declaration.")
-    lines.append("- **Validated** columns come from this test run.")
-    lines.append(
-        "- **Supported with notes** means at least one support path passed and remaining non-passing rows are "
-        "accepted policy, Not Supported declarations, or environment/precondition notes."
-    )
-    lines.append("- Failures and errors are reported as **Action needed**.")
-    lines.append("- Raw skip reasons are listed later as diagnostics and may overlap with CU attention items.")
-    lines.append("")
+    lines.extend(_render_delta_block(context, baseline))
+    lines.extend(_render_supports_block(context))
+    lines.extend(_render_top_findings(context))
 
-    lines.append("### High-Level Coverage Views")
+    lines.append("<details>")
+    lines.append("<summary><b>Coverage Overview</b></summary>")
     lines.append("")
     lines.append(
-        "_These rows separate the active server declaration from the main IJT facet rollups and the complete CU set._"
+        "_These rows separate the active server capability profile from reference IJT facet rollups and the complete CU set._"
     )
     lines.append("")
     lines.append(
-        "| View | Role | Facet Count | CUs in View | Declared by Server | Validated Supported | Validated with Notes | Not Supported | Blocked | Action Needed | Run Compliance |"
+        "| Coverage View | Purpose | Facets | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcomes | Result |"
     )
-    lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|")
+    lines.append("|---|---|---:|---:|---:|---:|---:|---|---|")
     view_rows: list[tuple[str, str, int, list[str]]] = []
     if active:
         view_rows.append(
             (
                 str(active.get("name", _title_from_key(active_profile))),
-                "Active server declaration",
+                "Server capability profile",
                 len(active.get("facets", [])),
                 _profile_cus(active, facets),
             )
@@ -489,126 +810,205 @@ def _render_profile_facet_summary(cu_payload: dict[str, Any] | None) -> list[str
 
     for view_name, profile_role, facet_count, cu_keys in view_rows:
         counts = _count_outcomes(cu_keys, by_cu)
+        server_profile_cus = _server_profile_cu_count(cu_keys, supported)
         lines.append(
             f"| {_md_cell(view_name)} | {profile_role} | "
-            f"{facet_count} | {len(cu_keys)} | {_server_profile_cu_count(cu_keys, supported)} | "
-            f"{counts['supported']} | {counts['partial']} | {counts['not_supported']} | "
-            f"{counts['blocked']} | {counts['action_needed']} | "
+            f"{facet_count} | {len(cu_keys)} | {server_profile_cus} | "
+            f"{_server_profile_pct(server_profile_cus, len(cu_keys))} | "
+            f"{_supported_cus_validated_pct(cu_keys, by_cu, supported)} | {_outcomes_cell(counts)} | "
             f"{_compliance_label(counts, len(cu_keys))} |"
         )
     lines.append("")
+    lines.append("</details>")
+    lines.append("")
 
-    lines.append("### Facets")
+    lines.append("<details>")
+    lines.append("<summary><b>Facet Coverage</b></summary>")
     lines.append("")
     lines.append(
-        "| Facet | Type | CUs in Facet | Declared by Server | Validated Supported | Validated with Notes | Not Supported | Blocked | Action Needed | Run Compliance |"
+        "| Facet | Type | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcomes | Result |"
     )
-    lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---|")
+    lines.append("|---|---|---:|---:|---:|---:|---|---|")
     for facet in facets.values():
         cu_keys = list(facet.get("conformance_units", []))
         counts = _count_outcomes(cu_keys, by_cu)
         facet_kind = "Rollup" if str(facet.get("kind") or "") == "rollup" else "Facet"
+        server_profile_cus = _server_profile_cu_count(cu_keys, supported)
         lines.append(
             f"| {_md_cell(str(facet.get('display_name', 'Facet')))} | {facet_kind} "
-            f"| {len(cu_keys)} | {_server_profile_cu_count(cu_keys, supported)} | {counts['supported']} | "
-            f"{counts['partial']} | {counts['not_supported']} | {counts['blocked']} | "
-            f"{counts['action_needed']} | "
+            f"| {len(cu_keys)} | {server_profile_cus} | {_server_profile_pct(server_profile_cus, len(cu_keys))} | "
+            f"{_supported_cus_validated_pct(cu_keys, by_cu, supported)} | {_outcomes_cell(counts)} | "
             f"{_compliance_label(counts, len(cu_keys))} |"
         )
     lines.append("")
+    lines.append("</details>")
+    lines.append("")
 
-    attention_cus: list[tuple[str, dict[str, Any]]] = []
-    for cu_key in all_cu_keys:
-        data_raw = by_cu.get(cu_key)
-        data = data_raw if isinstance(data_raw, dict) else {}
-        if _cu_compliance_key(data) in {"partial", "not_supported", "blocked", "action_needed"}:
-            attention_cus.append((cu_key, data))
-    if attention_cus:
-        lines.append("### CU Attention Items")
-        lines.append("")
-        lines.append(
-            "_Support-level detail for CUs that are supported with notes, Not Supported, blocked, or action needed. "
-            "Use this section for stakeholder follow-up; raw skip buckets below are diagnostics._"
-        )
-        lines.append("")
-        lines.append(
-            "| CU | Facet(s) | Declared by Server | Run Compliance | Primary Reason | Tests | Passed | Not Supported | Blocked | Failed/Error |"
-        )
-        lines.append("|---|---|---|---|---|---:|---:|---:|---:|---:|")
-        for cu_key, data in attention_cus[:40]:
-            failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
-            in_server_profile = _in_server_profile(cu_key, supported)
-            lines.append(
-                f"| {_md_cell(_cu_display_name(cu_key))} | {_md_cell(', '.join(facet_map.get(cu_key, [])))} | "
-                f"{in_server_profile} | {_outcome_label(_cu_compliance_key(data))} | "
-                f"{_md_cell(_cu_note_summary(cu_key, tests_by_cu))} | "
-                f"{int(data.get('test_count', 0) or 0)} | {int(data.get('passed', 0) or 0)} | "
-                f"{int(data.get('not_supported', 0) or 0)} | {int(data.get('blocked', 0) or 0)} | {failed} |"
-            )
-        if len(attention_cus) > 40:
-            lines.append(f"| ... | ... | ... | ... | ... | ... | ... | ... | ... | {len(attention_cus) - 40} more |")
-        lines.append("")
-
-    lines.append("<details>")
-    lines.append("<summary>Full CU coverage details</summary>")
+    lines.append("<details open>")
+    lines.append("<summary><b>Conformance Findings</b></summary>")
     lines.append("")
     lines.append(
-        "| CU | Facet(s) | Declared by Server | Run Compliance | Tests | Passed | Not Supported | Blocked | Failed/Error | Workbook Cases |"
+        "_Support-level detail for CUs that need explanation or follow-up: Supported with notes, "
+        "Not Supported, Blocked, or Action needed. Raw skip buckets below are diagnostics._"
     )
-    lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|")
+    lines.append("")
+    lines.append(
+        "| Severity | CU | Facet(s) | Server Supported | Result | Primary Reason | Tests | Passed | Not Supported | Blocked | Failed/Error | Δ |"
+    )
+    lines.append("|---|---|---|---|---|---|---:|---:|---:|---:|---:|---|")
+    findings: list[dict[str, Any]] = context["findings"]
+    if findings:
+        for finding in findings:
+            severity = f"{finding['severity_icon']} {finding['severity']}"
+            lines.append(
+                f"| {severity} | {_md_cell(str(finding['cu']))} | {_md_cell(str(finding['facets']))} | "
+                f"{finding['server_supported']} | {finding['result']} | "
+                f"{_md_cell(str(finding['reason']) or 'See CU details')} | "
+                f"{finding['tests']} | {finding['passed']} | {finding['not_supported']} | "
+                f"{finding['blocked']} | {finding['failed']} | {finding['delta']} |"
+            )
+    else:
+        lines.append("| ℹ️ Info | No findings |  |  |  |  | 0 | 0 | 0 | 0 | 0 |  |")
+    lines.append("")
+    lines.append("</details>")
+    lines.append("")
+
+    lines.append("<details>")
+    lines.append("<summary><b>Full CU coverage</b></summary>")
+    lines.append("")
+    lines.append(
+        "| CU | Facet(s) | Server Supported | Result | Tests | Passed | Not Supported | Blocked | Failed/Error | Workbook Cases | Δ |"
+    )
+    lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|---|")
     for cu_key in all_cu_keys:
         data_raw = by_cu.get(cu_key)
         data = data_raw if isinstance(data_raw, dict) else {}
         failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
         in_server_profile = _in_server_profile(cu_key, supported)
+        outcome = _cu_compliance_key(data)
         lines.append(
             f"| {_md_cell(_cu_display_name(cu_key))} | {_md_cell(', '.join(facet_map.get(cu_key, [])))} | "
-            f"{in_server_profile} | {_outcome_label(_cu_compliance_key(data))} | "
+            f"{in_server_profile} | {_outcome_label(outcome)} | "
             f"{int(data.get('test_count', 0) or 0)} | {int(data.get('passed', 0) or 0)} | "
             f"{int(data.get('not_supported', 0) or 0)} | {int(data.get('blocked', 0) or 0)} | {failed} | "
-            f"{int(data.get('workbook_case_count', 0) or 0)} |"
+            f"{int(data.get('workbook_case_count', 0) or 0)} | {_delta_symbol(cu_key, outcome, baseline)} |"
         )
     lines.append("")
     lines.append("</details>")
     lines.append("")
-    return lines
+
+    lines.append("<details>")
+    lines.append("<summary><b>Test environment</b></summary>")
+    lines.append("")
+    lines.extend(_render_test_environment())
+    lines.append("")
+    lines.append("</details>")
+    lines.append("")
+
+    lines.append("<details>")
+    lines.append("<summary><b>How to read this report</b></summary>")
+    lines.append("")
+    lines.append("- **Server capability profile** is the active profile selected by the server capability YAML.")
+    lines.append(
+        "- **Reference IJT facet** and **Reference full CU set** rows are comparison views only; "
+        "they are not extra pass/fail requirements."
+    )
+    lines.append("- **Server Supported CUs** means the CUs listed as supported in the server capability file.")
+    lines.append("- **Server Support %** is the share of CUs in that row that the server says it supports.")
+    lines.append(
+        "- **Supported CUs Validated %** is the share of server-supported CUs that this run validated as "
+        "Supported or Supported with notes."
+    )
+    lines.append(
+        "- **Score** is a 0–100 composite of `0.7 × Validation Health + 0.3 × Spec Coverage`, "
+        "capped at 50 if any **Action Needed** finding exists and capped at 75 if any **Blocked** finding exists."
+    )
+    lines.append(
+        "- **Severity** is computed from the result: Critical = action needed, Major = blocked, "
+        "Minor = server-supported CU not supported, Info = supported with notes or outside server support."
+    )
+    lines.append("- **Δ** compares this run with `test-results/report-baseline.json` when that file exists.")
+    lines.append("- Failures and errors are reported as **Action needed**.")
+    lines.append("- Raw skip reasons are listed later as diagnostics and may overlap with conformance findings.")
+    lines.append("")
+    lines.append("</details>")
+    lines.append("")
+    return lines, context
 
 
-def _render(data: dict, server_url: str, run_ts: str, cu_payload: dict[str, Any] | None) -> str:
+def _render(
+    data: dict,
+    server_url: str,
+    run_ts: str,
+    cu_payload: dict[str, Any] | None,
+    baseline: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any] | None]:
     p = data["passed"]
     f = data["failed"] + data["errors"]
     s = data["skipped"]
     x = data["xfailed"]
     total = data["total"]
     mins, secs = divmod(int(data["duration_s"]), 60)
+    profile_lines, context = _render_profile_facet_summary(cu_payload, baseline)
 
     lines: list[str] = []
     lines.append("# IJT Conformance Test Report")
     lines.append("")
-    lines.append(
-        f"**Result:** {_status_badge(p, f, 0)}  |  "
-        f"**Server:** `{server_url}`  |  "
-        f"**Run:** {run_ts}  |  "
-        f"**Duration:** {mins}m {secs}s"
-    )
+    result_badge = _status_badge(p, f, 0)
+    score_text = f"{context['score']} / 100" if context else "n/a"
+    server_name = str(context["server_name"]) if context else "Server under test"
+    active_label = str(context["active_label"]) if context else "n/a"
+    lines.append(f"{result_badge} · **Score: {score_text}**")
+    lines.append("")
+    lines.append("| Item | Value |")
+    lines.append("|---|---|")
+    lines.append(f"| **Server** | {_md_cell(server_name)} (`{server_url}`) |")
+    lines.append(f"| **Capability profile** | {_md_cell(active_label)} |")
+    lines.append(f"| **Run** | {run_ts} · Duration {mins}m {secs}s |")
+    lines.append(f"| **Build** | commit `{_short_git_sha()}` · run logs: {_md_cell(_run_logs_url())} |")
     lines.append("")
 
-    # ── Headline counts ──
-    lines.append("## Summary")
+    if context:
+        supported = context["server_supported_count"]
+        total_active = len(context["active_cus"])
+        validated = _supported_cus_validated_count(context["active_cus"], context["by_cu"], context["supported"])
+        findings_count: Counter[str] = context["findings_count"]
+        lines.append("## At a glance")
+        lines.append("")
+        lines.append("| Spec Coverage | ✅ Validation Health | ⚠️ Findings |")
+        lines.append("|:---:|:---:|:---:|")
+        lines.append(
+            f"| **{_fmt_pct(context['spec_coverage_value'])}** | "
+            f"**{_fmt_pct(context['validation_health_value'])}** | "
+            f"**{findings_count['critical']} Critical / {findings_count['major']} Major / "
+            f"{findings_count['minor']} Minor / {findings_count['info']} Info** |"
+        )
+        lines.append(
+            f"| {supported} / {total_active} CUs server-supported | "
+            f"{validated} / {supported} server-supported CUs validated | Sorted in Findings below |"
+        )
+        lines.append("")
+
+    lines.append("<details>")
+    lines.append("<summary><b>Test result counts</b></summary>")
     lines.append("")
     lines.append("| Status | Count | % |")
     lines.append("|--------|------:|--:|")
-    lines.append(f"| ✅ Passed   | **{p}** | {p * 100 // total if total else 0}% |")
-    lines.append(f"| ❌ Failed   | **{f}** | {f * 100 // total if total else 0}% |")
-    lines.append(f"| ⏭️ Skipped  | **{s}** | {s * 100 // total if total else 0}% |")
+    lines.append(f"| ✅ Passed | **{p}** | {p * 100 // total if total else 0}% |")
+    lines.append(f"| ❌ Failed | **{f}** | {f * 100 // total if total else 0}% |")
+    lines.append(f"| ⏭️ Skipped | **{s}** | {s * 100 // total if total else 0}% |")
     lines.append(f"| 🟡 Expected Fail | **{x}** | {x * 100 // total if total else 0}% |")
-    lines.append(f"| **Total**   | **{total}** | 100% |")
+    lines.append(f"| **Total** | **{total}** | 100% |")
+    lines.append("")
+    lines.append("</details>")
     lines.append("")
 
-    lines.extend(_render_profile_facet_summary(cu_payload))
+    lines.extend(profile_lines)
 
     # ── Failures detail ──
     if data["failures"]:
+        lines.append("<details open>")
+        lines.append("<summary><b>Failures</b></summary>")
         lines.append("## ❌ Failures")
         lines.append("")
         lines.append("| Test | Message |")
@@ -620,13 +1020,16 @@ def _render(data: dict, server_url: str, run_ts: str, cu_payload: dict[str, Any]
         if len(data["failures"]) > 30:
             lines.append(f"| … | *{len(data['failures']) - 30} more — see report.xlsx* |")
         lines.append("")
+        lines.append("</details>")
+        lines.append("")
 
     # ── Skip reason buckets ──
     if data["skip_reasons"]:
-        lines.append("## ⏭️ Raw Skip Reason Summary")
+        lines.append("<details>")
+        lines.append("<summary><b>Raw Skip Diagnostics</b></summary>")
         lines.append("")
         lines.append(
-            "Diagnostic skip buckets from pytest. These may overlap with CU attention items and do not "
+            "Diagnostic skip buckets from pytest. These may overlap with conformance findings and do not "
             "by themselves reduce CU compliance when the CU also has passing support coverage."
         )
         lines.append("")
@@ -635,10 +1038,13 @@ def _render(data: dict, server_url: str, run_ts: str, cu_payload: dict[str, Any]
         for reason, count in data["skip_reasons"].items():
             lines.append(f"| {_md_cell(reason)} | {count} |")
         lines.append("")
+        lines.append("</details>")
+        lines.append("")
 
     # ── Xfail reasons ──
     if data["xfail_reasons"]:
-        lines.append("## 🟡 Expected Failures")
+        lines.append("<details>")
+        lines.append("<summary><b>Expected Failures</b></summary>")
         lines.append("")
         lines.append("These tests are marked as expected failures — known server gaps, not bugs.")
         lines.append("")
@@ -647,10 +1053,12 @@ def _render(data: dict, server_url: str, run_ts: str, cu_payload: dict[str, Any]
         for reason, count in data["xfail_reasons"].items():
             lines.append(f"| {_md_cell(reason)} | {count} |")
         lines.append("")
+        lines.append("</details>")
+        lines.append("")
 
     lines.append("---")
     lines.append("*Full detail: download `report.xlsx` or `report.html` from the run artifacts.*")
-    return "\n".join(lines)
+    return "\n".join(lines), context
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -661,6 +1069,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--xml", default="test-results/pytest.xml")
     p.add_argument("--out", default="test-results/summary.md")
     p.add_argument("--cu-json", default=str(_DEFAULT_CU_JSON))
+    p.add_argument("--baseline", default=str(_DEFAULT_BASELINE_JSON))
     return p.parse_args()
 
 
@@ -675,15 +1084,21 @@ def main() -> int:
     data = _parse(xml_path)
     server_url = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
     run_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    run_ts_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     cu_payload = _load_json(Path(args.cu_json))
+    baseline_path = Path(args.baseline)
+    baseline = _load_baseline(baseline_path)
 
-    md = _render(data, server_url, run_ts, cu_payload)
+    md, context = _render(data, server_url, run_ts, cu_payload, baseline)
 
     # Write local copy
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(md, encoding="utf-8")
     print(f"Summary written: {out_path}")
+    if context is not None:
+        _write_baseline(baseline_path, _baseline_payload(context, run_ts_iso))
+        print(f"Baseline written: {baseline_path}")
 
     # Write to GitHub Step Summary if running in CI
     github_summary = os.environ.get("GITHUB_STEP_SUMMARY")

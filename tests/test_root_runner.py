@@ -892,7 +892,8 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
         "cs_live",
     }
     assert baseline["suites"]["tc_tests"]["skip_tolerance"] == 10
-    assert baseline["suites"]["wd_js"]["tests"] == 519
+    assert baseline["suites"]["wd_py"]["tests"] == 666
+    assert baseline["suites"]["wd_js"]["tests"] == 522
     assert baseline["suites"]["wc_web"]["skipped"] == 0
     assert baseline["suites"]["wc_web"]["skip_tolerance"] == 0
     assert "load_integration_baseline(" in workflow
@@ -923,8 +924,46 @@ def test_web_client_live_suite_has_no_runtime_skip_calls() -> None:
     ).read_text(encoding="utf-8")
 
     assert "pytest.skip(" not in live_tests
-    assert "REGRESSION_RESULT_EVENT_JOINT" in live_tests
+    assert "REGRESSION_RESULT_EVENT_JOINT" not in live_tests
+    assert "REGRESSION_JOINT_" not in live_tests
+    assert "_browse_tool_product_instance_uri" in live_tests
+    assert "GetJointList must return at least one usable JointId" in live_tests
+    assert "StartSelectedJoining can" in live_tests
     assert "ResultMetaData.ProcessingTimes" in live_tests
+
+
+def test_console_client_live_suite_discovers_joint_ids_without_hidden_xfail() -> None:
+    live_tests = (
+        _runner.REPO_ROOT
+        / "OPC_UA_Clients"
+        / "Release2"
+        / "IJT_Console_Client"
+        / "tests"
+        / "live"
+        / "test_opcua_live_console.py"
+    ).read_text(encoding="utf-8")
+
+    assert "pytest.xfail(" not in live_tests
+    assert "REGRESSION_JOINT_" not in live_tests
+    assert "GetJointList must return at least one usable JointId" in live_tests
+    assert "ProductInstanceUri must be configured on this server" in live_tests
+
+
+def test_web_regression_discovers_product_and_joint_ids_before_joint_flow() -> None:
+    source = (
+        _runner.REPO_ROOT
+        / "OPC_UA_Clients"
+        / "Release2"
+        / "IJT_Web_Client"
+        / "scripts"
+        / "run_regression.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'send_recv("read product instance uri")' in source
+    assert "PRODUCT_ID_OVERRIDE or discovered_product_id or DEFAULT_PRODUCT_ID" in source
+    assert "GetJointList" in source
+    assert "discovered_joint_ids" in source
+    assert "JOINT_1_OVERRIDE = os.getenv" in source
 
 
 def test_web_client_e2e_suite_has_no_runtime_skip_calls() -> None:

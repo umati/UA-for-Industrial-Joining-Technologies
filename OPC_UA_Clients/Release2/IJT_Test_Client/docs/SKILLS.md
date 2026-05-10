@@ -10,8 +10,8 @@ Full technical reference: [`opc-ua-server-context.md`](../../../../OPC_UA_Server
 # Full suite — OPC UA server auto-launched if needed
 python run_all_tests.py
 
-# Always generate Excel report (non-fatal post-step)
-python run_all_tests.py --excel=always
+# Skip the default Excel report only when explicitly needed
+python run_all_tests.py --excel=never
 
 # Generate a reference workflow walkthrough for review/demo use
 python scripts/run_reference_workflow.py --output test-results/reference-workflows/reference_joining_process_workflow.md
@@ -42,9 +42,11 @@ unit stage and is currently 95%.
 - The live CU compliance report includes workbook traceability for the checked-in Test Cases workbook: 1,122 expected TC header rows grouped by official CU, positive/negative classification, CTT/review/spec-link metadata, and optional exact row links from `@pytest.mark.workbook_ref("Sheet", [row])`.
 - Unit-only and collect-only pytest sessions must not write or overwrite the live CU compliance report.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
-- Local default is `on-success`; CI default is `always`.
+- Default is `always` locally and in CI; the Excel post-step is non-fatal. When tests fail, the workbook is diagnostic and includes a red warning banner.
 - Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
-- Excel and GitHub Actions summaries include IJT high-level coverage views, facet, and CU coverage tables when the live CU compliance report is present; report wording separates `Active server declaration`, `Reference IJT facet`, `Reference full CU set`, `Declared by Server`, `Run Compliance`, and `Primary Reason` for public clarity.
+- Excel and GitHub Actions summaries include a Conformance Score, at-a-glance KPIs, delta from `test-results/report-baseline.json`, server support summary, top findings, coverage overview, facet coverage, and CU coverage tables when the live CU compliance report is present.
+- Report wording separates `Server capability profile`, `Reference IJT facet`, `Reference full CU set`, `Server Supported CUs`, `Server Support %`, `Supported CUs Validated %`, `Result`, `Severity`, and `Primary Reason` for public clarity.
+- `report-baseline.json` is local/job-local in this slice; do not add GitHub Actions cache or cross-run baseline download without a separate security review.
 - Missing phase1 tools are auto-installed locally by default; CI keeps auto-install off by default for reproducibility.
 - Use `--no-auto-install-tools` to disable local auto-install, or `--auto-install-tools` to force-enable it.
 
@@ -54,7 +56,7 @@ unit stage and is currently 95%.
 |---|---|---|
 | `OPCUA_SERVER_URL` | raw pytest: `opc.tcp://localhost:40451`; runner auto-launch: `opc.tcp://localhost:40462` | OPC UA server endpoint URL |
 | `OPCUA_SIMULATOR_EXE` | (none) | Path to simulator binary for auto-launch |
-| `OPCUA_CAPABILITIES_FILE` | `server_capabilities.yaml` | Capability declaration for the server under test; auto-launched checked-in simulator uses `server_capabilities.simulator.yaml` when this is unset |
+| `OPCUA_CAPABILITIES_FILE` | `server_capabilities.yaml` | Capability file for the server under test; auto-launched checked-in simulator uses `server_capabilities.simulator.yaml` when this is unset |
 | `OPCUA_STARTUP_TIMEOUT_SEC` | `30` | Seconds to wait for server OPC UA readiness |
 | `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install |
 

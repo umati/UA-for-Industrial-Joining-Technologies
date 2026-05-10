@@ -430,8 +430,8 @@ export class JointDemoPage {
     await this.page.waitForFunction(
       (selector) => {
         const text = document.querySelector(selector)?.textContent || ''
-        return text.includes('Active ProductInstanceUri:')
-          && (text.includes('(auto-detected)') || text.includes('(selected from server)') || text.includes('(from Settings)'))
+        return text.includes('Active ProductInstanceUri:') &&
+          (text.includes('(auto-detected)') || text.includes('(selected from server)') || text.includes('(from Settings)'))
       },
       SEL.DEMO_ACTIVE_URI,
       { timeout }
@@ -456,7 +456,7 @@ export class JointDemoPage {
     await this.page.waitForTimeout(800)
   }
 
-  /** Full demo cycle: joint1 → tighten → joint2 → tighten */
+  /** Full demo cycle: primary joint -> tighten -> secondary joint -> tighten */
   async runFullDemoCycle () {
     await this.selectJoint1()
     await this.simulateTightening()

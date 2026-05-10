@@ -5,13 +5,16 @@ function makeDemo ({
   selected = null,
   settingsProductId = '',
   detectedProductInstanceUri = '',
+  detectedJoints = [],
 } = {}) {
   const demo = Object.create(JointDemo.prototype)
   demo._selectedProductInstanceUri = selected
-  demo.settings = { productId: settingsProductId }
+  demo.settings = { productId: settingsProductId, Joint1: 'Configured_1', Joint2: 'Configured_2' }
   demo._detectedTools = detectedProductInstanceUri
     ? [{ toolName: 'Tool 1', productInstanceUri: detectedProductInstanceUri, path: '0:TighteningSystem/2:Assets/2:Tools/2:Tool_1' }]
     : []
+  demo._detectedJoints = detectedJoints
+  demo._jointButtons = []
   return demo
 }
 
@@ -76,5 +79,31 @@ describe('JointDemo ProductInstanceUri resolution', () => {
     })
 
     expect(demo._callableProductUri()).toBe('www.atlascopco.com/53F22F10-B313-4B1D-924C-3A3EC7FCA002')
+  })
+
+  it('uses server-discovered joint IDs before Settings defaults', () => {
+    const demo = makeDemo({ detectedJoints: ['ServerJointA', 'ServerJointB'] })
+
+    expect(demo._jointIdForButton(0)).toBe('ServerJointA')
+    expect(demo._jointIdForButton(1)).toBe('ServerJointB')
+  })
+
+  it('falls back to the first discovered joint when the server exposes one joint', () => {
+    const demo = makeDemo({ detectedJoints: ['OnlyServerJoint'] })
+
+    expect(demo._jointIdForButton(0)).toBe('OnlyServerJoint')
+    expect(demo._jointIdForButton(1)).toBe('OnlyServerJoint')
+  })
+
+  it('parses JointIds from GetJointList method output shapes', () => {
+    const demo = makeDemo()
+    const output = [[
+      { JointId: 'Joint-A' },
+      { Value: { JointMetaData: { JointId: 'Joint-B' } } },
+      'Joint-C',
+      { JointId: 'Joint-A' },
+    ]]
+
+    expect(demo._extractJointIds(output)).toEqual(['Joint-A', 'Joint-B', 'Joint-C'])
   })
 })

@@ -16,7 +16,7 @@ test('JointDemo: demo buttons are rendered', async ({ connected: app }) => {
   await expect(app.page.locator('.demoActionSimulateTightening').first()).toBeVisible()
 })
 
-test('JointDemo: selecting joint 1 does not crash the page', async ({ connected: app }) => {
+test('JointDemo: selecting primary joint does not crash the page', async ({ connected: app }) => {
   test.setTimeout(90_000)
   const demo = await app.openJointDemo()
   await demo.waitForButtons()
@@ -25,7 +25,7 @@ test('JointDemo: selecting joint 1 does not crash the page', async ({ connected:
   await expect(app.page.locator('.demoActionSelectJoint1').first()).toBeVisible()
 })
 
-test('JointDemo: selecting joint 2 does not crash the page', async ({ connected: app }) => {
+test('JointDemo: selecting secondary joint does not crash the page', async ({ connected: app }) => {
   test.setTimeout(90_000)
   const demo = await app.openJointDemo()
   await demo.waitForButtons()
@@ -33,7 +33,7 @@ test('JointDemo: selecting joint 2 does not crash the page', async ({ connected:
   await expect(app.page.locator('.demoActionSelectJoint2').first()).toBeVisible()
 })
 
-test('JointDemo: simulate tightening for joint 1 produces an event', async ({ connected: app }) => {
+test('JointDemo: simulate tightening for primary joint produces an event', async ({ connected: app }) => {
   test.setTimeout(150_000)
   const demo = await app.openJointDemo()
   await demo.waitForButtons({ timeout: 60_000 })
@@ -46,7 +46,7 @@ test('JointDemo: simulate tightening for joint 1 produces an event', async ({ co
   expect(count).toBeGreaterThan(0)
 })
 
-test('JointDemo: full demo cycle (j1→tighten→j2→tighten) produces results', async ({ connected: app }) => {
+test('JointDemo: full demo cycle for primary and secondary joints produces results', async ({ connected: app }) => {
   test.setTimeout(180_000)
   const demo = await app.openJointDemo()
   await demo.waitForButtons({ timeout: 60_000 })
@@ -82,7 +82,7 @@ test('JointDemo: repeated demo cycles accumulate results', async ({ connected: a
   const demo = await app.openJointDemo()
   await demo.waitForButtons({ timeout: 60_000 })
 
-  // Run two full cycles
+  // Run two full primary/secondary cycles.
   await demo.runFullDemoCycle()
   await demo.runFullDemoCycle()
 

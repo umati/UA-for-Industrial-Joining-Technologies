@@ -11,7 +11,7 @@ Sheets produced:
   Failures         — only failed tests with full message
   Skipped          — only skipped tests with reason
   Expected Fail    — xfailed and xpassed tests with reason
-  Profile Coverage — IJT high-level coverage views, when CU JSON is present
+  Profile Coverage — IJT coverage overview, when CU JSON is present
   Facet Coverage   — IJT facet coverage, when CU JSON is present
   CU Coverage      — one row per conformance unit, when CU JSON is present
 
@@ -26,12 +26,15 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
+import platform
 import re
 import sys
 import xml.etree.ElementTree as ET  # nosec B405
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -92,7 +95,23 @@ _CU_STATUS_COLOUR = {
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _PROFILES_DIR = _PROJECT_ROOT / "profiles"
 _DEFAULT_CU_JSON = _PROJECT_ROOT / "test-results" / "cu-compliance-report.json"
+_DEFAULT_BASELINE_JSON = _PROJECT_ROOT / "test-results" / "report-baseline.json"
 _CU_COMPLIANCE_KEYS = {"supported", "partial", "not_supported", "blocked", "action_needed", "untested"}
+_FINDING_OUTCOMES = {"partial", "not_supported", "blocked", "action_needed"}
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+# Score / severity / delta logic lives in helpers/report_scoring.py.
+# Markdown and Excel generators must use the same helper to stay in sync.
+from helpers.report_scoring import (  # noqa: E402,I001
+    OUTCOME_RANK as _OUTCOME_RANK,
+    SEVERITY_ORDER as _SEVERITY_ORDER,
+    conformance_score as _conformance_score,
+    delta_symbol as _delta_symbol,
+    format_pct as _fmt_pct,
+    pct_value as _pct_value,
+    severity_for as _severity_for,
+)
 
 # ── Data model ────────────────────────────────────────────────────────────────
 
@@ -309,6 +328,97 @@ def _server_profile_pct(server_profile_cus: int | str, total: int) -> str:
     return _pct(server_profile_cus, total)
 
 
+def _server_supported_cu_keys(cu_keys: list[str], supported: set[str] | None) -> list[str]:
+    if supported is None:
+        return []
+    return [cu_key for cu_key in cu_keys if cu_key in supported]
+
+
+def _supported_cus_validated_count(cu_keys: list[str], by_cu: dict[str, Any], supported: set[str] | None) -> int | str:
+    if supported is None:
+        return "n/a"
+    counts = _count_cu_outcomes(_server_supported_cu_keys(cu_keys, supported), by_cu)
+    return counts["supported"] + counts["partial"]
+
+
+def _supported_cus_validated_pct(cu_keys: list[str], by_cu: dict[str, Any], supported: set[str] | None) -> str:
+    server_supported_count = _server_profile_cu_count(cu_keys, supported)
+    validated_count = _supported_cus_validated_count(cu_keys, by_cu, supported)
+    if not isinstance(server_supported_count, int) or not isinstance(validated_count, int):
+        return "n/a"
+    return _pct(validated_count, server_supported_count)
+
+
+def _supported_cus_validated_pct_value(
+    cu_keys: list[str], by_cu: dict[str, Any], supported: set[str] | None
+) -> float | None:
+    server_supported_count = _server_profile_cu_count(cu_keys, supported)
+    validated_count = _supported_cus_validated_count(cu_keys, by_cu, supported)
+    if not isinstance(server_supported_count, int) or not isinstance(validated_count, int):
+        return None
+    return _pct_value(validated_count, server_supported_count)
+
+
+def _short_git_sha() -> str:
+    sha = os.environ.get("GITHUB_SHA")
+    if sha:
+        return sha[:7]
+    repo_root = _PROJECT_ROOT.parents[2]
+    git_path = repo_root / ".git"
+    try:
+        if git_path.is_file():
+            gitdir_line = git_path.read_text(encoding="utf-8").strip()
+            gitdir = gitdir_line.removeprefix("gitdir:").strip()
+            git_path = Path(gitdir) if Path(gitdir).is_absolute() else (repo_root / gitdir).resolve()
+        head = (git_path / "HEAD").read_text(encoding="utf-8").strip()
+        if head.startswith("ref: "):
+            ref_name = head.removeprefix("ref: ").strip()
+            ref_path = git_path / ref_name
+            if ref_path.exists():
+                head = ref_path.read_text(encoding="utf-8").strip()
+            else:
+                packed_refs = git_path / "packed-refs"
+                for line in packed_refs.read_text(encoding="utf-8").splitlines():
+                    if not line or line.startswith("#") or line.startswith("^"):
+                        continue
+                    ref_sha, _, ref = line.partition(" ")
+                    if ref == ref_name:
+                        head = ref_sha
+                        break
+    except OSError:
+        return "unknown"
+    return head[:7] if re.fullmatch(r"[0-9a-fA-F]{7,40}", head) else "unknown"
+
+
+def _run_logs_url() -> str:
+    server = os.environ.get("GITHUB_SERVER_URL")
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    run_id = os.environ.get("GITHUB_RUN_ID")
+    if server and repo and run_id:
+        return f"{server}/{repo}/actions/runs/{run_id}"
+    return "n/a"
+
+
+def _package_version(package: str) -> str:
+    try:
+        return metadata.version(package)
+    except metadata.PackageNotFoundError:
+        return "not installed"
+
+
+def _load_baseline(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _write_baseline(path: Path, baseline: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def _cus_for_profile(profile: ProfileInfo, facets: dict[str, FacetInfo]) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
@@ -468,6 +578,126 @@ def _cu_note_summary(cu_key: str, tests_by_cu: dict[str, list[dict[str, Any]]]) 
     return "; ".join(notes)
 
 
+def _build_report_context(
+    cu_payload: dict[str, Any] | None,
+    profiles: dict[str, ProfileInfo],
+    facets: dict[str, FacetInfo],
+    capabilities: CapabilitiesInfo | None,
+    baseline: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not cu_payload:
+        return None
+    by_cu = cu_payload.get("by_cu", {}) if isinstance(cu_payload.get("by_cu"), dict) else {}
+    supported = _supported_set(cu_payload)
+    active_profile = capabilities.active_profile if capabilities else ""
+    active = profiles.get(active_profile)
+    active_cus = _cus_for_profile(active, facets) if active else []
+    active_cus_set = set(active_cus)
+    active_counts = _count_cu_outcomes(active_cus, by_cu) if active else Counter()
+    server_supported_count = _server_profile_cu_count(active_cus, supported)
+    score = _conformance_score(active_counts, server_supported_count, len(active_cus))
+    validation_health_value = _supported_cus_validated_pct_value(active_cus, by_cu, supported)
+    spec_coverage_value = (
+        _pct_value(server_supported_count, len(active_cus)) if isinstance(server_supported_count, int) else None
+    )
+    ordered_keys = _ordered_cu_keys(by_cu, facets)
+    facet_map = _cu_to_facets(facets)
+    tests_by_cu = _cu_test_index(cu_payload)
+
+    findings: list[dict[str, Any]] = []
+    cu_outcomes: dict[str, str] = {}
+    for cu_key in ordered_keys:
+        data_raw = by_cu.get(cu_key)
+        data = data_raw if isinstance(data_raw, dict) else {}
+        outcome = _cu_compliance_key(data)
+        cu_outcomes[cu_key] = outcome
+        if outcome not in _FINDING_OUTCOMES:
+            continue
+        severity, severity_icon = _severity_for(cu_key, outcome, active_cus_set)
+        findings.append(
+            {
+                "cu_key": cu_key,
+                "cu": _cu_display_name(cu_key),
+                "facets": ", ".join(facet_map.get(cu_key, [])),
+                "outcome": outcome,
+                "result": _cu_compliance_label(outcome),
+                "reason": _cu_note_summary(cu_key, tests_by_cu),
+                "severity": severity,
+                "severity_icon": severity_icon,
+                "delta": _delta_symbol(cu_key, outcome, baseline),
+            }
+        )
+    findings.sort(key=lambda item: (_SEVERITY_ORDER.get(str(item["severity"]), 99), str(item["cu_key"])))
+    return {
+        "by_cu": by_cu,
+        "supported": supported,
+        "active_profile": active_profile,
+        "active_label": active.name if active else "No active profile found",
+        "active_cus": active_cus,
+        "active_counts": active_counts,
+        "server_supported_count": server_supported_count,
+        "score": score,
+        "validation_health_value": validation_health_value,
+        "spec_coverage_value": spec_coverage_value,
+        "findings": findings,
+        "findings_count": Counter(str(item["severity"]).lower() for item in findings),
+        "cu_outcomes": cu_outcomes,
+    }
+
+
+def _baseline_payload(context: dict[str, Any], run_ts_iso: str) -> dict[str, Any]:
+    return {
+        "run_ts": run_ts_iso,
+        "git_sha": _short_git_sha(),
+        "score": context["score"],
+        "validation_health_pct": context["validation_health_value"],
+        "spec_coverage_pct": context["spec_coverage_value"],
+        "findings_count": dict(context["findings_count"]),
+        "cu_outcomes": context["cu_outcomes"],
+    }
+
+
+def _delta_summary(context: dict[str, Any], baseline: dict[str, Any] | None) -> dict[str, int]:
+    if not baseline:
+        return {"new": 0, "resolved": 0, "regressed": 0}
+    raw_previous_outcomes = baseline.get("cu_outcomes")
+    previous_outcomes: dict[str, Any] = raw_previous_outcomes if isinstance(raw_previous_outcomes, dict) else {}
+    current_outcomes: dict[str, str] = context["cu_outcomes"]
+    new = resolved = regressed = 0
+    for cu_key, current in current_outcomes.items():
+        previous = str(previous_outcomes.get(cu_key) or "")
+        if current in _FINDING_OUTCOMES and previous not in _FINDING_OUTCOMES:
+            new += 1
+        if previous in _FINDING_OUTCOMES and current not in _FINDING_OUTCOMES:
+            resolved += 1
+        current_rank = _OUTCOME_RANK.get(current)
+        previous_rank = _OUTCOME_RANK.get(previous)
+        if current_rank is not None and previous_rank is not None and current_rank < previous_rank:
+            regressed += 1
+    return {"new": new, "resolved": resolved, "regressed": regressed}
+
+
+def _support_rows(context: dict[str, Any], facets: dict[str, FacetInfo], limit: int = 12) -> list[tuple[str, str]]:
+    by_cu: dict[str, Any] = context["by_cu"]
+    supported: set[str] | None = context["supported"]
+    rows: list[tuple[int, str, str]] = []
+    for facet in facets.values():
+        if facet.kind == "rollup":
+            continue
+        counts = _count_cu_outcomes(facet.conformance_units, by_cu)
+        server_supported_count = _server_profile_cu_count(facet.conformance_units, supported)
+        if counts["action_needed"] or counts["blocked"] or server_supported_count == 0:
+            icon, rank, label = "❌", 0, "not supported by this server"
+        elif counts["partial"] or counts["not_supported"] or server_supported_count != len(facet.conformance_units):
+            icon, rank, label = "⚠️", 1, "partially supported"
+        else:
+            icon, rank, label = "✅", 2, "supported"
+        name = facet.display_name.removeprefix("IJT ").removesuffix(" Server Facet")
+        rows.append((rank, name, f"{icon} {label}. {facet.description}"))
+    rows.sort(key=lambda item: (item[0], item[1]))
+    return [(name, status) for _rank, name, status in rows[:limit]]
+
+
 def _compliance_status(counts: Counter[str], total: int) -> str:
     if counts["action_needed"]:
         return "ACTION NEEDED"
@@ -491,6 +721,27 @@ def _status_fill(status: str) -> PatternFill:
         "NO COMPLIANCE RESULT": _GRAY,
     }.get(status, _WHITE)
     return _fill(colour)
+
+
+def _percentage_fill(value: str | float | None) -> PatternFill:
+    if value is None or value == "n/a":
+        return _fill(_GRAY)
+    if isinstance(value, str):
+        try:
+            pct = float(value.removesuffix("%"))
+        except ValueError:
+            return _fill(_WHITE)
+    else:
+        pct = value
+    if pct >= 99.9:
+        return _fill(_LIGHT_GREEN)
+    if pct >= 90.0:
+        return _fill(_LIGHT_GREEN_NOTE)
+    if pct >= 75.0:
+        return _fill(_LIGHT_YELLOW)
+    if pct >= 50.0:
+        return _fill(_LIGHT_ORANGE)
+    return _fill(_LIGHT_RED)
 
 
 def _pct(numerator: int, denominator: int) -> str:
@@ -534,7 +785,132 @@ def _write_row(ws, row: int, values: list, status: str, alternate: bool) -> None
 # ── Sheet builders ────────────────────────────────────────────────────────────
 
 
-def _build_summary(wb: openpyxl.Workbook, cases: list[TestCase], run_ts: str) -> None:
+def _write_failure_banner(ws, row: int) -> None:
+    ws.cell(row=row, column=1, value="Run result").font = Font(bold=True)
+    cell = ws.cell(
+        row=row,
+        column=2,
+        value=(
+            "FAILED - this workbook was generated for diagnostics after a failed test run. "
+            "Coverage may be partial; review the Failures sheet and runner output first."
+        ),
+    )
+    cell.fill = _fill(_LIGHT_RED)
+    cell.font = Font(bold=True)
+    cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+
+def _build_cover(
+    wb: openpyxl.Workbook,
+    cases: list[TestCase],
+    run_ts: str,
+    run_result: str,
+    context: dict[str, Any] | None,
+    baseline: dict[str, Any] | None,
+    facets: dict[str, FacetInfo],
+) -> None:
+    ws = wb.create_sheet("Cover")
+    ws.sheet_view.showGridLines = False
+    for col in range(1, 8):
+        ws.column_dimensions[get_column_letter(col)].width = 22
+
+    statuses = [case.status for case in cases]
+    failed = statuses.count("failed") + statuses.count("error")
+    status = "PASSED" if failed == 0 and run_result != "failed" else "FAILED"
+    score = context["score"] if context else "n/a"
+    ws.merge_cells("A1:G1")
+    title = ws["A1"]
+    title.value = f"{status} - Score {score} / 100"
+    title.font = Font(bold=True, size=24)
+    title.fill = _fill(_LIGHT_GREEN if status == "PASSED" else _LIGHT_RED)
+    title.alignment = Alignment(horizontal="center")
+
+    if run_result == "failed":
+        _write_failure_banner(ws, 3)
+
+    row = 5
+    _apply_header(ws, row, ["Metric", "Value", "Context"], [28, 24, 70])
+    if context:
+        supported = context["server_supported_count"]
+        total_active = len(context["active_cus"])
+        validated = _supported_cus_validated_count(context["active_cus"], context["by_cu"], context["supported"])
+        findings_count: Counter[str] = context["findings_count"]
+        metrics = [
+            (
+                "Spec Coverage",
+                _fmt_pct(context["spec_coverage_value"]),
+                f"{supported} / {total_active} CUs server-supported",
+            ),
+            (
+                "Validation Health",
+                _fmt_pct(context["validation_health_value"]),
+                f"{validated} / {supported} server-supported CUs validated",
+            ),
+            (
+                "Findings",
+                f"{findings_count['critical']} Critical / {findings_count['major']} Major / "
+                f"{findings_count['minor']} Minor / {findings_count['info']} Info",
+                "Sorted by severity in Conformance Findings",
+            ),
+        ]
+        for offset, (metric, value, note) in enumerate(metrics, start=1):
+            ws.cell(row=row + offset, column=1, value=metric).font = Font(bold=True)
+            value_cell = ws.cell(row=row + offset, column=2, value=value)
+            value_cell.font = Font(bold=True)
+            if metric != "Findings":
+                value_cell.fill = _percentage_fill(
+                    context["spec_coverage_value" if metric == "Spec Coverage" else "validation_health_value"]
+                )
+            ws.cell(row=row + offset, column=3, value=note).alignment = Alignment(wrap_text=True, vertical="top")
+
+    row = 10
+    ws.cell(row=row, column=1, value="Delta Since Last Run").font = Font(bold=True, size=14)
+    if context and baseline:
+        delta = _delta_summary(context, baseline)
+        rows = [
+            ("Score", f"{baseline.get('score', 'n/a')} -> {context['score']}"),
+            (
+                "Validation Health",
+                f"{_fmt_pct(baseline.get('validation_health_pct'))} -> {_fmt_pct(context['validation_health_value'])}",
+            ),
+            (
+                "Spec Coverage",
+                f"{_fmt_pct(baseline.get('spec_coverage_pct'))} -> {_fmt_pct(context['spec_coverage_value'])}",
+            ),
+            ("Findings", f"{delta['new']} new / {delta['resolved']} resolved / {delta['regressed']} regressed"),
+        ]
+    else:
+        rows = [("Baseline", "No baseline yet - this run becomes the baseline.")]
+    _apply_header(ws, row + 1, ["Item", "Change"], [28, 50])
+    for offset, (item, value) in enumerate(rows, start=2):
+        ws.cell(row=row + offset, column=1, value=item).font = Font(bold=True)
+        ws.cell(row=row + offset, column=2, value=value)
+
+    row = row + max(6, len(rows) + 4)
+    ws.cell(row=row, column=1, value="What this server supports").font = Font(bold=True, size=14)
+    _apply_header(ws, row + 1, ["Capability Area", "Status"], [34, 90])
+    if context:
+        for offset, (area, status_text) in enumerate(_support_rows(context, facets), start=2):
+            ws.cell(row=row + offset, column=1, value=area).font = Font(bold=True)
+            ws.cell(row=row + offset, column=2, value=status_text).alignment = Alignment(wrap_text=True, vertical="top")
+
+    row = row + 16
+    ws.cell(row=row, column=1, value="Test environment").font = Font(bold=True, size=14)
+    env_rows = [
+        ("Generated", run_ts),
+        ("Commit", _short_git_sha()),
+        ("Python", platform.python_version()),
+        ("asyncua", _package_version("asyncua")),
+        ("Host OS", platform.platform()),
+        ("Run logs", _run_logs_url()),
+    ]
+    _apply_header(ws, row + 1, ["Item", "Value"], [28, 80])
+    for offset, (item, value) in enumerate(env_rows, start=2):
+        ws.cell(row=row + offset, column=1, value=item).font = Font(bold=True)
+        ws.cell(row=row + offset, column=2, value=value).alignment = Alignment(wrap_text=True, vertical="top")
+
+
+def _build_summary(wb: openpyxl.Workbook, cases: list[TestCase], run_ts: str, run_result: str) -> None:
     ws = wb.create_sheet("Summary")
     ws.sheet_view.showGridLines = False
 
@@ -543,6 +919,8 @@ def _build_summary(wb: openpyxl.Workbook, cases: list[TestCase], run_ts: str) ->
     ws["A1"].font = Font(bold=True, size=14)
     ws["A2"] = f"Generated: {run_ts}"
     ws["A2"].font = Font(italic=True, size=10)
+    if run_result == "failed":
+        _write_failure_banner(ws, 3)
 
     # Overall counts
     statuses = [c.status for c in cases]
@@ -663,6 +1041,7 @@ def _build_profile_coverage(
     profiles: dict[str, ProfileInfo],
     facets: dict[str, FacetInfo],
     capabilities: CapabilitiesInfo | None,
+    run_result: str,
 ) -> None:
     ws = wb.create_sheet("Profile Coverage")
     ws.sheet_view.showGridLines = False
@@ -673,15 +1052,18 @@ def _build_profile_coverage(
     summary = cu_payload.get("summary", {}) if isinstance(cu_payload.get("summary"), dict) else {}
     all_cu_keys = _ordered_cu_keys(by_cu, facets)
 
-    ws["A1"] = "IJT Profiles, Facets, and Conformance Units Coverage"
+    ws["A1"] = "IJT Profile, Facet, and Conformance Unit Coverage"
     ws["A1"].font = Font(bold=True, size=14)
     ws["A2"] = (
-        "This sheet maps the current test run to IJT high-level coverage views, facets, and conformance units. "
-        "Start with the Active Server Declaration row; Reference IJT Facet and Reference Full CU Set rows are comparison views only, not extra pass/fail requirements. "
-        "Declared by Server comes from the active server declaration. Run Compliance and validated counts come from this test run. "
-        "Raw skip reports remain diagnostic and may overlap with CU attention items."
+        "This sheet maps the current test run to IJT coverage views, facets, and conformance units. "
+        "Start with the Server Capability Profile row; Reference IJT Facet and Reference Full CU Set rows are comparison views only, not extra pass/fail requirements. "
+        "Server Supported CUs comes from the server capability file. Result and validated counts come from this test run. "
+        "Supported CUs Validated % is the main health signal and is color-coded; Server Support % is informational and is not color-coded. "
+        "Raw skip reports remain diagnostic and may overlap with conformance findings."
     )
     ws["A2"].alignment = Alignment(wrap_text=True)
+    if run_result == "failed":
+        _write_failure_banner(ws, 3)
 
     active = capabilities.active_profile if capabilities else ""
     server = capabilities.server_name if capabilities else "Server under test"
@@ -690,9 +1072,9 @@ def _build_profile_coverage(
         4,
         [
             ("Server", server),
-            ("Active server declaration", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
+            ("Server capability profile", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
             ("Official IJT CUs", summary.get("official_cu_count", len(by_cu))),
-            ("Declared by server", len(supported) if supported is not None else "n/a"),
+            ("Server supported CUs", len(supported) if supported is not None else "n/a"),
             ("Workbook test cases", summary.get("workbook_case_count", "n/a")),
         ],
     )
@@ -702,18 +1084,19 @@ def _build_profile_coverage(
         "Role",
         "Facet Count",
         "CUs in View",
-        "Declared by Server",
+        "Server Supported CUs",
         "Validated Supported",
         "Validated with Notes",
         "Not Supported",
         "Blocked",
         "Action Needed",
         "Untested",
-        "Declared by Server %",
-        "Run Compliance",
+        "Server Support %",
+        "Supported CUs Validated %",
+        "Result",
         "Description",
     ]
-    widths = [34, 28, 12, 10, 14, 12, 12, 14, 9, 13, 9, 12, 16, 70]
+    widths = [34, 28, 12, 10, 14, 12, 12, 14, 9, 13, 9, 12, 14, 16, 70]
     _apply_header(ws, next_row, headers, widths)
 
     view_rows: list[tuple[str, str, int, list[str], str]] = []
@@ -722,7 +1105,7 @@ def _build_profile_coverage(
         view_rows.append(
             (
                 profile.name,
-                "Active Server Declaration",
+                "Server Capability Profile",
                 len(profile.facets),
                 _cus_for_profile(profile, facets),
                 profile.description,
@@ -762,6 +1145,7 @@ def _build_profile_coverage(
     for view_name, role, facet_count, cu_keys, description in view_rows:
         counts = _count_cu_outcomes(cu_keys, by_cu)
         server_profile_cus = _server_profile_cu_count(cu_keys, supported)
+        supported_validated_pct_value = _supported_cus_validated_pct_value(cu_keys, by_cu, supported)
         compliance = _compliance_status(counts, len(cu_keys))
         values = [
             view_name,
@@ -776,21 +1160,25 @@ def _build_profile_coverage(
             counts["action_needed"],
             counts["untested"],
             _server_profile_pct(server_profile_cus, len(cu_keys)),
+            _supported_cus_validated_pct(cu_keys, by_cu, supported),
             compliance,
             description,
         ]
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            if col == 2 and value == "Active Server Declaration":
+            if col == 2 and value == "Server Capability Profile":
                 cell.fill = _fill(_LIGHT_BLUE)
                 cell.font = Font(bold=True)
             if col == 13:
+                cell.fill = _percentage_fill(supported_validated_pct_value)
+                cell.font = Font(bold=True)
+            if col == 14:
                 cell.fill = _status_fill(str(value))
                 cell.font = Font(bold=True)
         row += 1
 
-    ws.auto_filter.ref = f"A{next_row}:N{row - 1}"
+    ws.auto_filter.ref = f"A{next_row}:O{row - 1}"
 
 
 def _build_facet_coverage(
@@ -812,24 +1200,26 @@ def _build_facet_coverage(
         "Facet Key",
         "Facet Type",
         "CUs in Facet",
-        "Declared by Server",
+        "Server Supported CUs",
         "Validated Supported",
         "Validated with Notes",
         "Not Supported",
         "Blocked",
         "Action Needed",
         "Untested",
-        "Declared by Server %",
-        "Run Compliance",
+        "Server Support %",
+        "Supported CUs Validated %",
+        "Result",
         "Description",
     ]
-    widths = [34, 34, 12, 10, 14, 12, 12, 14, 9, 13, 9, 12, 16, 70]
+    widths = [34, 34, 12, 10, 14, 12, 12, 14, 9, 13, 9, 12, 14, 16, 70]
     _apply_header(ws, 1, headers, widths)
 
     for row, facet in enumerate(facets.values(), start=2):
         cu_keys = facet.conformance_units
         counts = _count_cu_outcomes(cu_keys, by_cu)
         server_profile_cus = _server_profile_cu_count(cu_keys, supported)
+        supported_validated_pct_value = _supported_cus_validated_pct_value(cu_keys, by_cu, supported)
         compliance = _compliance_status(counts, len(cu_keys))
         facet_type = "Rollup" if facet.kind == "rollup" else "Facet"
         if facet.key in active_extra_facets:
@@ -847,6 +1237,7 @@ def _build_facet_coverage(
             counts["action_needed"],
             counts["untested"],
             _server_profile_pct(server_profile_cus, len(cu_keys)),
+            _supported_cus_validated_pct(cu_keys, by_cu, supported),
             compliance,
             facet.description,
         ]
@@ -854,10 +1245,13 @@ def _build_facet_coverage(
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
             if col == 13:
+                cell.fill = _percentage_fill(supported_validated_pct_value)
+                cell.font = Font(bold=True)
+            if col == 14:
                 cell.fill = _status_fill(str(value))
                 cell.font = Font(bold=True)
 
-    ws.auto_filter.ref = f"A1:N{max(1, len(facets) + 1)}"
+    ws.auto_filter.ref = f"A1:O{max(1, len(facets) + 1)}"
 
 
 def _build_cu_coverage(
@@ -865,6 +1259,8 @@ def _build_cu_coverage(
     cu_payload: dict[str, Any],
     facets: dict[str, FacetInfo],
     capabilities: CapabilitiesInfo | None,
+    context: dict[str, Any] | None,
+    baseline: dict[str, Any] | None,
 ) -> None:
     ws = wb.create_sheet("CU Coverage")
     ws.sheet_view.showGridLines = False
@@ -876,13 +1272,16 @@ def _build_cu_coverage(
     overrides = capabilities.overrides if capabilities else {}
     ordered_keys = _ordered_cu_keys(by_cu, facets)
     tests_by_cu = _cu_test_index(cu_payload)
+    active_cus = set(context["active_cus"]) if context else set()
 
     headers = [
+        "Severity",
+        "Δ",
         "CU",
         "CU Key",
         "Facet(s)",
-        "Declared by Server",
-        "Run Compliance",
+        "Server Supported",
+        "Result",
         "Tests",
         "Passed",
         "Not Supported",
@@ -895,7 +1294,7 @@ def _build_cu_coverage(
         "Notes",
         "Example Test",
     ]
-    widths = [34, 34, 44, 18, 16, 8, 8, 14, 9, 12, 14, 9, 9, 14, 80, 80]
+    widths = [14, 8, 34, 34, 44, 18, 16, 8, 8, 14, 9, 12, 14, 9, 9, 14, 80, 80]
     _apply_header(ws, 1, headers, widths)
 
     for row, cu_key in enumerate(ordered_keys, start=2):
@@ -905,7 +1304,10 @@ def _build_cu_coverage(
         failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
         tests = data.get("tests") if isinstance(data.get("tests"), list) else []
         support = _in_server_profile(cu_key, supported)
+        severity, severity_icon = _severity_for(cu_key, compliance, active_cus)
         values = [
+            f"{severity_icon} {severity}",
+            _delta_symbol(cu_key, compliance, baseline),
             _cu_display_name(cu_key),
             cu_key,
             ", ".join(facet_map.get(cu_key, [])),
@@ -926,13 +1328,23 @@ def _build_cu_coverage(
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            if col == 4 and value == "No":
+            if col == 1 and severity:
+                cell.font = Font(bold=True)
+                if severity == "Critical":
+                    cell.fill = _fill(_LIGHT_RED)
+                elif severity == "Major":
+                    cell.fill = _fill(_LIGHT_ORANGE)
+                elif severity == "Minor":
+                    cell.fill = _fill(_LIGHT_YELLOW)
+                else:
+                    cell.fill = _fill(_GRAY)
+            if col == 6 and value == "No":
                 cell.fill = _fill(_LIGHT_YELLOW)
-            if col == 5:
+            if col == 7:
                 cell.fill = _fill(_CU_STATUS_COLOUR.get(compliance, _WHITE))
                 cell.font = Font(bold=True)
 
-    ws.auto_filter.ref = f"A1:P{max(1, len(ordered_keys) + 1)}"
+    ws.auto_filter.ref = f"A1:R{max(1, len(ordered_keys) + 1)}"
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -951,6 +1363,18 @@ def _parse_args() -> argparse.Namespace:
         "--capabilities",
         default=None,
         help="Optional server capabilities YAML used to label the active profile",
+    )
+    p.add_argument(
+        "--run-result",
+        choices=["passed", "failed", "unknown"],
+        default=os.environ.get("IJT_RUN_RESULT", "unknown"),
+        help="Overall runner result; failed adds a diagnostic warning banner to the workbook",
+    )
+    p.add_argument("--baseline", default=str(_DEFAULT_BASELINE_JSON), help="Report baseline JSON path")
+    p.add_argument(
+        "--write-baseline",
+        action="store_true",
+        help="Write report-baseline.json after rendering; CI summary normally owns this in Integration",
     )
     return p.parse_args()
 
@@ -971,26 +1395,35 @@ def main() -> int:
     cases = parse_junit_xml(xml_path)
     print(f"  {len(cases)} test cases found")
     cu_payload = _load_json(Path(args.cu_json))
-    capabilities = _load_capabilities(Path(args.capabilities)) if args.capabilities else None
+    capabilities_arg = args.capabilities or os.environ.get("OPCUA_CAPABILITIES_FILE")
+    capabilities_path = Path(capabilities_arg) if capabilities_arg else _PROJECT_ROOT / "server_capabilities.yaml"
+    capabilities = _load_capabilities(capabilities_path)
     facets = _load_facets()
     profiles = _load_profiles()
+    baseline_path = Path(args.baseline)
+    baseline = _load_baseline(baseline_path)
+    context = _build_report_context(cu_payload, profiles, facets, capabilities, baseline)
 
     run_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    run_ts_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     wb = openpyxl.Workbook()
     wb.remove(wb.active)  # remove default empty sheet
 
-    _build_summary(wb, cases, run_ts)
+    _build_cover(wb, cases, run_ts, args.run_result, context, baseline, facets)
+    _build_summary(wb, cases, run_ts, args.run_result)
     _build_all_tests(wb, cases)
     _build_filtered(wb, cases, "Failures", ["failed", "error"], _RED)
     _build_filtered(wb, cases, "Skipped", ["skipped"], _YELLOW)
     _build_filtered(wb, cases, "Expected Fail", ["xfailed", "xpassed"], _ORANGE)
     if cu_payload and facets:
-        _build_profile_coverage(wb, cu_payload, profiles, facets, capabilities)
+        _build_profile_coverage(wb, cu_payload, profiles, facets, capabilities, args.run_result)
         _build_facet_coverage(wb, cu_payload, facets, capabilities)
-        _build_cu_coverage(wb, cu_payload, facets, capabilities)
+        _build_cu_coverage(wb, cu_payload, facets, capabilities, context, baseline)
 
     wb.save(out_path)
+    if args.write_baseline and context is not None:
+        _write_baseline(baseline_path, _baseline_payload(context, run_ts_iso))
 
     # Print summary to console
     statuses = [c.status for c in cases]

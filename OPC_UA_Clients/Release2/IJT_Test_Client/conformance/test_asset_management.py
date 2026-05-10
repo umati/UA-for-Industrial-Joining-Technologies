@@ -872,7 +872,7 @@ async def test_virtual_stations_folder_has_at_least_one_instance(virtual_station
 
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_VIRTUAL_STATION)
 async def test_virtual_station_implements_ivirtual_station_type_interface(virtual_stations_folder, ns_indices):
-    """First VirtualStation must declare HasInterface → IVirtualStationType."""
+    """First VirtualStation must expose HasInterface → IVirtualStationType."""
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None or virtual_stations_folder is None:
         pytest.skip("VirtualStations folder or IJT Base namespace not available")
@@ -883,8 +883,7 @@ async def test_virtual_station_implements_ivirtual_station_type_interface(virtua
     has_iface = await has_interface(vs_node, ns_ijt, IJTTypes.IVIRTUAL_STATION_TYPE)
     if not has_iface:
         pytest.skip(
-            f"VirtualStation '{_name}' has no HasInterface → IVirtualStationType — "
-            "interface not declared on this server"
+            f"VirtualStation '{_name}' has no HasInterface → IVirtualStationType — interface not present on this server"
         )
 
 

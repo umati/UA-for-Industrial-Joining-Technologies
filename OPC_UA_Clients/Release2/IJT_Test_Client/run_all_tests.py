@@ -10,7 +10,7 @@ Usage:
   python run_all_tests.py --phase1           # static analysis only (no server)
   python run_all_tests.py --phase2           # live tests only (server must be up)
   python run_all_tests.py --junit-xml=FILE   # write JUnit XML report
-  python run_all_tests.py --excel=always     # generate Excel report after run (non-fatal)
+  python run_all_tests.py --excel=never      # disable Excel report generation
   python run_all_tests.py --no-auto-install-tools  # do not auto-install missing quality tools
   python run_all_tests.py --verbose          # verbose pytest output
   python run_all_tests.py --no-server-check  # skip pre-test server check
@@ -1344,8 +1344,8 @@ def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _
 
 
 def _default_excel_mode() -> str:
-    """Default Excel behavior: always in CI, on-success for local runs."""
-    return "always" if os.environ.get("CI") else "on-success"
+    """Default Excel behavior: generate a non-fatal workbook for every run."""
+    return "always"
 
 
 def _summarize_skip_reason(message: str) -> str:
@@ -1445,7 +1445,7 @@ def _resolve_junit_xml_path(explicit_junit_xml: str | None) -> Path | None:
     return None
 
 
-def _step_excel_report(xml_path: Path, out_path: Path) -> _StepResult:
+def _step_excel_report(xml_path: Path, out_path: Path, *, tests_passed: bool) -> _StepResult:
     """Generate Excel report from JUnit XML. Failures here are advisory only."""
     result = _StepResult("[POST] Excel report")
     t0 = time.monotonic()
@@ -1459,6 +1459,9 @@ def _step_excel_report(xml_path: Path, out_path: Path) -> _StepResult:
         str(xml_path),
         "--out",
         str(out_path),
+        "--run-result",
+        "passed" if tests_passed else "failed",
+        "--write-baseline",
     ]
     if capabilities_path:
         cmd.extend(["--capabilities", capabilities_path])
@@ -1504,7 +1507,7 @@ def _maybe_generate_excel(
         return result
 
     out_path = Path(excel_out) if excel_out else _DEFAULT_EXCEL_OUT
-    return _step_excel_report(xml_path, out_path)
+    return _step_excel_report(xml_path, out_path, tests_passed=tests_passed)
 
 
 # ---------------------------------------------------------------------------
@@ -1526,7 +1529,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--excel",
         choices=["never", "on-success", "always"],
         default=_default_excel_mode(),
-        help="Generate Excel report after tests (non-fatal). Default: on-success locally, always in CI.",
+        help="Generate Excel report after tests (non-fatal). Default: always.",
     )
     p.add_argument(
         "--excel-out",

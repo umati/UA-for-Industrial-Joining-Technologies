@@ -65,7 +65,7 @@ class WorkbookCase:
 
 
 def ordered_cu_keys() -> tuple[str, ...]:
-    """Return CU keys in workbook/spec order using the CU registry declaration order."""
+    """Return CU keys in workbook/spec order using the CU registry order."""
     return tuple(value for name, value in CU.__dict__.items() if name.isupper() and isinstance(value, str))
 
 

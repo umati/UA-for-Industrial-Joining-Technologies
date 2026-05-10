@@ -141,9 +141,9 @@ python3 setup_client.py --url="opc.tcp://<ip>:<port>"
   BrowseName text when the server exposes mixed namespace shapes.
 - Live tests that share a module-scoped asyncua client must use the same
   pytest-asyncio loop scope, e.g. `@pytest.mark.asyncio(loop_scope="module")`.
-- **Joint IDs**: always use `Joint_1`, `Joint_2` (capital J, underscore). Never use `joint1`.
-  - Pass `--joint-id Joint_1` on command line (see **Method Call Quick Reference** section below)
-  - Dynamically call `GetJointList` to discover real IDs before calling `GetJoint`/`SelectJoint`.
+- **Joint IDs**: dynamically call `GetJointList` to discover real IDs before calling `GetJoint`/`SelectJoint`.
+  - `Joint_1` / `Joint_2` are simulator defaults only; do not assume they exist on other IJT servers.
+  - Manual CLI calls may pass `--joint-id <server JointId>` after discovery.
 
 ### Serialization (`serialize_data.py`)
 - Shared serialization logic with IJT Web Client (`src/python/serialize_data.py`).
@@ -217,7 +217,7 @@ Activate the venv first:
 
 ### Select Joint
 ```powershell
-python main.py --origin-id= --joint-id Joint_1 --call select_joint --url "opc.tcp://localhost:40451"
+python main.py --origin-id= --joint-id "<JointId returned by GetJointList>" --call select_joint --url "opc.tcp://localhost:40451"
 ```
 
 ### Enable Asset

@@ -55,11 +55,22 @@ function runtimeAppUrl (wsUrl) {
   return `/?${params.toString()}`
 }
 
+async function waitForBackendReachable (wsUrl, timeoutMs = 10_000, intervalMs = 500) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (await isBackendReachable(wsUrl, Math.min(intervalMs, timeoutMs))) {
+      return true
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+  return false
+}
+
 export const test = base.extend({
   /** True when the Python backend WebSocket is reachable. */
-  backendUp: async (_, use, testInfo) => {
+  backendUp: async ({ browserName: _browserName }, use, testInfo) => {
     const runtime = runtimeForWorker(testInfo)
-    const up = await isBackendReachable(runtime.wsUrl)
+    const up = await waitForBackendReachable(runtime.wsUrl)
     await use(up)
   },
 

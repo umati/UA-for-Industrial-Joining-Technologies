@@ -275,7 +275,7 @@ def test_live_tests_respect_explicit_coverage_args():
 
 def test_skip_summary_formats_cu_not_supported_reason():
     reason = (
-        "Skipped: Conformance unit 'send_joining_process' is not declared supported "
+        "Skipped: Conformance unit 'send_joining_process' is not listed as supported "
         "for this server. Config file: server_capabilities.simulator.yaml"
     )
     assert _mod._summarize_skip_reason(reason) == "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED"

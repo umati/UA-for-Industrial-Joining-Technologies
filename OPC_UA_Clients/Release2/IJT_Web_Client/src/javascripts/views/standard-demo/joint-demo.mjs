@@ -24,6 +24,9 @@ export default class JointDemo extends BasicScreen {
     this._selectedProductInstanceUri = null
     /** All tool rows fetched from the server: [{toolName, productInstanceUri, path}] */
     this._detectedTools = []
+    /** Server-discovered joint IDs from GetJointList(ProductInstanceUri). */
+    this._detectedJoints = []
+    this._jointButtons = []
 
     // Create display areas
     const displayArea = document.createElement('div')
@@ -102,10 +105,73 @@ export default class JointDemo extends BasicScreen {
       this._detectedTools = (message && message.tools) || []
       this._renderToolsTable()
       this._updateActiveUriLabel()
+      return this._loadJointsFromServer()
     }).catch(err => {
       ijtLog.warn('[JointDemo] Could not read tool ProductInstanceUris:', err)
       this._renderToolsTable() // render empty / error state
       this._updateActiveUriLabel()
+      this._updateJointButtons()
+    })
+  }
+
+  async _loadJointsFromServer () {
+    const getJointListMethod = this.methodManager?.getMethod('GetJointList')
+    const productUri = this._getProductUri()
+    if (!getJointListMethod || !productUri || this._isSampleProductUri(productUri)) {
+      this._detectedJoints = []
+      this._updateJointButtons()
+      return
+    }
+
+    try {
+      const output = await this.methodManager.call(getJointListMethod, [
+        {
+          value: productUri,
+          type: getJointListMethod.arguments?.[0]?.DataType || { Identifier: '12' },
+        },
+      ])
+      this._detectedJoints = this._extractJointIds(output)
+    } catch (err) {
+      ijtLog.warn('[JointDemo] Could not read server JointIds:', err)
+      this._detectedJoints = []
+    }
+    this._updateJointButtons()
+  }
+
+  _extractJointIds (output) {
+    const first = Array.isArray(output) && Array.isArray(output[0]) ? output[0] : output
+    const entries = Array.isArray(first) ? first : [first]
+    const ids = []
+    for (const entry of entries) {
+      const jointId = this._jointIdFromEntry(entry)
+      if (jointId && !ids.includes(jointId)) ids.push(jointId)
+    }
+    return ids
+  }
+
+  _jointIdFromEntry (entry) {
+    const value = entry?.Value ?? entry
+    for (const source of [value, value?.JointMetaData]) {
+      const jointId = source?.JointId ?? source?.Id
+      if (jointId) return String(jointId).trim()
+    }
+    return typeof value === 'string' ? value.trim() : ''
+  }
+
+  _jointIdForButton (index) {
+    const discovered = this._detectedJoints[index] || this._detectedJoints[0]
+    const configured = index === 0 ? this.settings?.Joint1 : this.settings?.Joint2
+    return String(discovered || configured || '').trim()
+  }
+
+  _updateJointButtons () {
+    this._jointButtons.forEach((button, index) => {
+      const jointId = this._jointIdForButton(index)
+      const fallbackLabel = index === 0 ? 'primary joint' : 'secondary joint'
+      button.innerText = jointId ? `Select ${jointId}` : `Select ${fallbackLabel}`
+      button.title = jointId
+        ? `Select server JointId: ${jointId}`
+        : `Select ${fallbackLabel} after connecting to a server or configuring Settings.`
     })
   }
 
@@ -169,6 +235,7 @@ export default class JointDemo extends BasicScreen {
       btn.addEventListener('click', () => {
         this._selectedProductInstanceUri = tool.productInstanceUri
         this._updateActiveUriLabel()
+        this._loadJointsFromServer()
         // Highlight selected row
         tbody.querySelectorAll('tr').forEach(r => { r.classList.remove('jointDemoToolsRowSelected') })
         tr.classList.add('jointDemoToolsRowSelected')
@@ -216,52 +283,18 @@ export default class JointDemo extends BasicScreen {
 
     // ── Joint selection buttons ───────────────────────────────────────────────
     const button1 = document.createElement('button')
-    button1.innerText = 'Select joint 1'
+    button1.innerText = 'Select primary joint'
     button1.classList.add('demoButtonFree', 'demoActionSelectJoint1')
-    button1.title =
-    `Joint data
-    Joint Id: Joint_1
-    Joint name: Engine front top joint
-    Joint material:
-      0.015 Steel
-      0.010 Steel
-    Joint location: {x: 0.1, y: 0.15, z:0.22}
-    Joint context: Engine
-    Bolt type: M8
-    Bolt tread length: 0.05
-    Bolt geometry: Hex
-    Bolt Material: 304 Stainless steel
-    Bolt grade: 4.8 / A2-70
-
-    Associated program name: Program_4_Steps
-    Associated program identity: 153X-FFTS-LJ67-99MM
-    `
     MESArea.appendChild(button1)
-    button1.addEventListener('click', () => this.selectJoint(this.settings.Joint1))
+    button1.addEventListener('click', () => this.selectJoint(this._jointIdForButton(0)))
 
     const button2 = document.createElement('button')
-    button2.innerText = 'Select joint 2'
+    button2.innerText = 'Select secondary joint'
     button2.classList.add('demoButtonFree', 'demoActionSelectJoint2')
-    button2.title =
-    `Joint data
-    Joint Id: Joint_2
-    Joint name: Engine back nut joint
-    Joint material:
-      0.010 Steel
-      0.030 Steel
-    Joint location: {x: 1.1, y: 0.55, z:0.22}
-    Joint context: Engine
-    Bolt type: M8
-    Bolt tread length: 0.06
-    Nut geometry: Hex
-    Bolt Material: 304 Stainless steel
-    Bolt grade: 4.8 / A2-70
-
-    Associated program name: Program_One_Step
-    Associated program identity: 66JA-UUOJ-FFTS-8MMM
-    `
     MESArea.appendChild(button2)
-    button2.addEventListener('click', () => this.selectJoint(this.settings.Joint2))
+    button2.addEventListener('click', () => this.selectJoint(this._jointIdForButton(1)))
+    this._jointButtons = [button1, button2]
+    this._updateJointButtons()
 
     const button3 = document.createElement('button')
     button3.innerText = 'Simulate tightening'
@@ -367,7 +400,7 @@ export default class JointDemo extends BasicScreen {
    * Call SelectJoint.
    * ProductInstanceUri must resolve to a selected row, manual non-sample Settings
    * value, or server-detected tool URI before the call is sent.
-   * @param {string} jointName  The JointId to select (e.g. 'Joint_1').
+   * @param {string} jointName  The server-discovered or user-configured JointId to select.
    */
   selectJoint (jointName) {
     const selectJointMethod = this.methodManager.getMethod('SelectJoint')
@@ -376,6 +409,11 @@ export default class JointDemo extends BasicScreen {
     }
     const productUri = this._callableProductUri()
     if (!productUri) {
+      return
+    }
+    const jointId = String(jointName || '').trim()
+    if (!jointId || jointId === '-') {
+      ijtLog.warn('[JointDemo] JointId is not resolved; skipping SelectJoint until server joints or Settings are available.')
       return
     }
 
@@ -393,7 +431,7 @@ export default class JointDemo extends BasicScreen {
         type: {
           Identifier: '31918',
         },
-        value: jointName,
+        value: jointId,
       },
       {
         type: {

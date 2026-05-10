@@ -102,7 +102,7 @@ def _classify_report(report) -> str:
             or "client-library limitation" in reason_lower
         ):
             return "environment"
-        if "not declared supported" in reason_lower or "not supported" in reason_lower:
+        if "not listed as supported" in reason_lower or "not supported" in reason_lower:
             return "not_supported"
         return "blocked"
     return "skipped"

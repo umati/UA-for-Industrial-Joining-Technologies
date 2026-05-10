@@ -207,7 +207,7 @@ class TestLoadSupportedCusSupportedOverride:
         assert "custom_vendor_extension" in supported
 
     def test_supported_override_adds_key_not_in_profile(self, profile_tmp_path):
-        """A key explicitly declared supported must appear even if not in the profile's facets."""
+        """A key explicitly listed as supported must appear even if not in the profile's facets."""
         caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(
             caps_file,

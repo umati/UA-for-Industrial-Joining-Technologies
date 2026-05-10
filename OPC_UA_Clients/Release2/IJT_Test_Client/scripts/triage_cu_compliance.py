@@ -6,7 +6,7 @@ This script is intentionally read-only with respect to test artifacts: it reads
 the CU compliance JSON/JUnit XML and writes a separate Markdown triage summary.
 Use it after simulator or real-server runs to classify failures, blocked tests,
 Not Supported CUs, and suspicious skip reasons before deciding whether an issue
-belongs to the server, the profile declaration, or the Test Client.
+belongs to the server, the server capability profile, or the Test Client.
 """
 
 from __future__ import annotations
@@ -180,9 +180,11 @@ def _review_flags(payload: dict[str, Any]) -> list[tuple[str, str, str]]:
                 (cu_key, "mixed-pass-not-supported", f"{passed} passed and {not_supported} Not Supported tests.")
             )
         if cu_key in supported and compliance == "not_supported":
-            flags.append((cu_key, "supported-but-not-supported", "CU is declared supported but reports Not Supported."))
+            flags.append(
+                (cu_key, "supported-but-not-supported", "CU is listed as supported but reports Not Supported.")
+            )
         if cu_key in supported and compliance == "blocked":
-            flags.append((cu_key, "supported-but-blocked", "CU is declared supported but reports Blocked."))
+            flags.append((cu_key, "supported-but-blocked", "CU is listed as supported but reports Blocked."))
 
         for test in _tests_for_cu(data, lookup):
             outcome = str(test.get("outcome", ""))
@@ -347,7 +349,7 @@ def _render(payload: dict[str, Any], junit_cases: list[JUnitCase], source: Path,
     lines.append(
         "- `failed` / `error`: inspect first; classify as server defect, Test Client bug, or profile/config error."
     )
-    lines.append("- `not_supported`: acceptable only for optional CUs not declared supported by the active profile.")
+    lines.append("- `not_supported`: acceptable only for optional CUs not listed as supported by the active profile.")
     lines.append(
         "- `blocked`: acceptable only when a trigger, prerequisite, data source, or simulator capability is unavailable."
     )
