@@ -580,7 +580,7 @@ def test_websocket_backend_readiness_failure_terminates_owned_backend(monkeypatc
     monkeypatch.setattr(
         runner,
         "wait_for_websocket_protocol_ready",
-        lambda _ws_url, _endpoint, **_kwargs: "connect to returned exception",
+        lambda _ws_url, _endpoint, **_kwargs: "backend readiness response timed out",
     )
 
     started, ready, returned_proc = runner._maybe_start_websocket_backend(

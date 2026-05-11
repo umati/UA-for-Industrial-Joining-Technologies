@@ -645,7 +645,7 @@ def _maybe_start_websocket_backend(
         probe_error = wait_for_websocket_protocol_ready(probe_url, endpoint, attempts=1)
         if probe_error is None:
             return False, True, None
-        _warn(f"WebSocket backend port {port} is open but cannot reach OPC UA: {probe_error}")
+        _warn(f"WebSocket backend port {port} is open but backend readiness failed: {probe_error}")
         return False, False, None
     if not _local_host(host):
         _warn(f"Cannot auto-start non-local WebSocket backend at {host}:{port}")
@@ -683,7 +683,7 @@ def _maybe_start_websocket_backend(
             if probe_error is None:
                 _ok(f"WebSocket backend ready on :{port}")
                 return True, True, proc
-            _warn(f"WebSocket backend port {port} is open but OPC UA round-trip failed: {probe_error}; see {log_path}")
+            _warn(f"WebSocket backend port {port} is open but backend readiness failed: {probe_error}; see {log_path}")
             _stop_websocket_backend(proc)
             return True, False, None
         time.sleep(1)

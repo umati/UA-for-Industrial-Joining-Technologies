@@ -202,7 +202,7 @@ def ensure_live_servers(request):
             if websocket_probe_error is not None:
                 pytest.fail(
                     f"Web Client server port {_WS_PORT} is open, but the WebSocket "
-                    f"ping probe did not become ready after 3 attempts. "
+                    f"backend readiness probe did not respond within 5 s. "
                     f"Last error: {websocket_probe_error}."
                 )
 

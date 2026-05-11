@@ -15,6 +15,12 @@ DEFAULT_PROTOCOL_READY_ATTEMPTS = 10
 DEFAULT_PROTOCOL_READY_INTERVAL = 1.5
 DEFAULT_PROTOCOL_READY_TIMEOUT = 2.5
 
+# The WebSocket probe is intentionally backend-only. Direct OPC UA protocol
+# readiness is checked separately before this probe runs.
+DEFAULT_WEBSOCKET_READY_ATTEMPTS = 1
+DEFAULT_WEBSOCKET_READY_INTERVAL = 1.0
+DEFAULT_WEBSOCKET_READY_RESPONSE_TIMEOUT = 5.0
+
 
 def web_client_results_dir(web_client_root: Path) -> Path:
     value = os.getenv("IJT_WEB_TEST_RESULTS_DIR")
@@ -98,7 +104,7 @@ def wait_for_opcua_protocol_ready(
     return last_error
 
 
-async def _probe_websocket_protocol(ws_url: str, opcua_endpoint: str, response_timeout: float) -> None:
+async def _probe_websocket_protocol(ws_url: str, response_timeout: float) -> None:
     import websockets
 
     async with websockets.connect(ws_url, open_timeout=min(5.0, response_timeout), close_timeout=0.5) as websocket:
@@ -106,8 +112,8 @@ async def _probe_websocket_protocol(ws_url: str, opcua_endpoint: str, response_t
         await websocket.send(
             json.dumps(
                 {
-                    "command": "connect to",
-                    "endpoint": opcua_endpoint,
+                    "command": "get connectionpoints",
+                    "endpoint": "common",
                     "uniqueid": uniqueid,
                 }
             )
@@ -119,7 +125,13 @@ async def _probe_websocket_protocol(ws_url: str, opcua_endpoint: str, response_t
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
                 raise TimeoutError(f"no matching readiness response received; last response: {last_response}")
-            raw = await asyncio.wait_for(websocket.recv(), timeout=remaining)
+            try:
+                raw = await asyncio.wait_for(websocket.recv(), timeout=remaining)
+            except TimeoutError as exc:
+                raise TimeoutError(
+                    f"no matching readiness response received within {response_timeout:.1f}s; "
+                    f"last response: {last_response}"
+                ) from exc
             last_response = str(raw)
             try:
                 payload = json.loads(raw)
@@ -130,25 +142,21 @@ async def _probe_websocket_protocol(ws_url: str, opcua_endpoint: str, response_t
                 if unmatched_count >= 5:
                     raise RuntimeError(f"no matching readiness response received; last response: {last_response}")
                 continue
-            data = payload.get("data")
-            exception = data.get("exception") if isinstance(data, dict) else None
-            if exception:
-                raise RuntimeError(f"readiness connect returned exception: {exception}")
             return
 
 
 def wait_for_websocket_protocol_ready(
     ws_url: str,
-    opcua_endpoint: str,
+    opcua_endpoint: str | None = None,
     *,
-    attempts: int = DEFAULT_PROTOCOL_READY_ATTEMPTS,
-    interval: float = DEFAULT_PROTOCOL_READY_INTERVAL,
-    response_timeout: float = DEFAULT_PROTOCOL_READY_TIMEOUT,
+    attempts: int = DEFAULT_WEBSOCKET_READY_ATTEMPTS,
+    interval: float = DEFAULT_WEBSOCKET_READY_INTERVAL,
+    response_timeout: float = DEFAULT_WEBSOCKET_READY_RESPONSE_TIMEOUT,
 ) -> str | None:
     last_error = "no WebSocket protocol probe attempted"
     for attempt in range(attempts):
         try:
-            asyncio.run(_probe_websocket_protocol(ws_url, opcua_endpoint, response_timeout))
+            asyncio.run(_probe_websocket_protocol(ws_url, response_timeout))
             return None
         except Exception as exc:  # pragma: no cover - exact backend/websocket error type varies by version
             last_error = f"{type(exc).__name__}: {exc}"
