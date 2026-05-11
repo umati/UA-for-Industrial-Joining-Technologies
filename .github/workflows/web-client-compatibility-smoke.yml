@@ -1,0 +1,190 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Web Client Compatibility Smoke
+#
+# This scheduled/manual workflow runs Web Client compatibility smoke specs
+# against configured (OS, browser) cells. Today: windows-latest with the
+# runner's installed Microsoft Edge channel. Audit-derived scope: Result bundle
+# import via the visible file chooser, and Result bundle JSON export via browser
+# download.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Web Client Compatibility Smoke"
+
+on:
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  web-client-compatibility-smoke:
+    name: "Web Client Compatibility Smoke"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            browser: msedge
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.14"
+          cache: 'pip'
+          cache-dependency-path: |
+            OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
+            OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json
+
+      - name: Capture browser and runner versions
+        id: browser_probe
+        env:
+          BROWSER_CHANNEL: ${{ matrix.browser }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          switch ($env:BROWSER_CHANNEL) {
+            "msedge" {
+              $browserPath = @(
+                "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+                "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe"
+              ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+            }
+            default {
+              throw "Unsupported browser matrix value: $env:BROWSER_CHANNEL"
+            }
+          }
+          if (-not $browserPath) {
+            throw "$env:BROWSER_CHANNEL executable was not found on this runner"
+          }
+          $browserVersion = (Get-Item $browserPath).VersionInfo.ProductVersion
+          "browser_version=$browserVersion" >> $env:GITHUB_OUTPUT
+          "image_os=$env:ImageOS" >> $env:GITHUB_OUTPUT
+          "image_version=$env:ImageVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Run Web Client Compatibility Smoke
+        run: python OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py --compatibility-smoke-only
+
+      - name: Write compatibility smoke environment artifact
+        if: always()
+        run: |
+          $dir = "OPC_UA_Clients/Release2/IJT_Web_Client/test-results"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          @"
+          RUNNER_OS=${env:RUNNER_OS}
+          MatrixOS=${{ matrix.os }}
+          MatrixBrowser=${{ matrix.browser }}
+          ImageOS=${{ steps.browser_probe.outputs.image_os }}
+          ImageVersion=${{ steps.browser_probe.outputs.image_version }}
+          BrowserVersion=${{ steps.browser_probe.outputs.browser_version }}
+          RunURL=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          "@ | Set-Content -Path "$dir/compatibility-smoke-environment.txt" -Encoding UTF8
+
+      - name: Upload Web Client Compatibility Smoke results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        if: always()
+        with:
+          name: results-web-client-compatibility-smoke-${{ matrix.os }}-${{ matrix.browser }}
+          path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Open or update compatibility smoke issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $title = "[Web Client Compatibility Smoke] ${{ matrix.os }} / ${{ matrix.browser }}"
+          $legacyTitle = "[L2 Compat] Windows + Edge"  # TODO: remove legacy fallback after issue #371 closes cleanly.
+          $runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          $body = @"
+          Web Client Compatibility Smoke failed.
+
+          - Run: $runUrl
+          - OS: ${{ matrix.os }}
+          - Browser: ${{ matrix.browser }}
+          - Browser version: ${{ steps.browser_probe.outputs.browser_version }}
+          - ImageOS: ${{ steps.browser_probe.outputs.image_os }}
+          - ImageVersion: ${{ steps.browser_probe.outputs.image_version }}
+          - Workflow: ${{ github.workflow }}
+          - Commit: ${{ github.sha }}
+
+          See artifact `results-web-client-compatibility-smoke-${{ matrix.os }}-${{ matrix.browser }}` for Playwright/JUnit output, traces, videos, and logs.
+          "@
+          $bodyPath = Join-Path $env:RUNNER_TEMP "compatibility-smoke-issue.md"
+          $body | Set-Content -Path $bodyPath -Encoding UTF8
+
+          $issueJson = gh issue list --search "`"$title`" in:title" --state open --json number,title
+          $issues = @($issueJson | ConvertFrom-Json)
+          $issue = $issues | Where-Object { $_.title -eq $title } | Select-Object -First 1
+          if (-not $issue) {
+            $legacyIssueJson = gh issue list --search "`"$legacyTitle`" in:title" --state open --json number,title
+            $legacyIssues = @($legacyIssueJson | ConvertFrom-Json)
+            $issue = $legacyIssues | Where-Object { $_.title -eq $legacyTitle } | Select-Object -First 1
+          }
+          if ($issue) {
+            if ($issue.title -ne $title) {
+              gh issue edit $($issue.number) --title $title
+            }
+            gh issue comment $($issue.number) --body-file $bodyPath
+          } else {
+            gh issue create --title $title --body-file $bodyPath
+          }
+
+      - name: Close recovered compatibility smoke issue
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $title = "[Web Client Compatibility Smoke] ${{ matrix.os }} / ${{ matrix.browser }}"
+          $legacyTitle = "[L2 Compat] Windows + Edge"  # TODO: remove legacy fallback after issue #371 closes cleanly.
+          $issueJson = gh issue list --search "`"$title`" in:title" --state open --json number,title
+          $issues = @($issueJson | ConvertFrom-Json)
+          $matchingIssues = @($issues | Where-Object { $_.title -eq $title })
+          $legacyIssueJson = gh issue list --search "`"$legacyTitle`" in:title" --state open --json number,title
+          $legacyIssues = @($legacyIssueJson | ConvertFrom-Json)
+          $matchingIssues += @($legacyIssues | Where-Object { $_.title -eq $legacyTitle })
+          $matchingIssues = @($matchingIssues | Sort-Object number -Unique)
+          if ($matchingIssues.Count -eq 0) {
+            exit 0
+          }
+
+          $runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          $comment = @"
+          Web Client Compatibility Smoke recovered.
+
+          - Green run: $runUrl
+          - OS: ${{ matrix.os }}
+          - Browser: ${{ matrix.browser }}
+          - Browser version: ${{ steps.browser_probe.outputs.browser_version }}
+          - ImageOS: ${{ steps.browser_probe.outputs.image_os }}
+          - ImageVersion: ${{ steps.browser_probe.outputs.image_version }}
+          - Commit: ${{ github.sha }}
+          "@
+          $commentPath = Join-Path $env:RUNNER_TEMP "compatibility-smoke-recovered.md"
+          $comment | Set-Content -Path $commentPath -Encoding UTF8
+          foreach ($issue in $matchingIssues) {
+            if ($issue.title -ne $title) {
+              gh issue edit $($issue.number) --title $title
+            }
+            gh issue comment $($issue.number) --body-file $commentPath
+            gh issue close $($issue.number)
+          }

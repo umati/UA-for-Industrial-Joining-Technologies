@@ -597,7 +597,7 @@ def test_targeted_live_suite_flags_are_available():
         "--playwright-smoke-only",
         "--playwright-features-only",
         "--playwright-regression-only",
-        "--l2-compat-only",
+        "--compatibility-smoke-only",
     ]:
         assert flag in source
 
@@ -610,7 +610,7 @@ def _target_args(**enabled):
         "playwright_smoke_only",
         "playwright_features_only",
         "playwright_regression_only",
-        "l2_compat_only",
+        "compatibility_smoke_only",
     ]
     values = {name: False for name in names}
     values.update(enabled)
@@ -627,7 +627,7 @@ def test_target_only_dependency_requirements_are_explicit():
         (_target_args(playwright_smoke_only=True), (False, True)),
         (_target_args(playwright_features_only=True), (True, True)),
         (_target_args(playwright_regression_only=True), (True, True)),
-        (_target_args(l2_compat_only=True), (True, True)),
+        (_target_args(compatibility_smoke_only=True), (True, True)),
     ]
 
     for args, expected in cases:
@@ -672,13 +672,13 @@ def test_target_only_dependencies_run_before_target_stage(monkeypatch, tmp_path)
     assert calls == ["pip", "npm", "playwright-install", "playwright-features"]
 
 
-def test_l2_compat_target_uses_owned_services_without_chromium_install(monkeypatch):
+def test_compatibility_smoke_target_uses_owned_services_without_chromium_install(monkeypatch):
     runner = _load_runner()
     calls = []
 
-    monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--l2-compat-only"])
+    monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--compatibility-smoke-only"])
     monkeypatch.setattr(runner, "IS_CI", True)
-    monkeypatch.setattr(runner, "_RESULTS_DIR", _PROJECT_ROOT / "test-results" / "unit-l2-target")
+    monkeypatch.setattr(runner, "_RESULTS_DIR", _PROJECT_ROOT / "test-results" / "unit-compatibility-smoke-target")
     monkeypatch.setattr(runner, "_cleanup_caches", lambda root: None)
     monkeypatch.setattr(runner, "_prepare_tmp_dir", lambda: None)
     monkeypatch.setattr(runner, "_port_open", lambda *args, **kwargs: False)
@@ -696,26 +696,34 @@ def test_l2_compat_target_uses_owned_services_without_chromium_install(monkeypat
     )
 
     def fail_if_chromium_install_runs():
-        raise AssertionError("L2 Edge compat must use installed Edge, not install Chromium")
+        raise AssertionError("Compatibility smoke must use the configured real browser, not install Chromium")
 
     def fake_owned_services(**kwargs):
         calls.append(f"owned:{kwargs['name']}:{kwargs['need_ws']}")
         return kwargs["stage"]()
 
     monkeypatch.setattr(runner, "_stage_playwright_install", fail_if_chromium_install_runs)
+    monkeypatch.setattr(
+        runner,
+        "_stage_playwright_ffmpeg_install",
+        lambda: calls.append("ffmpeg") or runner.StageResult("playwright-ffmpeg-install", 0),
+    )
     monkeypatch.setattr(runner, "_run_with_owned_services", fake_owned_services)
     monkeypatch.setattr(
         runner,
-        "_stage_playwright_l2_compat",
-        lambda ws_url, ui_url: calls.append(f"l2:{ws_url}:{ui_url}") or runner.StageResult("playwright-l2-compat", 0),
+        "_stage_playwright_compatibility_smoke",
+        lambda ws_url, ui_url: (
+            calls.append(f"smoke:{ws_url}:{ui_url}") or runner.StageResult("playwright-compatibility-smoke", 0)
+        ),
     )
 
     assert runner.main() == 0
     assert calls == [
         "pip",
         "npm",
-        "owned:playwright-l2-compat:True",
-        "l2:ws://localhost:8004:http://127.0.0.1:3007",
+        "ffmpeg",
+        "owned:playwright-compatibility-smoke:True",
+        "smoke:ws://localhost:8004:http://127.0.0.1:3007",
     ]
 
 
@@ -985,13 +993,13 @@ def test_playwright_project_unset_shard_keeps_old_filename(monkeypatch, tmp_path
     assert captured["env"]["PLAYWRIGHT_JUNIT_OUTPUT_FILE"] == expected_junit
 
 
-def test_playwright_l2_compat_stage_uses_edge_config(monkeypatch):
+def test_playwright_compatibility_smoke_stage_uses_smoke_config(monkeypatch):
     runner = _load_runner()
     captured = {}
 
     monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
     monkeypatch.setattr(runner, "_banner", lambda title: None)
-    monkeypatch.setattr(runner, "_RESULTS_DIR", _PROJECT_ROOT / "test-results" / "unit-l2-stage")
+    monkeypatch.setattr(runner, "_RESULTS_DIR", _PROJECT_ROOT / "test-results" / "unit-compatibility-smoke-stage")
 
     def fake_run(cmd, **kwargs):
         captured["cmd"] = cmd
@@ -1001,16 +1009,39 @@ def test_playwright_l2_compat_stage_uses_edge_config(monkeypatch):
 
     monkeypatch.setattr(runner, "_run", fake_run)
 
-    result = runner._stage_playwright_l2_compat("ws://localhost:8004", "http://127.0.0.1:3007")
+    result = runner._stage_playwright_compatibility_smoke("ws://localhost:8004", "http://127.0.0.1:3007")
 
     assert result.rc == 0
-    assert "--project=edge-compat" in captured["cmd"]
-    assert "--config=playwright.l2-compat.config.mjs" in captured["cmd"]
+    assert "--project=compatibility-smoke" in captured["cmd"]
+    assert "--config=playwright.compatibility-smoke.config.mjs" in captured["cmd"]
     assert "--workers=1" in captured["cmd"]
     assert captured["env"]["WS_TEST_URL"] == "ws://localhost:8004"
     assert captured["env"]["PLAYWRIGHT_TEST_BASE_URL"] == "http://127.0.0.1:3007"
-    assert captured["env"]["PLAYWRIGHT_JUNIT_OUTPUT_FILE"].endswith("playwright-l2-compat.xml")
+    assert captured["env"]["PLAYWRIGHT_JUNIT_OUTPUT_FILE"].endswith("playwright-compatibility-smoke.xml")
     assert captured["timeout"] == 360
+
+
+def test_playwright_ffmpeg_install_stage_installs_only_ffmpeg(monkeypatch):
+    runner = _load_runner()
+    captured = {}
+
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["label"] = kwargs["label"]
+        captured["timeout"] = kwargs["timeout"]
+        return 0
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_playwright_ffmpeg_install()
+
+    assert result.rc == 0
+    assert captured["cmd"] == ["playwright.cmd", "install", "ffmpeg"]
+    assert captured["label"] == "playwright install ffmpeg"
+    assert captured["timeout"] == 180
 
 
 def test_playwright_project_empty_shard_env_is_treated_as_unset(monkeypatch, tmp_path, recwarn):

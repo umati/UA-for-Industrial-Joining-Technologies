@@ -3,7 +3,7 @@ export function makeResultBundle (resultId) {
     type: 'ijt-result-export',
     version: 1,
     exportedAt: new Date().toISOString(),
-    source: { app: 'l2-edge-compat', format: 'result-bundle' },
+    source: { app: 'compatibility-smoke', format: 'result-bundle' },
     results: [{
       ResultMetaData: {
         ResultId: resultId,

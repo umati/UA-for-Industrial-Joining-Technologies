@@ -27,7 +27,7 @@ Force flags (override auto-detection):
   --playwright-smoke-only      root-runner target: browser smoke tests
   --playwright-features-only   root-runner target: browser feature specs
   --playwright-regression-only root-runner target: browser regression spec
-  --l2-compat-only             Windows + Edge L2 compatibility smoke
+  --compatibility-smoke-only   Web Client Compatibility Smoke
 
 Environment variables (all optional):
   OPCUA_TEST_ENDPOINT   default: opc.tcp://localhost:40463
@@ -1317,6 +1317,36 @@ def _stage_playwright_install() -> StageResult:
     return StageResult("playwright-install", rc, duration=time.monotonic() - t0)
 
 
+def _stage_playwright_ffmpeg_install() -> StageResult:
+    _banner("STAGE Compatibility Smoke Setup  Install Playwright ffmpeg")
+    t0 = time.monotonic()
+    playwright = _node_bin_path("playwright")
+    if playwright is None:
+        _warn("local Playwright CLI not found - run npm install first")
+        return StageResult(
+            "playwright-ffmpeg-install",
+            1,
+            duration=time.monotonic() - t0,
+            notes=["local Playwright CLI not found"],
+        )
+
+    rc = _run(
+        [playwright, "install", "ffmpeg"],
+        label="playwright install ffmpeg",
+        env=os.environ.copy(),
+        timeout=180,
+    )
+    if rc != 0:
+        _warn("Playwright ffmpeg install failed")
+        return StageResult(
+            "playwright-ffmpeg-install",
+            rc if rc > 0 else 1,
+            duration=time.monotonic() - t0,
+            notes=["ffmpeg download failed"],
+        )
+    return StageResult("playwright-ffmpeg-install", rc, duration=time.monotonic() - t0)
+
+
 def _playwright_chromium_available() -> bool:
     node = shutil.which("node") or shutil.which("node.exe")
     if not node:
@@ -1457,16 +1487,16 @@ def _stage_playwright_regression(ws_url: str, ui_url: str) -> StageResult:
     )
 
 
-def _stage_playwright_l2_compat(ws_url: str, ui_url: str) -> StageResult:
+def _stage_playwright_compatibility_smoke(ws_url: str, ui_url: str) -> StageResult:
     return _stage_playwright_project(
-        project="edge-compat",
-        name="playwright-l2-compat",
-        title="STAGE L2  Playwright Windows Edge compatibility",
+        project="compatibility-smoke",
+        name="playwright-compatibility-smoke",
+        title="STAGE Compatibility Smoke  Web Client browser file handling",
         ws_url=ws_url,
         ui_url=ui_url,
         timeout=360,
         workers=1,
-        config="playwright.l2-compat.config.mjs",
+        config="playwright.compatibility-smoke.config.mjs",
     )
 
 
@@ -1533,9 +1563,9 @@ _SIMULATOR_PACKAGE_ZIPS: list[Path] = (
 # The OPC UA server port this client connects to.  Defined once here so every
 # reference below derives from it — change the port in one place only.
 _OPCUA_SERVER_PORT = 40463
-_L2_COMPAT_OPCUA_SERVER_PORT = 40468
-_L2_COMPAT_WS_URL = "ws://localhost:8004"
-_L2_COMPAT_UI_URL = "http://127.0.0.1:3007"
+_COMPATIBILITY_SMOKE_OPCUA_SERVER_PORT = 40468
+_COMPATIBILITY_SMOKE_WS_URL = "ws://localhost:8004"
+_COMPATIBILITY_SMOKE_UI_URL = "http://127.0.0.1:3007"
 _MAX_SIMULATOR_INSTANCE_PATH = 100
 _SIMULATOR_INSTANCE_ROOT_ENV = "IJT_SIMULATOR_INSTANCE_ROOT"
 _server_tmp_dir: Path | None = None  # set by _launch_simulator_on_port; cleared in _stop_opcua_server
@@ -1600,19 +1630,19 @@ def _parse_playwright_shard(raw: str | None) -> tuple[str | None, str]:
     raise ValueError(f"IJT_PLAYWRIGHT_SHARD must be 'N/M' with integers satisfying 1 <= N <= M; got {raw!r}")
 
 
-def _apply_l2_compat_defaults(args: argparse.Namespace) -> None:
-    """Give L2 Edge compatibility its own local service ports by default."""
+def _apply_compatibility_smoke_defaults(args: argparse.Namespace) -> None:
+    """Give Web Client Compatibility Smoke its own local service ports by default."""
     if (
         not os.getenv("OPCUA_SERVER_PORT")
         and not os.getenv("OPCUA_TEST_ENDPOINT")
         and not os.getenv("OPCUA_SERVER_URL")
     ):
-        os.environ["OPCUA_SERVER_PORT"] = str(_L2_COMPAT_OPCUA_SERVER_PORT)
-        args.opcua_endpoint = f"opc.tcp://localhost:{_L2_COMPAT_OPCUA_SERVER_PORT}"
+        os.environ["OPCUA_SERVER_PORT"] = str(_COMPATIBILITY_SMOKE_OPCUA_SERVER_PORT)
+        args.opcua_endpoint = f"opc.tcp://localhost:{_COMPATIBILITY_SMOKE_OPCUA_SERVER_PORT}"
     if not os.getenv("WS_TEST_URL") and args.ws_url == "ws://localhost:8001":
-        args.ws_url = _L2_COMPAT_WS_URL
+        args.ws_url = _COMPATIBILITY_SMOKE_WS_URL
     if not os.getenv("UI_TEST_BASE_URL") and args.ui_url == "http://127.0.0.1:3000":
-        args.ui_url = _L2_COMPAT_UI_URL
+        args.ui_url = _COMPATIBILITY_SMOKE_UI_URL
 
 
 @dataclass
@@ -2247,7 +2277,7 @@ STAGES = [
     "playwright-smoke",
     "playwright-features",
     "playwright-regression",
-    "playwright-l2-compat",
+    "playwright-compatibility-smoke",
     "playwright-e2e",
     "docker-smoke",
 ]
@@ -2284,13 +2314,13 @@ def _target_only_dependency_requirements(args: argparse.Namespace) -> TargetDepe
             or args.python_lifecycle_only
             or args.playwright_features_only
             or args.playwright_regression_only
-            or args.l2_compat_only
+            or args.compatibility_smoke_only
         ),
         npm=bool(
             args.playwright_smoke_only
             or args.playwright_features_only
             or args.playwright_regression_only
-            or args.l2_compat_only
+            or args.compatibility_smoke_only
         ),
     )
 
@@ -2357,7 +2387,9 @@ def main() -> int:
     parser.add_argument(
         "--playwright-regression-only", action="store_true", help="Run only Playwright regression E2E tests"
     )
-    parser.add_argument("--l2-compat-only", action="store_true", help="Run only Windows + Edge L2 compatibility smoke")
+    parser.add_argument(
+        "--compatibility-smoke-only", action="store_true", help="Run only Web Client Compatibility Smoke"
+    )
     parser.add_argument("--list", action="store_true", help="Print available stages and exit")
     parser.add_argument(
         "--opcua-endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{_opcua_server_port()}")
@@ -2373,7 +2405,7 @@ def main() -> int:
         args.playwright_smoke_only,
         args.playwright_features_only,
         args.playwright_regression_only,
-        args.l2_compat_only,
+        args.compatibility_smoke_only,
     ]
     if sum(1 for flag in targeted_flags if flag) > 1:
         parser.error("choose only one targeted live-suite flag")
@@ -2405,8 +2437,8 @@ def main() -> int:
         _relaunch_under_venv()
         return 0  # unreachable after sys.exit(); satisfies type checker
 
-    if args.l2_compat_only:
-        _apply_l2_compat_defaults(args)
+    if args.compatibility_smoke_only:
+        _apply_compatibility_smoke_defaults(args)
 
     if args.list:
         print("Available stages:")
@@ -2534,16 +2566,19 @@ def main() -> int:
                         stage=lambda: _stage_playwright_regression(args.ws_url, args.ui_url),
                     )
                 )
-        elif args.l2_compat_only:
-            results.append(
-                _run_with_owned_services(
-                    python=python,
-                    name="playwright-l2-compat",
-                    need_ws=True,
-                    ws_url=args.ws_url,
-                    stage=lambda: _stage_playwright_l2_compat(args.ws_url, args.ui_url),
+        elif args.compatibility_smoke_only:
+            ffmpeg_install = _stage_playwright_ffmpeg_install()
+            results.append(ffmpeg_install)
+            if ffmpeg_install.rc == 0:
+                results.append(
+                    _run_with_owned_services(
+                        python=python,
+                        name="playwright-compatibility-smoke",
+                        need_ws=True,
+                        ws_url=args.ws_url,
+                        stage=lambda: _stage_playwright_compatibility_smoke(args.ws_url, args.ui_url),
+                    )
                 )
-            )
 
         total_time = time.monotonic() - t_start
         _write_timing_artifacts(results, total_time, mode)

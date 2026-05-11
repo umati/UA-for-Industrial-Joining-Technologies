@@ -397,7 +397,7 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `web-client-e2e-smoke` | local root runner + `integration.yml` | HTTP 3004 | Playwright smoke project; GitHub Integration runs it in the pinned Linux Playwright container |
 | `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs with owned browser/backend/server workers; GitHub Integration uses two Browser Features shards in the pinned Linux Playwright container |
 | `web-client-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec; GitHub Integration runs it in the pinned Linux Playwright container |
-| Web Client L2 Edge compat | Web runner + `l2-compat.yml` | OPC UA 40468 / WS 8004 / HTTP 3007 | Windows + Edge compatibility smoke for audited import/export browser surfaces; schedule/manual only |
+| Web Client Compatibility Smoke | Web runner + `web-client-compatibility-smoke.yml` | OPC UA 40468 / WS 8004 / HTTP 3007 | Scheduled/manual smoke for audited browser file surfaces; today runs `windows-latest` / `msedge` |
 | `web-client-docker-smoke` | local root runner | HTTP 3000 / WS 8001 | Web Client production Docker image/readiness smoke |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
 | `live-webclient` | `integration.yml` | **40463/40466/40467** | Windows native EXE for non-browser Web Client live suites |
@@ -426,13 +426,14 @@ split into two Playwright shards; CI defaults to two feature workers per shard,
 while local root runs keep the default four-worker feature pool. Do not add
 Playwright browser cache/install steps to the browser matrix: the pinned image
 owns the browser binary and dependencies.
-The separate `l2-compat.yml` workflow is the Windows + Edge compatibility
-detection layer. It runs only on schedule/manual dispatch, uses the installed
-Edge channel on `windows-latest`, and executes exactly the two audited L2 specs:
-result import through the visible file chooser path and result export through
-browser download handling. It is non-blocking because it is not a required
+The separate `web-client-compatibility-smoke.yml` workflow is the Web Client
+Compatibility Smoke detection layer. It runs only on schedule/manual dispatch
+with a matrix that currently contains one cell: `windows-latest` / `msedge`.
+It executes exactly the two audited specs: Result bundle import through the
+visible file chooser path and Result bundle JSON export through browser
+download handling. It is non-blocking because it is not a required
 branch-protection check; the test step itself still fails red and opens or
-updates `[L2 Compat] Windows + Edge`.
+updates `[Web Client Compatibility Smoke] windows-latest / msedge`.
 Joint Demo feature tests wait for the active `ProductInstanceUri` to resolve
 before calling demo methods; the Web UI does not fire Joint Demo methods while
 only a bundled sample Settings URI is available.

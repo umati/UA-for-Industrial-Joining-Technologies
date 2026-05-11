@@ -864,10 +864,12 @@ def test_integration_web_client_e2e_jobs_require_pinned_linux_container() -> Non
         assert "cache" not in setup_node_step.get("with", {})
 
 
-def test_l2_compat_workflow_is_schedule_only_windows_edge_detection() -> None:
+def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> None:
     import yaml
 
-    workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "l2-compat.yml"
+    workflow_path = (
+        _runner.REPO_ROOT / ".github" / "workflows" / "web-client-compatibility-smoke.yml"
+    )
     workflow_text = workflow_path.read_text(encoding="utf-8")
     workflow = yaml.safe_load(workflow_text)
     triggers = workflow.get("on", workflow.get(True, {}))
@@ -883,9 +885,16 @@ def test_l2_compat_workflow_is_schedule_only_windows_edge_detection() -> None:
     assert permissions.get("contents") != "write"
 
     jobs = workflow["jobs"]
-    assert set(jobs) == {"web-client-l2-edge-compat"}
-    job = jobs["web-client-l2-edge-compat"]
-    assert job["runs-on"] == "windows-latest"
+    assert set(jobs) == {"web-client-compatibility-smoke"}
+    job = jobs["web-client-compatibility-smoke"]
+    assert job["runs-on"] == "${{ matrix.os }}"
+    assert job["strategy"]["fail-fast"] is False
+    matrix_rows = job["strategy"]["matrix"]["include"]
+    assert matrix_rows == [{"os": "windows-latest", "browser": "msedge"}]
+    assert {row["os"] for row in matrix_rows} <= {"windows-latest"}
+    browsers = {row["browser"] for row in matrix_rows}
+    assert browsers <= {"msedge"}
+    assert not browsers & {"firefox", "webkit", "safari"}
 
     steps = job["steps"]
     assert not any(
@@ -896,33 +905,44 @@ def test_l2_compat_workflow_is_schedule_only_windows_edge_detection() -> None:
         for step in steps
         if isinstance(step, dict) and isinstance(step.get("run"), str)
     )
-    assert "--l2-compat-only" in run_commands
+    assert "--compatibility-smoke-only" in run_commands
     assert "msedge.exe" in run_commands
+    assert "VersionInfo.ProductVersion" in run_commands
+    assert "& $edge --version" not in run_commands
     assert "gh issue list" in run_commands
     assert "gh issue create" in run_commands
+    assert "gh issue edit" in run_commands
     assert "gh issue comment" in run_commands
     assert "gh issue close" in run_commands
+    assert (
+        "[Web Client Compatibility Smoke] ${{ matrix.os }} / ${{ matrix.browser }}" in run_commands
+    )
     assert "[L2 Compat] Windows + Edge" in run_commands
+    assert "TODO: remove legacy fallback after issue #371 closes cleanly." in run_commands
+    assert "L2 Compatibility" not in workflow_text
+    assert "L2 Edge Compat" not in workflow_text
 
 
-def test_l2_compat_playwright_scope_is_two_edge_specs_only() -> None:
+def test_compatibility_smoke_playwright_scope_is_two_edge_specs_only() -> None:
     web_root = _runner.REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client"
     l1_config = (web_root / "playwright.config.mjs").read_text(encoding="utf-8")
-    l2_config = (web_root / "playwright.l2-compat.config.mjs").read_text(encoding="utf-8")
-    spec_dir = web_root / "tests" / "e2e-compat"
+    smoke_config = (web_root / "playwright.compatibility-smoke.config.mjs").read_text(
+        encoding="utf-8"
+    )
+    spec_dir = web_root / "tests" / "e2e-compatibility-smoke"
     spec_files = sorted(path.name for path in spec_dir.glob("*.spec.mjs"))
 
     assert "testDir: './tests/e2e'" in l1_config
-    assert "e2e-compat" not in l1_config
+    assert "e2e-compatibility-smoke" not in l1_config
 
-    assert "testDir: './tests/e2e-compat'" in l2_config
-    assert re.search(r"retries:\s*0", l2_config)
-    assert l2_config.count("name: 'edge-compat'") == 1
-    assert re.findall(r"channel:\s*'([^']+)'", l2_config) == ["msedge"]
-    assert "chromium" in l2_config
-    assert "firefox" not in l2_config
-    assert "webkit" not in l2_config
-    assert "safari" not in l2_config.lower()
+    assert "testDir: './tests/e2e-compatibility-smoke'" in smoke_config
+    assert re.search(r"retries:\s*0", smoke_config)
+    assert smoke_config.count("name: 'compatibility-smoke'") == 1
+    assert re.findall(r"channel:\s*'([^']+)'", smoke_config) == ["msedge"]
+    assert "chromium" in smoke_config
+    assert "firefox" not in smoke_config
+    assert "webkit" not in smoke_config
+    assert "safari" not in smoke_config.lower()
 
     assert spec_files == [
         "edge-result-export-download-smoke.spec.mjs",

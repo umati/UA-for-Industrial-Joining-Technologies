@@ -422,7 +422,7 @@ python run_all_tests.py --python-lifecycle-only
 python run_all_tests.py --playwright-smoke-only
 python run_all_tests.py --playwright-features-only
 python run_all_tests.py --playwright-regression-only
-python run_all_tests.py --l2-compat-only
+python run_all_tests.py --compatibility-smoke-only
 python run_all_tests.py --docker-only
 ```
 
@@ -442,15 +442,18 @@ allowed in the workflow because the image owns Chromium and its system
 dependencies. Each suite receives an isolated `IJT_WEB_TEST_RESULTS_DIR`, so
 JUnit, coverage, Playwright, and timing artifacts cannot overwrite another
 suite's files.
-Windows + Edge L2 compatibility is deliberately outside the bulk browser logic
-lane. `python run_all_tests.py --l2-compat-only` uses default ports OPC UA
-40468, WebSocket 8004, and HTTP 3007 unless explicit endpoint/env overrides
-are provided. It runs `playwright.l2-compat.config.mjs`, launches the installed
-Edge channel, and executes only the two audit-derived specs under
-`tests/e2e-compat/`: result import through the visible file chooser and result
-export through browser download handling. The GitHub workflow
-`.github/workflows/l2-compat.yml` is schedule/manual only and opens or closes
-the canonical `[L2 Compat] Windows + Edge` issue from real red/green results.
+Web Client Compatibility Smoke is deliberately outside the bulk browser logic
+lane. `python run_all_tests.py --compatibility-smoke-only` uses default ports
+OPC UA 40468, WebSocket 8004, and HTTP 3007 unless explicit endpoint/env
+overrides are provided. It runs `playwright.compatibility-smoke.config.mjs`,
+launches the configured real browser channel, and executes only the two
+audit-derived specs under `tests/e2e-compatibility-smoke/`: Result bundle import
+through the visible file chooser and Result bundle JSON export through browser
+download handling. The GitHub workflow
+`.github/workflows/web-client-compatibility-smoke.yml` is schedule/manual only
+and opens or closes the canonical
+`[Web Client Compatibility Smoke] windows-latest / msedge` issue from real
+red/green results.
 
 If the checked-in simulator binary directory is absent in CI, the runner
 extracts the Release 2 platform-specific simulator ZIP from

@@ -9,7 +9,7 @@ test('edge-result-export-download-smoke', async ({ connected: app }) => {
   const results = await app.openResults()
   await results.waitForHeader({ timeout: 60_000 })
 
-  const resultId = `l2-edge-export-${Date.now()}`
+  const resultId = `compatibility-smoke-export-${Date.now()}`
   const bundle = makeResultBundle(resultId)
 
   await results.setImportMode('replace')

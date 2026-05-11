@@ -7,15 +7,15 @@ test('edge-result-import-filechooser-smoke', async ({ connected: app }) => {
   const results = await app.openResults()
   await results.waitForHeader({ timeout: 60_000 })
 
-  const resultId = `l2-edge-import-${Date.now()}`
+  const resultId = `compatibility-smoke-import-${Date.now()}`
   const bundle = makeResultBundle(resultId)
 
   await results.setImportMode('skip-duplicates')
   await results.setImportStrict(false)
-  await results.importBundleObjectViaFileChooser(bundle, 'ijt-l2-edge-import.json')
+  await results.importBundleObjectViaFileChooser(bundle, 'ijt-compatibility-smoke-import.json')
 
   await expect.poll(async () => results.getStatusText(), { timeout: 10_000 }).toContain('Imported 1')
 
-  await results.importBundleObjectViaFileChooser(bundle, 'ijt-l2-edge-import.json')
+  await results.importBundleObjectViaFileChooser(bundle, 'ijt-compatibility-smoke-import.json')
   await expect.poll(async () => results.getStatusText(), { timeout: 10_000 }).toContain('duplicate_result_id:1')
 })
