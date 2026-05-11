@@ -410,7 +410,7 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `web-client-docker-smoke` | local root runner | HTTP 3000 / WS 8001 | Web Client production Docker image/readiness smoke |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
 | `live-webclient` | `integration.yml` | **40463/40466/40467** | Windows native EXE for non-browser Web Client live suites |
-| `live-webclient-browser` | `integration.yml` | **40469–40472 / 40480** | `mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645` on Ubuntu; Linux simulator package |
+| `live-webclient-browser` | `integration.yml` | **40469–40472 / 40480** | `mcr.microsoft.com/playwright:v1.60.0-noble@sha256:83192064c7510f7ee73dd63dc5f22a5e01a92c81a2e6a9c715d9e3fe55471fd9` on Ubuntu; Linux simulator package |
 | `live-console` | `integration.yml` | **40461** | Windows native EXE |
 | `csharp-live` (nightly) | `integration.yml` | **40464** | Windows native EXE |
 
@@ -429,7 +429,7 @@ runner matrix, split by execution surface. The non-browser Web Client live
 suites stay on `windows-latest` because they validate Python/backend behavior
 against the Windows simulator package. All `web-client-e2e-*` Playwright suites
 run on `ubuntu-latest` inside the pinned Playwright Linux image
-`mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645`
+`mcr.microsoft.com/playwright:v1.60.0-noble@sha256:83192064c7510f7ee73dd63dc5f22a5e01a92c81a2e6a9c715d9e3fe55471fd9`
 with `--ipc=host` and the Linux simulator package. Browser Features remains
 split into two Playwright shards; CI defaults to two feature workers per shard,
 while local root runs keep the default four-worker feature pool. Do not add

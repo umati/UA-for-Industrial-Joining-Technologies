@@ -435,7 +435,7 @@ runs the same root-runner Web Client live/e2e suites as local validation, split
 by execution surface. `web-client-live-*` suites stay on `windows-latest` with
 the Windows simulator package. Every `web-client-e2e-*` suite runs on
 `ubuntu-latest` inside the pinned Playwright Linux image
-`mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645`
+`mcr.microsoft.com/playwright:v1.60.0-noble@sha256:83192064c7510f7ee73dd63dc5f22a5e01a92c81a2e6a9c715d9e3fe55471fd9`
 with `--ipc=host` and the Linux simulator package. Browser Features keeps two
 Playwright shards, but no browser cache or `npx playwright install` step is
 allowed in the workflow because the image owns Chromium and its system

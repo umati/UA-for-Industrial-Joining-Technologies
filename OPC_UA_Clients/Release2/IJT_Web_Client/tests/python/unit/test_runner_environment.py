@@ -1349,7 +1349,7 @@ def test_playwright_config_uses_runtime_ui_port_and_no_retries():
     assert "const PLAYWRIGHT_WORKERS" in source
     assert "process.env.IJT_PLAYWRIGHT_WORKERS" in source
     assert "canonicalPlaywrightImage" in source
-    assert "mcr.microsoft.com/playwright:v1.59.1-noble@sha256:" in source
+    assert "mcr.microsoft.com/playwright:v1.60.0-noble@sha256:" in source
     assert "baseURL: UI_BASE_URL" in source
     assert "reuseExistingServer: false" in source
     assert re.search(r"retries:\s*0", source)

@@ -4,7 +4,7 @@ const UI_PORT = process.env.UI_TEST_PORT ?? '3000'
 const UI_BASE_URL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? process.env.UI_TEST_BASE_URL ?? `http://127.0.0.1:${UI_PORT}`
 const TEST_RESULTS_DIR = process.env.IJT_WEB_TEST_RESULTS_DIR ?? 'test-results'
 const CANONICAL_PLAYWRIGHT_IMAGE =
-  'mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645'
+  'mcr.microsoft.com/playwright:v1.60.0-noble@sha256:83192064c7510f7ee73dd63dc5f22a5e01a92c81a2e6a9c715d9e3fe55471fd9'
 const PLAYWRIGHT_WORKERS = Number.parseInt(
   process.env.IJT_PLAYWRIGHT_WORKERS ?? (process.env.CI ? '2' : '1'),
   10

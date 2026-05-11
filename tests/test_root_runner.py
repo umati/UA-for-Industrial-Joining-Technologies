@@ -791,6 +791,7 @@ def test_root_feature_worker_count_handles_empty_env_var(monkeypatch) -> None:
     for non-feature suites (e.g. ``${{ matrix.feature_workers || '' }}``).
     ``int(os.getenv(name, default))`` returns '' on set-but-empty vars and
     crashes the module at import time, taking down every Web Client live job."""
+    monkeypatch.delenv("CI", raising=False)
     monkeypatch.setenv("IJT_PLAYWRIGHT_FEATURE_WORKERS", "")
     runner = _load_runner_at("run_all_tests.py", "ijt_root_runner_feature_workers_empty")
 
@@ -798,6 +799,7 @@ def test_root_feature_worker_count_handles_empty_env_var(monkeypatch) -> None:
 
 
 def test_root_feature_worker_count_handles_whitespace_env_var(monkeypatch) -> None:
+    monkeypatch.delenv("CI", raising=False)
     monkeypatch.setenv("IJT_PLAYWRIGHT_FEATURE_WORKERS", "   ")
     runner = _load_runner_at("run_all_tests.py", "ijt_root_runner_feature_workers_ws")
 
@@ -894,8 +896,8 @@ def test_integration_web_client_e2e_jobs_require_pinned_linux_container() -> Non
     workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml"
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
     expected_image = (
-        "mcr.microsoft.com/playwright:v1.59.1-noble"
-        "@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645"
+        "mcr.microsoft.com/playwright:v1.60.0-noble"
+        "@sha256:83192064c7510f7ee73dd63dc5f22a5e01a92c81a2e6a9c715d9e3fe55471fd9"
     )
 
     for job_name, job in workflow["jobs"].items():

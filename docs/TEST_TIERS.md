@@ -169,7 +169,7 @@ run their live/integration tests in parallel without port conflicts.
 > suites stay on GitHub-hosted Windows runners. Every `web-client-e2e-*`
 > Playwright suite runs on `ubuntu-latest` inside the pinned Playwright Linux
 > image
-> `mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645`
+> `mcr.microsoft.com/playwright:v1.60.0-noble@sha256:83192064c7510f7ee73dd63dc5f22a5e01a92c81a2e6a9c715d9e3fe55471fd9`
 > with the Linux simulator package. Browser Features keeps two shards; CI
 > defaults to two feature workers per shard, and local root validation defaults
 > to four workers.
