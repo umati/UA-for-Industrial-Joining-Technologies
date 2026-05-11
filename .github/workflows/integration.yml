@@ -998,9 +998,11 @@ jobs:
                   if expected_tests is not None:
                       delta = total - int(expected_tests)
                       if delta != 0:
+                          reanchor_command = f"python tests/tools/update_integration_baseline.py --run {run_id} --suite {key}"
                           warnings.append(
                               f"⚠️ **{label}**: {total:,} tests ({delta:+d} vs baseline "
                               f"{int(expected_tests):,}) — investigate suite collection drift."
+                              f" After review, re-anchor with `{reanchor_command}`."
                           )
 
                   expected_skips = entry.get("skipped")
@@ -1009,9 +1011,11 @@ jobs:
                   tolerance = int(entry.get("skip_tolerance", default_tolerance) or 0)
                   skip_delta = skipped - int(expected_skips)
                   if skip_delta > tolerance:
+                      reanchor_command = f"python tests/tools/update_integration_baseline.py --run {run_id} --suite {key}"
                       warnings.append(
                           f"⚠️ **{label}**: {skipped:,} skipped ({skip_delta:+d} vs baseline "
                           f"{int(expected_skips):,}; tolerance +{tolerance}) — investigate skip drift."
+                          f" After review, re-anchor with `{reanchor_command}`."
                       )
               return warnings
 

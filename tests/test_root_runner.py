@@ -1196,7 +1196,7 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
     )
 
     assert baseline["schema_version"] == 1
-    assert set(baseline["suites"]) == {
+    expected_suites = {
         "sd_smoke",
         "wd_py",
         "wd_js",
@@ -1207,14 +1207,16 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
         "con_live",
         "cs_live",
     }
-    assert baseline["suites"]["tc_tests"]["skip_tolerance"] == 10
-    assert baseline["suites"]["wd_py"]["tests"] == 677
-    assert baseline["suites"]["wd_js"]["tests"] == 522
-    assert baseline["suites"]["wc_live"]["tests"] == 127
-    assert baseline["suites"]["wc_live"]["skipped"] == 0
-    assert baseline["suites"]["wc_live"]["skip_tolerance"] == 0
-    assert baseline["suites"]["wc_browser"]["tests"] == 66
-    assert baseline["suites"]["wc_browser"]["skipped"] == 0
+    assert set(baseline["suites"]) == expected_suites
+    for key in expected_suites:
+        entry = baseline["suites"][key]
+        assert isinstance(entry["label"], str)
+        assert isinstance(entry["tests"], int)
+        assert entry["tests"] > 0
+        assert isinstance(entry["skipped"], int)
+        assert entry["skipped"] >= 0
+        assert isinstance(entry["skip_tolerance"], int)
+        assert entry["skip_tolerance"] >= 0
     assert "load_integration_baseline(" in workflow
     assert "format_count_delta(" in workflow
     assert 'return "" if delta == 0 else f" ({delta:+d})"' in workflow
@@ -1228,6 +1230,69 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
     assert "### ⚠️ Report Warnings" in workflow
     assert "skip drift" in workflow
     assert "suite collection drift" in workflow
+    assert "tests/tools/update_integration_baseline.py --run" in workflow
+    assert "--suite {key}" in workflow
+
+
+def test_update_integration_baseline_helper_is_guarded() -> None:
+    helper = _runner.REPO_ROOT / "tests" / "tools" / "update_integration_baseline.py"
+    text = helper.read_text(encoding="utf-8")
+    module = _load_runner_at(
+        "tests/tools/update_integration_baseline.py",
+        "ijt_update_integration_baseline",
+    )
+    baseline = {
+        "suites": {
+            "wd_py": {
+                "label": "Web Client - Docker Python Unit",
+                "tests": 680,
+                "skipped": 0,
+            }
+        }
+    }
+
+    assert "--run" in text
+    assert "--suite" in text
+    assert "--allow-decrease" in text
+    assert "gh" in text
+    assert "run" in text
+    assert "download" in text
+    assert "ARTIFACT_SPECS" in text
+    assert "conclusion" in text
+    assert "success" in text
+    assert "Integration — Live System Tests" in text
+    assert "would decrease" in text
+    assert "captured_from_run" in text
+    assert set(module.ARTIFACT_SPECS) == {
+        "sd_smoke",
+        "wd_py",
+        "wd_js",
+        "tc_smoke",
+        "tc_tests",
+        "wc_live",
+        "wc_browser",
+        "con_live",
+        "cs_live",
+    }
+    with pytest.raises(SystemExit, match="would decrease"):
+        module._apply_update(
+            baseline,
+            {"tests": 679, "skipped": 0},
+            run_id="123",
+            captured_at="2026-05-11T20:33:34Z",
+            suite="wd_py",
+            allow_decrease=False,
+        )
+    updated = module._apply_update(
+        baseline,
+        {"tests": 681, "skipped": 0},
+        run_id="123",
+        captured_at="2026-05-11T20:33:34Z",
+        suite="wd_py",
+        allow_decrease=False,
+    )
+    assert updated["suites"]["wd_py"]["tests"] == 681
+    assert updated["captured_from_run"] == 123
 
 
 def test_web_client_live_suite_has_no_runtime_skip_calls() -> None:
