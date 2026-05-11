@@ -888,6 +888,7 @@ def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> Non
     assert set(jobs) == {"web-client-compatibility-smoke"}
     job = jobs["web-client-compatibility-smoke"]
     assert job["runs-on"] == "${{ matrix.os }}"
+    assert job["defaults"]["run"]["shell"] == "pwsh"
     assert job["strategy"]["fail-fast"] is False
     matrix_rows = job["strategy"]["matrix"]["include"]
     assert matrix_rows == [{"os": "windows-latest", "browser": "msedge"}]

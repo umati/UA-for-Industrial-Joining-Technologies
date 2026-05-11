@@ -27,6 +27,9 @@ jobs:
     name: "Web Client Compatibility Smoke"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
     strategy:
       fail-fast: false
       matrix:
