@@ -161,9 +161,14 @@ run their live/integration tests in parallel without port conflicts.
 > suites with their own service ports. Web Client Docker build/readiness stays
 > in the separate `web-client-docker-smoke` suite.
 > GitHub integration runs that same local root-runner suite matrix instead of
-> a separate raw pytest-only Web integration command. The Web Client feature
-> matrix uses two shards with one Playwright worker per GitHub-hosted Windows
-> runner; local root validation defaults to four workers.
+> a separate raw pytest-only Web integration command. The non-browser Web live
+> suites stay on GitHub-hosted Windows runners. Every `web-client-e2e-*`
+> Playwright suite runs on `ubuntu-latest` inside the pinned Playwright Linux
+> image
+> `mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645`
+> with the Linux simulator package. Browser Features keeps two shards; CI
+> defaults to two feature workers per shard, and local root validation defaults
+> to four workers.
 
 ### Port Assignment
 

@@ -9,7 +9,8 @@
 #   server-smoke-docker  OPC UA Server          Linux native Docker build + smoke
 #   webclient-docker     Web Client             Docker unit/prod tests
 #   int-testclient       Test Client            Windows: OPC UA server (port 40462) + Test Client full suite
-#   live-webclient       Web Client             Windows: local runner web-client-live-* / web-client-e2e-* matrix
+#   live-webclient       Web Client             Windows: local runner web-client-live-* matrix
+#   live-webclient-browser Web Client           Linux Playwright container: web-client-e2e-* matrix
 #   live-console         Console Client         Windows: Console Client live tests (port 40461)
 #   csharp-live          C# Client              Windows: xUnit live tests (port 40464) - nightly
 #   report               Combined summary                 Always runs after all jobs
@@ -412,8 +413,8 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Web Client - Windows Live Runner Matrix
-  #   Runs the same Web Client live/e2e suites as the local root runner.
-  #   Each suite owns its OPC UA server, WebSocket backend, UI port, and results directory.
+  #   Runs the non-browser Web Client live suites on Windows.
+  #   Each suite owns its OPC UA server, WebSocket backend, and results directory.
   # ───────────────────────────────────────────────────────────────────────────
   live-webclient:
     name: "Web Client - ${{ matrix.label }}"
@@ -427,29 +428,10 @@ jobs:
         include:
           - suite: web-client-live-opcua-direct
             label: "Direct OPC UA"
-            feature_workers: ""
           - suite: web-client-live-websocket-api
             label: "WebSocket API"
-            feature_workers: ""
           - suite: web-client-live-websocket-connection
             label: "WebSocket Connection"
-            feature_workers: ""
-          - suite: web-client-e2e-smoke
-            label: "Browser Smoke"
-            feature_workers: ""
-          - suite: web-client-e2e-features
-            label: "Browser Features (1/2)"
-            feature_workers: "1"
-            feature_shard: "1/2"
-            shard_suffix: "-shard-1of2"
-          - suite: web-client-e2e-features
-            label: "Browser Features (2/2)"
-            feature_workers: "1"
-            feature_shard: "2/2"
-            shard_suffix: "-shard-2of2"
-          - suite: web-client-e2e-regression
-            label: "Browser Regression"
-            feature_workers: ""
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -470,28 +452,81 @@ jobs:
           cache: npm
           cache-dependency-path: OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json
 
-      - name: Cache Playwright browsers
-        id: pw-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
-        if: startsWith(matrix.suite, 'web-client-e2e-')
-        with:
-          path: ~\AppData\Local\ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json') }}
-          restore-keys: |
-            playwright-${{ runner.os }}-
-
-      - name: Install Playwright browsers
-        if: startsWith(matrix.suite, 'web-client-e2e-') && steps.pw-cache.outputs.cache-hit != 'true'
-        working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
-        run: npx playwright install --with-deps chromium
-
       - name: Run Web Client local live suite
-        env:
-          IJT_PLAYWRIGHT_FEATURE_WORKERS: ${{ matrix.feature_workers || '' }}
-          IJT_PLAYWRIGHT_SHARD: ${{ matrix.feature_shard || '' }}
         run: python run_all_tests.py --suite "${{ matrix.suite }}" --verbose
 
       - name: Upload Web Client results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        if: always()
+        with:
+          name: results-live-webclient-${{ matrix.suite }}
+          path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
+          retention-days: 14
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Web Client - Browser E2E Runner Matrix
+  #   Runs every Playwright/headless-Chromium suite in the pinned Linux
+  #   Playwright image. Windows browser compatibility coverage is tracked
+  #   separately so the bulk browser logic suite does not depend on
+  #   Windows-hosted Chromium process stability.
+  # ───────────────────────────────────────────────────────────────────────────
+  live-webclient-browser:
+    name: "Web Client Browser - ${{ matrix.label }}"
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645
+      options: --ipc=host
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: web-client-e2e-smoke
+            label: "Browser Smoke"
+            feature_shard: ""
+            shard_suffix: ""
+          - suite: web-client-e2e-features
+            label: "Browser Features (1/2)"
+            feature_shard: "1/2"
+            shard_suffix: "-shard-1of2"
+          - suite: web-client-e2e-features
+            label: "Browser Features (2/2)"
+            feature_shard: "2/2"
+            shard_suffix: "-shard-2of2"
+          - suite: web-client-e2e-regression
+            label: "Browser Regression"
+            feature_shard: ""
+            shard_suffix: ""
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.14"
+          cache: 'pip'
+          cache-dependency-path: |
+            OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt
+            OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json
+
+      - name: Run Web Client browser e2e suite
+        env:
+          IJT_PLAYWRIGHT_SHARD: ${{ matrix.feature_shard || '' }}
+        run: python run_all_tests.py --suite "${{ matrix.suite }}" --verbose
+
+      - name: Upload Web Client browser results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
@@ -739,7 +774,7 @@ jobs:
     name: "📋 Extended Test Report"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [server-smoke-docker, webclient-docker, int-testclient, live-webclient, live-console, csharp-live]
+    needs: [server-smoke-docker, webclient-docker, int-testclient, live-webclient, live-webclient-browser, live-console, csharp-live]
     if: always()
     permissions:
       actions: read
@@ -843,6 +878,7 @@ jobs:
           WD_RESULT:   ${{ needs.webclient-docker.result }}
           TC_RESULT:   ${{ needs.int-testclient.result }}
           WC_RESULT:   ${{ needs.live-webclient.result }}
+          WB_RESULT:   ${{ needs.live-webclient-browser.result }}
           CON_RESULT:  ${{ needs.live-console.result }}
           CS_RESULT:   ${{ needs.csharp-live.result }}
           GH_SHA:         ${{ github.sha }}
@@ -1243,6 +1279,7 @@ jobs:
           wd_r  = E("WD_RESULT",  "unknown")
           tc_r  = E("TC_RESULT",  "unknown")
           wc_r  = E("WC_RESULT",  "unknown")
+          wb_r  = E("WB_RESULT",  "unknown")
           con_r = E("CON_RESULT", "unknown")
           cs_r  = E("CS_RESULT",  "unknown")
 
@@ -1258,7 +1295,8 @@ jobs:
           wd_js     = parse_junit("all-results/results-webclient-docker/vitest.xml")
           tc_smoke  = parse_junit("all-results/results-testclient/smoke-sanity.xml")
           tc_tests  = parse_junit("all-results/results-testclient/pytest.xml")
-          wc_web    = parse_junit("all-results/results-live-webclient-*/**/*.xml")
+          wc_live   = parse_junit("all-results/results-live-webclient-web-client-live-*/**/*.xml")
+          wc_browser = parse_junit("all-results/results-live-webclient-web-client-e2e-*/**/*.xml")
           con_live  = parse_junit("all-results/results-live-console/**/pytest-live.xml")
           cs_live   = parse_junit("all-results/results-csharp-live/tests.xml")
           wc_feature_timings = browser_feature_timings(
@@ -1278,7 +1316,8 @@ jobs:
           tc_smoke_skips = collect_skips("all-results/results-testclient/smoke-sanity.xml")
           tc_conf_skips = collect_skips("all-results/results-testclient/pytest.xml")
           con_live_skips = collect_skips("all-results/results-live-console/**/pytest-live.xml")
-          wc_web_skips  = collect_skips("all-results/results-live-webclient-*/**/*.xml")
+          wc_live_skips = collect_skips("all-results/results-live-webclient-web-client-live-*/**/*.xml")
+          wc_browser_skips = collect_skips("all-results/results-live-webclient-web-client-e2e-*/**/*.xml")
           cs_live_skips = collect_skips("all-results/results-csharp-live/tests.xml")
 
           # ── Artifact sanity gate ─────────────────────────────────────────
@@ -1294,7 +1333,8 @@ jobs:
           _warn(wd_r,  wd_js[0],     "webclient-docker",    "vitest.xml")
           _warn(tc_r,  tc_smoke[0],  "int-testclient",      "smoke-sanity.xml")
           _warn(tc_r,  tc_tests[0],  "int-testclient",      "pytest.xml")
-          _warn(wc_r,  wc_web[0],    "live-webclient",      "JUnit XML")
+          _warn(wc_r,  wc_live[0],   "live-webclient",      "JUnit XML")
+          _warn(wb_r,  wc_browser[0], "live-webclient-browser", "JUnit XML")
           _warn(con_r, con_live[0],  "live-console",        "pytest-live.xml")
           _warn(cs_r,  cs_live[0],   "csharp-live",         "tests.xml")
 
@@ -1304,7 +1344,8 @@ jobs:
               ("wd_js", "Web Client — Docker JavaScript", wd_js),
               ("tc_smoke", "Test Client — Smoke Sanity", tc_smoke),
               ("tc_tests", "Test Client — Conformance", tc_tests),
-              ("wc_web", "Web Client — Integration", wc_web),
+              ("wc_live", "Web Client — Python/WebSocket Live", wc_live),
+              ("wc_browser", "Web Client — Browser E2E", wc_browser),
               ("con_live", "Console Client — Live", con_live),
               ("cs_live", "C# Client — Live", cs_live),
           ]
@@ -1315,7 +1356,7 @@ jobs:
 
           # ── Overall status ────────────────────────────────────────────────
 
-          all_suites_data = [sd_smoke, wd_py, wd_js, tc_smoke, tc_tests, wc_web, con_live, cs_live]
+          all_suites_data = [sd_smoke, wd_py, wd_js, tc_smoke, tc_tests, wc_live, wc_browser, con_live, cs_live]
           total_t  = sum(s[0] for s in all_suites_data if s[0] is not None)
           total_f  = sum(s[2] for s in all_suites_data if s[2] is not None)
           total_sk = sum(s[3] for s in all_suites_data if s[3] is not None)
@@ -1324,7 +1365,7 @@ jobs:
           else:
               totals_str = "no test data"
 
-          core_jobs = [sd_r, wd_r, tc_r, wc_r, con_r, cs_r]
+          core_jobs = [sd_r, wd_r, tc_r, wc_r, wb_r, con_r, cs_r]
           n_pass  = sum(1 for r in core_jobs if r == "success")
           n_fail  = sum(1 for r in core_jobs if r == "failure")
           n_total = len(core_jobs)
@@ -1349,7 +1390,7 @@ jobs:
               "",
               f"> {status_icon} **{status_msg}**",
               f"> **Branch:** `{branch}` &nbsp;·&nbsp; **Commit:** {sha_str} &nbsp;·&nbsp; **Run:** {run_link}",
-              "> Nightly integration and live tests — full OPC UA stack on Windows + Docker",
+              "> Nightly integration and live tests — full OPC UA stack on Windows + Linux browser container + Docker",
               "",
               "---",
               "",
@@ -1407,9 +1448,19 @@ jobs:
               "|:------|-----:|------:|--------:|:------|",
               f"| Test Client — Smoke sanity       | 40462 | {tests(*tc_smoke, baseline=baseline_suite(integration_baseline, 'tc_smoke'))} | {skips(tc_smoke[3])} | Server and namespace reachability |",
               f"| Test Client — Conformance (live) | 40462 | {tests(*tc_tests, baseline=baseline_suite(integration_baseline, 'tc_tests'))} | {skips(tc_tests[3])} | {skip_note_inline(tc_conf_skips, tc_tests[3])} |",
-              f"| Web Client — Integration (live)  | 40463 | {tests(*wc_web, baseline=baseline_suite(integration_baseline, 'wc_web'))} | {skips(wc_web[3])} | {skip_note_inline(wc_web_skips, wc_web[3], 'OPC UA subscriptions + WebSocket')} |",
+              f"| Web Client — Python/WebSocket    | 40463/40466/40467 | {tests(*wc_live, baseline=baseline_suite(integration_baseline, 'wc_live'))} | {skips(wc_live[3])} | {skip_note_inline(wc_live_skips, wc_live[3], 'OPC UA subscriptions + WebSocket')} |",
               f"| Console Client — Live            | 40461 | {tests(*con_live, baseline=baseline_suite(integration_baseline, 'con_live'))} | {skips(con_live[3])} | {skip_note_inline(con_live_skips, con_live[3])} |",
               f"| C# Client — Live (xUnit)         | 40464 | {tests(*cs_live, baseline=baseline_suite(integration_baseline, 'cs_live'))} | {skips(cs_live[3])} | {skip_note_inline(cs_live_skips, cs_live[3], 'Nightly drift detection')} |",
+              "",
+              "---",
+              "",
+              "### Browser E2E Tests",
+              "",
+              "> Platform: Ubuntu latest — pinned Playwright Linux container `mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645`",
+              "",
+              "| Suite | Surface | Tests | Skipped | Notes |",
+              "|:------|:--------|------:|--------:|:------|",
+              f"| Web Client — Browser E2E | Chromium DOM/JS + OPC UA WebSocket + result/event UX | {tests(*wc_browser, baseline=baseline_suite(integration_baseline, 'wc_browser'))} | {skips(wc_browser[3])} | {skip_note_inline(wc_browser_skips, wc_browser[3], 'Headless Chromium in pinned Linux image')} |",
           ]
 
           if wc_feature_timings:
@@ -1471,7 +1522,8 @@ jobs:
           skip_sections += format_skip_section("Test Client — Smoke Sanity", tc_smoke_skips, tc_smoke[3])
           skip_sections += format_skip_section("Test Client — Conformance", tc_conf_skips, tc_tests[3])
           skip_sections += format_skip_section("Console Client — Live", con_live_skips, con_live[3])
-          skip_sections += format_skip_section("Web Client — Integration", wc_web_skips, wc_web[3])
+          skip_sections += format_skip_section("Web Client — Python/WebSocket Live", wc_live_skips, wc_live[3])
+          skip_sections += format_skip_section("Web Client — Browser E2E", wc_browser_skips, wc_browser[3])
           skip_sections += format_skip_section("C# Client — Live", cs_live_skips, cs_live[3])
 
           if skip_sections:

@@ -32,8 +32,10 @@ Environment variables (all optional):
   OPCUA_TEST_ENDPOINT   default: opc.tcp://localhost:40463
   WS_TEST_URL           default: ws://localhost:8001
   UI_TEST_BASE_URL      default: http://127.0.0.1:3000
+  IJT_PLAYWRIGHT_WORKERS
+                         worker count passed to playwright.config.mjs
   IJT_PLAYWRIGHT_FEATURE_WORKERS
-                         feature-suite Playwright worker count (default: 4)
+                         feature-suite Playwright worker count (default: 4 local, 2 in CI)
   IJT_PLAYWRIGHT_SHARD   "N/M" to run only shard N of M (passed to playwright
                          --shard=N/M); empty/unset disables sharding.  When set,
                          the JUnit output filename gets a "-shard-NofM" suffix
@@ -1499,14 +1501,16 @@ def _stage_infra_lint() -> StageResult:
 # ---------------------------------------------------------------------------
 _SERVER_COMPOSE_DIR = ROOT.parent.parent.parent / "OPC_UA_Servers" / "Release2"
 
-_WELL_KNOWN_SIMULATOR_PATHS: list[Path] = [
-    _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe",
-    _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application",
-]
-_SIMULATOR_PACKAGE_ZIPS: list[Path] = [
-    _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator.zip",
-    _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator_Linux.zip",
-]
+_WINDOWS_SIMULATOR_EXE = _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe"
+_LINUX_SIMULATOR_EXE = _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
+_WINDOWS_SIMULATOR_ZIP = _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator.zip"
+_LINUX_SIMULATOR_ZIP = _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator_Linux.zip"
+_WELL_KNOWN_SIMULATOR_PATHS: list[Path] = (
+    [_WINDOWS_SIMULATOR_EXE, _LINUX_SIMULATOR_EXE] if IS_WINDOWS else [_LINUX_SIMULATOR_EXE, _WINDOWS_SIMULATOR_EXE]
+)
+_SIMULATOR_PACKAGE_ZIPS: list[Path] = (
+    [_WINDOWS_SIMULATOR_ZIP, _LINUX_SIMULATOR_ZIP] if IS_WINDOWS else [_LINUX_SIMULATOR_ZIP, _WINDOWS_SIMULATOR_ZIP]
+)
 # The OPC UA server port this client connects to.  Defined once here so every
 # reference below derives from it — change the port in one place only.
 _OPCUA_SERVER_PORT = 40463
@@ -1544,7 +1548,7 @@ def _parse_int_env(name: str, default: int) -> int:
 # environments; override with IJT_DOCKER_TIMEOUT=<seconds> for slow CI runners.
 _DOCKER_TIMEOUT = _parse_int_env("IJT_DOCKER_TIMEOUT", 90)
 _DOCKER_BUILD_TIMEOUT = _parse_int_env("IJT_DOCKER_BUILD_TIMEOUT", 1200)
-_PLAYWRIGHT_FEATURE_WORKERS = _parse_int_env("IJT_PLAYWRIGHT_FEATURE_WORKERS", 4)
+_PLAYWRIGHT_FEATURE_WORKERS = _parse_int_env("IJT_PLAYWRIGHT_FEATURE_WORKERS", 2 if IS_CI else 4)
 
 
 def _parse_playwright_shard(raw: str | None) -> tuple[str | None, str]:
@@ -1700,8 +1704,17 @@ def _launch_simulator_instance(port: int, exe: str) -> _OpcuaServerInstance | No
             shutil.rmtree(tmp_dir, ignore_errors=True)
             return None
 
+    launch_exe = tmp_dir / exe_path.name
+    if not IS_WINDOWS:
+        try:
+            os.chmod(launch_exe, launch_exe.stat().st_mode | 0o111)
+        except OSError as exc:
+            _warn(f"Failed to mark simulator executable: {exc}")
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return None
+
     try:
-        proc = _start_process_with_opcua_logs([str(tmp_dir / exe_path.name)], cwd=tmp_dir, port=port)
+        proc = _start_process_with_opcua_logs([str(launch_exe)], cwd=tmp_dir, port=port)
     except OSError as exc:
         _warn(f"Failed to launch binary: {exc}; {_opcua_server_log_hint(port)}")
         shutil.rmtree(tmp_dir, ignore_errors=True)

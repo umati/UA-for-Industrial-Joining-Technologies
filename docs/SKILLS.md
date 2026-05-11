@@ -394,12 +394,13 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `web-client-live-opcua-direct` | local root runner + `integration.yml` | OPC UA 40463 | Direct Python OPC UA and method tests |
 | `web-client-live-websocket-api` | local root runner + `integration.yml` | OPC UA 40466 / WS 8002 | Python WebSocket backend contract and integration tests |
 | `web-client-live-websocket-connection` | local root runner + `integration.yml` | OPC UA 40467 / WS 8003 | WebSocket lifecycle tests isolated from backend contract tests |
-| `web-client-e2e-smoke` | local root runner + `integration.yml` | HTTP 3004 | Playwright smoke project |
-| `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs, four isolated browser workers locally; GitHub Integration uses two Browser Features shards with one Playwright worker per shard |
-| `web-client-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec |
+| `web-client-e2e-smoke` | local root runner + `integration.yml` | HTTP 3004 | Playwright smoke project; GitHub Integration runs it in the pinned Linux Playwright container |
+| `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs with owned browser/backend/server workers; GitHub Integration uses two Browser Features shards in the pinned Linux Playwright container |
+| `web-client-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec; GitHub Integration runs it in the pinned Linux Playwright container |
 | `web-client-docker-smoke` | local root runner | HTTP 3000 / WS 8001 | Web Client production Docker image/readiness smoke |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
-| `live-webclient` | `integration.yml` | **40463** | Windows native EXE |
+| `live-webclient` | `integration.yml` | **40463/40466/40467** | Windows native EXE for non-browser Web Client live suites |
+| `live-webclient-browser` | `integration.yml` | **40469–40472 / 40480** | `mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645` on Ubuntu; Linux simulator package |
 | `live-console` | `integration.yml` | **40461** | Windows native EXE |
 | `csharp-live` (nightly) | `integration.yml` | **40464** | Windows native EXE |
 
@@ -414,14 +415,16 @@ The Playwright feature suite is parallelized across four owned backend/server
 pairs. Worker 0 uses the base ports, and workers 1–3 use the next contiguous
 ports, so browser workers never share a WebSocket backend or OPC UA simulator.
 GitHub integration runs the same Web Client live/e2e suites through the root
-runner matrix. Browser Features is split into two Playwright shards in GitHub
-integration, with one Playwright worker per Windows runner to keep the local
-browser/backend/socket load bounded. Local root runs keep the default
-four-worker feature pool. Web Client e2e matrix rows cache Playwright browser
-binaries under the Windows runner profile and run
-`npx playwright install --with-deps chromium` only when the exact browser cache
-key misses; this keeps browser download time out of the 600 s root-runner suite
-budget.
+runner matrix, split by execution surface. The non-browser Web Client live
+suites stay on `windows-latest` because they validate Python/backend behavior
+against the Windows simulator package. All `web-client-e2e-*` Playwright suites
+run on `ubuntu-latest` inside the pinned Playwright Linux image
+`mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645`
+with `--ipc=host` and the Linux simulator package. Browser Features remains
+split into two Playwright shards; CI defaults to two feature workers per shard,
+while local root runs keep the default four-worker feature pool. Do not add
+Playwright browser cache/install steps to the browser matrix: the pinned image
+owns the browser binary and dependencies.
 Joint Demo feature tests wait for the active `ProductInstanceUri` to resolve
 before calling demo methods; the Web UI does not fire Joint Demo methods while
 only a bundled sample Settings URI is available.
@@ -440,13 +443,13 @@ Triggers on: `OPC_UA_Servers/**`, all Web Client files, `IJT_Test_Client/**`, Co
 | `live-webclient` | Windows live matrix: root-runner Web Client live/e2e suites with owned services and per-suite artifacts |
 | `live-console` | Windows live: Console Client live tests — server on port 40461 |
 | `csharp-live` | Windows live: C# xUnit live tests (nightly drift detection) — server on port 40464 |
-| `report` | Downloads integration artifacts and publishes pass/fail/skip totals, test-count deltas from `tests/baselines/integration-test-counts.json`, non-failing skip/test drift warnings, per-job wall-clock durations from the current run jobs API, and Browser Features / C# Live timing tables |
+| `report` | Downloads integration artifacts and publishes pass/fail/skip totals, test-count deltas from `tests/baselines/integration-test-counts.json`, non-failing skip/test drift warnings, per-job wall-clock durations from the current run jobs API, split Web live/browser rows, and Browser Features / C# Live timing tables |
 
 Runtime: ~10–15 minutes (int-testclient, live-webclient matrix jobs, live-console, csharp-live all run in parallel). Web Client GUI/JS changes now trigger integration because the live matrix includes Playwright smoke/features/regression suites.
 Use the report timing tables for CI performance decisions: Browser Features comes from Web Client `timing-latest.json` artifacts, and C# Live comes from `results-csharp-live/tests.trx` per-test durations.
 The `Job Durations` section is best-effort and non-failing; it uses the GitHub Actions jobs API for the current run, marks the longest completed job, and excludes the report job itself because a report cannot measure its own completed duration.
 Update `tests/baselines/integration-test-counts.json` manually in a normal code review when an intentional suite count or expected skip-count change lands; drift is reported loudly but never fails the report job.
-Skip tolerance is zero by default; only high-volume or matrix-aggregated live suites get a small explicit tolerance so routine skip churn stays visible without hiding real drift. The `wc_web` baseline aggregates every Web live/e2e matrix XML, so any new XML-producing Web matrix row must update the baseline in the same review.
+Skip tolerance is zero by default; only high-volume or matrix-aggregated live suites get a small explicit tolerance so routine skip churn stays visible without hiding real drift. Web live and browser artifacts are tracked separately as `wc_live` and `wc_browser`, so any new XML-producing Web matrix row must update the matching baseline in the same review.
 All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents: read`.
 
 ---

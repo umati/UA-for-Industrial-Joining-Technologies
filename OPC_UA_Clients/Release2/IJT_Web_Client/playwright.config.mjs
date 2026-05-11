@@ -3,6 +3,8 @@ import { defineConfig, devices } from '@playwright/test'
 const UI_PORT = process.env.UI_TEST_PORT ?? '3000'
 const UI_BASE_URL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? process.env.UI_TEST_BASE_URL ?? `http://127.0.0.1:${UI_PORT}`
 const TEST_RESULTS_DIR = process.env.IJT_WEB_TEST_RESULTS_DIR ?? 'test-results'
+const CANONICAL_PLAYWRIGHT_IMAGE =
+  'mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645'
 const PLAYWRIGHT_WORKERS = Number.parseInt(
   process.env.IJT_PLAYWRIGHT_WORKERS ?? (process.env.CI ? '2' : '1'),
   10
@@ -10,6 +12,10 @@ const PLAYWRIGHT_WORKERS = Number.parseInt(
 
 /**
  * Playwright configuration for IJT Web Client E2E + UI regression tests.
+ * Browser e2e CI assumes execution inside CANONICAL_PLAYWRIGHT_IMAGE.
+ * Local CI reproduction must use that image with the integration.yml setup
+ * steps; bare Windows headless Chromium is not a supported browser-e2e CI
+ * surface.
  *
  * Projects:
  *   smoke      - Fast structural checks (no backend required)
@@ -25,6 +31,7 @@ const PLAYWRIGHT_WORKERS = Number.parseInt(
 export default defineConfig({
   testDir: './tests/e2e',
   outputDir: `${TEST_RESULTS_DIR}/artifacts`,
+  metadata: { canonicalPlaywrightImage: CANONICAL_PLAYWRIGHT_IMAGE },
 
   /* Global test timeout */
   timeout: 90_000,
@@ -47,8 +54,7 @@ export default defineConfig({
 
   use: {
     baseURL: UI_BASE_URL,
-    // Use chromium (installed via `npx playwright install chromium`)
-    // Works on Windows, Linux, macOS and Docker without a Chrome install.
+    // Use the Chromium browser from the canonical Playwright Linux image.
     browserName: 'chromium',
     actionTimeout: 15_000,
     navigationTimeout: 30_000,

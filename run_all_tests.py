@@ -240,7 +240,10 @@ def _int_env(name: str, default: int) -> int:
         raise ValueError(f"{name} must be an integer, got {raw!r}") from exc
 
 
-WEB_CLIENT_E2E_FEATURE_WORKERS = _int_env("IJT_PLAYWRIGHT_FEATURE_WORKERS", 4)
+WEB_CLIENT_E2E_FEATURE_WORKERS = _int_env(
+    "IJT_PLAYWRIGHT_FEATURE_WORKERS",
+    2 if os.getenv("CI") else 4,
+)
 WEB_CLIENT_RESULTS_DIR = WEB_CLIENT_DIR / "test-results"
 
 # Release 1 / Node client — legacy default, unchanged for backward compatibility.

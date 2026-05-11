@@ -445,6 +445,19 @@ def test_simulator_package_is_extracted_when_binary_is_missing(monkeypatch, tmp_
     assert extracted == {"path": package, "destination": server_dir}
 
 
+def test_simulator_package_order_follows_host_platform():
+    runner = _load_runner()
+
+    first_package = runner._SIMULATOR_PACKAGE_ZIPS[0].name
+    first_executable = runner._WELL_KNOWN_SIMULATOR_PATHS[0].name
+    if runner.IS_WINDOWS:
+        assert first_package == "OPC_UA_IJT_Server_Simulator.zip"
+        assert first_executable == "opcua_ijt_demo_application.exe"
+    else:
+        assert first_package == "OPC_UA_IJT_Server_Simulator_Linux.zip"
+        assert first_executable == "opcua_ijt_demo_application"
+
+
 def test_playwright_install_skips_with_deps_on_windows(monkeypatch):
     runner = _load_runner()
     calls = []
@@ -955,6 +968,8 @@ def test_playwright_config_uses_runtime_ui_port_and_no_retries():
     assert "outputFile: `${TEST_RESULTS_DIR}/playwright.xml`" in source
     assert "const PLAYWRIGHT_WORKERS" in source
     assert "process.env.IJT_PLAYWRIGHT_WORKERS" in source
+    assert "canonicalPlaywrightImage" in source
+    assert "mcr.microsoft.com/playwright:v1.59.1-noble@sha256:" in source
     assert "baseURL: UI_BASE_URL" in source
     assert "reuseExistingServer: false" in source
     assert re.search(r"retries:\s*0", source)

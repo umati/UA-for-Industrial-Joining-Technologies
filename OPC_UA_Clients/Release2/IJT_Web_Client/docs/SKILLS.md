@@ -405,11 +405,13 @@ At the root-runner level, `web-client-docker-smoke` is prechecked like the serve
 Docker smoke: missing Docker or a stopped daemon is reported as a skipped suite.
 Calling this Web runner directly with `--docker-only` remains an explicit Docker
 validation request and fails if Docker cannot run.
-The Playwright feature suite runs with `IJT_PLAYWRIGHT_FEATURE_WORKERS=4` in
-the root runner. Each worker gets a dedicated WebSocket backend and OPC UA
-simulator by offsetting the base `WS_TEST_URL` and `OPCUA_TEST_ENDPOINT` ports;
-the browser URL carries the worker-specific WebSocket port through query
-parameters.
+The Playwright feature suite runs with `IJT_PLAYWRIGHT_FEATURE_WORKERS=4`
+locally and defaults to two feature workers in CI. Each worker gets a dedicated
+WebSocket backend and OPC UA simulator by offsetting the base `WS_TEST_URL` and
+`OPCUA_TEST_ENDPOINT` ports; the browser URL carries the worker-specific
+WebSocket port through query parameters. `IJT_PLAYWRIGHT_WORKERS` is the only
+environment variable consumed by `playwright.config.mjs`; the runner sets it
+when it launches a Playwright project.
 
 Focused live-suite commands used by the root runner:
 
@@ -428,15 +430,23 @@ delegates to `--phase1-python`, and `web-client-js` delegates to
 `--phase1-js`. The workflow no longer duplicates the individual pytest,
 Vitest, ESLint, mypy, Bandit, and audit commands, and the split gives each
 language stack its own timing and failure surface. GitHub `integration.yml`
-runs the same root-runner Web Client live/e2e suite matrix as local validation.
-Browser Features uses two Playwright shards on GitHub-hosted Windows runners
-with one Playwright worker per shard. Each suite receives an isolated
-`IJT_WEB_TEST_RESULTS_DIR`, so JUnit, coverage, Playwright, and timing artifacts
-cannot overwrite another suite's files.
+runs the same root-runner Web Client live/e2e suites as local validation, split
+by execution surface. `web-client-live-*` suites stay on `windows-latest` with
+the Windows simulator package. Every `web-client-e2e-*` suite runs on
+`ubuntu-latest` inside the pinned Playwright Linux image
+`mcr.microsoft.com/playwright:v1.59.1-noble@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645`
+with `--ipc=host` and the Linux simulator package. Browser Features keeps two
+Playwright shards, but no browser cache or `npx playwright install` step is
+allowed in the workflow because the image owns Chromium and its system
+dependencies. Each suite receives an isolated `IJT_WEB_TEST_RESULTS_DIR`, so
+JUnit, coverage, Playwright, and timing artifacts cannot overwrite another
+suite's files.
 
 If the checked-in simulator binary directory is absent in CI, the runner
-extracts the Release 2 Windows/Linux simulator ZIP from `OPC_UA_Servers/Release2`
-before launching owned live-suite servers.
+extracts the Release 2 platform-specific simulator ZIP from
+`OPC_UA_Servers/Release2` before launching owned live-suite servers. Linux hosts
+prefer `OPC_UA_IJT_Server_Simulator_Linux.zip`; Windows hosts prefer
+`OPC_UA_IJT_Server_Simulator.zip`.
 
 ### Browser Runtime WebSocket Config
 
@@ -531,6 +541,7 @@ and `SimulateBulkEvents` defaults to event type `1` and count `3`.
 | `WS_TEST_URL` | `ws://localhost:8001` | Test WebSocket URL; root split suites override this per suite |
 | `UI_TEST_PORT` | `3000` | Playwright static UI server port; root split suites override this per browser suite |
 | `UI_TEST_BASE_URL` | `http://127.0.0.1:3000` | Playwright base URL; root split suites override this per browser suite |
+| `IJT_PLAYWRIGHT_WORKERS` | `2` in CI, `1` in direct local Playwright config | Playwright worker count consumed by `playwright.config.mjs`; the runner sets it for project-specific runs |
 | `IS_DOCKER` | (unset) | Set to `true` inside Docker containers; skips venv creation |
 | `OPCUA_SIMULATOR_EXE` | (unset) | Path to simulator binary for auto-launch |
 | `IJT_SIMULATOR_INSTANCE_ROOT` | `{RUNNER_TEMP or temp}/ijt-sim` | Optional short root for runner-owned simulator copies; each port gets its own child directory |

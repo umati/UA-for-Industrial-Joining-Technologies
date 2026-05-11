@@ -731,6 +731,14 @@ def test_root_feature_worker_count_handles_whitespace_env_var(monkeypatch) -> No
     assert runner.WEB_CLIENT_E2E_FEATURE_WORKERS == 4
 
 
+def test_root_feature_worker_count_defaults_to_two_in_ci(monkeypatch) -> None:
+    monkeypatch.delenv("IJT_PLAYWRIGHT_FEATURE_WORKERS", raising=False)
+    monkeypatch.setenv("CI", "true")
+    runner = _load_runner_at("run_all_tests.py", "ijt_root_runner_feature_workers_ci")
+
+    assert runner.WEB_CLIENT_E2E_FEATURE_WORKERS == 2
+
+
 def test_root_int_env_helper_rejects_garbage(monkeypatch) -> None:
     monkeypatch.setenv("IJT_SUITE_TIMEOUT", "not-a-number")
 
@@ -752,29 +760,36 @@ def test_ci_web_client_splits_local_phase1_runner_by_language_lane() -> None:
     assert "steps.web_js_runner.outcome" in web_jobs
 
 
-def test_integration_web_client_uses_local_live_suite_matrix() -> None:
-    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
-        encoding="utf-8"
-    )
-    expected_suites = {
+def test_integration_web_client_uses_split_live_and_browser_matrices() -> None:
+    import yaml
+
+    workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    live_rows = workflow["jobs"]["live-webclient"]["strategy"]["matrix"]["include"]
+    browser_rows = workflow["jobs"]["live-webclient-browser"]["strategy"]["matrix"]["include"]
+    live_suites = {row["suite"] for row in live_rows}
+    browser_suites = {row["suite"] for row in browser_rows}
+
+    assert live_suites == {
         "web-client-live-opcua-direct",
         "web-client-live-websocket-api",
         "web-client-live-websocket-connection",
+    }
+    assert browser_suites == {
         "web-client-e2e-smoke",
         "web-client-e2e-features",
         "web-client-e2e-regression",
     }
+    assert workflow["jobs"]["live-webclient"]["runs-on"] == "windows-latest"
+    assert workflow["jobs"]["live-webclient-browser"]["runs-on"] == "ubuntu-latest"
 
-    for suite in expected_suites:
-        assert suite in workflow
-
-    assert 'python run_all_tests.py --suite "${{ matrix.suite }}" --verbose' in workflow
-    assert "OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/" not in workflow
-    assert "results-live-webclient-${{ matrix.suite }}" in workflow
-    assert "all-results/results-live-webclient-*/**/*.xml" in workflow
-    assert "Cache Playwright browsers" in workflow
-    assert "npx playwright install --with-deps chromium" in workflow
-    assert "if: startsWith(matrix.suite, 'web-client-e2e-')" in workflow
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    assert 'python run_all_tests.py --suite "${{ matrix.suite }}" --verbose' in workflow_text
+    assert "OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/" not in workflow_text
+    assert "results-live-webclient-${{ matrix.suite }}" in workflow_text
+    assert "all-results/results-live-webclient-web-client-e2e-*/**/*.xml" in workflow_text
+    assert "Cache Playwright browsers" not in workflow_text
+    assert "npx playwright install --with-deps chromium" not in workflow_text
 
 
 def test_integration_web_client_features_are_sharded() -> None:
@@ -782,47 +797,49 @@ def test_integration_web_client_features_are_sharded() -> None:
 
     workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml"
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
-    live_webclient = workflow["jobs"]["live-webclient"]
-    rows = live_webclient["strategy"]["matrix"]["include"]
+    browser_webclient = workflow["jobs"]["live-webclient-browser"]
+    rows = browser_webclient["strategy"]["matrix"]["include"]
     feature_rows = [row for row in rows if row.get("suite") == "web-client-e2e-features"]
 
     assert [row.get("feature_shard") for row in feature_rows] == ["1/2", "2/2"]
     assert [row.get("shard_suffix") for row in feature_rows] == ["-shard-1of2", "-shard-2of2"]
-    assert [row.get("feature_workers") for row in feature_rows] == ["1", "1"]
+    assert [row.get("feature_workers") for row in feature_rows] == [None, None]
     assert [row.get("label") for row in feature_rows] == [
         "Browser Features (1/2)",
         "Browser Features (2/2)",
     ]
     assert len({row["shard_suffix"] for row in feature_rows}) == 2
     assert workflow["jobs"]["report"]["needs"].count("live-webclient") == 1
+    assert workflow["jobs"]["report"]["needs"].count("live-webclient-browser") == 1
     assert "live-webclient-shard" not in workflow["jobs"]["report"]["needs"]
 
 
-def test_integration_playwright_install_is_skipped_on_cache_hit() -> None:
-    """The Playwright browsers cache step must expose an id so the install step
-    can skip on cache hit. Re-running ``playwright install`` on a warm cache
-    costs ~3 min per shard and dwarfs the actual sharding benefit.
-    """
+def test_integration_web_client_e2e_jobs_require_pinned_linux_container() -> None:
+    """Browser e2e must stay off Windows-hosted Chromium."""
     import yaml
 
     workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml"
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
-    live_webclient = workflow["jobs"]["live-webclient"]
-    steps = live_webclient["steps"]
+    expected_image = (
+        "mcr.microsoft.com/playwright:v1.59.1-noble"
+        "@sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645"
+    )
 
-    cache_step = next(s for s in steps if s.get("name") == "Cache Playwright browsers")
-    install_step = next(s for s in steps if s.get("name") == "Install Playwright browsers")
+    for job_name, job in workflow["jobs"].items():
+        rows = job.get("strategy", {}).get("matrix", {}).get("include", [])
+        e2e_rows = [
+            row
+            for row in rows
+            if isinstance(row, dict) and row.get("suite", "").startswith("web-client-e2e-")
+        ]
+        if not e2e_rows:
+            continue
 
-    assert cache_step.get("id") == "pw-cache", (
-        "Cache step must expose id=pw-cache so install can reference its outputs"
-    )
-    if_clause = install_step.get("if", "")
-    assert "steps.pw-cache.outputs.cache-hit != 'true'" in if_clause, (
-        f"Install step must skip when cache hit; got if={if_clause!r}"
-    )
-    assert "startsWith(matrix.suite, 'web-client-e2e-')" in if_clause, (
-        "Install step must remain gated to e2e matrix rows"
-    )
+        assert job_name == "live-webclient-browser"
+        assert job["runs-on"] == "ubuntu-latest"
+        assert job.get("container", {}).get("image") == expected_image
+        assert "@sha256:" in job["container"]["image"]
+        assert job["container"].get("options") == "--ipc=host"
 
 
 def test_integration_report_surfaces_browser_feature_timings() -> None:
@@ -887,15 +904,18 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
         "wd_js",
         "tc_smoke",
         "tc_tests",
-        "wc_web",
+        "wc_live",
+        "wc_browser",
         "con_live",
         "cs_live",
     }
     assert baseline["suites"]["tc_tests"]["skip_tolerance"] == 10
     assert baseline["suites"]["wd_py"]["tests"] == 666
     assert baseline["suites"]["wd_js"]["tests"] == 522
-    assert baseline["suites"]["wc_web"]["skipped"] == 0
-    assert baseline["suites"]["wc_web"]["skip_tolerance"] == 0
+    assert baseline["suites"]["wc_live"]["skipped"] == 0
+    assert baseline["suites"]["wc_live"]["skip_tolerance"] == 0
+    assert baseline["suites"]["wc_browser"]["tests"] == 77
+    assert baseline["suites"]["wc_browser"]["skipped"] == 0
     assert "load_integration_baseline(" in workflow
     assert "format_count_delta(" in workflow
     assert 'return "" if delta == 0 else f" ({delta:+d})"' in workflow
