@@ -779,6 +779,76 @@ def test_node_runner_subprocess_env_disables_npm_update_notifier(monkeypatch) ->
     assert captured["npm_config_update_notifier"] == "false"
 
 
+def test_node_runner_npm_ci_starts_from_clean_install_state(monkeypatch) -> None:
+    module = _load_runner_at(
+        "OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests.py",
+        "ijt_node_runner_npm_clean_cache",
+    )
+    test_root = module._PROJECT_DIR / "tmp" / "unit-test-npm-clean-state"
+    if test_root.exists():
+        module._force_rmtree(test_root)
+    try:
+        cache = test_root / "npm-cache"
+        stale_entry = cache / "_cacache" / "tmp" / "stale"
+        stale_entry.parent.mkdir(parents=True)
+        stale_entry.write_text("stale", encoding="utf-8")
+        node_modules = test_root / "node_modules"
+        stale_module = node_modules / "node-opcua-nodeset-ua" / "dist"
+        stale_module.mkdir(parents=True)
+        monkeypatch.setattr(module, "_NPM_CACHE", cache)
+        monkeypatch.setattr(module, "_NODE_MODULES", node_modules)
+
+        def _fake_run(cmd):
+            assert cmd == [module._NPM, "ci", *module._NPM_INSTALL_FLAGS]
+            assert cache.exists()
+            assert not stale_entry.exists()
+            assert not stale_module.exists()
+            return 0, ""
+
+        monkeypatch.setattr(module, "_run", _fake_run)
+
+        result = module._step_npm_ci()
+
+        assert result.status == "PASS"
+    finally:
+        if test_root.exists():
+            module._force_rmtree(test_root)
+
+
+def test_node_runner_cleanup_removes_runner_npm_cache() -> None:
+    module = _load_runner_at(
+        "OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests.py",
+        "ijt_node_runner_npm_cleanup",
+    )
+    test_root = module._PROJECT_DIR / "tmp" / "unit-test-npm-cleanup"
+    if test_root.exists():
+        module._force_rmtree(test_root)
+    try:
+        cache = test_root / "tmp" / "npm-cache"
+        (cache / "_cacache").mkdir(parents=True)
+
+        module._cleanup_caches(test_root)
+
+        assert not cache.exists()
+    finally:
+        if test_root.exists():
+            module._force_rmtree(test_root)
+
+
+def test_ci_csharp_jobs_do_not_use_blocking_nuget_cache() -> None:
+    import yaml
+
+    workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "ci.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+
+    for job_name in ("csharp-unit", "csharp-vuln"):
+        steps = workflow["jobs"][job_name]["steps"]
+        step_names = [step.get("name", "") for step in steps]
+        assert "Cache NuGet Packages" not in step_names
+        assert not any(step.get("uses", "").startswith("actions/cache") for step in steps)
+        assert "Restore NuGet Packages" in step_names
+
+
 def test_root_feature_worker_count_can_be_overridden_for_ci(monkeypatch) -> None:
     monkeypatch.setenv("IJT_PLAYWRIGHT_FEATURE_WORKERS", "2")
     runner = _load_runner_at("run_all_tests.py", "ijt_root_runner_feature_workers")
@@ -1263,6 +1333,8 @@ def test_ci_pre_commit_gate_is_required_and_reported() -> None:
     ]
     assert install_steps
     assert '"pre-commit==4.5.1" "pytest~=9.0"' in install_steps[0]["run"]
+    pre_commit_steps = workflow["jobs"]["pre-commit"]["steps"]
+    assert not any(step.get("uses", "").startswith("actions/cache") for step in pre_commit_steps)
     assert "PC_RESULT:       ${{ needs.pre-commit.result }}" in workflow_text
     assert 'pc_r     = E("PC_RESULT"' in workflow_text
     assert "Pre-commit Hooks" in workflow_text
@@ -1270,6 +1342,30 @@ def test_ci_pre_commit_gate_is_required_and_reported() -> None:
         "${{ needs.pre-commit.result }}"
         in workflow["jobs"]["all-required"]["steps"][0]["env"]["RESULTS"]
     )
+
+
+def test_workflows_do_not_depend_on_actions_cache_or_setup_caches() -> None:
+    import yaml
+
+    setup_actions = ("actions/setup-python@", "actions/setup-node@", "actions/setup-dotnet@")
+    for workflow_path in (_runner.REPO_ROOT / ".github" / "workflows").glob("*.yml"):
+        workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+        for job_name, job in workflow.get("jobs", {}).items():
+            for step in job.get("steps", []):
+                uses = step.get("uses", "")
+                assert not uses.startswith("actions/cache"), (
+                    f"{workflow_path.name} job '{job_name}' uses actions/cache. CI must not "
+                    "depend on cache-service availability; install/restore commands are the "
+                    "correctness gates."
+                )
+                if any(uses.startswith(action) for action in setup_actions):
+                    step_with = step.get("with", {})
+                    assert "cache" not in step_with, (
+                        f"{workflow_path.name} job '{job_name}' uses built-in cache in {uses}. "
+                        "Setup actions must only select toolchains; dependency install commands "
+                        "own dependency resolution."
+                    )
+                    assert "cache-dependency-path" not in step_with
 
 
 def test_ci_report_web_python_skip_budget_uses_expected_skip_identities() -> None:

@@ -70,6 +70,7 @@ _DEFAULT_SERVER_URL = "opc.tcp://localhost:40451"
 _NPM_INSTALL_FLAGS = ["--no-audit", "--no-fund"]
 _TMP_DIR = _PROJECT_DIR / "tmp"
 _NPM_CACHE = _TMP_DIR / "npm-cache"
+_NODE_MODULES = _PROJECT_DIR / "node_modules"
 
 
 def _subprocess_env(env: dict | None = None) -> dict:
@@ -374,9 +375,11 @@ def _check_prerequisites() -> bool:
 def _step_npm_ci() -> StepResult:
     label = "npm ci"
     t0 = time.monotonic()
+    _reset_npm_install_state()
     rc, _ = _run([_NPM, "ci", *_NPM_INSTALL_FLAGS])
     dur = time.monotonic() - t0
     if rc != 0:
+        _cleanup_caches(_PROJECT_DIR)
         return StepResult(label, "PHASE 1", "FAIL", f"exit {rc}", dur)
     return StepResult(label, "PHASE 1", "PASS", "", dur)
 
@@ -877,10 +880,25 @@ def _force_rmtree(path: Path) -> None:
     shutil.rmtree(path, onexc=_on_exc)
 
 
+def _reset_npm_install_state() -> None:
+    """Start npm installs from the same clean dependency state CI uses."""
+    for path in (_NPM_CACHE, _NODE_MODULES):
+        if path.exists():
+            _force_rmtree(path)
+    _NPM_CACHE.mkdir(parents=True, exist_ok=True)
+
+
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
     _SKIP = {"node_modules", ".git", "test-results"}
-    _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "htmlcov"}
+    _CACHE_DIRS = {
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        "htmlcov",
+        "npm-cache",
+    }
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [
             d
