@@ -58,6 +58,7 @@ def test_suite_ids_match_naming_pattern() -> None:
                 "e2e",
                 "smoke",
                 "docker-smoke",
+                "compatibility-smoke",
                 "linux-package-smoke",
             ),
             key=len,
@@ -92,6 +93,11 @@ def test_suite_ids_match_naming_pattern() -> None:
         "docker-smoke",
         "",
     )
+    assert parse_suite_id("web-client-compatibility-smoke") == (
+        "web-client",
+        "compatibility-smoke",
+        "",
+    )
     assert parse_suite_id("server-linux-package-smoke") == (
         "server",
         "linux-package-smoke",
@@ -114,6 +120,7 @@ def test_suite_ids_match_naming_pattern() -> None:
         "e2e",
         "smoke",
         "docker-smoke",
+        "compatibility-smoke",
         "linux-package-smoke",
     }
 
@@ -135,6 +142,7 @@ def test_suite_groups_are_known_enum_values() -> None:
         "phase2-live",
         "phase2-package",
         "phase2-web-live",
+        "phase2-web-compatibility",
     }
     assert all(
         isinstance(spec.group, _runner.SuiteGroup) for spec in _runner.SUITE_REGISTRY.values()
@@ -142,7 +150,7 @@ def test_suite_groups_are_known_enum_values() -> None:
 
 
 def test_suite_registry_has_no_duplicate_ids() -> None:
-    assert len(_runner.SUITE_REGISTRY) == 20
+    assert len(_runner.SUITE_REGISTRY) == 21
     assert len(set(_runner.SUITE_REGISTRY)) == len(_runner.SUITE_REGISTRY)
 
     runners = [spec.runner for spec in _runner.SUITE_REGISTRY.values()]
@@ -391,6 +399,71 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
         _runner.WEB_CLIENT_RESULTS_DIR / "docker-smoke"
     )
     assert calls[6]["timeout"] == _runner.DOCKER_BUILD_TIMEOUT + 180
+
+
+def test_webclient_compatibility_smoke_is_opt_in_suite(monkeypatch) -> None:
+    calls: list[dict] = []
+
+    def _fake_delegate_to_runner(**kwargs):
+        calls.append(kwargs)
+        return _runner.SuiteResult(kwargs["name"], True, 0.0)
+
+    monkeypatch.setattr(_runner.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(_runner, "_edge_executable_available", lambda: True)
+    monkeypatch.setattr(_runner, "_delegate_to_runner", _fake_delegate_to_runner)
+
+    spec = _runner.SUITE_REGISTRY["web-client-compatibility-smoke"]
+    result = _runner._suite_webclient_compatibility_smoke()
+
+    assert _runner.SuiteGroup.PHASE2_WEB_COMPATIBILITY.value == "phase2-web-compatibility"
+    assert spec.display_name == "Web Client - Edge compatibility smoke"
+    assert spec.group is _runner.SuiteGroup.PHASE2_WEB_COMPATIBILITY
+    assert spec.runner is _runner._suite_webclient_compatibility_smoke
+    assert "web-client-compatibility-smoke" not in _runner.phase1_specs()
+    assert "web-client-compatibility-smoke" not in _runner.phase2_specs()
+    assert result.ok
+    assert calls == [
+        {
+            "name": "web-client-compatibility-smoke",
+            "runner_dir": _runner.WEB_CLIENT_DIR,
+            "phase_args": ["--compatibility-smoke-only"],
+            "label": "webclient runner (compatibility-smoke)",
+            "extra_env": {
+                "IJT_WEB_TEST_RESULTS_DIR": str(
+                    _runner.WEB_CLIENT_RESULTS_DIR / "compatibility-smoke"
+                )
+            },
+        }
+    ]
+
+
+def test_webclient_compatibility_smoke_skips_when_not_windows(monkeypatch) -> None:
+    def fail_if_edge_checked():
+        raise AssertionError("non-Windows skip should not inspect Edge")
+
+    monkeypatch.setattr(_runner.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(_runner, "_edge_executable_available", fail_if_edge_checked)
+
+    result = _runner._suite_webclient_compatibility_smoke()
+
+    assert result.ok
+    assert result.skipped
+    assert result.notes == ["Windows-only suite"]
+
+
+def test_webclient_compatibility_smoke_skips_without_edge(monkeypatch) -> None:
+    def fail_if_delegated(**_kwargs):
+        raise AssertionError("compatibility smoke should skip before delegating")
+
+    monkeypatch.setattr(_runner.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(_runner, "_edge_executable_available", lambda: False)
+    monkeypatch.setattr(_runner, "_delegate_to_runner", fail_if_delegated)
+
+    result = _runner._suite_webclient_compatibility_smoke()
+
+    assert result.ok
+    assert result.skipped
+    assert result.notes == ["Microsoft Edge not installed"]
 
 
 def test_delegate_to_runner_reports_child_failure(monkeypatch, capsys) -> None:
@@ -901,6 +974,35 @@ def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> Non
     assert not any(
         step.get("continue-on-error") is True for step in steps if isinstance(step, dict)
     )
+    upload_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("name") == "Upload Web Client Compatibility Smoke results"
+    )
+    issue_close_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("name") == "Close recovered compatibility smoke issue"
+    )
+    summary_index = next(
+        index for index, step in enumerate(steps) if step.get("name") == "Render run summary"
+    )
+    summary_step = steps[summary_index]
+    summary_run = summary_step["run"]
+    assert summary_index > upload_index
+    assert summary_index > issue_close_index
+    assert summary_step["if"] == "always()"
+    assert summary_step["shell"] == "pwsh"
+    assert "GITHUB_STEP_SUMMARY" in summary_run
+    assert (
+        "OPC_UA_Clients/Release2/IJT_Web_Client/test-results/playwright-compatibility-smoke.xml"
+        in summary_step["env"]["JUNIT_PATH"]
+    )
+    assert "### Specs" in summary_run
+    assert "### Environment" in summary_run
+    assert "results-web-client-compatibility-smoke-$($env:MATRIX_OS)-$($env:MATRIX_BROWSER)" in (
+        summary_run
+    )
     run_commands = "\n".join(
         step.get("run", "")
         for step in steps
@@ -1024,11 +1126,12 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
         "cs_live",
     }
     assert baseline["suites"]["tc_tests"]["skip_tolerance"] == 10
-    assert baseline["suites"]["wd_py"]["tests"] == 666
+    assert baseline["suites"]["wd_py"]["tests"] == 671
     assert baseline["suites"]["wd_js"]["tests"] == 522
+    assert baseline["suites"]["wc_live"]["tests"] == 127
     assert baseline["suites"]["wc_live"]["skipped"] == 0
     assert baseline["suites"]["wc_live"]["skip_tolerance"] == 0
-    assert baseline["suites"]["wc_browser"]["tests"] == 77
+    assert baseline["suites"]["wc_browser"]["tests"] == 66
     assert baseline["suites"]["wc_browser"]["skipped"] == 0
     assert "load_integration_baseline(" in workflow
     assert "format_count_delta(" in workflow

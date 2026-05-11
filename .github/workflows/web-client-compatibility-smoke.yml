@@ -191,3 +191,129 @@ jobs:
             gh issue comment $($issue.number) --body-file $commentPath
             gh issue close $($issue.number)
           }
+
+      - name: Render run summary
+        if: always()
+        shell: pwsh
+        env:
+          BROWSER_VERSION: ${{ steps.browser_probe.outputs.browser_version }}
+          IMAGE_OS: ${{ steps.browser_probe.outputs.image_os }}
+          IMAGE_VERSION: ${{ steps.browser_probe.outputs.image_version }}
+          MATRIX_OS: ${{ matrix.os }}
+          MATRIX_BROWSER: ${{ matrix.browser }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JUNIT_PATH: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/playwright-compatibility-smoke.xml
+        run: |
+          $ErrorActionPreference = "Continue"
+
+          function ConvertTo-Int([object] $value) {
+            if ($null -eq $value -or [string]::IsNullOrWhiteSpace([string] $value)) {
+              return 0
+            }
+            return [int] $value
+          }
+
+          function Format-MarkdownCell([object] $value) {
+            if ($null -eq $value) {
+              return ""
+            }
+            return ([string] $value).Replace("|", "\|").Replace("`r", " ").Replace("`n", " ")
+          }
+
+          $summaryPath = $env:GITHUB_STEP_SUMMARY
+          if ([string]::IsNullOrWhiteSpace($summaryPath)) {
+            $summaryPath = Join-Path $env:RUNNER_TEMP "compatibility-smoke-summary.md"
+          }
+
+          $total = 0
+          $failed = 0
+          $skipped = 0
+          $passed = 0
+          $cases = @()
+          $parseWarning = $null
+
+          if (Test-Path -LiteralPath $env:JUNIT_PATH) {
+            try {
+              [xml] $junit = Get-Content -Raw -LiteralPath $env:JUNIT_PATH
+              if ($junit.testsuites) {
+                $suiteNodes = @($junit.testsuites.testsuite)
+              } elseif ($junit.testsuite) {
+                $suiteNodes = @($junit.testsuite)
+              } else {
+                $suiteNodes = @()
+              }
+
+              foreach ($suite in $suiteNodes) {
+                $suiteTests = ConvertTo-Int $suite.tests
+                $suiteFailures = ConvertTo-Int $suite.failures
+                $suiteErrors = ConvertTo-Int $suite.errors
+                $suiteSkipped = ConvertTo-Int $suite.skipped
+                $total += $suiteTests
+                $failed += $suiteFailures + $suiteErrors
+                $skipped += $suiteSkipped
+
+                foreach ($case in @($suite.testcase)) {
+                  if ($null -eq $case) {
+                    continue
+                  }
+                  $caseFailed = $null -ne $case.failure -or $null -ne $case.error
+                  $caseSkipped = $null -ne $case.skipped
+                  $status = if ($caseFailed) { "fail" } elseif ($caseSkipped) { "skip" } else { "pass" }
+                  $cases += [pscustomobject] @{
+                    Name = $case.name
+                    Status = $status
+                    Time = $case.time
+                  }
+                }
+              }
+              $passed = $total - $failed - $skipped
+            } catch {
+              $parseWarning = $_.Exception.Message
+            }
+          } else {
+            $parseWarning = "JUnit results not found: $($env:JUNIT_PATH)"
+          }
+
+          if ($total -eq 0) {
+            $headline = "## Web Client Compatibility Smoke - $($env:MATRIX_OS) / $($env:MATRIX_BROWSER)`n`nStatus: results unavailable."
+          } elseif ($failed -gt 0) {
+            $headline = "## Web Client Compatibility Smoke - $($env:MATRIX_OS) / $($env:MATRIX_BROWSER)`n`nStatus: failed - $failed of $total specs failed."
+          } else {
+            $headline = "## Web Client Compatibility Smoke - $($env:MATRIX_OS) / $($env:MATRIX_BROWSER)`n`nStatus: passed - all $total specs passed."
+          }
+
+          $lines = @(
+            $headline,
+            "",
+            "### Specs",
+            "",
+            "| Spec | Status | Duration (s) |",
+            "|------|--------|--------------|"
+          )
+
+          if ($cases.Count -gt 0) {
+            foreach ($case in $cases) {
+              $lines += "| $(Format-MarkdownCell $case.Name) | $(Format-MarkdownCell $case.Status) | $(Format-MarkdownCell $case.Time) |"
+            }
+          } else {
+            $lines += "| No spec rows available | unknown |  |"
+          }
+
+          $lines += @(
+            "",
+            "### Environment",
+            "",
+            "- Browser: $($env:MATRIX_BROWSER) $($env:BROWSER_VERSION)",
+            "- OS: $($env:MATRIX_OS)",
+            "- ImageOS: $($env:IMAGE_OS)",
+            "- ImageVersion: $($env:IMAGE_VERSION)",
+            "- Run: $($env:RUN_URL)",
+            "",
+            "Artifact: ``results-web-client-compatibility-smoke-$($env:MATRIX_OS)-$($env:MATRIX_BROWSER)``"
+          )
+
+          if ($parseWarning) {
+            $lines += @("", "JUnit parse note: ``$parseWarning``")
+          }
+
+          $lines | Set-Content -Path $summaryPath -Encoding UTF8

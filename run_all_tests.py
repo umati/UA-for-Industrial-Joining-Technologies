@@ -32,6 +32,8 @@ Usage:
   python run_all_tests.py --suite repo-static-markdown-leak-check # single suite by name
   python run_all_tests.py --suite server-smoke  # focused server smoke on port 40451
   python run_all_tests.py --suite server-linux-package-smoke  # Docker smoke on port 40465
+  python run_all_tests.py --suite web-client-compatibility-smoke
+      # Windows + Edge opt-in compatibility smoke
   python run_all_tests.py --ci-mode         # force child runners through CI codepaths
   python run_all_tests.py --verbose          # DEBUG-level logging
   python run_all_tests.py --help
@@ -1794,6 +1796,35 @@ def _suite_webclient_docker_smoke() -> SuiteResult:
     )
 
 
+def _edge_executable_available() -> bool:
+    """Return True when Microsoft Edge is installed on the current Windows host."""
+    candidates = [_find_cmd(["msedge", "msedge.exe"])]
+    for env_name in ("PROGRAMFILES(X86)", "PROGRAMFILES"):
+        program_files = os.getenv(env_name)
+        if program_files:
+            candidates.append(
+                str(Path(program_files) / "Microsoft" / "Edge" / "Application" / "msedge.exe")
+            )
+    return any(candidate and Path(candidate).exists() for candidate in candidates)
+
+
+def _suite_webclient_compatibility_smoke() -> SuiteResult:
+    """Web Client Edge compatibility smoke; opt-in, Windows + Edge only."""
+    name = "web-client-compatibility-smoke"
+    if platform.system() != "Windows":
+        return SuiteResult(name, True, skipped=True, notes=["Windows-only suite"])
+    if not _edge_executable_available():
+        return SuiteResult(name, True, skipped=True, notes=["Microsoft Edge not installed"])
+
+    return _delegate_to_runner(
+        name=name,
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--compatibility-smoke-only"],
+        label="webclient runner (compatibility-smoke)",
+        extra_env={"IJT_WEB_TEST_RESULTS_DIR": str(WEB_CLIENT_RESULTS_DIR / "compatibility-smoke")},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Suite registry
 # ---------------------------------------------------------------------------
@@ -1814,6 +1845,7 @@ class SuiteGroup(StrEnum):
     PHASE2_LIVE = "phase2-live"
     PHASE2_PACKAGE = "phase2-package"
     PHASE2_WEB_LIVE = "phase2-web-live"
+    PHASE2_WEB_COMPATIBILITY = "phase2-web-compatibility"
 
 
 @dataclass(frozen=True)
@@ -1951,6 +1983,12 @@ SUITE_REGISTRY: dict[str, SuiteSpec] = {
         display_name="Web Client - Docker image smoke",
         group=SuiteGroup.PHASE2_WEB_LIVE,
         runner=_suite_webclient_docker_smoke,
+    ),
+    "web-client-compatibility-smoke": SuiteSpec(
+        id="web-client-compatibility-smoke",
+        display_name="Web Client - Edge compatibility smoke",
+        group=SuiteGroup.PHASE2_WEB_COMPATIBILITY,
+        runner=_suite_webclient_compatibility_smoke,
     ),
 }
 
@@ -2287,6 +2325,10 @@ def _print_suite_list() -> None:
         (
             SuiteGroup.PHASE2_WEB_LIVE,
             "Phase 2 Web live suites (parallel, isolated Web runtime ports):",
+        ),
+        (
+            SuiteGroup.PHASE2_WEB_COMPATIBILITY,
+            "Opt-in Web compatibility suites (not part of the default run):",
         ),
     ]
     for group, label in groups:
