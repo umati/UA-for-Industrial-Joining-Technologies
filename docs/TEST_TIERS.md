@@ -169,6 +169,12 @@ run their live/integration tests in parallel without port conflicts.
 > with the Linux simulator package. Browser Features keeps two shards; CI
 > defaults to two feature workers per shard, and local root validation defaults
 > to four workers.
+> L2 Windows + Edge compatibility is intentionally separate from Integration:
+> `.github/workflows/l2-compat.yml` runs only at `04:30 UTC` or by manual
+> dispatch, reuses the Web Client runner-owned Windows simulator/backend stack,
+> launches the installed Edge channel, and executes only the two audited
+> import/export compatibility specs. It is a non-required detection workflow;
+> failures stay red and create/update `[L2 Compat] Windows + Edge`.
 
 ### Port Assignment
 
@@ -183,6 +189,7 @@ run their live/integration tests in parallel without port conflicts.
 | Web Client Playwright smoke | HTTP 3004 | `.venv_test` + Playwright | Browser smoke project only |
 | Web Client Playwright features | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | `.venv_test` + Playwright | Feature specs with four owned backend/server worker pairs |
 | Web Client Playwright regression | OPC UA 40480 / WS 8010 / HTTP 3006 | `.venv_test` + Playwright | Regression spec with owned backend and UI ports |
+| Web Client L2 Edge compat | OPC UA 40468 / WS 8004 / HTTP 3007 | `.venv_test` + Playwright + Edge | Windows + Edge compatibility smoke for audited import/export browser surfaces; schedule/manual only |
 | Web Client Docker smoke | HTTP 3000 / WS 8001 | Docker | Builds the Web Client production image through `--docker-only`; independent from live/browser suites; root runner skips when Docker is unavailable |
 | IJT_Node_Client    | **40451** (fixed) | N/A (Node) | **Release 1 legacy** — server port is hardcoded, dynamic isolation not supported |
 | Server smoke/native default | 40451  | —            | Built-in default (from `server_configuration.json`); root runner Phase 2 validates this package path |

@@ -27,6 +27,7 @@ Force flags (override auto-detection):
   --playwright-smoke-only      root-runner target: browser smoke tests
   --playwright-features-only   root-runner target: browser feature specs
   --playwright-regression-only root-runner target: browser regression spec
+  --l2-compat-only             Windows + Edge L2 compatibility smoke
 
 Environment variables (all optional):
   OPCUA_TEST_ENDPOINT   default: opc.tcp://localhost:40463
@@ -1356,6 +1357,7 @@ def _stage_playwright_project(
     timeout: int = 600,
     workers: int | None = None,
     extra_env: dict[str, str] | None = None,
+    config: str | None = None,
 ) -> StageResult:
     _banner(title)
     t0 = time.monotonic()
@@ -1383,6 +1385,8 @@ def _stage_playwright_project(
 
     run_env = {**env, "PLAYWRIGHT_JUNIT_OUTPUT_FILE": str(results_dir / junit_name)}
     cmd = [playwright, "test", f"--project={project}", "--reporter=line", "--reporter=junit"]
+    if config is not None:
+        cmd.append(f"--config={config}")
     if workers is not None:
         cmd.append(f"--workers={workers}")
     if shard_arg:
@@ -1453,6 +1457,19 @@ def _stage_playwright_regression(ws_url: str, ui_url: str) -> StageResult:
     )
 
 
+def _stage_playwright_l2_compat(ws_url: str, ui_url: str) -> StageResult:
+    return _stage_playwright_project(
+        project="edge-compat",
+        name="playwright-l2-compat",
+        title="STAGE L2  Playwright Windows Edge compatibility",
+        ws_url=ws_url,
+        ui_url=ui_url,
+        timeout=360,
+        workers=1,
+        config="playwright.l2-compat.config.mjs",
+    )
+
+
 def _stage_infra_lint() -> StageResult:
     _banner("STAGE Infra  Dockerfile / YAML / Compose linting")
     t0 = time.monotonic()
@@ -1516,6 +1533,9 @@ _SIMULATOR_PACKAGE_ZIPS: list[Path] = (
 # The OPC UA server port this client connects to.  Defined once here so every
 # reference below derives from it — change the port in one place only.
 _OPCUA_SERVER_PORT = 40463
+_L2_COMPAT_OPCUA_SERVER_PORT = 40468
+_L2_COMPAT_WS_URL = "ws://localhost:8004"
+_L2_COMPAT_UI_URL = "http://127.0.0.1:3007"
 _MAX_SIMULATOR_INSTANCE_PATH = 100
 _SIMULATOR_INSTANCE_ROOT_ENV = "IJT_SIMULATOR_INSTANCE_ROOT"
 _server_tmp_dir: Path | None = None  # set by _launch_simulator_on_port; cleared in _stop_opcua_server
@@ -1578,6 +1598,21 @@ def _parse_playwright_shard(raw: str | None) -> tuple[str | None, str]:
         if shard >= 1 and total >= 1 and shard <= total:
             return (f"--shard={shard}/{total}", f"-shard-{shard}of{total}")
     raise ValueError(f"IJT_PLAYWRIGHT_SHARD must be 'N/M' with integers satisfying 1 <= N <= M; got {raw!r}")
+
+
+def _apply_l2_compat_defaults(args: argparse.Namespace) -> None:
+    """Give L2 Edge compatibility its own local service ports by default."""
+    if (
+        not os.getenv("OPCUA_SERVER_PORT")
+        and not os.getenv("OPCUA_TEST_ENDPOINT")
+        and not os.getenv("OPCUA_SERVER_URL")
+    ):
+        os.environ["OPCUA_SERVER_PORT"] = str(_L2_COMPAT_OPCUA_SERVER_PORT)
+        args.opcua_endpoint = f"opc.tcp://localhost:{_L2_COMPAT_OPCUA_SERVER_PORT}"
+    if not os.getenv("WS_TEST_URL") and args.ws_url == "ws://localhost:8001":
+        args.ws_url = _L2_COMPAT_WS_URL
+    if not os.getenv("UI_TEST_BASE_URL") and args.ui_url == "http://127.0.0.1:3000":
+        args.ui_url = _L2_COMPAT_UI_URL
 
 
 @dataclass
@@ -2212,6 +2247,7 @@ STAGES = [
     "playwright-smoke",
     "playwright-features",
     "playwright-regression",
+    "playwright-l2-compat",
     "playwright-e2e",
     "docker-smoke",
 ]
@@ -2248,8 +2284,14 @@ def _target_only_dependency_requirements(args: argparse.Namespace) -> TargetDepe
             or args.python_lifecycle_only
             or args.playwright_features_only
             or args.playwright_regression_only
+            or args.l2_compat_only
         ),
-        npm=bool(args.playwright_smoke_only or args.playwright_features_only or args.playwright_regression_only),
+        npm=bool(
+            args.playwright_smoke_only
+            or args.playwright_features_only
+            or args.playwright_regression_only
+            or args.l2_compat_only
+        ),
     )
 
 
@@ -2315,6 +2357,7 @@ def main() -> int:
     parser.add_argument(
         "--playwright-regression-only", action="store_true", help="Run only Playwright regression E2E tests"
     )
+    parser.add_argument("--l2-compat-only", action="store_true", help="Run only Windows + Edge L2 compatibility smoke")
     parser.add_argument("--list", action="store_true", help="Print available stages and exit")
     parser.add_argument(
         "--opcua-endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{_opcua_server_port()}")
@@ -2330,6 +2373,7 @@ def main() -> int:
         args.playwright_smoke_only,
         args.playwright_features_only,
         args.playwright_regression_only,
+        args.l2_compat_only,
     ]
     if sum(1 for flag in targeted_flags if flag) > 1:
         parser.error("choose only one targeted live-suite flag")
@@ -2360,6 +2404,9 @@ def main() -> int:
     if not IS_CI and not IS_DOCKER and not _inside_venv():
         _relaunch_under_venv()
         return 0  # unreachable after sys.exit(); satisfies type checker
+
+    if args.l2_compat_only:
+        _apply_l2_compat_defaults(args)
 
     if args.list:
         print("Available stages:")
@@ -2487,6 +2534,16 @@ def main() -> int:
                         stage=lambda: _stage_playwright_regression(args.ws_url, args.ui_url),
                     )
                 )
+        elif args.l2_compat_only:
+            results.append(
+                _run_with_owned_services(
+                    python=python,
+                    name="playwright-l2-compat",
+                    need_ws=True,
+                    ws_url=args.ws_url,
+                    stage=lambda: _stage_playwright_l2_compat(args.ws_url, args.ui_url),
+                )
+            )
 
         total_time = time.monotonic() - t_start
         _write_timing_artifacts(results, total_time, mode)

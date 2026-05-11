@@ -44,6 +44,8 @@ export const SEL = {
   RESULT_IMPORT_MODE_SELECT: '.resultImportMode select',
   RESULT_IMPORT_STRICT_CHECKBOX: '.resultImportStrictInput',
   RESULT_IMPORT_FILE_INPUT: '.resultImportInput',
+  RESULT_IMPORT_BUTTON: 'button:has-text("Import")',
+  RESULT_EXPORT_BUTTON: 'button:has-text("Export")',
   RESULT_STATUS: '.consolidatedResultScreen .uiStatus',
   DRAW_BOX: '.drawResultBox',
   COMPLE_WRAPPER: '.complewrapper',
@@ -388,6 +390,24 @@ export class ResultsPage {
       mimeType: 'application/json',
       buffer: payload
     })
+  }
+
+  async importBundleObjectViaFileChooser (bundleObject, filename = 'ijt-results-import.json') {
+    const payload = Buffer.from(JSON.stringify(bundleObject, null, 2), 'utf-8')
+    const fileChooserPromise = this.page.waitForEvent('filechooser')
+    await this.page.locator(SEL.RESULT_IMPORT_BUTTON).first().click()
+    const fileChooser = await fileChooserPromise
+    await fileChooser.setFiles({
+      name: filename,
+      mimeType: 'application/json',
+      buffer: payload
+    })
+  }
+
+  async exportCurrentResults () {
+    const downloadPromise = this.page.waitForEvent('download')
+    await this.page.locator(SEL.RESULT_EXPORT_BUTTON).first().click()
+    return downloadPromise
   }
 
   async getStatusText () {

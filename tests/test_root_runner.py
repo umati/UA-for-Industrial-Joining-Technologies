@@ -864,6 +864,77 @@ def test_integration_web_client_e2e_jobs_require_pinned_linux_container() -> Non
         assert "cache" not in setup_node_step.get("with", {})
 
 
+def test_l2_compat_workflow_is_schedule_only_windows_edge_detection() -> None:
+    import yaml
+
+    workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "l2-compat.yml"
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(workflow_text)
+    triggers = workflow.get("on", workflow.get(True, {}))
+
+    assert set(triggers) == {"schedule", "workflow_dispatch"}
+    assert triggers["schedule"] == [{"cron": "30 4 * * *"}]
+    assert "push" not in triggers
+    assert "pull_request" not in triggers
+
+    permissions = workflow["permissions"]
+    assert permissions["contents"] == "read"
+    assert permissions["issues"] == "write"
+    assert permissions.get("contents") != "write"
+
+    jobs = workflow["jobs"]
+    assert set(jobs) == {"web-client-l2-edge-compat"}
+    job = jobs["web-client-l2-edge-compat"]
+    assert job["runs-on"] == "windows-latest"
+
+    steps = job["steps"]
+    assert not any(
+        step.get("continue-on-error") is True for step in steps if isinstance(step, dict)
+    )
+    run_commands = "\n".join(
+        step.get("run", "")
+        for step in steps
+        if isinstance(step, dict) and isinstance(step.get("run"), str)
+    )
+    assert "--l2-compat-only" in run_commands
+    assert "msedge.exe" in run_commands
+    assert "gh issue list" in run_commands
+    assert "gh issue create" in run_commands
+    assert "gh issue comment" in run_commands
+    assert "gh issue close" in run_commands
+    assert "[L2 Compat] Windows + Edge" in run_commands
+
+
+def test_l2_compat_playwright_scope_is_two_edge_specs_only() -> None:
+    web_root = _runner.REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client"
+    l1_config = (web_root / "playwright.config.mjs").read_text(encoding="utf-8")
+    l2_config = (web_root / "playwright.l2-compat.config.mjs").read_text(encoding="utf-8")
+    spec_dir = web_root / "tests" / "e2e-compat"
+    spec_files = sorted(path.name for path in spec_dir.glob("*.spec.mjs"))
+
+    assert "testDir: './tests/e2e'" in l1_config
+    assert "e2e-compat" not in l1_config
+
+    assert "testDir: './tests/e2e-compat'" in l2_config
+    assert re.search(r"retries:\s*0", l2_config)
+    assert l2_config.count("name: 'edge-compat'") == 1
+    assert re.findall(r"channel:\s*'([^']+)'", l2_config) == ["msedge"]
+    assert "chromium" in l2_config
+    assert "firefox" not in l2_config
+    assert "webkit" not in l2_config
+    assert "safari" not in l2_config.lower()
+
+    assert spec_files == [
+        "edge-result-export-download-smoke.spec.mjs",
+        "edge-result-import-filechooser-smoke.spec.mjs",
+    ]
+    test_count = sum(
+        len(re.findall(r"\btest\(", (spec_dir / spec_file).read_text(encoding="utf-8")))
+        for spec_file in spec_files
+    )
+    assert test_count == 2
+
+
 def test_integration_report_surfaces_browser_feature_timings() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
         encoding="utf-8"
