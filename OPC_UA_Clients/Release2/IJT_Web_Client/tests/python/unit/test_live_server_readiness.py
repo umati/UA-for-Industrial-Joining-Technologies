@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -93,16 +94,27 @@ def test_protocol_warmup_defaults_match_ci_startup_budget():
     assert readiness.DEFAULT_PROTOCOL_READY_TIMEOUT == 2.5
 
 
-def test_protocol_warmup_retries_first_websocket_ping(monkeypatch):
+def test_protocol_warmup_retries_first_websocket_connect_ack(monkeypatch):
     attempts = []
     sleeps = []
+    connects = 0
 
     class FakeWebSocket:
-        def ping(self):
-            attempts.append("ping")
-            if len(attempts) < 3:
-                raise TimeoutError("websocket still warming")
-            return None
+        async def send(self, payload):
+            message = json.loads(payload)
+            assert message == {
+                "command": "connect to",
+                "endpoint": "opc.tcp://localhost:40463",
+                "uniqueid": "readiness-probe",
+            }
+            attempts.append("send")
+
+        async def recv(self):
+            nonlocal connects
+            connects += 1
+            if connects < 3:
+                raise TimeoutError("backend still warming")
+            return json.dumps({"uniqueid": "readiness-probe", "data": {}})
 
     class FakeConnect:
         def __init__(self, url, **kwargs):
@@ -128,5 +140,44 @@ def test_protocol_warmup_retries_first_websocket_ping(monkeypatch):
     )
 
     assert error is None
-    assert attempts == ["ping", "ping", "ping"]
+    assert attempts == ["send", "send", "send"]
     assert sleeps == [1.0, 1.0]
+
+
+def test_protocol_warmup_retries_and_surfaces_wrong_websocket_ack(monkeypatch):
+    sleeps = []
+
+    class FakeWebSocket:
+        async def send(self, _payload):
+            return None
+
+        async def recv(self):
+            return json.dumps({"uniqueid": "not-readiness-probe", "data": {}})
+
+    class FakeConnect:
+        def __init__(self, url, **kwargs):
+            assert url == "ws://localhost:8001"
+            assert kwargs["open_timeout"] == 1.25
+            assert kwargs["close_timeout"] == 0.5
+
+        async def __aenter__(self):
+            return FakeWebSocket()
+
+        async def __aexit__(self, _exc_type, _exc, _tb):
+            return None
+
+    monkeypatch.setitem(sys.modules, "websockets", SimpleNamespace(connect=FakeConnect))
+    monkeypatch.setattr(readiness.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    error = readiness.wait_for_websocket_protocol_ready(
+        "ws://localhost:8001",
+        "opc.tcp://localhost:40463",
+        attempts=2,
+        interval=1.0,
+        response_timeout=1.25,
+    )
+
+    assert error is not None
+    assert "RuntimeError" in error
+    assert "not-readiness-probe" in error
+    assert sleeps == [1.0]

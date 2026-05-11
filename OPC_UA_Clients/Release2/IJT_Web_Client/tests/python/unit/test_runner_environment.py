@@ -26,6 +26,14 @@ def _load_runner():
     return module
 
 
+def _make_simulator_executable(tmp_path: Path) -> Path:
+    src_dir = tmp_path / "simulator-src"
+    src_dir.mkdir()
+    executable = src_dir / ("simulator.exe" if os.name == "nt" else "simulator")
+    executable.write_text("binary placeholder", encoding="utf-8")
+    return executable
+
+
 def test_precommit_hooks_are_not_installed_in_ci(monkeypatch):
     runner = _load_runner()
     monkeypatch.setattr(runner, "IS_CI", True)
@@ -285,6 +293,7 @@ def test_subprocess_env_preserves_explicit_npm_cache(monkeypatch):
 def test_websocket_backend_uses_existing_port(monkeypatch):
     runner = _load_runner()
     monkeypatch.setattr(runner, "_port_open", lambda host, port, timeout=1.0: True)
+    monkeypatch.setattr(runner, "wait_for_websocket_protocol_ready", lambda _ws_url, _endpoint, **_kwargs: None)
 
     started, ready, proc = runner._maybe_start_websocket_backend(Path("python"), "localhost", 8001)
 
@@ -310,6 +319,9 @@ def test_websocket_backend_auto_start_sets_ws_port(monkeypatch):
     monkeypatch.setenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40463")
 
     class FakeProc:
+        def poll(self):
+            return None
+
         def terminate(self):
             created["terminated"] = True
 
@@ -325,8 +337,9 @@ def test_websocket_backend_auto_start_sets_ws_port(monkeypatch):
         return FakeProc()
 
     monkeypatch.setattr(runner, "ROOT", _PROJECT_ROOT)
-    monkeypatch.setattr(runner, "_port_open", lambda host, port, timeout=1.0: False)
-    monkeypatch.setattr(runner, "_wait_for_port", lambda host, port, timeout=30: True)
+    port_checks = iter([False, True])
+    monkeypatch.setattr(runner, "_port_open", lambda host, port, timeout=1.0: next(port_checks))
+    monkeypatch.setattr(runner, "wait_for_websocket_protocol_ready", lambda _ws_url, _endpoint, **_kwargs: None)
     monkeypatch.setattr(runner.subprocess, "Popen", fake_popen)
 
     started, ready, proc = runner._maybe_start_websocket_backend(Path("python"), "localhost", 9001)
@@ -347,6 +360,7 @@ def test_existing_opcua_port_sets_test_endpoint(monkeypatch):
     monkeypatch.delenv("OPCUA_SERVER_PORT", raising=False)
     monkeypatch.setenv("IJT_OPCUA_PRESTARTED_PORT", "40463")
     monkeypatch.setattr(runner, "_port_open", lambda host, port, timeout=1.0: True)
+    monkeypatch.setattr(runner, "_probe_opcua_protocol", lambda _endpoint, **_kwargs: None)
 
     started, ready, proc = runner._maybe_start_opcua_server()
 
@@ -422,6 +436,163 @@ def test_owned_opcua_launch_sets_endpoint_and_prestarted_marker(monkeypatch, tmp
     assert isinstance(proc, FakeProc)
     assert runner.os.environ["OPCUA_TEST_ENDPOINT"] == "opc.tcp://localhost:40466"
     assert runner.os.environ["IJT_OPCUA_PRESTARTED_PORT"] == "40466"
+
+
+def test_simulator_launch_fails_fast_when_process_exits_before_protocol_probe(monkeypatch, tmp_path):
+    runner = _load_runner()
+    executable = _make_simulator_executable(tmp_path)
+    instance_dir = tmp_path / "instance"
+    probe_called = False
+
+    class FakeProc:
+        def __init__(self):
+            self.poll_results = iter([None, 1])
+
+        def poll(self):
+            return next(self.poll_results)
+
+    def fail_probe(_endpoint, **_kwargs):
+        nonlocal probe_called
+        probe_called = True
+        raise AssertionError("protocol probe must not run after simulator process exits")
+
+    monkeypatch.setattr(runner, "_MAX_SIMULATOR_INSTANCE_PATH", 4096)
+    monkeypatch.setattr(runner, "_simulator_instance_dir", lambda _port: instance_dir)
+    monkeypatch.setattr(runner, "_start_process_with_opcua_logs", lambda _cmd, *, cwd, port: FakeProc())
+    monkeypatch.setattr(runner, "_port_open", lambda _host, _port, timeout=1.0: False)
+    monkeypatch.setattr(runner, "_probe_opcua_protocol", fail_probe)
+    monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
+
+    result = runner._launch_simulator_instance(40470, str(executable))
+
+    assert result is None
+    assert probe_called is False
+    assert not instance_dir.exists()
+
+
+def test_simulator_launch_fails_when_protocol_probe_fails_after_tcp_open(monkeypatch, tmp_path):
+    runner = _load_runner()
+    executable = _make_simulator_executable(tmp_path)
+    instance_dir = tmp_path / "instance"
+
+    class FakeProc:
+        def __init__(self):
+            self.terminated = False
+            self.killed = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            self.killed = True
+
+    proc = FakeProc()
+    warnings = []
+
+    monkeypatch.setattr(runner, "_MAX_SIMULATOR_INSTANCE_PATH", 4096)
+    monkeypatch.setattr(runner, "_simulator_instance_dir", lambda _port: instance_dir)
+    monkeypatch.setattr(runner, "_start_process_with_opcua_logs", lambda _cmd, *, cwd, port: proc)
+    monkeypatch.setattr(runner, "_port_open", lambda _host, _port, timeout=1.0: True)
+    monkeypatch.setattr(runner, "_probe_opcua_protocol", lambda _endpoint, **_kwargs: "BadServerNotConnected")
+    monkeypatch.setattr(runner, "_warn", lambda message: warnings.append(message))
+
+    result = runner._launch_simulator_instance(40470, str(executable))
+
+    assert result is None
+    assert proc.terminated is True
+    assert proc.killed is False
+    assert not instance_dir.exists()
+    assert any("BadServerNotConnected" in warning for warning in warnings)
+
+
+def test_feature_worker_pool_does_not_start_websocket_workers_after_simulator_readiness_failure(monkeypatch):
+    runner = _load_runner()
+    launched_ports = []
+    stopped_ports = []
+
+    class FakeProc:
+        pass
+
+    def fake_launch(port, _exe):
+        launched_ports.append(port)
+        if port == 4101:
+            return None
+        return runner._OpcuaServerInstance(port=port, proc=FakeProc(), tmp_dir=None)
+
+    def fail_start_ws(*_args, **_kwargs):
+        raise AssertionError("WebSocket workers must not start until every simulator is protocol-ready")
+
+    monkeypatch.delenv("OPCUA_TEST_ENDPOINT", raising=False)
+    monkeypatch.delenv("OPCUA_SERVER_URL", raising=False)
+    monkeypatch.setenv("OPCUA_SERVER_PORT", "4100")
+    monkeypatch.setattr(runner, "_port_open", lambda _host, _port, timeout=1.0: False)
+    monkeypatch.setattr(runner, "_find_simulator_executable", lambda: "simulator.exe")
+    monkeypatch.setattr(runner, "_launch_simulator_instance", fake_launch)
+    monkeypatch.setattr(runner, "_maybe_start_websocket_backend", fail_start_ws)
+    monkeypatch.setattr(runner, "_stop_opcua_server_instance", lambda instance: stopped_ports.append(instance.port))
+
+    result = runner._run_playwright_features_with_owned_pool(
+        python=Path("python"),
+        name="playwright-features",
+        ws_url="ws://localhost:9000",
+        ui_url="http://127.0.0.1:3005",
+        workers=2,
+    )
+
+    assert result.rc == 1
+    assert result.notes == ["OPC UA worker 1 failed to start on port 4101"]
+    assert launched_ports == [4100, 4101]
+    assert stopped_ports == [4100]
+
+
+def test_websocket_backend_readiness_failure_terminates_owned_backend(monkeypatch, tmp_path):
+    runner = _load_runner()
+    port_checks = iter([False, True])
+
+    class FakeProc:
+        def __init__(self):
+            self.terminated = False
+            self.killed = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            self.killed = True
+
+    proc = FakeProc()
+
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(runner, "_port_open", lambda _host, _port, timeout=1.0: next(port_checks))
+    monkeypatch.setattr(runner.subprocess, "Popen", lambda *_args, **_kwargs: proc)
+    monkeypatch.setattr(
+        runner,
+        "wait_for_websocket_protocol_ready",
+        lambda _ws_url, _endpoint, **_kwargs: "connect to returned exception",
+    )
+
+    started, ready, returned_proc = runner._maybe_start_websocket_backend(
+        Path(sys.executable),
+        "localhost",
+        9000,
+        opcua_endpoint="opc.tcp://localhost:4100",
+    )
+
+    assert (started, ready, returned_proc) == (True, False, None)
+    assert proc.terminated is True
+    assert proc.killed is False
 
 
 def test_simulator_package_is_extracted_when_binary_is_missing(monkeypatch, tmp_path):

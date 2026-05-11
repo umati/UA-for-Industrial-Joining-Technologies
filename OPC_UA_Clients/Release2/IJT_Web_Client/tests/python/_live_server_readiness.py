@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import inspect
+import json
 import os
 import subprocess
 import time
@@ -98,15 +98,43 @@ def wait_for_opcua_protocol_ready(
     return last_error
 
 
-async def _probe_websocket_protocol(ws_url: str, _opcua_endpoint: str, response_timeout: float) -> None:
+async def _probe_websocket_protocol(ws_url: str, opcua_endpoint: str, response_timeout: float) -> None:
     import websockets
 
     async with websockets.connect(ws_url, open_timeout=min(5.0, response_timeout), close_timeout=0.5) as websocket:
-        ping_result = websocket.ping()
-        if inspect.isawaitable(ping_result):
-            awaited = await ping_result
-            if inspect.isawaitable(awaited):
-                await asyncio.wait_for(awaited, timeout=response_timeout)
+        uniqueid = "readiness-probe"
+        await websocket.send(
+            json.dumps(
+                {
+                    "command": "connect to",
+                    "endpoint": opcua_endpoint,
+                    "uniqueid": uniqueid,
+                }
+            )
+        )
+        deadline = asyncio.get_running_loop().time() + response_timeout
+        last_response = "no response received"
+        unmatched_count = 0
+        while True:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise TimeoutError(f"no matching readiness response received; last response: {last_response}")
+            raw = await asyncio.wait_for(websocket.recv(), timeout=remaining)
+            last_response = str(raw)
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"invalid readiness response JSON: {exc.msg}") from exc
+            if payload.get("uniqueid") != uniqueid:
+                unmatched_count += 1
+                if unmatched_count >= 5:
+                    raise RuntimeError(f"no matching readiness response received; last response: {last_response}")
+                continue
+            data = payload.get("data")
+            exception = data.get("exception") if isinstance(data, dict) else None
+            if exception:
+                raise RuntimeError(f"readiness connect returned exception: {exception}")
+            return
 
 
 def wait_for_websocket_protocol_ready(

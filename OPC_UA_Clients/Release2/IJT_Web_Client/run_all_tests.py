@@ -76,6 +76,14 @@ if hasattr(sys.stderr, "reconfigure"):
 # Paths
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tests.python._live_server_readiness import (  # noqa: E402
+    wait_for_opcua_protocol_ready,
+    wait_for_websocket_protocol_ready,
+)
+
 IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 IS_CI = bool(os.getenv("CI"))
@@ -590,6 +598,32 @@ def _wait_for_port(host: str, port: int, timeout: int = 30) -> bool:
     return False
 
 
+def _terminate_owned_process(proc: subprocess.Popen | None) -> None:
+    if proc is None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except Exception:
+        proc.kill()
+        with contextlib.suppress(Exception):
+            proc.wait(timeout=5)
+
+
+def _default_opcua_endpoint(port: int | None = None) -> str:
+    return f"opc.tcp://localhost:{port or _opcua_server_port()}"
+
+
+def _probe_opcua_protocol(endpoint: str, *, attempts: int | None = None) -> str | None:
+    kwargs = {} if attempts is None else {"attempts": attempts}
+    return wait_for_opcua_protocol_ready(endpoint, **kwargs)
+
+
+def _websocket_probe_url(host: str, port: int) -> str:
+    ready_host = "127.0.0.1" if host in {"localhost", "0.0.0.0"} else host
+    return f"ws://{ready_host}:{port}"
+
+
 def _local_host(host: str) -> bool:
     return host in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
 
@@ -603,8 +637,16 @@ def _maybe_start_websocket_backend(
     log_name: str = "websocket-backend.log",
 ) -> tuple[bool, bool, subprocess.Popen | None]:
     """Ensure the local WebSocket backend is listening for Playwright E2E."""
+    endpoint = (
+        opcua_endpoint or os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL") or _default_opcua_endpoint()
+    )
+    probe_url = _websocket_probe_url(host, port)
     if _port_open(host, port, timeout=1.0):
-        return False, True, None
+        probe_error = wait_for_websocket_protocol_ready(probe_url, endpoint, attempts=1)
+        if probe_error is None:
+            return False, True, None
+        _warn(f"WebSocket backend port {port} is open but cannot reach OPC UA: {probe_error}")
+        return False, False, None
     if not _local_host(host):
         _warn(f"Cannot auto-start non-local WebSocket backend at {host}:{port}")
         return False, False, None
@@ -630,9 +672,21 @@ def _maybe_start_websocket_backend(
         )
 
     ready_host = "127.0.0.1" if host in {"localhost", "0.0.0.0"} else host
-    if _wait_for_port(ready_host, port, timeout=30):
-        _ok(f"WebSocket backend ready on :{port}")
-        return True, True, proc
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        exit_code = proc.poll()
+        if exit_code is not None:
+            _warn(f"WebSocket backend exited with code {exit_code} before readiness; see {log_path}")
+            return True, False, None
+        if _port_open(ready_host, port, timeout=1.0):
+            probe_error = wait_for_websocket_protocol_ready(probe_url, endpoint)
+            if probe_error is None:
+                _ok(f"WebSocket backend ready on :{port}")
+                return True, True, proc
+            _warn(f"WebSocket backend port {port} is open but OPC UA round-trip failed: {probe_error}; see {log_path}")
+            _stop_websocket_backend(proc)
+            return True, False, None
+        time.sleep(1)
 
     _warn(f"WebSocket backend did not open port {port}; see {log_path}")
     _stop_websocket_backend(proc)
@@ -1789,13 +1843,28 @@ def _launch_simulator_instance(port: int, exe: str) -> _OpcuaServerInstance | No
 
     _info(f"Waiting up to 30s for port {port} ...")
     for _ in range(30):
+        exit_code = proc.poll()
+        if exit_code is not None:
+            _warn(f"Binary exited with code {exit_code} before OPC UA readiness; {_opcua_server_log_hint(port)}")
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return None
         if _port_open("localhost", port, timeout=1.0):
+            endpoint = _default_opcua_endpoint(port)
+            probe_error = _probe_opcua_protocol(endpoint)
+            if probe_error is not None:
+                _warn(
+                    f"OPC UA server port {port} opened, but protocol readiness failed: "
+                    f"{probe_error}; {_opcua_server_log_hint(port)}"
+                )
+                _terminate_owned_process(proc)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+                return None
             _ok(f"OPC UA server ready on :{port}")
             return _OpcuaServerInstance(port=port, proc=proc, tmp_dir=tmp_dir)
         time.sleep(1)
 
     _warn(f"Binary did not open port {port} within 30s; {_opcua_server_log_hint(port)}")
-    proc.terminate()
+    _terminate_owned_process(proc)
     shutil.rmtree(tmp_dir, ignore_errors=True)
     return None
 
@@ -1861,12 +1930,22 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
         os.environ.setdefault("OPCUA_TEST_ENDPOINT", endpoint)
         host, srv_port = _parse_opcua_host_port(endpoint)
         open_ = _port_open(host, srv_port)
+        if open_:
+            probe_error = _probe_opcua_protocol(endpoint, attempts=1)
+            if probe_error is not None:
+                _warn(f"OPC UA endpoint {endpoint} has an open TCP port but failed protocol readiness: {probe_error}")
+                return False, False, None
         return False, open_, None
 
     port = _opcua_server_port()
     if _port_open("localhost", port):
         os.environ.pop(_OPCUA_PRESTARTED_PORT_ENV, None)
         _info(f"OPC UA server already listening on port {port}")
+        endpoint = _default_opcua_endpoint(port)
+        probe_error = _probe_opcua_protocol(endpoint, attempts=1)
+        if probe_error is not None:
+            _warn(f"OPC UA server port {port} is open but protocol readiness failed: {probe_error}")
+            return False, False, None
         _set_opcua_test_endpoint(port)
         return False, True, None
 
@@ -1898,6 +1977,12 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
     _info(f"Waiting up to 60s for OPC UA port {port} ...")
     for _ in range(30):
         if _port_open("localhost", port, timeout=1.0):
+            endpoint = _default_opcua_endpoint(port)
+            probe_error = _probe_opcua_protocol(endpoint)
+            if probe_error is not None:
+                _warn(f"OPC UA Docker server port {port} opened, but protocol readiness failed: {probe_error}")
+                _stop_opcua_server(None)
+                return True, False, None
             _ok(f"OPC UA server ready on :{port}")
             _set_opcua_test_endpoint(port)
             _set_opcua_prestarted_port(port)
