@@ -841,6 +841,22 @@ def test_integration_web_client_e2e_jobs_require_pinned_linux_container() -> Non
         assert "@sha256:" in job["container"]["image"]
         assert job["container"].get("options") == "--ipc=host"
 
+        steps = job["steps"]
+        setup_python_index = next(
+            index
+            for index, step in enumerate(steps)
+            if step.get("uses", "").startswith("actions/setup-python@")
+        )
+        helper_index = next(
+            index
+            for index, step in enumerate(steps)
+            if step.get("name") == "Install setup-python OS helper"
+        )
+        assert helper_index < setup_python_index
+        assert (
+            "apt-get install -y --no-install-recommends lsb-release" in steps[helper_index]["run"]
+        )
+
 
 def test_integration_report_surfaces_browser_feature_timings() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
