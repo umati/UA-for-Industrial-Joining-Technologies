@@ -26,6 +26,19 @@ def _load_runner():
     return module
 
 
+def test_precommit_hooks_are_not_installed_in_ci(monkeypatch):
+    runner = _load_runner()
+    monkeypatch.setattr(runner, "IS_CI", True)
+    monkeypatch.setattr(runner, "_py_module_available", lambda name: True)
+
+    def fail_check_call(*args, **kwargs):
+        raise AssertionError("pre-commit hook install should not run in CI")
+
+    monkeypatch.setattr(runner.subprocess, "check_call", fail_check_call)
+
+    runner._ensure_precommit_hooks()
+
+
 def test_subprocess_env_uses_project_npm_cache(monkeypatch):
     monkeypatch.delenv("npm_config_cache", raising=False)
     monkeypatch.delenv("npm_config_update_notifier", raising=False)

@@ -495,7 +495,9 @@ def _requirements_hash() -> str:
 
 
 def _ensure_precommit_hooks() -> None:
-    """Install pre-commit hooks into .git/hooks/ if not already present."""
+    """Install pre-commit hooks into .git/hooks/ for local runs."""
+    if IS_CI:
+        return
     git_root = ROOT
     # Walk up to find .git directory (project may be nested in a monorepo)
     for parent in [ROOT] + list(ROOT.parents):
