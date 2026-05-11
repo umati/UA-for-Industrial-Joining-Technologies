@@ -148,6 +148,27 @@ repos:
         pass_filenames: false
         files: '^OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/css/.*\.css$'
 
+      # GitHub Actions workflow/report policy guard — runs the IJT root-runner
+      # workflow tests when a workflow, root workflow guard, or integration
+      # baseline file is staged.
+      # These tests enforce repo-specific contracts that no off-the-shelf
+      # linter knows about: suite IDs, matrix shape, browser-features
+      # sharding, pinned Linux container for e2e, integration-report skip
+      # budgets, and the integration-test-counts baseline. Running the full
+      # `tests/test_root_runner.py` (≈65 tests, sub-second) is deliberate —
+      # narrowing with `-k workflow` would silently miss most of the
+      # workflow-validating tests (e.g. `test_integration_web_client_*`,
+      # `test_ci_web_client_*`, `test_ci_report_*`, baseline assertions).
+      # pass_filenames: false — the tests read workflow paths from
+      # `_runner.REPO_ROOT / .github / workflows / ...` themselves.
+      - id: workflow-policy-guard
+        name: Workflow policy guard (root runner)
+        language: system
+        entry: python
+        args: ['-m', 'pytest', 'tests/test_root_runner.py', '-q']
+        pass_filenames: false
+        files: '(^\.github/workflows/.*\.ya?ml$|^tests/test_root_runner\.py$|^tests/baselines/integration-test-counts\.json$)'
+
       # Lightweight static guard for optional imports that are known to trip
       # mypy when packages are installed without stubs. Full mypy stays in
       # project runners/CI; this catches narrow cross-runner patterns early.
@@ -163,3 +184,14 @@ repos:
             raise SystemExit(0 if result.status == "PASS" else 1)
         pass_filenames: false
         files: '(^run_all_tests\.py$|^tests/test_root_runner\.py$|^OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_CSharp_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Console_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Test_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Test_Client/scripts/(make_ci_summary|make_excel_report)\.py$|^OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests\.py$|^OPC_UA_Servers/Release2/run_all_tests\.py$)'
+
+  # GitHub Actions workflow schema validation.
+  # Validates `.github/workflows/*.{yml,yaml}` against check-jsonschema's
+  # built-in GitHub Workflows schema. Catches malformed YAML, unknown keys,
+  # wrong types, and missing required fields locally — before CI eats a
+  # 12-minute Integration run discovering the same problem. The hook's
+  # default `files:` pattern already scopes to `.github/workflows/`.
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.37.2
+    hooks:
+      - id: check-github-workflows

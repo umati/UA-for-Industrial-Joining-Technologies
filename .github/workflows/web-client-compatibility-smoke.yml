@@ -86,17 +86,24 @@ jobs:
 
       - name: Write compatibility smoke environment artifact
         if: always()
+        env:
+          MATRIX_OS: ${{ matrix.os }}
+          MATRIX_BROWSER: ${{ matrix.browser }}
+          IMAGE_OS: ${{ steps.browser_probe.outputs.image_os }}
+          IMAGE_VERSION: ${{ steps.browser_probe.outputs.image_version }}
+          BROWSER_VERSION: ${{ steps.browser_probe.outputs.browser_version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           $dir = "OPC_UA_Clients/Release2/IJT_Web_Client/test-results"
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
           @"
           RUNNER_OS=${env:RUNNER_OS}
-          MatrixOS=${{ matrix.os }}
-          MatrixBrowser=${{ matrix.browser }}
-          ImageOS=${{ steps.browser_probe.outputs.image_os }}
-          ImageVersion=${{ steps.browser_probe.outputs.image_version }}
-          BrowserVersion=${{ steps.browser_probe.outputs.browser_version }}
-          RunURL=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MatrixOS=$env:MATRIX_OS
+          MatrixBrowser=$env:MATRIX_BROWSER
+          ImageOS=$env:IMAGE_OS
+          ImageVersion=$env:IMAGE_VERSION
+          BrowserVersion=$env:BROWSER_VERSION
+          RunURL=$env:RUN_URL
           "@ | Set-Content -Path "$dir/compatibility-smoke-environment.txt" -Encoding UTF8
 
       - name: Upload Web Client Compatibility Smoke results
@@ -112,23 +119,30 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
+          MATRIX_OS: ${{ matrix.os }}
+          MATRIX_BROWSER: ${{ matrix.browser }}
+          IMAGE_OS: ${{ steps.browser_probe.outputs.image_os }}
+          IMAGE_VERSION: ${{ steps.browser_probe.outputs.image_version }}
+          BROWSER_VERSION: ${{ steps.browser_probe.outputs.browser_version }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           $ErrorActionPreference = "Stop"
-          $title = "[Web Client Compatibility Smoke] ${{ matrix.os }} / ${{ matrix.browser }}"
-          $runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          $title = "[Web Client Compatibility Smoke] $env:MATRIX_OS / $env:MATRIX_BROWSER"
           $body = @"
           Web Client Compatibility Smoke failed.
 
-          - Run: $runUrl
-          - OS: ${{ matrix.os }}
-          - Browser: ${{ matrix.browser }}
-          - Browser version: ${{ steps.browser_probe.outputs.browser_version }}
-          - ImageOS: ${{ steps.browser_probe.outputs.image_os }}
-          - ImageVersion: ${{ steps.browser_probe.outputs.image_version }}
-          - Workflow: ${{ github.workflow }}
-          - Commit: ${{ github.sha }}
+          - Run: $env:RUN_URL
+          - OS: $env:MATRIX_OS
+          - Browser: $env:MATRIX_BROWSER
+          - Browser version: $env:BROWSER_VERSION
+          - ImageOS: $env:IMAGE_OS
+          - ImageVersion: $env:IMAGE_VERSION
+          - Workflow: $env:WORKFLOW_NAME
+          - Commit: $env:COMMIT_SHA
 
-          See artifact `results-web-client-compatibility-smoke-${{ matrix.os }}-${{ matrix.browser }}` for Playwright/JUnit output, traces, videos, and logs.
+          See artifact ``results-web-client-compatibility-smoke-$env:MATRIX_OS-$env:MATRIX_BROWSER`` for Playwright/JUnit output, traces, videos, and logs.
           "@
           $bodyPath = Join-Path $env:RUNNER_TEMP "compatibility-smoke-issue.md"
           $body | Set-Content -Path $bodyPath -Encoding UTF8
@@ -146,9 +160,16 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
+          MATRIX_OS: ${{ matrix.os }}
+          MATRIX_BROWSER: ${{ matrix.browser }}
+          IMAGE_OS: ${{ steps.browser_probe.outputs.image_os }}
+          IMAGE_VERSION: ${{ steps.browser_probe.outputs.image_version }}
+          BROWSER_VERSION: ${{ steps.browser_probe.outputs.browser_version }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           $ErrorActionPreference = "Stop"
-          $title = "[Web Client Compatibility Smoke] ${{ matrix.os }} / ${{ matrix.browser }}"
+          $title = "[Web Client Compatibility Smoke] $env:MATRIX_OS / $env:MATRIX_BROWSER"
           $issueJson = gh issue list --search "`"$title`" in:title" --state open --json number,title
           $issues = @($issueJson | ConvertFrom-Json)
           $matchingIssues = @($issues | Where-Object { $_.title -eq $title })
@@ -156,17 +177,16 @@ jobs:
             exit 0
           }
 
-          $runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           $comment = @"
           Web Client Compatibility Smoke recovered.
 
-          - Green run: $runUrl
-          - OS: ${{ matrix.os }}
-          - Browser: ${{ matrix.browser }}
-          - Browser version: ${{ steps.browser_probe.outputs.browser_version }}
-          - ImageOS: ${{ steps.browser_probe.outputs.image_os }}
-          - ImageVersion: ${{ steps.browser_probe.outputs.image_version }}
-          - Commit: ${{ github.sha }}
+          - Green run: $env:RUN_URL
+          - OS: $env:MATRIX_OS
+          - Browser: $env:MATRIX_BROWSER
+          - Browser version: $env:BROWSER_VERSION
+          - ImageOS: $env:IMAGE_OS
+          - ImageVersion: $env:IMAGE_VERSION
+          - Commit: $env:COMMIT_SHA
           "@
           $commentPath = Join-Path $env:RUNNER_TEMP "compatibility-smoke-recovered.md"
           $comment | Set-Content -Path $commentPath -Encoding UTF8

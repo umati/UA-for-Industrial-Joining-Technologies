@@ -1016,9 +1016,17 @@ def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> Non
     assert "gh issue create" in run_commands
     assert "gh issue comment" in run_commands
     assert "gh issue close" in run_commands
-    assert (
-        "[Web Client Compatibility Smoke] ${{ matrix.os }} / ${{ matrix.browser }}" in run_commands
-    )
+    assert "[Web Client Compatibility Smoke] $env:MATRIX_OS / $env:MATRIX_BROWSER" in run_commands
+    for forbidden_expression in (
+        "${{ matrix.",
+        "${{ steps.browser_probe.outputs.",
+        "${{ github.workflow",
+        "${{ github.sha",
+        "${{ github.server_url",
+        "${{ github.repository",
+        "${{ github.run_id",
+    ):
+        assert forbidden_expression not in run_commands
     for forbidden in (
         "[L" + "2 Compat]",
         "legacy " + "fallback",
