@@ -17,6 +17,7 @@
 #   csharp-vuln          C# Client              NuGet vulnerability scan
 #   actionlint           GHA workflow lint             actionlint (all .github/workflows/*.yml)
 #   zizmor               GHA security audit            zizmor → SARIF upload (skipped on fork PRs)
+#   pre-commit           Local hook parity             pre-commit run --all-files
 #   report               Combined summary (always runs after all jobs)
 #
 # Live / integration / security tests: see .github/workflows/integration.yml
@@ -884,7 +885,7 @@ jobs:
     name: "📋 Test Report"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [changes, web-client-python, web-client-js, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor]
+    needs: [changes, web-client-python, web-client-js, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor, pre-commit]
     if: always()
     permissions:
       contents: read
@@ -995,6 +996,7 @@ jobs:
           SS_WIN_RESULT:   ${{ needs.server-smoke-windows.result }}
           AL_RESULT:       ${{ needs.actionlint.result }}
           ZZ_RESULT:       ${{ needs.zizmor.result }}
+          PC_RESULT:       ${{ needs.pre-commit.result }}
           # ── Per-tool step outcomes ─────────────────────────────
           WEB_PY_RUFF:     ${{ needs.web-client-python.outputs.ruff_result }}
           WEB_PY_MYPY:     ${{ needs.web-client-python.outputs.mypy_result }}
@@ -1195,6 +1197,7 @@ jobs:
           ss_r     = E("SS_WIN_RESULT",  "unknown")
           al_r     = E("AL_RESULT",      "unknown")
           zz_r     = E("ZZ_RESULT",      "unknown")
+          pc_r     = E("PC_RESULT",      "unknown")
 
           web_ruff   = E("WEB_PY_RUFF",   "")
           web_eslint = E("WEB_JS_ESLINT", "")
@@ -1292,7 +1295,20 @@ jobs:
 
           # ── Overall status ────────────────────────────────────────────────────
 
-          all_jobs = [web_py_r, web_js_r, con_r, nod_r, dck_r, cs_u_r, cs_v_r, tc_r, ss_r, al_r, zz_r]
+          all_jobs = [
+              web_py_r,
+              web_js_r,
+              con_r,
+              nod_r,
+              dck_r,
+              cs_u_r,
+              cs_v_r,
+              tc_r,
+              ss_r,
+              al_r,
+              zz_r,
+              pc_r,
+          ]
           n_pass  = sum(1 for r in all_jobs if r == "success")
           n_fail  = sum(1 for r in all_jobs if r == "failure")
           n_total = len(all_jobs)
@@ -1360,6 +1376,7 @@ jobs:
               f"| Web Client — Docker Smoke (HTTP + WebSocket) | {job_icon(dck_r)} |",
               f"| GHA Workflow Lint (actionlint)               | {job_icon(al_r)} |",
               f"| GHA Security Audit (zizmor)                  | {job_icon(zz_r)} |",
+              f"| Pre-commit Hooks                             | {job_icon(pc_r)} |",
               "",
               "---",
               "",
@@ -1516,6 +1533,48 @@ jobs:
           inputs: .github/workflows/
 
   # ───────────────────────────────────────────────────────────────────────────
+  # Pre-commit gate — runs `.pre-commit-config.yaml` against all files.
+  #   Closes the "hooks not installed locally" gap: ensures that whatever a
+  #   developer's local pre-commit would have caught is also enforced at PR
+  #   time, regardless of whether they ran `pre-commit install` on their
+  #   machine. Cached pre-commit hook envs keyed on the config hash keep
+  #   cold runs under ~30s and warm runs near-instant.
+  #
+  #   SKIP excludes the npm-backed hooks because they are already gated by
+  #   the dedicated JS jobs with full `npm ci` setup — re-running them here
+  #   would require duplicate dependency installs without adding signal.
+  # ───────────────────────────────────────────────────────────────────────────
+  pre-commit:
+    name: "Pre-commit hooks (all files)"
+    runs-on: ubuntu-latest
+    needs: [changes]
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      SKIP: eslint-node-client,css-node-client,eslint-web-client,stylelint-web-client
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.14"
+
+      - name: Install pre-commit
+        run: python -m pip install --upgrade "pre-commit==4.5.1"
+
+      - name: Cache pre-commit hook environments
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-py3.14-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit on all files
+        run: pre-commit run --all-files --show-diff-on-failure --color=always
+
+  # ───────────────────────────────────────────────────────────────────────────
   # C# NuGet Vulnerability Scan — lightweight path-filtered gate.
   #   Runs when C# paths change (catches vuln deps introduced in PRs),
   #   or on manual dispatch. Nightly drift is covered by integration.yml.
@@ -1584,7 +1643,7 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   all-required:
     name: "All checks passed"
-    needs: [web-client-python, web-client-js, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor]
+    needs: [web-client-python, web-client-js, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor, pre-commit]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -1602,6 +1661,7 @@ jobs:
             ${{ needs.server-smoke-windows.result }}
             ${{ needs.actionlint.result }}
             ${{ needs.zizmor.result }}
+            ${{ needs.pre-commit.result }}
         run: |
           echo "Job results: $RESULTS"
           if echo "$RESULTS" | grep -qE '\b(failure|cancelled)\b'; then

@@ -1241,6 +1241,28 @@ def test_ci_report_uses_declared_coverage_thresholds() -> None:
     assert "### ⚠️ Coverage Threshold Warnings" in workflow
 
 
+def test_ci_pre_commit_gate_is_required_and_reported() -> None:
+    import yaml
+
+    workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "ci.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+
+    assert "pre-commit" in workflow["jobs"]["report"]["needs"]
+    assert "pre-commit" in workflow["jobs"]["all-required"]["needs"]
+    pre_commit_env = workflow["jobs"]["pre-commit"]["env"]
+    assert pre_commit_env["SKIP"] == (
+        "eslint-node-client,css-node-client,eslint-web-client,stylelint-web-client"
+    )
+    assert "PC_RESULT:       ${{ needs.pre-commit.result }}" in workflow_text
+    assert 'pc_r     = E("PC_RESULT"' in workflow_text
+    assert "Pre-commit Hooks" in workflow_text
+    assert (
+        "${{ needs.pre-commit.result }}"
+        in workflow["jobs"]["all-required"]["steps"][0]["env"]["RESULTS"]
+    )
+
+
 def test_ci_report_web_python_skip_budget_uses_expected_skip_identities() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 

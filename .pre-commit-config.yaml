@@ -195,3 +195,20 @@ repos:
     rev: 0.37.2
     hooks:
       - id: check-github-workflows
+
+  # zizmor — GitHub Actions security audit, local pre-commit hook.
+  # Severity policy mirrors `run_all_tests.py:_parse_zizmor_output`, which
+  # fails the IJT root-runner only on High/Critical findings. `--min-severity=high`
+  # keeps this local hook aligned with that policy and with the CI
+  # `zizmorcore/zizmor-action` job (which uploads SARIF and never fails the
+  # job on its own — Code Scanning enforces severity through alert policy).
+  # Without this clamp, the upstream pre-commit defaults would fail on any
+  # finding (including Note/Low/Medium), making the local gate strictly
+  # stricter than CI — the exact local-vs-CI drift this repo avoids.
+  # When updating: keep `rev` here, the severity threshold here, and the
+  # parser in `run_all_tests.py` in lockstep so all three layers agree.
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.24.1
+    hooks:
+      - id: zizmor
+        args: ['--min-severity=high', '--no-progress']

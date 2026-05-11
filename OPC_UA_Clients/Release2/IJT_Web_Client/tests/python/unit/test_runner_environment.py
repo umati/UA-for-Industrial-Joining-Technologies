@@ -144,6 +144,93 @@ def test_pip_install_does_not_mark_hash_current_when_required_modules_remain_mis
     assert not (venv_dir / ".req-hash").exists()
 
 
+def test_python_lint_fails_on_fixable_pip_audit_cve(monkeypatch, tmp_path):
+    runner = _load_runner()
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
+    monkeypatch.setattr(runner, "_TMP_DIR", tmp_path / "tmp")
+    monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+    monkeypatch.setattr(runner, "_py_module_available", lambda name: name == "pip_audit")
+    monkeypatch.setattr(runner, "_cmd_available", lambda name: False)
+    monkeypatch.setattr(runner, "_is_https_reachable", lambda host: True)
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_skip", lambda msg: None)
+
+    def fake_run(cmd, **kwargs):
+        if "pip_audit" in cmd:
+            report = Path(cmd[cmd.index("-o") + 1])
+            report.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text(
+                json.dumps(
+                    {
+                        "dependencies": [
+                            {
+                                "name": "urllib3",
+                                "vulns": [{"id": "CVE-2026-44431", "fix_versions": ["2.7.0"]}],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return 1
+        return 0
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_python_lint(Path(sys.executable))
+
+    assert result.rc == 1
+    assert any("1 fixable CVE" in note for note in result.notes)
+
+
+def test_python_lint_allows_advisory_only_pip_audit_cve(monkeypatch, tmp_path):
+    runner = _load_runner()
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
+    monkeypatch.setattr(runner, "_TMP_DIR", tmp_path / "tmp")
+    monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+    monkeypatch.setattr(runner, "_py_module_available", lambda name: name == "pip_audit")
+    monkeypatch.setattr(runner, "_cmd_available", lambda name: False)
+    monkeypatch.setattr(runner, "_is_https_reachable", lambda host: True)
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_skip", lambda msg: None)
+
+    def fake_run(cmd, **kwargs):
+        if "pip_audit" in cmd:
+            report = Path(cmd[cmd.index("-o") + 1])
+            report.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text(
+                json.dumps({"dependencies": [{"name": "package", "vulns": [{"id": "CVE-X", "fix_versions": []}]}]}),
+                encoding="utf-8",
+            )
+            return 1
+        return 0
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_python_lint(Path(sys.executable))
+
+    assert result.rc == 0
+    assert any("advisory CVE" in note for note in result.notes)
+
+
+def test_python_lint_fails_when_pip_audit_reports_cves_without_json(monkeypatch, tmp_path):
+    runner = _load_runner()
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
+    monkeypatch.setattr(runner, "_TMP_DIR", tmp_path / "tmp")
+    monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+    monkeypatch.setattr(runner, "_py_module_available", lambda name: name == "pip_audit")
+    monkeypatch.setattr(runner, "_cmd_available", lambda name: False)
+    monkeypatch.setattr(runner, "_is_https_reachable", lambda host: True)
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_skip", lambda msg: None)
+    monkeypatch.setattr(runner, "_run", lambda cmd, **kwargs: 1 if "pip_audit" in cmd else 0)
+
+    result = runner._stage_python_lint(Path(sys.executable))
+
+    assert result.rc == 1
+    assert any("report missing" in note for note in result.notes)
+
+
 def test_npm_install_uses_ci_in_ci_when_lockfile_exists(monkeypatch):
     runner = _load_runner()
     monkeypatch.setattr(runner, "IS_CI", True)

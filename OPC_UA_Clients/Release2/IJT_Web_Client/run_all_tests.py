@@ -937,6 +937,7 @@ def _stage_python_lint(python: Path) -> StageResult:
                     "PIP_CACHE_DIR": str(pip_audit_cache),
                 }
             )
+            pip_audit_report = results_dir / "pip-audit.json"
             rc = _run(
                 [
                     python,
@@ -945,7 +946,7 @@ def _stage_python_lint(python: Path) -> StageResult:
                     "--format",
                     "json",
                     "-o",
-                    str(results_dir / "pip-audit.json"),
+                    str(pip_audit_report),
                     "--progress-spinner",
                     "off",
                     "--timeout",
@@ -958,10 +959,41 @@ def _stage_python_lint(python: Path) -> StageResult:
                 timeout=90 if IS_CI else 30,
                 timeout_message="[SKIP] pip-audit skipped — network/TLS timeout",
             )
-            if rc not in (0, 1, -1):  # 1 = CVEs found (informational); -1 = timeout/network (advisory)
-                overall_rc = rc
             if rc == -1:
                 notes.append("pip-audit skipped (network timeout)")
+            elif rc in (0, 1):
+                # Parse the JSON report to split fixable CVEs (must-fix) from
+                # advisory-only CVEs (no `fix_versions`). Policy matches
+                # Console/Test Client `_step_pip_audit`: fixable CVEs fail the
+                # suite, advisory-only CVEs pass with a note. Previous behavior
+                # accepted rc=1 wholesale as "informational" which silently
+                # masked fixable CVEs in transitive deps like urllib3.
+                if not pip_audit_report.exists():
+                    if rc != 0:
+                        overall_rc = rc
+                        notes.append("pip-audit: report missing after CVE exit")
+                else:
+                    try:
+                        data = json.loads(pip_audit_report.read_text(encoding="utf-8"))
+                        vulns = [v for dep in data.get("dependencies", []) for v in dep.get("vulns", [])]
+                        fixable = [v for v in vulns if v.get("fix_versions")]
+                        if fixable:
+                            overall_rc = 1
+                            notes.append(f"pip-audit: {len(fixable)} fixable CVE(s) — see test-results/pip-audit.json")
+                        elif vulns:
+                            notes.append(f"pip-audit: {len(vulns)} advisory CVE(s), none fixable")
+                    except (OSError, ValueError) as exc:
+                        # Could not parse the report. Fail closed only when
+                        # pip-audit also returned a non-zero rc — otherwise the
+                        # report is missing/empty for a benign reason (rc=0).
+                        if rc != 0:
+                            overall_rc = rc
+                            notes.append(f"pip-audit: could not parse report ({exc})")
+            elif rc not in (0, 1):
+                # Tool error (not "vulns found"). Surface it so the runner
+                # does not swallow real failures as advisory.
+                overall_rc = rc
+                notes.append(f"pip-audit: exit code {rc}")
     else:
         _skip("pip-audit not installed — pip install pip-audit")
         notes.append("pip-audit not installed")

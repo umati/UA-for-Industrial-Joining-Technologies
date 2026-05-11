@@ -129,6 +129,41 @@ def test_pip_audit_timeout_is_advisory_skip():
     assert run_cmd.call_args.kwargs["timeout_label"] == "pip-audit"
 
 
+def test_install_requirements_does_not_mark_hash_current_after_pip_failure(monkeypatch, tmp_path):
+    venv = tmp_path / ".venv_test"
+    venv.mkdir()
+    requirements = tmp_path / "requirements.txt"
+    requirements_dev = tmp_path / "requirements-dev.txt"
+    requirements.write_text("PyYAML>=6.0\n", encoding="utf-8")
+    requirements_dev.write_text("urllib3>=2.7.0\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def fake_check_call(cmd, **kwargs):
+        calls.append(list(cmd))
+        if str(requirements_dev) in cmd:
+            raise _mod.subprocess.CalledProcessError(1, cmd)
+
+    monkeypatch.setattr(_mod, "VENV", venv)
+    monkeypatch.setattr(_mod, "REQUIREMENTS", requirements)
+    monkeypatch.setattr(_mod, "_REQUIREMENTS_DEV", requirements_dev)
+    monkeypatch.setattr(_mod, "_TMP_DIR", tmp_path / "tmp")
+    monkeypatch.setattr(_mod, "_venv_pip", lambda path: Path("pip"))
+    monkeypatch.setattr(_mod, "_venv_python", lambda path: Path("python"))
+    monkeypatch.setattr(_mod.subprocess, "run", lambda *args, **kwargs: None)
+    monkeypatch.setattr(_mod.subprocess, "check_call", fake_check_call)
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+
+    try:
+        _mod.install_requirements()
+    except _mod.subprocess.CalledProcessError:
+        pass
+    else:
+        raise AssertionError("install_requirements should fail when pip install fails")
+
+    assert any(str(requirements_dev) in cmd for cmd in calls)
+    assert not (venv / ".req-hash").exists()
+
+
 def test_phase1_mypy_runs_ci_equivalent_command():
     with (
         patch.object(_mod, "_ensure_python_tool", return_value=(True, "")),

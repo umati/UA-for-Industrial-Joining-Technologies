@@ -514,9 +514,8 @@ def install_requirements() -> None:
     for req_file in (REQUIREMENTS, _REQUIREMENTS_DEV):
         if req_file.exists():
             logger.info("Installing requirements from %s...", req_file.name)
-            subprocess.run(
+            subprocess.check_call(
                 [pip, "install", "--quiet", "-r", str(req_file)],
-                check=False,
                 env=pip_env,
             )
         else:
