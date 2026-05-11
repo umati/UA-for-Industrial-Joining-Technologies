@@ -115,7 +115,6 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $title = "[Web Client Compatibility Smoke] ${{ matrix.os }} / ${{ matrix.browser }}"
-          $legacyTitle = "[L2 Compat] Windows + Edge"  # TODO: remove legacy fallback after issue #371 closes cleanly.
           $runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           $body = @"
           Web Client Compatibility Smoke failed.
@@ -137,15 +136,7 @@ jobs:
           $issueJson = gh issue list --search "`"$title`" in:title" --state open --json number,title
           $issues = @($issueJson | ConvertFrom-Json)
           $issue = $issues | Where-Object { $_.title -eq $title } | Select-Object -First 1
-          if (-not $issue) {
-            $legacyIssueJson = gh issue list --search "`"$legacyTitle`" in:title" --state open --json number,title
-            $legacyIssues = @($legacyIssueJson | ConvertFrom-Json)
-            $issue = $legacyIssues | Where-Object { $_.title -eq $legacyTitle } | Select-Object -First 1
-          }
           if ($issue) {
-            if ($issue.title -ne $title) {
-              gh issue edit $($issue.number) --title $title
-            }
             gh issue comment $($issue.number) --body-file $bodyPath
           } else {
             gh issue create --title $title --body-file $bodyPath
@@ -158,14 +149,9 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $title = "[Web Client Compatibility Smoke] ${{ matrix.os }} / ${{ matrix.browser }}"
-          $legacyTitle = "[L2 Compat] Windows + Edge"  # TODO: remove legacy fallback after issue #371 closes cleanly.
           $issueJson = gh issue list --search "`"$title`" in:title" --state open --json number,title
           $issues = @($issueJson | ConvertFrom-Json)
           $matchingIssues = @($issues | Where-Object { $_.title -eq $title })
-          $legacyIssueJson = gh issue list --search "`"$legacyTitle`" in:title" --state open --json number,title
-          $legacyIssues = @($legacyIssueJson | ConvertFrom-Json)
-          $matchingIssues += @($legacyIssues | Where-Object { $_.title -eq $legacyTitle })
-          $matchingIssues = @($matchingIssues | Sort-Object number -Unique)
           if ($matchingIssues.Count -eq 0) {
             exit 0
           }
@@ -185,9 +171,6 @@ jobs:
           $commentPath = Join-Path $env:RUNNER_TEMP "compatibility-smoke-recovered.md"
           $comment | Set-Content -Path $commentPath -Encoding UTF8
           foreach ($issue in $matchingIssues) {
-            if ($issue.title -ne $title) {
-              gh issue edit $($issue.number) --title $title
-            }
             gh issue comment $($issue.number) --body-file $commentPath
             gh issue close $($issue.number)
           }

@@ -1014,16 +1014,18 @@ def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> Non
     assert "& $edge --version" not in run_commands
     assert "gh issue list" in run_commands
     assert "gh issue create" in run_commands
-    assert "gh issue edit" in run_commands
     assert "gh issue comment" in run_commands
     assert "gh issue close" in run_commands
     assert (
         "[Web Client Compatibility Smoke] ${{ matrix.os }} / ${{ matrix.browser }}" in run_commands
     )
-    assert "[L2 Compat] Windows + Edge" in run_commands
-    assert "TODO: remove legacy fallback after issue #371 closes cleanly." in run_commands
-    assert "L2 Compatibility" not in workflow_text
-    assert "L2 Edge Compat" not in workflow_text
+    for forbidden in (
+        "[L" + "2 Compat]",
+        "legacy " + "fallback",
+        "L" + "2 Compatibility",
+        "L" + "2 Edge Compat",
+    ):
+        assert forbidden not in workflow_text
 
 
 def test_compatibility_smoke_playwright_scope_is_two_edge_specs_only() -> None:
