@@ -847,15 +847,21 @@ def test_integration_web_client_e2e_jobs_require_pinned_linux_container() -> Non
             for index, step in enumerate(steps)
             if step.get("uses", "").startswith("actions/setup-python@")
         )
+        setup_python_step = steps[setup_python_index]
         helper_index = next(
             index
             for index, step in enumerate(steps)
             if step.get("name") == "Install setup-python OS helper"
         )
+        setup_node_step = next(
+            step for step in steps if step.get("uses", "").startswith("actions/setup-node@")
+        )
         assert helper_index < setup_python_index
         assert (
             "apt-get install -y --no-install-recommends lsb-release" in steps[helper_index]["run"]
         )
+        assert "cache" not in setup_python_step.get("with", {})
+        assert "cache" not in setup_node_step.get("with", {})
 
 
 def test_integration_report_surfaces_browser_feature_timings() -> None:
