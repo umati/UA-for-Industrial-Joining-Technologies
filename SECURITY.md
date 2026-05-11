@@ -42,8 +42,9 @@ We aim to acknowledge reports within **5 business days** and provide a fix or mi
 - The web client (`IJT_Web_Client`) binds its WebSocket backend to `localhost` by default.
   Review `client_config.py` and Docker port mappings before any network-accessible deployment.
 - Dependencies are kept up to date via [Renovate](renovate.json) and audited in CI via
-  `bandit` (Python), `npm audit` (Node.js), and CodeQL static analysis (C#, Python, JavaScript)
-  using the `security-extended` query suite (`.github/workflows/codeql.yml`).
+  `pip-audit` (Python dependencies), `npm audit` (Node.js dependencies), the C# NuGet
+  vulnerability scan, `bandit` (Python SAST), and CodeQL static analysis (C#, Python,
+  JavaScript) using the `security-extended` query suite (`.github/workflows/codeql.yml`).
 - GitHub Actions workflow files are audited by [zizmor](https://woodruffw.github.io/zizmor/)
   in the CI workflow when `.github/workflows/` changes, or on manual dispatch. Findings are
   uploaded as SARIF to GitHub Code Scanning (Security → Code scanning alerts). High/Critical
@@ -51,3 +52,6 @@ We aim to acknowledge reports within **5 business days** and provide a fix or mi
   check-failure settings are required if new Code Scanning alerts should also block merges.
   The GitHub Actions zizmor job is skipped on fork PRs where `security-events: write` is
   unavailable.
+- The CI `pre-commit` job runs the repository hook set on all files. The local and CI
+  zizmor hooks use the same High/Critical severity policy as the root runner so local
+  checks do not become stricter than CI.

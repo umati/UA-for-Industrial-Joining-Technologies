@@ -92,7 +92,7 @@ All auto-detected — present=run, absent=skip with install hint.
 `pyright` is installed by default (listed in `requirements-dev.txt`) and runs as **advisory** (non-blocking; findings written to `pyright.stderr.txt`). It uses basic mode; `tests/unit` is excluded from pyright scope because unit tests intentionally pass wrong types for edge-case testing. See `pyrightconfig.json`.
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
 `semgrep` (static analysis), `pyright` (standard install, advisory), `detect-secrets` (secrets).
-pip-audit uses the PyPI JSON endpoint preflight, local project cache, spinner disabled, and short timeouts; network/TLS/timeout outcomes are SKIP, not PASS/FAIL.
+pip-audit uses the PyPI JSON endpoint preflight, local project cache, spinner disabled, and short timeouts; network/TLS/timeout outcomes are SKIP, not PASS/FAIL. Fixable CVEs fail the suite; advisory-only CVEs may pass with an explicit note.
 
 ---
 

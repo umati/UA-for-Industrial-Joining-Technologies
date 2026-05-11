@@ -142,7 +142,7 @@ python scripts/run_docker_tests.py --live-docker
 ## Zero-Escape Testing Tools (run_all_tests.py Phase 1)
 
 All auto-detected — present=run, absent=skip with install hint.
-Network-backed advisory tools fail fast: pip-audit uses the PyPI JSON endpoint preflight, local cache, spinner disabled, and short timeouts; Semgrep uses the real `p/default` rules endpoint. `mypy` scans explicit Python source roots instead of `.` so runner temp/state directories cannot break local checks on Windows.
+Network-backed advisory tools fail fast: pip-audit uses the PyPI JSON endpoint preflight, local cache, spinner disabled, and short timeouts; Semgrep uses the real `p/default` rules endpoint. Network/TLS/timeout outcomes are advisory skips, but fixable `pip-audit` CVEs fail the Python lane and advisory-only CVEs pass with an explicit note. `mypy` scans explicit Python source roots instead of `.` so runner temp/state directories cannot break local checks on Windows.
 Runner-managed and Dockerfile `npm install` / `npm ci` commands use `--no-audit --no-fund`, disable the npm update notifier, and keep direct runner npm subprocesses on project `tmp/npm-cache` so repeated local/CI logs stay readable; JS CVEs are still checked by the separate explicit `npm audit` step.
 
 | Tool | What it checks |
@@ -575,13 +575,13 @@ production/browser use unless you intentionally want to replace the served `LOCA
 Runner-owned OPC UA simulator launches write `opcua-server-<port>.out.log` and
 `opcua-server-<port>.err.log` under `test-results/` (or `IJT_WEB_TEST_RESULTS_DIR`
 when set). The runner also exports `IJT_OPCUA_PRESTARTED_PORT=<port>` after an
-owned simulator reaches TCP readiness. Live/integration pytest fixtures use that
+owned simulator reaches OPC UA protocol readiness. Live/integration pytest fixtures use that
 marker to fail fast with the captured log paths if the runner-owned port closes
 before fixture startup; they do not spawn a fallback EXE on a different,
-unpatched port. Fixtures also run OPC UA and WebSocket protocol probes after
-TCP ports open so first tests do not consume the simulator/backend warmup
-window. The default probe budget is about 38 seconds, sized from GitHub-hosted
-Windows startup evidence.
+unpatched port. Fixtures also run OPC UA protocol probes and a backend-only
+WebSocket JSON dispatch probe after TCP ports open so first tests do not consume
+the simulator/backend warmup window. The WebSocket readiness probe must remain
+non-mutating; direct OPC UA readiness owns the simulator protocol check.
 
 On Windows, runner-owned simulator copies live under a short temp root
 (`RUNNER_TEMP\ijt-sim\<port>` on GitHub Actions, the system temp fallback, or

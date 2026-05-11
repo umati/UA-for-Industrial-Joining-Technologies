@@ -46,7 +46,7 @@ unit stage and is currently 95%.
 - Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
 - Excel and GitHub Actions summaries include a Conformance Score, at-a-glance KPIs, delta from `test-results/report-baseline.json`, server support summary, Action Items, Capability Notes, coverage overview, facet coverage, and CU coverage tables when the live CU compliance report is present.
 - Report wording separates `Server capability profile`, `Reference IJT facet`, `Reference full CU set`, `Server Supported CUs`, `Server Support %`, `Supported CUs Validated %`, `Result`, `Status`, and `Primary Reason` for public clarity.
-- `report-baseline.json` is local/job-local in this slice; do not add GitHub Actions cache or cross-run baseline download without a separate security review.
+- `report-baseline.json` is local/job-local in the current implementation; do not add GitHub Actions cache or cross-run baseline download without a separate security review.
 - Missing phase1 tools are auto-installed locally by default; CI keeps auto-install off by default for reproducibility.
 - Use `--no-auto-install-tools` to disable local auto-install, or `--auto-install-tools` to force-enable it.
 
@@ -64,7 +64,7 @@ unit stage and is currently 95%.
 
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
 `semgrep` (static analysis), `pyright` (strict type checking — **advisory, non-blocking**), `detect-secrets` (secrets).
-pip-audit uses the PyPI JSON endpoint preflight, local project cache, spinner disabled, and short timeouts; network/TLS/timeout outcomes are SKIP, not PASS/FAIL.
+pip-audit uses the PyPI JSON endpoint preflight, local project cache, spinner disabled, and short timeouts; network/TLS/timeout outcomes are SKIP, not PASS/FAIL. Fixable CVEs fail the suite; advisory-only CVEs may pass with an explicit note.
 The runner refreshes `pip` before the requirements-hash fast path so stale bootstrap tooling does not create false CVE failures.
 Pyright is configured in `pyproject.toml` to use `.venv_test` so installed project dependencies are resolved consistently during local runner checks.
 `mypy` is blocking in local Phase 1 and uses the same command as CI:

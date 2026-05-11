@@ -1254,6 +1254,13 @@ def test_ci_pre_commit_gate_is_required_and_reported() -> None:
     assert pre_commit_env["SKIP"] == (
         "eslint-node-client,css-node-client,eslint-web-client,stylelint-web-client"
     )
+    install_steps = [
+        step
+        for step in workflow["jobs"]["pre-commit"]["steps"]
+        if step.get("name") == "Install pre-commit and root test dependency"
+    ]
+    assert install_steps
+    assert '"pre-commit==4.5.1" "pytest~=9.0"' in install_steps[0]["run"]
     assert "PC_RESULT:       ${{ needs.pre-commit.result }}" in workflow_text
     assert 'pc_r     = E("PC_RESULT"' in workflow_text
     assert "Pre-commit Hooks" in workflow_text

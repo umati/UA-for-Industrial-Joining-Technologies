@@ -28,7 +28,7 @@ This repo uses [pre-commit](https://pre-commit.com/) to automatically fix format
 pip install pre-commit          # or: pip install -r requirements-dev.txt
 pre-commit install              # installs hooks into .git/hooks/
 ```
-The three Python runners (Console, Web, Test) call `pre-commit install` automatically on first run. For CSharp, Node, and Server runners — or direct git use — run it manually once after cloning.
+The three Python runners (Console, Web, Test) call `pre-commit install` automatically on first local, non-CI run. For CSharp, Node, and Server runners — or direct git use — run it manually once after cloning.
 
 **What happens on `git commit`:**
 1. `ruff-format` rewrites Python files with wrong indentation/quotes/blank-lines
@@ -39,9 +39,15 @@ The three Python runners (Console, Web, Test) call `pre-commit install` automati
 6. `css-node-client` runs the Node Client CSS checker
 7. `eslint-web-client` lints Web Client JS (`src/javascripts/`, `config.js`)
 8. `stylelint-web-client` lints Web Client CSS (`src/resources/css/`)
+9. `workflow-policy-guard` runs the root workflow/baseline policy tests when workflow YAML, `tests/test_root_runner.py`, or the Integration test-count baseline changes
+10. `check-github-workflows` validates workflow files against the GitHub Actions schema
+11. `zizmor` audits workflow security at the same High/Critical severity policy used by the root runner
 
 JS hooks (#5–#8) run with the project's own `node_modules` via `npm --prefix` — no global
 install required. They only trigger when matching files are staged.
+The CI `pre-commit` job runs the same hook set on all files and skips only the
+npm-backed JS hooks, because the dedicated Node and Web JavaScript CI jobs own
+their full `npm ci` setup and lint/audit gates.
 
 Multi-exception style rule: always write `except (A, B):`, never `except A, B:`. This is enforced
 by the unit-level guard test (`test_ruff_format_guard.py`) which verifies ruff does not corrupt
@@ -177,11 +183,11 @@ All Python runner scripts (`run_all_tests.py`) use a `_StepResult` class with fo
 | `ok=False, warn=False` | **FAIL** | red | `failed` → suite FAIL | Real defect or gate violation |
 | `skipped=True` | **SKIP** | yellow | `skipped` | Tool not installed / not applicable |
 
-**Advisory tool rule**: Tools whose failures are inherently non-actionable on the local/CI environment (Semgrep SSL, pyright advisory, pip-audit network) must use `result.warn = True` or `skipped=True` — **never** `result.ok = False`. Setting `ok=False` converts an advisory observation into a suite-blocking failure.
+**Advisory tool rule**: Tools whose failures are inherently non-actionable on the local/CI environment (Semgrep SSL, pyright advisory, pip-audit network) must use `result.warn = True` or `skipped=True` — **never** `result.ok = False`. Setting `ok=False` converts an advisory observation into a suite-blocking failure. Actionable dependency findings are different: `pip-audit` findings with fix versions must fail the owning Python lane; advisory-only findings may pass with an explicit note.
 
 **Semgrep preflight rule**: When a runner uses `--config=p/default`, the network preflight must probe `https://semgrep.dev/c/p/default`, not only `https://semgrep.dev/`. Use `requests` when available so the preflight follows the same certifi/TLS trust path as Semgrep and pip-audit. Keep `requests` optional inside the helper and annotate that import with `# type: ignore[import-untyped]` unless `types-requests` is a required dev dependency. Optional imports used by runner/report tooling are covered by the root optional-import typing guard, including untyped imports and forward-annotation/reimport patterns that mypy flags as `no-redef`. The root host can be reachable while the rule download path fails TLS/auth, which otherwise costs roughly 100 seconds and emits traceback noise before producing the same advisory WARN.
 
-**pip-audit preflight rule**: pip-audit must preflight `https://pypi.org/pypi/pip/json`, not the PyPI root page, and must use `--progress-spinner off`, `--timeout 5`, and a project-local `--cache-dir`. Local parent-process timeout should be short (30s); CI can be longer (90s). Network/TLS/timeout outcomes are advisory skips, not PASS and not FAIL.
+**pip-audit preflight rule**: pip-audit must preflight `https://pypi.org/pypi/pip/json`, not the PyPI root page, and must use `--progress-spinner off`, `--timeout 5`, and a project-local `--cache-dir`. Local parent-process timeout should be short (30s); CI can be longer (90s). Network/TLS/timeout outcomes are advisory skips, not PASS and not FAIL. If pip-audit reports fixable CVEs or exits with CVEs but no JSON report, the suite fails closed.
 
 **npm install noise rule**: Runner-managed and Dockerfile dependency installs must pass `--no-audit --no-fund` to `npm ci` / `npm install` so repeated local and CI runs do not print funding/audit summaries. Dockerfile npm commands should also disable the npm update notifier. Child runners that invoke npm directly should use a repo-local npm cache and disable the npm update notifier when they own the subprocess environment. Keep `npm audit` as a separate explicit security step; do not rely on install-time audit output.
 
@@ -353,15 +359,18 @@ UA-for-Industrial-Joining-Technologies/
 ### CI (`ci.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
 |-----|--------------|
-| `web-client` | Web Client local Phase 1 runner: Python unit/type/security, JS unit/lint/security, and runner timing artifacts |
+| `web-client-python` | Web Client Python Phase 1 runner: unit/type/security/audit checks and timing artifacts |
+| `web-client-js` | Web Client JavaScript Phase 1 runner: Vitest, ESLint, stylelint, npm audit, and timing artifacts |
 | `console-client` | Python unit tests (`tests/unit/`), Bandit, Ruff, mypy |
 | `node-client` | JS unit tests, ESLint, npm audit |
+| `docker-smoke` | Web Client Docker image smoke/readiness check |
 | `test-client` | pytest unit tests (`tests/unit/`) + Bandit, Ruff, mypy |
 | `csharp-unit` | dotnet restore (locked mode) + build (`-warnaserror`) + xUnit unit tests (`Category!=Live`, `--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
 | `csharp-vuln` | NuGet vulnerability scan (`--vulnerable --include-transitive`); fails on known CVEs |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
 | `actionlint` | GitHub Actions syntax/static validation for workflow changes |
 | `zizmor` | GitHub Actions security audit with SARIF upload to Code Scanning; local root-runner parsing fails High/Critical findings from current zizmor v1 JSON output |
+| `pre-commit` | Runs `.pre-commit-config.yaml` on all files with npm-backed JS hooks skipped because dedicated JS jobs already own them |
 | `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · coverage/threshold cells from each client gate · skip-budget and coverage-threshold warnings · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |
 
 Runtime: ~5–7 minutes. Python 3.14, Node.js 24, .NET 10 everywhere.
@@ -397,7 +406,7 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `web-client-e2e-smoke` | local root runner + `integration.yml` | HTTP 3004 | Playwright smoke project; GitHub Integration runs it in the pinned Linux Playwright container |
 | `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs with owned browser/backend/server workers; GitHub Integration uses two Browser Features shards in the pinned Linux Playwright container |
 | `web-client-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec; GitHub Integration runs it in the pinned Linux Playwright container |
-| Web Client Compatibility Smoke | Web runner + `web-client-compatibility-smoke.yml` | OPC UA 40468 / WS 8004 / HTTP 3007 | Scheduled/manual smoke for audited browser file surfaces; today runs `windows-latest` / `msedge` |
+| Web Client Compatibility Smoke | Web runner + `web-client-compatibility-smoke.yml` | OPC UA 40468 / WS 8004 / HTTP 3007 | Scheduled/manual smoke for audited browser file surfaces; current matrix runs `windows-latest` / `msedge` |
 | `web-client-docker-smoke` | local root runner | HTTP 3000 / WS 8001 | Web Client production Docker image/readiness smoke |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
 | `live-webclient` | `integration.yml` | **40463/40466/40467** | Windows native EXE for non-browser Web Client live suites |
