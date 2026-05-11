@@ -1128,7 +1128,7 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
         "cs_live",
     }
     assert baseline["suites"]["tc_tests"]["skip_tolerance"] == 10
-    assert baseline["suites"]["wd_py"]["tests"] == 671
+    assert baseline["suites"]["wd_py"]["tests"] == 677
     assert baseline["suites"]["wd_js"]["tests"] == 522
     assert baseline["suites"]["wc_live"]["tests"] == 127
     assert baseline["suites"]["wc_live"]["skipped"] == 0
