@@ -985,7 +985,7 @@ jobs:
               delta = total - expected
               return "" if delta == 0 else f" ({delta:+d})"
 
-          def integration_drift_warnings(baseline, suite_counts):
+          def integration_drift_warnings(baseline, suite_counts, run_id):
               """Build non-failing warnings for test-count and skip-count drift."""
               warnings = []
               default_tolerance = int(baseline.get("skip_tolerance_default", 0) or 0)
@@ -1331,7 +1331,11 @@ jobs:
               ("cs_live", "C# Client — Live", cs_live),
           ]
           skip_policy_failures = non_test_client_skip_failures(suite_counts)
-          report_warnings = integration_drift_warnings(integration_baseline, suite_counts)
+          report_warnings = integration_drift_warnings(
+              integration_baseline,
+              suite_counts,
+              E("GH_RUN_ID", ""),
+          )
           if baseline_warning:
               report_warnings.insert(0, baseline_warning)
 

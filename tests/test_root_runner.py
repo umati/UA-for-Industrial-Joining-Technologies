@@ -1220,7 +1220,8 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
     assert "load_integration_baseline(" in workflow
     assert "format_count_delta(" in workflow
     assert 'return "" if delta == 0 else f" ({delta:+d})"' in workflow
-    assert "integration_drift_warnings(" in workflow
+    assert "def integration_drift_warnings(baseline, suite_counts, run_id):" in workflow
+    assert 'E("GH_RUN_ID", "")' in workflow
     assert "non_test_client_skip_failures(" in workflow
     assert "skip_policy_failures" in workflow
     assert "### ❌ Skip Policy Failures" in workflow
