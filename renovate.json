@@ -10,6 +10,12 @@
       "matchPackagePatterns": ["^ubuntu$", "^debian$", "^alpine$"],
       "automerge": false,
       "addLabels": ["needs-manual-review", "docker-base-image"]
+    },
+    {
+      "description": "Hold eslint at v9 until neostandard supports eslint ^10. neostandard@0.13.0 (latest as of 2026-05-12) declares peerDependencies: { eslint: \"^9.0.0\" }, so eslint v10 is structurally incompatible. Re-enable when neostandard publishes a release with eslint ^10 in its peer range. See PR #375 for context.",
+      "matchPackageNames": ["eslint", "@eslint/js"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
     }
   ]
 }
