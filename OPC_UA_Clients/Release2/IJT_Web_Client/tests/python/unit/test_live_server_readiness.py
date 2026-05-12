@@ -74,7 +74,7 @@ def test_protocol_warmup_retries_first_opcua_connect(monkeypatch):
             attempts.append("disconnect")
 
     monkeypatch.setitem(sys.modules, "asyncua", SimpleNamespace(Client=FakeClient))
-    monkeypatch.setattr(readiness.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(readiness, "_sleep", lambda seconds: sleeps.append(seconds))
 
     error = readiness.wait_for_opcua_protocol_ready(
         "opc.tcp://localhost:40463",
@@ -138,7 +138,7 @@ def test_protocol_warmup_retries_first_websocket_backend_response(monkeypatch):
             return None
 
     monkeypatch.setitem(sys.modules, "websockets", SimpleNamespace(connect=FakeConnect))
-    monkeypatch.setattr(readiness.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(readiness, "_sleep", lambda seconds: sleeps.append(seconds))
 
     error = readiness.wait_for_websocket_protocol_ready(
         "ws://localhost:8001",
@@ -200,7 +200,7 @@ def test_protocol_warmup_retries_and_surfaces_wrong_websocket_ack(monkeypatch):
             return None
 
     monkeypatch.setitem(sys.modules, "websockets", SimpleNamespace(connect=FakeConnect))
-    monkeypatch.setattr(readiness.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(readiness, "_sleep", lambda seconds: sleeps.append(seconds))
 
     error = readiness.wait_for_websocket_protocol_ready(
         "ws://localhost:8001",

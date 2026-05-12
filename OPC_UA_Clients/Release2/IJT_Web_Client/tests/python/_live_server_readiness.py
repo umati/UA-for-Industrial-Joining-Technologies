@@ -36,6 +36,7 @@ _KNOWN_FAILURE_SIGNATURES: tuple[str, ...] = (
 )
 _FAILURE_SIGNATURE_TAIL_LINES = 40
 _FAILURE_SIGNATURE_TAIL_BYTES = 8192
+_sleep = time.sleep
 
 
 def _tail_log_lines(path: Path, *, max_lines: int, max_bytes: int) -> list[str]:
@@ -139,7 +140,7 @@ def wait_for_opcua_protocol_ready(
         except Exception as exc:  # pragma: no cover - exact asyncua exception type varies by version
             last_error = f"{type(exc).__name__}: {exc}"
             if attempt < attempts - 1:
-                time.sleep(interval)
+                _sleep(interval)
     return last_error
 
 
@@ -200,5 +201,5 @@ def wait_for_websocket_protocol_ready(
         except Exception as exc:  # pragma: no cover - exact backend/websocket error type varies by version
             last_error = f"{type(exc).__name__}: {exc}"
             if attempt < attempts - 1:
-                time.sleep(interval)
+                _sleep(interval)
     return last_error

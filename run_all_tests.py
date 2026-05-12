@@ -878,12 +878,33 @@ def _check_actionlint(results_dir: Path) -> StepResult:
     workflows = list((ROOT / ".github/workflows").glob("*.yml"))
     if not workflows:
         return StepResult("GHA actionlint", "SKIP", "No workflow files found")
-    result = subprocess.run(
-        ["actionlint", "-format", "{{json .}}", *[str(w) for w in workflows]],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    # Disable actionlint's auto-spawned shellcheck/pyflakes subprocesses: on some
+    # Windows hosts they hang indefinitely (no upstream timeout) and freeze Phase 1.
+    # Workflow syntax + action-reference validation still runs from actionlint itself.
+    cmd = [
+        "actionlint",
+        "-shellcheck=",
+        "-pyflakes=",
+        "-format",
+        "{{json .}}",
+        *[str(w) for w in workflows],
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        out_file = results_dir / "actionlint.json"
+        out_file.write_text("[]", encoding="utf-8")
+        return StepResult(
+            "GHA actionlint",
+            "FAIL",
+            "actionlint did not return within 60s (likely environmental hang)",
+        )
     out_file = results_dir / "actionlint.json"
     out_file.write_text(result.stdout or "[]", encoding="utf-8")
     if result.returncode != 0:
