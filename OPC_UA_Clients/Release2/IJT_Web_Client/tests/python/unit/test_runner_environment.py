@@ -34,6 +34,22 @@ def _make_simulator_executable(tmp_path: Path) -> Path:
     return executable
 
 
+def _patch_simulator_launch_common(monkeypatch, runner, tmp_path: Path) -> Path:
+    instance_dir = tmp_path / "instance"
+    state_dir = tmp_path / "state"
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "results")
+    monkeypatch.setattr(runner, "_STATE_DIR", state_dir)
+    monkeypatch.setattr(runner, "_TIMING_HISTORY", state_dir / "timing-history.jsonl")
+    monkeypatch.setattr(runner, "_MAX_SIMULATOR_INSTANCE_PATH", 4096)
+    monkeypatch.setattr(runner, "_simulator_instance_dir", lambda _port: instance_dir)
+    monkeypatch.setattr(runner, "_warn", lambda _message: None)
+    monkeypatch.setattr(runner, "_info", lambda _message: None)
+    monkeypatch.setattr(runner, "_ok", lambda _message: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
+    runner._SIMULATOR_LAUNCH_NOTES.clear()
+    return instance_dir
+
+
 def test_precommit_hooks_are_not_installed_in_ci(monkeypatch):
     runner = _load_runner()
     monkeypatch.setattr(runner, "IS_CI", True)
@@ -335,6 +351,25 @@ def test_js_unit_stage_writes_ci_junit_and_cobertura_coverage(monkeypatch):
     assert any(str(part).endswith("vitest.xml") for part in captured["cmd"])
 
 
+def test_js_lint_eslint_skip_mentions_production_image_probes(monkeypatch, tmp_path):
+    runner = _load_runner()
+    node_modules = tmp_path / "node_modules"
+    node_modules.mkdir()
+    skips = []
+
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    monkeypatch.setattr(runner.shutil, "which", lambda name: "npx" if name in {"npx", "npx.cmd"} else None)
+    monkeypatch.setattr(runner, "_cmd_available", lambda _name: False)
+    monkeypatch.setattr(runner, "_banner", lambda _title: None)
+    monkeypatch.setattr(runner, "_skip", lambda message: skips.append(message))
+
+    result = runner._stage_js_lint()
+
+    assert result.rc == 0
+    assert "eslint not installed in node_modules" in skips[0]
+    assert "production-image probes" in skips[0]
+
+
 def test_timing_artifacts_are_written_to_results_and_persistent_history(monkeypatch, tmp_path):
     runner = _load_runner()
     results_dir = tmp_path / "results"
@@ -557,6 +592,41 @@ def test_simulator_launch_fails_fast_when_process_exits_before_protocol_probe(mo
     assert not instance_dir.exists()
 
 
+def test_simulator_launch_surfaces_err_log_signature_when_process_exits_mid_wait(monkeypatch, tmp_path):
+    runner = _load_runner()
+    executable = _make_simulator_executable(tmp_path)
+    instance_dir = _patch_simulator_launch_common(monkeypatch, runner, tmp_path)
+    warnings = []
+
+    class FakeProc:
+        def __init__(self):
+            self.poll_results = iter([None, 1])
+
+        def poll(self):
+            return next(self.poll_results)
+
+    def fake_start(_cmd, *, cwd, port):
+        _, err_log = runner._opcua_server_log_paths(port)
+        err_log.parent.mkdir(parents=True, exist_ok=True)
+        err_log.write_text("server-instance creation failed: 0x80010000\n", encoding="utf-8")
+        return FakeProc()
+
+    def fail_probe(_endpoint, **_kwargs):
+        raise AssertionError("protocol probe must not run after simulator process exits")
+
+    monkeypatch.setattr(runner, "MAX_SIMULATOR_LAUNCH_ATTEMPTS", 1)
+    monkeypatch.setattr(runner, "_start_process_with_opcua_logs", fake_start)
+    monkeypatch.setattr(runner, "_port_open", lambda _host, _port, timeout=1.0: False)
+    monkeypatch.setattr(runner, "_probe_opcua_protocol", fail_probe)
+    monkeypatch.setattr(runner, "_warn", lambda message: warnings.append(message))
+
+    result = runner._launch_simulator_instance(40470, str(executable))
+
+    assert result is None
+    assert not instance_dir.exists()
+    assert any("0x80010000" in warning for warning in warnings)
+
+
 def test_simulator_launch_fails_when_protocol_probe_fails_after_tcp_open(monkeypatch, tmp_path):
     runner = _load_runner()
     executable = _make_simulator_executable(tmp_path)
@@ -596,6 +666,133 @@ def test_simulator_launch_fails_when_protocol_probe_fails_after_tcp_open(monkeyp
     assert proc.killed is False
     assert not instance_dir.exists()
     assert any("BadServerNotConnected" in warning for warning in warnings)
+
+
+def test_launch_retries_once_on_known_signature(monkeypatch, tmp_path):
+    runner = _load_runner()
+    executable = _make_simulator_executable(tmp_path)
+    instance_dir = _patch_simulator_launch_common(monkeypatch, runner, tmp_path)
+    start_calls = []
+    probe_errors = iter(["BadServerNotConnected", None])
+
+    class FakeProc:
+        def __init__(self):
+            self.terminated = False
+            self.killed = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            self.killed = True
+
+    def fake_start(_cmd, *, cwd, port):
+        proc = FakeProc()
+        start_calls.append(proc)
+        if len(start_calls) == 1:
+            _, err_log = runner._opcua_server_log_paths(port)
+            err_log.parent.mkdir(parents=True, exist_ok=True)
+            err_log.write_text("server-instance creation failed: 0x80010000\n", encoding="utf-8")
+        return proc
+
+    monkeypatch.setattr(runner, "_start_process_with_opcua_logs", fake_start)
+    monkeypatch.setattr(runner, "_port_open", lambda _host, _port, timeout=1.0: True)
+    monkeypatch.setattr(runner, "_probe_opcua_protocol", lambda _endpoint, **_kwargs: next(probe_errors))
+
+    result = runner._launch_simulator_instance(40470, str(executable))
+
+    assert result is not None
+    assert result.tmp_dir == instance_dir
+    assert result.proc is start_calls[1]
+    assert len(start_calls) == 2
+    assert start_calls[0].terminated is True
+    notes = runner._consume_simulator_launch_notes()
+    assert any("simulator-launch-retry: attempt=1/2 signature=0x80010000" in note for note in notes)
+    events = (runner._TIMING_HISTORY).read_text(encoding="utf-8").splitlines()
+    assert len(events) == 1
+    assert json.loads(events[0])["event"] == "simulator_launch_retry"
+
+
+def test_launch_does_not_retry_on_unknown_failure(monkeypatch, tmp_path):
+    runner = _load_runner()
+    executable = _make_simulator_executable(tmp_path)
+    _patch_simulator_launch_common(monkeypatch, runner, tmp_path)
+    start_calls = []
+
+    class FakeProc:
+        def poll(self):
+            return None
+
+        def terminate(self):
+            return None
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_start(_cmd, *, cwd, port):
+        start_calls.append(port)
+        _, err_log = runner._opcua_server_log_paths(port)
+        err_log.parent.mkdir(parents=True, exist_ok=True)
+        err_log.write_text("unexpected startup failure\n", encoding="utf-8")
+        return FakeProc()
+
+    monkeypatch.setattr(runner, "_start_process_with_opcua_logs", fake_start)
+    monkeypatch.setattr(runner, "_port_open", lambda _host, _port, timeout=1.0: True)
+    monkeypatch.setattr(runner, "_probe_opcua_protocol", lambda _endpoint, **_kwargs: "BadServerNotConnected")
+
+    result = runner._launch_simulator_instance(40470, str(executable))
+
+    assert result is None
+    assert start_calls == [40470]
+    assert not (runner._TIMING_HISTORY).exists()
+    assert not any("simulator-launch-retry" in note for note in runner._consume_simulator_launch_notes())
+
+
+def test_launch_caps_retries_at_two(monkeypatch, tmp_path):
+    runner = _load_runner()
+    executable = _make_simulator_executable(tmp_path)
+    _patch_simulator_launch_common(monkeypatch, runner, tmp_path)
+    start_calls = []
+
+    class FakeProc:
+        def poll(self):
+            return None
+
+        def terminate(self):
+            return None
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_start(_cmd, *, cwd, port):
+        start_calls.append(port)
+        _, err_log = runner._opcua_server_log_paths(port)
+        err_log.parent.mkdir(parents=True, exist_ok=True)
+        err_log.write_text("server-instance creation failed: 0x80010000\n", encoding="utf-8")
+        return FakeProc()
+
+    monkeypatch.setattr(runner, "_start_process_with_opcua_logs", fake_start)
+    monkeypatch.setattr(runner, "_port_open", lambda _host, _port, timeout=1.0: True)
+    monkeypatch.setattr(runner, "_probe_opcua_protocol", lambda _endpoint, **_kwargs: "BadServerNotConnected")
+
+    result = runner._launch_simulator_instance(40470, str(executable))
+
+    assert result is None
+    assert start_calls == [40470, 40470]
+    events = (runner._TIMING_HISTORY).read_text(encoding="utf-8").splitlines()
+    assert len(events) == 1
 
 
 def test_feature_worker_pool_does_not_start_websocket_workers_after_simulator_readiness_failure(monkeypatch):

@@ -102,16 +102,47 @@ def _record(
     label: str,
     ok: bool,
     status: str,
+    *,
+    optional: bool = False,
 ) -> None:
     """Append result tuple and print the phase line immediately."""
-    results.append((phase, label, ok, status))
+    results.append((phase, label, ok, status, optional))
+    if optional and status.startswith("SKIP"):
+        return
     _print(f"[PHASE {phase}] {label} .. {status}")
 
 
+def _unpack_result(result: tuple) -> tuple[int, str, bool, str, bool]:
+    phase, label, ok, status, *rest = result
+    optional = bool(rest[0]) if rest else False
+    return phase, label, ok, status, optional
+
+
+def _all_results_ok(results: list) -> bool:
+    return all(_unpack_result(result)[2] for result in results)
+
+
+def _print_optional_scanner_status(results: list) -> None:
+    skipped = [
+        (label, status)
+        for result in results
+        for _phase, label, _ok, status, optional in [_unpack_result(result)]
+        if optional and status.startswith("SKIP")
+    ]
+    if not skipped:
+        return
+    _print("[PHASE 1] Optional scanner status")
+    _print("  | Scanner | Status |")
+    _print("  |---|---|")
+    for label, status in skipped:
+        _print(f"  | {label} | {status} |")
+
+
 def _footer(results: list, elapsed: float) -> None:
-    passed = sum(1 for _, _, ok, s in results if ok and not s.startswith("SKIP"))
-    failed = sum(1 for _, _, ok, _ in results if not ok)
-    skipped = sum(1 for _, _, _, s in results if s.startswith("SKIP"))
+    unpacked = [_unpack_result(result) for result in results]
+    passed = sum(1 for _, _, ok, status, _ in unpacked if ok and not status.startswith("SKIP"))
+    failed = sum(1 for _, _, ok, _, _ in unpacked if not ok)
+    skipped = sum(1 for _, _, _, status, _ in unpacked if status.startswith("SKIP"))
     _print(_BAR_SINGLE)
     _print(
         f"Result: {'PASS' if failed == 0 else 'FAIL'}   "
@@ -201,6 +232,7 @@ def _check_hadolint(results: list) -> None:
             label,
             True,
             "SKIP (hadolint not installed — brew install hadolint / scoop install hadolint)",
+            optional=True,
         )
         return
     dockerfile = PROJ_DIR / "Dockerfile"
@@ -357,6 +389,7 @@ def _check_detect_secrets(results: list) -> None:
             label,
             True,
             "SKIP (detect-secrets not installed — pip install detect-secrets)",
+            optional=True,
         )
         return
     r = subprocess.run(
@@ -376,13 +409,22 @@ def _check_pip_audit(results: list) -> None:
     label = "pip-audit (requirements.txt)"
     reqs = PROJ_DIR / "tests" / "requirements.txt"
     if not reqs.exists():
-        _record(results, 1, label, True, "SKIP (tests/requirements.txt not found)")
+        _record(results, 1, label, True, "SKIP (tests/requirements.txt not found)", optional=True)
         return
     if not _py_module_available("pip_audit"):
-        _record(results, 1, label, True, "SKIP (pip-audit not installed — pip install pip-audit)")
+        _record(
+            results,
+            1,
+            label,
+            True,
+            "SKIP (pip-audit not installed — pip install pip-audit)",
+            optional=True,
+        )
         return
     if not _is_https_reachable("pypi.org"):
-        _record(results, 1, label, True, "SKIP — network/TLS unavailable (preflight)")
+        _record(
+            results, 1, label, True, "SKIP — network/TLS unavailable (preflight)", optional=True
+        )
         return
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -420,7 +462,7 @@ def _check_pip_audit(results: list) -> None:
             },
         )
     except subprocess.TimeoutExpired:
-        _record(results, 1, label, True, "SKIP — network/TLS timeout")
+        _record(results, 1, label, True, "SKIP — network/TLS timeout", optional=True)
         return
     if r.returncode == 0:
         try:
@@ -446,7 +488,7 @@ def _check_pip_audit(results: list) -> None:
             "socket operation was attempted to an unreachable network",
         )
         if any(marker in low for marker in network_markers):
-            _record(results, 1, label, True, "SKIP — network/TLS unavailable")
+            _record(results, 1, label, True, "SKIP — network/TLS unavailable", optional=True)
             return
         _record(results, 1, label, False, f"FAIL (exit {r.returncode})")
 
@@ -478,10 +520,11 @@ def _check_trivy(results: list) -> None:
             label,
             True,
             "SKIP (trivy not installed — https://aquasecurity.github.io/trivy)",
+            optional=True,
         )
         return
     if not _is_docker_running():
-        _record(results, 1, label, True, "SKIP (Docker not running)")
+        _record(results, 1, label, True, "SKIP (Docker not running)", optional=True)
         return
 
     _print("  Building Docker image for trivy scan (opcua-ijt-server-scan:latest) ...")
@@ -550,7 +593,7 @@ def _check_semgrep(results: list) -> None:
     """Run Semgrep AI code review; skip if not installed."""
     label = "Semgrep (AI review)"
     if not _cmd_available("semgrep"):
-        _record(results, 1, label, True, "SKIP (Install: pip install semgrep)")
+        _record(results, 1, label, True, "SKIP (Install: pip install semgrep)", optional=True)
         return
     if not _is_https_reachable("semgrep.dev"):
         _record(
@@ -583,7 +626,7 @@ def _check_semgrep(results: list) -> None:
         )
         rc = proc.returncode
     except subprocess.TimeoutExpired:
-        _record(results, 1, label, True, "SKIP (semgrep timed out after 120s)")
+        _record(results, 1, label, True, "SKIP (semgrep timed out after 120s)", optional=True)
         return
     if not json_file.exists():
         _record(
@@ -721,6 +764,7 @@ def run_phase1(results: list) -> None:
     _check_trivy(results)
     _check_binaries(results)
     _check_semgrep(results)
+    _print_optional_scanner_status(results)
 
 
 def run_phase2(results: list) -> None:
@@ -883,7 +927,7 @@ def main() -> int:
     if not args.phase1:
         run_phase2(results)
 
-    all_ok = all(ok for _, _, ok, _ in results)
+    all_ok = _all_results_ok(results)
     _footer(results, time.monotonic() - t0)
     _cleanup_caches(PROJ_DIR)
     return 0 if all_ok else 1

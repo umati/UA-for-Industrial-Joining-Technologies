@@ -89,6 +89,12 @@ def test_protocol_warmup_retries_first_opcua_connect(monkeypatch):
 
 
 def test_protocol_warmup_defaults_match_ci_startup_budget():
+    assert readiness.MAX_SIMULATOR_LAUNCH_ATTEMPTS == 2
+    assert readiness.SIMULATOR_RETRY_TRIGGERS == (
+        "0x80010000",
+        "CoInitialize",
+        "server-instance creation failed",
+    )
     assert readiness.DEFAULT_PROTOCOL_READY_ATTEMPTS == 10
     assert readiness.DEFAULT_PROTOCOL_READY_INTERVAL == 1.5
     assert readiness.DEFAULT_PROTOCOL_READY_TIMEOUT == 2.5
@@ -145,6 +151,30 @@ def test_protocol_warmup_retries_first_websocket_backend_response(monkeypatch):
     assert error is None
     assert attempts == ["send", "send", "send"]
     assert sleeps == [1.0, 1.0]
+
+
+def test_extract_known_failure_signatures_finds_0x80010000(tmp_path):
+    err_log = tmp_path / "opcua-server-40470.err.log"
+    err_log.write_text(
+        "startup\nserver-instance creation failed: 0x80010000 CoInitialize failed\n",
+        encoding="utf-8",
+    )
+
+    signatures = readiness.extract_known_failure_signatures(err_log)
+
+    assert signatures == ["server-instance creation failed: 0x80010000 CoInitialize failed"]
+
+
+def test_extract_known_failure_signatures_truncates_long_logs(tmp_path):
+    err_log = tmp_path / "opcua-server-40470.err.log"
+    lines = [f"old Bad line {index} " + ("x" * 300) for index in range(100)]
+    err_log.write_text("\n".join(lines), encoding="utf-8")
+
+    signatures = readiness.extract_known_failure_signatures(err_log)
+
+    assert 1 <= len(signatures) <= 40
+    assert sum(len(line.encode("utf-8")) for line in signatures) <= 8192
+    assert all("old Bad line" in line for line in signatures)
 
 
 def test_protocol_warmup_retries_and_surfaces_wrong_websocket_ack(monkeypatch):

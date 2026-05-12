@@ -11,6 +11,12 @@ import time
 from pathlib import Path
 
 OPCUA_PRESTARTED_PORT_ENV = "IJT_OPCUA_PRESTARTED_PORT"
+MAX_SIMULATOR_LAUNCH_ATTEMPTS = 2
+SIMULATOR_RETRY_TRIGGERS: tuple[str, ...] = (
+    "0x80010000",
+    "CoInitialize",
+    "server-instance creation failed",
+)
 DEFAULT_PROTOCOL_READY_ATTEMPTS = 10
 DEFAULT_PROTOCOL_READY_INTERVAL = 1.5
 DEFAULT_PROTOCOL_READY_TIMEOUT = 2.5
@@ -20,6 +26,39 @@ DEFAULT_PROTOCOL_READY_TIMEOUT = 2.5
 DEFAULT_WEBSOCKET_READY_ATTEMPTS = 1
 DEFAULT_WEBSOCKET_READY_INTERVAL = 1.0
 DEFAULT_WEBSOCKET_READY_RESPONSE_TIMEOUT = 5.0
+_KNOWN_FAILURE_SIGNATURES: tuple[str, ...] = (
+    "0x80010000",
+    "CoInitialize",
+    "server-instance",
+    "server-instance creation failed",
+    "failed to create",
+    "Bad",
+)
+_FAILURE_SIGNATURE_TAIL_LINES = 40
+_FAILURE_SIGNATURE_TAIL_BYTES = 8192
+
+
+def _tail_log_lines(path: Path, *, max_lines: int, max_bytes: int) -> list[str]:
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return []
+    text = raw[-max_bytes:].decode("utf-8", errors="replace")
+    return text.splitlines()[-max_lines:]
+
+
+def extract_known_failure_signatures(err_log_path: Path) -> list[str]:
+    """Return known simulator-startup failure lines from the bounded err-log tail."""
+    lines = _tail_log_lines(
+        err_log_path,
+        max_lines=_FAILURE_SIGNATURE_TAIL_LINES,
+        max_bytes=_FAILURE_SIGNATURE_TAIL_BYTES,
+    )
+    matches: list[str] = []
+    for line in lines:
+        if any(signature.lower() in line.lower() for signature in _KNOWN_FAILURE_SIGNATURES):
+            matches.append(line.strip())
+    return matches
 
 
 def web_client_results_dir(web_client_root: Path) -> Path:

@@ -180,6 +180,14 @@ run their live/integration tests in parallel without port conflicts.
 > `windows-latest` / `msedge`. It executes only the two audited browser file
 > specs. It is a non-required detection workflow; failures stay red and
 > create/update `[Web Client Compatibility Smoke] windows-latest / msedge`.
+>
+> **Local Playwright browser install:** direct local browser runs need Chromium
+> from `https://cdn.playwright.dev` over HTTPS. Corporate users should set
+> `HTTPS_PROXY` or `PLAYWRIGHT_DOWNLOAD_HOST`; offline users should point
+> `PLAYWRIGHT_BROWSERS_PATH` at a prepopulated browser mirror/cache. The local
+> failure signature is typically `Failed to download Chromium` with
+> `getaddrinfo ENOTFOUND cdn.playwright.dev`. CI avoids this path by running
+> inside the pinned Playwright Linux image named above.
 
 ### Port Assignment
 

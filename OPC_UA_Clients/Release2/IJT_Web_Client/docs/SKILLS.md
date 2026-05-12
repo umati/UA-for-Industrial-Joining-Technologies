@@ -412,6 +412,9 @@ WebSocket backend and OPC UA simulator by offsetting the base `WS_TEST_URL` and
 WebSocket port through query parameters. `IJT_PLAYWRIGHT_WORKERS` is the only
 environment variable consumed by `playwright.config.mjs`; the runner sets it
 when it launches a Playwright project.
+Local browser install prerequisites live in `README.md`; corporate/offline
+users need the documented `HTTPS_PROXY`, `PLAYWRIGHT_DOWNLOAD_HOST`, or
+`PLAYWRIGHT_BROWSERS_PATH` path before running local Playwright installs.
 
 Focused live-suite commands used by the root runner:
 
@@ -582,6 +585,10 @@ unpatched port. Fixtures also run OPC UA protocol probes and a backend-only
 WebSocket JSON dispatch probe after TCP ports open so first tests do not consume
 the simulator/backend warmup window. The WebSocket readiness probe must remain
 non-mutating; direct OPC UA readiness owns the simulator protocol check.
+Runner-side simulator failure extraction lives in `tests/python/_live_server_readiness.py`.
+The bounded startup retry is capped by `MAX_SIMULATOR_LAUNCH_ATTEMPTS` and only
+matches `SIMULATOR_RETRY_TRIGGERS`; never generalize it to retry unknown
+readiness failures.
 
 On Windows, runner-owned simulator copies live under a short temp root
 (`RUNNER_TEMP\ijt-sim\<port>` on GitHub Actions, the system temp fallback, or

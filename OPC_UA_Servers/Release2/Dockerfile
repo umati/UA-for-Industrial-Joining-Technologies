@@ -29,6 +29,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 FROM ubuntu:26.04
+ARG DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
 

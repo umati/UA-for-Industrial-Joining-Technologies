@@ -17,6 +17,13 @@ a web browser. The backend is Python with WebSockets. The frontend is Node.js.
 - A running OPC UA IJT server, such as the [IJT Server Simulator](../../../OPC_UA_Servers/Release2)
   - Default OPC UA endpoint: `opc.tcp://localhost:40451`
 
+### Prerequisites for local browser tests
+
+- Local Playwright browser tests need Chromium downloaded from `https://cdn.playwright.dev` over HTTPS.
+- On corporate networks, set `HTTPS_PROXY` for the proxy path or `PLAYWRIGHT_DOWNLOAD_HOST` for an approved mirror before running `npx playwright install chromium`.
+- For offline machines, prepopulate a browser cache and set `PLAYWRIGHT_BROWSERS_PATH` to that mirror/cache location.
+- For CI-equivalent browser dependencies, run the tests in the pinned Playwright Linux image documented in [`docs/TEST_TIERS.md`](../../../docs/TEST_TIERS.md).
+
 ## Option 1 - Local Setup
 
 - **Run:** `python setup_project.py`

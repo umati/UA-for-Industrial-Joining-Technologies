@@ -80,6 +80,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tests.python._live_server_readiness import (  # noqa: E402
+    MAX_SIMULATOR_LAUNCH_ATTEMPTS,
+    SIMULATOR_RETRY_TRIGGERS,
+    extract_known_failure_signatures,
     wait_for_opcua_protocol_ready,
     wait_for_websocket_protocol_ready,
 )
@@ -127,6 +130,8 @@ def _path_from_env(name: str, default: Path) -> Path:
 
 _RESULTS_DIR = _path_from_env("IJT_WEB_TEST_RESULTS_DIR", ROOT / "test-results")
 _OPCUA_PRESTARTED_PORT_ENV = "IJT_OPCUA_PRESTARTED_PORT"
+# Simulator launches are currently sequential; use scoped storage if workers become parallel.
+_SIMULATOR_LAUNCH_NOTES: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -1164,7 +1169,10 @@ def _stage_js_lint() -> StageResult:
         if rc not in (0, 1):  # 0 = clean, 1 = lint findings
             overall_rc = rc
     else:
-        _skip("eslint not in node_modules — npm install")
+        _skip(
+            "eslint not installed in node_modules — run 'npm install' in IJT_Web_Client "
+            "to enable JS lint (skipping is expected in production-image probes)"
+        )
         notes.append("eslint not installed")
 
     if (ROOT / "node_modules" / "prettier").exists():
@@ -1767,6 +1775,58 @@ def _opcua_server_log_hint(port: int) -> str:
     return f"see {out_log} and {err_log}"
 
 
+def _opcua_err_log_tail(port: int, *, max_lines: int = 40, max_bytes: int = 8192) -> str:
+    _, err_log = _opcua_server_log_paths(port)
+    try:
+        raw = err_log.read_bytes()
+    except OSError:
+        return ""
+    text = raw[-max_bytes:].decode("utf-8", errors="replace")
+    return "\n".join(text.splitlines()[-max_lines:])
+
+
+def _simulator_failure_details(port: int) -> tuple[list[str], str]:
+    _, err_log = _opcua_server_log_paths(port)
+    return extract_known_failure_signatures(err_log), _opcua_err_log_tail(port)
+
+
+def _matching_retry_signature(signatures: list[str]) -> str | None:
+    haystack = "\n".join(signatures).lower()
+    for trigger in SIMULATOR_RETRY_TRIGGERS:
+        if trigger.lower() in haystack:
+            return trigger
+    return None
+
+
+def _record_simulator_launch_note(note: str) -> None:
+    _SIMULATOR_LAUNCH_NOTES.append(note)
+
+
+def _consume_simulator_launch_notes() -> list[str]:
+    notes = list(_SIMULATOR_LAUNCH_NOTES)
+    _SIMULATOR_LAUNCH_NOTES.clear()
+    return notes
+
+
+def _with_simulator_launch_notes(result: StageResult) -> StageResult:
+    result.notes.extend(_consume_simulator_launch_notes())
+    return result
+
+
+def _record_simulator_launch_retry_event(*, stage: str, port: int, signature: str, attempts: int) -> None:
+    payload = {
+        "event": "simulator_launch_retry",
+        "stage": stage,
+        "port": port,
+        "signature": signature,
+        "attempts": attempts,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+    _STATE_DIR.mkdir(parents=True, exist_ok=True)
+    with _TIMING_HISTORY.open("a", encoding="utf-8") as history:
+        history.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+
+
 def _absolute_path_text(path: Path) -> str:
     return os.fspath(path if path.is_absolute() else path.resolve())
 
@@ -1834,70 +1894,144 @@ def _launch_simulator_instance(port: int, exe: str) -> _OpcuaServerInstance | No
         )
         return None
 
-    _info(f"[server] Launching simulator on port {port} (copied to {tmp_dir})")
-    try:
-        if tmp_dir.exists():
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-        shutil.copytree(src_dir, tmp_dir)
-    except OSError as exc:
-        _warn(f"Failed to copy binary dir: {exc}")
+    def warn_failure(message: str) -> str | None:
+        signatures, tail = _simulator_failure_details(port)
+        retry_signature = _matching_retry_signature(signatures)
+        detail_parts = []
+        if signatures:
+            detail_parts.append("err-log signature(s): " + " | ".join(signatures))
+        if tail:
+            detail_parts.append("err-log tail (last 40 lines):\n" + tail)
+        full_message = f"{message}; {_opcua_server_log_hint(port)}"
+        if detail_parts:
+            full_message += "; " + "; ".join(detail_parts)
+        _warn(full_message)
+        _record_simulator_launch_note(full_message)
+        return retry_signature
+
+    def cleanup_attempt(proc: subprocess.Popen | None) -> None:
+        if proc is not None and proc.poll() is None:
+            _terminate_owned_process(proc)
         shutil.rmtree(tmp_dir, ignore_errors=True)
-        return None
 
-    cfg_path = tmp_dir / "server_configuration.json"
-    if cfg_path.exists():
+    for attempt in range(1, MAX_SIMULATOR_LAUNCH_ATTEMPTS + 1):
+        proc: subprocess.Popen | None = None
+        _info(
+            f"[server] Launching simulator on port {port} "
+            f"(attempt {attempt}/{MAX_SIMULATOR_LAUNCH_ATTEMPTS}, copied to {tmp_dir})"
+        )
         try:
-            with cfg_path.open(encoding="utf-8") as fh:
-                cfg = json.load(fh)
-            cfg.setdefault("serverConfigurationData", {})["serverEndpointTCPPort"] = port
-            with cfg_path.open("w", encoding="utf-8") as fh:
-                json.dump(cfg, fh, indent=2)
-        except (OSError, ValueError) as exc:
-            _warn(f"Failed to patch server_configuration.json: {exc}")
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-            return None
-
-    launch_exe = tmp_dir / exe_path.name
-    if not IS_WINDOWS:
-        try:
-            os.chmod(launch_exe, launch_exe.stat().st_mode | 0o111)
+            if tmp_dir.exists():
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            shutil.copytree(src_dir, tmp_dir)
         except OSError as exc:
-            _warn(f"Failed to mark simulator executable: {exc}")
+            _warn(f"Failed to copy binary dir: {exc}")
             shutil.rmtree(tmp_dir, ignore_errors=True)
             return None
 
-    try:
-        proc = _start_process_with_opcua_logs([str(launch_exe)], cwd=tmp_dir, port=port)
-    except OSError as exc:
-        _warn(f"Failed to launch binary: {exc}; {_opcua_server_log_hint(port)}")
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        return None
-
-    _info(f"Waiting up to 30s for port {port} ...")
-    for _ in range(30):
-        exit_code = proc.poll()
-        if exit_code is not None:
-            _warn(f"Binary exited with code {exit_code} before OPC UA readiness; {_opcua_server_log_hint(port)}")
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-            return None
-        if _port_open("localhost", port, timeout=1.0):
-            endpoint = _default_opcua_endpoint(port)
-            probe_error = _probe_opcua_protocol(endpoint)
-            if probe_error is not None:
-                _warn(
-                    f"OPC UA server port {port} opened, but protocol readiness failed: "
-                    f"{probe_error}; {_opcua_server_log_hint(port)}"
-                )
-                _terminate_owned_process(proc)
+        cfg_path = tmp_dir / "server_configuration.json"
+        if cfg_path.exists():
+            try:
+                with cfg_path.open(encoding="utf-8") as fh:
+                    cfg = json.load(fh)
+                cfg.setdefault("serverConfigurationData", {})["serverEndpointTCPPort"] = port
+                with cfg_path.open("w", encoding="utf-8") as fh:
+                    json.dump(cfg, fh, indent=2)
+            except (OSError, ValueError) as exc:
+                _warn(f"Failed to patch server_configuration.json: {exc}")
                 shutil.rmtree(tmp_dir, ignore_errors=True)
                 return None
-            _ok(f"OPC UA server ready on :{port}")
-            return _OpcuaServerInstance(port=port, proc=proc, tmp_dir=tmp_dir)
-        time.sleep(1)
 
-    _warn(f"Binary did not open port {port} within 30s; {_opcua_server_log_hint(port)}")
-    _terminate_owned_process(proc)
-    shutil.rmtree(tmp_dir, ignore_errors=True)
+        launch_exe = tmp_dir / exe_path.name
+        if not IS_WINDOWS:
+            try:
+                os.chmod(launch_exe, launch_exe.stat().st_mode | 0o111)
+            except OSError as exc:
+                _warn(f"Failed to mark simulator executable: {exc}")
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+                return None
+
+        try:
+            proc = _start_process_with_opcua_logs([str(launch_exe)], cwd=tmp_dir, port=port)
+        except OSError as exc:
+            retry_signature = warn_failure(f"Failed to launch binary: {exc}")
+            cleanup_attempt(proc)
+            if retry_signature and attempt < MAX_SIMULATOR_LAUNCH_ATTEMPTS:
+                retry_note = (
+                    f"simulator-launch-retry: attempt={attempt}/{MAX_SIMULATOR_LAUNCH_ATTEMPTS} "
+                    f"signature={retry_signature}"
+                )
+                _warn(retry_note)
+                _record_simulator_launch_note(retry_note)
+                _record_simulator_launch_retry_event(
+                    stage="launch", port=port, signature=retry_signature, attempts=attempt
+                )
+                time.sleep(2.0)
+                continue
+            return None
+
+        _info(f"Waiting up to 30s for port {port} ...")
+        for _ in range(30):
+            exit_code = proc.poll()
+            if exit_code is not None:
+                retry_signature = warn_failure(f"Binary exited with code {exit_code} before OPC UA readiness")
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+                if retry_signature and attempt < MAX_SIMULATOR_LAUNCH_ATTEMPTS:
+                    retry_note = (
+                        f"simulator-launch-retry: attempt={attempt}/{MAX_SIMULATOR_LAUNCH_ATTEMPTS} "
+                        f"signature={retry_signature}"
+                    )
+                    _warn(retry_note)
+                    _record_simulator_launch_note(retry_note)
+                    _record_simulator_launch_retry_event(
+                        stage="launch", port=port, signature=retry_signature, attempts=attempt
+                    )
+                    time.sleep(2.0)
+                    break
+                return None
+            if _port_open("localhost", port, timeout=1.0):
+                endpoint = _default_opcua_endpoint(port)
+                probe_error = _probe_opcua_protocol(endpoint)
+                if probe_error is not None:
+                    exit_code = proc.poll()
+                    exit_note = "" if exit_code is None else f"; process exit={exit_code}"
+                    retry_signature = warn_failure(
+                        f"OPC UA server port {port} opened, but protocol readiness failed: {probe_error}{exit_note}"
+                    )
+                    cleanup_attempt(proc)
+                    if retry_signature and attempt < MAX_SIMULATOR_LAUNCH_ATTEMPTS:
+                        retry_note = (
+                            f"simulator-launch-retry: attempt={attempt}/{MAX_SIMULATOR_LAUNCH_ATTEMPTS} "
+                            f"signature={retry_signature}"
+                        )
+                        _warn(retry_note)
+                        _record_simulator_launch_note(retry_note)
+                        _record_simulator_launch_retry_event(
+                            stage="launch", port=port, signature=retry_signature, attempts=attempt
+                        )
+                        time.sleep(2.0)
+                        break
+                    return None
+                _ok(f"OPC UA server ready on :{port}")
+                return _OpcuaServerInstance(port=port, proc=proc, tmp_dir=tmp_dir)
+            time.sleep(1)
+        else:
+            retry_signature = warn_failure(f"Binary did not open port {port} within 30s")
+            cleanup_attempt(proc)
+            if retry_signature and attempt < MAX_SIMULATOR_LAUNCH_ATTEMPTS:
+                retry_note = (
+                    f"simulator-launch-retry: attempt={attempt}/{MAX_SIMULATOR_LAUNCH_ATTEMPTS} "
+                    f"signature={retry_signature}"
+                )
+                _warn(retry_note)
+                _record_simulator_launch_note(retry_note)
+                _record_simulator_launch_retry_event(
+                    stage="launch", port=port, signature=retry_signature, attempts=attempt
+                )
+                time.sleep(2.0)
+                continue
+            return None
+
     return None
 
 
@@ -2113,15 +2247,15 @@ def _run_with_owned_services(
     ws_proc: subprocess.Popen | None = None
     try:
         if not srv_open:
-            return StageResult(name, 1, notes=["OPC UA server not available"])
+            return _with_simulator_launch_notes(StageResult(name, 1, notes=["OPC UA server not available"]))
 
         if need_ws:
             ws_host, ws_port = _parse_ws_host_port(ws_url)
             ws_started, ws_ready, ws_proc = _maybe_start_websocket_backend(python, ws_host, ws_port)
             if not ws_ready:
-                return StageResult(name, 1, notes=["WebSocket backend not reachable"])
+                return _with_simulator_launch_notes(StageResult(name, 1, notes=["WebSocket backend not reachable"]))
 
-        return stage()
+        return _with_simulator_launch_notes(stage())
     finally:
         if ws_started:
             _stop_websocket_backend(ws_proc)
@@ -2175,7 +2309,9 @@ def _run_playwright_features_with_owned_pool(
             opcua_port = opcua_base_port + index
             instance = _launch_simulator_instance(opcua_port, exe)
             if instance is None:
-                return StageResult(name, 1, notes=[f"OPC UA worker {index} failed to start on port {opcua_port}"])
+                return _with_simulator_launch_notes(
+                    StageResult(name, 1, notes=[f"OPC UA worker {index} failed to start on port {opcua_port}"])
+                )
             servers.append(instance)
 
         for index in range(workers):
@@ -2192,14 +2328,16 @@ def _run_playwright_features_with_owned_pool(
                 return StageResult(name, 1, notes=[f"WebSocket worker {index} failed to start on port {ws_port}"])
             ws_procs.append(proc)
 
-        return _stage_playwright_features(
-            ws_url,
-            ui_url,
-            workers=workers,
-            extra_env={
-                "OPCUA_TEST_ENDPOINT": f"opc.tcp://localhost:{opcua_base_port}",
-                "IJT_E2E_BACKEND_WORKERS": str(workers),
-            },
+        return _with_simulator_launch_notes(
+            _stage_playwright_features(
+                ws_url,
+                ui_url,
+                workers=workers,
+                extra_env={
+                    "OPCUA_TEST_ENDPOINT": f"opc.tcp://localhost:{opcua_base_port}",
+                    "IJT_E2E_BACKEND_WORKERS": str(workers),
+                },
+            )
         )
     finally:
         for proc in reversed(ws_procs):
@@ -2736,15 +2874,23 @@ def main() -> int:
             _srv_started, _srv_port_open, _srv_proc = _maybe_start_opcua_server()
             if run_live:
                 if _srv_port_open:
-                    results.append(_stage_python_live(python))
+                    results.append(_with_simulator_launch_notes(_stage_python_live(python)))
                 else:
                     _skip("python-live: OPC UA server not available")
-                    results.append(StageResult("python-live", 0, skipped=True, notes=["OPC UA server not available"]))
+                    results.append(
+                        _with_simulator_launch_notes(
+                            StageResult("python-live", 0, skipped=True, notes=["OPC UA server not available"])
+                        )
+                    )
 
             if run_live or docker_up or _srv_port_open:
                 # Pass prestarted so integration stage re-uses the running server.
                 # Keep this same server alive through Playwright E2E below.
-                results.append(_stage_python_integration(python, prestarted=(_srv_started, _srv_port_open, _srv_proc)))
+                results.append(
+                    _with_simulator_launch_notes(
+                        _stage_python_integration(python, prestarted=(_srv_started, _srv_port_open, _srv_proc))
+                    )
+                )
             else:
                 _skip("python-integration: OPC UA server not available and Docker not running")
                 results.append(
@@ -2779,7 +2925,11 @@ def main() -> int:
                         if not _srv_port_open:
                             _skip("playwright-e2e: OPC UA server not available")
                             results.append(
-                                StageResult("playwright-e2e", 0, skipped=True, notes=["OPC UA server not available"])
+                                _with_simulator_launch_notes(
+                                    StageResult(
+                                        "playwright-e2e", 0, skipped=True, notes=["OPC UA server not available"]
+                                    )
+                                )
                             )
                         elif ws_ready:
                             results.append(_stage_playwright_e2e(args.ws_url, args.ui_url))
