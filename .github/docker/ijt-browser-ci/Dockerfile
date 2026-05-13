@@ -83,7 +83,13 @@ RUN python -m pip install --upgrade pip \
  && python -m pip wheel --pre \
         -r /tmp/requirements.txt \
         -r /tmp/requirements-dev.txt \
-        --wheel-dir /opt/ijt-browser-ci/pip-wheelhouse
+        --wheel-dir /opt/ijt-browser-ci/pip-wheelhouse \
+ && python -m pip install --pre \
+        --no-index \
+        --find-links /opt/ijt-browser-ci/pip-wheelhouse \
+        -r /tmp/requirements.txt \
+        -r /tmp/requirements-dev.txt \
+ && python -c "import pytest, pytest_asyncio, pytest_timeout, asyncua, websockets, dotenv, aiofiles, pytz; print('python deps OK')"
 
 # ---------------------------------------------------------------------------
 # 5. Bake npm cache from IJT Web Client package-lock + install Playwright
