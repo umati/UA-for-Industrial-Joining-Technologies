@@ -949,19 +949,25 @@ def test_playwright_install_skips_with_deps_on_windows(monkeypatch):
 
 
 def test_playwright_install_uses_with_deps_on_linux(monkeypatch):
-    """Linux ``_stage_playwright_install`` must invoke ``--with-deps``.
+    """Linux ``_stage_playwright_install`` must invoke ``--with-deps`` when
+    Chromium is not already present.
 
-    This is the permanent replacement path for the previously pinned
-    ``mcr.microsoft.com/playwright`` job-level container in
-    ``.github/workflows/integration.yml`` (``live-webclient-browser``).
-    The Integration job now runs on stock ``ubuntu-latest`` and relies
-    on this stage to install Chromium plus its Linux system
-    dependencies against the locked ``@playwright/test`` version in
-    ``package.json``. If the ``--with-deps`` invocation ever regresses
-    to a bare ``playwright install chromium`` on Linux, the CI job will
-    succeed in installing the browser binary but fail at first launch
-    on a fresh runner because the required system libraries are not
-    present. This test guards that contract.
+    Post-PR-B context: the Integration ``live-webclient-browser`` job runs
+    each suite **inside** the owned ``ijt-browser-ci`` image (digest pinned
+    via ``.github/docker/ijt-browser-ci/image-pin.json``) under
+    ``docker run --network=none``. The image bakes Chromium at
+    ``PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`` against the locked
+    ``@playwright/test`` version in ``package.json``, so in the real CI run
+    ``_playwright_chromium_available()`` is True and this stage short-circuits
+    (see ``test_playwright_install_short_circuits_when_chromium_present``).
+
+    However, the ``--with-deps`` Linux path is still the contract for any
+    Linux execution where Chromium is **not** already present — for example,
+    a developer running the suite locally on a fresh Linux/WSL host, or a
+    future contingency where someone runs this stage outside the
+    ``ijt-browser-ci`` image. Dropping ``--with-deps`` from that path would
+    silently install the browser binary without its Linux system libraries
+    and fail at first launch. This test guards that fallback contract.
     """
     runner = _load_runner()
     calls = []
@@ -984,25 +990,27 @@ def test_playwright_install_uses_with_deps_on_linux(monkeypatch):
     assert result.rc == 0
     assert calls == [["/usr/local/bin/playwright", "install", "chromium", "--with-deps"]], (
         "Linux `_stage_playwright_install` must invoke "
-        "`playwright install chromium --with-deps`. This is the permanent "
-        "replacement for the removed Playwright job-level container in "
-        "integration.yml's `live-webclient-browser` job; dropping "
-        "`--with-deps` would leave Chromium without its Linux system "
-        "libraries on stock ubuntu-latest runners and fail at first launch."
+        "`playwright install chromium --with-deps` whenever Chromium is not "
+        "already present. In the Integration `live-webclient-browser` job "
+        "this stage normally short-circuits because Chromium is baked into "
+        "the `ijt-browser-ci` image, but if this Linux path is ever reached "
+        "(local Linux dev, image regression, etc.) dropping `--with-deps` "
+        "would leave Chromium without its Linux system libraries and fail "
+        "at first launch."
     )
 
 
 def test_playwright_install_fails_fast_in_ci_when_with_deps_fails(monkeypatch):
-    """CI Linux must not silently fall back to bare `playwright install chromium`.
+    """CI Linux must not silently fall back to bare ``playwright install chromium``.
 
-    On stock ``ubuntu-latest`` the ``--with-deps`` invocation is the
-    only step that installs the system libraries Chromium needs at
-    runtime (libnss3, libatk, libcups, etc.). A bare fallback would let
-    the install stage report success while the actual browser launch
-    would fail later inside the Playwright suite with an opaque error.
-    Integration's ``live-webclient-browser`` job therefore relies on
-    this stage failing fast in CI so the real cause surfaces at the
-    install step, not deep in a downstream test run.
+    Post-PR-B the Integration ``live-webclient-browser`` job runs inside the
+    owned ``ijt-browser-ci`` image where Chromium is pre-installed, so this
+    stage normally short-circuits. But if a future image rebuild fails to bake
+    Chromium, or a contributor runs the runner in a CI-shaped environment
+    without the image, the only remaining path that installs system libraries
+    is ``--with-deps``. A bare fallback would let install report success while
+    the actual browser launch would fail later inside the Playwright suite
+    with an opaque error. This test guards that CI fail-fast contract.
     """
     runner = _load_runner()
     calls = []
@@ -1667,11 +1675,13 @@ def test_playwright_config_uses_runtime_ui_port_and_no_retries():
     assert "outputFile: `${TEST_RESULTS_DIR}/playwright.xml`" in source
     assert "const PLAYWRIGHT_WORKERS" in source
     assert "process.env.IJT_PLAYWRIGHT_WORKERS" in source
-    # Browser e2e CI installs Chromium via the Web Client runner's
-    # ``npx playwright install chromium --with-deps`` step, not a pinned
-    # container image. This guard prevents anyone from re-introducing
-    # the old image-pin shape that coupled the config to a specific MCR
-    # digest and silently re-coupled CI to a registry SPOF.
+    # Browser e2e CI runs inside the owned `ijt-browser-ci` image (digest
+    # pinned in `.github/docker/ijt-browser-ci/image-pin.json`); Chromium is
+    # baked into the image and the locked `@playwright/test` version in
+    # `package.json` is the single source of truth for the browser bundle.
+    # This guard prevents anyone from re-introducing the old image-pin shape
+    # that coupled the playwright.config to a specific MCR digest and silently
+    # re-coupled CI to a registry SPOF.
     assert "canonicalPlaywrightImage" not in source, (
         "playwright.config.mjs must not export a canonicalPlaywrightImage "
         "metadata field. Browser e2e CI no longer runs inside a job-level "
@@ -1680,10 +1690,9 @@ def test_playwright_config_uses_runtime_ui_port_and_no_retries():
     )
     assert "mcr.microsoft.com/playwright" not in source, (
         "playwright.config.mjs must not reference an MCR Playwright image "
-        "digest. Browser e2e CI installs Chromium via "
-        "`npx playwright install chromium --with-deps` against the locked "
-        "@playwright/test version; any image reference in the config is "
-        "stale and misleads contributors."
+        "digest. Browser e2e CI runs inside the owned `ijt-browser-ci` "
+        "image (digest pinned in `.github/docker/ijt-browser-ci/image-pin.json`); "
+        "any MCR reference in the config is stale and misleads contributors."
     )
     assert "baseURL: UI_BASE_URL" in source
     assert "reuseExistingServer: false" in source

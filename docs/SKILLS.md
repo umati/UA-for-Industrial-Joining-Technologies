@@ -403,14 +403,14 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `web-client-live-opcua-direct` | local root runner + `integration.yml` | OPC UA 40463 | Direct Python OPC UA and method tests |
 | `web-client-live-websocket-api` | local root runner + `integration.yml` | OPC UA 40466 / WS 8002 | Python WebSocket backend contract and integration tests |
 | `web-client-live-websocket-connection` | local root runner + `integration.yml` | OPC UA 40467 / WS 8003 | WebSocket lifecycle tests isolated from backend contract tests |
-| `web-client-e2e-smoke` | local root runner + `integration.yml` | HTTP 3004 | Playwright smoke project; GitHub Integration runs it on stock `ubuntu-latest` with Chromium installed by the Web Client runner |
-| `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs with owned browser/backend/server workers; GitHub Integration uses two Browser Features shards on stock `ubuntu-latest` with Chromium installed by the Web Client runner |
-| `web-client-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec; GitHub Integration runs it on stock `ubuntu-latest` with Chromium installed by the Web Client runner |
+| `web-client-e2e-smoke` | local root runner + `integration.yml` | HTTP 3004 | Playwright smoke project; GitHub Integration runs it inside the owned `ghcr.io/.../ijt-browser-ci` image (digest pinned in `.github/docker/ijt-browser-ci/image-pin.json`) under `docker run --network=none` |
+| `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs with owned browser/backend/server workers; GitHub Integration uses two Browser Features shards inside the owned `ijt-browser-ci` image under `docker run --network=none` |
+| `web-client-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec; GitHub Integration runs it inside the owned `ijt-browser-ci` image under `docker run --network=none` |
 | Web Client Compatibility Smoke | Web runner + `web-client-compatibility-smoke.yml` | OPC UA 40468 / WS 8004 / HTTP 3007 | Scheduled/manual smoke for audited browser file surfaces; current matrix runs `windows-latest` / `msedge` |
 | `web-client-docker-smoke` | local root runner | HTTP 3000 / WS 8001 | Web Client production Docker image/readiness smoke |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
 | `live-webclient` | `integration.yml` | **40463/40466/40467** | Windows native EXE for non-browser Web Client live suites |
-| `live-webclient-browser` | `integration.yml` | **40469–40472 / 40480** | Stock `ubuntu-latest`; Chromium installed by the Web Client runner via `npx playwright install chromium --with-deps` against the locked `@playwright/test` version; Linux simulator package |
+| `live-webclient-browser` | `integration.yml` | **40469–40472 / 40480** | `ubuntu-latest` host runner; suites execute **inside** the owned `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci` image (digest pinned via `.github/docker/ijt-browser-ci/image-pin.json`) under `docker run --network=none`; Chromium, Linux system libraries, Python 3.14, and Node 24 are baked into the image; the Linux simulator binary comes from the mounted checkout |
 | `live-console` | `integration.yml` | **40461** | Windows native EXE |
 | `csharp-live` (nightly) | `integration.yml` | **40464** | Windows native EXE |
 
@@ -428,11 +428,14 @@ GitHub integration runs the same Web Client live/e2e suites through the root
 runner matrix, split by execution surface. The non-browser Web Client live
 suites stay on `windows-latest` because they validate Python/backend behavior
 against the Windows simulator package. All `web-client-e2e-*` Playwright suites
-runs `python run_all_tests.py --suite` so Chromium and its system
-dependencies are installed at the start of each suite by the Web Client
-runner via `npx playwright install chromium --with-deps` against the
-locked `@playwright/test` version in
-`OPC_UA_Clients/Release2/IJT_Web_Client/package.json`. The job
+runs `python run_all_tests.py --suite` **inside** the owned
+`ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci`
+image, digest-pinned via `.github/docker/ijt-browser-ci/image-pin.json`
+and started with `docker run --network=none`. Chromium, its Linux
+system dependencies, the locked `@playwright/test` version, the
+Python 3.14 toolchain, and the Node 24 toolchain are all baked into
+the image — the host runner never reaches `npx playwright install
+chromium --with-deps`. The job
 deliberately does NOT declare a job-level `container:` image because
 GitHub creates container-job runtimes before any workflow step runs, so
 a registry pull failure (transient MCR outage, network reroute, etc.)

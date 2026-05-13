@@ -167,10 +167,14 @@ run their live/integration tests in parallel without port conflicts.
 > GitHub integration runs that same local root-runner suite matrix instead of
 > a separate raw pytest-only Web integration command. The non-browser Web live
 > suites stay on GitHub-hosted Windows runners. Every `web-client-e2e-*`
-> Playwright suite runs on stock `ubuntu-latest`; Chromium and its system
-> dependencies are installed at the start of each suite by the Web Client
-> runner via `npx playwright install chromium --with-deps` against the locked
-> `@playwright/test` version. No job-level `container:` image is used:
+> Playwright suite runs inside the owned
+> `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci` image,
+> digest-pinned via `.github/docker/ijt-browser-ci/image-pin.json` and started
+> with `docker run --network=none`. Chromium, its Linux system dependencies,
+> the locked `@playwright/test` version, Python 3.14, and Node 24 are all baked
+> into the image — the host runner never reaches
+> `npx playwright install chromium --with-deps`. No job-level `container:`
+> image is used:
 > container-job images are pulled by GitHub before any step runs, so a
 > registry outage would take the whole job down with no in-job retry,
 > fallback, or diagnostics. Browser Features keeps two shards; CI

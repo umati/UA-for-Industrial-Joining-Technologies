@@ -960,20 +960,19 @@ def test_integration_web_client_features_are_sharded() -> None:
 
 
 def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
-    """Browser e2e must stay off Windows-hosted Chromium and off job-level container images.
+    """Browser e2e must run inside the owned ijt-browser-ci image with --network=none.
 
     History: a job-level ``container: image: mcr.microsoft.com/playwright:...``
-    block previously ran every browser suite, but a job-level container image
-    is pulled by GitHub *before* any workflow step runs. A transient MCR
-    outage took the whole job down with no in-job retry, fallback, or
-    diagnostics possible. The job now uses ``runs-on: ubuntu-latest`` with
-    no container image; Chromium and its system deps are installed at the
-    start of each suite by the Web Client runner's
-    ``_stage_playwright_install()`` (which runs ``npx playwright install
-    chromium --with-deps`` against the locked ``@playwright/test`` version),
-    matching Playwright's own CI guidance. This regression gate prevents
-    re-introducing a job-level ``container:`` block or moving e2e onto
-    Windows-hosted Chromium.
+    block once ran every browser suite, but a job-level container image is
+    pulled by GitHub *before* any workflow step runs, so a transient registry
+    outage took the whole job down with no in-job retry. PR A introduced the
+    owned ``ghcr.io/.../ijt-browser-ci`` image (digest-pinned via
+    ``.github/docker/ijt-browser-ci/image-pin.json``) and PR B wires it into
+    this job via a step-level ``docker run --network=none``, so pull + run +
+    diagnostics all happen inside steps the job controls end-to-end. This
+    regression gate prevents re-introducing a job-level ``container:`` block,
+    re-introducing live ``npx playwright install --with-deps`` on the host
+    runner, or moving e2e onto Windows-hosted Chromium.
     """
     import yaml
 
@@ -996,36 +995,97 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
             "live-webclient-browser must not use a job-level container image: "
             "GitHub pulls container-job images before any step runs, so a "
             "registry outage takes the whole job down with no in-job retry. "
-            "Chromium is installed by the Web Client runner via "
-            "`npx playwright install chromium --with-deps`."
+            "The job uses a step-level `docker run` against the owned "
+            "ijt-browser-ci image instead."
         )
-        assert "PLAYWRIGHT_BROWSERS_PATH" not in job.get("env", {}), (
-            "PLAYWRIGHT_BROWSERS_PATH was the bundled-image install location "
-            "(/ms-playwright). With Playwright installing Chromium itself, "
-            "the default path is correct."
+        assert job.get("permissions", {}).get("packages") == "read", (
+            "live-webclient-browser must declare `permissions: packages: read` "
+            "to authenticate against GHCR for the ijt-browser-ci pull."
         )
 
         steps = job["steps"]
         step_names = [step.get("name") or step.get("uses", "") for step in steps]
-        assert not any("Install setup-python OS helper" in name for name in step_names), (
-            "The lsb-release helper step was needed only inside the slim "
-            "Playwright container image. ubuntu-latest already has lsb-release."
+
+        assert not any(
+            step.get("uses", "").startswith("actions/setup-python@") for step in steps
+        ), (
+            "setup-python is baked into the ijt-browser-ci image; the host "
+            "runner must not install its own Python."
         )
-        setup_python_step = next(
-            step for step in steps if step.get("uses", "").startswith("actions/setup-python@")
+        assert not any(step.get("uses", "").startswith("actions/setup-node@") for step in steps), (
+            "setup-node is baked into the ijt-browser-ci image; the host "
+            "runner must not install its own Node."
         )
-        setup_node_step = next(
-            step for step in steps if step.get("uses", "").startswith("actions/setup-node@")
+
+        resolve_step = next(
+            step
+            for step in steps
+            if step.get("name") == "Resolve IJT Browser CI image reference (digest-qualified)"
         )
-        assert setup_python_step.get("with", {}).get("python-version") == "3.14"
-        assert setup_node_step.get("with", {}).get("node-version") == "24"
-        assert "cache" not in setup_python_step.get("with", {})
-        assert "cache" not in setup_node_step.get("with", {})
+        assert (
+            resolve_step.get("env", {}).get("PIN_PATH")
+            == ".github/docker/ijt-browser-ci/image-pin.json"
+        )
+        assert "^sha256:[0-9a-f]{64}$" in resolve_step["run"], (
+            "Resolve step must guard that the digest is sha256:<64hex>."
+        )
+
+        login_step = next(
+            step for step in steps if step.get("uses", "").startswith("docker/login-action@")
+        )
+        assert login_step.get("with", {}).get("registry") == "ghcr.io"
+
+        pull_step = next(
+            step
+            for step in steps
+            if step.get("name") == "Pull IJT Browser CI image (3-attempt retry)"
+        )
+        pull_body = pull_step["run"]
+        assert "docker pull" in pull_body
+        assert "max_attempts=3" in pull_body, (
+            "Pull step must retry 3x; transient GHCR errors must not fail "
+            "the job on a single attempt."
+        )
+        assert "build-browser-ci-image.yml" in pull_body, (
+            "Pull step diagnostic must name the image-build workflow so operators can republish."
+        )
+        assert "ghcr.io" in pull_body, "Pull step diagnostic must name the registry (ghcr.io)."
 
         run_step = next(
-            step for step in steps if step.get("name") == "Run Web Client browser e2e suite"
+            step
+            for step in steps
+            if step.get("name") == "Run Web Client browser e2e suite (offline, --network=none)"
         )
-        assert "python run_all_tests.py --suite" in run_step["run"]
+        run_body = run_step["run"]
+        assert "docker run" in run_body
+        assert "--network=none" in run_body
+        assert '--user "$(id -u):$(id -g)"' in run_body
+        assert '-v "${GITHUB_WORKSPACE}:/workspace"' in run_body
+        assert "PIP_NO_INDEX=1" in run_body
+        assert "npm_config_offline=true" in run_body
+        assert "SKIP_VENV_INSTALL=1" in run_body
+        assert "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright" in run_body
+        assert "python run_all_tests.py --suite" in run_body
+        for required_env in (
+            "GITHUB_RUN_ID",
+            "GITHUB_RUN_ATTEMPT",
+            "GITHUB_SHA",
+            "GITHUB_REPOSITORY",
+            "GITHUB_SERVER_URL",
+        ):
+            assert required_env in run_body, (
+                f"Run step must propagate {required_env} into the container so "
+                "in-container reports/summaries can stamp the run identity."
+            )
+
+        assert not any("Install setup-python OS helper" in name for name in step_names), (
+            "The lsb-release helper step was only needed for the slim Playwright "
+            "container image and must not be reintroduced."
+        )
+        assert not any("npx playwright install" in (step.get("run") or "") for step in steps), (
+            "Live `npx playwright install --with-deps` on the host runner is "
+            "forbidden; Chromium + deps are baked into the ijt-browser-ci image."
+        )
 
 
 def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> None:
