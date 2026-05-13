@@ -546,10 +546,15 @@ def _build_report_context(cu_payload: dict[str, Any] | None, baseline: dict[str,
     }
 
 
-def _baseline_payload(context: dict[str, Any], run_ts_iso: str) -> dict[str, Any]:
+def _baseline_payload(
+    context: dict[str, Any],
+    run_ts_iso: str,
+    *,
+    git_sha: str | None = None,
+) -> dict[str, Any]:
     return {
         "run_ts": run_ts_iso,
-        "git_sha": _short_git_sha(_PROJECT_ROOT),
+        "git_sha": git_sha if git_sha is not None else _short_git_sha(_PROJECT_ROOT),
         "score": context["score"],
         "validation_health_pct": context["validation_health_value"],
         "spec_coverage_pct": context["spec_coverage_value"],
@@ -685,19 +690,29 @@ def _render_review_sections(context: dict[str, Any], limit: int = 10) -> list[st
     return lines
 
 
-def _render_test_environment() -> list[str]:
+def _render_test_environment(
+    *,
+    git_sha: str | None = None,
+    run_logs_url: str | None = None,
+) -> list[str]:
+    resolved_git_sha = git_sha if git_sha is not None else _short_git_sha(_PROJECT_ROOT)
+    resolved_run_logs_url = run_logs_url if run_logs_url is not None else _run_logs_url()
     lines = ["| Item | Value |", "|---|---|"]
-    lines.append(f"| Test Client commit | `{_short_git_sha(_PROJECT_ROOT)}` |")
+    lines.append(f"| Test Client commit | `{resolved_git_sha}` |")
     lines.append(f"| Python | {platform.python_version()} |")
     lines.append(f"| asyncua | {_package_version('asyncua')} |")
     lines.append(f"| Host OS | {_md_cell(platform.platform())} |")
     lines.append("| Repro command | `python run_all_tests.py` |")
-    lines.append(f"| Run logs | {_md_cell(_run_logs_url())} |")
+    lines.append(f"| Run logs | {_md_cell(resolved_run_logs_url)} |")
     return lines
 
 
 def _render_profile_facet_summary(
-    cu_payload: dict[str, Any] | None, baseline: dict[str, Any] | None
+    cu_payload: dict[str, Any] | None,
+    baseline: dict[str, Any] | None,
+    *,
+    git_sha: str | None = None,
+    run_logs_url: str | None = None,
 ) -> tuple[list[str], dict[str, Any] | None]:
     context = _build_report_context(cu_payload, baseline)
     if context is None:
@@ -853,7 +868,7 @@ def _render_profile_facet_summary(
     lines.append("<details>")
     lines.append("<summary><b>Test Environment</b></summary>")
     lines.append("")
-    lines.extend(_render_test_environment())
+    lines.extend(_render_test_environment(git_sha=git_sha, run_logs_url=run_logs_url))
     lines.append("")
     lines.append("</details>")
     lines.append("")
@@ -898,6 +913,9 @@ def render_conformance_summary(
     run_ts: str,
     cu_payload: dict[str, Any] | None,
     baseline: dict[str, Any] | None = None,
+    *,
+    git_sha: str | None = None,
+    run_logs_url: str | None = None,
 ) -> tuple[str, dict[str, Any] | None]:
     """Return the IJT Conformance Test Report Markdown plus the report context.
 
@@ -907,14 +925,28 @@ def render_conformance_summary(
     `cu-compliance-report.json`, and an optional `baseline` dict loaded from
     `report-baseline.json`. The caller is responsible for any baseline write
     side effect; this function never touches disk.
+
+    The keyword-only ``git_sha`` and ``run_logs_url`` parameters override the
+    build-metadata defaults, which are otherwise read from the local git
+    checkout and the ``GITHUB_*`` environment variables. Production callers
+    should leave them as ``None`` (current behavior); byte-identity tests
+    pass frozen values so the rendered Markdown stays deterministic across
+    machines and CI runners.
     """
+    resolved_git_sha = git_sha if git_sha is not None else _short_git_sha(_PROJECT_ROOT)
+    resolved_run_logs_url = run_logs_url if run_logs_url is not None else _run_logs_url()
     p = data["passed"]
     f = data["failed"] + data["errors"]
     s = data["skipped"]
     x = data["xfailed"]
     total = data["total"]
     mins, secs = divmod(int(data["duration_s"]), 60)
-    profile_lines, context = _render_profile_facet_summary(cu_payload, baseline)
+    profile_lines, context = _render_profile_facet_summary(
+        cu_payload,
+        baseline,
+        git_sha=resolved_git_sha,
+        run_logs_url=resolved_run_logs_url,
+    )
 
     lines: list[str] = []
     lines.append("# IJT Conformance Test Report")
@@ -930,7 +962,7 @@ def render_conformance_summary(
     lines.append(f"| **Server** | {_md_cell(server_name)} (`{server_url}`) |")
     lines.append(f"| **Capability profile** | {_md_cell(active_label)} |")
     lines.append(f"| **Run** | {run_ts} · Duration {mins}m {secs}s |")
-    lines.append(f"| **Build** | commit `{_short_git_sha(_PROJECT_ROOT)}` · run logs: {_md_cell(_run_logs_url())} |")
+    lines.append(f"| **Build** | commit `{resolved_git_sha}` · run logs: {_md_cell(resolved_run_logs_url)} |")
     lines.append("")
 
     if context:

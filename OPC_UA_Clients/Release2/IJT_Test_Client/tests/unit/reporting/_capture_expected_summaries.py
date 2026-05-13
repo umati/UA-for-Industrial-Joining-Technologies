@@ -35,6 +35,10 @@ from reporting.conformance_summary import render_conformance_summary  # noqa: E4
 # ``test_render_conformance_summary.py``.
 FIXED_RUN_TS = "2026-05-13 14:00 UTC"
 FIXED_SERVER_URL = "opc.tcp://fixture.ijt.test:40451"
+# Frozen build metadata. Must stay in sync with
+# ``test_render_conformance_summary.py``.
+FIXED_GIT_SHA = "15bc900"
+FIXED_RUN_LOGS_URL = "n/a"
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EXPECTED_DIR = FIXTURES_DIR / "expected"
@@ -57,6 +61,8 @@ def render_fixture(fixture_dir: Path) -> str:
         FIXED_RUN_TS,
         cu_payload=cu_payload,
         baseline=baseline,
+        git_sha=FIXED_GIT_SHA,
+        run_logs_url=FIXED_RUN_LOGS_URL,
     )
     return md
 

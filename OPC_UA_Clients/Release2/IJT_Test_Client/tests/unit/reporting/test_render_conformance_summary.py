@@ -47,6 +47,12 @@ from reporting.conformance_summary import render_conformance_summary  # noqa: E4
 
 FIXED_RUN_TS = "2026-05-13 14:00 UTC"
 FIXED_SERVER_URL = "opc.tcp://fixture.ijt.test:40451"
+# Frozen build metadata: matches the captured expected fixtures so the
+# byte-identity test stays deterministic regardless of the local git SHA
+# or the ``GITHUB_*`` environment variables present during the run. Must
+# stay in sync with ``_capture_expected_summaries.py``.
+FIXED_GIT_SHA = "15bc900"
+FIXED_RUN_LOGS_URL = "n/a"
 
 _FIXTURES_DIR = Path(__file__).parent / "fixtures"
 _EXPECTED_DIR = _FIXTURES_DIR / "expected"
@@ -75,6 +81,8 @@ def test_conformance_summary_byte_identical(fixture_dir: str, expected_file: str
         FIXED_RUN_TS,
         cu_payload,
         baseline,
+        git_sha=FIXED_GIT_SHA,
+        run_logs_url=FIXED_RUN_LOGS_URL,
     )
 
     expected = (_EXPECTED_DIR / expected_file).read_text(encoding="utf-8")
