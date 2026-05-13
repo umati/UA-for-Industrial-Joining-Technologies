@@ -421,6 +421,8 @@ For the full port assignment table, auto-launch mechanics, and venv rationale, s
 ## Restore Determinism
 
 - `Directory.Build.props` enables `RestorePackagesWithLockFile=true` for this project tree.
+- Root `NuGet.config` and `Types/nuget.config` clear inherited package sources and source mappings, then use only `nuget.org`.
+- If restore must use a private mirror or proxy, add it explicitly in the relevant `NuGet.config` after the `<clear />` entries and map packages there.
 - `packages.lock.json` files are committed in git for deterministic restore.
 - `run_all_tests.py` uses locked-mode restore automatically when `packages.lock.json` files are present.
 - CI restore uses locked mode against committed lock files.
