@@ -151,7 +151,10 @@ def test_ijt_browser_ci_image_env_var_is_workflow_or_image_config_only() -> None
         Path(".github/workflows"),
         Path(".github/docker/ijt-browser-ci"),
     )
-    allowed_exact = {Path("tests/test_image_pin.py")}
+    allowed_exact = {
+        Path(".github/scripts/update_browser_ci_image_pin.py"),
+        Path("tests/test_image_pin.py"),
+    }
     offenders: list[str] = []
 
     for path in _tracked_files():
@@ -339,9 +342,14 @@ def test_build_browser_ci_image_workflow_opens_reviewed_pin_pr_without_loop() ->
         paths = triggers[event_name]["paths"]
         docker_glob_index = paths.index(".github/docker/ijt-browser-ci/**")
         pin_exclude_index = paths.index("!.github/docker/ijt-browser-ci/image-pin.json")
+        readme_exclude_index = paths.index("!.github/docker/ijt-browser-ci/README.md")
         assert docker_glob_index < pin_exclude_index, (
             "image-pin.json must be excluded after the docker directory include; "
             "otherwise the automation branch can publish a fresh image and loop."
+        )
+        assert docker_glob_index < readme_exclude_index, (
+            "README.md must be excluded after the docker directory include; "
+            "documentation-only edits must not rebuild and republish the browser image."
         )
 
     assert workflow["permissions"] == {"contents": "read"}
@@ -366,23 +374,60 @@ def test_build_browser_ci_image_workflow_opens_reviewed_pin_pr_without_loop() ->
     assert "Capture metadata from published digest" in step_names
     assert "Update image-pin.json" in step_names
     assert "Open or update image-pin PR" in step_names
+    assert "Job summary" in step_names
+
+    capture_step = next(
+        step
+        for step in update_pin_job["steps"]
+        if step.get("name") == "Capture metadata from published digest"
+    )
+    assert capture_step.get("id") == "capture_metadata"
+    assert "result=captured" in capture_step["run"]
+    assert "metadata captured from published digest" in capture_step["run"]
 
     update_step = next(
         step for step in update_pin_job["steps"] if step.get("name") == "Update image-pin.json"
     )
+    assert update_step.get("id") == "update_pin"
     assert ".github/scripts/update_browser_ci_image_pin.py" in update_step["run"]
     assert "--metadata" in update_step["run"]
     assert '--digest "$PUBLISHED_DIGEST"' in update_step["run"]
+    assert "result=rendered" in update_step["run"]
+    assert "image-pin.json rendered from verified metadata" in update_step["run"]
 
     pr_step = next(
         step
         for step in update_pin_job["steps"]
         if step.get("name") == "Open or update image-pin PR"
     )
+    assert pr_step.get("id") == "pr"
     pr_body = pr_step["run"]
+    assert "auto_pr_result=no_change" in pr_body
+    assert "auto_pr_result=updated" in pr_body
+    assert "auto_pr_result=opened" in pr_body
+    assert "reason=image-pin.json already points at ${PUBLISHED_DIGEST}; no PR needed" in pr_body
+    assert "reason=updated existing image-pin PR" in pr_body
+    assert "reason=opened new image-pin PR" in pr_body
     assert "git push --force-with-lease" in pr_body
     assert "gh pr list" in pr_body
     assert "gh pr edit" in pr_body
     assert "gh pr create" in pr_body
     assert "Review focus:" in pr_body
     assert ".github/docker/ijt-browser-ci/image-pin.json" in pr_body
+
+    summary_step = next(
+        step for step in update_pin_job["steps"] if step.get("name") == "Job summary"
+    )
+    assert summary_step.get("if") == "always()"
+    summary_env = summary_step["env"]
+    assert summary_env["CAPTURE_OUTCOME"] == "${{ steps.capture_metadata.outcome }}"
+    assert summary_env["UPDATE_OUTCOME"] == "${{ steps.update_pin.outcome }}"
+    assert summary_env["PR_OUTCOME"] == "${{ steps.pr.outcome }}"
+    assert summary_env["AUTO_PR_RESULT"] == "${{ steps.pr.outputs.auto_pr_result }}"
+    assert summary_env["AUTO_PR_REASON"] == "${{ steps.pr.outputs.reason }}"
+    summary_body = summary_step["run"]
+    assert "Metadata capture:" in summary_body
+    assert "Pin update:" in summary_body
+    assert "Auto-PR opened/updated:" in summary_body
+    assert "not completed; inspect the first failed update-pin step above" in summary_body
+    assert "One or more update-pin steps did not succeed" in summary_body

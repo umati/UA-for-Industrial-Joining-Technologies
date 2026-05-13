@@ -4,9 +4,10 @@ name: Build Browser CI Image
 # live-webclient-browser matrix job in .github/workflows/integration.yml.
 # See .github/docker/ijt-browser-ci/README.md for design.
 #
-# image-pin.json is intentionally excluded from path triggers. The update-pin
-# job opens a PR that changes only that file; merging that PR must not publish
-# a new image and create an image-pin update loop.
+# image-pin.json and this README are intentionally excluded from path triggers.
+# The update-pin job opens a PR that changes only image-pin.json; merging that
+# PR must not publish a new image and create an image-pin update loop. README
+# updates must not rebuild the browser image either.
 #
 # Three-job split:
 #   - build:   loads image locally, runs Phase 0 smoke under the exact
@@ -23,6 +24,7 @@ on:
     paths:
       - '.github/docker/ijt-browser-ci/**'
       - '!.github/docker/ijt-browser-ci/image-pin.json'
+      - '!.github/docker/ijt-browser-ci/README.md'
       - '.github/scripts/update_browser_ci_image_pin.py'
       - '.github/workflows/build-browser-ci-image.yml'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package.json'
@@ -33,6 +35,7 @@ on:
     paths:
       - '.github/docker/ijt-browser-ci/**'
       - '!.github/docker/ijt-browser-ci/image-pin.json'
+      - '!.github/docker/ijt-browser-ci/README.md'
       - '.github/scripts/update_browser_ci_image_pin.py'
       - '.github/workflows/build-browser-ci-image.yml'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package.json'
@@ -344,6 +347,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Capture metadata from published digest
+        id: capture_metadata
         env:
           PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
         run: |
@@ -353,8 +357,11 @@ jobs:
           docker run --rm --network=none "$REF" \
             cat /opt/ijt-browser-ci/metadata.json > "${RUNNER_TEMP}/ijt-browser-ci-metadata.json"
           cat "${RUNNER_TEMP}/ijt-browser-ci-metadata.json"
+          echo "result=captured" >> "$GITHUB_OUTPUT"
+          echo "reason=metadata captured from published digest" >> "$GITHUB_OUTPUT"
 
       - name: Update image-pin.json
+        id: update_pin
         env:
           PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
         run: |
@@ -368,6 +375,8 @@ jobs:
             --image-created "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --image-workflow-run "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           python -m json.tool "$PIN_PATH" > /dev/null
+          echo "result=rendered" >> "$GITHUB_OUTPUT"
+          echo "reason=image-pin.json rendered from verified metadata" >> "$GITHUB_OUTPUT"
 
       - name: Open or update image-pin PR
         id: pr
@@ -377,7 +386,11 @@ jobs:
         run: |
           set -euo pipefail
           if git diff --quiet -- "$PIN_PATH"; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "changed=false"
+              echo "auto_pr_result=no_change"
+              echo "reason=image-pin.json already points at ${PUBLISHED_DIGEST}; no PR needed"
+            } >> "$GITHUB_OUTPUT"
             echo "image-pin.json already points at ${PUBLISHED_DIGEST}; no PR needed."
             exit 0
           fi
@@ -424,21 +437,37 @@ jobs:
             gh pr edit "$existing_pr" \
               --title "Update IJT Browser CI image pin" \
               --body-file "$body_file"
-            echo "pr=${existing_pr}" >> "$GITHUB_OUTPUT"
+            {
+              echo "pr=${existing_pr}"
+              echo "auto_pr_result=updated"
+              echo "reason=updated existing image-pin PR #${existing_pr}"
+              echo "changed=true"
+            } >> "$GITHUB_OUTPUT"
           else
             pr_url="$(gh pr create \
               --base main \
               --head "$PIN_BRANCH" \
               --title "Update IJT Browser CI image pin" \
               --body-file "$body_file")"
-            echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
+            {
+              echo "pr_url=${pr_url}"
+              echo "auto_pr_result=opened"
+              echo "reason=opened new image-pin PR ${pr_url}"
+              echo "changed=true"
+            } >> "$GITHUB_OUTPUT"
           fi
-          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Job summary
         if: always()
         env:
           UPDATED: ${{ steps.pr.outputs.changed }}
+          CAPTURE_OUTCOME: ${{ steps.capture_metadata.outcome }}
+          CAPTURE_REASON: ${{ steps.capture_metadata.outputs.reason }}
+          UPDATE_OUTCOME: ${{ steps.update_pin.outcome }}
+          UPDATE_REASON: ${{ steps.update_pin.outputs.reason }}
+          PR_OUTCOME: ${{ steps.pr.outcome }}
+          AUTO_PR_RESULT: ${{ steps.pr.outputs.auto_pr_result }}
+          AUTO_PR_REASON: ${{ steps.pr.outputs.reason }}
           PR_NUMBER: ${{ steps.pr.outputs.pr }}
           PR_URL: ${{ steps.pr.outputs.pr_url }}
           PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
@@ -449,10 +478,19 @@ jobs:
             echo ""
             echo "- Published digest: \`${PUBLISHED_DIGEST}\`"
             echo "- image-pin.json changed: \`${UPDATED:-unknown}\`"
+            echo "- Metadata capture: \`${CAPTURE_OUTCOME:-unknown}\` — ${CAPTURE_REASON:-not completed}"
+            echo "- Pin update: \`${UPDATE_OUTCOME:-unknown}\` — ${UPDATE_REASON:-not completed}"
+            echo "- Auto-PR opened/updated: \`${AUTO_PR_RESULT:-not_attempted}\`"
+            echo "- Auto-PR step outcome: \`${PR_OUTCOME:-unknown}\`"
+            echo "- Reason: ${AUTO_PR_REASON:-not completed; inspect the first failed update-pin step above}"
             if [[ -n "${PR_NUMBER:-}" ]]; then
               echo "- Existing PR updated: #${PR_NUMBER}"
             fi
             if [[ -n "${PR_URL:-}" ]]; then
               echo "- New PR opened: ${PR_URL}"
+            fi
+            if [[ "${CAPTURE_OUTCOME:-}" != "success" || "${UPDATE_OUTCOME:-}" != "success" || "${PR_OUTCOME:-}" != "success" ]]; then
+              echo ""
+              echo "> One or more update-pin steps did not succeed. Review the failed step logs before re-running the workflow."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
