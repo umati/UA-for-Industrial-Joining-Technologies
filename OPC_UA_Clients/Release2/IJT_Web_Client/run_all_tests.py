@@ -1391,16 +1391,17 @@ def _stage_playwright_install() -> StageResult:
             label="playwright install chromium --with-deps",
             env=env,
         )
-        # ``--with-deps`` is the load-bearing CI contract on Linux: the
-        # Integration ``live-webclient-browser`` job runs on stock
-        # ``ubuntu-latest`` and relies on this stage to install Chromium
-        # plus its Linux system libraries. Falling back to a bare
-        # ``playwright install chromium`` after ``--with-deps`` fails
-        # would let the install stage report success while the browser
-        # would crash at first launch because libnss3/libatk/etc. are
-        # missing. In CI we therefore fail fast on ``--with-deps``
-        # failure so the job surfaces the real cause instead of a later
-        # opaque browser-launch error in the Playwright suite.
+        # In GitHub Integration, ``live-webclient-browser`` runs inside the
+        # owned browser CI image. Chromium and its Linux libraries are baked
+        # into that image, so this stage should normally short-circuit before
+        # reaching the install command. If a CI-shaped run ever reaches this
+        # fallback path, ``--with-deps`` is still required: falling back to a
+        # bare ``playwright install chromium`` after ``--with-deps`` fails
+        # would let the install stage report success while the browser would
+        # crash at first launch because libnss3/libatk/etc. are missing.
+        # In CI we therefore fail fast on ``--with-deps`` failure so the job
+        # surfaces the real cause instead of a later opaque browser-launch
+        # error in the Playwright suite.
         #
         # On a local developer Linux machine the system libraries are
         # almost always already installed by the distro, so the bare

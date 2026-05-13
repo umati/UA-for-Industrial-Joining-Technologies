@@ -10,7 +10,7 @@
 #   webclient-docker     Web Client             Docker unit/prod tests
 #   int-testclient       Test Client            Windows: OPC UA server (port 40462) + Test Client full suite
 #   live-webclient       Web Client             Windows: local runner web-client-live-* matrix
-#   live-webclient-browser Web Client           Linux stock ubuntu-latest: web-client-e2e-* matrix; Chromium installed by the Web Client runner
+#   live-webclient-browser Web Client           Linux ubuntu-latest: web-client-e2e-* matrix; runs inside owned ghcr.io/.../ijt-browser-ci image (digest pinned in .github/docker/ijt-browser-ci/image-pin.json) with --network=none
 #   live-console         Console Client         Windows: Console Client live tests (port 40461)
 #   csharp-live          C# Client              Windows: xUnit live tests (port 40464) - nightly
 #   report               Combined summary                 Always runs after all jobs
@@ -454,18 +454,23 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Web Client - Browser E2E Runner Matrix
-  #   Runs every Playwright/headless-Chromium suite on the standard
-  #   ubuntu-latest runner. Chromium and its system dependencies are
-  #   installed at the start of each job by the Web Client runner's
-  #   `_stage_playwright_install()`, which downloads the browser bundle
-  #   matching the locked `@playwright/test` version from
-  #   `cdn.playwright.dev`. The job intentionally does NOT use a job-level
-  #   `container:` image: GitHub creates container-job runtimes before any
-  #   workflow step runs, so a registry pull failure (e.g. transient MCR
-  #   outage) takes the whole job down with no in-job retry, fallback, or
-  #   diagnostics possible. Letting Playwright install its own browsers on
-  #   a stock runner removes that single point of failure entirely; the
-  #   `--with-deps` install path matches Playwright's own CI guidance.
+  #   Runs every Playwright/headless-Chromium suite inside the owned
+  #   `ijt-browser-ci` image published to GHCR by
+  #   `.github/workflows/build-browser-ci-image.yml`. The image is digest-
+  #   pinned via `.github/docker/ijt-browser-ci/image-pin.json` and bakes
+  #   Python 3.14, Node 24, Playwright + Chromium + Linux system libs, the
+  #   pip wheelhouse, and the npm cache. The container runs with
+  #   `--network=none`, `--user $(id -u):$(id -g)`, and
+  #   `-v $GITHUB_WORKSPACE:/workspace`, so the only inputs are the checkout
+  #   tree and the baked caches, and the only outputs are the test-results
+  #   directories under the workspace.
+  #
+  #   The job intentionally does NOT use a job-level `container:` image:
+  #   GitHub creates container-job runtimes before any workflow step runs,
+  #   so a registry pull failure (e.g. transient GHCR outage) takes the
+  #   whole job down with no in-job retry, fallback, or diagnostics
+  #   possible. A step-level `docker run` keeps the pull, the digest guard,
+  #   and the suite invocation inside steps that we control end-to-end.
   #   Windows browser compatibility coverage is tracked separately so the
   #   bulk browser logic suite does not depend on Windows-hosted Chromium
   #   process stability.
@@ -476,6 +481,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      packages: read
     strategy:
       fail-fast: false
       matrix:
@@ -502,18 +508,94 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
-        with:
-          python-version: "3.14"
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
-        with:
-          node-version: "24"
-
-      - name: Run Web Client browser e2e suite
+      - name: Resolve IJT Browser CI image reference (digest-qualified)
+        id: image
         env:
-          IJT_PLAYWRIGHT_SHARD: ${{ matrix.feature_shard || '' }}
-        run: python run_all_tests.py --suite "${{ matrix.suite }}" --verbose
+          PIN_PATH: .github/docker/ijt-browser-ci/image-pin.json
+        run: |
+          set -euo pipefail
+          IMG="$(jq -r .image "$PIN_PATH")"
+          DIG="$(jq -r .digest "$PIN_PATH")"
+          if ! [[ "$DIG" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error file=$PIN_PATH::digest is not a valid sha256:<64hex> reference: $DIG" >&2
+            exit 1
+          fi
+          REF="${IMG}@${DIG}"
+          if ! [[ "$REF" =~ @sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error file=$PIN_PATH::Resolved IJT_BROWSER_CI_IMAGE is not digest-qualified: $REF" >&2
+            exit 1
+          fi
+          echo "ijt_browser_ci_image=$REF" >> "$GITHUB_OUTPUT"
+          echo "Resolved IJT_BROWSER_CI_IMAGE=$REF"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull IJT Browser CI image (3-attempt retry)
+        env:
+          IMG: ${{ steps.image.outputs.ijt_browser_ci_image }}
+          PIN_PATH: .github/docker/ijt-browser-ci/image-pin.json
+        run: |
+          set -euo pipefail
+          # Retry 3x with backoff. GHCR is the SPOF this job depends on; if all
+          # three attempts fail the diagnostic must name the digest, the
+          # registry, and the image-build workflow so the operator can decide
+          # whether to re-run the publish workflow or wait out a GHCR incident.
+          attempt=0
+          max_attempts=3
+          delay=5
+          until docker pull "$IMG"; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error file=${PIN_PATH}::Failed to pull IJT Browser CI image after ${max_attempts} attempts." >&2
+              echo "::error::  image:    ${IMG}" >&2
+              echo "::error::  registry: ghcr.io (GHCR)" >&2
+              echo "::error::  pin file: ${PIN_PATH}" >&2
+              echo "::error::  republish: re-run .github/workflows/build-browser-ci-image.yml on main to regenerate this digest, then update ${PIN_PATH}." >&2
+              exit 1
+            fi
+            echo "docker pull attempt ${attempt}/${max_attempts} failed; retrying in ${delay}s..." >&2
+            sleep "$delay"
+            delay=$((delay * 2))
+          done
+          docker image inspect "$IMG" --format 'id={{.Id}} created={{.Created}}'
+
+      - name: Run Web Client browser e2e suite (offline, --network=none)
+        env:
+          IMG: ${{ steps.image.outputs.ijt_browser_ci_image }}
+          SUITE: ${{ matrix.suite }}
+          SHARD: ${{ matrix.feature_shard || '' }}
+        run: |
+          set -euo pipefail
+          # GitHub metadata envs are propagated so the in-container Python
+          # runner can stamp reports/summaries with the run identity. They are
+          # informational only; the run still executes under --network=none.
+          docker run --rm --init \
+            --network=none \
+            --user "$(id -u):$(id -g)" \
+            -w /workspace \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            -e CI=1 \
+            -e HOME=/opt/ijt-browser-ci/home \
+            -e npm_config_cache=/opt/ijt-browser-ci/npm-cache \
+            -e npm_config_offline=true \
+            -e PIP_CACHE_DIR=/opt/ijt-browser-ci/pip-cache \
+            -e PIP_NO_INDEX=1 \
+            -e PIP_FIND_LINKS=/opt/ijt-browser-ci/pip-wheelhouse \
+            -e SKIP_VENV_INSTALL=1 \
+            -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+            -e IJT_PLAYWRIGHT_SHARD="$SHARD" \
+            -e GITHUB_RUN_ID="${GITHUB_RUN_ID}" \
+            -e GITHUB_RUN_ATTEMPT="${GITHUB_RUN_ATTEMPT}" \
+            -e GITHUB_SHA="${GITHUB_SHA}" \
+            -e GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+            -e GITHUB_SERVER_URL="${GITHUB_SERVER_URL}" \
+            "$IMG" \
+            bash -lc "python run_all_tests.py --suite \"$SUITE\" --verbose"
 
       - name: Upload Web Client browser results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
@@ -1441,11 +1523,11 @@ jobs:
               "",
               "### Browser E2E Tests",
               "",
-              "> Platform: Ubuntu latest — Chromium installed by `npx playwright install chromium --with-deps` matching the locked `@playwright/test` version in `OPC_UA_Clients/Release2/IJT_Web_Client/package.json`",
+              "> Platform: Ubuntu latest — runs inside the owned `ijt-browser-ci` image (digest-pinned via `.github/docker/ijt-browser-ci/image-pin.json`); Chromium + system libs are baked at image-build time and the container runs with `--network=none`",
               "",
               "| Suite | Surface | Tests | Skipped | Notes |",
               "|:------|:--------|------:|--------:|:------|",
-              f"| Web Client — Browser E2E | Chromium DOM/JS + OPC UA WebSocket + result/event UX | {tests(*wc_browser, baseline=baseline_suite(integration_baseline, 'wc_browser'))} | {skips(wc_browser[3])} | {skip_note_inline(wc_browser_skips, wc_browser[3], 'Headless Chromium installed via Playwright CLI on the runner')} |",
+              f"| Web Client — Browser E2E | Chromium DOM/JS + OPC UA WebSocket + result/event UX | {tests(*wc_browser, baseline=baseline_suite(integration_baseline, 'wc_browser'))} | {skips(wc_browser[3])} | {skip_note_inline(wc_browser_skips, wc_browser[3], 'Headless Chromium baked into the IJT Browser CI image')} |",
           ]
 
           if wc_feature_timings:
