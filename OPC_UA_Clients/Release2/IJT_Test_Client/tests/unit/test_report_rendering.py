@@ -14,7 +14,14 @@ _ROOT = Path(__file__).parents[2]
 _SCRIPTS = _ROOT / "scripts"
 sys.path.insert(0, str(_SCRIPTS))
 
-_ci_summary: Any = importlib.import_module("make_ci_summary")
+_shim: Any = importlib.import_module("make_conformance_summary")
+_renderer: Any = importlib.import_module("reporting.conformance_summary")
+# Tests historically referred to the renderer module as ``_ci_summary``; keep
+# that alias to minimise diff churn now that the renderer is its own module.
+# All renderer entry points are accessed through this alias; ``_shim`` is used
+# only for the CLI-shim-owned helpers (``_parse``, ``_load_*``,
+# ``_write_baseline``). No module-level mutation of either binding.
+_ci_summary: Any = _renderer
 _excel_report: Any = importlib.import_module("make_excel_report")
 _git_info: Any = importlib.import_module("helpers.git_info")
 _report_scoring: Any = importlib.import_module("helpers.report_scoring")
@@ -457,7 +464,7 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
         "xfail_reasons": {},
     }
 
-    rendered, _context = _ci_summary._render(
+    rendered, _context = _ci_summary.render_conformance_summary(
         data,
         "opc.tcp://localhost:40462",
         "2026-05-10 15:46 UTC",
@@ -530,7 +537,7 @@ def test_baseline_written_after_render():
     }
 
     try:
-        _ci_summary._write_baseline(baseline_path, _ci_summary._baseline_payload(context, "2026-05-10T15:46:00Z"))
+        _shim._write_baseline(baseline_path, _ci_summary._baseline_payload(context, "2026-05-10T15:46:00Z"))
 
         written = json.loads(baseline_path.read_text(encoding="utf-8"))
         assert written["score"] == 94

@@ -28,19 +28,25 @@ repos:
       # Ensures every non-generated text file ends with exactly one newline
       # (LF), matching the project's .gitattributes line-ending policy.
       - id: end-of-file-fixer
-        # Lockfiles are package-manager outputs. NuGet/dotnet restore rewrites
-        # packages.lock.json without a trailing newline, so text-hygiene
-        # auto-fixers must not fight Renovate or local package-manager output.
-        exclude: &lockfiles '(^|/)(packages\.lock\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Pipfile\.lock|Gemfile\.lock|Cargo\.lock|composer\.lock)$'
+        # Byte-sensitive files: text-hygiene auto-fixers must not rewrite
+        # them.
+        # - Lockfiles (NuGet/npm/yarn/etc.): package-manager outputs that
+        #   tooling rewrites without a trailing newline; auto-fixers must
+        #   not fight Renovate or local restore.
+        # - Conformance summary expected fixtures
+        #   (tests/unit/reporting/fixtures/expected/*.md): captured
+        #   byte-for-byte from the renderer; must match exactly so the
+        #   byte-identity regression test stays meaningful.
+        exclude: &byte_sensitive '(^|/)(packages\.lock\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Pipfile\.lock|Gemfile\.lock|Cargo\.lock|composer\.lock)$|^OPC_UA_Clients/Release2/IJT_Test_Client/tests/unit/reporting/fixtures/expected/.*\.md$'
 
       # Strips trailing spaces and tabs from all lines.
       - id: trailing-whitespace
-        exclude: *lockfiles
+        exclude: *byte_sensitive
 
       # Converts any CRLF or CR line endings to LF throughout the repo.
       - id: mixed-line-ending
         args: [--fix=lf]
-        exclude: *lockfiles
+        exclude: *byte_sensitive
 
       # Detects leftover merge-conflict markers (<<<<<<<, =======, >>>>>>>).
       # Does NOT auto-fix — the developer must resolve conflicts manually.
@@ -189,7 +195,7 @@ repos:
             print(f"{result.status}: {result.detail}");
             raise SystemExit(0 if result.status == "PASS" else 1)
         pass_filenames: false
-        files: '(^run_all_tests\.py$|^tests/test_root_runner\.py$|^OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_CSharp_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Console_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Test_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Test_Client/scripts/(make_ci_summary|make_excel_report)\.py$|^OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests\.py$|^OPC_UA_Servers/Release2/run_all_tests\.py$)'
+        files: '(^run_all_tests\.py$|^tests/test_root_runner\.py$|^OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_CSharp_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Console_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Test_Client/run_all_tests\.py$|^OPC_UA_Clients/Release2/IJT_Test_Client/scripts/(make_conformance_summary|make_excel_report)\.py$|^OPC_UA_Clients/Release2/IJT_Test_Client/scripts/reporting/conformance_summary\.py$|^OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests\.py$|^OPC_UA_Servers/Release2/run_all_tests\.py$)'
 
   # GitHub Actions workflow schema validation.
   # Validates `.github/workflows/*.{yml,yaml}` against check-jsonschema's

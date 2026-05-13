@@ -673,7 +673,7 @@ def test_optional_import_typing_guard_passes_current_files() -> None:
     result = _runner._check_optional_import_typing()
 
     assert result.status == "PASS"
-    assert result.detail == "8 file(s) verified"
+    assert result.detail == "9 file(s) verified"
 
 
 def test_optional_import_typing_guard_detects_unsuppressed_requests(monkeypatch) -> None:
@@ -701,7 +701,7 @@ def test_optional_import_typing_guard_detects_forward_annotation_reimport(monkey
             return True
 
         def relative_to(self, root):
-            return Path("fake/make_ci_summary.py")
+            return Path("fake/make_conformance_summary.py")
 
         def read_text(self, encoding: str) -> str:
             return "yaml: Any\ntry:\n    import yaml\nexcept ImportError:\n    yaml = None\n"

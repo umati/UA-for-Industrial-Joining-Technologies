@@ -1,42 +1,42 @@
-#!/usr/bin/env python3
-"""
-make_ci_summary.py — Write a GitHub Actions Step Summary from JUnit XML test results.
+"""Conformance summary renderer for the IJT Test Client.
 
-Reads:  test-results/pytest.xml   (or --xml=FILE)
-        test-results/cu-compliance-report.json, when present
-Writes: $GITHUB_STEP_SUMMARY      (GitHub markdown step summary, if env var is set)
-        test-results/summary.md   (always, as a local copy)
+This module owns the Markdown rendering pipeline that produces the
+`IJT Conformance Test Report` written by `make_conformance_summary.py`. It was
+extracted from that script (then named `make_ci_summary.py`) in Phase 1 of the IJT CI / System
+Tests reporting overhaul to keep the rendering logic separately
+testable (`tests/unit/reporting/test_render_conformance_summary.py`).
 
-Called automatically by the CI workflow after the test run. Safe to run locally too.
+The public entry point is `render_conformance_summary(...)`. Its
+signature mirrors the original `_render(...)` so the surrounding CLI
+shim in `make_conformance_summary.py` stays a one-line delegation. The output
+of this function must remain byte-identical to the pre-extraction
+output for the captured fixtures; do not introduce any wording or
+ordering change here without updating the expected Markdown files
+under `tests/unit/reporting/fixtures/expected/` in the same commit.
 """
 
 from __future__ import annotations
 
-import argparse
 import ast
-import json
 import os
 import platform
 import re
 import sys
-import xml.etree.ElementTree as ET  # nosec B405
 from collections import Counter
 from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
 from typing import Any
 
-# Bandit B405/B314 suppressions are limited to trusted JUnit XML from pytest.
-
 try:
     import yaml  # type: ignore[import-untyped]
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+# scripts/reporting/conformance_summary.py is two directories deep inside
+# IJT_Test_Client, so parents[2] points at the Test Client project root.
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _PROFILES_DIR = _PROJECT_ROOT / "profiles"
-_DEFAULT_CU_JSON = _PROJECT_ROOT / "test-results" / "cu-compliance-report.json"
-_DEFAULT_BASELINE_JSON = _PROJECT_ROOT / "test-results" / "report-baseline.json"
 _CU_COMPLIANCE_KEYS = {"supported", "partial", "not_supported", "blocked", "action_needed", "untested"}
 _FINDING_OUTCOMES = {"partial", "not_supported", "blocked", "action_needed"}
 if str(_PROJECT_ROOT) not in sys.path:
@@ -112,77 +112,6 @@ from helpers.report_scoring import (
     status_for as _status_for,
 )
 
-# ── Parse JUnit XML ───────────────────────────────────────────────────────────
-
-
-def _parse(xml_path: Path):
-    tree = ET.parse(xml_path)  # nosec B314
-    root = tree.getroot()
-    suites = root.findall(".//testsuite") if root.tag == "testsuites" else [root]
-
-    passed = failed = errors = skipped = xfailed = 0
-    total_time = 0.0
-    failures: list[dict] = []
-    skip_reasons: dict[str, int] = {}
-    xfail_reasons: dict[str, int] = {}
-
-    for suite in suites:
-        for tc in suite.findall("testcase"):
-            duration = float(tc.get("time", "0") or "0")
-            total_time += duration
-            name = tc.get("name", "")
-            classname = tc.get("classname", "")
-            f = tc.find("failure")
-            e = tc.find("error")
-            s = tc.find("skipped")
-
-            if f is not None:
-                failed += 1
-                failures.append(
-                    {
-                        "name": name,
-                        "classname": classname,
-                        "message": (f.get("message") or (f.text or ""))[:300],
-                    }
-                )
-            elif e is not None:
-                errors += 1
-                failures.append(
-                    {
-                        "name": name,
-                        "classname": classname,
-                        "message": (e.get("message") or (e.text or ""))[:300],
-                    }
-                )
-            elif s is not None:
-                msg = (s.get("message") or "").strip()
-                if (s.get("type") or "").lower() == "pytest.xfail":
-                    xfailed += 1
-                    # Bucket xfail reasons by first sentence
-                    key = msg.split(".")[0][:80] if msg else "no reason"
-                    xfail_reasons[key] = xfail_reasons.get(key, 0) + 1
-                else:
-                    skipped += 1
-                    key = _skip_reason_bucket(msg)
-                    skip_reasons[key] = skip_reasons.get(key, 0) + 1
-            else:
-                passed += 1
-
-    total = passed + failed + errors + skipped + xfailed
-    return {
-        "passed": passed,
-        "failed": failed,
-        "errors": errors,
-        "skipped": skipped,
-        "xfailed": xfailed,
-        "total": total,
-        "duration_s": total_time,
-        "failures": failures,
-        "skip_reasons": dict(sorted(skip_reasons.items(), key=lambda x: -x[1])[:20]),
-        "xfail_reasons": dict(sorted(xfail_reasons.items(), key=lambda x: -x[1])),
-    }
-
-
 # ── Markdown rendering ────────────────────────────────────────────────────────
 
 
@@ -195,12 +124,6 @@ def _status_badge(passed: int, failed: int, errors: int) -> str:
     if failed + errors > 0:
         return f"{_RUN_RESULT_ICONS['failed']} **FAILED**"
     return f"{_RUN_RESULT_ICONS['passed']} **PASSED**"
-
-
-def _load_json(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -346,19 +269,6 @@ def _package_version(package: str) -> str:
         return metadata.version(package)
     except metadata.PackageNotFoundError:
         return "not installed"
-
-
-def _load_baseline(path: Path) -> dict[str, Any] | None:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return None
-    return data if isinstance(data, dict) else None
-
-
-def _write_baseline(path: Path, baseline: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _baseline_age(baseline: dict[str, Any]) -> str:
@@ -982,13 +892,22 @@ def _render_profile_facet_summary(
     return lines, context
 
 
-def _render(
+def render_conformance_summary(
     data: dict,
     server_url: str,
     run_ts: str,
     cu_payload: dict[str, Any] | None,
     baseline: dict[str, Any] | None = None,
 ) -> tuple[str, dict[str, Any] | None]:
+    """Return the IJT Conformance Test Report Markdown plus the report context.
+
+    Inputs are the same as the original `_render(...)` in `make_conformance_summary.py`:
+    parsed JUnit XML data, the OPC UA server URL string, the formatted
+    `run_ts` to print on the report, an optional `cu_payload` from
+    `cu-compliance-report.json`, and an optional `baseline` dict loaded from
+    `report-baseline.json`. The caller is responsible for any baseline write
+    side effect; this function never touches disk.
+    """
     p = data["passed"]
     f = data["failed"] + data["errors"]
     s = data["skipped"]
@@ -1104,60 +1023,3 @@ def _render(
     lines.append("---")
     lines.append("*Full detail: download `report.xlsx` or `report.html` from the run artifacts.*")
     return "\n".join(lines), context
-
-
-# ── Main ──────────────────────────────────────────────────────────────────────
-
-
-def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--xml", default="test-results/pytest.xml")
-    p.add_argument("--out", default="test-results/summary.md")
-    p.add_argument("--cu-json", default=str(_DEFAULT_CU_JSON))
-    p.add_argument("--baseline", default=str(_DEFAULT_BASELINE_JSON))
-    return p.parse_args()
-
-
-def main() -> int:
-    args = _parse_args()
-    xml_path = Path(args.xml)
-
-    if not xml_path.exists():
-        print(f"ERROR: {xml_path} not found", file=sys.stderr)
-        return 1
-
-    data = _parse(xml_path)
-    server_url = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
-    run_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    run_ts_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    cu_payload = _load_json(Path(args.cu_json))
-    baseline_path = Path(args.baseline)
-    baseline = _load_baseline(baseline_path)
-
-    md, context = _render(data, server_url, run_ts, cu_payload, baseline)
-
-    # Write local copy
-    out_path = Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(md, encoding="utf-8")
-    print(f"Summary written: {out_path}")
-    if context is not None:
-        _write_baseline(baseline_path, _baseline_payload(context, run_ts_iso))
-        print(f"Baseline written: {baseline_path}")
-
-    # Write to GitHub Step Summary if running in CI
-    github_summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if github_summary:
-        with open(github_summary, "a", encoding="utf-8") as fh:
-            fh.write(md)
-        print("GitHub Step Summary updated.")
-
-    # Exit non-zero if there were failures (makes CI step fail-aware)
-    total_failures = data["failed"] + data["errors"]
-    if total_failures:
-        print(f"\n  *** {total_failures} FAILURE(S) ***", file=sys.stderr)
-    return 0  # summary script itself always exits 0; pytest exit code controls CI pass/fail
-
-
-if __name__ == "__main__":
-    sys.exit(main())

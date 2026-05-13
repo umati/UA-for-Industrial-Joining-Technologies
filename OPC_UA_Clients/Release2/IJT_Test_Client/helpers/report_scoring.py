@@ -1,7 +1,7 @@
 """Shared scoring, status, KPI formatting, and delta helpers for IJT reports.
 
 Single source of truth for user-facing report logic shared by the Markdown
-generator (``scripts/make_ci_summary.py``) and the Excel generator
+generator (``scripts/make_conformance_summary.py``) and the Excel generator
 (``scripts/make_excel_report.py``).
 
 Architecture rules:

@@ -196,7 +196,8 @@ _RUNNER_SCRIPT_PATHS: tuple[Path, ...] = (
     SERVER_DIR / "run_all_tests.py",
 )
 _OPTIONAL_IMPORT_GUARD_PATHS: tuple[Path, ...] = _RUNNER_SCRIPT_PATHS + (
-    TEST_CLIENT_DIR / "scripts" / "make_ci_summary.py",
+    TEST_CLIENT_DIR / "scripts" / "make_conformance_summary.py",
+    TEST_CLIENT_DIR / "scripts" / "reporting" / "conformance_summary.py",
     TEST_CLIENT_DIR / "scripts" / "make_excel_report.py",
 )
 
