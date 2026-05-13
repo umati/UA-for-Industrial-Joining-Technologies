@@ -111,15 +111,15 @@ jobs:
           set -euo pipefail
           IMG="${IMAGE_NAME}:phase0-${{ steps.decide.outputs.short_sha }}"
           docker run --rm --network=none "$IMG" cat /opt/ijt-browser-ci/metadata.json
-          docker run --rm --network=none "$IMG" sh -c 'python --version | grep -E "^Python 3\.14\."'
-          docker run --rm --network=none "$IMG" sh -c 'node --version | grep -E "^v24\."'
+          docker run --rm --network=none "$IMG" bash -c 'python --version | grep -E "^Python 3\.14\."'
+          docker run --rm --network=none "$IMG" bash -c 'node --version | grep -E "^v24\."'
 
       - name: Phase 0 smoke - cache & permissions probe (non-root UID)
         run: |
           set -euo pipefail
           IMG="${IMAGE_NAME}:phase0-${{ steps.decide.outputs.short_sha }}"
           UID_GID="$(id -u):$(id -g)"
-          docker run --rm --network=none --user "$UID_GID" "$IMG" sh -c '
+          docker run --rm --network=none --user "$UID_GID" "$IMG" bash -c '
             set -euo pipefail
             touch /opt/ijt-browser-ci/home/.probe
             touch /opt/ijt-browser-ci/npm-cache/.probe
@@ -271,8 +271,8 @@ jobs:
           echo "Pulling $REF ..."
           docker pull "$REF"
           docker run --rm --network=none "$REF" cat /opt/ijt-browser-ci/metadata.json
-          docker run --rm --network=none "$REF" sh -c 'python --version | grep -E "^Python 3\.14\."'
-          docker run --rm --network=none "$REF" sh -c 'node --version | grep -E "^v24\."'
+          docker run --rm --network=none "$REF" bash -c 'python --version | grep -E "^Python 3\.14\."'
+          docker run --rm --network=none "$REF" bash -c 'node --version | grep -E "^v24\."'
 
       - name: Job summary
         run: |
