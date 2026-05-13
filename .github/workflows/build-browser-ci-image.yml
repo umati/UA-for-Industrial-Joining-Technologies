@@ -4,19 +4,26 @@ name: Build Browser CI Image
 # live-webclient-browser matrix job in .github/workflows/integration.yml.
 # See .github/docker/ijt-browser-ci/README.md for design.
 #
-# PR A scope: build path only. PR B wires the image into integration.yml.
+# image-pin.json is intentionally excluded from path triggers. The update-pin
+# job opens a PR that changes only that file; merging that PR must not publish
+# a new image and create an image-pin update loop.
 #
-# Two-job split:
+# Three-job split:
 #   - build:   loads image locally, runs Phase 0 smoke under the exact
 #              runtime contract. NO packages: write.
 #   - publish: depends on build; only runs when push == true; pushes to GHCR
 #              with packages: write scoped to this job only.
+#   - update-pin: depends on publish; opens/updates a reviewable PR that
+#                 refreshes image-pin.json. contents/pull-requests write are
+#                 scoped to this job only.
 
 on:
   push:
     branches: [main]
     paths:
       - '.github/docker/ijt-browser-ci/**'
+      - '!.github/docker/ijt-browser-ci/image-pin.json'
+      - '.github/scripts/update_browser_ci_image_pin.py'
       - '.github/workflows/build-browser-ci-image.yml'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package.json'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json'
@@ -25,6 +32,8 @@ on:
   pull_request:
     paths:
       - '.github/docker/ijt-browser-ci/**'
+      - '!.github/docker/ijt-browser-ci/image-pin.json'
+      - '.github/scripts/update_browser_ci_image_pin.py'
       - '.github/workflows/build-browser-ci-image.yml'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package.json'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json'
@@ -42,7 +51,7 @@ on:
         options: [ 'true', 'false' ]
 
 # Workflow-level: read-only. packages: write is granted only on the publish
-# job below.
+# job. contents/pull-requests write are granted only on the update-pin job.
 permissions:
   contents: read
 
@@ -67,6 +76,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
@@ -107,17 +118,21 @@ jobs:
           cache-to: type=gha,scope=ijt-browser-ci,mode=max
 
       - name: Phase 0 smoke - metadata + tool versions
+        env:
+          SHORT_SHA: ${{ steps.decide.outputs.short_sha }}
         run: |
           set -euo pipefail
-          IMG="${IMAGE_NAME}:phase0-${{ steps.decide.outputs.short_sha }}"
+          IMG="${IMAGE_NAME}:phase0-${SHORT_SHA}"
           docker run --rm --network=none "$IMG" cat /opt/ijt-browser-ci/metadata.json
           docker run --rm --network=none "$IMG" bash -c 'python --version | grep -E "^Python 3\.14\."'
           docker run --rm --network=none "$IMG" bash -c 'node --version | grep -E "^v24\."'
 
       - name: Phase 0 smoke - cache & permissions probe (non-root UID)
+        env:
+          SHORT_SHA: ${{ steps.decide.outputs.short_sha }}
         run: |
           set -euo pipefail
-          IMG="${IMAGE_NAME}:phase0-${{ steps.decide.outputs.short_sha }}"
+          IMG="${IMAGE_NAME}:phase0-${SHORT_SHA}"
           UID_GID="$(id -u):$(id -g)"
           docker run --rm --network=none --user "$UID_GID" "$IMG" bash -c '
             set -euo pipefail
@@ -135,9 +150,11 @@ jobs:
         # fails this step and PR A. Artifacts are captured for inspection
         # regardless of pass/fail via the always() upload step below.
         id: deep_smoke
+        env:
+          SHORT_SHA: ${{ steps.decide.outputs.short_sha }}
         run: |
           set -euo pipefail
-          IMG="${IMAGE_NAME}:phase0-${{ steps.decide.outputs.short_sha }}"
+          IMG="${IMAGE_NAME}:phase0-${SHORT_SHA}"
           UID_GID="$(id -u):$(id -g)"
           mkdir -p "${GITHUB_WORKSPACE}/.phase0-artifacts"
           chmod 0777 "${GITHUB_WORKSPACE}/.phase0-artifacts"
@@ -218,6 +235,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
@@ -265,9 +284,11 @@ jobs:
       - name: Verify published image by digest (pull + offline smoke)
         # Proves GHCR pull permission AND that the digest is usable as
         # IJT_BROWSER_CI_IMAGE for PR B. Hard gate.
+        env:
+          PUBLISHED_DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           set -euo pipefail
-          REF="${IMAGE_NAME}@${{ steps.push.outputs.digest }}"
+          REF="${IMAGE_NAME}@${PUBLISHED_DIGEST}"
           echo "Pulling $REF ..."
           docker pull "$REF"
           docker run --rm --network=none "$REF" cat /opt/ijt-browser-ci/metadata.json
@@ -275,6 +296,9 @@ jobs:
           docker run --rm --network=none "$REF" bash -c 'node --version | grep -E "^v24\."'
 
       - name: Job summary
+        env:
+          PUBLISHED_DIGEST: ${{ steps.push.outputs.digest }}
+          PUBLISHED_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           set -euo pipefail
           {
@@ -282,12 +306,153 @@ jobs:
             echo ""
             echo "- Tags:"
             echo '```'
-            echo "${{ steps.meta.outputs.tags }}"
+            echo "${PUBLISHED_TAGS}"
             echo '```'
-            echo "- Digest: \`${{ steps.push.outputs.digest }}\`"
+            echo "- Digest: \`${PUBLISHED_DIGEST}\`"
             echo ""
-            echo "_PR B can pin (paste into \`integration.yml\` or \`image-pin.json\`):_"
+            echo "_The update-pin job opens or updates a reviewed \`image-pin.json\` PR for:_"
             echo '```'
-            echo "${IMAGE_NAME}@${{ steps.push.outputs.digest }}"
+            echo "${IMAGE_NAME}@${PUBLISHED_DIGEST}"
             echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  update-pin:
+    name: Open image-pin update PR
+    needs: publish
+    if: needs.publish.outputs.digest != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: read
+    env:
+      PIN_BRANCH: automation/ijt-browser-ci-image-pin
+      PIN_PATH: .github/docker/ijt-browser-ci/image-pin.json
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Log in to GHCR for metadata readback
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Capture metadata from published digest
+        env:
+          PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          REF="${IMAGE_NAME}@${PUBLISHED_DIGEST}"
+          docker pull "$REF"
+          docker run --rm --network=none "$REF" \
+            cat /opt/ijt-browser-ci/metadata.json > "${RUNNER_TEMP}/ijt-browser-ci-metadata.json"
+          cat "${RUNNER_TEMP}/ijt-browser-ci-metadata.json"
+
+      - name: Update image-pin.json
+        env:
+          PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          python .github/scripts/update_browser_ci_image_pin.py \
+            --pin "$PIN_PATH" \
+            --metadata "${RUNNER_TEMP}/ijt-browser-ci-metadata.json" \
+            --image "$IMAGE_NAME" \
+            --digest "$PUBLISHED_DIGEST" \
+            --image-revision "$GITHUB_SHA" \
+            --image-created "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --image-workflow-run "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          python -m json.tool "$PIN_PATH" > /dev/null
+
+      - name: Open or update image-pin PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- "$PIN_PATH"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "image-pin.json already points at ${PUBLISHED_DIGEST}; no PR needed."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git checkout -B "$PIN_BRANCH"
+          git add "$PIN_PATH"
+          git commit -m "Update IJT Browser CI image pin" \
+            -m "1. Point image-pin.json at the verified GHCR digest published by this workflow." \
+            -m "2. Keep the browser Integration job on a reviewed digest instead of a floating tag."
+          # This automation branch is single-writer and represents the newest
+          # verified digest. Force-with-lease intentionally supersedes an older
+          # open pin PR if a later image publishes before review completes.
+          git fetch origin "${PIN_BRANCH}:refs/remotes/origin/${PIN_BRANCH}" || true
+          git push --force-with-lease "origin" "HEAD:refs/heads/${PIN_BRANCH}"
+
+          body_file="${RUNNER_TEMP}/image-pin-pr.md"
+          cat > "$body_file" <<EOF
+          ## IJT Browser CI image pin update
+
+          This PR was opened by \`.github/workflows/build-browser-ci-image.yml\` after a verified image publish.
+
+          - Published digest: \`${IMAGE_NAME}@${PUBLISHED_DIGEST}\`
+          - Source revision: \`${GITHUB_SHA}\`
+          - Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          The build workflow already performed:
+
+          - Phase 0 smoke under \`--network=none\`
+          - GHCR digest publish
+          - Pull-verify of the published digest
+
+          Note on CI checks: PRs opened by GITHUB_TOKEN do not trigger Integration, CodeQL, pre-commit, actionlint, zizmor, or workflow-policy-guard on the PR itself. The new digest has already been validated by this workflow's Phase 0 smoke under \`--network=none\` and publish-job digest pull-verify.
+
+          To run the full Integration matrix against this exact pin PR, close and reopen the PR or push an empty commit as a user.
+
+          Review focus: \`.github/docker/ijt-browser-ci/image-pin.json\` only.
+          EOF
+
+          existing_pr="$(gh pr list --state open --base main --head "$PIN_BRANCH" --json number --jq '.[0].number // empty')"
+          if [[ -n "$existing_pr" ]]; then
+            gh pr edit "$existing_pr" \
+              --title "Update IJT Browser CI image pin" \
+              --body-file "$body_file"
+            echo "pr=${existing_pr}" >> "$GITHUB_OUTPUT"
+          else
+            pr_url="$(gh pr create \
+              --base main \
+              --head "$PIN_BRANCH" \
+              --title "Update IJT Browser CI image pin" \
+              --body-file "$body_file")"
+            echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Job summary
+        if: always()
+        env:
+          UPDATED: ${{ steps.pr.outputs.changed }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr }}
+          PR_URL: ${{ steps.pr.outputs.pr_url }}
+          PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## IJT Browser CI image - Pin update"
+            echo ""
+            echo "- Published digest: \`${PUBLISHED_DIGEST}\`"
+            echo "- image-pin.json changed: \`${UPDATED:-unknown}\`"
+            if [[ -n "${PR_NUMBER:-}" ]]; then
+              echo "- Existing PR updated: #${PR_NUMBER}"
+            fi
+            if [[ -n "${PR_URL:-}" ]]; then
+              echo "- New PR opened: ${PR_URL}"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

@@ -10,11 +10,24 @@ commit `4ad418b5`.
 
 - `Dockerfile` — image definition (Python 3.14, Node 24, Playwright 1.60.0
   + Chromium + Linux system libs; wheelhouse + npm cache pre-warmed).
+- `image-pin.json` — reviewed digest consumed by the Integration workflow.
+  The image-build workflow updates this file through a pull request after a
+  verified publish; the file is excluded from image-build path triggers to
+  prevent a pin-update loop.
 
 ## Image
 
 Published to `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci`
 by `.github/workflows/build-browser-ci-image.yml`.
+
+The workflow has three permission-separated jobs:
+
+- `build` — no package write permission; builds and runs the full Phase 0
+  smoke path under `--network=none`.
+- `publish` — the only job with `packages: write`; pushes the verified image
+  to GHCR and pull-verifies the digest.
+- `update-pin` — the only job with `contents: write` and
+  `pull-requests: write`; opens or updates the reviewed `image-pin.json` PR.
 
 ## Runtime contract
 
@@ -30,5 +43,6 @@ container is invoked with:
   `PIP_FIND_LINKS=/opt/ijt-browser-ci/pip-wheelhouse`,
   `PIP_CACHE_DIR=...`, `SKIP_VENV_INSTALL=1`, plus the `GITHUB_*` whitelist.
 
-PR A (this PR) introduces only the image build and publish path. PR B will
-wire the image into `integration.yml`.
+Local Web E2E remains native. Neither the root runner nor the Web Client
+runner reads `IJT_BROWSER_CI_IMAGE`; the owned image is wired only in the
+GitHub Actions Integration workflow.
