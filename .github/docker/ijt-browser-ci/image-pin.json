@@ -7,5 +7,5 @@
   "image_revision": "3768a248",
   "image_created": "2026-05-13T20:39:23Z",
   "image_workflow_run": "https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/25824684520",
-  "_comment": "Single source of truth for the IJT Browser CI image consumed by integration.yml live-webclient-browser. IJT_BROWSER_CI_IMAGE is constructed at runtime as image@digest. Refresh procedure: when a new image is published, copy the digest from the Publish to GHCR job summary into this file. The workflow MUST fail fast if digest does not match ^sha256:[0-9a-f]{64}$."
+  "_comment": "Single source of truth for the IJT Browser CI image consumed by integration.yml live-webclient-browser. IJT_BROWSER_CI_IMAGE is constructed at runtime as image@digest. Refresh procedure: the build-browser-ci-image workflow publishes a verified image, updates this file on the automation/ijt-browser-ci-image-pin branch, and opens or updates a reviewable PR. The workflow MUST fail fast if digest does not match ^sha256:[0-9a-f]{64}$."
 }

@@ -8,6 +8,7 @@ syntax/regex failure on Linux runners).
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import shutil
@@ -18,6 +19,8 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _PIN_PATH = _REPO_ROOT / ".github" / "docker" / "ijt-browser-ci" / "image-pin.json"
+_PIN_UPDATE_SCRIPT = _REPO_ROOT / ".github" / "scripts" / "update_browser_ci_image_pin.py"
+_IMAGE_BUILD_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "build-browser-ci-image.yml"
 
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _DIGEST_REF_SUFFIX_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
@@ -193,3 +196,193 @@ def test_local_web_e2e_does_not_require_docker_or_ghcr() -> None:
             "`@playwright/test` version is the single source of truth for the "
             "local browser bundle. CI image references belong in the workflow."
         )
+
+
+# ---------------------------------------------------------------------------
+# Drift-guard automation contracts
+# ---------------------------------------------------------------------------
+
+
+def _load_pin_update_module():
+    spec = importlib.util.spec_from_file_location("update_browser_ci_image_pin", _PIN_UPDATE_SCRIPT)
+    assert spec and spec.loader, f"unable to import {_PIN_UPDATE_SCRIPT}"
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_update_browser_ci_image_pin_script_writes_verified_publish_metadata() -> None:
+    """The updater must produce a reviewed pin from image metadata, not prose."""
+    module = _load_pin_update_module()
+    updated = module.build_updated_pin(
+        current={
+            "image": "ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci",
+            "digest": "sha256:" + "0" * 64,
+            "playwright_version": "1.60.0",
+            "node_version": "24.x",
+            "python_version": "3.14.x",
+            "image_revision": "old",
+            "image_created": "old",
+            "image_workflow_run": "old",
+            "custom_audit_field": "preserved",
+            "_comment": "old manual comment",
+        },
+        metadata={
+            "playwright_version": "1.60.0",
+            "node_version": "v24.11.1",
+            "python_version": "Python 3.14.0",
+            "base_digests": {
+                "ubuntu": "sha256:" + "a" * 64,
+                "python": "sha256:" + "b" * 64,
+                "node": "sha256:" + "c" * 64,
+            },
+        },
+        image="ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci",
+        digest="sha256:" + "1" * 64,
+        image_revision="abc1234",
+        image_created="2026-05-13T22:00:00Z",
+        image_workflow_run=(
+            "https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/1"
+        ),
+    )
+
+    assert updated["digest"] == "sha256:" + "1" * 64
+    assert updated["node_version"] == "v24.11.1"
+    assert updated["python_version"] == "Python 3.14.0"
+    assert updated["base_digests"]["ubuntu"] == "sha256:" + "a" * 64
+    assert updated["custom_audit_field"] == "preserved"
+    assert "opens or updates a reviewable PR" in updated["_comment"]
+
+
+def test_update_browser_ci_image_pin_script_keeps_current_pin_when_digest_matches() -> None:
+    """A scheduled rebuild with the same digest must not churn image-pin PRs."""
+    module = _load_pin_update_module()
+    current = {
+        "image": "ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci",
+        "digest": "sha256:" + "1" * 64,
+        "playwright_version": "1.60.0",
+        "node_version": "24.x",
+        "python_version": "3.14.x",
+        "image_revision": "old",
+        "image_created": "old",
+        "image_workflow_run": "old",
+        "_comment": "already reviewed",
+    }
+
+    updated = module.build_updated_pin(
+        current=current,
+        metadata={
+            "playwright_version": "1.60.0",
+            "node_version": "v24.11.1",
+            "python_version": "Python 3.14.0",
+        },
+        image=current["image"],
+        digest=current["digest"],
+        image_revision="new",
+        image_created="2026-05-13T23:00:00Z",
+        image_workflow_run="https://github.com/example/repo/actions/runs/2",
+    )
+
+    assert updated == current
+
+
+@pytest.mark.parametrize(
+    ("image", "digest", "message"),
+    [
+        (
+            "ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci:latest",
+            "sha256:" + "1" * 64,
+            "floating tag",
+        ),
+        (
+            "docker.io/umati/ijt-browser-ci",
+            "sha256:" + "1" * 64,
+            "lowercase ghcr.io",
+        ),
+        (
+            "ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci",
+            "sha256:not-a-digest",
+            "sha256",
+        ),
+    ],
+)
+def test_update_browser_ci_image_pin_script_rejects_unsafe_references(
+    image: str,
+    digest: str,
+    message: str,
+) -> None:
+    module = _load_pin_update_module()
+
+    with pytest.raises(ValueError, match=message):
+        module.build_updated_pin(
+            current={},
+            metadata={
+                "playwright_version": "1.60.0",
+                "node_version": "v24.11.1",
+                "python_version": "Python 3.14.0",
+            },
+            image=image,
+            digest=digest,
+            image_revision="abc1234",
+            image_created="2026-05-13T22:00:00Z",
+            image_workflow_run="https://github.com/example/repo/actions/runs/1",
+        )
+
+
+def test_build_browser_ci_image_workflow_opens_reviewed_pin_pr_without_loop() -> None:
+    """Pin refresh must be automatic but still reviewable and non-self-triggering."""
+    import yaml
+
+    workflow = yaml.safe_load(_IMAGE_BUILD_WORKFLOW.read_text(encoding="utf-8"))
+    triggers = workflow.get("on", workflow.get(True, {}))
+    for event_name in ("push", "pull_request"):
+        paths = triggers[event_name]["paths"]
+        docker_glob_index = paths.index(".github/docker/ijt-browser-ci/**")
+        pin_exclude_index = paths.index("!.github/docker/ijt-browser-ci/image-pin.json")
+        assert docker_glob_index < pin_exclude_index, (
+            "image-pin.json must be excluded after the docker directory include; "
+            "otherwise the automation branch can publish a fresh image and loop."
+        )
+
+    assert workflow["permissions"] == {"contents": "read"}
+    jobs = workflow["jobs"]
+    assert jobs["publish"]["permissions"] == {
+        "contents": "read",
+        "packages": "write",
+        "id-token": "write",
+    }
+
+    update_pin_job = jobs["update-pin"]
+    assert update_pin_job["needs"] == "publish"
+    assert update_pin_job["permissions"] == {
+        "contents": "write",
+        "pull-requests": "write",
+        "packages": "read",
+    }
+    assert update_pin_job["env"]["PIN_BRANCH"] == "automation/ijt-browser-ci-image-pin"
+    assert update_pin_job["env"]["PIN_PATH"] == ".github/docker/ijt-browser-ci/image-pin.json"
+
+    step_names = [step.get("name", "") for step in update_pin_job["steps"]]
+    assert "Capture metadata from published digest" in step_names
+    assert "Update image-pin.json" in step_names
+    assert "Open or update image-pin PR" in step_names
+
+    update_step = next(
+        step for step in update_pin_job["steps"] if step.get("name") == "Update image-pin.json"
+    )
+    assert ".github/scripts/update_browser_ci_image_pin.py" in update_step["run"]
+    assert "--metadata" in update_step["run"]
+    assert '--digest "$PUBLISHED_DIGEST"' in update_step["run"]
+
+    pr_step = next(
+        step
+        for step in update_pin_job["steps"]
+        if step.get("name") == "Open or update image-pin PR"
+    )
+    pr_body = pr_step["run"]
+    assert "git push --force-with-lease" in pr_body
+    assert "gh pr list" in pr_body
+    assert "gh pr edit" in pr_body
+    assert "gh pr create" in pr_body
+    assert "Review focus:" in pr_body
+    assert ".github/docker/ijt-browser-ci/image-pin.json" in pr_body
