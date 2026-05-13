@@ -1049,7 +1049,14 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
         assert "build-browser-ci-image.yml" in pull_body, (
             "Pull step diagnostic must name the image-build workflow so operators can republish."
         )
-        assert "ghcr.io" in pull_body, "Pull step diagnostic must name the registry (ghcr.io)."
+        # Match the precise diagnostic phrase from integration.yml so this
+        # assertion can't be misread as URL-substring sanitization (CodeQL
+        # py/incomplete-url-substring-sanitization false-positive on the
+        # bare "ghcr.io" substring).
+        assert "ghcr.io (GHCR)" in pull_body, (
+            "Pull step diagnostic must name the registry as `ghcr.io (GHCR)` "
+            "so the operator immediately knows which registry failed."
+        )
 
         run_step = next(
             step
