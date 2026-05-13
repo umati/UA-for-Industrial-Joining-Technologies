@@ -1391,8 +1391,24 @@ def _stage_playwright_install() -> StageResult:
             label="playwright install chromium --with-deps",
             env=env,
         )
-        if rc != 0:
-            _warn("--with-deps failed, retrying without it")
+        # ``--with-deps`` is the load-bearing CI contract on Linux: the
+        # Integration ``live-webclient-browser`` job runs on stock
+        # ``ubuntu-latest`` and relies on this stage to install Chromium
+        # plus its Linux system libraries. Falling back to a bare
+        # ``playwright install chromium`` after ``--with-deps`` fails
+        # would let the install stage report success while the browser
+        # would crash at first launch because libnss3/libatk/etc. are
+        # missing. In CI we therefore fail fast on ``--with-deps``
+        # failure so the job surfaces the real cause instead of a later
+        # opaque browser-launch error in the Playwright suite.
+        #
+        # On a local developer Linux machine the system libraries are
+        # almost always already installed by the distro, so the bare
+        # fallback is still useful when ``--with-deps`` only fails
+        # because ``sudo`` is unavailable or the package manager is
+        # locked. The fallback is therefore gated to non-CI Linux.
+        if rc != 0 and not IS_CI:
+            _warn("--with-deps failed, retrying without it (local Linux only)")
             rc = _run(
                 [playwright, "install", "chromium"],
                 label="playwright install chromium",

@@ -22,7 +22,7 @@ a web browser. The backend is Python with WebSockets. The frontend is Node.js.
 - Local Playwright browser tests need Chromium downloaded from `https://cdn.playwright.dev` over HTTPS.
 - On corporate networks, set `HTTPS_PROXY` for the proxy path or `PLAYWRIGHT_DOWNLOAD_HOST` for an approved mirror before running `npx playwright install chromium`.
 - For offline machines, prepopulate a browser cache and set `PLAYWRIGHT_BROWSERS_PATH` to that mirror/cache location.
-- For CI-equivalent browser dependencies, run the tests in the pinned Playwright Linux image documented in [`docs/TEST_TIERS.md`](../../../docs/TEST_TIERS.md).
+- For CI-equivalent browser dependencies, the Integration `live-webclient-browser` job runs on stock `ubuntu-latest` and installs Chromium with `npx playwright install chromium --with-deps` against the locked `@playwright/test` version in [`package.json`](./package.json); reproduce that same path locally on a Linux host (or WSL) to match CI exactly. See [`docs/TEST_TIERS.md`](../../../docs/TEST_TIERS.md) for the full tier description.
 
 ## Option 1 - Local Setup
 

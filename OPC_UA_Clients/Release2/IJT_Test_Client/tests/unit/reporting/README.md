@@ -16,16 +16,36 @@ renderer's output during refactors.
 
 ## Determinism inputs
 
-The byte-identity test calls the renderer with frozen inputs (kept in
-sync with the regenerator, [`_capture_expected_summaries.py`](_capture_expected_summaries.py)):
+The byte-identity test calls the renderer with frozen inputs taken from
+[`_frozen_env.py`](_frozen_env.py), which is also imported by the
+regenerator ([`_capture_expected_summaries.py`](_capture_expected_summaries.py))
+so both sides cannot drift:
 
 | Input | Value | Why frozen |
 |---|---|---|
-| `run_ts` | `2026-05-13 14:00 UTC` | Avoids `datetime.now()` injection |
+| `run_ts` | `2026-05-13 14:00 UTC` | Avoids `datetime.now()` injection into the rendered header |
 | `server_url` | `opc.tcp://fixture.ijt.test:40451` | Avoids env leak from `OPCUA_SERVER_URL` |
+| `report_environment` | `FROZEN_ENV` (a `ReportEnvironment` instance) | Bundles every runtime-derived value the renderer would otherwise read live: short git SHA, Python version, `asyncua` version, host OS string, `GITHUB_*` run-logs URL, and `now_utc` for age math. Production callers leave the kwarg as `None` and the renderer captures these via `ReportEnvironment.from_runtime()`. |
 
-If the renderer ever starts reading another non-deterministic input,
-this README and the test must be updated together.
+The renderer routes **every** runtime-derived value through the
+`ReportEnvironment` seam (no `datetime.now()`, `platform.*`,
+`importlib.metadata`, git, or `os.environ.get("GITHUB_*")` calls outside
+that seam). Two companion tests in
+[`test_render_conformance_summary.py`](test_render_conformance_summary.py)
+guard the seam:
+
+- `test_renderer_ignores_live_environment_when_frozen_env_passed` —
+  monkeypatches every live-state reader to a sentinel and asserts the
+  output stays byte-identical to the expected fixture. Any future
+  bypass of the seam fails this test.
+- `test_runtime_report_environment_reads_live_state` —
+  asserts `ReportEnvironment.from_runtime()` actually reads the
+  patched live values, so the seam is not a no-op.
+
+If the renderer ever needs to consume a new runtime-derived input, add
+it to `ReportEnvironment` (with a `from_runtime` capture), update
+`_frozen_env.FROZEN_ENV` with a frozen value, and update this README in
+the same commit.
 
 ## Fixtures
 

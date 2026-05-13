@@ -23,6 +23,7 @@ import platform
 import re
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
@@ -271,13 +272,61 @@ def _package_version(package: str) -> str:
         return "not installed"
 
 
-def _baseline_age(baseline: dict[str, Any]) -> str:
+@dataclass(frozen=True)
+class ReportEnvironment:
+    """Frozen execution-environment metadata for the conformance summary.
+
+    Bundles every runtime-derived value the renderer would otherwise read
+    from ``platform``, ``importlib.metadata``, the local git checkout, the
+    ``GITHUB_*`` environment variables, or the system wall clock. Production
+    callers should construct this from live state via :meth:`from_runtime` (which is also
+    the implicit default when ``report_environment=None`` is passed to
+    :func:`render_conformance_summary`). Byte-identity tests and the
+    capture helper pass a frozen instance so the rendered Markdown stays
+    deterministic regardless of which Python patch version, host OS,
+    asyncua release, git SHA, or GitHub Actions run hosts the test — the
+    project promises Python ``3.14+`` is supported, so the test contract
+    must not depend on the exact patch version of any of those inputs.
+    """
+
+    git_sha: str
+    python_version: str
+    asyncua_version: str
+    host_os: str
+    run_logs_url: str
+    now_utc: datetime
+    repro_command: str = "python run_all_tests.py"
+
+    @classmethod
+    def from_runtime(cls) -> ReportEnvironment:
+        """Build a :class:`ReportEnvironment` from the current process state."""
+        return cls(
+            git_sha=_short_git_sha(_PROJECT_ROOT),
+            python_version=platform.python_version(),
+            asyncua_version=_package_version("asyncua"),
+            host_os=platform.platform(),
+            run_logs_url=_run_logs_url(),
+            now_utc=_utc_now(),
+        )
+
+
+def _utc_now() -> datetime:
+    """Return the current UTC time as an aware ``datetime``.
+
+    Wrapped in a helper so the renderer has exactly one entry point that
+    reads the wall clock; this lets ``ReportEnvironment.from_runtime`` and
+    the leak-prevention regression test agree on the same single seam.
+    """
+    return datetime.now(timezone.utc)
+
+
+def _baseline_age(baseline: dict[str, Any], now_utc: datetime) -> str:
     raw = str(baseline.get("run_ts") or "")
     try:
         previous = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
         return "previous run"
-    delta = datetime.now(timezone.utc) - previous
+    delta = now_utc - previous
     days = delta.days
     if days > 0:
         return f"{days} day{'s' if days != 1 else ''} ago"
@@ -549,12 +598,11 @@ def _build_report_context(cu_payload: dict[str, Any] | None, baseline: dict[str,
 def _baseline_payload(
     context: dict[str, Any],
     run_ts_iso: str,
-    *,
-    git_sha: str | None = None,
+    env: ReportEnvironment,
 ) -> dict[str, Any]:
     return {
         "run_ts": run_ts_iso,
-        "git_sha": git_sha if git_sha is not None else _short_git_sha(_PROJECT_ROOT),
+        "git_sha": env.git_sha,
         "score": context["score"],
         "validation_health_pct": context["validation_health_value"],
         "spec_coverage_pct": context["spec_coverage_value"],
@@ -583,7 +631,7 @@ def _delta_summary(context: dict[str, Any], baseline: dict[str, Any] | None) -> 
     return {"new": new, "resolved": resolved, "regressed": regressed}
 
 
-def _render_delta_block(context: dict[str, Any], baseline: dict[str, Any] | None) -> list[str]:
+def _render_delta_block(context: dict[str, Any], baseline: dict[str, Any] | None, now_utc: datetime) -> list[str]:
     lines: list[str] = []
     if not baseline:
         lines.append("### Δ Since Last Run")
@@ -592,7 +640,7 @@ def _render_delta_block(context: dict[str, Any], baseline: dict[str, Any] | None
         lines.append("")
         return lines
     previous_sha = str(baseline.get("git_sha") or "unknown")
-    lines.append(f"### Δ Since Last Run (commit `{previous_sha}`, {_baseline_age(baseline)})")
+    lines.append(f"### Δ Since Last Run (commit `{previous_sha}`, {_baseline_age(baseline, now_utc)})")
     lines.append("")
     delta = _delta_summary(context, baseline)
     previous_score = baseline.get("score", "n/a")
@@ -690,20 +738,14 @@ def _render_review_sections(context: dict[str, Any], limit: int = 10) -> list[st
     return lines
 
 
-def _render_test_environment(
-    *,
-    git_sha: str | None = None,
-    run_logs_url: str | None = None,
-) -> list[str]:
-    resolved_git_sha = git_sha if git_sha is not None else _short_git_sha(_PROJECT_ROOT)
-    resolved_run_logs_url = run_logs_url if run_logs_url is not None else _run_logs_url()
+def _render_test_environment(*, env: ReportEnvironment) -> list[str]:
     lines = ["| Item | Value |", "|---|---|"]
-    lines.append(f"| Test Client commit | `{resolved_git_sha}` |")
-    lines.append(f"| Python | {platform.python_version()} |")
-    lines.append(f"| asyncua | {_package_version('asyncua')} |")
-    lines.append(f"| Host OS | {_md_cell(platform.platform())} |")
-    lines.append("| Repro command | `python run_all_tests.py` |")
-    lines.append(f"| Run logs | {_md_cell(resolved_run_logs_url)} |")
+    lines.append(f"| Test Client commit | `{env.git_sha}` |")
+    lines.append(f"| Python | {env.python_version} |")
+    lines.append(f"| asyncua | {env.asyncua_version} |")
+    lines.append(f"| Host OS | {_md_cell(env.host_os)} |")
+    lines.append(f"| Repro command | `{env.repro_command}` |")
+    lines.append(f"| Run logs | {_md_cell(env.run_logs_url)} |")
     return lines
 
 
@@ -711,9 +753,9 @@ def _render_profile_facet_summary(
     cu_payload: dict[str, Any] | None,
     baseline: dict[str, Any] | None,
     *,
-    git_sha: str | None = None,
-    run_logs_url: str | None = None,
+    env: ReportEnvironment | None = None,
 ) -> tuple[list[str], dict[str, Any] | None]:
+    resolved_env = env if env is not None else ReportEnvironment.from_runtime()
     context = _build_report_context(cu_payload, baseline)
     if context is None:
         return [], None
@@ -727,7 +769,7 @@ def _render_profile_facet_summary(
     facet_map: dict[str, list[str]] = context["facet_map"]
 
     lines: list[str] = []
-    lines.extend(_render_delta_block(context, baseline))
+    lines.extend(_render_delta_block(context, baseline, resolved_env.now_utc))
     lines.extend(_render_supports_block(context))
     lines.extend(_render_review_sections(context))
 
@@ -868,7 +910,7 @@ def _render_profile_facet_summary(
     lines.append("<details>")
     lines.append("<summary><b>Test Environment</b></summary>")
     lines.append("")
-    lines.extend(_render_test_environment(git_sha=git_sha, run_logs_url=run_logs_url))
+    lines.extend(_render_test_environment(env=resolved_env))
     lines.append("")
     lines.append("</details>")
     lines.append("")
@@ -904,6 +946,7 @@ def _render_profile_facet_summary(
     lines.append("")
     lines.append("</details>")
     lines.append("")
+    context["report_environment"] = resolved_env
     return lines, context
 
 
@@ -914,8 +957,7 @@ def render_conformance_summary(
     cu_payload: dict[str, Any] | None,
     baseline: dict[str, Any] | None = None,
     *,
-    git_sha: str | None = None,
-    run_logs_url: str | None = None,
+    report_environment: ReportEnvironment | None = None,
 ) -> tuple[str, dict[str, Any] | None]:
     """Return the IJT Conformance Test Report Markdown plus the report context.
 
@@ -926,15 +968,19 @@ def render_conformance_summary(
     `report-baseline.json`. The caller is responsible for any baseline write
     side effect; this function never touches disk.
 
-    The keyword-only ``git_sha`` and ``run_logs_url`` parameters override the
-    build-metadata defaults, which are otherwise read from the local git
-    checkout and the ``GITHUB_*`` environment variables. Production callers
-    should leave them as ``None`` (current behavior); byte-identity tests
-    pass frozen values so the rendered Markdown stays deterministic across
-    machines and CI runners.
+    The keyword-only ``report_environment`` parameter bundles every
+    runtime-derived value the report would otherwise read from
+    ``platform``, ``importlib.metadata``, the local git checkout, or the
+    ``GITHUB_*`` environment variables (see :class:`ReportEnvironment`).
+    Production callers leave it as ``None`` and the renderer builds it from
+    live state via :meth:`ReportEnvironment.from_runtime`. Byte-identity
+    tests and the capture helper pass a frozen instance so the rendered
+    Markdown stays deterministic regardless of which Python patch version,
+    host OS, asyncua release, git SHA, or GitHub Actions run hosts the
+    test — a property the project's ``Python 3.14+`` support promise
+    requires.
     """
-    resolved_git_sha = git_sha if git_sha is not None else _short_git_sha(_PROJECT_ROOT)
-    resolved_run_logs_url = run_logs_url if run_logs_url is not None else _run_logs_url()
+    resolved_env = report_environment if report_environment is not None else ReportEnvironment.from_runtime()
     p = data["passed"]
     f = data["failed"] + data["errors"]
     s = data["skipped"]
@@ -944,8 +990,7 @@ def render_conformance_summary(
     profile_lines, context = _render_profile_facet_summary(
         cu_payload,
         baseline,
-        git_sha=resolved_git_sha,
-        run_logs_url=resolved_run_logs_url,
+        env=resolved_env,
     )
 
     lines: list[str] = []
@@ -962,7 +1007,7 @@ def render_conformance_summary(
     lines.append(f"| **Server** | {_md_cell(server_name)} (`{server_url}`) |")
     lines.append(f"| **Capability profile** | {_md_cell(active_label)} |")
     lines.append(f"| **Run** | {run_ts} · Duration {mins}m {secs}s |")
-    lines.append(f"| **Build** | commit `{resolved_git_sha}` · run logs: {_md_cell(resolved_run_logs_url)} |")
+    lines.append(f"| **Build** | commit `{resolved_env.git_sha}` · run logs: {_md_cell(resolved_env.run_logs_url)} |")
     lines.append("")
 
     if context:

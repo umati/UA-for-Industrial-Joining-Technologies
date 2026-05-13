@@ -537,13 +537,18 @@ def test_baseline_written_after_render():
     }
 
     try:
-        _shim._write_baseline(baseline_path, _ci_summary._baseline_payload(context, "2026-05-10T15:46:00Z"))
+        baseline_env = _ci_summary.ReportEnvironment.from_runtime()
+        _shim._write_baseline(
+            baseline_path,
+            _ci_summary._baseline_payload(context, "2026-05-10T15:46:00Z", baseline_env),
+        )
 
         written = json.loads(baseline_path.read_text(encoding="utf-8"))
         assert written["score"] == 94
         assert written["validation_health_pct"] == 100.0
         assert written["spec_coverage_pct"] == 79.7
         assert written["cu_outcomes"] == {"joining_system_base": "supported"}
+        assert written["git_sha"] == baseline_env.git_sha
     finally:
         baseline_path.unlink(missing_ok=True)
 

@@ -10,7 +10,7 @@
 #   webclient-docker     Web Client             Docker unit/prod tests
 #   int-testclient       Test Client            Windows: OPC UA server (port 40462) + Test Client full suite
 #   live-webclient       Web Client             Windows: local runner web-client-live-* matrix
-#   live-webclient-browser Web Client           Linux Playwright container: web-client-e2e-* matrix
+#   live-webclient-browser Web Client           Linux stock ubuntu-latest: web-client-e2e-* matrix; Chromium installed by the Web Client runner
 #   live-console         Console Client         Windows: Console Client live tests (port 40461)
 #   csharp-live          C# Client              Windows: xUnit live tests (port 40464) - nightly
 #   report               Combined summary                 Always runs after all jobs
@@ -454,22 +454,28 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Web Client - Browser E2E Runner Matrix
-  #   Runs every Playwright/headless-Chromium suite in the pinned Linux
-  #   Playwright image. Windows browser compatibility coverage is tracked
-  #   separately so the bulk browser logic suite does not depend on
-  #   Windows-hosted Chromium process stability.
+  #   Runs every Playwright/headless-Chromium suite on the standard
+  #   ubuntu-latest runner. Chromium and its system dependencies are
+  #   installed at the start of each job by the Web Client runner's
+  #   `_stage_playwright_install()`, which downloads the browser bundle
+  #   matching the locked `@playwright/test` version from
+  #   `cdn.playwright.dev`. The job intentionally does NOT use a job-level
+  #   `container:` image: GitHub creates container-job runtimes before any
+  #   workflow step runs, so a registry pull failure (e.g. transient MCR
+  #   outage) takes the whole job down with no in-job retry, fallback, or
+  #   diagnostics possible. Letting Playwright install its own browsers on
+  #   a stock runner removes that single point of failure entirely; the
+  #   `--with-deps` install path matches Playwright's own CI guidance.
+  #   Windows browser compatibility coverage is tracked separately so the
+  #   bulk browser logic suite does not depend on Windows-hosted Chromium
+  #   process stability.
   # ───────────────────────────────────────────────────────────────────────────
   live-webclient-browser:
     name: "Web Client Browser - ${{ matrix.label }}"
     runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright:v1.60.0-noble@sha256:83192064c7510f7ee73dd63dc5f22a5e01a92c81a2e6a9c715d9e3fe55471fd9
-      options: --ipc=host
     timeout-minutes: 30
     permissions:
       contents: read
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     strategy:
       fail-fast: false
       matrix:
@@ -495,12 +501,6 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           persist-credentials: false
-
-      - name: Install setup-python OS helper
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends lsb-release
-          rm -rf /var/lib/apt/lists/*
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
@@ -1441,11 +1441,11 @@ jobs:
               "",
               "### Browser E2E Tests",
               "",
-              "> Platform: Ubuntu latest — pinned Playwright Linux container `mcr.microsoft.com/playwright:v1.60.0-noble@sha256:83192064c7510f7ee73dd63dc5f22a5e01a92c81a2e6a9c715d9e3fe55471fd9`",
+              "> Platform: Ubuntu latest — Chromium installed by `npx playwright install chromium --with-deps` matching the locked `@playwright/test` version in `OPC_UA_Clients/Release2/IJT_Web_Client/package.json`",
               "",
               "| Suite | Surface | Tests | Skipped | Notes |",
               "|:------|:--------|------:|--------:|:------|",
-              f"| Web Client — Browser E2E | Chromium DOM/JS + OPC UA WebSocket + result/event UX | {tests(*wc_browser, baseline=baseline_suite(integration_baseline, 'wc_browser'))} | {skips(wc_browser[3])} | {skip_note_inline(wc_browser_skips, wc_browser[3], 'Headless Chromium in pinned Linux image')} |",
+              f"| Web Client — Browser E2E | Chromium DOM/JS + OPC UA WebSocket + result/event UX | {tests(*wc_browser, baseline=baseline_suite(integration_baseline, 'wc_browser'))} | {skips(wc_browser[3])} | {skip_note_inline(wc_browser_skips, wc_browser[3], 'Headless Chromium installed via Playwright CLI on the runner')} |",
           ]
 
           if wc_feature_timings:

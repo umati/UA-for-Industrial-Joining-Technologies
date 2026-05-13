@@ -948,6 +948,128 @@ def test_playwright_install_skips_with_deps_on_windows(monkeypatch):
     assert calls == [["playwright.cmd", "install", "chromium"]]
 
 
+def test_playwright_install_uses_with_deps_on_linux(monkeypatch):
+    """Linux ``_stage_playwright_install`` must invoke ``--with-deps``.
+
+    This is the permanent replacement path for the previously pinned
+    ``mcr.microsoft.com/playwright`` job-level container in
+    ``.github/workflows/integration.yml`` (``live-webclient-browser``).
+    The Integration job now runs on stock ``ubuntu-latest`` and relies
+    on this stage to install Chromium plus its Linux system
+    dependencies against the locked ``@playwright/test`` version in
+    ``package.json``. If the ``--with-deps`` invocation ever regresses
+    to a bare ``playwright install chromium`` on Linux, the CI job will
+    succeed in installing the browser binary but fail at first launch
+    on a fresh runner because the required system libraries are not
+    present. This test guards that contract.
+    """
+    runner = _load_runner()
+    calls = []
+
+    monkeypatch.setattr(runner, "IS_WINDOWS", False)
+    monkeypatch.setattr(runner, "IS_CI", True)
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "/usr/local/bin/playwright")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_warn", lambda message: None)
+    monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return 0
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_playwright_install()
+
+    assert result.rc == 0
+    assert calls == [["/usr/local/bin/playwright", "install", "chromium", "--with-deps"]], (
+        "Linux `_stage_playwright_install` must invoke "
+        "`playwright install chromium --with-deps`. This is the permanent "
+        "replacement for the removed Playwright job-level container in "
+        "integration.yml's `live-webclient-browser` job; dropping "
+        "`--with-deps` would leave Chromium without its Linux system "
+        "libraries on stock ubuntu-latest runners and fail at first launch."
+    )
+
+
+def test_playwright_install_fails_fast_in_ci_when_with_deps_fails(monkeypatch):
+    """CI Linux must not silently fall back to bare `playwright install chromium`.
+
+    On stock ``ubuntu-latest`` the ``--with-deps`` invocation is the
+    only step that installs the system libraries Chromium needs at
+    runtime (libnss3, libatk, libcups, etc.). A bare fallback would let
+    the install stage report success while the actual browser launch
+    would fail later inside the Playwright suite with an opaque error.
+    Integration's ``live-webclient-browser`` job therefore relies on
+    this stage failing fast in CI so the real cause surfaces at the
+    install step, not deep in a downstream test run.
+    """
+    runner = _load_runner()
+    calls = []
+
+    monkeypatch.setattr(runner, "IS_WINDOWS", False)
+    monkeypatch.setattr(runner, "IS_CI", True)
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "/usr/local/bin/playwright")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_warn", lambda message: None)
+    monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return 1
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_playwright_install()
+
+    assert result.rc == 1
+    assert calls == [["/usr/local/bin/playwright", "install", "chromium", "--with-deps"]], (
+        "In CI on Linux the install stage must fail fast on `--with-deps` "
+        "failure and must NOT retry with a bare `playwright install chromium`. "
+        "Falling back would mask missing system libraries and surface as an "
+        "opaque browser-launch failure later in the Playwright suite."
+    )
+    assert "Browser download failed" in result.notes[0]
+
+
+def test_playwright_install_retries_without_with_deps_on_local_linux(monkeypatch):
+    """Local (non-CI) Linux retains the developer-convenience fallback.
+
+    On a developer Linux machine the Chromium system libraries are
+    almost always already installed by the distro, so ``--with-deps``
+    can fail purely because ``sudo`` is unavailable or the package
+    manager is locked. In that case retrying without ``--with-deps``
+    succeeds and the developer gets a working browser without manual
+    intervention. The fallback is gated to ``not IS_CI`` so it never
+    masks the CI contract.
+    """
+    runner = _load_runner()
+    calls = []
+
+    monkeypatch.setattr(runner, "IS_WINDOWS", False)
+    monkeypatch.setattr(runner, "IS_CI", False)
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "/usr/local/bin/playwright")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_warn", lambda message: None)
+    monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
+
+    rcs = iter([1, 0])
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return next(rcs)
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_playwright_install()
+
+    assert result.rc == 0
+    assert calls == [
+        ["/usr/local/bin/playwright", "install", "chromium", "--with-deps"],
+        ["/usr/local/bin/playwright", "install", "chromium"],
+    ]
+
+
 def test_e2e_local_connection_waits_for_endpoint_state_not_visual_status():
     source = (_PROJECT_ROOT / "tests" / "e2e" / "page-objects.mjs").read_text(encoding="utf-8")
     start = source.index("async connectToLocal")
@@ -1545,8 +1667,24 @@ def test_playwright_config_uses_runtime_ui_port_and_no_retries():
     assert "outputFile: `${TEST_RESULTS_DIR}/playwright.xml`" in source
     assert "const PLAYWRIGHT_WORKERS" in source
     assert "process.env.IJT_PLAYWRIGHT_WORKERS" in source
-    assert "canonicalPlaywrightImage" in source
-    assert "mcr.microsoft.com/playwright:v1.60.0-noble@sha256:" in source
+    # Browser e2e CI installs Chromium via the Web Client runner's
+    # ``npx playwright install chromium --with-deps`` step, not a pinned
+    # container image. This guard prevents anyone from re-introducing
+    # the old image-pin shape that coupled the config to a specific MCR
+    # digest and silently re-coupled CI to a registry SPOF.
+    assert "canonicalPlaywrightImage" not in source, (
+        "playwright.config.mjs must not export a canonicalPlaywrightImage "
+        "metadata field. Browser e2e CI no longer runs inside a job-level "
+        "Playwright container; the locked @playwright/test version in "
+        "package.json is the single source of truth for the browser bundle."
+    )
+    assert "mcr.microsoft.com/playwright" not in source, (
+        "playwright.config.mjs must not reference an MCR Playwright image "
+        "digest. Browser e2e CI installs Chromium via "
+        "`npx playwright install chromium --with-deps` against the locked "
+        "@playwright/test version; any image reference in the config is "
+        "stale and misleads contributors."
+    )
     assert "baseURL: UI_BASE_URL" in source
     assert "reuseExistingServer: false" in source
     assert re.search(r"retries:\s*0", source)

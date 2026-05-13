@@ -183,7 +183,10 @@ def main() -> int:
     out_path.write_text(md, encoding="utf-8")
     print(f"Summary written: {out_path}")
     if context is not None:
-        _write_baseline(baseline_path, _baseline_payload(context, run_ts_iso))
+        _write_baseline(
+            baseline_path,
+            _baseline_payload(context, run_ts_iso, context["report_environment"]),
+        )
         print(f"Baseline written: {baseline_path}")
 
     # Write to GitHub Step Summary if running in CI

@@ -6,9 +6,9 @@ Run from the IJT_Test_Client/ directory:
 
 For each fixture under ``tests/unit/reporting/fixtures/``, this re-runs the
 current conformance renderer (``scripts/reporting/conformance_summary.py``)
-with frozen inputs (no wall-clock time, no baseline file write) and
-overwrites the corresponding expected Markdown file under
-``tests/unit/reporting/fixtures/expected/``.
+with frozen inputs (no wall-clock time, no baseline file write, no live
+environment reads) and overwrites the corresponding expected Markdown file
+under ``tests/unit/reporting/fixtures/expected/``.
 
 Only re-run this helper when the renderer output is intentionally allowed
 to change. The byte-equality test in ``test_render_conformance_summary.py``
@@ -27,18 +27,16 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[3] / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
+# Sibling helper modules (``_frozen_env``) live next to this script in a
+# non-package directory; ensure they're importable when this helper is run
+# directly as ``python tests/unit/reporting/_capture_expected_summaries.py``.
+_THIS_DIR = Path(__file__).resolve().parent
+if str(_THIS_DIR) not in sys.path:
+    sys.path.insert(0, str(_THIS_DIR))
+
+from _frozen_env import FIXED_RUN_TS, FIXED_SERVER_URL, FROZEN_ENV  # noqa: E402
 from make_conformance_summary import _load_baseline, _load_json, _parse  # noqa: E402
 from reporting.conformance_summary import render_conformance_summary  # noqa: E402
-
-# Frozen inputs so the regenerated Markdown is deterministic across machines
-# and CI runners. These must stay in sync with
-# ``test_render_conformance_summary.py``.
-FIXED_RUN_TS = "2026-05-13 14:00 UTC"
-FIXED_SERVER_URL = "opc.tcp://fixture.ijt.test:40451"
-# Frozen build metadata. Must stay in sync with
-# ``test_render_conformance_summary.py``.
-FIXED_GIT_SHA = "15bc900"
-FIXED_RUN_LOGS_URL = "n/a"
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EXPECTED_DIR = FIXTURES_DIR / "expected"
@@ -61,8 +59,7 @@ def render_fixture(fixture_dir: Path) -> str:
         FIXED_RUN_TS,
         cu_payload=cu_payload,
         baseline=baseline,
-        git_sha=FIXED_GIT_SHA,
-        run_logs_url=FIXED_RUN_LOGS_URL,
+        report_environment=FROZEN_ENV,
     )
     return md
 

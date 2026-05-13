@@ -959,16 +959,26 @@ def test_integration_web_client_features_are_sharded() -> None:
     assert "live-webclient-shard" not in workflow["jobs"]["report"]["needs"]
 
 
-def test_integration_web_client_e2e_jobs_require_pinned_linux_container() -> None:
-    """Browser e2e must stay off Windows-hosted Chromium."""
+def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
+    """Browser e2e must stay off Windows-hosted Chromium and off job-level container images.
+
+    History: a job-level ``container: image: mcr.microsoft.com/playwright:...``
+    block previously ran every browser suite, but a job-level container image
+    is pulled by GitHub *before* any workflow step runs. A transient MCR
+    outage took the whole job down with no in-job retry, fallback, or
+    diagnostics possible. The job now uses ``runs-on: ubuntu-latest`` with
+    no container image; Chromium and its system deps are installed at the
+    start of each suite by the Web Client runner's
+    ``_stage_playwright_install()`` (which runs ``npx playwright install
+    chromium --with-deps`` against the locked ``@playwright/test`` version),
+    matching Playwright's own CI guidance. This regression gate prevents
+    re-introducing a job-level ``container:`` block or moving e2e onto
+    Windows-hosted Chromium.
+    """
     import yaml
 
     workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml"
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
-    expected_image = (
-        "mcr.microsoft.com/playwright:v1.60.0-noble"
-        "@sha256:83192064c7510f7ee73dd63dc5f22a5e01a92c81a2e6a9c715d9e3fe55471fd9"
-    )
 
     for job_name, job in workflow["jobs"].items():
         rows = job.get("strategy", {}).get("matrix", {}).get("include", [])
@@ -982,31 +992,40 @@ def test_integration_web_client_e2e_jobs_require_pinned_linux_container() -> Non
 
         assert job_name == "live-webclient-browser"
         assert job["runs-on"] == "ubuntu-latest"
-        assert job.get("container", {}).get("image") == expected_image
-        assert "@sha256:" in job["container"]["image"]
-        assert job["container"].get("options") == "--ipc=host"
+        assert "container" not in job, (
+            "live-webclient-browser must not use a job-level container image: "
+            "GitHub pulls container-job images before any step runs, so a "
+            "registry outage takes the whole job down with no in-job retry. "
+            "Chromium is installed by the Web Client runner via "
+            "`npx playwright install chromium --with-deps`."
+        )
+        assert "PLAYWRIGHT_BROWSERS_PATH" not in job.get("env", {}), (
+            "PLAYWRIGHT_BROWSERS_PATH was the bundled-image install location "
+            "(/ms-playwright). With Playwright installing Chromium itself, "
+            "the default path is correct."
+        )
 
         steps = job["steps"]
-        setup_python_index = next(
-            index
-            for index, step in enumerate(steps)
-            if step.get("uses", "").startswith("actions/setup-python@")
+        step_names = [step.get("name") or step.get("uses", "") for step in steps]
+        assert not any("Install setup-python OS helper" in name for name in step_names), (
+            "The lsb-release helper step was needed only inside the slim "
+            "Playwright container image. ubuntu-latest already has lsb-release."
         )
-        setup_python_step = steps[setup_python_index]
-        helper_index = next(
-            index
-            for index, step in enumerate(steps)
-            if step.get("name") == "Install setup-python OS helper"
+        setup_python_step = next(
+            step for step in steps if step.get("uses", "").startswith("actions/setup-python@")
         )
         setup_node_step = next(
             step for step in steps if step.get("uses", "").startswith("actions/setup-node@")
         )
-        assert helper_index < setup_python_index
-        assert (
-            "apt-get install -y --no-install-recommends lsb-release" in steps[helper_index]["run"]
-        )
+        assert setup_python_step.get("with", {}).get("python-version") == "3.14"
+        assert setup_node_step.get("with", {}).get("node-version") == "24"
         assert "cache" not in setup_python_step.get("with", {})
         assert "cache" not in setup_node_step.get("with", {})
+
+        run_step = next(
+            step for step in steps if step.get("name") == "Run Web Client browser e2e suite"
+        )
+        assert "python run_all_tests.py --suite" in run_step["run"]
 
 
 def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> None:

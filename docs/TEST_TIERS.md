@@ -167,12 +167,15 @@ run their live/integration tests in parallel without port conflicts.
 > GitHub integration runs that same local root-runner suite matrix instead of
 > a separate raw pytest-only Web integration command. The non-browser Web live
 > suites stay on GitHub-hosted Windows runners. Every `web-client-e2e-*`
-> Playwright suite runs on `ubuntu-latest` inside the pinned Playwright Linux
-> image
-> `mcr.microsoft.com/playwright:v1.60.0-noble@sha256:83192064c7510f7ee73dd63dc5f22a5e01a92c81a2e6a9c715d9e3fe55471fd9`
-> with the Linux simulator package. Browser Features keeps two shards; CI
-> defaults to two feature workers per shard, and local root validation defaults
-> to four workers.
+> Playwright suite runs on stock `ubuntu-latest`; Chromium and its system
+> dependencies are installed at the start of each suite by the Web Client
+> runner via `npx playwright install chromium --with-deps` against the locked
+> `@playwright/test` version. No job-level `container:` image is used:
+> container-job images are pulled by GitHub before any step runs, so a
+> registry outage would take the whole job down with no in-job retry,
+> fallback, or diagnostics. Browser Features keeps two shards; CI
+> defaults to two feature workers per shard, and local root validation
+> defaults to four workers.
 > Web Client Compatibility Smoke is intentionally separate from Integration:
 > `.github/workflows/web-client-compatibility-smoke.yml` runs only at `04:30 UTC`
 > or by manual dispatch, reuses the Web Client runner-owned Windows
@@ -181,13 +184,12 @@ run their live/integration tests in parallel without port conflicts.
 > specs. It is a non-required detection workflow; failures stay red and
 > create/update `[Web Client Compatibility Smoke] windows-latest / msedge`.
 >
-> **Local Playwright browser install:** direct local browser runs need Chromium
-> from `https://cdn.playwright.dev` over HTTPS. Corporate users should set
-> `HTTPS_PROXY` or `PLAYWRIGHT_DOWNLOAD_HOST`; offline users should point
-> `PLAYWRIGHT_BROWSERS_PATH` at a prepopulated browser mirror/cache. The local
-> failure signature is typically `Failed to download Chromium` with
-> `getaddrinfo ENOTFOUND cdn.playwright.dev`. CI avoids this path by running
-> inside the pinned Playwright Linux image named above.
+> **Local Playwright browser install:** local browser runs need Chromium
+> from `https://cdn.playwright.dev` over HTTPS — the same path CI now uses.
+> Corporate users should set `HTTPS_PROXY` or `PLAYWRIGHT_DOWNLOAD_HOST`;
+> offline users should point `PLAYWRIGHT_BROWSERS_PATH` at a prepopulated
+> browser mirror/cache. The failure signature is typically `Failed to
+> download Chromium` with `getaddrinfo ENOTFOUND cdn.playwright.dev`.
 
 ### Port Assignment
 

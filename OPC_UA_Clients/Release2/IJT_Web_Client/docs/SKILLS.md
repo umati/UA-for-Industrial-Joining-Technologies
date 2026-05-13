@@ -436,13 +436,15 @@ Vitest, ESLint, mypy, Bandit, and audit commands, and the split gives each
 language stack its own timing and failure surface. GitHub `integration.yml`
 runs the same root-runner Web Client live/e2e suites as local validation, split
 by execution surface. `web-client-live-*` suites stay on `windows-latest` with
-the Windows simulator package. Every `web-client-e2e-*` suite runs on
-`ubuntu-latest` inside the pinned Playwright Linux image
-`mcr.microsoft.com/playwright:v1.60.0-noble@sha256:83192064c7510f7ee73dd63dc5f22a5e01a92c81a2e6a9c715d9e3fe55471fd9`
-with `--ipc=host` and the Linux simulator package. Browser Features keeps two
-Playwright shards, but no browser cache or `npx playwright install` step is
-allowed in the workflow because the image owns Chromium and its system
-dependencies. Each suite receives an isolated `IJT_WEB_TEST_RESULTS_DIR`, so
+the Windows simulator package. Every `web-client-e2e-*` suite runs on stock
+`ubuntu-latest`; Chromium and its system dependencies are installed at the
+start of each suite by the Web Client runner via
+`npx playwright install chromium --with-deps` against the locked
+`@playwright/test` version. No job-level `container:` image is used —
+container-job images are pulled by GitHub before any step runs, so a
+registry outage would take the whole job down with no in-job retry,
+fallback, or diagnostics. Browser Features keeps two Playwright shards
+and each suite receives an isolated `IJT_WEB_TEST_RESULTS_DIR`, so
 JUnit, coverage, Playwright, and timing artifacts cannot overwrite another
 suite's files.
 Web Client Compatibility Smoke is deliberately outside the bulk browser logic
