@@ -25,16 +25,22 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
-      # Ensures every file ends with exactly one newline (LF), matching
-      # the project's .gitattributes line-ending policy.
+      # Ensures every non-generated text file ends with exactly one newline
+      # (LF), matching the project's .gitattributes line-ending policy.
       - id: end-of-file-fixer
+        # Lockfiles are package-manager outputs. NuGet/dotnet restore rewrites
+        # packages.lock.json without a trailing newline, so text-hygiene
+        # auto-fixers must not fight Renovate or local package-manager output.
+        exclude: &lockfiles '(^|/)(packages\.lock\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Pipfile\.lock|Gemfile\.lock|Cargo\.lock|composer\.lock)$'
 
       # Strips trailing spaces and tabs from all lines.
       - id: trailing-whitespace
+        exclude: *lockfiles
 
       # Converts any CRLF or CR line endings to LF throughout the repo.
       - id: mixed-line-ending
         args: [--fix=lf]
+        exclude: *lockfiles
 
       # Detects leftover merge-conflict markers (<<<<<<<, =======, >>>>>>>).
       # Does NOT auto-fix — the developer must resolve conflicts manually.

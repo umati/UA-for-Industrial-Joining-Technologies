@@ -424,6 +424,7 @@ For the full port assignment table, auto-launch mechanics, and venv rationale, s
 - Root `NuGet.config` and `Types/nuget.config` clear inherited package sources and source mappings, then use only `nuget.org`.
 - If restore must use a private mirror or proxy, add it explicitly in the relevant `NuGet.config` after the `<clear />` entries and map packages there.
 - `packages.lock.json` files are committed in git for deterministic restore.
+- Tool-generated lockfiles are excluded from pre-commit text-hygiene auto-fixers (`end-of-file-fixer`, `trailing-whitespace`, `mixed-line-ending`) because package managers own lockfile formatting; JSON syntax validation still applies to JSON lockfiles.
 - `run_all_tests.py` uses locked-mode restore automatically when `packages.lock.json` files are present.
 - CI restore uses locked mode against committed lock files.
 - `ci.yml` runs the full C# gate: locked restore → build → NuGet CVE scan → xUnit tests → format check.
