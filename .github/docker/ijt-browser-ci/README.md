@@ -46,3 +46,33 @@ container is invoked with:
 Local Web E2E remains native. Neither the root runner nor the Web Client
 runner reads `IJT_BROWSER_CI_IMAGE`; the owned image is wired only in the
 GitHub Actions Integration workflow.
+
+## Reviewing an auto pin PR
+
+After a successful build + publish, the `update-pin` job opens (or
+force-updates) a PR on branch `automation/ijt-browser-ci-image-pin`
+that touches **only** `image-pin.json`. To accept or reject quickly:
+
+1. **Diff must be `image-pin.json` only.** Any other touched file means
+   the automation drifted; investigate before merging.
+2. **Verify the upstream Build Browser CI Image run.** PR body links the
+   workflow run; both `build` (Phase 0 smoke under `--network=none`) and
+   `publish` (digest pull-verify) must be green.
+3. **Confirm exact versions captured.** The new pin should carry exact
+   `playwright_version`, `node_version`, `python_version`, and
+   `base_digests` from the in-image `/opt/ijt-browser-ci/metadata.json`,
+   not the loose `24.x` / `3.14.x` form.
+4. **Required checks may be absent.** PRs opened by `GITHUB_TOKEN` do
+   not trigger Integration / CodeQL / pre-commit / actionlint / zizmor /
+   workflow-policy-guard. This is expected. To unblock: `gh pr close`
+   then `gh pr reopen` on the PR (or push an empty user commit). Both
+   re-fire the required-check set.
+5. **A new digest with no Dockerfile change is normal.** Docker rebuilds
+   are not byte-reproducible; identical inputs typically produce a new
+   digest. Accept the new digest unless the metadata block shows an
+   unexpected version drift.
+6. **Loop-prevention is automatic.** Merging the pin PR must NOT
+   re-trigger the Build Browser CI Image workflow because `image-pin.json`
+   is path-excluded from its own triggers. If a new build-image run
+   appears for the pin-only merge, the loop-prevention exclusion has
+   regressed; treat it as a stop-the-line bug.
