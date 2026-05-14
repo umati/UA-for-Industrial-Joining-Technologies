@@ -9,23 +9,23 @@
 | **Run** | 2026-05-13 14:00 UTC · Duration 1m 25s |
 | **Build** | commit `15bc900` · run logs: n/a |
 
-## At a Glance
+## Conformance Overview
 
-| Spec Coverage | ✅ Validation Health | CU Status |
+| Server Support Coverage | ✅ Validation Health | CU Status |
 |:---:|:---:|:---:|
-| **79.7%** | **100.0%** | **🔴 0 Action Needed · 🟠 0 Blocked · ⚪ 25 Not Supported · ℹ️ 3 With Notes** |
-| 98 / 123 CUs server-supported | 98 / 98 server-supported CUs validated | Action Items and Capability Notes below |
+| **79.7%** | **100.0%** | **🔴 0 Failed · 🟠 0 Blocked · ⚪ 25 Not Supported · ℹ️ 3 With Notes** |
+| 98 / 123 CUs server-supported | 98 / 98 server-supported CUs validated | Failed items and capability notes below |
 
 ### Δ Since Last Run (commit `2068e58`, 1 day ago)
 
 - Score **94 → 94**
 - Validation Health 100.0% → 100.0%
-- Spec Coverage 79.7% → 79.7%
+- Server Support Coverage 79.7% → 79.7%
 - Review Items: 🆕 0 new · ✅ 0 resolved · ⚠️ 0 regressed
 
 ## What This Server Supports
 
-_Auto-generated from facet outcomes. Full detail is in Facet Coverage._
+_Auto-generated from facet outcomes. Full detail is in Facet and CU Coverage._
 
 - ❌ **Joint Component** — not supported by this server. Joint component send, list, read, data, and delete coverage.
 - ❌ **Joint Design** — not supported by this server. Joint design send, list, read, data, and delete coverage.
@@ -39,11 +39,39 @@ _Auto-generated from facet outcomes. Full detail is in Facet Coverage._
 - ✅ **Basic Joining System** — supported. Minimum conformance requirement for any OPC UA IJT server: JoiningSystem structure, identification, and Machinery building blocks.
 - ✅ **Batch Result** — supported. Batch and intervention result support with related result counters.
 - ✅ **Enable Tool** — supported. EnableAsset/enable-tool workflow support and corresponding asset enable state event coverage.
-- … 7 more capability areas in Facet Coverage
+
+_Capability area counts: 11 supported · 6 partially supported · 2 not supported by this server._
+
+<details open>
+<summary><b>All capability areas</b></summary>
+
+| Capability Area | Status | Notes |
+|---|---|---|
+| Joint Component | ❌ not supported by this server | Joint component send, list, read, data, and delete coverage. |
+| Joint Design | ❌ not supported by this server | Joint design send, list, read, data, and delete coverage. |
+| Additional Asset Methods | ⚠️ partially supported | Optional asset operation methods beyond the asset topology baseline. |
+| Additional Process Methods | ⚠️ partially supported | Optional joining process definition, mapping, counter, delete, and revision-list methods. |
+| Asset Connection | ⚠️ partially supported | Asset connection facet for DisconnectAsset and asset connection event coverage. |
+| Joining Process Base | ⚠️ partially supported | JoiningProcessManagement base object and list access for joining process definitions. |
+| Joint | ⚠️ partially supported | Joint management base object and methods for sending, listing, selecting, reading, deleting, and revising joints. |
+| Stored Result | ⚠️ partially supported | Stored/requested result workflows including result requests, requested-result access, acknowledgements, and unacknowledged-result requests. |
+| Asset Management Assets | ✅ supported | Asset topology, asset identification, Machinery building blocks, health, service, calibration, and individual IJT asset type coverage. |
+| Basic Joining System | ✅ supported | Minimum conformance requirement for any OPC UA IJT server: JoiningSystem structure, identification, and Machinery building blocks. |
+| Batch Result | ✅ supported | Batch and intervention result support with related result counters. |
+| Enable Tool | ✅ supported | EnableAsset/enable-tool workflow support and corresponding asset enable state event coverage. |
+| Event Management | ✅ supported | Joining system event payload, condition classes, asset connection events, identifier events, process selection events, and event content fields. |
+| General Process Operations | ✅ supported | Selecting, starting, aborting, resetting, and reading the selected joining process. |
+| Identifiers Methods | ✅ supported | SendIdentifiers, GetIdentifiers, and ResetIdentifiers methods for attaching external entity identifiers to results. |
+| Joining Result | ✅ supported | Joining-result payload details such as failure reason, result values, step results, errors, and trace data. |
+| Result | ✅ supported | Result management baseline: result objects, result access methods, result event access, and basic result metadata. |
+| Sequential Process Operations | ✅ supported | Sequential joining process execution and process counter/size operations. |
+| Sync Result | ✅ supported | Synchronisation result support and related result counters. |
+
+</details>
 
 ## Action Items
 
-**🔴 0 Action Needed · 🟠 0 Blocked**
+**🔴 0 Failed · 🟠 0 Blocked**
 
 _No action items — server validation passed cleanly._
 
@@ -54,7 +82,7 @@ _No action items — server validation passed cleanly._
 
 **⚪ 25 Not Supported · ℹ️ 3 With Notes**
 
-| Status | CU | Result | Primary Reason | Δ |
+| Review Status | CU | Outcome | Primary Reason | Δ |
 |---|---|---|---|---|
 | ⚪ Not Supported | `acknowledge_results` | ⚪ Not Supported | Not Supported: IJT Acknowledge Results - Method: AcknowledgeResults NOT SUPPORTED | ✓ |
 | ⚪ Not Supported | `delete_joining_process` | ⚪ Not Supported | Not Supported: IJT Delete Joining Process - Method: DeleteJoiningProcess NOT SUPPORTED | ✓ |
@@ -73,52 +101,52 @@ _No action items — server validation passed cleanly._
 <details>
 <summary><b>Coverage Overview</b></summary>
 
-_These rows separate the active server capability profile from reference IJT facet rollups and the complete CU set._
+_These rows separate the active server capability profile from reference IJT facet groups and the complete CU set._
 
-| Coverage View | Purpose | Facets | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcomes | Result |
+| Coverage View | Purpose | Facets | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcomes | Outcome |
 |---|---|---:|---:|---:|---:|---:|---|---|
-| Full IJT Base Conformance | Server capability profile | 21 | 123 | 98 | 79.7% | 100.0% | 95 Supported<br>3 With Notes<br>25 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
-| Basic Joining System Server Facet | Reference IJT facet | 1 | 3 | 3 | 100.0% | 100.0% | 3 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| General Joining System Server Facet | Reference IJT facet | 1 | 39 | 39 | 100.0% | 100.0% | 37 Supported<br>2 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
-| Joining System Selectable Features Server Facet | Reference IJT facet | 1 | 84 | 59 | 70.2% | 100.0% | 58 Supported<br>1 With Notes<br>25 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
+| Full IJT Base Conformance | Server capability profile | 21 | 123 | 98 | 79.7% | 100.0% | 95 Supported<br>3 With Notes<br>25 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| Basic Joining System Server Facet | Reference IJT facet | 1 | 3 | 3 | 100.0% | 100.0% | 3 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| General Joining System Server Facet | Reference IJT facet | 1 | 39 | 39 | 100.0% | 100.0% | 37 Supported<br>2 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| Joining System Selectable Features Server Facet | Reference IJT facet | 1 | 84 | 59 | 70.2% | 100.0% | 58 Supported<br>1 With Notes<br>25 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
 
 </details>
 
 <details>
-<summary><b>Facet Coverage</b></summary>
+<summary><b>Facet and CU Coverage</b></summary>
 
-| Facet | Type | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcomes | Result |
+| Facet | Type | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcomes | Outcome |
 |---|---|---:|---:|---:|---:|---|---|
-| IJT Result Server Facet | Facet | 12 | 12 | 100.0% | 100.0% | 12 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| IJT Joining Result Server Facet | Facet | 7 | 7 | 100.0% | 100.0% | 7 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| IJT Sync Result Server Facet | Facet | 2 | 2 | 100.0% | 100.0% | 2 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| IJT Batch Result Server Facet | Facet | 3 | 3 | 100.0% | 100.0% | 3 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| IJT Stored Result Server Facet | Facet | 5 | 3 | 60.0% | 100.0% | 3 Supported<br>0 With Notes<br>2 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
-| IJT Asset Management Assets Server Facet | Facet | 23 | 23 | 100.0% | 100.0% | 23 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| IJT Identifiers Methods Server Facet | Facet | 3 | 3 | 100.0% | 100.0% | 3 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| IJT Additional Asset Methods Server Facet | Facet | 9 | 2 | 22.2% | 100.0% | 2 Supported<br>0 With Notes<br>7 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
-| IJT Event Management Server Facet | Facet | 8 | 8 | 100.0% | 100.0% | 8 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| IJT Enable Tool Server Facet | Facet | 2 | 2 | 100.0% | 100.0% | 2 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| IJT Asset Connection Server Facet | Facet | 3 | 2 | 66.7% | 100.0% | 2 Supported<br>0 With Notes<br>1 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
-| IJT Joining Process Base Server Facet | Facet | 2 | 2 | 100.0% | 100.0% | 1 Supported<br>1 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
-| IJT General Process Operations Server Facet | Facet | 6 | 6 | 100.0% | 100.0% | 6 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| IJT Sequential Process Operations Server Facet | Facet | 4 | 4 | 100.0% | 100.0% | 4 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| IJT Additional Process Methods Server Facet | Facet | 6 | 1 | 16.7% | 100.0% | 1 Supported<br>0 With Notes<br>5 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
-| IJT Joint Server Facet | Facet | 8 | 7 | 87.5% | 100.0% | 6 Supported<br>1 With Notes<br>1 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
-| IJT Joint Design Server Facet | Facet | 5 | 0 | 0.0% | n/a | 0 Supported<br>0 With Notes<br>5 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
-| IJT Joint Component Server Facet | Facet | 5 | 0 | 0.0% | n/a | 0 Supported<br>0 With Notes<br>5 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
-| Basic Joining System Server Facet | Facet | 3 | 3 | 100.0% | 100.0% | 3 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟢 Supported |
-| General Joining System Server Facet | Rollup | 39 | 39 | 100.0% | 100.0% | 37 Supported<br>2 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
-| Joining System Selectable Features Server Facet | Rollup | 84 | 59 | 70.2% | 100.0% | 58 Supported<br>1 With Notes<br>25 Not Supported<br>0 Blocked<br>0 Action Needed | 🟩 Supported with Notes |
+| IJT Result Server Facet | Facet | 12 | 12 | 100.0% | 100.0% | 12 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| IJT Joining Result Server Facet | Facet | 7 | 7 | 100.0% | 100.0% | 7 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| IJT Sync Result Server Facet | Facet | 2 | 2 | 100.0% | 100.0% | 2 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| IJT Batch Result Server Facet | Facet | 3 | 3 | 100.0% | 100.0% | 3 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| IJT Stored Result Server Facet | Facet | 5 | 3 | 60.0% | 100.0% | 3 Supported<br>0 With Notes<br>2 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| IJT Asset Management Assets Server Facet | Facet | 23 | 23 | 100.0% | 100.0% | 23 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| IJT Identifiers Methods Server Facet | Facet | 3 | 3 | 100.0% | 100.0% | 3 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| IJT Additional Asset Methods Server Facet | Facet | 9 | 2 | 22.2% | 100.0% | 2 Supported<br>0 With Notes<br>7 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| IJT Event Management Server Facet | Facet | 8 | 8 | 100.0% | 100.0% | 8 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| IJT Enable Tool Server Facet | Facet | 2 | 2 | 100.0% | 100.0% | 2 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| IJT Asset Connection Server Facet | Facet | 3 | 2 | 66.7% | 100.0% | 2 Supported<br>0 With Notes<br>1 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| IJT Joining Process Base Server Facet | Facet | 2 | 2 | 100.0% | 100.0% | 1 Supported<br>1 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| IJT General Process Operations Server Facet | Facet | 6 | 6 | 100.0% | 100.0% | 6 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| IJT Sequential Process Operations Server Facet | Facet | 4 | 4 | 100.0% | 100.0% | 4 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| IJT Additional Process Methods Server Facet | Facet | 6 | 1 | 16.7% | 100.0% | 1 Supported<br>0 With Notes<br>5 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| IJT Joint Server Facet | Facet | 8 | 7 | 87.5% | 100.0% | 6 Supported<br>1 With Notes<br>1 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| IJT Joint Design Server Facet | Facet | 5 | 0 | 0.0% | n/a | 0 Supported<br>0 With Notes<br>5 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| IJT Joint Component Server Facet | Facet | 5 | 0 | 0.0% | n/a | 0 Supported<br>0 With Notes<br>5 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| Basic Joining System Server Facet | Facet | 3 | 3 | 100.0% | 100.0% | 3 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
+| General Joining System Server Facet | Facet Group | 39 | 39 | 100.0% | 100.0% | 37 Supported<br>2 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| Joining System Selectable Features Server Facet | Facet Group | 84 | 59 | 70.2% | 100.0% | 58 Supported<br>1 With Notes<br>25 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
 
 </details>
 
 <details>
 <summary><b>Conformance Status</b></summary>
 
-_Support-level detail for CUs that need explanation or follow-up: Supported with Notes, Not Supported, Blocked, or Action Needed. Raw skip buckets below are diagnostics._
+_Review-level detail for CUs that need explanation or follow-up: Supported with Notes, Not Supported, Blocked, or Failed. Skip buckets below are diagnostics._
 
-| Status | CU | Facet(s) | Server Supported | Result | Primary Reason | Tests | Passed | Not Supported | Blocked | Failed/Error | Δ |
+| Review Status | CU | Facet(s) | Server Supported | Outcome | Primary Reason | Tests | Passed | Not Supported | Blocked | Failures | Δ |
 |---|---|---|---|---|---|---:|---:|---:|---:|---:|---|
 | ⚪ Not Supported | IJT Acknowledge Results | IJT Stored Result Server Facet | No | ⚪ Not Supported | Not Supported: IJT Acknowledge Results - Method: AcknowledgeResults NOT SUPPORTED | 7 | 0 | 7 | 0 | 0 | ✓ |
 | ⚪ Not Supported | IJT Delete Joining Process | IJT Additional Process Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Delete Joining Process - Method: DeleteJoiningProcess NOT SUPPORTED | 2 | 0 | 2 | 0 | 0 | ✓ |
@@ -154,7 +182,7 @@ _Support-level detail for CUs that need explanation or follow-up: Supported with
 <details>
 <summary><b>Full CU Coverage</b></summary>
 
-| CU | Facet(s) | Server Supported | Result | Tests | Passed | Not Supported | Blocked | Failed/Error | Workbook Cases | Δ |
+| CU | Facet(s) | Server Supported | Outcome | Tests | Passed | Not Supported | Blocked | Failures | Workbook Cases | Δ |
 |---|---|---|---|---:|---:|---:|---:|---:|---:|---|
 | IJT Result Management | IJT Result Server Facet | Yes | 🟢 Supported | 13 | 13 | 0 | 0 | 0 | 11 | ✓ |
 | IJT Single Result | IJT Result Server Facet | Yes | 🟢 Supported | 5 | 5 | 0 | 0 | 0 | 14 | ✓ |
@@ -297,18 +325,19 @@ _Support-level detail for CUs that need explanation or follow-up: Supported with
 </details>
 
 <details>
-<summary><b>How to Read This Report</b></summary>
+<summary><b>Glossary and Reading Guide</b></summary>
 
 - **Server capability profile** is the active profile selected by the server capability YAML.
 - **Reference IJT facet** and **Reference full CU set** rows are comparison views only; they are not extra pass/fail requirements.
 - **Server Supported CUs** means the CUs listed as supported in the server capability file.
 - **Server Support %** is the share of CUs in that row that the server says it supports.
 - **Supported CUs Validated %** is the share of server-supported CUs that this run validated as Supported or Supported with Notes.
-- **Score** is a 0–100 composite of `0.7 × Validation Health + 0.3 × Spec Coverage`, capped at 50 if any **Action Needed** item exists and capped at 75 if any **Blocked** item exists.
-- **Status** is computed from the result: Action Needed = failure or error, Blocked = missing runtime precondition, Not Supported = server-supported CU not supported, With Notes = supported with notes or outside server support.
+- **Score** is a 0–100 composite of `0.7 × Validation Health + 0.3 × Server Support Coverage`, capped at 50 if any **Failed** item exists and capped at 75 if any **Blocked** item exists.
+- **Review Status** highlights follow-up work: Failed = failure or error, Blocked = missing runtime precondition, Not Supported = server-supported CU not supported, With Notes = supported with notes or outside server support.
+- **Outcome** is the CU-level conformance classification for the current run.
 - **Δ** compares this run with `test-results/report-baseline.json` when that file exists.
-- Failures and errors are reported as **Action Needed**.
-- Raw skip reasons are listed later as diagnostics and may overlap with conformance status items.
+- Failures and errors are reported as **Failed**.
+- Skip reasons are listed later as diagnostics and may overlap with conformance status items.
 
 </details>
 
@@ -326,7 +355,7 @@ _Support-level detail for CUs that need explanation or follow-up: Supported with
 </details>
 
 <details>
-<summary><b>Raw Skip Diagnostics</b></summary>
+<summary><b>Skip Diagnostics</b></summary>
 
 Diagnostic skip buckets from pytest. These may overlap with conformance status items and do not by themselves reduce CU compliance when the CU also has passing support coverage.
 

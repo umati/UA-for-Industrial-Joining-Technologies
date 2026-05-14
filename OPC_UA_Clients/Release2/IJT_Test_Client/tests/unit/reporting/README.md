@@ -70,14 +70,13 @@ absence is the entire point of this scenario.
 **Scenario:** Renderer's **full path** — a System Tests live conformance
 run with the complete CU compliance payload and a previous baseline.
 This is the **canonical real-world conformance regression fixture** for
-the renderer: it exercises authentic scale, profile/facet rollups, the Δ
+the renderer: it exercises authentic scale, profile/facet groups, the Δ
 Since Last Run delta path, not-supported handling, with-notes / partial
 outcomes, truncation, and the full CU coverage table.
 
 This fixture is **not** a complete branch-coverage oracle. Targeted
-Action Needed / Blocked / error-path tests remain the responsibility of
-small dedicated fixtures (added in Phase 4 when branch semantics get
-their own coverage lens).
+Failed / Blocked / error-path tests remain the responsibility of small
+dedicated fixtures when branch semantics need their own coverage lens.
 
 | File | Origin | Purpose |
 |---|---|---|

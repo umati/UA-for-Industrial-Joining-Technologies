@@ -12,7 +12,7 @@ Sheets produced:
   Skipped          — only skipped tests with reason
   Expected Fail    — xfailed and xpassed tests with reason
   Profile Coverage — IJT coverage overview, when CU JSON is present
-  Facet Coverage   — IJT facet coverage, when CU JSON is present
+  Facet and CU Coverage — IJT facet coverage, when CU JSON is present
   CU Coverage      — one row per conformance unit, when CU JSON is present
 
 Usage:
@@ -692,7 +692,7 @@ def _support_rows(context: dict[str, Any], facets: dict[str, FacetInfo], limit: 
 
 def _compliance_status(counts: Counter[str], total: int) -> str:
     if counts["action_needed"]:
-        return "ACTION NEEDED"
+        return "FAILED"
     if counts["blocked"]:
         return "BLOCKED"
     if counts["partial"] or counts["not_supported"]:
@@ -709,7 +709,7 @@ def _status_fill(status: str) -> PatternFill:
         "SUPPORTED": _LIGHT_GREEN,
         "SUPPORTED WITH NOTES": _LIGHT_GREEN_NOTE,
         "BLOCKED": _LIGHT_ORANGE,
-        "ACTION NEEDED": _LIGHT_RED,
+        "FAILED": _LIGHT_RED,
         "NO COMPLIANCE RESULT": _GRAY,
     }.get(status, _WHITE)
     return _fill(colour)
@@ -833,7 +833,7 @@ def _build_cover(
         findings_count: Counter[str] = context["findings_count"]
         metrics = [
             (
-                "Spec Coverage",
+                "Server Support Coverage",
                 _fmt_pct(context["spec_coverage_value"]),
                 f"{supported} / {total_active} CUs server-supported",
             ),
@@ -845,7 +845,7 @@ def _build_cover(
             (
                 "CU Status",
                 _format_kpi_strip(findings_count),
-                "Action Items and Capability Notes",
+                "Failed items and Capability Notes",
             ),
         ]
         for offset, (metric, value, note) in enumerate(metrics, start=1):
@@ -854,13 +854,13 @@ def _build_cover(
             value_cell.font = Font(bold=True)
             if metric != "CU Status":
                 value_cell.fill = _percentage_fill(
-                    context["spec_coverage_value" if metric == "Spec Coverage" else "validation_health_value"]
+                    context["spec_coverage_value" if metric == "Server Support Coverage" else "validation_health_value"]
                 )
             ws.cell(row=row + offset, column=3, value=note).alignment = Alignment(wrap_text=True, vertical="top")
 
     row = 10
-    ws.cell(row=row, column=1, value="Delta Since Last Run").font = Font(bold=True, size=14)
     if context and baseline:
+        ws.cell(row=row, column=1, value="Delta Since Last Run").font = Font(bold=True, size=14)
         delta = _delta_summary(context, baseline)
         rows = [
             ("Score", f"{baseline.get('score', 'n/a')} -> {context['score']}"),
@@ -869,19 +869,17 @@ def _build_cover(
                 f"{_fmt_pct(baseline.get('validation_health_pct'))} -> {_fmt_pct(context['validation_health_value'])}",
             ),
             (
-                "Spec Coverage",
+                "Server Support Coverage",
                 f"{_fmt_pct(baseline.get('spec_coverage_pct'))} -> {_fmt_pct(context['spec_coverage_value'])}",
             ),
             ("Review Items", _format_delta_summary(delta)),
         ]
-    else:
-        rows = [("Baseline", "No baseline yet - this run becomes the baseline.")]
-    _apply_header(ws, row + 1, ["Item", "Change"], [28, 50])
-    for offset, (item, value) in enumerate(rows, start=2):
-        ws.cell(row=row + offset, column=1, value=item).font = Font(bold=True)
-        ws.cell(row=row + offset, column=2, value=value)
+        _apply_header(ws, row + 1, ["Item", "Change"], [28, 50])
+        for offset, (item, value) in enumerate(rows, start=2):
+            ws.cell(row=row + offset, column=1, value=item).font = Font(bold=True)
+            ws.cell(row=row + offset, column=2, value=value)
+        row = row + max(6, len(rows) + 4)
 
-    row = row + max(6, len(rows) + 4)
     ws.cell(row=row, column=1, value="What this server supports").font = Font(bold=True, size=14)
     _apply_header(ws, row + 1, ["Capability Area", "Status"], [34, 90])
     if context:
@@ -1052,9 +1050,9 @@ def _build_profile_coverage(
     ws["A2"] = (
         "This sheet maps the current test run to IJT coverage views, facets, and conformance units. "
         "Start with the Server Capability Profile row; Reference IJT Facet and Reference Full CU Set rows are comparison views only, not extra pass/fail requirements. "
-        "Server Supported CUs comes from the server capability file. Result and validated counts come from this test run. "
+        "Server Supported CUs comes from the server capability file. Outcome and validated counts come from this test run. "
         "Supported CUs Validated % is the main health signal and is color-coded; Server Support % is informational and is not color-coded. "
-        "Raw skip reports remain diagnostic and may overlap with conformance status items."
+        "Skip diagnostics may overlap with conformance status items."
     )
     ws["A2"].alignment = Alignment(wrap_text=True)
     if run_result == "failed":
@@ -1088,7 +1086,7 @@ def _build_profile_coverage(
         _outcome_label("untested"),
         "Server Support %",
         "Supported CUs Validated %",
-        "Result",
+        "Outcome",
         "Description",
     ]
     widths = [34, 28, 12, 10, 14, 12, 12, 14, 9, 13, 9, 12, 14, 16, 70]
@@ -1182,7 +1180,7 @@ def _build_facet_coverage(
     facets: dict[str, FacetInfo],
     capabilities: CapabilitiesInfo | None,
 ) -> None:
-    ws = wb.create_sheet("Facet Coverage")
+    ws = wb.create_sheet("Facet and CU Coverage")
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = "A2"
 
@@ -1204,7 +1202,7 @@ def _build_facet_coverage(
         _outcome_label("untested"),
         "Server Support %",
         "Supported CUs Validated %",
-        "Result",
+        "Outcome",
         "Description",
     ]
     widths = [34, 34, 12, 10, 14, 12, 12, 14, 9, 13, 9, 12, 14, 16, 70]
@@ -1216,7 +1214,7 @@ def _build_facet_coverage(
         server_profile_cus = _server_profile_cu_count(cu_keys, supported)
         supported_validated_pct_value = _supported_cus_validated_pct_value(cu_keys, by_cu, supported)
         compliance = _compliance_status(counts, len(cu_keys))
-        facet_type = "Rollup" if facet.kind == "rollup" else "Facet"
+        facet_type = "Facet Group" if facet.kind == "rollup" else "Facet"
         if facet.key in active_extra_facets:
             facet_type = f"Additional {facet_type}"
         values = [
@@ -1270,18 +1268,18 @@ def _build_cu_coverage(
     active_cus = set(context["active_cus"]) if context else set()
 
     headers = [
-        "Status",
+        "Review Status",
         "Δ",
         "CU",
         "CU Key",
         "Facet(s)",
         "Server Supported",
-        "Result",
+        "Outcome",
         "Tests",
         "Passed",
         _outcome_label("not_supported"),
         _outcome_label("blocked"),
-        "Failed/Error",
+        "Failures",
         "Workbook Cases",
         "Positive",
         "Negative",
@@ -1427,7 +1425,7 @@ def main() -> int:
     print(f"  Xfailed:  {xfailed}")
     print(f"  Total:    {len(cases)}")
     if cu_payload and facets:
-        print("  CU sheets: Profile Coverage, Facet Coverage, CU Coverage")
+        print("  CU sheets: Profile Coverage, Facet and CU Coverage, CU Coverage")
     if failed > 0:
         print(f"\n  *** {failed} FAILURE(S) — see 'Failures' sheet ***")
     return 0

@@ -14,9 +14,9 @@ Inputs:
 - `test-results/report-baseline.json` — the previous run's baseline for the
   "Δ Since Last Run" block (optional).
 
-Output: a single Markdown document containing _At a Glance_, _What This Server
+Output: a single Markdown document containing _Conformance Overview_, _What This Server
 Supports_, _Action Items_, _Capability Notes_, _Coverage Overview_, _Facet
-Coverage_, _Conformance Status_, _Full CU Coverage_, _Test Environment_, _Δ
+and CU Coverage_, _Conformance Status_, _Full CU Coverage_, _Test Environment_, _Δ
 Since Last Run_, etc.
 
 ## What this package is **not**

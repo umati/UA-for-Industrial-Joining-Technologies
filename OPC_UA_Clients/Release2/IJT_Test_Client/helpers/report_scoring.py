@@ -53,7 +53,7 @@ OUTCOME_LABELS: Mapping[str, str] = MappingProxyType(
         "partial": "Supported with Notes",
         "not_supported": "Not Supported",
         "blocked": "Blocked",
-        "action_needed": "Action Needed",
+        "action_needed": "Failed",
         "untested": "Untested",
     }
 )
@@ -68,14 +68,14 @@ NON_KPI_ICONS: Mapping[str, str] = MappingProxyType(
 )
 
 KPI_LABELS: tuple[str, ...] = (
-    "Action Needed",
+    "Failed",
     "Blocked",
     "Not Supported",
     "With Notes",
 )
 KPI_ICONS: Mapping[str, str] = MappingProxyType(
     {
-        "Action Needed": "🔴",
+        "Failed": "🔴",
         "Blocked": "🟠",
         "Not Supported": "⚪",
         "With Notes": "ℹ️",
@@ -83,16 +83,24 @@ KPI_ICONS: Mapping[str, str] = MappingProxyType(
 )
 KPI_SEPARATOR: str = " · "
 STATUS_ORDER: Mapping[str, int] = MappingProxyType({label: index for index, label in enumerate(KPI_LABELS)})
-ACTION_ITEM_LABEL_ORDER: tuple[str, ...] = ("Action Needed", "Blocked")
+ACTION_ITEM_LABEL_ORDER: tuple[str, ...] = ("Failed", "Blocked")
 CAPABILITY_NOTE_LABEL_ORDER: tuple[str, ...] = ("Not Supported", "With Notes")
 ACTION_ITEM_LABELS: frozenset[str] = frozenset(ACTION_ITEM_LABEL_ORDER)
 CAPABILITY_NOTE_LABELS: frozenset[str] = frozenset(CAPABILITY_NOTE_LABEL_ORDER)
 STATUS_COLORS_EXCEL: Mapping[str, str] = MappingProxyType(
     {
-        "Action Needed": "FFFFE5E5",
+        "Failed": "FFFFE5E5",
         "Blocked": "FFFCE4D6",
         "Not Supported": "FFF2F2F2",
         "With Notes": "FFDDEBF7",
+    }
+)
+STATUS_COUNT_KEYS: Mapping[str, str] = MappingProxyType(
+    {
+        "Failed": "action_needed",
+        "Blocked": "blocked",
+        "Not Supported": "not_supported",
+        "With Notes": "with_notes",
     }
 )
 DELTA_LABELS: tuple[str, ...] = ("new", "resolved", "regressed")
@@ -154,7 +162,7 @@ def status_for(cu_key: str, outcome: str, active_cus: set[str]) -> tuple[str, st
     if outcome == "supported":
         return "", ""
     if outcome == "action_needed":
-        return "Action Needed", KPI_ICONS["Action Needed"]
+        return "Failed", KPI_ICONS["Failed"]
     if outcome == "blocked":
         return "Blocked", KPI_ICONS["Blocked"]
     if outcome == "not_supported" and cu_key in active_cus:
@@ -164,7 +172,7 @@ def status_for(cu_key: str, outcome: str, active_cus: set[str]) -> tuple[str, st
 
 def status_count_key(status: str) -> str:
     """Convert a public status label to the internal count key."""
-    return status.lower().replace(" ", "_")
+    return STATUS_COUNT_KEYS.get(status, status.lower().replace(" ", "_"))
 
 
 def format_status_count(label: str, count: int) -> str:
@@ -196,7 +204,7 @@ def format_status_counts(labels: tuple[str, ...], counts: Mapping[str, int]) -> 
 def format_kpi_strip(counts: Mapping[str, int], separator: str = KPI_SEPARATOR) -> str:
     """Render the headline KPI strip used by both Markdown and Excel.
 
-    ``counts`` may be keyed by public labels (``"Action Needed"``) or by the
+    ``counts`` may be keyed by public labels (``"Failed"``) or by the
     internal count keys already used by report contexts (``"action_needed"``).
     If both are present, the internal key takes precedence. Missing values
     render as 0. Production callers use the default separator so Markdown and

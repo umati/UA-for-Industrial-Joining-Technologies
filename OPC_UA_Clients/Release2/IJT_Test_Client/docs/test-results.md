@@ -57,8 +57,9 @@ If the test run fails, `report.xlsx` is still generated for diagnostics when
 JUnit XML is available. In that case the workbook includes a red warning banner
 and should not be treated as a clean conformance report.
 When report data is available, `report-baseline.json` is read before rendering
-and overwritten after rendering. The first run shows "No baseline yet"; the next
-run shows score, validation-health, spec-coverage, finding, and per-CU deltas.
+and overwritten after rendering. If no baseline exists, the delta section is
+hidden. Once a baseline exists, the report shows score, validation-health,
+server-support-coverage, finding, and per-CU deltas.
 
 **Write the CU compliance report to a custom location:**
 ```bash
@@ -83,7 +84,7 @@ runs with no CU-marked tests and collect-only sessions do not write or
 overwrite the main live report; this keeps `cu-compliance-report.json` tied to
 executed compliance results.
 The live report records collected CU-marked tests, per-test outcomes, CU
-rollups, conservative CU compliance status, Not Supported skips, and official
+aggregates, conservative CU compliance status, Not Supported skips, and official
 CUs with no collected test path.
 Unsupported CU skips use compact public labels in runner summaries, for example
 `IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED`, so the
@@ -104,8 +105,8 @@ The report summary exposes `workbook_case_count`,
 Each `by_cu` JSON row exposes both `outcome` and `compliance`. `outcome` is
 the raw execution rollup kept for backward compatibility; for example, any
 passing support path can roll up to `passed`. `compliance` is the
-user-facing status used by GitHub and Excel reports. It is intentionally more
-conservative: failures become `action_needed`, passing support plus unresolved
+user-facing review status used by GitHub and Excel reports. It is intentionally more
+conservative: failures use the internal `action_needed` key and render as `Failed`, passing support plus unresolved
 support-relevant rows becomes `partial` / `Supported with Notes`, and a
 `blocked` row takes precedence over `not_supported` when no passing support
 path exists. Use `compliance` for new report consumers.
@@ -167,9 +168,9 @@ that need manual classification.
 | **Skipped (N)** | Skipped tests only — with skip reason |
 | **Expected Fail (N)** | Xfailed/xpassed — expected failures with reason |
 | **Cover** | Audience-first summary with overall result, Conformance Score, KPI strip, delta, server support summary, and environment details |
-| **Profile Coverage** | User-facing IJT coverage overview: server capability profile, reference IJT facets, optional full CU-set view, server-supported CU count, server-support percentage, supported-CUs-validated percentage, result, and coverage counts |
-| **Facet Coverage** | IJT facet table with CU counts, server-supported CU count, server-support percentage, supported-CUs-validated percentage, support/not-supported/blocked/action-needed status, and facet descriptions |
-| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, whether it is supported by the server capability profile, result, workbook case counts, and example test |
+| **Profile Coverage** | User-facing IJT coverage overview: server capability profile, reference IJT facets, optional full CU-set view, server-supported CU count, server-support percentage, supported-CUs-validated percentage, outcome, and coverage counts |
+| **Facet and CU Coverage** | IJT facet table with CU counts, server-supported CU count, server-support percentage, supported-CUs-validated percentage, supported/not-supported/blocked/failed status, and facet descriptions |
+| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, whether it is supported by the server capability profile, outcome, workbook case counts, and example test |
 
 Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠 orange = xfailed.
 
@@ -177,12 +178,13 @@ The profile/facet/CU sheets are generated when
 `test-results/cu-compliance-report.json` is present. CI Integration also adds a
 compact **IJT Profile, Facet, and Conformance Unit Coverage** table to
 `summary.md` and the GitHub Actions step summary, so users can see the active
-server capability profile, Conformance Score, at-a-glance KPIs, delta from the
-previous local/job baseline, server support summary, Action Items, Capability Notes,
-facet coverage, conformance status items, and a collapsible full CU coverage table without downloading the Excel
+server capability profile, Conformance Score, conformance overview KPIs, delta
+from the previous local/job baseline when one exists, server support summary,
+Action Items, Capability Notes, facet and CU coverage, conformance status items,
+and a collapsible full CU coverage table without downloading the Excel
 file first.
 `Server Supported CUs` is read from the server capability file (`n/a` when
-no capability file was loaded); `Result` and validated counts are calculated
+no capability file was loaded); `Outcome` and validated counts are calculated
 from the current test run. `Server Support %` is informational; `Supported CUs
 Validated %` is the health signal for how much of the server's supported
 capability set was validated by the run. Start with the `Server capability
@@ -192,17 +194,18 @@ additional pass/fail requirements for this server.
 The `Primary Reason` / `Notes` fields explain why a CU appears in the status
 table, such as a dependency on an optional method or a true runtime precondition
 that prevented coverage.
-`Status` is computed from the result: Action Needed means a failure or error,
+`Review Status` is computed from the outcome: Failed means a failure or error,
 Blocked means a missing runtime precondition, Not Supported means a
 server-supported CU is not supported, and With Notes means supported with notes
-or outside server support.
+or outside server support. `Outcome` is the CU-level conformance classification
+for the current run.
 Profile and facet tables distinguish fully supported CUs from CUs supported
 with notes. "Supported with notes" means at least one test path passed and
 the remaining non-passing rows are accepted skips, Not Supported methods/CUs
 from the server profile, or environment/precondition notes; failures and errors
-are reported separately as action needed.
+are reported separately as Failed review-status items.
 Accepted policy and environment/tooling limitation skips remain visible in the
-raw skip reason summary as diagnostics, but they do not reduce CU compliance
+skip diagnostics summary, but they do not reduce CU compliance
 when the CU also has passing support coverage. In Excel, `Supported with Notes`
 uses a light-green fill and `Not Supported` uses neutral gray so capability
 gaps are not presented as warnings.

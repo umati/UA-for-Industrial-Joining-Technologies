@@ -69,7 +69,7 @@ def main() -> int:
     for fixture_name, expected_name in CASES:
         md = render_fixture(FIXTURES_DIR / fixture_name)
         out = EXPECTED_DIR / expected_name
-        out.write_text(md, encoding="utf-8")
+        out.write_text(md, encoding="utf-8", newline="\n")
         print(f"wrote {out} ({len(md)} bytes)")
     return 0
 

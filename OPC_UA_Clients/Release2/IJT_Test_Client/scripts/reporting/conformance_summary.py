@@ -634,11 +634,7 @@ def _delta_summary(context: dict[str, Any], baseline: dict[str, Any] | None) -> 
 def _render_delta_block(context: dict[str, Any], baseline: dict[str, Any] | None, now_utc: datetime) -> list[str]:
     lines: list[str] = []
     if not baseline:
-        lines.append("### Δ Since Last Run")
-        lines.append("")
-        lines.append("_No baseline yet — this run becomes the baseline._")
-        lines.append("")
-        return lines
+        return []
     previous_sha = str(baseline.get("git_sha") or "unknown")
     lines.append(f"### Δ Since Last Run (commit `{previous_sha}`, {_baseline_age(baseline, now_utc)})")
     lines.append("")
@@ -650,7 +646,7 @@ def _render_delta_block(context: dict[str, Any], baseline: dict[str, Any] | None
     current_spec = context["spec_coverage_value"]
     lines.append(f"- Score **{previous_score} → {context['score']}**")
     lines.append(f"- Validation Health {_fmt_pct(previous_validation)} → {_fmt_pct(current_validation)}")
-    lines.append(f"- Spec Coverage {_fmt_pct(previous_spec)} → {_fmt_pct(current_spec)}")
+    lines.append(f"- Server Support Coverage {_fmt_pct(previous_spec)} → {_fmt_pct(current_spec)}")
     lines.append(f"- Review Items: {_format_delta_summary(delta)}")
     lines.append("")
     return lines
@@ -660,7 +656,7 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
     facets: dict[str, dict[str, Any]] = context["facets"]
     by_cu: dict[str, Any] = context["by_cu"]
     supported: set[str] | None = context["supported"]
-    rows: list[tuple[int, str]] = []
+    rows: list[tuple[int, str, str, str, str]] = []
     for facet in facets.values():
         if str(facet.get("kind") or "") == "rollup":
             continue
@@ -675,15 +671,32 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
             icon, rank, label = _CAPABILITY_SUPPORT_ICONS["supported"], 2, "supported"
         name = str(facet.get("display_name") or "Facet").removeprefix("IJT ").removesuffix(" Server Facet")
         description = str(facet.get("description") or "").strip().replace("\n", " ")
-        rows.append((rank, f"{icon} **{_md_cell(name)}** — {label}. {_md_cell(description)}"))
+        rows.append((rank, name, icon, label, description))
     rows.sort(key=lambda item: (item[0], item[1]))
     lines = ["## What This Server Supports", ""]
-    lines.append("_Auto-generated from facet outcomes. Full detail is in Facet Coverage._")
+    lines.append("_Auto-generated from facet outcomes. Full detail is in Facet and CU Coverage._")
     lines.append("")
-    for _rank, row in rows[:limit]:
-        lines.append(f"- {row}")
+    for _rank, name, icon, label, description in rows[:limit]:
+        lines.append(f"- {icon} **{_md_cell(name)}** — {label}. {_md_cell(description)}")
     if len(rows) > limit:
-        lines.append(f"- … {len(rows) - limit} more capability areas in Facet Coverage")
+        summary_counts = Counter(label for _rank, _name, _icon, label, _description in rows)
+        lines.append("")
+        lines.append(
+            "_Capability area counts: "
+            f"{summary_counts['supported']} supported · "
+            f"{summary_counts['partially supported']} partially supported · "
+            f"{summary_counts['not supported by this server']} not supported by this server._"
+        )
+        lines.append("")
+        lines.append("<details open>")
+        lines.append("<summary><b>All capability areas</b></summary>")
+        lines.append("")
+        lines.append("| Capability Area | Status | Notes |")
+        lines.append("|---|---|---|")
+        for _rank, name, icon, label, description in rows:
+            lines.append(f"| {_md_cell(name)} | {icon} {label} | {_md_cell(description)} |")
+        lines.append("")
+        lines.append("</details>")
     lines.append("")
     return lines
 
@@ -694,7 +707,7 @@ def _append_review_table(
     limit: int,
     more_target: str,
 ) -> None:
-    lines.append("| Status | CU | Result | Primary Reason | Δ |")
+    lines.append("| Review Status | CU | Outcome | Primary Reason | Δ |")
     lines.append("|---|---|---|---|---|")
     for finding in findings[:limit]:
         status = f"{finding['status_icon']} {finding['status']}"
@@ -777,11 +790,11 @@ def _render_profile_facet_summary(
     lines.append("<summary><b>Coverage Overview</b></summary>")
     lines.append("")
     lines.append(
-        "_These rows separate the active server capability profile from reference IJT facet rollups and the complete CU set._"
+        "_These rows separate the active server capability profile from reference IJT facet groups and the complete CU set._"
     )
     lines.append("")
     lines.append(
-        "| Coverage View | Purpose | Facets | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcomes | Result |"
+        "| Coverage View | Purpose | Facets | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcomes | Outcome |"
     )
     lines.append("|---|---|---:|---:|---:|---:|---:|---|---|")
     view_rows: list[tuple[str, str, int, list[str]]] = []
@@ -830,16 +843,16 @@ def _render_profile_facet_summary(
     lines.append("")
 
     lines.append("<details>")
-    lines.append("<summary><b>Facet Coverage</b></summary>")
+    lines.append("<summary><b>Facet and CU Coverage</b></summary>")
     lines.append("")
     lines.append(
-        "| Facet | Type | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcomes | Result |"
+        "| Facet | Type | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcomes | Outcome |"
     )
     lines.append("|---|---|---:|---:|---:|---:|---|---|")
     for facet in facets.values():
         cu_keys = list(facet.get("conformance_units", []))
         counts = _count_outcomes(cu_keys, by_cu)
-        facet_kind = "Rollup" if str(facet.get("kind") or "") == "rollup" else "Facet"
+        facet_kind = "Facet Group" if str(facet.get("kind") or "") == "rollup" else "Facet"
         server_profile_cus = _server_profile_cu_count(cu_keys, supported)
         lines.append(
             f"| {_md_cell(str(facet.get('display_name', 'Facet')))} | {facet_kind} "
@@ -855,14 +868,14 @@ def _render_profile_facet_summary(
     lines.append("<summary><b>Conformance Status</b></summary>")
     lines.append("")
     lines.append(
-        f"_Support-level detail for CUs that need explanation or follow-up: {_plain_outcome_label('partial')}, "
+        f"_Review-level detail for CUs that need explanation or follow-up: {_plain_outcome_label('partial')}, "
         f"{_CAPABILITY_NOTE_LABEL_ORDER[0]}, {_ACTION_ITEM_LABEL_ORDER[1]}, or "
-        f"{_ACTION_ITEM_LABEL_ORDER[0]}. Raw skip buckets below are diagnostics._"
+        f"{_ACTION_ITEM_LABEL_ORDER[0]}. Skip buckets below are diagnostics._"
     )
     lines.append("")
     lines.append(
-        f"| Status | CU | Facet(s) | Server Supported | Result | Primary Reason | Tests | Passed | "
-        f"{_plain_outcome_label('not_supported')} | {_plain_outcome_label('blocked')} | Failed/Error | Δ |"
+        f"| Review Status | CU | Facet(s) | Server Supported | Outcome | Primary Reason | Tests | Passed | "
+        f"{_plain_outcome_label('not_supported')} | {_plain_outcome_label('blocked')} | Failures | Δ |"
     )
     lines.append("|---|---|---|---|---|---|---:|---:|---:|---:|---:|---|")
     findings: list[dict[str, Any]] = context["findings"]
@@ -886,8 +899,8 @@ def _render_profile_facet_summary(
     lines.append("<summary><b>Full CU Coverage</b></summary>")
     lines.append("")
     lines.append(
-        f"| CU | Facet(s) | Server Supported | Result | Tests | Passed | {_plain_outcome_label('not_supported')} | "
-        f"{_plain_outcome_label('blocked')} | Failed/Error | Workbook Cases | Δ |"
+        f"| CU | Facet(s) | Server Supported | Outcome | Tests | Passed | {_plain_outcome_label('not_supported')} | "
+        f"{_plain_outcome_label('blocked')} | Failures | Workbook Cases | Δ |"
     )
     lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|---|")
     for cu_key in all_cu_keys:
@@ -916,7 +929,7 @@ def _render_profile_facet_summary(
     lines.append("")
 
     lines.append("<details>")
-    lines.append("<summary><b>How to Read This Report</b></summary>")
+    lines.append("<summary><b>Glossary and Reading Guide</b></summary>")
     lines.append("")
     lines.append("- **Server capability profile** is the active profile selected by the server capability YAML.")
     lines.append(
@@ -930,19 +943,20 @@ def _render_profile_facet_summary(
         f"{_plain_outcome_label('supported')} or {_plain_outcome_label('partial')}."
     )
     lines.append(
-        "- **Score** is a 0–100 composite of `0.7 × Validation Health + 0.3 × Spec Coverage`, "
+        "- **Score** is a 0–100 composite of `0.7 × Validation Health + 0.3 × Server Support Coverage`, "
         f"capped at 50 if any **{_ACTION_ITEM_LABEL_ORDER[0]}** item exists and capped at 75 if any "
         f"**{_ACTION_ITEM_LABEL_ORDER[1]}** item exists."
     )
     lines.append(
-        f"- **Status** is computed from the result: {_ACTION_ITEM_LABEL_ORDER[0]} = failure or error, "
+        f"- **Review Status** highlights follow-up work: {_ACTION_ITEM_LABEL_ORDER[0]} = failure or error, "
         f"{_ACTION_ITEM_LABEL_ORDER[1]} = missing runtime precondition, "
         f"{_CAPABILITY_NOTE_LABEL_ORDER[0]} = server-supported CU not supported, "
         f"{_CAPABILITY_NOTE_LABEL_ORDER[1]} = supported with notes or outside server support."
     )
+    lines.append("- **Outcome** is the CU-level conformance classification for the current run.")
     lines.append("- **Δ** compares this run with `test-results/report-baseline.json` when that file exists.")
     lines.append(f"- Failures and errors are reported as **{_ACTION_ITEM_LABEL_ORDER[0]}**.")
-    lines.append("- Raw skip reasons are listed later as diagnostics and may overlap with conformance status items.")
+    lines.append("- Skip reasons are listed later as diagnostics and may overlap with conformance status items.")
     lines.append("")
     lines.append("</details>")
     lines.append("")
@@ -1015,9 +1029,9 @@ def render_conformance_summary(
         total_active = len(context["active_cus"])
         validated = _supported_cus_validated_count(context["active_cus"], context["by_cu"], context["supported"])
         findings_count: Counter[str] = context["findings_count"]
-        lines.append("## At a Glance")
+        lines.append("## Conformance Overview")
         lines.append("")
-        lines.append(f"| Spec Coverage | {_TEST_RESULT_ICONS['passed']} Validation Health | CU Status |")
+        lines.append(f"| Server Support Coverage | {_TEST_RESULT_ICONS['passed']} Validation Health | CU Status |")
         lines.append("|:---:|:---:|:---:|")
         lines.append(
             f"| **{_fmt_pct(context['spec_coverage_value'])}** | "
@@ -1026,7 +1040,7 @@ def render_conformance_summary(
         )
         lines.append(
             f"| {supported} / {total_active} CUs server-supported | "
-            f"{validated} / {supported} server-supported CUs validated | Action Items and Capability Notes below |"
+            f"{validated} / {supported} server-supported CUs validated | Failed items and capability notes below |"
         )
         lines.append("")
 
@@ -1067,7 +1081,7 @@ def render_conformance_summary(
     # ── Skip reason buckets ──
     if data["skip_reasons"]:
         lines.append("<details>")
-        lines.append("<summary><b>Raw Skip Diagnostics</b></summary>")
+        lines.append("<summary><b>Skip Diagnostics</b></summary>")
         lines.append("")
         lines.append(
             "Diagnostic skip buckets from pytest. These may overlap with conformance status items and do not "

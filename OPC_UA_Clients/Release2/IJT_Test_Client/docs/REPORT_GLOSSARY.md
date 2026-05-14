@@ -49,122 +49,121 @@ it as a glossary bug and fix it in the same PR that touches the symbol.
 
 ## 2. Conformance report top-level terms
 
-### 2.1 `Conformance Overview` (renamed from `At a Glance`) 👔 🛠️ 🧪 📦
-Source today: `scripts/reporting/conformance_summary.py` (`## At a Glance` heading and KPI table emitted in `render_conformance_summary()`).
-Currently rendered as a **three-column KPI strip** (`Spec Coverage` | `Validation Health` | `CU Status`) **plus a three-cell context row** beneath it.
+### 2.1 `Conformance Overview` 👔 🛠️ 🧪 📦
+Source: `scripts/reporting/conformance_summary.py` (`## Conformance Overview` heading and KPI table emitted in `render_conformance_summary()`).
+Rendered as a **three-column KPI strip** (`Server Support Coverage` | `Validation Health` | `CU Status`) **plus a three-cell context row** beneath it.
 
-Today the `CU Status` cell renders the four KPI labels defined by `KPI_LABELS` in `helpers/report_scoring.py`: **`Action Needed` · `Blocked` · `Not Supported` · `With Notes`** (no `Supported` count in this strip; `format_kpi_strip()` in `helpers/report_scoring.py` only emits the four KPI labels).
+The `CU Status` cell renders the four KPI labels defined by `KPI_LABELS` in `helpers/report_scoring.py`: **`Failed` · `Blocked` · `Not Supported` · `With Notes`** (no `Supported` count in this strip; `format_kpi_strip()` in `helpers/report_scoring.py` only emits the four KPI labels).
 
-The Phase 4 split moves those four items into their own readable cells at 360px width, and applies the separate `Action Needed` → `Failed` taxonomy rename so the strip then reads **`Failed` · `Blocked` · `Not Supported` · `With Notes`**.
-**Why renamed:** "At a Glance" is informal; non-IJT readers (management, customers) parsed it as "look here for everything," not "high-level KPIs." `Conformance Overview` says exactly what the block contains.
+**Why renamed:** the old "At a Glance" wording was informal; non-IJT readers (management, customers) parsed it as "look here for everything," not "high-level KPIs." `Conformance Overview` says exactly what the block contains.
 
-### 2.2 `Server Support Coverage` (renamed from `Spec Coverage`) 👔 🛠️ 📦
-Source today: `scripts/reporting/conformance_summary.py` — `Spec Coverage` column header in the `## At a Glance` KPI table; value is the local `spec_coverage_value` computed in `render_conformance_summary()`.
+### 2.2 `Server Support Coverage` 👔 🛠️ 📦
+Source: `scripts/reporting/conformance_summary.py` — `Server Support Coverage` column header in the `## Conformance Overview` KPI table; value is the local `spec_coverage_value` computed in `render_conformance_summary()`.
 The share of OPC 40100 Joining Test Result CUs (Conformance Units) that the **server under test claims to support** in its capability file.
 - **Numerator:** CUs the server lists as supported.
 - **Denominator:** CUs in the active profile (facet or full set).
 - Example: 78% means the server says it supports 78% of the CUs in the active profile.
 **Why renamed:** "Spec Coverage" suggested test coverage of the spec, which it is not. The value is about **what the server says it supports**, not what the tests cover.
 
-### 2.3 `Validation Health` (label unchanged, formula unchanged in Phase 4 default) 👔 🛠️ 🧪 📦
-Source today: `scripts/reporting/conformance_summary.py` — `Validation Health` column header in the `## At a Glance` KPI table; value is the local `validation_health_value` computed in `render_conformance_summary()` via `_supported_cus_validated_pct_value()`.
+### 2.3 `Validation Health` 👔 🛠️ 🧪 📦
+Source: `scripts/reporting/conformance_summary.py` — `Validation Health` column header in the `## Conformance Overview` KPI table; value is the local `validation_health_value` computed in `render_conformance_summary()` via `_supported_cus_validated_pct_value()`.
 The share of server-supported CUs that this run validated as **Supported** or **Supported with Notes**.
 - **Numerator:** CUs validated as Supported or Supported with Notes.
 - **Denominator:** CUs the server says it supports.
 - Example: 95% means 95% of the CUs the server claims to support were proven by tests.
-**Note:** Formula stays as-is in the rename PR. Phase 4 may revisit the weighting as a separate, optional subtask; if pursued, it lands as its own proposal document and PR.
+**Note:** Formula stays as-is. Any future weighting change requires a separate proposal document and PR.
 
 ### 2.4 `CU Status` (label unchanged) 👔 🛠️ 🧪 📦
-Source today: `scripts/reporting/conformance_summary.py` — `CU Status` column header in the `## At a Glance` KPI table; strip rendered via `_format_kpi_strip(findings_count)` (the `findings_count` Counter is built in `render_conformance_summary()`).
+Source: `scripts/reporting/conformance_summary.py` — `CU Status` column header in the `## Conformance Overview` KPI table; strip rendered via `_format_kpi_strip(findings_count)` (the `findings_count` Counter is built in `render_conformance_summary()`).
 Compressed status counts across all CUs. The strip renders the four KPI labels from `KPI_LABELS` in `helpers/report_scoring.py`:
 
 ```
-Action Needed · Blocked · Not Supported · With Notes
+Failed · Blocked · Not Supported · With Notes
 ```
 
 There is **no `Supported` count in this strip** — the strip only highlights the four buckets that need attention.
 
-**Display change in Phase 4:** today this is a four-item single line. The Phase 4 rename PR splits into separate icon + count cells so each status is readable at 360px width, and applies the `Action Needed` → `Failed` rename so the strip becomes `Failed · Blocked · Not Supported · With Notes`. No formula change; no new bucket.
+There is no formula change and no new bucket. The internal JSON key remains `action_needed`; the public report label is `Failed`.
 
-### 2.5 Score (label and formula unchanged in default Phase 4) 🛠️ 🧪
+### 2.5 Score 🛠️ 🧪
 Source: formula lives in `conformance_score()` in `helpers/report_scoring.py`; called as `_conformance_score(...)` inside `render_conformance_summary()` in `scripts/reporting/conformance_summary.py`; rendered as the `**Score: …**` banner emitted by the same function.
 0–100 composite, currently `0.7 × Validation Health + 0.3 × Server Support Coverage`,
-capped at 50 if any **Action Needed** item exists, capped at 75 if any **Blocked** item exists.
-**Note on taxonomy:** the current source term is `Action Needed` (`OUTCOME_LABELS` in `helpers/report_scoring.py` maps `action_needed` → `"Action Needed"`; the same file declares `ACTION_ITEM_LABEL_ORDER = ("Action Needed", "Blocked")`). The Phase 4 Outcome-column rename retires `Action Needed` in favour of `Failed` (see §3.1 below). Until the Phase 4 PR lands, every score report still says `Action Needed`.
-Phase 4 may revisit the score weighting as a separate, optional subtask.
+capped at 50 if any internal `action_needed` / public **Failed** item exists, capped at 75 if any **Blocked** item exists.
+**Note on taxonomy:** the internal source term is still `action_needed`; the public report label is `Failed`.
 
 ---
 
 ## 3. Outcome / status terms
 
-### 3.1 `Outcome` (replaces dual `Status` + `Result` columns) 🛠️ 🧪
-Today the report has both a `Status` column and a `Result` column with overlapping meanings:
-- Compact review table: `scripts/reporting/conformance_summary.py` — header `| Status | CU | Result | Primary Reason | Δ |` emitted by `_append_review_table()` (used inside `## Action Items` and `## Capability Notes`).
-- `Conformance Status` collapsed `<details>` table: header includes `Status`, `Result`, **and** `Failed/Error`.
-- `Full CU Coverage` collapsed `<details>` table: header includes `Result` and `Failed/Error` (no `Status` column).
+### 3.1 `Review Status` and `Outcome` 🛠️ 🧪
+The report deliberately keeps two concepts:
+- `Review Status` highlights follow-up work for the reader (`Failed`, `Blocked`, `Not Supported`, `With Notes`).
+- `Outcome` is the CU-level conformance classification for the current run.
 
-(The other two coverage tables — `Coverage Overview` and `Facet Coverage` — use an `Outcomes | Result` shape instead and are not part of this dual-column problem.)
+Current table shapes:
+- Compact review table: `Review Status | CU | Outcome | Primary Reason | Δ`.
+- `Conformance Status` collapsed `<details>` table: includes `Review Status`, `Outcome`, and `Failures`.
+- `Full CU Coverage` collapsed `<details>` table: includes `Outcome` and `Failures` (no `Review Status` column).
+- Coverage aggregate tables may show `Outcomes | Outcome`: `Outcomes` is the aggregate count column, while `Outcome` is the per-row classification.
 
-In Phase 4 both `Status` and `Result` collapse into a single `Outcome` column with icon + word. The Phase 4 PR also renames the source taxonomy from `Action Needed` to `Failed` to match user-facing intent and the Failures column rename.
-
-| Outcome (Phase 4 target) | Icon | Meaning | Current source term | Source today |
+| Outcome | Icon | Meaning | Internal source term | Source |
 |---|---|---|---|---|
 | Supported | ✅ | Test validated this CU as supported. | `Supported` | `OUTCOME_LABELS["supported"]` in `helpers/report_scoring.py` |
 | Supported with Notes | ⚠ | Validated but with caveats (e.g., partial coverage). Mapped from `partial` key. | `Supported with Notes` (KPI strip uses short form `With Notes` from `KPI_LABELS`) | `OUTCOME_LABELS["partial"]`, `KPI_LABELS` in `helpers/report_scoring.py` |
 | Not Supported | ➖ | Server-supported CU was not validated as supported by this run. | `Not Supported` | `OUTCOME_LABELS["not_supported"]` in `helpers/report_scoring.py` |
 | Blocked | 🚫 | Missing runtime precondition (e.g., dependency CU failed). | `Blocked` | `OUTCOME_LABELS["blocked"]` in `helpers/report_scoring.py` |
-| Failed | ❌ | Test failure or harness/runtime error. **Renamed in Phase 4 from current `Action Needed`.** | `Action Needed` | `OUTCOME_LABELS["action_needed"]`, `ACTION_ITEM_LABEL_ORDER` in `helpers/report_scoring.py` |
+| Failed | ❌ | Test failure or harness/runtime error. | `action_needed` | `OUTCOME_LABELS["action_needed"]`, `ACTION_ITEM_LABEL_ORDER` in `helpers/report_scoring.py` |
 
-The Phase 4 source change updates `helpers/report_scoring.py` `OUTCOME_LABELS["action_needed"]` from `"Action Needed"` to `"Failed"`, `ACTION_ITEM_LABEL_ORDER[0]` accordingly, and propagates through Markdown, Excel, KPI strip, and `STATUS_COLORS_EXCEL` keys.
+The internal JSON key remains `action_needed` so existing machine-readable data stays stable. The public label is `Failed`.
 
-### 3.2 `Failures` (renamed from `Failed/Error`) 🛠️ 🧪
-Source today: `scripts/reporting/conformance_summary.py` — `Failed/Error` column header in both the `Conformance Status` and `Full CU Coverage` collapsed `<details>` tables; Excel parity in the `Failed/Error` column emitted by `make_excel_report.py`.
+### 3.2 `Failures` 🛠️ 🧪
+Source: `scripts/reporting/conformance_summary.py` — `Failures` column header in both the `Conformance Status` and `Full CU Coverage` collapsed `<details>` tables; Excel parity in the `Failures` column emitted by `make_excel_report.py`.
 The single count of failures and harness/runtime errors. The code already collapses these into one number; the column name now matches the existing Excel sheet name `Failures` built by `_build_filtered(..., "Failures", ...)` in `make_excel_report.py`.
 
-> Note: The column `Failures` counts pytest `failed + errors`. The CU **outcome** rename (`Action Needed` → `Failed`) is a separate but related rename in the same Phase 4 PR. The two are not the same field: `Failures` is a per-CU count of underlying test failures+errors; `Failed` is the CU-level outcome bucket that replaces `Action Needed`.
+> Note: The column `Failures` counts pytest `failed + errors`. The CU **outcome** label `Failed` is not the same field: `Failures` is a per-CU count of underlying test failures+errors; `Failed` is the CU-level outcome bucket.
 
 ---
 
 ## 4. Coverage and capability terms
 
-### 4.1 `Facet and CU Coverage` (renamed from `Facet Coverage`) 🛠️ 🧪
-Source today: `scripts/reporting/conformance_summary.py` — Facet Coverage `<details>` block; the "more capability areas in Facet Coverage" overflow text is emitted by `_render_supports_block()`.
+### 4.1 `Facet and CU Coverage` 🛠️ 🧪
+Source: `scripts/reporting/conformance_summary.py` — `Facet and CU Coverage` `<details>` block; full capability-area details are emitted by `_render_supports_block()`.
 The table of facet-level rows that breaks down validation by facet of the OPC 40100 IJT profile, plus the Reference IJT facet and Reference full CU set rows.
 **Why renamed:** the table contains both facets and CU-level rows; the old name hid the CU rows.
 
 ### 4.2 `Capability Notes` (label kept) 🛠️ 🧪
-Source today: `scripts/reporting/conformance_summary.py` — `## Capability Notes` section in `_render_review_sections()`; filter uses `_CAPABILITY_NOTE_LABELS` (= {Not Supported, Supported with Notes}, imported from `helpers/report_scoring.py`).
+Source: `scripts/reporting/conformance_summary.py` — `## Capability Notes` section in `_render_review_sections()`; filter uses `_CAPABILITY_NOTE_LABELS` (= {Not Supported, Supported with Notes}, imported from `helpers/report_scoring.py`).
 Per-CU notes about CUs that are **not** action items (no failure, no block) but still need explanation.
 **Why kept (not renamed to `Exceptions`):** "Exception" has a specific meaning in the OPC UA spec (StatusCode-bearing condition); reusing that term in the report would be confusing.
 
 ### 4.3 `Coverage Overview` (label kept) 👔 🛠️ 🧪 📦
-Source today: `scripts/reporting/conformance_summary.py` section heading.
+Source: `scripts/reporting/conformance_summary.py` section heading.
 A small table summarizing how much of the active profile each row covered. Numbers are independent of pass/fail; they express **breadth**, not **success**.
 
 ### 4.4 `Full CU Coverage` (label kept) 🛠️ 🧪
-Source today: `scripts/reporting/conformance_summary.py` collapsed `<details>` block.
-The full list of every CU in the active profile with its individual result.
+Source: `scripts/reporting/conformance_summary.py` collapsed `<details>` block.
+The full list of every CU in the active profile with its individual outcome.
 
-### 4.5 `Skip Diagnostics` (renamed from `Raw Skip Diagnostics`) 🛠️ 🧪
-Source today: `scripts/reporting/conformance_summary.py` section heading.
-Raw skip-reason histogram for diagnostic purposes only. Skip counts here **overlap** with CU outcomes above and should not be added to them.
+### 4.5 `Skip Diagnostics` 🛠️ 🧪
+Source: `scripts/reporting/conformance_summary.py` section heading.
+Skip-reason histogram for diagnostic purposes only. Skip counts here **overlap** with CU outcomes above and should not be added to them.
 
 ---
 
 ## 5. Document structure terms
 
-### 5.1 `Glossary and Reading Guide` (renamed from `How to Read This Report`) 👔 🛠️ 🧪 📦
-Source today: `scripts/reporting/conformance_summary.py` section heading.
-The trailing section that defines terms inline inside the generated report. The generated report keeps its inline guide (changing it would break byte-identity with the staged renderer); this file is the authoritative in-repo terminology reference and is not linked from the rendered summary.
+### 5.1 `Glossary and Reading Guide` 👔 🛠️ 🧪 📦
+Source: `scripts/reporting/conformance_summary.py` section heading.
+The trailing section that defines terms inline inside the generated report. This file is the authoritative in-repo terminology reference.
 
 ### 5.2 `Conformance Status` (label kept) 🛠️ 🧪
-Source today: `scripts/reporting/conformance_summary.py` collapsed `<details>` block heading.
+Source: `scripts/reporting/conformance_summary.py` collapsed `<details>` block heading.
 The detail table of action items and capability notes that need explanation.
 
 ### 5.3 `Since Last Run` (block) 🛠️ 🧪
-Source today: baseline read by `_load_baseline()` in `scripts/make_conformance_summary.py`; no-baseline text and Δ-block emitted by `_render_delta_block()` in `scripts/reporting/conformance_summary.py`; baseline payload built by `_baseline_payload()` in `scripts/reporting/conformance_summary.py`; baseline write by `_write_baseline()` in `scripts/make_conformance_summary.py` (invoked from `main()`).
+Source: baseline read by `_load_baseline()` in `scripts/make_conformance_summary.py`; Δ-block emitted by `_render_delta_block()` in `scripts/reporting/conformance_summary.py`; baseline payload built by `_baseline_payload()` in `scripts/reporting/conformance_summary.py`; baseline write by `_write_baseline()` in `scripts/make_conformance_summary.py` (invoked from `main()`).
 Comparison with the previously persisted `test-results/report-baseline.json`.
-**Phase 4 change:** when no baseline exists, the block is **hidden**, not shown with an empty message. The misleading "no previous run" wording is the user's Q11 complaint.
+When no baseline exists, the block is **hidden**, not shown with an empty message.
 
 ---
 
@@ -182,9 +181,9 @@ Auto-detects the slowest current job/suite and shows the top-5 slowest tests in 
 ---
 
 ## 7. Cross-report parity (Markdown ↔ Excel) 🛠️ 🧪
-- Every term renamed in `scripts/reporting/conformance_summary.py` is renamed in lockstep in `make_excel_report.py` (Phase 4 same PR).
+- Every term rendered in `scripts/reporting/conformance_summary.py` is rendered in lockstep in `make_excel_report.py`.
 - Excel sheet `Failures` is the canonical name and is preserved (`_build_filtered(..., "Failures", ...)` in `make_excel_report.py`).
-- Excel terminology source today: column-header constants and sheet builders in `scripts/make_excel_report.py` (Excel column rename happens in lockstep with the renderer rename in Phase 4).
+- Excel terminology source: column-header constants and sheet builders in `scripts/make_excel_report.py`.
 
 ---
 
@@ -195,12 +194,11 @@ Auto-detects the slowest current job/suite and shows the top-5 slowest tests in 
 
 ---
 
-## 9. Deferred to Phase 4 — terminology cleanup
+## 9. Internal implementation terms
 
-The renderer currently surfaces the word **`Rollup`** to end users:
-- as the value of the `Type` column in the `Facet Coverage` table (alternative value: `Facet`), and
-- in the italic note under `Coverage Overview`: *"…reference IJT facet rollups and the complete CU set."*
+The source data still uses the internal discriminator **`rollup`** for grouped
+facet definitions. The renderer and Excel workbook expose those rows as
+**`Facet Group`**.
 
-`Rollup` is internal jargon that is unhelpful for management / customer audiences. Phase 4 should rename it to a clearer user-facing term (candidates: `Aggregate Facet`, `Facet Group`, `Composite Facet`) and update the `Coverage Overview` blurb in lockstep. Internal Python (`kind == "rollup"` discriminator, `rollups` list variable) may stay as-is — it is not user-visible.
-
-This is a renderer-output change and therefore intentionally **not** done in Phase 1 (would break byte-identity).
+Internal Python (`kind == "rollup"` discriminator, `rollups` list variable) may
+stay as-is because it is not user-visible.

@@ -326,6 +326,14 @@ def test_format_kpi_strip_round_trip():
         assert _assert_kpi_strip(rendered, counts) == rendered
 
 
+def test_internal_action_needed_key_renders_failed_public_label():
+    rendered = _report_scoring.format_kpi_strip({"action_needed": 1, "blocked": 0, "not_supported": 0, "with_notes": 0})
+
+    assert _report_scoring.status_count_key("Failed") == "action_needed"
+    assert "🔴 1 Failed" in rendered
+    assert "Action Needed" not in rendered
+
+
 def test_format_status_count_and_label_use_shared_icons():
     supported = _report_scoring.outcome_label("supported")
 
@@ -390,19 +398,19 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
 
     assert context is not None
     assert context["score"] == 90
-    assert "### Δ Since Last Run" in rendered
-    assert "_No baseline yet — this run becomes the baseline._" in rendered
+    assert "### Δ Since Last Run" not in rendered
+    assert "this run becomes the baseline" not in rendered
     assert "## What This Server Supports" in rendered
     assert "## Action Items" in rendered
     assert "## Capability Notes" in rendered
     assert "_No action items — server validation passed cleanly._" in rendered
     assert "<summary><b>Coverage Overview</b></summary>" in rendered
-    assert "<summary><b>Facet Coverage</b></summary>" in rendered
+    assert "<summary><b>Facet and CU Coverage</b></summary>" in rendered
     assert "<details open>\n<summary><b>Show capability notes</b></summary>" in rendered
     assert "<summary><b>Conformance Status</b></summary>" in rendered
     assert "<summary><b>Full CU Coverage</b></summary>" in rendered
     assert "<summary><b>Test Environment</b></summary>" in rendered
-    assert "<summary><b>How to Read This Report</b></summary>" in rendered
+    assert "<summary><b>Glossary and Reading Guide</b></summary>" in rendered
     assert rendered.count("# IJT Conformance Test Report") == 0
     assert "## Coverage Overview" not in rendered
     assert "Purpose" in rendered
@@ -410,7 +418,7 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
     assert "Server Supported CUs" in rendered
     assert "Server Support %" in rendered
     assert "Supported CUs Validated %" in rendered
-    assert "Result" in rendered
+    assert "Outcome" in rendered
     for legacy_term in (
         "Dec" + "lared",
         "dec" + "lared",
@@ -473,7 +481,7 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
     lines = rendered.splitlines()
 
     assert lines.count("# IJT Conformance Test Report") == 1
-    assert "## At a Glance" in lines
+    assert "## Conformance Overview" in lines
     assert "## What This Server Supports" in lines
     assert "## Action Items" in lines
     assert "## Capability Notes" in lines
@@ -483,7 +491,7 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
     )
     assert "<summary><b>Full CU Coverage</b></summary>" in rendered
     assert "<summary><b>Test Environment</b></summary>" in rendered
-    assert "<summary><b>Raw Skip Diagnostics</b></summary>" not in rendered
+    assert "<summary><b>Skip Diagnostics</b></summary>" not in rendered
 
 
 def test_review_items_sort_order(monkeypatch):
@@ -583,6 +591,20 @@ def test_excel_cover_uses_kpi_separator():
     assert "/" not in rendered
 
 
+def test_excel_cover_hides_delta_section_when_baseline_is_absent():
+    profiles, facets, capabilities = _excel_metadata()
+    context = _excel_report._build_report_context(_sample_payload(), profiles, facets, capabilities, baseline=None)
+    wb = _excel_report.openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    _excel_report._build_cover(wb, [], "2026-05-10 15:46:00", "passed", context, None, facets)
+
+    values = [str(cell.value) for row in wb["Cover"].iter_rows() for cell in row if cell.value is not None]
+    assert "Delta Since Last Run" not in values
+    assert all("this run becomes the baseline" not in value for value in values)
+    assert "What this server supports" in values
+
+
 def test_excel_cu_status_and_delta_columns_present():
     profiles, facets, capabilities = _excel_metadata()
     payload = _sample_payload()
@@ -594,7 +616,7 @@ def test_excel_cu_status_and_delta_columns_present():
     _excel_report._build_cu_coverage(wb, payload, facets, capabilities, context, baseline)
     ws = wb["CU Coverage"]
 
-    assert ws["A1"].value == "Status"
+    assert ws["A1"].value == "Review Status"
     assert ws["B1"].value == "Δ"
     assert ws["A4"].value == _report_scoring.format_status_label(NOT_SUPPORTED)
     assert ws["A4"].fill.fgColor.rgb == _report_scoring.STATUS_COLORS_EXCEL[NOT_SUPPORTED]

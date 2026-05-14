@@ -47,9 +47,11 @@ repos:
         exclude: *byte_sensitive
 
       # Converts any CRLF or CR line endings to LF throughout the repo.
+      # Keep this repo-wide even for byte-sensitive snapshots: LF is the
+      # repository storage contract in .gitattributes, and generators must
+      # emit LF so snapshot bytes stay stable across Windows/Linux.
       - id: mixed-line-ending
         args: [--fix=lf]
-        exclude: *byte_sensitive
 
       # Detects leftover merge-conflict markers (<<<<<<<, =======, >>>>>>>).
       # Does NOT auto-fix — the developer must resolve conflicts manually.
