@@ -301,7 +301,7 @@ def main() -> None:
         ("Web Client — Python", web_cov, 95.0),
         ("Web Client — JavaScript", web_js_cov, 95.0),
         ("Console Client — Python", con_cov, 95.0),
-        ("Node Client — JavaScript", nod_cov, 95.0),
+        ("Node Client — Legacy JavaScript", nod_cov, 95.0),
         ("C# Client — Unit", cs_cov, 95.0),
         ("Test Client — Python", tc_cov, 95.0),
     ]
@@ -344,6 +344,7 @@ def main() -> None:
     total_t = sum(s[0] for s in suites if s[0] is not None)
     total_f = sum(s[2] for s in suites if s[2] is not None)
     total_sk = sum(s[3] for s in suites if s[3] is not None)
+    total_passed = max(total_t - total_f - total_sk, 0)
 
     if total_t > 0:
         totals = f"{total_t:,} tests  ·  {total_f} failed  ·  {total_sk} skipped"
@@ -366,72 +367,103 @@ def main() -> None:
         "",
         "---",
         "",
-        "### 🧪 Test Results",
+        "### 📊 Outcome Overview",
         "",
-        "| Component | Platform | Tests | Skipped | Coverage / Threshold |",
-        "|:----------|:--------:|------:|--------:|:--------:|",
+        "```mermaid",
+        "pie showData",
+        "  title CI test outcomes",
+        f'  "Passed" : {total_passed}',
+        f'  "Failed" : {total_f}',
+        f'  "Skipped" : {total_sk}',
+        "```",
+        "",
+        "| Outcome | Count |",
+        "|:--------|------:|",
+        f"| Passed | {total_passed} |",
+        f"| Failed | {total_f} |",
+        f"| Skipped | {total_sk} |",
+        "",
+        "---",
+        "",
+        "### 🧪 Validation Results",
+        "",
+        "| Component | Validation Scope | Tests Run | Skipped | Coverage / Threshold |",
+        "|:----------|:-----------------|----------:|--------:|:---------------------:|",
         (
-            f"| Web Client — Python      | Ubuntu  | {tests(*web_py_t)} | "
+            f"| Web Client — Python | Ubuntu Release 2 Python unit lane | {tests(*web_py_t)} | "
             f"{skips(web_py_t[3])} | {cov(web_cov, 95)} |"
         ),
         (
-            f"| Web Client — JavaScript  | Ubuntu  | {tests(*web_js_t)} | "
+            "| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | "
+            f"{tests(*web_js_t)} | "
             f"{skips(web_js_t[3])} | {cov(web_js_cov, 95)} |"
         ),
         (
-            f"| Console Client — Python  | Ubuntu  | {tests(*con_py_t)} | "
+            f"| Console Client — Python | Ubuntu Python unit lane | {tests(*con_py_t)} | "
             f"{skips(con_py_t[3])} | {cov(con_cov, 95)} |"
         ),
         (
-            f"| Node Client — JavaScript | Ubuntu  | {tests(*nod_js_t)} | "
+            "| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | "
+            f"{tests(*nod_js_t)} | "
             f"{skips(nod_js_t[3])} | {cov(nod_cov, 95)} |"
         ),
         (
-            f"| C# Client — Unit (xUnit) | Windows | {tests(*cs_unit_t)} | "
+            f"| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | {tests(*cs_unit_t)} | "
             f"{skips(cs_unit_t[3])} | {cov(cs_cov, 95)} |"
         ),
         (
-            f"| Test Client — Python (Unit) | Ubuntu | {tests(*tc_py_t)} | "
+            f"| Test Client — Python (Unit) | Ubuntu Python unit lane | {tests(*tc_py_t)} | "
             f"{skips(tc_py_t[3])} | {cov(tc_cov, 95)} |"
         ),
         (
-            f"| OPC UA Server — Smoke    | Windows | {tests(*ss_smoke)} | "
+            f"| OPC UA Server — Smoke | Windows native server smoke lane | {tests(*ss_smoke)} | "
             f"{skips(ss_smoke[3])} | Not Applicable |"
         ),
         "",
         "---",
         "",
-        "### 🛡️ Code Quality",
+        "### 🧹 Code Quality Checks",
         "",
-        "| Component | Lint | Type Check | Security | Dependencies |",
-        "|:----------|:-----|:----------:|:--------:|:------------:|",
+        "| Component | Validation Scope | Lint / Format | Type Check / Build |",
+        "|:----------|:-----------------|:--------------|:-------------------|",
         (
-            "| Web Client     | "
+            "| Web Client | Python and JavaScript static quality | "
             f"{lint(tool(web_ruff, 'ruff'), eslint_fmt(web_eslint, web_esl))} | "
-            f"{tool(web_mypy, 'mypy')} | {bandit_fmt(*web_ban)} | "
-            f"{npm_fmt(*web_npm)} |"
+            f"{tool(web_mypy, 'mypy')} |"
         ),
         (
-            f"| Console Client | {tool(con_ruff, 'ruff')} | {tool(con_mypy, 'mypy')} | "
-            f"{bandit_fmt(*con_ban)} | Not Applicable |"
+            f"| Console Client | Python static quality | {tool(con_ruff, 'ruff')} | "
+            f"{tool(con_mypy, 'mypy')} |"
         ),
         (
-            f"| Node Client    | {eslint_fmt(nod_eslint, nod_esl)} | Not Applicable | "
-            f"Not Configured | {npm_fmt(*nod_npm)} |"
+            f"| Node Client — Legacy JavaScript | JavaScript static quality | "
+            f"{eslint_fmt(nod_eslint, nod_esl)} | Not Applicable |"
         ),
         (
-            "| C# Client      | "
+            "| C# Client | Build and formatting quality | "
             f"{lint(tool(cs_build, 'build'), tool(cs_format, 'format'))} | "
-            f"Not Applicable | {tool(cs_vuln, 'nuget')} | Not Applicable |"
+            "Not Applicable |"
         ),
         (
-            f"| Test Client    | {tool(tc_ruff, 'ruff')} | {tool(tc_mypy, 'mypy')} | "
-            f"{bandit_fmt(*tc_ban)} | Not Applicable |"
+            f"| Test Client | Python static quality | {tool(tc_ruff, 'ruff')} | "
+            f"{tool(tc_mypy, 'mypy')} |"
         ),
         "",
         "---",
         "",
-        "### 🏗️ Infrastructure",
+        "### 🔒 Security Checks",
+        "",
+        "| Component | Security Scan | Dependency Audit |",
+        "|:----------|:--------------|:-----------------|",
+        f"| Web Client | {bandit_fmt(*web_ban)} | {npm_fmt(*web_npm)} |",
+        f"| Console Client | {bandit_fmt(*con_ban)} | Not Applicable |",
+        f"| Node Client — Legacy JavaScript | Not Configured | {npm_fmt(*nod_npm)} |",
+        f"| C# Client | Not Applicable | {tool(cs_vuln, 'nuget')} |",
+        f"| Test Client | {bandit_fmt(*tc_ban)} | Not Applicable |",
+        "",
+        "---",
+        "",
+        "### ⚙️ CI Infrastructure",
         "",
         "| Check | Status |",
         "|:------|:------:|",
@@ -459,7 +491,11 @@ def main() -> None:
     skip_sections += format_skip_section("Web Client — Python", web_py_skips, web_py_t[3])
     skip_sections += format_skip_section("Web Client — JavaScript", web_js_skips, web_js_t[3])
     skip_sections += format_skip_section("Console Client — Python", con_py_skips, con_py_t[3])
-    skip_sections += format_skip_section("Node Client — JavaScript", nod_js_skips, nod_js_t[3])
+    skip_sections += format_skip_section(
+        "Node Client — Legacy JavaScript",
+        nod_js_skips,
+        nod_js_t[3],
+    )
     skip_sections += format_skip_section("C# Client — Unit", cs_unit_skips, cs_unit_t[3])
     skip_sections += format_skip_section("Test Client — Python", tc_py_skips, tc_py_t[3])
     skip_sections += format_skip_section("OPC UA Server — Smoke", ss_smoke_skips, ss_smoke[3])

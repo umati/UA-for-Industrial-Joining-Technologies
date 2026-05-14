@@ -1480,8 +1480,11 @@ def test_web_client_e2e_suite_has_no_runtime_skip_calls() -> None:
 
 def test_ci_report_uses_declared_coverage_thresholds() -> None:
     report_script = _CI_REPORT_SCRIPT.read_text(encoding="utf-8")
+    expected_header = (
+        "| Component | Validation Scope | Tests Run | Skipped | Coverage / Threshold |"
+    )
 
-    assert "| Component | Platform | Tests | Skipped | Coverage / Threshold |" in report_script
+    assert expected_header in report_script
     assert "def cov(pct, threshold=None):" in report_script
     assert "cov(web_cov, 95)" in report_script
     assert "cov(web_js_cov, 95)" in report_script

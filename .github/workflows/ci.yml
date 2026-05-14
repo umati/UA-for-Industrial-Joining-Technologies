@@ -169,6 +169,7 @@ jobs:
           name: "Web Client — Python Tests"
           path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/pytest.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -233,6 +234,7 @@ jobs:
           name: "Web Client — JS Tests (Vitest)"
           path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/vitest.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -321,6 +323,7 @@ jobs:
           name: "Console Client — Tests"
           path: OPC_UA_Clients/Release2/IJT_Console_Client/test-results/pytest.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -406,6 +409,7 @@ jobs:
           name: "Node Client — Tests"
           path: OPC_UA_Clients/Release1/IJT_Node_Client/test-results/vitest.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -445,6 +449,9 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    env:
+      DOCKER_BUILD_SUMMARY: "false"
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
@@ -887,6 +894,7 @@ jobs:
           name: "Web Client — Python Tests"
           path: all-results/results-web-client-python/pytest.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -898,6 +906,7 @@ jobs:
           name: "Web Client — JS Tests (Vitest)"
           path: all-results/results-web-client-js/vitest.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -909,6 +918,7 @@ jobs:
           name: "Console Client — Python Tests"
           path: all-results/results-console-client/pytest.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -920,6 +930,7 @@ jobs:
           name: "Node Client — JS Tests (Vitest)"
           path: all-results/results-node-client/vitest.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -931,6 +942,7 @@ jobs:
           name: "Test Client — Python Tests (Unit)"
           path: all-results/results-test-client/pytest.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -942,6 +954,7 @@ jobs:
           name: "C# Client — Unit Tests (xUnit)"
           path: all-results/results-csharp-unit/tests.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -953,6 +966,7 @@ jobs:
           name: "OPC UA Server — Smoke Tests (Windows)"
           path: all-results/results-server-smoke/smoke.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -1130,11 +1144,12 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Branch-protection aggregator — converts path-filtered "skipped" jobs to
-  # "success" so the branch protection rule can check a single status name
-  # instead of tracking all 11 individual jobs.
+  # CI aggregator — converts path-filtered "skipped" jobs to "success" so CI
+  # has one readable gate result instead of requiring users to scan all
+  # component jobs.
   #
-  # Rule: configure branch protection to require only "All checks passed".
+  # Ruleset 15294123 currently requires only the CodeQL Analyze contexts; this
+  # job is still kept as CI's own aggregate validation signal.
   # "skipped" is treated as success (path filter didn't touch that component).
   # "failure" or "cancelled" causes this job to fail.
   # ───────────────────────────────────────────────────────────────────────────

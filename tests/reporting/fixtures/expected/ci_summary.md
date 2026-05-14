@@ -5,33 +5,63 @@
 
 ---
 
-### 🧪 Test Results
+### 📊 Outcome Overview
 
-| Component | Platform | Tests | Skipped | Coverage / Threshold |
-|:----------|:--------:|------:|--------:|:--------:|
-| Web Client — Python      | Ubuntu  | ✅ 4 | 2 | 97.0% / 95% ✅ |
-| Web Client — JavaScript  | Ubuntu  | ✅ 3 | 0 | 96.0% / 95% ✅ |
-| Console Client — Python  | Ubuntu  | ✅ 2 | 0 | 99.0% / 95% ✅ |
-| Node Client — JavaScript | Ubuntu  | ✅ 2 | 1 | 95.0% / 95% ✅ |
-| C# Client — Unit (xUnit) | Windows | ✅ 16 | 15 | 95.0% / 95% ✅ |
-| Test Client — Python (Unit) | Ubuntu | ✅ 2 | 0 | 98.0% / 95% ✅ |
-| OPC UA Server — Smoke    | Windows | ✅ 10 | 0 | Not Applicable |
+```mermaid
+pie showData
+  title CI test outcomes
+  "Passed" : 21
+  "Failed" : 0
+  "Skipped" : 18
+```
 
----
-
-### 🛡️ Code Quality
-
-| Component | Lint | Type Check | Security | Dependencies |
-|:----------|:-----|:----------:|:--------:|:------------:|
-| Web Client     | ruff ✅ · eslint ⚠️ (1 warnings) | mypy ✅ | ✅ No issues | ✅ No issues |
-| Console Client | ruff ✅ | mypy ✅ | ✅ No issues | Not Applicable |
-| Node Client    | eslint ✅ | Not Applicable | Not Configured | ✅ No issues |
-| C# Client      | build ✅ · format ✅ | Not Applicable | nuget ✅ | Not Applicable |
-| Test Client    | ruff ✅ | mypy ✅ | ✅ No issues | Not Applicable |
+| Outcome | Count |
+|:--------|------:|
+| Passed | 21 |
+| Failed | 0 |
+| Skipped | 18 |
 
 ---
 
-### 🏗️ Infrastructure
+### 🧪 Validation Results
+
+| Component | Validation Scope | Tests Run | Skipped | Coverage / Threshold |
+|:----------|:-----------------|----------:|--------:|:---------------------:|
+| Web Client — Python | Ubuntu Release 2 Python unit lane | ✅ 4 | 2 | 97.0% / 95% ✅ |
+| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | ✅ 3 | 0 | 96.0% / 95% ✅ |
+| Console Client — Python | Ubuntu Python unit lane | ✅ 2 | 0 | 99.0% / 95% ✅ |
+| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | ✅ 2 | 1 | 95.0% / 95% ✅ |
+| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | ✅ 16 | 15 | 95.0% / 95% ✅ |
+| Test Client — Python (Unit) | Ubuntu Python unit lane | ✅ 2 | 0 | 98.0% / 95% ✅ |
+| OPC UA Server — Smoke | Windows native server smoke lane | ✅ 10 | 0 | Not Applicable |
+
+---
+
+### 🧹 Code Quality Checks
+
+| Component | Validation Scope | Lint / Format | Type Check / Build |
+|:----------|:-----------------|:--------------|:-------------------|
+| Web Client | Python and JavaScript static quality | ruff ✅ · eslint ⚠️ (1 warnings) | mypy ✅ |
+| Console Client | Python static quality | ruff ✅ | mypy ✅ |
+| Node Client — Legacy JavaScript | JavaScript static quality | eslint ✅ | Not Applicable |
+| C# Client | Build and formatting quality | build ✅ · format ✅ | Not Applicable |
+| Test Client | Python static quality | ruff ✅ | mypy ✅ |
+
+---
+
+### 🔒 Security Checks
+
+| Component | Security Scan | Dependency Audit |
+|:----------|:--------------|:-----------------|
+| Web Client | ✅ No issues | ✅ No issues |
+| Console Client | ✅ No issues | Not Applicable |
+| Node Client — Legacy JavaScript | Not Configured | ✅ No issues |
+| C# Client | Not Applicable | nuget ✅ |
+| Test Client | ✅ No issues | Not Applicable |
+
+---
+
+### ⚙️ CI Infrastructure
 
 | Check | Status |
 |:------|:------:|
@@ -58,7 +88,7 @@
 
 </details>
 
-<details><summary>⏭️ <b>Node Client — JavaScript</b> — 1 skipped</summary>
+<details><summary>⏭️ <b>Node Client — Legacy JavaScript</b> — 1 skipped</summary>
 
 | Reason | Count |
 |:-------|------:|
