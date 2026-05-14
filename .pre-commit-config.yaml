@@ -37,7 +37,10 @@ repos:
         #   (tests/unit/reporting/fixtures/expected/*.md): captured
         #   byte-for-byte from the renderer; must match exactly so the
         #   byte-identity regression test stays meaningful.
-        exclude: &byte_sensitive '(^|/)(packages\.lock\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Pipfile\.lock|Gemfile\.lock|Cargo\.lock|composer\.lock)$|^OPC_UA_Clients/Release2/IJT_Test_Client/tests/unit/reporting/fixtures/expected/.*\.md$'
+        # - Root reporting expected fixtures
+        #   (tests/reporting/fixtures/expected/*.md): captured byte-for-byte
+        #   from extracted CI/Integration summary scripts.
+        exclude: &byte_sensitive '(^|/)(packages\.lock\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Pipfile\.lock|Gemfile\.lock|Cargo\.lock|composer\.lock)$|^OPC_UA_Clients/Release2/IJT_Test_Client/tests/unit/reporting/fixtures/expected/.*\.md$|^tests/reporting/fixtures/expected/.*\.md$'
 
       # Strips trailing spaces and tabs from all lines.
       - id: trailing-whitespace
@@ -169,17 +172,18 @@ repos:
       # budgets, and the integration-test-counts baseline. Running the full
       # `tests/test_root_runner.py` (≈65 tests, sub-second) is deliberate —
       # narrowing with `-k workflow` would silently miss most of the
-      # workflow-validating tests (e.g. `test_integration_web_client_*`,
-      # `test_ci_web_client_*`, `test_ci_report_*`, baseline assertions).
+      # workflow/reporting-validating tests (e.g. `test_integration_web_client_*`,
+      # `test_ci_web_client_*`, `test_ci_report_*`, baseline assertions,
+      # extracted summary snapshot/contract tests).
       # pass_filenames: false — the tests read workflow paths from
       # `_runner.REPO_ROOT / .github / workflows / ...` themselves.
       - id: workflow-policy-guard
         name: Workflow policy guard (root runner)
         language: system
         entry: python
-        args: ['-m', 'pytest', 'tests/test_root_runner.py', '-q']
+        args: ['-m', 'pytest', 'tests/test_root_runner.py', 'tests/reporting', '-q']
         pass_filenames: false
-        files: '(^\.github/workflows/.*\.ya?ml$|^tests/test_root_runner\.py$|^tests/baselines/integration-test-counts\.json$)'
+        files: '(^\.github/workflows/.*\.ya?ml$|^reporting/.*\.py$|^tests/reporting/.*$|^tests/test_root_runner\.py$|^tests/baselines/integration-test-counts\.json$)'
 
       # Lightweight static guard for optional imports that are known to trip
       # mypy when packages are installed without stubs. Full mypy stays in

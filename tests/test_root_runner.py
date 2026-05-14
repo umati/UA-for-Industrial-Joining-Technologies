@@ -22,6 +22,8 @@ def _load_root_runner():
 
 
 _runner = _load_root_runner()
+_CI_REPORT_SCRIPT = _runner.REPO_ROOT / "reporting" / "ci_run_summary.py"
+_INTEGRATION_REPORT_SCRIPT = _runner.REPO_ROOT / "reporting" / "system_tests_run_summary.py"
 
 
 def setup_function() -> None:
@@ -932,7 +934,8 @@ def test_integration_web_client_uses_split_live_and_browser_matrices() -> None:
     assert 'python run_all_tests.py --suite "${{ matrix.suite }}" --verbose' in workflow_text
     assert "OPC_UA_Clients/Release2/IJT_Web_Client/tests/python/integration/" not in workflow_text
     assert "results-live-webclient-${{ matrix.suite }}" in workflow_text
-    assert "all-results/results-live-webclient-web-client-e2e-*/**/*.xml" in workflow_text
+    integration_report = _INTEGRATION_REPORT_SCRIPT.read_text(encoding="utf-8")
+    assert "all-results/results-live-webclient-web-client-e2e-*/**/*.xml" in integration_report
     assert "Cache Playwright browsers" not in workflow_text
     assert "npx playwright install --with-deps chromium" not in workflow_text
 
@@ -1227,49 +1230,47 @@ def test_compatibility_smoke_playwright_scope_is_two_edge_specs_only() -> None:
 
 
 def test_integration_report_surfaces_browser_feature_timings() -> None:
-    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
-        encoding="utf-8"
-    )
+    report_script = _INTEGRATION_REPORT_SCRIPT.read_text(encoding="utf-8")
 
-    assert "browser_feature_timings(" in workflow
-    assert "results-live-webclient-web-client-e2e-features*/**/timing-latest.json" in workflow
-    assert "### Browser Features Timing" in workflow
-    assert "pip-install" in workflow
-    assert "npm-install" in workflow
-    assert "playwright-install" in workflow
-    assert "playwright-features" in workflow
+    assert "browser_feature_timings(" in report_script
+    assert "results-live-webclient-web-client-e2e-features*/**/timing-latest.json" in report_script
+    assert "### Browser Features Timing" in report_script
+    assert "pip-install" in report_script
+    assert "npm-install" in report_script
+    assert "playwright-install" in report_script
+    assert "playwright-features" in report_script
 
 
 def test_integration_report_surfaces_csharp_live_timings() -> None:
-    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
-        encoding="utf-8"
-    )
+    report_script = _INTEGRATION_REPORT_SCRIPT.read_text(encoding="utf-8")
 
-    assert "csharp_live_timings(" in workflow
-    assert "results-csharp-live/**/*.trx" in workflow
-    assert "UnitTestResult" in workflow
-    assert "### C# Live Timing" in workflow
-    assert "#### Top C# Live Tests" in workflow
+    assert "csharp_live_timings(" in report_script
+    assert "results-csharp-live/**/*.trx" in report_script
+    assert "UnitTestResult" in report_script
+    assert "### C# Live Timing" in report_script
+    assert "#### Top C# Live Tests" in report_script
 
 
 def test_integration_report_surfaces_job_durations() -> None:
     workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
         encoding="utf-8"
     )
+    report_script = _INTEGRATION_REPORT_SCRIPT.read_text(encoding="utf-8")
 
     assert "actions: read" in workflow
     assert "GH_REPOSITORY:  ${{ github.repository }}" in workflow
     assert "GH_RUN_ID:      ${{ github.run_id }}" in workflow
     assert "GH_TOKEN:       ${{ github.token }}" in workflow
     assert 'REPORT_JOB_NAME: "📋 Extended Test Report"' in workflow
-    assert "def job_durations(path):" in workflow
-    assert "excluding this report job" in workflow
-    assert "name == report_job_name" in workflow
-    assert "Report job duration is excluded" in workflow
-    assert "### ⏱️ Job Durations" in workflow
-    assert "current workflow run jobs API" in workflow
-    assert "format_optional_duration(duration)" in workflow
-    assert "🏁" in workflow
+    assert "def job_durations(path):" in report_script
+    assert "excluding this report job" in report_script
+    assert "name == report_job_name" in report_script
+    assert "Report job duration is " in report_script
+    assert "excluded because a report cannot measure its own completed duration" in report_script
+    assert "### ⏱️ Job Durations" in report_script
+    assert "current workflow run jobs API" in report_script
+    assert "format_optional_duration(duration)" in report_script
+    assert "🏁" in report_script
 
 
 def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> None:
@@ -1277,9 +1278,7 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
 
     baseline_path = _runner.REPO_ROOT / "tests" / "baselines" / "integration-test-counts.json"
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
-    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(
-        encoding="utf-8"
-    )
+    report_script = _INTEGRATION_REPORT_SCRIPT.read_text(encoding="utf-8")
 
     assert baseline["schema_version"] == 1
     expected_suites = {
@@ -1303,22 +1302,22 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
         assert entry["skipped"] >= 0
         assert isinstance(entry["skip_tolerance"], int)
         assert entry["skip_tolerance"] >= 0
-    assert "load_integration_baseline(" in workflow
-    assert "format_count_delta(" in workflow
-    assert 'return "" if delta == 0 else f" ({delta:+d})"' in workflow
-    assert "def integration_drift_warnings(baseline, suite_counts, run_id):" in workflow
-    assert 'E("GH_RUN_ID", "")' in workflow
-    assert "non_test_client_skip_failures(" in workflow
-    assert "skip_policy_failures" in workflow
-    assert "### ❌ Skip Policy Failures" in workflow
-    assert "only IJT Test Client conformance" in workflow
-    assert "sys.exit(1)" in workflow
-    assert "tests/baselines/integration-test-counts.json" in workflow
-    assert "### ⚠️ Report Warnings" in workflow
-    assert "skip drift" in workflow
-    assert "suite collection drift" in workflow
-    assert "tests/tools/update_integration_baseline.py --run" in workflow
-    assert "--suite {key}" in workflow
+    assert "load_integration_baseline(" in report_script
+    assert "format_count_delta(" in report_script
+    assert 'return "" if delta == 0 else f" ({delta:+d})"' in report_script
+    assert "def integration_drift_warnings(baseline, suite_counts, run_id):" in report_script
+    assert 'E("GH_RUN_ID", "")' in report_script
+    assert "non_test_client_skip_failures(" in report_script
+    assert "skip_policy_failures" in report_script
+    assert "### ❌ Skip Policy Failures" in report_script
+    assert "only IJT Test Client conformance" in report_script
+    assert "sys.exit(1)" in report_script
+    assert "tests/baselines/integration-test-counts.json" in report_script
+    assert "### ⚠️ Report Warnings" in report_script
+    assert "skip drift" in report_script
+    assert "suite collection drift" in report_script
+    assert "tests/tools/update_integration_baseline.py --run" in report_script
+    assert "--suite {key}" in report_script
 
 
 def test_update_integration_baseline_helper_is_guarded() -> None:
@@ -1451,18 +1450,18 @@ def test_web_client_e2e_suite_has_no_runtime_skip_calls() -> None:
 
 
 def test_ci_report_uses_declared_coverage_thresholds() -> None:
-    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    report_script = _CI_REPORT_SCRIPT.read_text(encoding="utf-8")
 
-    assert "| Component | Platform | Tests | Skipped | Coverage / Threshold |" in workflow
-    assert "def cov(pct, threshold=None):" in workflow
-    assert "cov(web_cov, 95)" in workflow
-    assert "cov(web_js_cov, 95)" in workflow
-    assert "cov(con_cov, 95)" in workflow
-    assert "cov(nod_cov, 95)" in workflow
-    assert "cov(cs_cov, 95)" in workflow
-    assert "cov(tc_cov, 95)" in workflow
-    assert "coverage_warnings" in workflow
-    assert "### ⚠️ Coverage Threshold Warnings" in workflow
+    assert "| Component | Platform | Tests | Skipped | Coverage / Threshold |" in report_script
+    assert "def cov(pct, threshold=None):" in report_script
+    assert "cov(web_cov, 95)" in report_script
+    assert "cov(web_js_cov, 95)" in report_script
+    assert "cov(con_cov, 95)" in report_script
+    assert "cov(nod_cov, 95)" in report_script
+    assert "cov(cs_cov, 95)" in report_script
+    assert "cov(tc_cov, 95)" in report_script
+    assert "coverage_warnings" in report_script
+    assert "### ⚠️ Coverage Threshold Warnings" in report_script
 
 
 def test_ci_pre_commit_gate_is_required_and_reported() -> None:
@@ -1471,6 +1470,7 @@ def test_ci_pre_commit_gate_is_required_and_reported() -> None:
     workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "ci.yml"
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
     workflow_text = workflow_path.read_text(encoding="utf-8")
+    report_script = _CI_REPORT_SCRIPT.read_text(encoding="utf-8")
 
     assert "pre-commit" in workflow["jobs"]["report"]["needs"]
     assert "pre-commit" in workflow["jobs"]["all-required"]["needs"]
@@ -1488,8 +1488,8 @@ def test_ci_pre_commit_gate_is_required_and_reported() -> None:
     pre_commit_steps = workflow["jobs"]["pre-commit"]["steps"]
     assert not any(step.get("uses", "").startswith("actions/cache") for step in pre_commit_steps)
     assert "PC_RESULT:       ${{ needs.pre-commit.result }}" in workflow_text
-    assert 'pc_r     = E("PC_RESULT"' in workflow_text
-    assert "Pre-commit Hooks" in workflow_text
+    assert 'pc_r = E("PC_RESULT"' in report_script
+    assert "Pre-commit Hooks" in report_script
     assert (
         "${{ needs.pre-commit.result }}"
         in workflow["jobs"]["all-required"]["steps"][0]["env"]["RESULTS"]
@@ -1521,15 +1521,18 @@ def test_workflows_do_not_depend_on_actions_cache_or_setup_caches() -> None:
 
 
 def test_ci_report_web_python_skip_budget_uses_expected_skip_identities() -> None:
-    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    report_script = _CI_REPORT_SCRIPT.read_text(encoding="utf-8")
 
-    assert '"web-client (Python)":      2' in workflow
-    assert "expected_skip_names" in workflow
-    assert "test_required_static_asset_exists[node_modules/chart.js/dist/chart.umd.js]" in workflow
-    assert "test_eslint_passes" in workflow
-    assert "unexpected skips detected" in workflow
-    assert "missing_expected_names" in workflow
-    assert "expected skips not observed" in workflow
+    assert '"web-client (Python)": 2' in report_script
+    assert "expected_skip_names" in report_script
+    assert (
+        "test_required_static_asset_exists[node_modules/chart.js/dist/chart.umd.js]"
+        in report_script
+    )
+    assert "test_eslint_passes" in report_script
+    assert "unexpected skips detected" in report_script
+    assert "missing_expected_names" in report_script
+    assert "expected skips not observed" in report_script
 
 
 def test_ci_report_steps_skip_missing_artifacts_for_skipped_jobs() -> None:
