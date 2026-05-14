@@ -107,6 +107,7 @@ jobs:
           SHORT_SHA="${SOURCE_SHA::7}"
           PUBLISH_MODE="none"
           PR_IMAGE_TAG=""
+          PUSH_OUTPUT="false"
           trusted_dependency_bot=false
 
           dependency_inputs_changed=false
@@ -149,29 +150,30 @@ jobs:
             done <<< "$changed_files"
           fi
 
-          echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
-          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "cache_key=ijt-browser-ci-${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
           if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" ]]; then
-            echo "push=true" >> "$GITHUB_OUTPUT"
+            PUSH_OUTPUT="true"
             PUBLISH_MODE="pin"
           elif [[ "$EVENT_NAME" == "schedule" ]]; then
-            echo "push=true" >> "$GITHUB_OUTPUT"
+            PUSH_OUTPUT="true"
             PUBLISH_MODE="pin"
           elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "push=${DISPATCH_PUSH}" >> "$GITHUB_OUTPUT"
+            PUSH_OUTPUT="${DISPATCH_PUSH}"
             if [[ "$DISPATCH_PUSH" == "true" ]]; then
               PUBLISH_MODE="pin"
             fi
           elif [[ "$dependency_inputs_changed" == "true" && "$image_build_logic_changed" == "false" ]]; then
-            echo "push=true" >> "$GITHUB_OUTPUT"
+            PUSH_OUTPUT="true"
             PUBLISH_MODE="pr"
             PR_IMAGE_TAG="${IMAGE_NAME}:pr-${PR_NUMBER}-${SHORT_SHA}"
-          else
-            echo "push=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "publish_mode=${PUBLISH_MODE}" >> "$GITHUB_OUTPUT"
-          echo "pr_image_tag=${PR_IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          {
+            echo "source_sha=${SOURCE_SHA}"
+            echo "short_sha=${SHORT_SHA}"
+            echo "cache_key=ijt-browser-ci-${SOURCE_SHA}"
+            echo "push=${PUSH_OUTPUT}"
+            echo "publish_mode=${PUBLISH_MODE}"
+            echo "pr_image_tag=${PR_IMAGE_TAG}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build image (load only, gha cache export)
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
