@@ -32,8 +32,11 @@ The workflow has three permission-separated jobs:
   PR-scoped tag (`pr-<number>-<head-sha>`) for Integration to resolve to a
   digest before running the offline browser matrix.
 - `update-pin` — the only job with `contents: write` and
-  `pull-requests: write`; opens or updates the reviewed `image-pin.json` PR
-  for non-PR publishes only.
+  `pull-requests: write`; mints a short-lived IJT Pin Updater GitHub App
+  token from the dedicated `ijt-pin-updater` GitHub Environment, then opens
+  or updates the reviewed `image-pin.json` PR for non-PR publishes only. The
+  App-authored PR triggers normal pull request validation instead of relying
+  on a maintainer close/reopen cycle.
 
 ## Runtime contract
 
@@ -84,11 +87,11 @@ that touches **only** `image-pin.json`. To accept or reject quickly:
    `playwright_version`, `node_version`, `python_version`, and
    `base_digests` from the in-image `/opt/ijt-browser-ci/metadata.json`,
    not the loose `24.x` / `3.14.x` form.
-4. **Required checks may be absent.** PRs opened by `GITHUB_TOKEN` do
-   not trigger Integration / CodeQL / pre-commit / actionlint / zizmor /
-   workflow-policy-guard. This is expected. To unblock: `gh pr close`
-   then `gh pr reopen` on the PR (or push an empty user commit). Both
-   re-fire the required-check set.
+4. **Pull request checks must run automatically.** Auto pin PRs are opened
+   with the IJT Pin Updater GitHub App token, not `GITHUB_TOKEN`, so CodeQL
+   and CI workflows must appear on the PR head without a close/reopen or
+   empty maintainer commit. If the checks are absent, stop and inspect the
+   App secrets and workflow token plumbing before merging.
 5. **A new digest with no Dockerfile change is normal.** Docker rebuilds
    are not byte-reproducible; identical inputs typically produce a new
    digest. Accept the new digest unless the metadata block shows an

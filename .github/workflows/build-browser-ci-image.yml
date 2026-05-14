@@ -411,6 +411,7 @@ jobs:
     if: needs.publish.outputs.digest != '' && needs.build.outputs.publish_mode == 'pin'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment: ijt-pin-updater
     permissions:
       contents: write
       pull-requests: write
@@ -424,6 +425,38 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+
+      - name: Verify pin-updater GitHub App secrets are present
+        env:
+          APP_CLIENT_ID: ${{ secrets.IJT_PIN_UPDATER_APP_CLIENT_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.IJT_PIN_UPDATER_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APP_CLIENT_ID:-}" || -z "${APP_PRIVATE_KEY:-}" ]]; then
+            echo "::error::Configure environment secrets IJT_PIN_UPDATER_APP_CLIENT_ID and IJT_PIN_UPDATER_APP_PRIVATE_KEY for the IJT Pin Updater GitHub App before auto-pin publishing." >&2
+            exit 1
+          fi
+
+      - name: Mint GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          client-id: ${{ secrets.IJT_PIN_UPDATER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.IJT_PIN_UPDATER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Verify app token is present
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APP_TOKEN:-}" ]]; then
+            echo "::error::IJT Pin Updater GitHub App did not produce an installation token." >&2
+            exit 1
+          fi
 
       - name: Log in to GHCR for metadata readback
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
@@ -467,7 +500,7 @@ jobs:
       - name: Open or update image-pin PR
         id: pr
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
         run: |
           set -euo pipefail
@@ -511,9 +544,7 @@ jobs:
           - GHCR digest publish
           - Pull-verify of the published digest
 
-          Note on CI checks: PRs opened by GITHUB_TOKEN do not trigger Integration, CodeQL, pre-commit, actionlint, zizmor, or workflow-policy-guard on the PR itself. The new digest has already been validated by this workflow's Phase 0 smoke under \`--network=none\` and publish-job digest pull-verify.
-
-          To run the full Integration matrix against this exact pin PR, close and reopen the PR or push an empty commit as a user.
+          This PR is opened with the IJT Pin Updater GitHub App token, so normal pull_request workflows run on the PR head. Integration includes image-pin updates in its PR path filter and validates the browser suites against this digest.
 
           Review focus: \`.github/docker/ijt-browser-ci/image-pin.json\` only.
           EOF

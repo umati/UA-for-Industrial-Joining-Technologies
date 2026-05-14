@@ -21,6 +21,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _PIN_PATH = _REPO_ROOT / ".github" / "docker" / "ijt-browser-ci" / "image-pin.json"
 _PIN_UPDATE_SCRIPT = _REPO_ROOT / ".github" / "scripts" / "update_browser_ci_image_pin.py"
 _IMAGE_BUILD_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "build-browser-ci-image.yml"
+_INTEGRATION_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "integration.yml"
 
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _DIGEST_REF_SUFFIX_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
@@ -408,6 +409,7 @@ def test_build_browser_ci_image_workflow_opens_reviewed_pin_pr_without_loop() ->
         update_pin_job["if"]
         == "needs.publish.outputs.digest != '' && needs.build.outputs.publish_mode == 'pin'"
     )
+    assert update_pin_job["environment"] == "ijt-pin-updater"
     assert update_pin_job["permissions"] == {
         "contents": "write",
         "pull-requests": "write",
@@ -421,6 +423,48 @@ def test_build_browser_ci_image_workflow_opens_reviewed_pin_pr_without_loop() ->
     assert "Update image-pin.json" in step_names
     assert "Open or update image-pin PR" in step_names
     assert "Job summary" in step_names
+
+    app_token_steps = [
+        step
+        for step in update_pin_job["steps"]
+        if str(step.get("uses", "")).startswith("actions/create-github-app-token@")
+    ]
+    assert len(app_token_steps) == 1
+    app_token_step = app_token_steps[0]
+    assert re.fullmatch(
+        r"actions/create-github-app-token@[0-9a-f]{40}",
+        app_token_step["uses"],
+    ), "GitHub App token action must be pinned to an immutable commit SHA."
+    app_token_inputs = app_token_step["with"]
+    assert "app-id" not in app_token_inputs, (
+        "actions/create-github-app-token deprecates app-id; use client-id."
+    )
+    assert app_token_inputs["client-id"] == "${{ secrets.IJT_PIN_UPDATER_APP_CLIENT_ID }}"
+    assert app_token_inputs["private-key"] == "${{ secrets.IJT_PIN_UPDATER_APP_PRIVATE_KEY }}"
+    assert app_token_inputs["owner"] == "${{ github.repository_owner }}"
+    assert app_token_inputs["repositories"] == "${{ github.event.repository.name }}"
+    assert app_token_inputs["permission-contents"] == "write"
+    assert app_token_inputs["permission-pull-requests"] == "write"
+
+    secret_preflight = next(
+        step
+        for step in update_pin_job["steps"]
+        if step.get("env", {}).get("APP_CLIENT_ID")
+        == "${{ secrets.IJT_PIN_UPDATER_APP_CLIENT_ID }}"
+    )
+    assert "APP_PRIVATE_KEY" in secret_preflight["env"]
+    assert "Configure environment secrets IJT_PIN_UPDATER_APP_CLIENT_ID" in secret_preflight["run"]
+    assert "exit 1" in secret_preflight["run"]
+
+    token_preflight = next(
+        step
+        for step in update_pin_job["steps"]
+        if step.get("env", {}).get("APP_TOKEN") == "${{ steps.app-token.outputs.token }}"
+    )
+    assert (
+        "IJT Pin Updater GitHub App did not produce an installation token" in token_preflight["run"]
+    )
+    assert "exit 1" in token_preflight["run"]
 
     capture_step = next(
         step
@@ -447,6 +491,10 @@ def test_build_browser_ci_image_workflow_opens_reviewed_pin_pr_without_loop() ->
         if step.get("name") == "Open or update image-pin PR"
     )
     assert pr_step.get("id") == "pr"
+    expected_expr = "${{ steps.app-" + "token.outputs.token }}"
+    assert pr_step["env"]["GH_TOKEN"] == expected_expr
+    assert "github.token" not in pr_step["env"]["GH_TOKEN"]
+    assert "secrets.GITHUB_TOKEN" not in pr_step["env"]["GH_TOKEN"]
     pr_body = pr_step["run"]
     assert "auto_pr_result=no_change" in pr_body
     assert "auto_pr_result=updated" in pr_body
@@ -460,6 +508,8 @@ def test_build_browser_ci_image_workflow_opens_reviewed_pin_pr_without_loop() ->
     assert "gh pr create" in pr_body
     assert "Review focus:" in pr_body
     assert ".github/docker/ijt-browser-ci/image-pin.json" in pr_body
+    assert "GITHUB_TOKEN do not trigger" not in pr_body
+    assert "close and reopen the PR or push an empty commit" not in pr_body
 
     summary_step = next(
         step for step in update_pin_job["steps"] if step.get("name") == "Job summary"
@@ -477,3 +527,20 @@ def test_build_browser_ci_image_workflow_opens_reviewed_pin_pr_without_loop() ->
     assert "Auto-PR opened/updated:" in summary_body
     assert "not completed; inspect the first failed update-pin step above" in summary_body
     assert "One or more update-pin steps did not succeed" in summary_body
+
+
+def test_integration_workflow_runs_for_image_pin_updates() -> None:
+    """Pin PRs and merges must exercise the browser Integration workflow."""
+    import yaml
+
+    workflow = yaml.safe_load(_INTEGRATION_WORKFLOW.read_text(encoding="utf-8"))
+    triggers = workflow.get("on", workflow.get(True, {}))
+    pin_path = ".github/docker/ijt-browser-ci/image-pin.json"
+    assert pin_path in triggers["pull_request"]["paths"], (
+        "image-pin PRs must trigger Integration so browser suites validate the new digest "
+        "before merge."
+    )
+    assert pin_path in triggers["push"]["paths"], (
+        "image-pin merges to main must trigger Integration so post-merge closure has a "
+        "main-branch run for the reviewed digest."
+    )
