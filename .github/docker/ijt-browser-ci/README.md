@@ -11,16 +11,16 @@ commit `4ad418b5`.
 - `Dockerfile` — image definition (Python 3.14, Node 24, Playwright 1.60.0
   + Chromium + Linux system libs; wheelhouse + npm cache pre-warmed).
 - `image-pin.json` — reviewed digest consumed by the Integration workflow.
-  The image-build workflow updates this file through a pull request after a
-  verified publish; the file is excluded from image-build path triggers to
-  prevent a pin-update loop.
+  This file is updated by normal reviewed pull requests after a verified
+  publish; it is excluded from image-build path triggers to prevent a
+  pin-update loop.
 
 ## Image
 
 Published to `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci`
 by `.github/workflows/build-browser-ci-image.yml`.
 
-The workflow has three permission-separated jobs:
+The workflow has two permission-separated jobs:
 
 - `build` — no package write permission; builds and runs the full Phase 0
   smoke path under `--network=none`.
@@ -31,14 +31,6 @@ The workflow has three permission-separated jobs:
   (`package.json`, `package-lock.json`, `requirements*.txt`) publish a
   PR-scoped tag (`pr-<number>-<head-sha>`) for Integration to resolve to a
   digest before running the offline browser matrix.
-- `update-pin` — the only job with `contents: write` and
-  `pull-requests: write`; mints a short-lived IJT Pin Updater GitHub App
-  token from the dedicated `ijt-pin-updater` GitHub Environment, then opens
-  or updates the reviewed `image-pin.json` PR for non-PR publishes only. The
-  job runs only when repository variable `IJT_PIN_UPDATER_ENABLED` is `true`.
-  With the variable unset, image builds and publishes stay green and no pin PR
-  is opened. The App-authored PR triggers normal pull request validation
-  instead of relying on a maintainer close/reopen cycle.
 
 ## Runtime contract
 
@@ -74,32 +66,26 @@ build logic (`.github/docker/ijt-browser-ci/**`,
 through the normal image-build path instead of auto-publishing a modified image
 builder from the PR.
 
-## Reviewing an auto pin PR
+## Manual image-pin PR flow
 
-After a successful build + publish, the `update-pin` job opens (or
-force-updates) a PR on branch `automation/ijt-browser-ci-image-pin`
-that touches **only** `image-pin.json`. To accept or reject quickly:
+The build workflow publishes and verifies images. It does not open pull
+requests or require GitHub App/PAT credentials. To move `main` to a new
+reviewed digest:
 
-1. **Diff must be `image-pin.json` only.** Any other touched file means
-   the automation drifted; investigate before merging.
-2. **Verify the upstream Build Browser CI Image run.** PR body links the
-   workflow run; both `build` (Phase 0 smoke under `--network=none`) and
-   `publish` (digest pull-verify) must be green.
-3. **Confirm exact versions captured.** The new pin should carry exact
-   `playwright_version`, `node_version`, `python_version`, and
-   `base_digests` from the in-image `/opt/ijt-browser-ci/metadata.json`,
-   not the loose `24.x` / `3.14.x` form.
-4. **Pull request checks must run automatically.** Auto pin PRs are opened
-   with the IJT Pin Updater GitHub App token, not `GITHUB_TOKEN`, so CodeQL
-   and CI workflows must appear on the PR head without a close/reopen or
-   empty maintainer commit. If the checks are absent, stop and inspect the
-   App secrets and workflow token plumbing before merging.
-5. **A new digest with no Dockerfile change is normal.** Docker rebuilds
-   are not byte-reproducible; identical inputs typically produce a new
-   digest. Accept the new digest unless the metadata block shows an
-   unexpected version drift.
-6. **Loop-prevention is automatic.** Merging the pin PR must NOT
-   re-trigger the Build Browser CI Image workflow because `image-pin.json`
-   is path-excluded from its own triggers. If a new build-image run
-   appears for the pin-only merge, the loop-prevention exclusion has
-   regressed; treat it as a stop-the-line bug.
+1. Trigger or wait for a Build Browser CI Image run that completes both
+   `build` and `publish` successfully.
+2. Use the published digest from the job summary and the image metadata from
+   `/opt/ijt-browser-ci/metadata.json` to update `image-pin.json` with
+   `.github/scripts/update_browser_ci_image_pin.py`.
+3. Open a normal PR that touches **only**
+   `.github/docker/ijt-browser-ci/image-pin.json`.
+4. Wait for CI Fast Checks, CodeQL, and Integration to pass. Integration
+   includes `image-pin.json` in both `push.paths` and `pull_request.paths`,
+   so browser suites validate the new digest before and after merge.
+5. A new digest with no Dockerfile change is normal. Docker rebuilds are not
+   byte-reproducible; identical inputs typically produce a new digest. Accept
+   the new digest unless the metadata block shows unexpected version drift.
+6. Loop-prevention is structural. Merging the pin PR must NOT re-trigger the
+   Build Browser CI Image workflow because `image-pin.json` is path-excluded
+   from its own triggers. If a new build-image run appears for the pin-only
+   merge, the exclusion has regressed; treat it as a stop-the-line bug.

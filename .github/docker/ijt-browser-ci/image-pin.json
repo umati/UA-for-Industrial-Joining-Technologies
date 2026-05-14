@@ -12,5 +12,5 @@
     "python": "sha256:a3974109d36f164ca70024bc0d0828ac706e4ccda849f8638d879e91f79e90ec",
     "node": "sha256:24dc26ef1e3c3690f27ebc4136c9c186c3133b25563ae4d7f0692e4d1fe5db0e"
   },
-  "_comment": "Single source of truth for the IJT Browser CI image consumed by integration.yml live-webclient-browser. IJT_BROWSER_CI_IMAGE is constructed at runtime as image@digest. Refresh procedure: the build-browser-ci-image workflow publishes a verified image, updates this file on the automation/ijt-browser-ci-image-pin branch, and opens or updates a reviewable PR. The workflow MUST fail fast if digest does not match ^sha256:[0-9a-f]{64}$."
+  "_comment": "Single source of truth for the IJT Browser CI image consumed by integration.yml live-webclient-browser. IJT_BROWSER_CI_IMAGE is constructed at runtime as image@digest. Refresh procedure: the build-browser-ci-image workflow publishes a verified image, and a maintainer opens a normal reviewed PR updating this file when main should consume that digest. The workflow MUST fail fast if digest does not match ^sha256:[0-9a-f]{64}$."
 }

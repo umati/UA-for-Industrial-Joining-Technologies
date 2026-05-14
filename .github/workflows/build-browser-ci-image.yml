@@ -5,20 +5,17 @@ name: Build Browser CI Image
 # See .github/docker/ijt-browser-ci/README.md for design.
 #
 # image-pin.json and this README are intentionally excluded from path triggers.
-# The update-pin job opens a PR that changes only image-pin.json; merging that
-# PR must not publish a new image and create an image-pin update loop. README
-# updates must not rebuild the browser image either.
+# Manual image-pin PRs change only image-pin.json; merging those PRs must not
+# publish a new image and create an image-pin update loop. README updates must
+# not rebuild the browser image either.
 #
-# Three-job split:
+# Two-job split:
 #   - build:   loads image locally, runs Phase 0 smoke under the exact
 #              runtime contract. NO packages: write.
 #   - publish: depends on build; only runs when push == true. Main/scheduled/
 #              manual publishes refresh the reviewed pin path; trusted same-
 #              repo dependency-bot PRs publish a PR-scoped tag consumed by
 #              integration.yml so the offline cache matches the PR lockfile.
-#   - update-pin: depends on publish; for non-PR publishes, opens/updates a
-#                 reviewable PR that refreshes image-pin.json. contents/
-#                 pull-requests write are scoped to this job only.
 
 on:
   push:
@@ -55,8 +52,7 @@ on:
         type: choice
         options: [ 'true', 'false' ]
 
-# Workflow-level: read-only. packages: write is granted only on the publish
-# job. contents/pull-requests write are granted only on the update-pin job.
+# Workflow-level: read-only. packages: write is granted only on the publish job.
 permissions:
   contents: read
 
@@ -395,219 +391,12 @@ jobs:
             echo "- Digest: \`${PUBLISHED_DIGEST}\`"
             if [[ "$PUBLISH_MODE" == "pin" ]]; then
               echo ""
-              echo "_The update-pin job opens or updates a reviewed \`image-pin.json\` PR for:_"
+              echo "_Open a normal reviewed PR updating \`.github/docker/ijt-browser-ci/image-pin.json\` to this digest when main should consume it:_"
               echo '```'
               echo "${IMAGE_NAME}@${PUBLISHED_DIGEST}"
               echo '```'
             elif [[ "$PUBLISH_MODE" == "pr" ]]; then
               echo ""
               echo "_Integration resolves the PR-scoped tag above to this digest before running browser suites._"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  update-pin:
-    name: Open image-pin update PR
-    needs: [build, publish]
-    if: needs.publish.outputs.digest != '' && needs.build.outputs.publish_mode == 'pin' && vars.IJT_PIN_UPDATER_ENABLED == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: ijt-pin-updater
-    permissions:
-      contents: write
-      pull-requests: write
-      packages: read
-    env:
-      PIN_BRANCH: automation/ijt-browser-ci-image-pin
-      PIN_PATH: .github/docker/ijt-browser-ci/image-pin.json
-    steps:
-      - name: Checkout main
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: main
-          persist-credentials: false
-
-      - name: Verify pin-updater GitHub App secrets are present
-        env:
-          APP_CLIENT_ID: ${{ secrets.IJT_PIN_UPDATER_APP_CLIENT_ID }}
-          APP_PRIVATE_KEY: ${{ secrets.IJT_PIN_UPDATER_APP_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${APP_CLIENT_ID:-}" || -z "${APP_PRIVATE_KEY:-}" ]]; then
-            echo "::error::Configure environment secrets IJT_PIN_UPDATER_APP_CLIENT_ID and IJT_PIN_UPDATER_APP_PRIVATE_KEY for the IJT Pin Updater GitHub App before auto-pin publishing." >&2
-            exit 1
-          fi
-
-      - name: Mint GitHub App installation token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
-        with:
-          client-id: ${{ secrets.IJT_PIN_UPDATER_APP_CLIENT_ID }}
-          private-key: ${{ secrets.IJT_PIN_UPDATER_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-          permission-contents: write
-          permission-pull-requests: write
-
-      - name: Verify app token is present
-        env:
-          APP_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${APP_TOKEN:-}" ]]; then
-            echo "::error::IJT Pin Updater GitHub App did not produce an installation token." >&2
-            exit 1
-          fi
-
-      - name: Log in to GHCR for metadata readback
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Capture metadata from published digest
-        id: capture_metadata
-        env:
-          PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
-        run: |
-          set -euo pipefail
-          REF="${IMAGE_NAME}@${PUBLISHED_DIGEST}"
-          docker pull "$REF"
-          docker run --rm --network=none "$REF" \
-            cat /opt/ijt-browser-ci/metadata.json > "${RUNNER_TEMP}/ijt-browser-ci-metadata.json"
-          cat "${RUNNER_TEMP}/ijt-browser-ci-metadata.json"
-          echo "result=captured" >> "$GITHUB_OUTPUT"
-          echo "reason=metadata captured from published digest" >> "$GITHUB_OUTPUT"
-
-      - name: Update image-pin.json
-        id: update_pin
-        env:
-          PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
-        run: |
-          set -euo pipefail
-          python .github/scripts/update_browser_ci_image_pin.py \
-            --pin "$PIN_PATH" \
-            --metadata "${RUNNER_TEMP}/ijt-browser-ci-metadata.json" \
-            --image "$IMAGE_NAME" \
-            --digest "$PUBLISHED_DIGEST" \
-            --image-revision "$GITHUB_SHA" \
-            --image-created "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --image-workflow-run "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          python -m json.tool "$PIN_PATH" > /dev/null
-          echo "result=rendered" >> "$GITHUB_OUTPUT"
-          echo "reason=image-pin.json rendered from verified metadata" >> "$GITHUB_OUTPUT"
-
-      - name: Open or update image-pin PR
-        id: pr
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- "$PIN_PATH"; then
-            {
-              echo "changed=false"
-              echo "auto_pr_result=no_change"
-              echo "reason=image-pin.json already points at ${PUBLISHED_DIGEST}; no PR needed"
-            } >> "$GITHUB_OUTPUT"
-            echo "image-pin.json already points at ${PUBLISHED_DIGEST}; no PR needed."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git checkout -B "$PIN_BRANCH"
-          git add "$PIN_PATH"
-          git commit -m "Update IJT Browser CI image pin" \
-            -m "1. Point image-pin.json at the verified GHCR digest published by this workflow." \
-            -m "2. Keep the browser Integration job on a reviewed digest instead of a floating tag."
-          # This automation branch is single-writer and represents the newest
-          # verified digest. Force-with-lease intentionally supersedes an older
-          # open pin PR if a later image publishes before review completes.
-          git fetch origin "${PIN_BRANCH}:refs/remotes/origin/${PIN_BRANCH}" || true
-          git push --force-with-lease "origin" "HEAD:refs/heads/${PIN_BRANCH}"
-
-          body_file="${RUNNER_TEMP}/image-pin-pr.md"
-          cat > "$body_file" <<EOF
-          ## IJT Browser CI image pin update
-
-          This PR was opened by \`.github/workflows/build-browser-ci-image.yml\` after a verified image publish.
-
-          - Published digest: \`${IMAGE_NAME}@${PUBLISHED_DIGEST}\`
-          - Source revision: \`${GITHUB_SHA}\`
-          - Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
-
-          The build workflow already performed:
-
-          - Phase 0 smoke under \`--network=none\`
-          - GHCR digest publish
-          - Pull-verify of the published digest
-
-          This PR is opened with the IJT Pin Updater GitHub App token, so normal pull_request workflows run on the PR head. Integration includes image-pin updates in its PR path filter and validates the browser suites against this digest.
-
-          Review focus: \`.github/docker/ijt-browser-ci/image-pin.json\` only.
-          EOF
-
-          existing_pr="$(gh pr list --state open --base main --head "$PIN_BRANCH" --json number --jq '.[0].number // empty')"
-          if [[ -n "$existing_pr" ]]; then
-            gh pr edit "$existing_pr" \
-              --title "Update IJT Browser CI image pin" \
-              --body-file "$body_file"
-            {
-              echo "pr=${existing_pr}"
-              echo "auto_pr_result=updated"
-              echo "reason=updated existing image-pin PR #${existing_pr}"
-              echo "changed=true"
-            } >> "$GITHUB_OUTPUT"
-          else
-            pr_url="$(gh pr create \
-              --base main \
-              --head "$PIN_BRANCH" \
-              --title "Update IJT Browser CI image pin" \
-              --body-file "$body_file")"
-            {
-              echo "pr_url=${pr_url}"
-              echo "auto_pr_result=opened"
-              echo "reason=opened new image-pin PR ${pr_url}"
-              echo "changed=true"
-            } >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Job summary
-        if: always()
-        env:
-          UPDATED: ${{ steps.pr.outputs.changed }}
-          CAPTURE_OUTCOME: ${{ steps.capture_metadata.outcome }}
-          CAPTURE_REASON: ${{ steps.capture_metadata.outputs.reason }}
-          UPDATE_OUTCOME: ${{ steps.update_pin.outcome }}
-          UPDATE_REASON: ${{ steps.update_pin.outputs.reason }}
-          PR_OUTCOME: ${{ steps.pr.outcome }}
-          AUTO_PR_RESULT: ${{ steps.pr.outputs.auto_pr_result }}
-          AUTO_PR_REASON: ${{ steps.pr.outputs.reason }}
-          PR_NUMBER: ${{ steps.pr.outputs.pr }}
-          PR_URL: ${{ steps.pr.outputs.pr_url }}
-          PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
-        run: |
-          set -euo pipefail
-          {
-            echo "## IJT Browser CI image - Pin update"
-            echo ""
-            echo "- Published digest: \`${PUBLISHED_DIGEST}\`"
-            echo "- image-pin.json changed: \`${UPDATED:-unknown}\`"
-            echo "- Metadata capture: \`${CAPTURE_OUTCOME:-unknown}\` — ${CAPTURE_REASON:-not completed}"
-            echo "- Pin update: \`${UPDATE_OUTCOME:-unknown}\` — ${UPDATE_REASON:-not completed}"
-            echo "- Auto-PR opened/updated: \`${AUTO_PR_RESULT:-not_attempted}\`"
-            echo "- Auto-PR step outcome: \`${PR_OUTCOME:-unknown}\`"
-            echo "- Reason: ${AUTO_PR_REASON:-not completed; inspect the first failed update-pin step above}"
-            if [[ -n "${PR_NUMBER:-}" ]]; then
-              echo "- Existing PR updated: #${PR_NUMBER}"
-            fi
-            if [[ -n "${PR_URL:-}" ]]; then
-              echo "- New PR opened: ${PR_URL}"
-            fi
-            if [[ "${CAPTURE_OUTCOME:-}" != "success" || "${UPDATE_OUTCOME:-}" != "success" || "${PR_OUTCOME:-}" != "success" ]]; then
-              echo ""
-              echo "> One or more update-pin steps did not succeed. Review the failed step logs before re-running the workflow."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

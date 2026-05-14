@@ -16,10 +16,10 @@ _COMMENT = (
     "Single source of truth for the IJT Browser CI image consumed by "
     "integration.yml live-webclient-browser. IJT_BROWSER_CI_IMAGE is "
     "constructed at runtime as image@digest. Refresh procedure: the "
-    "build-browser-ci-image workflow publishes a verified image, updates this "
-    "file on the automation/ijt-browser-ci-image-pin branch, and opens or "
-    "updates a reviewable PR. The workflow MUST fail fast if digest does not "
-    "match ^sha256:[0-9a-f]{64}$."
+    "build-browser-ci-image workflow publishes a verified image, and a "
+    "maintainer opens a normal reviewed PR updating this file when main "
+    "should consume that digest. The workflow MUST fail fast if digest does "
+    "not match ^sha256:[0-9a-f]{64}$."
 )
 
 
