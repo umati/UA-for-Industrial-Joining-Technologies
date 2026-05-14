@@ -8,6 +8,7 @@
 ### 📊 Outcome Overview
 
 ```mermaid
+%%{init: {"themeVariables": {"pie1": "#22c55e", "pie2": "#ef4444", "pie3": "#9ca3af"}}}%%
 pie showData
   title CI test outcomes
   "Passed" : 21

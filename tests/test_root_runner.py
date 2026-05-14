@@ -1263,7 +1263,7 @@ def test_integration_report_surfaces_browser_feature_timings() -> None:
 
     assert "browser_feature_timings(" in report_script
     assert "results-live-webclient-web-client-e2e-features*/**/timing-latest.json" in report_script
-    assert "### Browser Features Timing" in report_script
+    assert "Browser Feature Stage Timing" in report_script
     assert "pip-install" in report_script
     assert "npm-install" in report_script
     assert "playwright-install" in report_script
@@ -1276,8 +1276,8 @@ def test_integration_report_surfaces_csharp_live_timings() -> None:
     assert "csharp_live_timings(" in report_script
     assert "results-csharp-live/**/*.trx" in report_script
     assert "UnitTestResult" in report_script
-    assert "### C# Live Timing" in report_script
-    assert "#### Top C# Live Tests" in report_script
+    assert "C# Live Timing Details" in report_script
+    assert "#### Slowest C# Live Tests" in report_script
 
 
 def test_integration_report_surfaces_job_durations() -> None:
@@ -1290,15 +1290,15 @@ def test_integration_report_surfaces_job_durations() -> None:
     assert "GH_REPOSITORY:  ${{ github.repository }}" in workflow
     assert "GH_RUN_ID:      ${{ github.run_id }}" in workflow
     assert "GH_TOKEN:       ${{ github.token }}" in workflow
-    assert 'REPORT_JOB_NAME: "📋 Extended Test Report"' in workflow
+    assert 'REPORT_JOB_NAME: "📋 System Tests Summary"' in workflow
     assert "def job_durations(path):" in report_script
     assert "excluding this report job" in report_script
     assert "name == report_job_name" in report_script
-    assert "Report job duration is " in report_script
-    assert "excluded because a report cannot measure its own completed duration" in report_script
-    assert "### ⏱️ Job Durations" in report_script
+    assert "### Duration and Bottlenecks" in report_script
+    assert "Bottleneck Spotlight" in report_script
     assert "current workflow run jobs API" in report_script
-    assert "format_optional_duration(duration)" in report_script
+    assert "Missing timing data" in report_script
+    assert "omitted rather than estimated" in report_script
     assert "🏁" in report_script
 
 
@@ -1338,11 +1338,11 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
     assert 'E("GH_RUN_ID", "")' in report_script
     assert "non_test_client_skip_failures(" in report_script
     assert "skip_policy_failures" in report_script
-    assert "### ❌ Skip Policy Failures" in report_script
+    assert "#### Skip Policy Failures" in report_script
     assert "only IJT Test Client conformance" in report_script
     assert "sys.exit(1)" in report_script
     assert "tests/baselines/integration-test-counts.json" in report_script
-    assert "### ⚠️ Report Warnings" in report_script
+    assert "### Warnings and Drift" in report_script
     assert "skip drift" in report_script
     assert "suite collection drift" in report_script
     assert "tests/tools/update_integration_baseline.py --run" in report_script
@@ -1375,7 +1375,7 @@ def test_update_integration_baseline_helper_is_guarded() -> None:
     assert "ARTIFACT_SPECS" in text
     assert "conclusion" in text
     assert "success" in text
-    assert "Integration — Live System Tests" in text
+    assert "System Tests — Live OPC UA, Browser, Docker, Conformance" in text
     assert "would decrease" in text
     assert "captured_from_run" in text
     assert set(module.ARTIFACT_SPECS) == {

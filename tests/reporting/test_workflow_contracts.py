@@ -82,6 +82,18 @@ def test_ci_dorny_actions_keep_check_runs_but_suppress_step_summaries() -> None:
     assert all(step["with"]["use-actions-summary"] is False for step in dorny_steps)
 
 
+def test_ci_outcome_pie_uses_semantic_colors_and_locked_slice_order() -> None:
+    report_script = (REPO_ROOT / "reporting" / "ci_run_summary.py").read_text(encoding="utf-8")
+
+    assert (
+        '%%{init: {"themeVariables": {"pie1": "#22c55e", "pie2": "#ef4444", "pie3": "#9ca3af"}}}%%'
+    ) in report_script
+    assert report_script.index('"pie1"') < report_script.index('"pie2"')
+    assert report_script.index('"pie2"') < report_script.index('"pie3"')
+    assert report_script.index('"Passed"') < report_script.index('"Failed"')
+    assert report_script.index('"Failed"') < report_script.index('"Skipped"')
+
+
 def test_ci_docker_smoke_suppresses_docker_build_summary_noise() -> None:
     workflow = _workflow("ci.yml")
     docker_smoke = workflow["jobs"]["docker-smoke"]
@@ -105,10 +117,14 @@ def test_ci_all_checks_comment_matches_current_ruleset_truth() -> None:
 
 
 def test_integration_summary_step_invokes_extracted_module() -> None:
+    workflow = _workflow("integration.yml")
     step = _summary_step("integration.yml")
 
+    assert workflow["name"] == "System Tests — Live OPC UA, Browser, Docker, Conformance"
+    assert workflow["jobs"]["report"]["name"] == "📋 System Tests Summary"
     assert step["run"].strip() == "python3 reporting/system_tests_run_summary.py"
     assert "PYEOF" not in step["run"]
+    assert step["env"]["REPORT_JOB_NAME"] == "📋 System Tests Summary"
     assert set(step["env"]) == {
         "SD_RESULT",
         "WD_RESULT",
@@ -127,6 +143,51 @@ def test_integration_summary_step_invokes_extracted_module() -> None:
         "GH_TOKEN",
         "REPORT_JOB_NAME",
     }
+
+
+def test_integration_dorny_actions_keep_check_runs_but_suppress_step_summaries() -> None:
+    workflow = _workflow("integration.yml")
+    expected_names = [
+        "OPC UA Server — Smoke Tests (Docker Linux)",
+        "Web Client Docker — Python Tests",
+        "Web Client Docker — JS Tests (Vitest)",
+        "Test Client — Conformance Tests (Live)",
+        "Web Client — Local Live Suites",
+        "Console Client — Live Tests",
+        "C# Client — Live Tests (xUnit)",
+    ]
+
+    dorny_steps = [
+        step for step in workflow["jobs"]["report"]["steps"] if step.get("uses") == DORNY_ACTION
+    ]
+
+    assert [step["with"]["name"] for step in dorny_steps] == expected_names
+    assert all(step["with"]["use-actions-summary"] is False for step in dorny_steps)
+
+
+def test_integration_docker_jobs_suppress_build_summary_noise() -> None:
+    workflow = _workflow("integration.yml")
+    build_action = "docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f"
+    for job_name in ("server-smoke-docker", "webclient-docker"):
+        job = workflow["jobs"][job_name]
+        build_steps = [step for step in job["steps"] if step.get("uses") == build_action]
+
+        assert build_steps and len(build_steps) == 2
+        assert job["env"]["DOCKER_BUILD_SUMMARY"] == "false"
+        assert job["env"]["DOCKER_BUILD_RECORD_UPLOAD"] == "false"
+        assert "DOCKERHUB_USERNAME" in job["env"]
+
+
+def test_integration_gantt_uses_semantic_colors_and_bottleneck_crit_tag() -> None:
+    report_script = (REPO_ROOT / "reporting" / "system_tests_run_summary.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"taskBkgColor": "#9ca3af"' in report_script
+    assert '"critBkgColor": "#ef4444"' in report_script
+    assert '"doneTaskBkgColor": "#22c55e"' in report_script
+    assert 'tags = ["crit"] if index == 0 else []' in report_script
+    assert "Bottleneck Spotlight" in report_script
 
 
 def test_integration_paths_include_reporting_modules() -> None:

@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Integration — Live System Tests
+# System Tests — Live OPC UA, Browser, Docker, Conformance
 #
 # TIER: integration (non-blocking) — skips and failures are tracked but do
 # not gate merges. See docs/TEST_TIERS.md for the full tier policy and the
@@ -22,7 +22,7 @@
 #   - Push / PR touching server or client code paths (see path filters below)
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: "Integration — Live System Tests"
+name: "System Tests — Live OPC UA, Browser, Docker, Conformance"
 
 on:
   schedule:
@@ -101,6 +101,8 @@ jobs:
       contents: read
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}   # empty string when secret absent
+      DOCKER_BUILD_SUMMARY: "false"
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -225,6 +227,8 @@ jobs:
       contents: read
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}   # empty string when secret absent
+      DOCKER_BUILD_SUMMARY: "false"
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -962,7 +966,7 @@ jobs:
   # Writes the root-level summary table to the Actions Summary page.
   # ───────────────────────────────────────────────────────────────────────────
   report:
-    name: "📋 Extended Test Report"
+    name: "📋 System Tests Summary"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [server-smoke-docker, webclient-docker, int-testclient, live-webclient, live-webclient-browser, live-console, csharp-live]
@@ -994,6 +998,7 @@ jobs:
           name: "OPC UA Server — Smoke Tests (Docker Linux)"
           path: all-results/results-server-smoke-docker/smoke.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -1005,6 +1010,7 @@ jobs:
           name: "Web Client Docker — Python Tests"
           path: all-results/results-webclient-docker/pytest-unit.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -1016,6 +1022,7 @@ jobs:
           name: "Web Client Docker — JS Tests (Vitest)"
           path: all-results/results-webclient-docker/vitest.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -1027,6 +1034,7 @@ jobs:
           name: "Test Client — Conformance Tests (Live)"
           path: all-results/results-testclient/pytest.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -1038,6 +1046,7 @@ jobs:
           name: "Web Client — Local Live Suites"
           path: all-results/results-live-webclient-*/**/*.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -1049,6 +1058,7 @@ jobs:
           name: "Console Client — Live Tests"
           path: all-results/results-live-console/**/pytest-live.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -1060,6 +1070,7 @@ jobs:
           name: "C# Client — Live Tests (xUnit)"
           path: all-results/results-csharp-live/tests.xml
           reporter: java-junit
+          use-actions-summary: false
           fail-on-error: false
           fail-on-empty: false
 
@@ -1080,6 +1091,6 @@ jobs:
           GH_RUN_ID:      ${{ github.run_id }}
           GH_API_URL:     ${{ github.api_url }}
           GH_TOKEN:       ${{ github.token }}
-          REPORT_JOB_NAME: "📋 Extended Test Report"
+          REPORT_JOB_NAME: "📋 System Tests Summary"
         run: |
           python3 reporting/system_tests_run_summary.py

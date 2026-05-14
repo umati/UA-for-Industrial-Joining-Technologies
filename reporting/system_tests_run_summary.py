@@ -418,6 +418,7 @@ def job_icon(r):
         "failure": "❌",
         "cancelled": "🚫",
         "skipped": "⏭️",
+        "recorded": "📊",
     }.get(r, "⚠️")
 
 
@@ -432,6 +433,47 @@ def tests(total, passed, failed, skipped=0, baseline=None):
 
 def skips(sk):
     return "—" if sk is None else str(sk)
+
+
+def count_evidence(counts, baseline=None):
+    """Compact evidence cell for a suite's tests and skips."""
+    return f"{tests(*counts, baseline=baseline)}; {skips(counts[3])} skipped"
+
+
+def mermaid_label(value):
+    """Keep Mermaid task labels readable and syntax-safe."""
+    text = str(value or "job").replace("#", "Sharp")
+    for char in "\r\n:;|":
+        text = text.replace(char, " ")
+    return " ".join(text.split())[:70] or "job"
+
+
+def bottleneck_candidates(job_timings, wc_feature_timings, cs_live_timings):
+    """Rank reliable timing sources without inventing missing duration data."""
+    rows = []
+    for name, duration, conclusion in job_timings:
+        if duration is not None:
+            rows.append(("Workflow job", name, duration, conclusion))
+    for row in wc_feature_timings:
+        rows.append(
+            (
+                "Browser timing artifact",
+                f"Browser Features ({row['shard']})",
+                row["total"],
+                "recorded",
+            )
+        )
+    if cs_live_timings:
+        for row in cs_live_timings["classes"]:
+            rows.append(
+                (
+                    "C# TRX class",
+                    f"C# Live — {short_csharp_class(row['class'])}",
+                    row["total"],
+                    "recorded",
+                )
+            )
+    return sorted(rows, key=lambda row: (-seconds(row[2]), row[1]))
 
 
 def main() -> None:
@@ -577,7 +619,7 @@ def main() -> None:
     # ── Build report ──────────────────────────────────────────────────
 
     out = [
-        "## IJT OPC UA — Integration",
+        "## IJT OPC UA — System Tests",
         "",
         f"> {status_icon} **{status_msg}**",
         (
@@ -585,140 +627,155 @@ def main() -> None:
             f"&nbsp;·&nbsp; **Run:** {run_link}"
         ),
         (
-            "> Nightly integration and live tests — full OPC UA stack on Windows + "
-            "Linux browser container + Docker"
+            "> Nightly and manual system tests — live OPC UA server behavior, browser "
+            "E2E suites, Docker packaging, and conformance evidence."
         ),
         "",
         "---",
         "",
-    ]
-
-    if skip_policy_failures:
-        out += ["### ❌ Skip Policy Failures", ""]
-        out += skip_policy_failures
-        out += ["", "---", ""]
-
-    if report_warnings:
-        out += ["### ⚠️ Report Warnings", ""]
-        out += report_warnings
-        out += ["", "---", ""]
-
-    if job_timings:
-        out += [
-            "### ⏱️ Job Durations",
-            "",
-            (
-                "> Source: current workflow run jobs API. Report job duration is "
-                "excluded because a report cannot measure its own completed duration; "
-                "see the workflow run page for its time."
-            ),
-            "",
-            "| Job | Duration | Status |",
-            "|:----|---------:|:-------|",
-        ]
-        long_pole_marked = False
-        for name, duration, conclusion in job_timings:
-            marker = ""
-            if duration is not None and not long_pole_marked:
-                marker = "🏁 "
-                long_pole_marked = True
-            out.append(
-                f"| {marker}{md_cell(name)} | {format_optional_duration(duration)} | "
-                f"{job_icon(conclusion)} {md_cell(conclusion)} |"
-            )
-        out += ["", "---", ""]
-
-    out += [
-        "### 🐳 Docker Tests",
+        "### Validation Overview",
         "",
-        "> Platform: Ubuntu latest — containerized OPC UA server",
-        "",
-        "| Suite | Tests | Skipped |",
-        "|:------|------:|--------:|",
-        (
-            "| OPC UA Server — Smoke    | "
-            f"{tests(*sd_smoke, baseline=baseline_suite(integration_baseline, 'sd_smoke'))} | "
-            f"{skips(sd_smoke[3])} |"
-        ),
-        (
-            "| Web Client — Python unit | "
-            f"{tests(*wd_py, baseline=baseline_suite(integration_baseline, 'wd_py'))} | "
-            f"{skips(wd_py[3])} |"
-        ),
-        (
-            "| Web Client — JavaScript  | "
-            f"{tests(*wd_js, baseline=baseline_suite(integration_baseline, 'wd_js'))} | "
-            f"{skips(wd_js[3])} |"
-        ),
+        "| Lane | Result | Evidence |",
+        "|:-----|:-------|:---------|",
+        f"| OPC UA Server Docker smoke | {job_icon(sd_r)} {md_cell(sd_r)} | "
+        f"{count_evidence(sd_smoke, baseline_suite(integration_baseline, 'sd_smoke'))} |",
+        f"| Web Client Docker tests | {job_icon(wd_r)} {md_cell(wd_r)} | "
+        f"Python {count_evidence(wd_py, baseline_suite(integration_baseline, 'wd_py'))}; "
+        f"JavaScript {count_evidence(wd_js, baseline_suite(integration_baseline, 'wd_js'))} |",
+        f"| Test Client conformance | {job_icon(tc_r)} {md_cell(tc_r)} | "
+        f"{count_evidence(tc_tests, baseline_suite(integration_baseline, 'tc_tests'))} |",
+        f"| Web Client live suites | {job_icon(wc_r)} {md_cell(wc_r)} | "
+        f"{count_evidence(wc_live, baseline_suite(integration_baseline, 'wc_live'))} |",
+        f"| Browser E2E suites | {job_icon(wb_r)} {md_cell(wb_r)} | "
+        f"{count_evidence(wc_browser, baseline_suite(integration_baseline, 'wc_browser'))} |",
+        f"| Console Client live | {job_icon(con_r)} {md_cell(con_r)} | "
+        f"{count_evidence(con_live, baseline_suite(integration_baseline, 'con_live'))} |",
+        f"| C# Client live | {job_icon(cs_r)} {md_cell(cs_r)} | "
+        f"{count_evidence(cs_live, baseline_suite(integration_baseline, 'cs_live'))} |",
         "",
         "---",
         "",
-        "### 🖥️ Live Integration Tests",
+        "### Component Evidence",
         "",
-        "> Platform: Windows Server — native OPC UA server (dedicated ports per client)",
-        "",
-        "| Suite | Port | Tests | Skipped | Notes |",
-        "|:------|-----:|------:|--------:|:------|",
+        "| Component | Validation Scope | Container Evidence | Live/System Evidence | Notes |",
+        "|:----------|:-----------------|:-------------------|:---------------------|:------|",
         (
-            "| Test Client — Smoke sanity       | 40462 | "
-            f"{tests(*tc_smoke, baseline=baseline_suite(integration_baseline, 'tc_smoke'))} | "
-            f"{skips(tc_smoke[3])} | Server and namespace reachability |"
+            "| OPC UA Server | Linux container plus Windows live server processes | "
+            f"{count_evidence(sd_smoke, baseline_suite(integration_baseline, 'sd_smoke'))} | "
+            "Dedicated Windows ports 40461/40462/40464 feed client live suites | "
+            "Docker smoke proves packaged Linux startup and namespace reachability |"
         ),
         (
-            "| Test Client — Conformance (live) | 40462 | "
-            f"{tests(*tc_tests, baseline=baseline_suite(integration_baseline, 'tc_tests'))} | "
-            f"{skips(tc_tests[3])} | {skip_note_inline(tc_conf_skips, tc_tests[3])} |"
+            "| Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | "
+            f"Python {count_evidence(wd_py, baseline_suite(integration_baseline, 'wd_py'))}; "
+            f"JS {count_evidence(wd_js, baseline_suite(integration_baseline, 'wd_js'))} | "
+            f"Live {count_evidence(wc_live, baseline_suite(integration_baseline, 'wc_live'))}; "
+            "browser "
+            f"{count_evidence(wc_browser, baseline_suite(integration_baseline, 'wc_browser'))} | "
+            f"{wc_browser_note} |"
         ),
         (
-            "| Web Client — Python/WebSocket    | 40463/40466/40467 | "
-            f"{tests(*wc_live, baseline=baseline_suite(integration_baseline, 'wc_live'))} | "
-            f"{skips(wc_live[3])} | "
-            f"{skip_note_inline(wc_live_skips, wc_live[3], 'OPC UA subscriptions + WebSocket')} |"
+            "| Test Client | Live conformance harness against OPC UA server | — | "
+            f"Smoke {count_evidence(tc_smoke, baseline_suite(integration_baseline, 'tc_smoke'))}; "
+            "conformance "
+            f"{count_evidence(tc_tests, baseline_suite(integration_baseline, 'tc_tests'))} | "
+            f"{skip_note_inline(tc_conf_skips, tc_tests[3])} |"
         ),
         (
-            "| Console Client — Live            | 40461 | "
-            f"{tests(*con_live, baseline=baseline_suite(integration_baseline, 'con_live'))} | "
-            f"{skips(con_live[3])} | {skip_note_inline(con_live_skips, con_live[3])} |"
+            "| Console Client | Live Python client behavior against OPC UA server | — | "
+            f"{count_evidence(con_live, baseline_suite(integration_baseline, 'con_live'))} | "
+            f"{skip_note_inline(con_live_skips, con_live[3])} |"
         ),
         (
-            "| C# Client — Live (xUnit)         | 40464 | "
-            f"{tests(*cs_live, baseline=baseline_suite(integration_baseline, 'cs_live'))} | "
-            f"{skips(cs_live[3])} | "
+            "| C# Client | Nightly xUnit live behavior against OPC UA server | — | "
+            f"{count_evidence(cs_live, baseline_suite(integration_baseline, 'cs_live'))} | "
             f"{skip_note_inline(cs_live_skips, cs_live[3], 'Nightly drift detection')} |"
         ),
         "",
         "---",
         "",
-        "### Browser E2E Tests",
+        "### Conformance Overview",
         "",
+        "| Suite | Port | Tests Run | Skipped | Notes |",
+        "|:------|-----:|----------:|--------:|:------|",
         (
-            "> Platform: Ubuntu latest — runs inside the owned `ijt-browser-ci` image "
-            "(reviewed `image-pin.json` digest, or matching PR/SHA digest for "
-            "dependency-input updates); "
-            "Chromium + system libs are baked at image-build time and the container "
-            "runs with `--network=none`"
+            "| Test Client — Smoke sanity | 40462 | "
+            f"{tests(*tc_smoke, baseline=baseline_suite(integration_baseline, 'tc_smoke'))} | "
+            f"{skips(tc_smoke[3])} | Server and namespace reachability |"
         ),
-        "",
-        "| Suite | Surface | Tests | Skipped | Notes |",
-        "|:------|:--------|------:|--------:|:------|",
         (
-            "| Web Client — Browser E2E | Chromium DOM/JS + OPC UA WebSocket + "
-            "result/event UX | "
-            f"{tests(*wc_browser, baseline=baseline_suite(integration_baseline, 'wc_browser'))} | "
-            f"{skips(wc_browser[3])} | "
-            f"{wc_browser_note} |"
+            "| Test Client — Conformance | 40462 | "
+            f"{tests(*tc_tests, baseline=baseline_suite(integration_baseline, 'tc_tests'))} | "
+            f"{skips(tc_tests[3])} | {skip_note_inline(tc_conf_skips, tc_tests[3])} |"
         ),
     ]
+
+    timing_rows = bottleneck_candidates(job_timings, wc_feature_timings, cs_live_timings)
+    out += ["", "---", "", "### Duration and Bottlenecks", ""]
+    if timing_rows:
+        out += [
+            (
+                "> Source order: current workflow run jobs API first, then Web Client "
+                "timing JSON and C# TRX artifacts when available. Missing timing data "
+                "is omitted rather than estimated."
+            ),
+            "",
+            "```mermaid",
+            (
+                '%%{init: {"themeVariables": {"taskBkgColor": "#9ca3af", '
+                '"taskTextColor": "#111827", "critBkgColor": "#ef4444", '
+                '"doneTaskBkgColor": "#22c55e"}}}%%'
+            ),
+            "gantt",
+            "  title System Tests duration spotlight",
+            "  dateFormat X",
+            "  axisFormat %M:%S",
+            "  section Duration sources",
+        ]
+        for index, (_source, name, duration, conclusion) in enumerate(timing_rows[:8]):
+            tags = ["crit"] if index == 0 else []
+            if conclusion in ("success", "recorded"):
+                tags.append("done")
+            tag_text = ", ".join(tags)
+            if tag_text:
+                tag_text = f"{tag_text}, "
+            end_seconds = max(int(round(seconds(duration))), 1)
+            out.append(f"  {mermaid_label(name)} :{tag_text}task{index}, 0, {end_seconds}")
+        out += [
+            "```",
+            "",
+            "| Source | Item | Duration | Status |",
+            "|:-------|:-----|---------:|:-------|",
+        ]
+        for index, (source, name, duration, conclusion) in enumerate(timing_rows[:10]):
+            marker = "🏁 " if index == 0 else ""
+            out.append(
+                f"| {md_cell(source)} | {marker}{md_cell(name)} | "
+                f"{format_duration(duration)} | {job_icon(conclusion)} {md_cell(conclusion)} |"
+            )
+        source, name, duration, _conclusion = timing_rows[0]
+        out += [
+            "",
+            "#### Bottleneck Spotlight",
+            "",
+            (
+                f"> 🏁 **{md_cell(name)}** is the current longest reliable timing source "
+                f"({format_duration(duration)}, {md_cell(source)})."
+            ),
+        ]
+    else:
+        out += [
+            (
+                "No reliable duration source was available. Job durations require the "
+                "current-run Jobs API; per-suite timing appears only when Browser timing "
+                "JSON or C# TRX artifacts are present."
+            )
+        ]
 
     if wc_feature_timings:
         out += [
             "",
-            "### Browser Features Timing",
-            "",
-            (
-                "> Source: Web Client `timing-latest.json` artifacts for the Browser "
-                "Features matrix rows."
-            ),
+            "<details><summary><b>Browser Feature Stage Timing</b></summary>",
             "",
             (
                 "| Shard | Total | pip-install | npm-install | Playwright install | "
@@ -734,13 +791,12 @@ def main() -> None:
                 f"{format_duration(row['playwright_features'])} | "
                 f"{format_duration(row['other'])} |"
             )
+        out += ["", "</details>"]
 
     if cs_live_timings:
         out += [
             "",
-            "### C# Live Timing",
-            "",
-            "> Source: C# Live `tests.trx`; timings exclude restore, build, and server startup.",
+            "<details><summary><b>C# Live Timing Details</b></summary>",
             "",
             "| Class | Tests | Total | Avg | Max |",
             "|:------|------:|------:|----:|----:|",
@@ -755,7 +811,7 @@ def main() -> None:
 
         out += [
             "",
-            "#### Top C# Live Tests",
+            "#### Slowest C# Live Tests",
             "",
             "| Test | Duration | Outcome |",
             "|:-----|---------:|:--------|",
@@ -765,6 +821,23 @@ def main() -> None:
                 f"| {md_cell(row['method'])} | {format_duration(row['duration'])} | "
                 f"{md_cell(row['outcome'])} |"
             )
+        out += ["", "</details>"]
+
+    out += ["", "---", "", "### Warnings and Drift", ""]
+    if skip_policy_failures:
+        out += ["#### Skip Policy Failures", ""]
+        out += skip_policy_failures
+        out += [""]
+    if report_warnings:
+        out += ["#### Report Warnings", ""]
+        out += report_warnings
+        out += [""]
+    if artifact_warnings:
+        out += ["#### Artifact Warnings", ""]
+        out += artifact_warnings
+        out += [""]
+    if not skip_policy_failures and not report_warnings and not artifact_warnings:
+        out += ["No skip policy failures, test-count drift warnings, or artifact warnings."]
 
     # ── Inline skip details (collapsible) ──────────────────────────
 
@@ -785,21 +858,19 @@ def main() -> None:
     )
     skip_sections += format_skip_section("C# Client — Live", cs_live_skips, cs_live[3])
 
-    if skip_sections:
-        out += ["", "---", "", "### ⏭️ Skip Details"]
-        out += skip_sections
-
     out += [
         "",
         "---",
+        "",
+        "### Artifacts and Drilldown",
         "",
         "> 📦 **Artifacts** — JUnit XML &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down",
         "> 🔒 Security audit (zizmor) results are in **CI** → Security → Code Scanning",
     ]
 
-    if artifact_warnings:
-        out += ["", "---", "", "### ⚠️ Artifact Warnings", ""]
-        out += artifact_warnings
+    if skip_sections:
+        out += ["", "#### Skip Details"]
+        out += skip_sections
 
     with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8") as fh:
         fh.write("\n".join(out) + "\n")

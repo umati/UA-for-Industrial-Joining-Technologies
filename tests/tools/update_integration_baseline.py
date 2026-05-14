@@ -18,7 +18,7 @@ from pathlib import Path
 REPO = "umati/UA-for-Industrial-Joining-Technologies"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE_PATH = REPO_ROOT / "tests" / "baselines" / "integration-test-counts.json"
-INTEGRATION_WORKFLOW = "Integration — Live System Tests"
+INTEGRATION_WORKFLOW = "System Tests — Live OPC UA, Browser, Docker, Conformance"
 
 ARTIFACT_SPECS: dict[str, list[tuple[str, tuple[str, ...]]]] = {
     "sd_smoke": [("results-server-smoke-docker", ("smoke.xml",))],

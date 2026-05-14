@@ -58,7 +58,7 @@ INTEGRATION_ENV = {
     "GH_API_URL": "https://api.github.example",
     "GH_TOKEN": "",
     "GITHUB_TOKEN": "",
-    "REPORT_JOB_NAME": "📋 Extended Test Report",
+    "REPORT_JOB_NAME": "📋 System Tests Summary",
 }
 
 

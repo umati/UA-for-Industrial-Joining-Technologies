@@ -37,6 +37,16 @@ it as a glossary bug and fix it in the same PR that touches the symbol.
 
 ---
 
+## 1.1 Summary chart color contract
+
+| Visual meaning | Mermaid binding | Color |
+|---|---|---|
+| Pass / completed | `pie1`, `doneTaskBkgColor` | Green `#22c55e` |
+| Failure / current bottleneck | `pie2`, `critBkgColor` | Red `#ef4444` |
+| Skipped / neutral | `pie3`, `taskBkgColor` | Gray `#9ca3af` |
+
+---
+
 ## 2. Conformance report top-level terms
 
 ### 2.1 `Conformance Overview` (renamed from `At a Glance`) 👔 🛠️ 🧪 📦

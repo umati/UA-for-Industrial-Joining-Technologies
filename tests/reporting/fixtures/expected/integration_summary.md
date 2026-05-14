@@ -1,72 +1,110 @@
-## IJT OPC UA — Integration
+## IJT OPC UA — System Tests
 
 > ✅ **All 7 / 7 jobs passed &nbsp;·&nbsp; 2,586 tests &nbsp;·&nbsp; 0 failed &nbsp;·&nbsp; 154 skipped**
 > **Branch:** `c2-phase-1b` &nbsp;·&nbsp; **Commit:** `abcdef12` &nbsp;·&nbsp; **Run:** [#84](https://github.example/ijt/actions/runs/84)
-> Nightly integration and live tests — full OPC UA stack on Windows + Linux browser container + Docker
+> Nightly and manual system tests — live OPC UA server behavior, browser E2E suites, Docker packaging, and conformance evidence.
 
 ---
 
-### 🐳 Docker Tests
+### Validation Overview
 
-> Platform: Ubuntu latest — containerized OPC UA server
-
-| Suite | Tests | Skipped |
-|:------|------:|--------:|
-| OPC UA Server — Smoke    | ✅ 10 | 0 |
-| Web Client — Python unit | ✅ 680 | 0 |
-| Web Client — JavaScript  | ✅ 522 | 0 |
-
----
-
-### 🖥️ Live Integration Tests
-
-> Platform: Windows Server — native OPC UA server (dedicated ports per client)
-
-| Suite | Port | Tests | Skipped | Notes |
-|:------|-----:|------:|--------:|:------|
-| Test Client — Smoke sanity       | 40462 | ✅ 10 | 0 | Server and namespace reachability |
-| Test Client — Conformance (live) | 40462 | ✅ 1,043 | 154 | Not Implemented fixture marker |
-| Web Client — Python/WebSocket    | 40463/40466/40467 | ✅ 127 | 0 | OPC UA subscriptions + WebSocket |
-| Console Client — Live            | 40461 | ✅ 18 | 0 | — |
-| C# Client — Live (xUnit)         | 40464 | ✅ 110 | 0 | Nightly drift detection |
+| Lane | Result | Evidence |
+|:-----|:-------|:---------|
+| OPC UA Server Docker smoke | ✅ success | ✅ 10; 0 skipped |
+| Web Client Docker tests | ✅ success | Python ✅ 680; 0 skipped; JavaScript ✅ 522; 0 skipped |
+| Test Client conformance | ✅ success | ✅ 1,043; 154 skipped |
+| Web Client live suites | ✅ success | ✅ 127; 0 skipped |
+| Browser E2E suites | ✅ success | ✅ 66; 0 skipped |
+| Console Client live | ✅ success | ✅ 18; 0 skipped |
+| C# Client live | ✅ success | ✅ 110; 0 skipped |
 
 ---
 
-### Browser E2E Tests
+### Component Evidence
 
-> Platform: Ubuntu latest — runs inside the owned `ijt-browser-ci` image (reviewed `image-pin.json` digest, or matching PR/SHA digest for dependency-input updates); Chromium + system libs are baked at image-build time and the container runs with `--network=none`
+| Component | Validation Scope | Container Evidence | Live/System Evidence | Notes |
+|:----------|:-----------------|:-------------------|:---------------------|:------|
+| OPC UA Server | Linux container plus Windows live server processes | ✅ 10; 0 skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
+| Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | Python ✅ 680; 0 skipped; JS ✅ 522; 0 skipped | Live ✅ 127; 0 skipped; browser ✅ 66; 0 skipped | Headless Chromium baked into the IJT Browser CI image |
+| Test Client | Live conformance harness against OPC UA server | — | Smoke ✅ 10; 0 skipped; conformance ✅ 1,043; 154 skipped | Not Implemented fixture marker |
+| Console Client | Live Python client behavior against OPC UA server | — | ✅ 18; 0 skipped | — |
+| C# Client | Nightly xUnit live behavior against OPC UA server | — | ✅ 110; 0 skipped | Nightly drift detection |
 
-| Suite | Surface | Tests | Skipped | Notes |
-|:------|:--------|------:|--------:|:------|
-| Web Client — Browser E2E | Chromium DOM/JS + OPC UA WebSocket + result/event UX | ✅ 66 | 0 | Headless Chromium baked into the IJT Browser CI image |
+---
 
-### Browser Features Timing
+### Conformance Overview
 
-> Source: Web Client `timing-latest.json` artifacts for the Browser Features matrix rows.
+| Suite | Port | Tests Run | Skipped | Notes |
+|:------|-----:|----------:|--------:|:------|
+| Test Client — Smoke sanity | 40462 | ✅ 10 | 0 | Server and namespace reachability |
+| Test Client — Conformance | 40462 | ✅ 1,043 | 154 | Not Implemented fixture marker |
+
+---
+
+### Duration and Bottlenecks
+
+> Source order: current workflow run jobs API first, then Web Client timing JSON and C# TRX artifacts when available. Missing timing data is omitted rather than estimated.
+
+```mermaid
+%%{init: {"themeVariables": {"taskBkgColor": "#9ca3af", "taskTextColor": "#111827", "critBkgColor": "#ef4444", "doneTaskBkgColor": "#22c55e"}}}%%
+gantt
+  title System Tests duration spotlight
+  dateFormat X
+  axisFormat %M:%S
+  section Duration sources
+  Browser Features (full) :crit, done, task0, 0, 123
+  CSharp Live — SlowTests :done, task1, 0, 70
+  CSharp Live — FastTests :done, task2, 0, 6
+```
+
+| Source | Item | Duration | Status |
+|:-------|:-----|---------:|:-------|
+| Browser timing artifact | 🏁 Browser Features (full) | 2.1 min | 📊 recorded |
+| C# TRX class | C# Live — SlowTests | 1.2 min | 📊 recorded |
+| C# TRX class | C# Live — FastTests | 5.5 s | 📊 recorded |
+
+#### Bottleneck Spotlight
+
+> 🏁 **Browser Features (full)** is the current longest reliable timing source (2.1 min, Browser timing artifact).
+
+<details><summary><b>Browser Feature Stage Timing</b></summary>
 
 | Shard | Total | pip-install | npm-install | Playwright install | Playwright features | Other |
 |:------|------:|------------:|------------:|-------------------:|--------------------:|------:|
 | full | 2.1 min | 10.0 s | 20.0 s | 30.0 s | 1.0 min | 3.4 s |
 
-### C# Live Timing
+</details>
 
-> Source: C# Live `tests.trx`; timings exclude restore, build, and server startup.
+<details><summary><b>C# Live Timing Details</b></summary>
 
 | Class | Tests | Total | Avg | Max |
 |:------|------:|------:|----:|----:|
 | SlowTests | 1 | 1.2 min | 1.2 min | 1.2 min |
 | FastTests | 1 | 5.5 s | 5.5 s | 5.5 s |
 
-#### Top C# Live Tests
+#### Slowest C# Live Tests
 
 | Test | Duration | Outcome |
 |:-----|---------:|:--------|
 | RunsJoiningCycle | 1.2 min | Passed |
 | ReadsServerStatus | 5.5 s | Passed |
 
+</details>
+
 ---
 
-### ⏭️ Skip Details
+### Warnings and Drift
+
+No skip policy failures, test-count drift warnings, or artifact warnings.
+
+---
+
+### Artifacts and Drilldown
+
+> 📦 **Artifacts** — JUnit XML &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down
+> 🔒 Security audit (zizmor) results are in **CI** → Security → Code Scanning
+
+#### Skip Details
 
 <details><summary>⏭️ <b>Test Client — Conformance</b> — 154 skipped</summary>
 
@@ -76,8 +114,3 @@
 | Not Implemented fixture marker | 1 |
 
 </details>
-
----
-
-> 📦 **Artifacts** — JUnit XML &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down
-> 🔒 Security audit (zizmor) results are in **CI** → Security → Code Scanning
