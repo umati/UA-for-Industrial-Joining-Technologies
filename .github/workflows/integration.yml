@@ -512,14 +512,142 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Log in to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Resolve IJT Browser CI image reference (digest-qualified)
         id: image
         env:
           PIN_PATH: .github/docker/ijt-browser-ci/image-pin.json
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BEFORE_SHA: ${{ github.event.before || '' }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login || '' }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
         run: |
           set -euo pipefail
           IMG="$(jq -r .image "$PIN_PATH")"
           DIG="$(jq -r .digest "$PIN_PATH")"
+
+          dependency_image_inputs_changed() {
+            local base_sha="$1"
+            local head_sha="$2"
+            local dependency_inputs_changed=false
+            local image_build_logic_changed=false
+
+            git fetch --no-tags --depth=1 origin "$base_sha" "$head_sha"
+            changed_files="$(git diff --name-only "$base_sha" "$head_sha")"
+            while IFS= read -r changed; do
+              [[ -n "$changed" ]] || continue
+              case "$changed" in
+                OPC_UA_Clients/Release2/IJT_Web_Client/package.json)
+                  dependency_inputs_changed=true
+                  ;;
+                OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json)
+                  dependency_inputs_changed=true
+                  ;;
+                OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt)
+                  dependency_inputs_changed=true
+                  ;;
+                OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt)
+                  dependency_inputs_changed=true
+                  ;;
+                .github/docker/ijt-browser-ci/*)
+                  image_build_logic_changed=true
+                  ;;
+                .github/scripts/update_browser_ci_image_pin.py)
+                  image_build_logic_changed=true
+                  ;;
+                .github/workflows/build-browser-ci-image.yml)
+                  image_build_logic_changed=true
+                  ;;
+              esac
+            done <<< "$changed_files"
+
+            [[ "$dependency_inputs_changed" == "true" && "$image_build_logic_changed" == "false" ]]
+          }
+
+          pull_tag_and_resolve_digest() {
+            local tag="$1"
+            local source="$2"
+            local expected_sha="$3"
+            local attempt=0
+            local max_attempts=30
+            local delay=20
+
+            echo "Waiting for ${source}: ${tag}"
+            until docker pull "$tag"; do
+              attempt=$((attempt + 1))
+              if [ "$attempt" -ge "$max_attempts" ]; then
+                echo "::error file=${PIN_PATH}::Timed out waiting for ${source}." >&2
+                echo "::error::  tag:      ${tag}" >&2
+                echo "::error::  workflow: .github/workflows/build-browser-ci-image.yml" >&2
+                echo "::error::  reason:   dependency input changed, but no matching PR/SHA image was published." >&2
+                exit 1
+              fi
+              echo "image tag not ready (${attempt}/${max_attempts}); retrying in ${delay}s..." >&2
+              sleep "$delay"
+            done
+
+            resolved_ref="$(
+              docker image inspect "$tag" --format '{{range .RepoDigests}}{{println .}}{{end}}' \
+                | grep -F "${IMG}@sha256:" \
+                | head -n 1 || true
+            )"
+            if [[ -z "$resolved_ref" ]]; then
+              echo "::error file=${PIN_PATH}::Pulled ${tag}, but Docker did not report a ${IMG}@sha256 digest." >&2
+              exit 1
+            fi
+            DIG="${resolved_ref##*@}"
+            echo "Resolved ${source} to ${IMG}@${DIG}"
+
+            actual_sha="$(
+              docker run --rm --network=none "${IMG}@${DIG}" \
+                python -c "import json; print(json.load(open('/opt/ijt-browser-ci/metadata.json')).get('build_sha',''))"
+            )"
+            if [[ "$actual_sha" != "$expected_sha" ]]; then
+              echo "::error file=${PIN_PATH}::Resolved ${source}, but image metadata does not match the expected source SHA." >&2
+              echo "::error::  expected: ${expected_sha}" >&2
+              echo "::error::  actual:   ${actual_sha}" >&2
+              echo "::error::  image:    ${IMG}@${DIG}" >&2
+              exit 1
+            fi
+          }
+
+          trusted_dependency_bot() {
+            case "$PR_AUTHOR" in
+              app/renovate|renovate\[bot\]|dependabot\[bot\])
+                return 0
+                ;;
+              *)
+                return 1
+                ;;
+            esac
+          }
+
+          image_source="reviewed image-pin.json"
+          null_sha="0000000000000000000000000000000000000000"
+          if [[ "$EVENT_NAME" == "pull_request" && "$PR_HEAD_REPO" == "$GITHUB_REPOSITORY" ]] && trusted_dependency_bot; then
+            if dependency_image_inputs_changed "$PR_BASE_SHA" "$PR_HEAD_SHA"; then
+              short_sha="${PR_HEAD_SHA::7}"
+              pull_tag_and_resolve_digest "${IMG}:pr-${PR_NUMBER}-${short_sha}" "PR-scoped dependency image" "$PR_HEAD_SHA"
+              image_source="PR-scoped dependency image"
+            fi
+          elif [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" && -n "$BEFORE_SHA" && "$BEFORE_SHA" != "$null_sha" ]]; then
+            if dependency_image_inputs_changed "$BEFORE_SHA" "$GITHUB_SHA"; then
+              short_sha="${GITHUB_SHA::7}"
+              pull_tag_and_resolve_digest "${IMG}:sha-${short_sha}" "main SHA dependency image" "$GITHUB_SHA"
+              image_source="main SHA dependency image"
+            fi
+          fi
+
           if ! [[ "$DIG" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "::error file=$PIN_PATH::digest is not a valid sha256:<64hex> reference: $DIG" >&2
             exit 1
@@ -530,18 +658,13 @@ jobs:
             exit 1
           fi
           echo "ijt_browser_ci_image=$REF" >> "$GITHUB_OUTPUT"
-          echo "Resolved IJT_BROWSER_CI_IMAGE=$REF"
-
-      - name: Log in to GHCR
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          echo "image_source=${image_source}" >> "$GITHUB_OUTPUT"
+          echo "Resolved IJT_BROWSER_CI_IMAGE=$REF (${image_source})"
 
       - name: Pull IJT Browser CI image (3-attempt retry)
         env:
           IMG: ${{ steps.image.outputs.ijt_browser_ci_image }}
+          IMAGE_SOURCE: ${{ steps.image.outputs.image_source }}
           PIN_PATH: .github/docker/ijt-browser-ci/image-pin.json
         run: |
           set -euo pipefail
@@ -557,9 +680,10 @@ jobs:
             if [ "$attempt" -ge "$max_attempts" ]; then
               echo "::error file=${PIN_PATH}::Failed to pull IJT Browser CI image after ${max_attempts} attempts." >&2
               echo "::error::  image:    ${IMG}" >&2
+              echo "::error::  source:   ${IMAGE_SOURCE}" >&2
               echo "::error::  registry: ghcr.io (GHCR)" >&2
               echo "::error::  pin file: ${PIN_PATH}" >&2
-              echo "::error::  republish: re-run .github/workflows/build-browser-ci-image.yml on main to regenerate this digest, then update ${PIN_PATH}." >&2
+              echo "::error::  republish: re-run .github/workflows/build-browser-ci-image.yml to regenerate the matching image, then re-run Integration." >&2
               exit 1
             fi
             echo "docker pull attempt ${attempt}/${max_attempts} failed; retrying in ${delay}s..." >&2

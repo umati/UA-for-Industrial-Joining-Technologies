@@ -169,10 +169,11 @@ run their live/integration tests in parallel without port conflicts.
 > suites stay on GitHub-hosted Windows runners. Every `web-client-e2e-*`
 > Playwright suite runs inside the owned
 > `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci` image,
-> digest-pinned via `.github/docker/ijt-browser-ci/image-pin.json` and started
-> with `docker run --network=none`. Chromium, its Linux system dependencies,
-> the locked `@playwright/test` version, Python 3.14, and Node 24 are all baked
-> into the image — the host runner never reaches
+> normally resolved from the reviewed `.github/docker/ijt-browser-ci/image-pin.json`
+> digest. Dependency-input PR/push runs resolve the matching PR/SHA image tag to
+> a digest first, then start that immutable image with `docker run --network=none`.
+> Chromium, its Linux system dependencies, the locked `@playwright/test` version,
+> Python 3.14, and Node 24 are all baked into the image — the host runner never reaches
 > `npx playwright install chromium --with-deps`. No job-level `container:`
 > image is used:
 > container-job images are pulled by GitHub before any step runs, so a

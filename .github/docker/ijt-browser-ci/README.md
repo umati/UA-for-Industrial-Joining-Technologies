@@ -25,9 +25,15 @@ The workflow has three permission-separated jobs:
 - `build` — no package write permission; builds and runs the full Phase 0
   smoke path under `--network=none`.
 - `publish` — the only job with `packages: write`; pushes the verified image
-  to GHCR and pull-verifies the digest.
+  to GHCR and pull-verifies the digest. Pushes to `main`, schedules, and
+  manual `push=true` dispatches publish the reviewed pin path. Same-repo
+  dependency-bot pull requests that change only Web Client dependency inputs
+  (`package.json`, `package-lock.json`, `requirements*.txt`) publish a
+  PR-scoped tag (`pr-<number>-<head-sha>`) for Integration to resolve to a
+  digest before running the offline browser matrix.
 - `update-pin` — the only job with `contents: write` and
-  `pull-requests: write`; opens or updates the reviewed `image-pin.json` PR.
+  `pull-requests: write`; opens or updates the reviewed `image-pin.json` PR
+  for non-PR publishes only.
 
 ## Runtime contract
 
@@ -46,6 +52,22 @@ container is invoked with:
 Local Web E2E remains native. Neither the root runner nor the Web Client
 runner reads `IJT_BROWSER_CI_IMAGE`; the owned image is wired only in the
 GitHub Actions Integration workflow.
+
+## Dependency-update PRs
+
+Renovate/Dependabot same-repo dependency PRs can update the Web Client lockfile
+before `image-pin.json` has been refreshed on `main`. For that case, the image
+build workflow publishes a PR-scoped image after Phase 0 smoke, and
+`integration.yml` resolves that tag to an immutable digest before the browser
+suites run under `--network=none`. This keeps PR validation automatic without
+allowing live npm/pip/Playwright fetches during the browser test job.
+
+PR-scoped publish is intentionally disabled when the PR also changes the image
+build logic (`.github/docker/ijt-browser-ci/**`,
+`.github/scripts/update_browser_ci_image_pin.py`, or
+`.github/workflows/build-browser-ci-image.yml`). Those changes must be reviewed
+through the normal image-build path instead of auto-publishing a modified image
+builder from the PR.
 
 ## Reviewing an auto pin PR
 

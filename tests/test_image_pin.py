@@ -354,14 +354,60 @@ def test_build_browser_ci_image_workflow_opens_reviewed_pin_pr_without_loop() ->
 
     assert workflow["permissions"] == {"contents": "read"}
     jobs = workflow["jobs"]
+    build_job = jobs["build"]
+    assert build_job["outputs"]["publish_mode"] == "${{ steps.decide.outputs.publish_mode }}"
+    assert build_job["outputs"]["source_sha"] == "${{ steps.decide.outputs.source_sha }}"
+    assert build_job["outputs"]["pr_image_tag"] == "${{ steps.decide.outputs.pr_image_tag }}"
+
+    checkout_step = next(step for step in build_job["steps"] if step.get("name") == "Checkout")
+    assert "ref" not in checkout_step["with"], (
+        "Build context should stay on the workflow checkout default: pull_request "
+        "events use the merge tree, while IMAGE_BUILD_SHA records the PR head SHA."
+    )
+
+    decide_step = next(
+        step
+        for step in build_job["steps"]
+        if step.get("name") == "Decide whether to push (carry to publish job)"
+    )
+    decide_body = decide_step["run"]
+    assert "PR_HEAD_REPO" in decide_step["env"]
+    assert "PR_AUTHOR" in decide_step["env"]
+    assert "PR_HEAD_SHA" in decide_step["env"]
+    assert "trusted_dependency_bot=false" in decide_body
+    assert r"app/renovate|renovate\[bot\]|dependabot\[bot\]" in decide_body
+    assert "OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json" in decide_body
+    assert ".github/docker/ijt-browser-ci/*" in decide_body
+    assert "image_build_logic_changed=false" in decide_body
+    assert 'PUBLISH_MODE="pr"' in decide_body
+    assert 'PR_IMAGE_TAG="${IMAGE_NAME}:pr-${PR_NUMBER}-${SHORT_SHA}"' in decide_body
+
     assert jobs["publish"]["permissions"] == {
         "contents": "read",
         "packages": "write",
         "id-token": "write",
     }
+    publish_job = jobs["publish"]
+    publish_checkout_step = next(
+        step for step in publish_job["steps"] if step.get("name") == "Checkout"
+    )
+    assert "ref" not in publish_checkout_step["with"], (
+        "Publish must rebuild the same default checkout context that Phase 0 "
+        "validated; only image metadata should use needs.build.outputs.source_sha."
+    )
+    publish_tags_step = next(
+        step for step in publish_job["steps"] if step.get("name") == "Compute publish tags"
+    )
+    assert "PUBLISH_MODE" in publish_tags_step["env"]
+    assert "PR_IMAGE_TAG" in publish_tags_step["env"]
+    assert "${PR_IMAGE_TAG}" in publish_tags_step["run"]
 
     update_pin_job = jobs["update-pin"]
-    assert update_pin_job["needs"] == "publish"
+    assert update_pin_job["needs"] == ["build", "publish"]
+    assert (
+        update_pin_job["if"]
+        == "needs.publish.outputs.digest != '' && needs.build.outputs.publish_mode == 'pin'"
+    )
     assert update_pin_job["permissions"] == {
         "contents": "write",
         "pull-requests": "write",

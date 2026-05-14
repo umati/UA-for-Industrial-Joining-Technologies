@@ -968,11 +968,12 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
     History: a job-level ``container: image: mcr.microsoft.com/playwright:...``
     block once ran every browser suite, but a job-level container image is
     pulled by GitHub *before* any workflow step runs, so a transient registry
-    outage took the whole job down with no in-job retry. PR A introduced the
-    owned ``ghcr.io/.../ijt-browser-ci`` image (digest-pinned via
-    ``.github/docker/ijt-browser-ci/image-pin.json``) and PR B wires it into
-    this job via a step-level ``docker run --network=none``, so pull + run +
-    diagnostics all happen inside steps the job controls end-to-end. This
+    outage took the whole job down with no in-job retry. The owned
+    ``ghcr.io/.../ijt-browser-ci`` image is resolved to an immutable digest
+    (reviewed pin for normal runs, matching PR/SHA digest for dependency-input
+    updates) and wired into this job via a step-level
+    ``docker run --network=none``, so pull + run + diagnostics all happen
+    inside steps the job controls end-to-end. This
     regression gate prevents re-introducing a job-level ``container:`` block,
     re-introducing live ``npx playwright install --with-deps`` on the host
     runner, or moving e2e onto Windows-hosted Chromium.
@@ -1008,6 +1009,18 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
 
         steps = job["steps"]
         step_names = [step.get("name") or step.get("uses", "") for step in steps]
+        resolve_index = step_names.index(
+            "Resolve IJT Browser CI image reference (digest-qualified)"
+        )
+        login_index = next(
+            index
+            for index, step in enumerate(steps)
+            if step.get("uses", "").startswith("docker/login-action@")
+        )
+        assert login_index < resolve_index, (
+            "Resolve step may pull PR/SHA image tags from GHCR; docker login "
+            "must happen before resolving the browser image reference."
+        )
 
         assert not any(
             step.get("uses", "").startswith("actions/setup-python@") for step in steps
@@ -1032,6 +1045,21 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
         assert "^sha256:[0-9a-f]{64}$" in resolve_step["run"], (
             "Resolve step must guard that the digest is sha256:<64hex>."
         )
+        assert "PR_HEAD_SHA" in resolve_step["env"], (
+            "Resolve step must know the PR head SHA so dependency-update PRs "
+            "can use the PR-scoped browser image built from the same lockfile."
+        )
+        assert "PR_AUTHOR" in resolve_step["env"]
+        assert "trusted_dependency_bot" in resolve_step["run"]
+        assert r"app/renovate|renovate\[bot\]|dependabot\[bot\]" in resolve_step["run"]
+        assert "dependency_image_inputs_changed" in resolve_step["run"]
+        assert "OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json" in resolve_step["run"]
+        assert "PR-scoped dependency image" in resolve_step["run"]
+        assert "main SHA dependency image" in resolve_step["run"]
+        assert 'docker pull "$tag"' in resolve_step["run"]
+        assert "/opt/ijt-browser-ci/metadata.json" in resolve_step["run"]
+        assert "actual_sha" in resolve_step["run"]
+        assert "image_source=${image_source}" in resolve_step["run"]
 
         login_step = next(
             step for step in steps if step.get("uses", "").startswith("docker/login-action@")
@@ -1045,6 +1073,7 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
         )
         pull_body = pull_step["run"]
         assert "docker pull" in pull_body
+        assert "source:   ${IMAGE_SOURCE}" in pull_body
         assert "max_attempts=3" in pull_body, (
             "Pull step must retry 3x; transient GHCR errors must not fail "
             "the job on a single attempt."

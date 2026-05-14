@@ -163,27 +163,28 @@ repos:
         pass_filenames: false
         files: '^OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/css/.*\.css$'
 
-      # GitHub Actions workflow/report policy guard — runs the IJT root-runner
-      # workflow tests when a workflow, root workflow guard, or integration
-      # baseline file is staged.
+      # GitHub Actions workflow/report policy guard — runs the IJT root-runner,
+      # browser image-pin, and reporting workflow tests when a workflow, image
+      # pin contract, root workflow guard, or integration baseline file is
+      # staged.
       # These tests enforce repo-specific contracts that no off-the-shelf
       # linter knows about: suite IDs, matrix shape, browser-features
       # sharding, pinned Linux container for e2e, integration-report skip
       # budgets, and the integration-test-counts baseline. Running the full
-      # `tests/test_root_runner.py` (≈65 tests, sub-second) is deliberate —
+      # `tests/test_root_runner.py` + `tests/test_image_pin.py` are deliberate —
       # narrowing with `-k workflow` would silently miss most of the
       # workflow/reporting-validating tests (e.g. `test_integration_web_client_*`,
-      # `test_ci_web_client_*`, `test_ci_report_*`, baseline assertions,
-      # extracted summary snapshot/contract tests).
+      # `test_ci_web_client_*`, `test_ci_report_*`, browser image-pin contracts,
+      # baseline assertions, extracted summary snapshot/contract tests).
       # pass_filenames: false — the tests read workflow paths from
       # `_runner.REPO_ROOT / .github / workflows / ...` themselves.
       - id: workflow-policy-guard
         name: Workflow policy guard (root runner)
         language: system
         entry: python
-        args: ['-m', 'pytest', 'tests/test_root_runner.py', 'tests/reporting', '-q']
+        args: ['-m', 'pytest', 'tests/test_root_runner.py', 'tests/test_image_pin.py', 'tests/reporting', '-q']
         pass_filenames: false
-        files: '(^\.github/workflows/.*\.ya?ml$|^reporting/.*\.py$|^tests/reporting/.*$|^tests/test_root_runner\.py$|^tests/baselines/integration-test-counts\.json$)'
+        files: '(^\.github/workflows/.*\.ya?ml$|^\.github/docker/ijt-browser-ci/.*$|^\.github/scripts/update_browser_ci_image_pin\.py$|^reporting/.*\.py$|^tests/reporting/.*$|^tests/test_image_pin\.py$|^tests/test_root_runner\.py$|^tests/baselines/integration-test-counts\.json$)'
 
       # Lightweight static guard for optional imports that are known to trip
       # mypy when packages are installed without stubs. Full mypy stays in

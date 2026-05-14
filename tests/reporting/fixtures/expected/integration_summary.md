@@ -34,7 +34,7 @@
 
 ### Browser E2E Tests
 
-> Platform: Ubuntu latest — runs inside the owned `ijt-browser-ci` image (digest-pinned via `.github/docker/ijt-browser-ci/image-pin.json`); Chromium + system libs are baked at image-build time and the container runs with `--network=none`
+> Platform: Ubuntu latest — runs inside the owned `ijt-browser-ci` image (reviewed `image-pin.json` digest, or matching PR/SHA digest for dependency-input updates); Chromium + system libs are baked at image-build time and the container runs with `--network=none`
 
 | Suite | Surface | Tests | Skipped | Notes |
 |:------|:--------|------:|--------:|:------|

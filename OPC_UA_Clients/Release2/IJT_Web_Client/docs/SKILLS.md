@@ -438,10 +438,12 @@ runs the same root-runner Web Client live/e2e suites as local validation, split
 by execution surface. `web-client-live-*` suites stay on `windows-latest` with
 the Windows simulator package. Every `web-client-e2e-*` suite runs inside the
 owned `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci`
-image, digest-pinned via `.github/docker/ijt-browser-ci/image-pin.json` and
-started with `docker run --network=none`; Chromium, its Linux system
-dependencies, the locked `@playwright/test` version, Python 3.14, and Node 24
-are all baked into the image. The host runner never executes
+image, normally resolved from the reviewed
+`.github/docker/ijt-browser-ci/image-pin.json` digest or from the
+matching PR/SHA image tag for dependency-input updates, then started with
+`docker run --network=none`; Chromium, its Linux system dependencies, the
+locked `@playwright/test` version, Python 3.14, and Node 24 are all baked into
+the image. The host runner never executes
 `npx playwright install chromium --with-deps`. No job-level `container:`
 image is used —
 container-job images are pulled by GitHub before any step runs, so a

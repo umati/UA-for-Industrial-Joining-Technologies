@@ -12,11 +12,13 @@ name: Build Browser CI Image
 # Three-job split:
 #   - build:   loads image locally, runs Phase 0 smoke under the exact
 #              runtime contract. NO packages: write.
-#   - publish: depends on build; only runs when push == true; pushes to GHCR
-#              with packages: write scoped to this job only.
-#   - update-pin: depends on publish; opens/updates a reviewable PR that
-#                 refreshes image-pin.json. contents/pull-requests write are
-#                 scoped to this job only.
+#   - publish: depends on build; only runs when push == true. Main/scheduled/
+#              manual publishes refresh the reviewed pin path; trusted same-
+#              repo dependency-bot PRs publish a PR-scoped tag consumed by
+#              integration.yml so the offline cache matches the PR lockfile.
+#   - update-pin: depends on publish; for non-PR publishes, opens/updates a
+#                 reviewable PR that refreshes image-pin.json. contents/
+#                 pull-requests write are scoped to this job only.
 
 on:
   push:
@@ -74,8 +76,11 @@ jobs:
       contents: read
     outputs:
       should_push: ${{ steps.decide.outputs.push }}
+      publish_mode: ${{ steps.decide.outputs.publish_mode }}
+      source_sha: ${{ steps.decide.outputs.source_sha }}
       short_sha: ${{ steps.decide.outputs.short_sha }}
       cache_key: ${{ steps.decide.outputs.cache_key }}
+      pr_image_tag: ${{ steps.decide.outputs.pr_image_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -91,20 +96,82 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REF: ${{ github.ref }}
           DISPATCH_PUSH: ${{ inputs.push }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login || '' }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
         run: |
           set -euo pipefail
-          SHORT_SHA="${GITHUB_SHA::7}"
+          SOURCE_SHA="${PR_HEAD_SHA:-$GITHUB_SHA}"
+          SHORT_SHA="${SOURCE_SHA::7}"
+          PUBLISH_MODE="none"
+          PR_IMAGE_TAG=""
+          trusted_dependency_bot=false
+
+          dependency_inputs_changed=false
+          image_build_logic_changed=false
+
+          case "$PR_AUTHOR" in
+            app/renovate|renovate\[bot\]|dependabot\[bot\])
+              trusted_dependency_bot=true
+              ;;
+          esac
+
+          if [[ "$EVENT_NAME" == "pull_request" && "$PR_HEAD_REPO" == "$GITHUB_REPOSITORY" && "$trusted_dependency_bot" == "true" ]]; then
+            git fetch --no-tags --depth=1 origin "$PR_BASE_SHA" "$PR_HEAD_SHA"
+            changed_files="$(git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA")"
+            while IFS= read -r changed; do
+              [[ -n "$changed" ]] || continue
+              case "$changed" in
+                OPC_UA_Clients/Release2/IJT_Web_Client/package.json)
+                  dependency_inputs_changed=true
+                  ;;
+                OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json)
+                  dependency_inputs_changed=true
+                  ;;
+                OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt)
+                  dependency_inputs_changed=true
+                  ;;
+                OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt)
+                  dependency_inputs_changed=true
+                  ;;
+                .github/docker/ijt-browser-ci/*)
+                  image_build_logic_changed=true
+                  ;;
+                .github/scripts/update_browser_ci_image_pin.py)
+                  image_build_logic_changed=true
+                  ;;
+                .github/workflows/build-browser-ci-image.yml)
+                  image_build_logic_changed=true
+                  ;;
+              esac
+            done <<< "$changed_files"
+          fi
+
+          echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "cache_key=ijt-browser-ci-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "cache_key=ijt-browser-ci-${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
           if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" ]]; then
             echo "push=true" >> "$GITHUB_OUTPUT"
+            PUBLISH_MODE="pin"
           elif [[ "$EVENT_NAME" == "schedule" ]]; then
             echo "push=true" >> "$GITHUB_OUTPUT"
+            PUBLISH_MODE="pin"
           elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "push=${DISPATCH_PUSH}" >> "$GITHUB_OUTPUT"
+            if [[ "$DISPATCH_PUSH" == "true" ]]; then
+              PUBLISH_MODE="pin"
+            fi
+          elif [[ "$dependency_inputs_changed" == "true" && "$image_build_logic_changed" == "false" ]]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+            PUBLISH_MODE="pr"
+            PR_IMAGE_TAG="${IMAGE_NAME}:pr-${PR_NUMBER}-${SHORT_SHA}"
           else
             echo "push=false" >> "$GITHUB_OUTPUT"
           fi
+          echo "publish_mode=${PUBLISH_MODE}" >> "$GITHUB_OUTPUT"
+          echo "pr_image_tag=${PR_IMAGE_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Build image (load only, gha cache export)
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
@@ -116,7 +183,7 @@ jobs:
           tags: ${{ env.IMAGE_NAME }}:phase0-${{ steps.decide.outputs.short_sha }}
           build-args: |
             IMAGE_BUILD_REF=${{ github.ref }}
-            IMAGE_BUILD_SHA=${{ github.sha }}
+            IMAGE_BUILD_SHA=${{ steps.decide.outputs.source_sha }}
           cache-from: type=gha,scope=ijt-browser-ci
           cache-to: type=gha,scope=ijt-browser-ci,mode=max
 
@@ -211,6 +278,8 @@ jobs:
           REF: ${{ github.ref }}
           SHORT_SHA: ${{ steps.decide.outputs.short_sha }}
           WILL_PUBLISH: ${{ steps.decide.outputs.push }}
+          PUBLISH_MODE: ${{ steps.decide.outputs.publish_mode }}
+          PR_IMAGE_TAG: ${{ steps.decide.outputs.pr_image_tag }}
         run: |
           set -euo pipefail
           {
@@ -220,6 +289,10 @@ jobs:
             echo "- Ref: \`${REF}\`"
             echo "- Short SHA: \`${SHORT_SHA}\`"
             echo "- Will publish: \`${WILL_PUBLISH}\`"
+            echo "- Publish mode: \`${PUBLISH_MODE}\`"
+            if [[ -n "${PR_IMAGE_TAG}" ]]; then
+              echo "- PR-scoped image tag: \`${PR_IMAGE_TAG}\`"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   publish:
@@ -257,9 +330,14 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REF: ${{ github.ref }}
           BUILD_SHORT_SHA: ${{ needs.build.outputs.short_sha }}
+          PUBLISH_MODE: ${{ needs.build.outputs.publish_mode }}
+          PR_IMAGE_TAG: ${{ needs.build.outputs.pr_image_tag }}
         run: |
           set -euo pipefail
           TAGS="${IMAGE_NAME}:sha-${BUILD_SHORT_SHA}"
+          if [[ "$PUBLISH_MODE" == "pr" ]]; then
+            TAGS="${TAGS}"$'\n'"${PR_IMAGE_TAG}"
+          fi
           if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" ]]; then
             TAGS="${TAGS}"$'\n'"${IMAGE_NAME}:main"
           fi
@@ -279,14 +357,14 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
             IMAGE_BUILD_REF=${{ github.ref }}
-            IMAGE_BUILD_SHA=${{ github.sha }}
+            IMAGE_BUILD_SHA=${{ needs.build.outputs.source_sha }}
           provenance: true
           sbom: true
           cache-from: type=gha,scope=ijt-browser-ci
 
       - name: Verify published image by digest (pull + offline smoke)
         # Proves GHCR pull permission AND that the digest is usable as
-        # IJT_BROWSER_CI_IMAGE for PR B. Hard gate.
+        # IJT_BROWSER_CI_IMAGE for Integration. Hard gate.
         env:
           PUBLISHED_DIGEST: ${{ steps.push.outputs.digest }}
         run: |
@@ -302,6 +380,7 @@ jobs:
         env:
           PUBLISHED_DIGEST: ${{ steps.push.outputs.digest }}
           PUBLISHED_TAGS: ${{ steps.meta.outputs.tags }}
+          PUBLISH_MODE: ${{ needs.build.outputs.publish_mode }}
         run: |
           set -euo pipefail
           {
@@ -312,17 +391,22 @@ jobs:
             echo "${PUBLISHED_TAGS}"
             echo '```'
             echo "- Digest: \`${PUBLISHED_DIGEST}\`"
-            echo ""
-            echo "_The update-pin job opens or updates a reviewed \`image-pin.json\` PR for:_"
-            echo '```'
-            echo "${IMAGE_NAME}@${PUBLISHED_DIGEST}"
-            echo '```'
+            if [[ "$PUBLISH_MODE" == "pin" ]]; then
+              echo ""
+              echo "_The update-pin job opens or updates a reviewed \`image-pin.json\` PR for:_"
+              echo '```'
+              echo "${IMAGE_NAME}@${PUBLISHED_DIGEST}"
+              echo '```'
+            elif [[ "$PUBLISH_MODE" == "pr" ]]; then
+              echo ""
+              echo "_Integration resolves the PR-scoped tag above to this digest before running browser suites._"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   update-pin:
     name: Open image-pin update PR
-    needs: publish
-    if: needs.publish.outputs.digest != ''
+    needs: [build, publish]
+    if: needs.publish.outputs.digest != '' && needs.build.outputs.publish_mode == 'pin'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
