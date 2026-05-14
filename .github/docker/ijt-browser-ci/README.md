@@ -35,8 +35,10 @@ The workflow has three permission-separated jobs:
   `pull-requests: write`; mints a short-lived IJT Pin Updater GitHub App
   token from the dedicated `ijt-pin-updater` GitHub Environment, then opens
   or updates the reviewed `image-pin.json` PR for non-PR publishes only. The
-  App-authored PR triggers normal pull request validation instead of relying
-  on a maintainer close/reopen cycle.
+  job runs only when repository variable `IJT_PIN_UPDATER_ENABLED` is `true`.
+  With the variable unset, image builds and publishes stay green and no pin PR
+  is opened. The App-authored PR triggers normal pull request validation
+  instead of relying on a maintainer close/reopen cycle.
 
 ## Runtime contract
 

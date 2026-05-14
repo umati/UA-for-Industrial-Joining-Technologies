@@ -408,7 +408,7 @@ jobs:
   update-pin:
     name: Open image-pin update PR
     needs: [build, publish]
-    if: needs.publish.outputs.digest != '' && needs.build.outputs.publish_mode == 'pin'
+    if: needs.publish.outputs.digest != '' && needs.build.outputs.publish_mode == 'pin' && vars.IJT_PIN_UPDATER_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: ijt-pin-updater

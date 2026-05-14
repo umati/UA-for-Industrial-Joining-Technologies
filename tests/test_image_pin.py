@@ -407,7 +407,8 @@ def test_build_browser_ci_image_workflow_opens_reviewed_pin_pr_without_loop() ->
     assert update_pin_job["needs"] == ["build", "publish"]
     assert (
         update_pin_job["if"]
-        == "needs.publish.outputs.digest != '' && needs.build.outputs.publish_mode == 'pin'"
+        == "needs.publish.outputs.digest != '' && needs.build.outputs.publish_mode == 'pin' && "
+        "vars.IJT_PIN_UPDATER_ENABLED == 'true'"
     )
     assert update_pin_job["environment"] == "ijt-pin-updater"
     assert update_pin_job["permissions"] == {
