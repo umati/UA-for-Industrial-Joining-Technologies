@@ -38,13 +38,14 @@ it as a glossary bug and fix it in the same PR that touches the symbol.
 
 ---
 
-## 1.1 Summary chart color contract
+## 1.1 Summary status marker contract
 
-| Visual meaning | Mermaid binding | Color |
+| Visual meaning | Report marker | Notes |
 |---|---|---|
-| Pass / completed | `doneTaskBkgColor` | Green `#22c55e` |
-| Failure / current bottleneck | `critBkgColor` | Red `#ef4444` |
-| Skipped / neutral | `taskBkgColor` | Gray `#9ca3af` |
+| Pass / completed | `✅` | Successful gate, check, or validated outcome. |
+| Failure | `❌` | Failed gate, check, or CU outcome. |
+| Current bottleneck | `🏁` | Longest reliable timing source in the current run. |
+| Skipped / neutral | `⏭️` / `⚪` | Skipped lane/check or neutral capability-scope fact. |
 
 ---
 
@@ -176,7 +177,7 @@ Auto-detects the slowest current job/suite and appears inside the System Tests `
 **Why auto:** the longest pole changes over time (Phase 3 Q15). Hardcoding "C# Live Tests" hid Web Client regressions when they became slower than C#.
 
 ### 6.2 Timing layers (Phase 8) 🛠️ 🧪
-- **Layer 1 (always visible):** Mermaid gantt of all job durations.
+- **Layer 1 (always visible):** top timing-source table built from current workflow jobs, Web Browser timing JSON, C# TRX artifacts, and Test Client JUnit durations when available.
 - **Layer 2 (always visible):** `Bottleneck Spotlight`.
 - **Layer 3 (`<details>` collapsed):** top-10 detail tables for available Web Browser, C# Live, and Test Client Conformance timing artifacts.
 

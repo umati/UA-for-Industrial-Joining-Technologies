@@ -53,18 +53,6 @@
 
 > Source order: current workflow run jobs API first, then Web Client timing JSON, C# TRX artifacts, and Test Client JUnit durations when available. Missing timing data is omitted rather than estimated.
 
-```mermaid
-%%{init: {"themeVariables": {"taskBkgColor": "#9ca3af", "taskTextColor": "#111827", "critBkgColor": "#ef4444", "doneTaskBkgColor": "#22c55e"}}}%%
-gantt
-  title System Tests duration spotlight
-  dateFormat X
-  axisFormat %M:%S
-  section Duration sources
-  Browser Features (full) :crit, done, task0, 0, 123
-  CSharp Live — SlowTests :done, task1, 0, 70
-  CSharp Live — FastTests :done, task2, 0, 6
-```
-
 | Source | Item | Duration | Status |
 |:-------|:-----|---------:|:-------|
 | Browser timing artifact | 🏁 Browser Features (full) | 2.1 min | 📊 recorded |

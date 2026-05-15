@@ -1,9 +1,11 @@
 """Unit tests for report_scoring helpers."""
 
 from helpers.report_scoring import (
+    action_items_context,
     conformance_score,
     delta_symbol,
     format_pct,
+    informational_notes_context,
     pct_value,
 )
 
@@ -39,6 +41,17 @@ def test_conformance_score_returns_zero_for_invalid_inputs():
     # Zero or negative total_active_profile_cus
     assert conformance_score(counts, 50, 0) == 0
     assert conformance_score(counts, 50, -1) == 0
+
+
+def test_overview_context_rows_are_data_aware():
+    """Overview helper text distinguishes actionable work from information."""
+    clean = {"action_needed": 0, "blocked": 0, "not_supported": 25, "with_notes": 3}
+    assert action_items_context(clean) == "No action needed"
+    assert informational_notes_context(clean) == "Information only; review scope and caveats"
+
+    actionable = {"action_needed": 1, "blocked": 2, "not_supported": 0, "with_notes": 0}
+    assert action_items_context(actionable) == "Investigate failed or blocked CUs"
+    assert informational_notes_context(actionable) == "No informational notes"
 
 
 def test_delta_symbol_returns_empty_for_missing_baseline():

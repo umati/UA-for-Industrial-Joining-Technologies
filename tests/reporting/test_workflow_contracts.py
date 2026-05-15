@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -93,6 +94,14 @@ def test_ci_outcome_pie_chart_removed_q11() -> None:
     assert "⏭️ Skipped:" in report_script
 
 
+def test_ci_expected_summary_has_no_dash_only_cells() -> None:
+    expected_summary = (
+        REPO_ROOT / "tests" / "reporting" / "fixtures" / "expected" / "ci_summary.md"
+    ).read_text(encoding="utf-8")
+
+    assert not re.search(r"\|\s*—\s*(?=\|)", expected_summary)
+
+
 def test_ci_docker_smoke_suppresses_docker_build_summary_noise() -> None:
     workflow = _workflow("ci.yml")
     docker_smoke = workflow["jobs"]["docker-smoke"]
@@ -177,15 +186,14 @@ def test_integration_docker_jobs_suppress_build_summary_noise() -> None:
         assert "DOCKERHUB_USERNAME" in job["env"]
 
 
-def test_integration_gantt_uses_semantic_colors_and_bottleneck_crit_tag() -> None:
+def test_integration_performance_hotspots_uses_table_not_mermaid() -> None:
     report_script = (REPO_ROOT / "reporting" / "system_tests_run_summary.py").read_text(
         encoding="utf-8"
     )
 
-    assert '"taskBkgColor": "#9ca3af"' in report_script
-    assert '"critBkgColor": "#ef4444"' in report_script
-    assert '"doneTaskBkgColor": "#22c55e"' in report_script
-    assert 'tags = ["crit"] if index == 0 else []' in report_script
+    assert "```mermaid" not in report_script
+    assert "gantt" not in report_script
+    assert "| Source | Item | Duration | Status |" in report_script
     assert "Bottleneck Spotlight" in report_script
 
 

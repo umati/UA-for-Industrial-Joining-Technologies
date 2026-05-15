@@ -484,21 +484,17 @@ def tests(total, passed, failed, skipped=0, baseline=None):
     return f"❌ {passed:,} / {total:,}{delta}"
 
 
+def tests_cell(counts, baseline=None):
+    return tests(counts[0], counts[1], counts[2], counts[3], baseline=baseline)
+
+
 def skips(sk):
     return "—" if sk is None else str(sk)
 
 
 def count_test_results(counts, baseline=None):
     """Compact test-results cell for a suite's tests and skips."""
-    return f"{tests(*counts, baseline=baseline)}; {skips(counts[3])} skipped"
-
-
-def mermaid_label(value):
-    """Keep Mermaid task labels readable and syntax-safe."""
-    text = str(value or "job").replace("#", "Sharp")
-    for char in "\r\n:;|":
-        text = text.replace(char, " ")
-    return " ".join(text.split())[:70] or "job"
+    return f"{tests_cell(counts, baseline)}; {skips(counts[3])} skipped"
 
 
 def bottleneck_candidates(job_timings, wc_feature_timings, cs_live_timings):
@@ -769,12 +765,12 @@ def main() -> None:
         "|:------|-----:|----------:|--------:|:------|",
         (
             "| Test Client — Smoke sanity | 40462 | "
-            f"{tests(*tc_smoke, baseline=baseline_suite(integration_baseline, 'tc_smoke'))} | "
+            f"{tests_cell(tc_smoke, baseline_suite(integration_baseline, 'tc_smoke'))} | "
             f"{skips(tc_smoke[3])} | Server and namespace reachability |"
         ),
         (
             "| Test Client — Conformance | 40462 | "
-            f"{tests(*tc_tests, baseline=baseline_suite(integration_baseline, 'tc_tests'))} | "
+            f"{tests_cell(tc_tests, baseline_suite(integration_baseline, 'tc_tests'))} | "
             f"{skips(tc_tests[3])} | {skip_note_inline(tc_conf_skips, tc_tests[3])} |"
         ),
     ]
@@ -796,30 +792,6 @@ def main() -> None:
                 "timing JSON, C# TRX artifacts, and Test Client JUnit durations when "
                 "available. Missing timing data is omitted rather than estimated."
             ),
-            "",
-            "```mermaid",
-            (
-                '%%{init: {"themeVariables": {"taskBkgColor": "#9ca3af", '
-                '"taskTextColor": "#111827", "critBkgColor": "#ef4444", '
-                '"doneTaskBkgColor": "#22c55e"}}}%%'
-            ),
-            "gantt",
-            "  title System Tests duration spotlight",
-            "  dateFormat X",
-            "  axisFormat %M:%S",
-            "  section Duration sources",
-        ]
-        for index, (_source, name, duration, conclusion) in enumerate(timing_rows[:8]):
-            tags = ["crit"] if index == 0 else []
-            if conclusion in ("success", "recorded"):
-                tags.append("done")
-            tag_text = ", ".join(tags)
-            if tag_text:
-                tag_text = f"{tag_text}, "
-            end_seconds = max(int(round(seconds(duration))), 1)
-            out.append(f"  {mermaid_label(name)} :{tag_text}task{index}, 0, {end_seconds}")
-        out += [
-            "```",
             "",
             "| Source | Item | Duration | Status |",
             "|:-------|:-----|---------:|:-------|",

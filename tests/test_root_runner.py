@@ -1549,13 +1549,13 @@ def test_ci_report_uses_declared_coverage_thresholds() -> None:
     )
 
     assert expected_header in report_script
-    assert "def cov(pct, threshold=None):" in report_script
-    assert "cov(web_cov, 95)" in report_script
-    assert "cov(web_js_cov, 95)" in report_script
-    assert "cov(con_cov, 95)" in report_script
-    assert "cov(nod_cov, 95)" in report_script
-    assert "cov(cs_cov, 95)" in report_script
-    assert "cov(tc_cov, 95)" in report_script
+    assert "def cov(pct, threshold=None, job_result=None):" in report_script
+    assert "cov(web_cov, 95, web_py_r)" in report_script
+    assert "cov(web_js_cov, 95, web_js_r)" in report_script
+    assert "cov(con_cov, 95, con_r)" in report_script
+    assert "cov(nod_cov, 95, nod_r)" in report_script
+    assert "cov(cs_cov, 95, cs_u_r)" in report_script
+    assert "cov(tc_cov, 95, tc_r)" in report_script
     assert "coverage_warnings" in report_script
     assert "### ⚠️ Coverage Threshold Warnings" in report_script
 

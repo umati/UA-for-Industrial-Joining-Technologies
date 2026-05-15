@@ -14,7 +14,7 @@
 | Server Support Coverage | ✅ Validation Health | Action Items | Informational Notes |
 |:---:|:---:|:---:|:---:|
 | **79.7%** | **100.0%** | **🔴 0 Failed · 🟠 0 Blocked** | **⚪ 25 Not Supported · ℹ️ 3 With Notes** |
-| 98 / 123 CUs server-supported | 98 / 98 server-supported CUs validated | Needs investigation or fix | Informational support gaps and caveats |
+| 98 / 123 CUs server-supported | 98 / 98 server-supported CUs validated | No action needed | Information only; review scope and caveats |
 
 ### Change Since Last Run (commit `2068e58`, 1 day ago)
 

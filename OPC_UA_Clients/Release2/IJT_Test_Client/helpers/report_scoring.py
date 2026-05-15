@@ -201,6 +201,18 @@ def format_status_counts(labels: tuple[str, ...], counts: Mapping[str, int]) -> 
     return KPI_SEPARATOR.join(format_status_count(label, _status_count(counts, label)) for label in labels)
 
 
+def action_items_context(counts: Mapping[str, int]) -> str:
+    """Render the Conformance Overview note for actionable findings."""
+    total = sum(_status_count(counts, label) for label in ACTION_ITEM_LABEL_ORDER)
+    return "Investigate failed or blocked CUs" if total else "No action needed"
+
+
+def informational_notes_context(counts: Mapping[str, int]) -> str:
+    """Render the Conformance Overview note for non-actionable findings."""
+    total = sum(_status_count(counts, label) for label in CAPABILITY_NOTE_LABEL_ORDER)
+    return "Information only; review scope and caveats" if total else "No informational notes"
+
+
 def format_kpi_strip(counts: Mapping[str, int], separator: str = KPI_SEPARATOR) -> str:
     """Render the headline KPI strip used by both Markdown and Excel.
 

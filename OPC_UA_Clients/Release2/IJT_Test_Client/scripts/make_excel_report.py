@@ -121,6 +121,9 @@ from helpers.report_scoring import (
     STATUS_ORDER as _STATUS_ORDER,
 )
 from helpers.report_scoring import (
+    action_items_context as _action_items_context,
+)
+from helpers.report_scoring import (
     change_marker as _change_marker,
 )
 from helpers.report_scoring import (
@@ -137,6 +140,9 @@ from helpers.report_scoring import (
 )
 from helpers.report_scoring import (
     format_status_counts as _format_status_counts,
+)
+from helpers.report_scoring import (
+    informational_notes_context as _informational_notes_context,
 )
 from helpers.report_scoring import (
     outcome_label as _outcome_label,
@@ -852,12 +858,12 @@ def _build_cover(
             (
                 "Action Items",
                 _format_status_counts(_ACTION_ITEM_LABEL_ORDER, findings_count),
-                "Needs investigation or fix",
+                _action_items_context(findings_count),
             ),
             (
                 "Informational Notes",
                 _format_status_counts(_CAPABILITY_NOTE_LABEL_ORDER, findings_count),
-                "Informational support gaps and caveats",
+                _informational_notes_context(findings_count),
             ),
         ]
         for offset, (metric, value, note) in enumerate(metrics, start=1):
@@ -1281,7 +1287,7 @@ def _build_cu_coverage(
     row_change_by_cu: dict[str, str] = {}
     for cu_key in ordered_keys:
         data_raw = by_cu.get(cu_key)
-        data = data_raw if isinstance(data_raw, dict) else {}
+        data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
         row_change_by_cu[cu_key] = _change_marker(cu_key, _cu_compliance_key(data), baseline)
     show_change = any(row_change_by_cu.values())
 
@@ -1316,13 +1322,13 @@ def _build_cu_coverage(
 
     for row, cu_key in enumerate(ordered_keys, start=2):
         data_raw = by_cu.get(cu_key)
-        data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
+        data = data_raw if isinstance(data_raw, dict) else {}
         compliance = _cu_compliance_key(data)
         failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
         tests = data.get("tests") if isinstance(data.get("tests"), list) else []
         support = _in_server_profile(cu_key, supported)
         status, status_icon = _status_for(cu_key, compliance, active_cus)
-        values = [f"{status_icon} {status}"]
+        values: list[Any] = [f"{status_icon} {status}"]
         if show_change:
             values.append(row_change_by_cu[cu_key])
         values.extend(

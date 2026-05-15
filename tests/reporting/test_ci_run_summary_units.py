@@ -291,40 +291,43 @@ def test_job_icon_unknown_result():
     assert ci_run_summary.job_icon("anything") == "⚠️"
 
 
-def test_tests_formatter_none_returns_dash():
-    """tests formatter returns dash when total is None."""
-    assert ci_run_summary.tests(None, None, None) == "—"
+def test_tests_formatter_none_returns_not_reported():
+    """tests formatter explains missing test-count data."""
+    assert ci_run_summary.tests(None, None, None) == "Not reported"
+    assert ci_run_summary.tests(None, None, None, job_result="skipped") == "Not run"
 
 
 def test_tests_formatter_no_failures():
     """tests formatter returns checkmark and total when no failures."""
-    assert ci_run_summary.tests(100, 100, 0) == "✅ 100"
+    assert ci_run_summary.tests(100, 100, 0) == "✅ 100 passed"
 
 
 def test_tests_formatter_with_failures():
     """tests formatter shows passed/total with X when failures exist."""
-    assert ci_run_summary.tests(100, 90, 10) == "❌ 90 / 100"
+    assert ci_run_summary.tests(100, 90, 10) == "❌ 90 / 100 passed"
 
 
 def test_tests_formatter_includes_thousands_separator():
     """tests formatter includes comma separators for large numbers."""
-    assert ci_run_summary.tests(1000, 1000, 0) == "✅ 1,000"
+    assert ci_run_summary.tests(1000, 1000, 0) == "✅ 1,000 passed"
 
 
-def test_skips_formatter_none_returns_dash():
-    """skips formatter returns dash when None."""
-    assert ci_run_summary.skips(None) == "—"
+def test_skips_formatter_none_returns_not_reported():
+    """skips formatter explains missing skip data."""
+    assert ci_run_summary.skips(None) == "Not reported"
+    assert ci_run_summary.skips(None, "skipped") == "Not run"
 
 
 def test_skips_formatter_converts_to_string():
-    """skips formatter converts number to string."""
-    assert ci_run_summary.skips(5) == "5"
-    assert ci_run_summary.skips(0) == "0"
+    """skips formatter labels the count for readable copied tables."""
+    assert ci_run_summary.skips(5) == "5 skipped"
+    assert ci_run_summary.skips(0) == "0 skipped"
 
 
-def test_cov_formatter_none_returns_dash():
-    """cov formatter returns dash when None."""
-    assert ci_run_summary.cov(None) == "—"
+def test_cov_formatter_none_returns_not_reported():
+    """cov formatter explains missing coverage data."""
+    assert ci_run_summary.cov(None) == "Not reported"
+    assert ci_run_summary.cov(None, job_result="skipped") == "Not run"
 
 
 def test_cov_formatter_no_threshold_uses_defaults():
@@ -372,10 +375,11 @@ def test_cov_formatter_meets_threshold():
     assert "✅" in result
 
 
-def test_tool_formatter_empty_returns_dash():
-    """tool formatter returns dash for empty or unknown result."""
-    assert ci_run_summary.tool("", "mypy") == "—"
-    assert ci_run_summary.tool("unknown", "ruff") == "—"
+def test_tool_formatter_empty_returns_not_reported():
+    """tool formatter explains empty, unknown, and skipped results."""
+    assert ci_run_summary.tool("", "mypy") == "mypy ⏭️ not reported"
+    assert ci_run_summary.tool("unknown", "ruff") == "ruff ⏭️ not reported"
+    assert ci_run_summary.tool("", "ruff", "skipped") == "ruff ⏭️ not run"
 
 
 def test_tool_formatter_known_result():
@@ -383,11 +387,6 @@ def test_tool_formatter_known_result():
     assert "mypy" in ci_run_summary.tool("success", "mypy")
     assert "✅" in ci_run_summary.tool("success", "mypy")
     assert "❌" in ci_run_summary.tool("failure", "ruff")
-
-
-def test_bandit_fmt_none_returns_dash():
-    """bandit_fmt returns dash when high is None."""
-    assert ci_run_summary.bandit_fmt(None, None) == "—"
 
 
 def test_bandit_fmt_no_issues():
@@ -403,9 +402,24 @@ def test_bandit_fmt_with_issues():
     assert "5 medium" in result
 
 
-def test_npm_fmt_none_returns_dash():
-    """npm_fmt returns dash when crit is None."""
-    assert ci_run_summary.npm_fmt(None, None) == "—"
+def test_bandit_fmt_none_returns_not_reported():
+    """bandit_fmt explains missing artifacts without implying scan failure."""
+    assert ci_run_summary.bandit_fmt(None, None) == "bandit ⏭️ not reported"
+
+
+def test_bandit_fmt_skipped_lane_is_explicit():
+    """bandit_fmt distinguishes skipped lanes from missing artifacts."""
+    assert ci_run_summary.bandit_fmt(None, None, "skipped") == "bandit ⏭️ not run"
+
+
+def test_npm_fmt_none_returns_not_reported():
+    """npm_fmt explains missing artifacts without implying audit failure."""
+    assert ci_run_summary.npm_fmt(None, None) == "npm-audit ⏭️ not reported"
+
+
+def test_npm_fmt_skipped_lane_is_explicit():
+    """npm_fmt distinguishes skipped lanes from missing artifacts."""
+    assert ci_run_summary.npm_fmt(None, None, "skipped") == "npm-audit ⏭️ not run"
 
 
 def test_npm_fmt_no_issues():
@@ -449,12 +463,14 @@ def test_pip_audit_fmt_states():
     assert ci_run_summary.pip_audit_fmt(0, 0, True) == "pip-audit ✅ 0 CVEs"
     assert ci_run_summary.pip_audit_fmt(2, 1, True) == "pip-audit ❌ 1 fixable CVE"
     assert ci_run_summary.pip_audit_fmt(2, 0, True) == "pip-audit ⚠️ 2 advisory CVEs"
-    assert ci_run_summary.pip_audit_fmt(None, None, False) == "pip-audit ⚠️ unavailable"
+    assert ci_run_summary.pip_audit_fmt(None, None, False) == "pip-audit ⏭️ not reported"
+    assert ci_run_summary.pip_audit_fmt(None, None, False, "skipped") == "pip-audit ⏭️ not run"
 
 
 def test_nuget_fmt_uses_countless_failure():
     assert ci_run_summary.nuget_fmt("success") == "nuget ✅ 0 vulnerable"
     assert ci_run_summary.nuget_fmt("failure") == "nuget ❌ vulnerable packages detected"
+    assert ci_run_summary.nuget_fmt("skipped") == "nuget ⏭️ not run"
 
 
 def test_eslint_fmt_none_uses_step_result():
@@ -489,17 +505,17 @@ def test_lint_joins_items():
     assert result == "ruff ✅ · mypy ✅"
 
 
-def test_lint_filters_dashes():
-    """lint filters out dash entries."""
+def test_lint_filters_legacy_dashes():
+    """lint still filters legacy dash entries."""
     result = ci_run_summary.lint("ruff ✅", "—", "mypy ✅")
     assert result == "ruff ✅ · mypy ✅"
 
 
-def test_lint_all_dashes_returns_dash():
-    """lint returns single dash when all items are dashes."""
-    assert ci_run_summary.lint("—", "—") == "—"
+def test_lint_all_dashes_returns_not_reported():
+    """lint does not emit dash-only report cells."""
+    assert ci_run_summary.lint("—", "—") == "Not reported"
 
 
-def test_lint_no_items_returns_dash():
-    """lint returns dash when no items provided."""
-    assert ci_run_summary.lint() == "—"
+def test_lint_no_items_returns_not_reported():
+    """lint does not emit dash-only report cells."""
+    assert ci_run_summary.lint() == "Not reported"

@@ -175,21 +175,30 @@ def job_icon(r):
     return {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
 
 
-def tests(total, passed, failed, skipped=0):
+def missing_cell(job_result=None):
+    """Return explicit text for data that is not present in the report."""
+    return "Not run" if job_result == "skipped" else "Not reported"
+
+
+def tests(total, passed, failed, skipped=0, job_result=None):
     if total is None:
-        return "—"
+        return missing_cell(job_result)
     if failed == 0:
-        return f"✅ {total:,}"
-    return f"❌ {passed:,} / {total:,}"
+        return f"✅ {total:,} passed"
+    return f"❌ {passed:,} / {total:,} passed"
 
 
-def skips(sk):
-    return "—" if sk is None else str(sk)
+def tests_cell(counts, job_result=None):
+    return tests(counts[0], counts[1], counts[2], counts[3], job_result=job_result)
 
 
-def cov(pct, threshold=None):
+def skips(sk, job_result=None):
+    return missing_cell(job_result) if sk is None else f"{sk:,} skipped"
+
+
+def cov(pct, threshold=None, job_result=None):
     if pct is None:
-        return "—"
+        return missing_cell(job_result)
     if threshold is None:
         icon = "✅" if pct >= 90 else ("⚠️" if pct >= 70 else "❌")
         return f"{pct:.1f}% {icon}"
@@ -197,26 +206,34 @@ def cov(pct, threshold=None):
     return f"{pct:.1f}% / {threshold:.0f}% {icon}"
 
 
-def tool(r, label):
+def tool(r, label, job_result=None):
+    if job_result == "skipped":
+        return f"{label} ⏭️ not run"
     if not r or r in ("", "unknown"):
-        return "—"
+        return f"{label} ⏭️ not reported"
+    if r == "skipped":
+        return f"{label} ⏭️ not run"
     icon = {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
     return f"{label} {icon}"
 
 
-def bandit_fmt(high, medium):
+def bandit_fmt(high, medium, job_result=None):
+    if job_result == "skipped":
+        return "bandit ⏭️ not run"
     if high is None:
-        return "—"
+        return "bandit ⏭️ not reported"
     if high == 0 and medium == 0:
         return "bandit ✅ 0 issues"
     return f"bandit ❌ {high} high, {medium} medium"
 
 
-def pip_audit_fmt(total, fixable, available):
+def pip_audit_fmt(total, fixable, available, job_result=None):
+    if job_result == "skipped":
+        return "pip-audit ⏭️ not run"
     if not available:
-        return "pip-audit ⚠️ unavailable"
+        return "pip-audit ⏭️ not reported"
     if total is None or fixable is None:
-        return "pip-audit ⚠️ unavailable"
+        return "pip-audit ⏭️ not reported"
     if total == 0:
         return "pip-audit ✅ 0 CVEs"
     if fixable > 0:
@@ -224,9 +241,11 @@ def pip_audit_fmt(total, fixable, available):
     return f"pip-audit ⚠️ {total} advisory CVE{'s' if total != 1 else ''}"
 
 
-def npm_fmt(crit, high):
+def npm_fmt(crit, high, job_result=None):
+    if job_result == "skipped":
+        return "npm-audit ⏭️ not run"
     if crit is None:
-        return "—"
+        return "npm-audit ⏭️ not reported"
     if crit == 0 and high == 0:
         return "npm-audit ✅ 0 critical"
     return f"npm-audit ❌ {crit} critical, {high} high"
@@ -237,10 +256,14 @@ def nuget_fmt(result):
         return "nuget ✅ 0 vulnerable"
     if result == "failure":
         return "nuget ❌ vulnerable packages detected"
+    if result == "skipped":
+        return "nuget ⏭️ not run"
+    if not result or result == "unknown":
+        return "nuget ⏭️ not reported"
     return tool(result, "nuget")
 
 
-def eslint_fmt(step_r, esl_tuple):
+def eslint_fmt(step_r, esl_tuple, job_result=None):
     errors, warnings = esl_tuple
     warn_count = warnings or 0
     if errors is not None:
@@ -249,12 +272,14 @@ def eslint_fmt(step_r, esl_tuple):
         if errors == 0:
             return f"eslint ⚠️ ({warn_count} warnings)"
         return f"eslint ❌ ({errors} errors, {warn_count} warnings)"
+    if job_result == "skipped":
+        return tool("skipped", "eslint")
     return tool(step_r, "eslint")
 
 
 def lint(*items):
-    parts = [p for p in items if p != "—"]
-    return " · ".join(parts) or "—"
+    parts = [p for p in items if p and p != "—"]
+    return " · ".join(parts) or "Not reported"
 
 
 def main() -> None:
@@ -395,11 +420,19 @@ def main() -> None:
     ]
     n_pass = sum(1 for r in all_jobs if r == "success")
     n_fail = sum(1 for r in all_jobs if r == "failure")
+    n_skipped = sum(1 for r in all_jobs if r == "skipped")
     n_total = len(all_jobs)
 
     if n_fail == 0:
-        status_icon = "✅"
-        status_msg = f"All {n_pass} / {n_total} jobs passed"
+        if n_pass == n_total:
+            status_icon = "✅"
+            status_msg = f"All {n_pass} / {n_total} jobs passed"
+        elif n_pass == 0 and n_skipped == n_total:
+            status_icon = "⏭️"
+            status_msg = f"No CI jobs ran · {n_skipped} skipped"
+        else:
+            status_icon = "✅"
+            status_msg = f"{n_pass} / {n_total} jobs passed · {n_skipped} skipped"
     else:
         status_icon = "❌"
         status_msg = f"{n_fail} / {n_total} jobs failed  ·  {n_pass} passed"
@@ -411,7 +444,16 @@ def main() -> None:
     total_passed = max(total_t - total_f - total_sk, 0)
 
     run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
-    sha_str = f"`{sha}`" if sha else "—"
+    sha_str = f"`{sha}`" if sha else "Not reported"
+    web_quality = lint(
+        tool(web_ruff, "ruff", web_py_r),
+        eslint_fmt(web_eslint, web_esl, web_js_r),
+    )
+    web_dep_audit = lint(
+        pip_audit_fmt(web_pip[0], web_pip[1], web_pip[2], web_py_r),
+        npm_fmt(web_npm[0], web_npm[1], web_js_r),
+    )
+    cs_quality = lint(tool(cs_build, "build", cs_u_r), tool(cs_format, "format", cs_u_r))
 
     # ── Build report ──────────────────────────────────────────────────────
 
@@ -447,34 +489,40 @@ def main() -> None:
         "| Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |",
         "|:----------|:-----------------|----------:|--------:|:---------------------:|",
         (
-            f"| Web Client — Python | Ubuntu Release 2 Python unit lane | {tests(*web_py_t)} | "
-            f"{skips(web_py_t[3])} | {cov(web_cov, 95)} |"
+            f"| Web Client — Python | Ubuntu Release 2 Python unit lane | "
+            f"{tests_cell(web_py_t, web_py_r)} | "
+            f"{skips(web_py_t[3], web_py_r)} | {cov(web_cov, 95, web_py_r)} |"
         ),
         (
             "| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | "
-            f"{tests(*web_js_t)} | "
-            f"{skips(web_js_t[3])} | {cov(web_js_cov, 95)} |"
+            f"{tests_cell(web_js_t, web_js_r)} | "
+            f"{skips(web_js_t[3], web_js_r)} | {cov(web_js_cov, 95, web_js_r)} |"
         ),
         (
-            f"| Console Client — Python | Ubuntu Python unit lane | {tests(*con_py_t)} | "
-            f"{skips(con_py_t[3])} | {cov(con_cov, 95)} |"
+            f"| Console Client — Python | Ubuntu Python unit lane | "
+            f"{tests_cell(con_py_t, con_r)} | "
+            f"{skips(con_py_t[3], con_r)} | {cov(con_cov, 95, con_r)} |"
         ),
         (
             "| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | "
-            f"{tests(*nod_js_t)} | "
-            f"{skips(nod_js_t[3])} | {cov(nod_cov, 95)} |"
+            f"{tests_cell(nod_js_t, nod_r)} | "
+            f"{skips(nod_js_t[3], nod_r)} | {cov(nod_cov, 95, nod_r)} |"
         ),
         (
-            f"| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | {tests(*cs_unit_t)} | "
-            f"{skips(cs_unit_t[3])} | {cov(cs_cov, 95)} |"
+            f"| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | "
+            f"{tests_cell(cs_unit_t, cs_u_r)} | "
+            f"{skips(cs_unit_t[3], cs_u_r)} | {cov(cs_cov, 95, cs_u_r)} |"
         ),
         (
-            f"| Test Client — Python (Unit) | Ubuntu Python unit lane | {tests(*tc_py_t)} | "
-            f"{skips(tc_py_t[3])} | {cov(tc_cov, 95)} |"
+            f"| Test Client — Python (Unit) | Ubuntu Python unit lane | "
+            f"{tests_cell(tc_py_t, tc_r)} | "
+            f"{skips(tc_py_t[3], tc_r)} | {cov(tc_cov, 95, tc_r)} |"
         ),
         (
-            f"| OPC UA Server — Smoke | Windows native server smoke lane | {tests(*ss_smoke)} | "
-            f"{skips(ss_smoke[3])} | Not Applicable |"
+            f"| OPC UA Server — Smoke | Windows native server smoke lane | "
+            f"{tests_cell(ss_smoke, ss_r)} | "
+            f"{skips(ss_smoke[3], ss_r)} | "
+            "Not measured (smoke) |"
         ),
         "",
         "---",
@@ -487,25 +535,20 @@ def main() -> None:
         "|:----------|:-----------------|:--------------|:-------------------|",
         (
             "| Web Client | Python and JavaScript static quality | "
-            f"{lint(tool(web_ruff, 'ruff'), eslint_fmt(web_eslint, web_esl))} | "
-            f"{tool(web_mypy, 'mypy')} |"
+            f"{web_quality} | {tool(web_mypy, 'mypy', web_py_r)} |"
         ),
         (
-            f"| Console Client | Python static quality | {tool(con_ruff, 'ruff')} | "
-            f"{tool(con_mypy, 'mypy')} |"
+            f"| Console Client | Python static quality | {tool(con_ruff, 'ruff', con_r)} | "
+            f"{tool(con_mypy, 'mypy', con_r)} |"
         ),
         (
             f"| Node Client — Legacy JavaScript | JavaScript static quality | "
-            f"{eslint_fmt(nod_eslint, nod_esl)} | Not Applicable |"
+            f"{eslint_fmt(nod_eslint, nod_esl, nod_r)} | Not Applicable |"
         ),
+        (f"| C# Client | Build and formatting quality | {cs_quality} | Not Applicable |"),
         (
-            "| C# Client | Build and formatting quality | "
-            f"{lint(tool(cs_build, 'build'), tool(cs_format, 'format'))} | "
-            "Not Applicable |"
-        ),
-        (
-            f"| Test Client | Python static quality | {tool(tc_ruff, 'ruff')} | "
-            f"{tool(tc_mypy, 'mypy')} |"
+            f"| Test Client | Python static quality | {tool(tc_ruff, 'ruff', tc_r)} | "
+            f"{tool(tc_mypy, 'mypy', tc_r)} |"
         ),
         "",
         "---",
@@ -527,17 +570,20 @@ def main() -> None:
         "",
         "| Component | Security Scan | Dependency Audit |",
         "|:----------|:--------------|:-----------------|",
+        (f"| Web Client | {bandit_fmt(web_ban[0], web_ban[1], web_py_r)} | {web_dep_audit} |"),
         (
-            f"| Web Client | {bandit_fmt(*web_ban)} | "
-            f"{lint(pip_audit_fmt(*web_pip), npm_fmt(*web_npm))} |"
+            f"| Console Client | {bandit_fmt(con_ban[0], con_ban[1], con_r)} | "
+            f"{pip_audit_fmt(con_pip[0], con_pip[1], con_pip[2], con_r)} |"
         ),
-        f"| Console Client | {bandit_fmt(*con_ban)} | {pip_audit_fmt(*con_pip)} |",
         (
             "| Node Client — Legacy JavaScript | Not Configured "
-            f"(no eslint-plugin-security) | {npm_fmt(*nod_npm)} |"
+            f"(no eslint-plugin-security) | {npm_fmt(nod_npm[0], nod_npm[1], nod_r)} |"
         ),
-        f"| C# Client | Not Applicable | {nuget_fmt(cs_vuln)} |",
-        f"| Test Client | {bandit_fmt(*tc_ban)} | {pip_audit_fmt(*tc_pip)} |",
+        f"| C# Client | CodeQL source scan runs in Security workflow | {nuget_fmt(cs_vuln)} |",
+        (
+            f"| Test Client | {bandit_fmt(tc_ban[0], tc_ban[1], tc_r)} | "
+            f"{pip_audit_fmt(tc_pip[0], tc_pip[1], tc_pip[2], tc_r)} |"
+        ),
         "",
         "---",
         "",

@@ -520,26 +520,6 @@ def test_count_test_results_with_baseline():
     assert "(+2)" in result
 
 
-def test_mermaid_label_sanitizes_special_chars():
-    """mermaid_label removes Mermaid syntax-breaking characters."""
-    result = system_tests_run_summary.mermaid_label("Job: Test|Build;Deploy")
-    assert ":" not in result
-    assert "|" not in result
-    assert ";" not in result
-
-
-def test_mermaid_label_replaces_hash_with_sharp():
-    """mermaid_label replaces # with Sharp."""
-    assert "Sharp" in system_tests_run_summary.mermaid_label("C#Test")
-
-
-def test_mermaid_label_truncates_at_70():
-    """mermaid_label truncates long labels."""
-    long_name = "x" * 100
-    result = system_tests_run_summary.mermaid_label(long_name)
-    assert len(result) <= 70
-
-
 def test_bottleneck_candidates_sorts_by_duration():
     """bottleneck_candidates sorts timing sources by duration descending."""
     job_timings = [("job1", 100.0, "success"), ("job2", 200.0, "success")]

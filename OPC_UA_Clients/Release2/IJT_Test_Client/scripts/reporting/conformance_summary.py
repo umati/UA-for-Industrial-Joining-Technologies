@@ -78,6 +78,9 @@ from helpers.report_scoring import (
     TEST_RESULT_ICONS as _TEST_RESULT_ICONS,
 )
 from helpers.report_scoring import (
+    action_items_context as _action_items_context,
+)
+from helpers.report_scoring import (
     change_marker as _change_marker,
 )
 from helpers.report_scoring import (
@@ -100,6 +103,9 @@ from helpers.report_scoring import (
 )
 from helpers.report_scoring import (
     format_status_label as _format_status_label,
+)
+from helpers.report_scoring import (
+    informational_notes_context as _informational_notes_context,
 )
 from helpers.report_scoring import (
     outcome_label as _plain_outcome_label,
@@ -1090,7 +1096,7 @@ def render_conformance_summary(
         lines.append(
             f"| {supported} / {total_active} CUs server-supported | "
             f"{validated} / {supported} server-supported CUs validated | "
-            "Needs investigation or fix | Informational support gaps and caveats |"
+            f"{_action_items_context(findings_count)} | {_informational_notes_context(findings_count)} |"
         )
         lines.append("")
 

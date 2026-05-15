@@ -25,13 +25,13 @@
 
 | Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |
 |:----------|:-----------------|----------:|--------:|:---------------------:|
-| Web Client — Python | Ubuntu Release 2 Python unit lane | ✅ 4 | 2 | 97.0% / 95% ✅ |
-| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | ✅ 3 | 0 | 96.0% / 95% ✅ |
-| Console Client — Python | Ubuntu Python unit lane | ✅ 2 | 0 | 99.0% / 95% ✅ |
-| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | ✅ 2 | 1 | 95.0% / 95% ✅ |
-| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | ✅ 16 | 15 | 95.0% / 95% ✅ |
-| Test Client — Python (Unit) | Ubuntu Python unit lane | ✅ 2 | 0 | 98.0% / 95% ✅ |
-| OPC UA Server — Smoke | Windows native server smoke lane | ✅ 10 | 0 | Not Applicable |
+| Web Client — Python | Ubuntu Release 2 Python unit lane | ✅ 4 passed | 2 skipped | 97.0% / 95% ✅ |
+| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | ✅ 3 passed | 0 skipped | 96.0% / 95% ✅ |
+| Console Client — Python | Ubuntu Python unit lane | ✅ 2 passed | 0 skipped | 99.0% / 95% ✅ |
+| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | ✅ 2 passed | 1 skipped | 95.0% / 95% ✅ |
+| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | ✅ 16 passed | 15 skipped | 95.0% / 95% ✅ |
+| Test Client — Python (Unit) | Ubuntu Python unit lane | ✅ 2 passed | 0 skipped | 98.0% / 95% ✅ |
+| OPC UA Server — Smoke | Windows native server smoke lane | ✅ 10 passed | 0 skipped | Not measured (smoke) |
 
 ---
 
@@ -62,7 +62,7 @@ For workflow security see CI Infrastructure → zizmor; for secret scanning see 
 | Web Client | bandit ✅ 0 issues | pip-audit ✅ 0 CVEs · npm-audit ✅ 0 critical |
 | Console Client | bandit ✅ 0 issues | pip-audit ✅ 0 CVEs |
 | Node Client — Legacy JavaScript | Not Configured (no eslint-plugin-security) | npm-audit ✅ 0 critical |
-| C# Client | Not Applicable | nuget ✅ 0 vulnerable |
+| C# Client | CodeQL source scan runs in Security workflow | nuget ✅ 0 vulnerable |
 | Test Client | bandit ✅ 0 issues | pip-audit ✅ 0 CVEs |
 
 ---
