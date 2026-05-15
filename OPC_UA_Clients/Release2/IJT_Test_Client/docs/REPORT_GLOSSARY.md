@@ -52,9 +52,9 @@ it as a glossary bug and fix it in the same PR that touches the symbol.
 
 ### 2.1 `Conformance Overview` 👔 🛠️ 🧪 📦
 Source: `scripts/reporting/conformance_summary.py` (`## Conformance Overview` heading and KPI table emitted in `render_conformance_summary()`).
-Rendered as a **four-column KPI strip** (`Server Support Coverage` | `Validation Health` | `Action Items` | `Capability Notes`) **plus a four-cell context row** beneath it.
+Rendered as a **four-column KPI strip** (`Server Support Coverage` | `Validation Health` | `Action Items` | `Informational Notes`) **plus a four-cell context row** beneath it.
 
-`Action Items` renders **`Failed` · `Blocked`**. `Capability Notes` renders **`Not Supported` · `With Notes`**. The split keeps immediate follow-up work separate from capability explanations.
+`Action Items` renders **`Failed` · `Blocked`** and means work to investigate or fix. `Informational Notes` renders **`Not Supported` · `With Notes`** and means capability gaps or caveats for context.
 
 **Why renamed:** the old "At a Glance" wording was informal; non-IJT readers (management, customers) parsed it as "look here for everything," not "high-level KPIs." `Conformance Overview` says exactly what the block contains.
 
@@ -74,13 +74,13 @@ The share of server-supported CUs that this run validated as **Supported** or **
 - Example: 95% means 95% of the CUs the server claims to support were proven by tests.
 **Note:** Formula stays as-is. Any future weighting change requires a separate proposal document and PR.
 
-### 2.4 `Action Items` and `Capability Notes` 👔 🛠️ 🧪 📦
-Source: `scripts/reporting/conformance_summary.py` — `Action Items` and `Capability Notes` column headers in the `## Conformance Overview` KPI table; cells rendered via `_format_status_counts(...)` from `helpers/report_scoring.py` (the `findings_count` Counter is built in `render_conformance_summary()`).
+### 2.4 `Action Items` and `Informational Notes` 👔 🛠️ 🧪 📦
+Source: `scripts/reporting/conformance_summary.py` — `Action Items` and `Informational Notes` column headers in the `## Conformance Overview` KPI table; cells rendered via `_format_status_counts(...)` from `helpers/report_scoring.py` (the `findings_count` Counter is built in `render_conformance_summary()`).
 Compressed status counts across all CUs. The split renders the four KPI labels from `KPI_LABELS` in `helpers/report_scoring.py` as two reader layers:
 
 ```
 Action Items: Failed · Blocked
-Capability Notes: Not Supported · With Notes
+Informational Notes: Not Supported · With Notes
 ```
 
 There is **no `Supported` count in these cells** — they only highlight buckets that need follow-up or explanation.
@@ -103,7 +103,7 @@ The report deliberately keeps two concepts:
 - `Outcome` is the CU-level conformance classification for the current run.
 
 Current table shapes:
-- Compact review table: `Review Status | CU | Outcome | Primary Reason | Δ`.
+- Compact review table: `Review Status | CU | Outcome | Primary Reason | Change` when at least one row changed since the previous baseline; otherwise the `Change` column is omitted.
 - `Conformance Status` collapsed `<details>` table: includes `Review Status`, `Outcome`, and `Failures`.
 - `Full CU Coverage` collapsed `<details>` table: includes `Outcome` and `Failures` (no `Review Status` column).
 - Coverage aggregate tables may show `Outcomes | Outcome`: `Outcomes` is the aggregate count column, while `Outcome` is the per-row classification.
@@ -133,10 +133,10 @@ Source: `scripts/reporting/conformance_summary.py` — `Facet and CU Coverage` `
 The table of facet-level rows that breaks down validation by facet of the OPC 40100 IJT profile, plus the Reference IJT facet and Reference full CU set rows.
 **Why renamed:** the table contains both facets and CU-level rows; the old name hid the CU rows.
 
-### 4.2 `Capability Notes` (label kept) 🛠️ 🧪
-Source: `scripts/reporting/conformance_summary.py` — `## Capability Notes` section in `_render_review_sections()`; filter uses `_CAPABILITY_NOTE_LABELS` (= {Not Supported, Supported with Notes}, imported from `helpers/report_scoring.py`).
+### 4.2 `Informational Notes` 🛠️ 🧪
+Source: `scripts/reporting/conformance_summary.py` — `## Informational Notes` section in `_render_review_sections()`; filter uses `_CAPABILITY_NOTE_LABELS` (= {Not Supported, Supported with Notes}, imported from `helpers/report_scoring.py`).
 Per-CU notes about CUs that are **not** action items (no failure, no block) but still need explanation.
-**Why kept (not renamed to `Exceptions`):** "Exception" has a specific meaning in the OPC UA spec (StatusCode-bearing condition); reusing that term in the report would be confusing.
+**Why not `Exceptions`:** "Exception" has a specific meaning in the OPC UA spec (StatusCode-bearing condition); reusing that term in the report would be confusing.
 
 ### 4.3 `Coverage Overview` (label kept) 👔 🛠️ 🧪 📦
 Source: `scripts/reporting/conformance_summary.py` section heading.
@@ -160,10 +160,10 @@ The trailing section that defines terms inline inside the generated report. This
 
 ### 5.2 `Conformance Status` (label kept) 🛠️ 🧪
 Source: `scripts/reporting/conformance_summary.py` collapsed `<details>` block heading.
-The detail table of action items and capability notes that need explanation.
+The detail table of action items and informational notes that need explanation.
 
-### 5.3 `Since Last Run` (block) 🛠️ 🧪
-Source: baseline read by `_load_baseline()` in `scripts/make_conformance_summary.py`; Δ-block emitted by `_render_delta_block()` in `scripts/reporting/conformance_summary.py`; baseline payload built by `_baseline_payload()` in `scripts/reporting/conformance_summary.py`; baseline write by `_write_baseline()` in `scripts/make_conformance_summary.py` (invoked from `main()`).
+### 5.3 `Change Since Last Run` (block) 🛠️ 🧪
+Source: baseline read by `_load_baseline()` in `scripts/make_conformance_summary.py`; change block emitted by `_render_delta_block()` in `scripts/reporting/conformance_summary.py`; baseline payload built by `_baseline_payload()` in `scripts/reporting/conformance_summary.py`; baseline write by `_write_baseline()` in `scripts/make_conformance_summary.py` (invoked from `main()`).
 Comparison with the previously persisted `test-results/report-baseline.json`.
 When no baseline exists, the block is **hidden**, not shown with an empty message.
 

@@ -398,15 +398,15 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
 
     assert context is not None
     assert context["score"] == 90
-    assert "### Δ Since Last Run" not in rendered
+    assert "### Change Since Last Run" not in rendered
     assert "this run becomes the baseline" not in rendered
-    assert "## What This Server Supports" in rendered
+    assert "## Capability Support" in rendered
     assert "## Action Items" in rendered
-    assert "## Capability Notes" in rendered
+    assert "## Informational Notes" in rendered
     assert "_No action items — server validation passed cleanly._" in rendered
     assert "<summary><b>Coverage Overview</b></summary>" in rendered
     assert "<summary><b>Facet and CU Coverage</b></summary>" in rendered
-    assert "<details open>\n<summary><b>Show capability notes</b></summary>" in rendered
+    assert "<details open>\n<summary><b>Show informational notes</b></summary>" in rendered
     assert "<summary><b>Conformance Status</b></summary>" in rendered
     assert "<summary><b>Full CU Coverage</b></summary>" in rendered
     assert "<summary><b>Test Environment</b></summary>" in rendered
@@ -430,7 +430,6 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
         "Critical",
         "Major",
         "Minor",
-        "Info",
     ):
         assert legacy_term not in rendered
     supported_label = _report_scoring.outcome_label("supported")
@@ -482,11 +481,11 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
 
     assert lines.count("# IJT Conformance Test Report") == 1
     assert "## Conformance Overview" in lines
-    assert "## What This Server Supports" in lines
+    assert "## Capability Support" in lines
     assert "## Action Items" in lines
-    assert "## Capability Notes" in lines
+    assert "## Informational Notes" in lines
     assert "Action Items" in rendered
-    assert "Capability Notes" in rendered
+    assert "Informational Notes" in rendered
     assert (
         _report_scoring.format_status_counts(_report_scoring.ACTION_ITEM_LABEL_ORDER, _context["findings_count"])
         in rendered
@@ -533,7 +532,7 @@ def test_delta_block_present_when_baseline_exists(monkeypatch):
     lines, _context = _ci_summary._render_profile_facet_summary(_sample_payload(), baseline=baseline)
     rendered = "\n".join(lines)
 
-    assert "### Δ Since Last Run (commit `abc123e`" in rendered
+    assert "### Change Since Last Run (commit `abc123e`" in rendered
     assert "Score **80 → 90**" in rendered
     assert "1 resolved" in rendered
     assert "1 regressed" in rendered
@@ -582,7 +581,7 @@ def test_excel_cover_sheet_exists_and_first():
     assert wb["Cover"]["B8"].value == _report_scoring.format_status_counts(
         _report_scoring.ACTION_ITEM_LABEL_ORDER, context["findings_count"]
     )
-    assert wb["Cover"]["A9"].value == "Capability Notes"
+    assert wb["Cover"]["A9"].value == "Informational Notes"
     assert wb["Cover"]["B9"].value == _report_scoring.format_status_counts(
         _report_scoring.CAPABILITY_NOTE_LABEL_ORDER, context["findings_count"]
     )
@@ -610,12 +609,12 @@ def test_excel_cover_hides_delta_section_when_baseline_is_absent():
     _excel_report._build_cover(wb, [], "2026-05-10 15:46:00", "passed", context, None, facets)
 
     values = [str(cell.value) for row in wb["Cover"].iter_rows() for cell in row if cell.value is not None]
-    assert "Delta Since Last Run" not in values
+    assert "Change Since Last Run" not in values
     assert all("this run becomes the baseline" not in value for value in values)
-    assert "What this server supports" in values
+    assert "Capability Support" in values
 
 
-def test_excel_cu_status_and_delta_columns_present():
+def test_excel_cu_status_and_change_columns_present():
     profiles, facets, capabilities = _excel_metadata()
     payload = _sample_payload()
     baseline = {"cu_outcomes": {"optional_feature": "supported"}}
@@ -627,7 +626,7 @@ def test_excel_cu_status_and_delta_columns_present():
     ws = wb["CU Coverage"]
 
     assert ws["A1"].value == "Review Status"
-    assert ws["B1"].value == "Δ"
+    assert ws["B1"].value == "Change"
     assert ws["A4"].value == _report_scoring.format_status_label(NOT_SUPPORTED)
     assert ws["A4"].fill.fgColor.rgb == _report_scoring.STATUS_COLORS_EXCEL[NOT_SUPPORTED]
     assert ws["B4"].value == "↓"

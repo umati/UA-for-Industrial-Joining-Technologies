@@ -13,7 +13,7 @@ import from here; there is no second copy to keep in sync.
 
 The ``now_utc`` value is intentionally ~1 day after the
 ``system_tests_full_conformance`` fixture baseline ``run_ts``
-(``2026-05-12T13:09:41.281286Z``) so the rendered "Δ Since Last Run" age
+(``2026-05-12T13:09:41.281286Z``) so the rendered "Change Since Last Run" age
 stays ``"1 day ago"`` regardless of when the test runs.
 """
 

@@ -70,8 +70,8 @@ absence is the entire point of this scenario.
 **Scenario:** Renderer's **full path** — a System Tests live conformance
 run with the complete CU compliance payload and a previous baseline.
 This is the **canonical real-world conformance regression fixture** for
-the renderer: it exercises authentic scale, profile/facet groups, the Δ
-Since Last Run delta path, not-supported handling, with-notes / partial
+the renderer: it exercises authentic scale, profile/facet groups, the Change
+Since Last Run path, not-supported handling, with-notes / partial
 outcomes, truncation, and the full CU coverage table.
 
 This fixture is **not** a complete branch-coverage oracle. Targeted
@@ -82,7 +82,7 @@ dedicated fixtures when branch semantics need their own coverage lens.
 |---|---|---|
 | `pytest.xml` | extracted from `results-testclient` artifact of GitHub Actions run id `25794967225` (`integration.yml`, captured 2026-05-13) | JUnit input |
 | `cu_results.json` | from a representative local conformance run (the upstream artifact did not contain `cu-compliance-report.json`); coherent with the `baseline.json` below | per-CU compliance payload |
-| `baseline.json` | from the same local conformance run as `cu_results.json` | enables the Δ Since Last Run block |
+| `baseline.json` | from the same local conformance run as `cu_results.json` | enables the Change Since Last Run block |
 
 **Coherence note.** The upstream GitHub Actions artifact for run
 `25794967225` only included `pytest.xml`. The conformance JSON files

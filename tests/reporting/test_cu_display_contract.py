@@ -33,7 +33,7 @@ def test_primary_cu_columns_use_public_display_names() -> None:
     primary_sections = "\n".join(
         [
             _section(rendered, "## Action Items"),
-            _section(rendered, "## Capability Notes"),
+            _section(rendered, "## Informational Notes"),
         ]
     )
 

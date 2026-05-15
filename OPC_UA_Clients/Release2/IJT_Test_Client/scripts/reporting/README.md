@@ -12,12 +12,12 @@ Inputs:
 - `test-results/cu-compliance-report.json` — per-CU outcomes produced by the
   Test Client conformance run.
 - `test-results/report-baseline.json` — the previous run's baseline for the
-  "Δ Since Last Run" block (optional).
+  "Change Since Last Run" block (optional).
 
-Output: a single Markdown document containing _Conformance Overview_, _What This Server
-Supports_, _Action Items_, _Capability Notes_, _Coverage Overview_, _Facet
-and CU Coverage_, _Conformance Status_, _Full CU Coverage_, _Test Environment_, _Δ
-Since Last Run_, etc.
+Output: a single Markdown document containing _Conformance Overview_, _Capability
+Support_, _Action Items_, _Informational Notes_, _Coverage Overview_, _Facet
+and CU Coverage_, _Conformance Status_, _Full CU Coverage_, _Test Environment_,
+_Change Since Last Run_, etc.
 
 ## What this package is **not**
 

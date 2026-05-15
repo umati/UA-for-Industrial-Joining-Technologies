@@ -117,7 +117,7 @@ CAPABILITY_SUPPORT_ICONS: Mapping[str, str] = MappingProxyType(
     {
         "supported": "✅",
         "partial": "⚠️",
-        "not_supported": "❌",
+        "not_supported": "⚪",
     }
 )
 
@@ -247,3 +247,9 @@ def delta_symbol(cu_key: str, outcome: str, baseline: dict[str, Any] | None) -> 
     if current_rank is None or previous_rank is None:
         return ""
     return "↑" if current_rank > previous_rank else "↓"
+
+
+def change_marker(cu_key: str, outcome: str, baseline: dict[str, Any] | None) -> str:
+    """Return only actionable row-level change markers for reader-facing tables."""
+    marker = delta_symbol(cu_key, outcome, baseline)
+    return "" if marker == "✓" else marker

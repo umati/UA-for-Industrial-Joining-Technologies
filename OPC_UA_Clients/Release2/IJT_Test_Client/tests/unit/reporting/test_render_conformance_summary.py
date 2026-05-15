@@ -123,7 +123,7 @@ def test_renderer_ignores_live_environment_when_frozen_env_passed(monkeypatch: p
     monkeypatch.setattr(_ci_summary, "_short_git_sha", lambda _root: "deadbee")
     monkeypatch.setattr(_ci_summary, "_package_version", lambda _name: "0.0.0-leak")
     # Wall-clock leak guard: if any code path bypasses ``env.now_utc`` and
-    # calls ``_utc_now()`` directly, the rendered "Δ Since Last Run" age
+    # calls ``_utc_now()`` directly, the rendered "Change Since Last Run" age
     # would jump from "1 day ago" to "5000 days ago" and break byte-identity.
     monkeypatch.setattr(
         _ci_summary,

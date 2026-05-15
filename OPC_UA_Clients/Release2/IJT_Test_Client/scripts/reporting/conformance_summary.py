@@ -78,6 +78,9 @@ from helpers.report_scoring import (
     TEST_RESULT_ICONS as _TEST_RESULT_ICONS,
 )
 from helpers.report_scoring import (
+    change_marker as _change_marker,
+)
+from helpers.report_scoring import (
     conformance_score as _conformance_score,
 )
 from helpers.report_scoring import (
@@ -561,6 +564,7 @@ def _build_report_context(cu_payload: dict[str, Any] | None, baseline: dict[str,
                 "status": status,
                 "status_icon": status_icon,
                 "delta": _delta_symbol(cu_key, outcome, baseline),
+                "change": _change_marker(cu_key, outcome, baseline),
             }
         )
     findings.sort(key=lambda item: (_STATUS_ORDER.get(str(item["status"]), 99), str(item["cu_key"])))
@@ -630,7 +634,7 @@ def _render_delta_block(context: dict[str, Any], baseline: dict[str, Any] | None
     if not baseline:
         return []
     previous_sha = str(baseline.get("git_sha") or "unknown")
-    lines.append(f"### Δ Since Last Run (commit `{previous_sha}`, {_baseline_age(baseline, now_utc)})")
+    lines.append(f"### Change Since Last Run (commit `{previous_sha}`, {_baseline_age(baseline, now_utc)})")
     lines.append("")
     delta = _delta_summary(context, baseline)
     previous_score = baseline.get("score", "n/a")
@@ -658,7 +662,7 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
         counts = _count_outcomes(cu_keys, by_cu)
         server_supported_count = _server_profile_cu_count(cu_keys, supported)
         if counts["action_needed"] or counts["blocked"] or server_supported_count == 0:
-            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["not_supported"], 0, "Not Supported by This Server"
+            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["not_supported"], 0, "Not Supported"
         elif counts["partial"] or counts["not_supported"] or server_supported_count != len(cu_keys):
             icon, rank, label = _CAPABILITY_SUPPORT_ICONS["partial"], 1, "Partially Supported"
         else:
@@ -667,8 +671,10 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
         description = str(facet.get("description") or "").strip().replace("\n", " ")
         rows.append((rank, name, icon, label, description))
     rows.sort(key=lambda item: (item[0], item[1]))
-    lines = ["## What This Server Supports", ""]
-    lines.append("_Auto-generated from facet outcomes. Full detail is in Facet and CU Coverage._")
+    lines = ["## Capability Support", ""]
+    lines.append(
+        "_Auto-generated from the server profile and conformance outcomes. Full detail is in Facet and CU Coverage._"
+    )
     lines.append("")
     for _rank, name, icon, label, description in rows[:limit]:
         lines.append(f"- {icon} **{_md_cell(name)}** — {label}. {_md_cell(description)}")
@@ -679,13 +685,13 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
             "_Capability area counts: "
             f"{summary_counts['Supported']} Supported · "
             f"{summary_counts['Partially Supported']} Partially Supported · "
-            f"{summary_counts['Not Supported by This Server']} Not Supported by This Server._"
+            f"{summary_counts['Not Supported']} Not Supported._"
         )
         lines.append("")
         lines.append("<details open>")
         lines.append("<summary><b>All capability areas</b></summary>")
         lines.append("")
-        lines.append("| Capability Area | Status | Notes |")
+        lines.append("| Capability Area | Support | Scope |")
         lines.append("|---|---|---|")
         for _rank, name, icon, label, description in rows:
             lines.append(f"| {_md_cell(name)} | {icon} {label} | {_md_cell(description)} |")
@@ -700,17 +706,28 @@ def _append_review_table(
     findings: list[dict[str, Any]],
     limit: int,
     more_target: str,
+    *,
+    show_change: bool,
 ) -> None:
-    lines.append("| Review Status | CU | Outcome | Primary Reason | Δ |")
-    lines.append("|---|---|---|---|---|")
+    change_header = " | Change" if show_change else ""
+    lines.append(f"| Review Status | CU | Outcome | Primary Reason{change_header} |")
+    lines.append(f"|---|---|---|---{'|---' if show_change else ''}|")
     for finding in findings[:limit]:
         status = f"{finding['status_icon']} {finding['status']}"
-        lines.append(
-            f"| {status} | {_md_cell(str(finding['cu']))} | {finding['result']} | "
-            f"{_md_cell(str(finding['reason']) or 'See CU details')} | {finding['delta']} |"
-        )
+        cells = [
+            status,
+            _md_cell(str(finding["cu"])),
+            str(finding["result"]),
+            _md_cell(str(finding["reason"]) or "See CU details"),
+        ]
+        if show_change:
+            cells.append(str(finding.get("change") or ""))
+        lines.append("| " + " | ".join(cells) + " |")
     if len(findings) > limit:
-        lines.append(f"| … | … | … | {len(findings) - limit} more items in {more_target} |  |")
+        cells = ["…", "…", "…", f"{len(findings) - limit} more items in {more_target}"]
+        if show_change:
+            cells.append("")
+        lines.append("| " + " | ".join(cells) + " |")
 
 
 def _render_review_sections(context: dict[str, Any], limit: int = 10) -> list[str]:
@@ -718,6 +735,8 @@ def _render_review_sections(context: dict[str, Any], limit: int = 10) -> list[st
     counts: Counter[str] = context["findings_count"]
     action_items = [item for item in findings if str(item["status"]) in _ACTION_ITEM_LABELS]
     capability_notes = [item for item in findings if str(item["status"]) in _CAPABILITY_NOTE_LABELS]
+    show_action_change = any(str(item.get("change") or "") for item in action_items)
+    show_note_change = any(str(item.get("change") or "") for item in capability_notes)
 
     lines = ["## Action Items", ""]
     lines.append(f"**{_format_status_counts(_ACTION_ITEM_LABEL_ORDER, counts)}**")
@@ -725,20 +744,20 @@ def _render_review_sections(context: dict[str, Any], limit: int = 10) -> list[st
     if not action_items:
         lines.append("_No action items — server validation passed cleanly._")
     else:
-        _append_review_table(lines, action_items, limit, "Conformance Status")
+        _append_review_table(lines, action_items, limit, "Conformance Status", show_change=show_action_change)
     lines.append("")
 
-    lines.append("## Capability Notes")
+    lines.append("## Informational Notes")
     lines.append("")
     lines.append("<details open>")
-    lines.append("<summary><b>Show capability notes</b></summary>")
+    lines.append("<summary><b>Show informational notes</b></summary>")
     lines.append("")
     lines.append(f"**{_format_status_counts(_CAPABILITY_NOTE_LABEL_ORDER, counts)}**")
     lines.append("")
     if not capability_notes:
         lines.append("_Server supports every CU in its server capability profile, no notes._")
     else:
-        _append_review_table(lines, capability_notes, limit, "Conformance Status")
+        _append_review_table(lines, capability_notes, limit, "Conformance Status", show_change=show_note_change)
     lines.append("")
     lines.append("</details>")
     lines.append("")
@@ -867,24 +886,38 @@ def _render_profile_facet_summary(
         f"{_ACTION_ITEM_LABEL_ORDER[0]}. Skip buckets below are diagnostics._"
     )
     lines.append("")
+    findings: list[dict[str, Any]] = context["findings"]
+    show_finding_change = any(str(finding.get("change") or "") for finding in findings)
+    finding_change_header = " | Change" if show_finding_change else ""
     lines.append(
         f"| Review Status | CU | Facet(s) | Server Supported | Outcome | Primary Reason | Tests | Passed | "
-        f"{_plain_outcome_label('not_supported')} | {_plain_outcome_label('blocked')} | Failures | Δ |"
+        f"{_plain_outcome_label('not_supported')} | {_plain_outcome_label('blocked')} | Failures{finding_change_header} |"
     )
-    lines.append("|---|---|---|---|---|---|---:|---:|---:|---:|---:|---|")
-    findings: list[dict[str, Any]] = context["findings"]
+    lines.append(f"|---|---|---|---|---|---|---:|---:|---:|---:|---:{'|---' if show_finding_change else ''}|")
     if findings:
         for finding in findings:
             status = f"{finding['status_icon']} {finding['status']}"
-            lines.append(
-                f"| {status} | {_md_cell(str(finding['cu']))} | {_md_cell(str(finding['facets']))} | "
-                f"{finding['server_supported']} | {finding['result']} | "
-                f"{_md_cell(str(finding['reason']) or 'See CU details')} | "
-                f"{finding['tests']} | {finding['passed']} | {finding['not_supported']} | "
-                f"{finding['blocked']} | {finding['failed']} | {finding['delta']} |"
-            )
+            cells = [
+                status,
+                _md_cell(str(finding["cu"])),
+                _md_cell(str(finding["facets"])),
+                str(finding["server_supported"]),
+                str(finding["result"]),
+                _md_cell(str(finding["reason"]) or "See CU details"),
+                str(finding["tests"]),
+                str(finding["passed"]),
+                str(finding["not_supported"]),
+                str(finding["blocked"]),
+                str(finding["failed"]),
+            ]
+            if show_finding_change:
+                cells.append(str(finding.get("change") or ""))
+            lines.append("| " + " | ".join(cells) + " |")
     else:
-        lines.append("|  | No conformance status items |  |  |  |  | 0 | 0 | 0 | 0 | 0 |  |")
+        empty_cells = ["", "No conformance status items", "", "", "", "", "0", "0", "0", "0", "0"]
+        if show_finding_change:
+            empty_cells.append("")
+        lines.append("| " + " | ".join(empty_cells) + " |")
     lines.append("")
     lines.append("</details>")
     lines.append("")
@@ -892,24 +925,39 @@ def _render_profile_facet_summary(
     lines.append("<details>")
     lines.append("<summary><b>Full CU Coverage</b></summary>")
     lines.append("")
+    cu_changes: dict[str, str] = {}
+    for cu_key in all_cu_keys:
+        data_raw = by_cu.get(cu_key)
+        data = data_raw if isinstance(data_raw, dict) else {}
+        cu_changes[cu_key] = _change_marker(cu_key, _cu_compliance_key(data), baseline)
+    show_cu_change = any(cu_changes.values())
+    cu_change_header = " | Change" if show_cu_change else ""
     lines.append(
         f"| CU | Facet(s) | Server Supported | Outcome | Tests | Passed | {_plain_outcome_label('not_supported')} | "
-        f"{_plain_outcome_label('blocked')} | Failures | Workbook Cases | Δ |"
+        f"{_plain_outcome_label('blocked')} | Failures | Workbook Cases{cu_change_header} |"
     )
-    lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|---|")
+    lines.append(f"|---|---|---|---|---:|---:|---:|---:|---:|---:{'|---' if show_cu_change else ''}|")
     for cu_key in all_cu_keys:
         data_raw = by_cu.get(cu_key)
         data = data_raw if isinstance(data_raw, dict) else {}
         failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
         in_server_profile = _in_server_profile(cu_key, supported)
         outcome = _cu_compliance_key(data)
-        lines.append(
-            f"| {_md_cell(cu_display_name(cu_key))} | {_md_cell(', '.join(facet_map.get(cu_key, [])))} | "
-            f"{in_server_profile} | {_outcome_label(outcome)} | "
-            f"{int(data.get('test_count', 0) or 0)} | {int(data.get('passed', 0) or 0)} | "
-            f"{int(data.get('not_supported', 0) or 0)} | {int(data.get('blocked', 0) or 0)} | {failed} | "
-            f"{int(data.get('workbook_case_count', 0) or 0)} | {_delta_symbol(cu_key, outcome, baseline)} |"
-        )
+        cells = [
+            _md_cell(cu_display_name(cu_key)),
+            _md_cell(", ".join(facet_map.get(cu_key, []))),
+            str(in_server_profile),
+            _outcome_label(outcome),
+            str(int(data.get("test_count", 0) or 0)),
+            str(int(data.get("passed", 0) or 0)),
+            str(int(data.get("not_supported", 0) or 0)),
+            str(int(data.get("blocked", 0) or 0)),
+            str(failed),
+            str(int(data.get("workbook_case_count", 0) or 0)),
+        ]
+        if show_cu_change:
+            cells.append(cu_changes[cu_key])
+        lines.append("| " + " | ".join(cells) + " |")
     lines.append("")
     lines.append("</details>")
     lines.append("")
@@ -948,7 +996,10 @@ def _render_profile_facet_summary(
         f"{_CAPABILITY_NOTE_LABEL_ORDER[1]} = supported with notes or outside server support."
     )
     lines.append("- **Outcome** is the CU-level conformance classification for the current run.")
-    lines.append("- **Δ** compares this run with `test-results/report-baseline.json` when that file exists.")
+    lines.append(
+        "- **Change** appears only when at least one row changed since `test-results/report-baseline.json`; "
+        "unchanged rows are left blank."
+    )
     lines.append(f"- Failures and errors are reported as **{_ACTION_ITEM_LABEL_ORDER[0]}**.")
     lines.append("- Skip reasons are listed later as diagnostics and may overlap with conformance status items.")
     lines.append("")
@@ -1027,7 +1078,7 @@ def render_conformance_summary(
         lines.append("")
         lines.append(
             f"| Server Support Coverage | {_TEST_RESULT_ICONS['passed']} Validation Health | "
-            "Action Items | Capability Notes |"
+            "Action Items | Informational Notes |"
         )
         lines.append("|:---:|:---:|:---:|:---:|")
         lines.append(
@@ -1039,7 +1090,7 @@ def render_conformance_summary(
         lines.append(
             f"| {supported} / {total_active} CUs server-supported | "
             f"{validated} / {supported} server-supported CUs validated | "
-            "Failures and blocked preconditions | Not supported CUs and supported-with-notes details |"
+            "Needs investigation or fix | Informational support gaps and caveats |"
         )
         lines.append("")
 

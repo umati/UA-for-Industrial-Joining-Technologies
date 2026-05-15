@@ -121,6 +121,9 @@ from helpers.report_scoring import (
     STATUS_ORDER as _STATUS_ORDER,
 )
 from helpers.report_scoring import (
+    change_marker as _change_marker,
+)
+from helpers.report_scoring import (
     conformance_score as _conformance_score,
 )
 from helpers.report_scoring import (
@@ -620,6 +623,7 @@ def _build_report_context(
                 "status": status,
                 "status_icon": status_icon,
                 "delta": _delta_symbol(cu_key, outcome, baseline),
+                "change": _change_marker(cu_key, outcome, baseline),
             }
         )
     findings.sort(key=lambda item: (_STATUS_ORDER.get(str(item["status"]), 99), str(item["cu_key"])))
@@ -682,7 +686,7 @@ def _support_rows(context: dict[str, Any], facets: dict[str, FacetInfo], limit: 
         counts = _count_cu_outcomes(facet.conformance_units, by_cu)
         server_supported_count = _server_profile_cu_count(facet.conformance_units, supported)
         if counts["action_needed"] or counts["blocked"] or server_supported_count == 0:
-            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["not_supported"], 0, "Not Supported by This Server"
+            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["not_supported"], 0, "Not Supported"
         elif counts["partial"] or counts["not_supported"] or server_supported_count != len(facet.conformance_units):
             icon, rank, label = _CAPABILITY_SUPPORT_ICONS["partial"], 1, "Partially Supported"
         else:
@@ -848,12 +852,12 @@ def _build_cover(
             (
                 "Action Items",
                 _format_status_counts(_ACTION_ITEM_LABEL_ORDER, findings_count),
-                "Failures and blocked preconditions",
+                "Needs investigation or fix",
             ),
             (
-                "Capability Notes",
+                "Informational Notes",
                 _format_status_counts(_CAPABILITY_NOTE_LABEL_ORDER, findings_count),
-                "Not supported CUs and supported-with-notes details",
+                "Informational support gaps and caveats",
             ),
         ]
         for offset, (metric, value, note) in enumerate(metrics, start=1):
@@ -868,7 +872,7 @@ def _build_cover(
 
     row = 10
     if context and baseline:
-        ws.cell(row=row, column=1, value="Delta Since Last Run").font = Font(bold=True, size=14)
+        ws.cell(row=row, column=1, value="Change Since Last Run").font = Font(bold=True, size=14)
         delta = _delta_summary(context, baseline)
         rows = [
             ("Score", f"{baseline.get('score', 'n/a')} -> {context['score']}"),
@@ -888,7 +892,7 @@ def _build_cover(
             ws.cell(row=row + offset, column=2, value=value)
         row = row + max(6, len(rows) + 4)
 
-    ws.cell(row=row, column=1, value="What this server supports").font = Font(bold=True, size=14)
+    ws.cell(row=row, column=1, value="Capability Support").font = Font(bold=True, size=14)
     _apply_header(ws, row + 1, ["Capability Area", "Status"], [34, 90])
     if context:
         for offset, (area, status_text) in enumerate(_support_rows(context, facets), start=2):
@@ -1274,28 +1278,40 @@ def _build_cu_coverage(
     ordered_keys = _ordered_cu_keys(by_cu, facets)
     tests_by_cu = _cu_test_index(cu_payload)
     active_cus = set(context["active_cus"]) if context else set()
+    row_change_by_cu: dict[str, str] = {}
+    for cu_key in ordered_keys:
+        data_raw = by_cu.get(cu_key)
+        data = data_raw if isinstance(data_raw, dict) else {}
+        row_change_by_cu[cu_key] = _change_marker(cu_key, _cu_compliance_key(data), baseline)
+    show_change = any(row_change_by_cu.values())
 
-    headers = [
-        "Review Status",
-        "Δ",
-        "CU",
-        "CU Key",
-        "Facet(s)",
-        "Server Supported",
-        "Outcome",
-        "Tests",
-        "Passed",
-        _outcome_label("not_supported"),
-        _outcome_label("blocked"),
-        "Failures",
-        "Workbook Cases",
-        "Positive",
-        "Negative",
-        "Override",
-        "Notes",
-        "Example Test",
-    ]
-    widths = [18, 8, 34, 34, 44, 18, 16, 8, 8, 14, 9, 12, 14, 9, 9, 14, 80, 80]
+    headers = ["Review Status"]
+    if show_change:
+        headers.append("Change")
+    headers.extend(
+        [
+            "CU",
+            "CU Key",
+            "Facet(s)",
+            "Server Supported",
+            "Outcome",
+            "Tests",
+            "Passed",
+            _outcome_label("not_supported"),
+            _outcome_label("blocked"),
+            "Failures",
+            "Workbook Cases",
+            "Positive",
+            "Negative",
+            "Override",
+            "Notes",
+            "Example Test",
+        ]
+    )
+    widths = [18]
+    if show_change:
+        widths.append(10)
+    widths.extend([34, 34, 44, 18, 16, 8, 8, 14, 9, 12, 14, 9, 9, 14, 80, 80])
     _apply_header(ws, 1, headers, widths)
 
     for row, cu_key in enumerate(ordered_keys, start=2):
@@ -1306,39 +1322,43 @@ def _build_cu_coverage(
         tests = data.get("tests") if isinstance(data.get("tests"), list) else []
         support = _in_server_profile(cu_key, supported)
         status, status_icon = _status_for(cu_key, compliance, active_cus)
-        values = [
-            f"{status_icon} {status}",
-            _delta_symbol(cu_key, compliance, baseline),
-            cu_display_name(cu_key),
-            cu_key,
-            ", ".join(facet_map.get(cu_key, [])),
-            support,
-            _cu_compliance_label(compliance),
-            int(data.get("test_count", 0) or 0),
-            int(data.get("passed", 0) or 0),
-            int(data.get("not_supported", 0) or 0),
-            int(data.get("blocked", 0) or 0),
-            failed,
-            int(data.get("workbook_case_count", 0) or 0),
-            int(data.get("workbook_positive_case_count", 0) or 0),
-            int(data.get("workbook_negative_case_count", 0) or 0),
-            overrides.get(cu_key, ""),
-            _cu_note_summary(cu_key, tests_by_cu),
-            str(tests[0]) if tests else "",
-        ]
+        values = [f"{status_icon} {status}"]
+        if show_change:
+            values.append(row_change_by_cu[cu_key])
+        values.extend(
+            [
+                cu_display_name(cu_key),
+                cu_key,
+                ", ".join(facet_map.get(cu_key, [])),
+                support,
+                _cu_compliance_label(compliance),
+                int(data.get("test_count", 0) or 0),
+                int(data.get("passed", 0) or 0),
+                int(data.get("not_supported", 0) or 0),
+                int(data.get("blocked", 0) or 0),
+                failed,
+                int(data.get("workbook_case_count", 0) or 0),
+                int(data.get("workbook_positive_case_count", 0) or 0),
+                int(data.get("workbook_negative_case_count", 0) or 0),
+                overrides.get(cu_key, ""),
+                _cu_note_summary(cu_key, tests_by_cu),
+                str(tests[0]) if tests else "",
+            ]
+        )
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
+            header = headers[col - 1]
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            if col == 1 and status:
+            if header == "Review Status" and status:
                 cell.font = Font(bold=True)
                 cell.fill = _review_status_fill(status)
-            if col == 6 and value == "No":
+            if header == "Server Supported" and value == "No":
                 cell.fill = _fill(_GRAY)
-            if col == 7:
+            if header == "Outcome":
                 cell.fill = _fill(_CU_STATUS_COLOUR.get(compliance, _WHITE))
                 cell.font = Font(bold=True)
 
-    ws.auto_filter.ref = f"A1:R{max(1, len(ordered_keys) + 1)}"
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{max(1, len(ordered_keys) + 1)}"
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

@@ -178,9 +178,9 @@ The profile/facet/CU sheets are generated when
 `test-results/cu-compliance-report.json` is present. CI Integration also adds a
 compact **IJT Profile, Facet, and Conformance Unit Coverage** table to
 `summary.md` and the GitHub Actions step summary, so users can see the active
-server capability profile, Conformance Score, conformance overview KPIs, delta
-from the previous local/job baseline when one exists, server support summary,
-Action Items, Capability Notes, facet and CU coverage, conformance status items,
+server capability profile, Conformance Score, conformance overview KPIs, change
+from the previous local/job baseline when one exists, capability support,
+Action Items, Informational Notes, facet and CU coverage, conformance status items,
 and a collapsible full CU coverage table without downloading the Excel
 file first.
 `Server Supported CUs` is read from the server capability file (`n/a` when
