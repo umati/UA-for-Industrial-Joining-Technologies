@@ -392,17 +392,40 @@ def _check_detect_secrets(results: list) -> None:
             optional=True,
         )
         return
+    cmd = ["detect-secrets", "scan", "."]
+    baseline = PROJ_DIR / ".secrets.baseline"
+    if baseline.exists():
+        cmd += ["--baseline", str(baseline)]
     r = subprocess.run(
-        ["detect-secrets", "scan", "--baseline", ".secrets.baseline"],
+        cmd,
         capture_output=True,
         text=True,
         check=False,
         cwd=str(PROJ_DIR),
     )
-    if r.returncode == 0:
-        _record(results, 1, label, True, "PASS")
-    else:
+    if r.returncode != 0:
         _record(results, 1, label, False, f"FAIL (exit {r.returncode})")
+        return
+    try:
+        data = json.loads(r.stdout)
+    except (json.JSONDecodeError, ValueError):
+        _record(results, 1, label, False, "FAIL (malformed detect-secrets output)")
+        return
+    findings = data.get("results")
+    if not isinstance(findings, dict):
+        _record(results, 1, label, False, "FAIL (malformed detect-secrets output)")
+        return
+    secret_count = sum(len(v) for v in findings.values())
+    if secret_count:
+        _record(
+            results,
+            1,
+            label,
+            False,
+            f"FAIL ({secret_count} potential secret(s) — review .secrets.baseline)",
+        )
+    else:
+        _record(results, 1, label, True, "PASS (0 findings)")
 
 
 def _check_pip_audit(results: list) -> None:

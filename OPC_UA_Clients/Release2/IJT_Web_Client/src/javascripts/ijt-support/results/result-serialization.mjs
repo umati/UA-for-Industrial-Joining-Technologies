@@ -120,7 +120,7 @@ function normalizeBundleShape (bundle) {
     version: bundle?.version,
     exportedAt: bundle?.exportedAt,
     source: bundle?.source,
-    results: Array.isArray(bundle?.results) ? bundle.results : [],
+    results: bundle?.results,
     legacy: false
   }
 }
@@ -131,9 +131,6 @@ export function serializeResultForStorage (resultModel, options = {}) {
   }
   const maxDepth = Number.isFinite(options.maxDepth) ? options.maxDepth : DEFAULT_MAX_DEPTH
   const sanitized = sanitizeValue(resultModel, 0, maxDepth)
-  if (!sanitized || typeof sanitized !== 'object') {
-    return null
-  }
   if (!sanitized.ResultMetaData || typeof sanitized.ResultMetaData !== 'object') {
     return null
   }

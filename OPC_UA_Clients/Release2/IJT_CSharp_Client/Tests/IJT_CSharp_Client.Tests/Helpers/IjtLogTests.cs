@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Linq;
 using IJT_CSharp_Client.Helpers;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -21,6 +22,22 @@ public sealed class IjtLogTests
             methodName,
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
         return (T)method!.Invoke(null, args)!;
+    }
+
+    private static ILogger NewConsoleLogger(LogLevel minimumLevel)
+    {
+        var ctor = ConsoleLoggerType.GetConstructors(
+            System.Reflection.BindingFlags.Instance |
+            System.Reflection.BindingFlags.Public |
+            System.Reflection.BindingFlags.NonPublic)
+            .Single(c =>
+            {
+                var ps = c.GetParameters();
+                return ps.Length == 2
+                    && ps[0].ParameterType == typeof(string)
+                    && ps[1].ParameterType == typeof(LogLevel);
+            });
+        return (ILogger)ctor.Invoke(new object[] { "Test.Category", minimumLevel });
     }
 
     // ── IjtLog.For<T> ─────────────────────────────────────────────────────────
@@ -217,5 +234,35 @@ public sealed class IjtLogTests
     public void ShortCategory_ReturnsReadableCategory(string category, string expected)
     {
         Assert.Equal(expected, InvokeConsoleLoggerHelper<string>("ShortCategory", category));
+    }
+
+    // ── Shutdown and Dispose ──────────────────────────────────────────────────
+
+    [Fact]
+    public void Shutdown_DoesNotThrow()
+    {
+        var ex = Record.Exception(IjtLog.Shutdown);
+        Assert.Null(ex);
+
+        // The test suite may continue logging after exercising Shutdown; the
+        // factory must be usable again rather than leaving a disposed singleton.
+        Assert.NotNull(IjtLog.For<IjtLogTests>());
+    }
+
+    [Fact]
+    public void Logger_LogBelowMinLevel_DoesNotLog()
+    {
+        var logger = NewConsoleLogger(LogLevel.Information);
+
+        Assert.False(logger.IsEnabled(LogLevel.Trace));
+        var ex = Record.Exception(() => logger.LogTrace("This should not log"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Logger_ColorFor_ReturnsNullForDebugAndTrace()
+    {
+        Assert.Null(InvokeConsoleLoggerHelper<ConsoleColor?>("ColorFor", LogLevel.Debug));
+        Assert.Null(InvokeConsoleLoggerHelper<ConsoleColor?>("ColorFor", LogLevel.Trace));
     }
 }

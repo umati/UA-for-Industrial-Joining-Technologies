@@ -70,6 +70,25 @@ describe('ServerGraphics', () => {
     expect(labels).toContain('Save')
   })
 
+  it('Add-new-server button appends an editable placeholder row', () => {
+    const addButton = Array.from(sg.backGround.querySelectorAll('button'))
+      .find(b => b.textContent === 'Add new server')
+
+    addButton.onclick(addButton)
+
+    expect(sg.rows.children.length).toBe(1)
+    const values = Array.from(sg.rows.querySelectorAll('input')).map(input => input.value)
+    expect(values).toContain('<NEW NAME>')
+    expect(values).toContain('<NEW ENDPOINTURL>')
+  })
+
+  it('clearDisplay empties the connection rows', () => {
+    sg.makeConnectionPointRow({ name: 'N', address: 'A', autoconnect: false }, socket, tabGen)
+    expect(sg.rows.children.length).toBe(1)
+    sg.clearDisplay()
+    expect(sg.rows.innerHTML).toBe('')
+  })
+
   // ── connectionPoints ─────────────────────────────────────────────────────────
 
   describe('connectionPoints', () => {

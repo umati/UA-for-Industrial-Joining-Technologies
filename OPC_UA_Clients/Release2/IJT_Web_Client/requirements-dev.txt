@@ -16,7 +16,16 @@ bandit~=1.9
 pip-audit~=2.9
 pyright~=1.1
 detect-secrets~=1.5
-# Security floor for transitive requests/pip-audit dependency.
+# Security floors for packages already present in the dev/runtime resolution.
+# These raise the minimum allowed version for pip-audit's fixable CVE gate.
 urllib3>=2.7.0
+cryptography>=46.0.7
+lxml>=6.1.0
+pillow>=12.2.0
+pygments>=2.20.0
+pypdf>=6.10.2
+pytest>=9.0.3
+python-multipart>=0.0.27
+requests>=2.33.0
 # Optional tools (auto-detected by runner, install separately if desired):
 #   semgrep    — pip install semgrep  (requires Python <3.14 or pre-built wheel)

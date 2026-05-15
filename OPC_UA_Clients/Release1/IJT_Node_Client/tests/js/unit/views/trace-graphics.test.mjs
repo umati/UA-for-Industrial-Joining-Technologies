@@ -125,6 +125,16 @@ describe('TraceGraphics', () => {
       expect(rm.subscribe).toHaveBeenCalledOnce()
     })
 
+    it('result subscription callback creates a trace from the result', () => {
+      const createSpy = vi.spyOn(tg, 'createNewTrace').mockImplementation(() => {})
+      const model = makeMinimalModel()
+      tg.activate()
+
+      rm.subscribe.mock.calls[0][0](model)
+
+      expect(createSpy).toHaveBeenCalledWith(model)
+    })
+
     it('subscription fires true triggers activate', () => {
       as.connectionManager._trigger('subscription', true)
       expect(rm.subscribe).toHaveBeenCalled()
@@ -213,6 +223,34 @@ describe('TraceGraphics', () => {
     it('sets showLimitSelected=false when not "yes"', () => {
       tg.showLimits('no')
       expect(tg.showLimitSelected).toBe(false)
+    })
+  })
+
+  describe('registered UI selection callbacks', () => {
+    it('trace selection callback selects the matching trace and clears selectedStep', () => {
+      const trace = { result: { resultId: 'r-1' } }
+      const findSpy = vi.spyOn(tg, 'findTrace').mockReturnValue(trace)
+      const selectSpy = vi.spyOn(tg, 'selectTrace').mockImplementation(() => {})
+      tg.selectedStep = { stepId: { value: 's-1' } }
+
+      tg.traceInterface.selectTraceEventHandler({ currentTarget: { resultId: 'r-1' } })
+
+      expect(findSpy).toHaveBeenCalledWith('r-1')
+      expect(selectSpy).toHaveBeenCalledWith(trace)
+      expect(tg.selectedStep).toBeNull()
+    })
+
+    it('step selection callback selects and zooms the selected step', () => {
+      const selectSpy = vi.spyOn(tg, 'selectStep').mockImplementation(() => {
+        tg.selectedStep = { stepId: { value: 's-1' } }
+      })
+      const zoomSpy = vi.spyOn(tg, 'zoom').mockImplementation(() => {})
+      tg.selectedTrace = { result: { resultId: 'r-1' } }
+
+      tg.traceInterface.selectStepEventHandler({ currentTarget: { stepId: 's-1' } })
+
+      expect(selectSpy).toHaveBeenCalledWith('s-1')
+      expect(zoomSpy).toHaveBeenCalledWith(tg.selectedTrace, tg.selectedStep)
     })
   })
 

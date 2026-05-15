@@ -41,3 +41,10 @@ def test_event_payload_field_reads_nested_dict_content():
 
 def test_event_payload_field_returns_none_when_absent():
     assert event_payload_field(SimpleNamespace(), "EventCode") is None
+
+
+def test_event_payload_field_reads_from_nested_dict_eventcontent():
+    """Test that event_payload_field reads from nested __dict__['EventContent']."""
+    event = SimpleNamespace()
+    event.__dict__["EventContent"] = _Variant(SimpleNamespace(ReportedValues=["value"]))
+    assert event_payload_field(event, "ReportedValues") == ["value"]

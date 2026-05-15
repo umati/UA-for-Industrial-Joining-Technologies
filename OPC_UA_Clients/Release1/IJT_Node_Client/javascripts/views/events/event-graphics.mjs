@@ -105,12 +105,11 @@ export default class EventGraphics extends ControlMessageSplitScreen {
     } else {
       if (e.SourceName) {
         header.innerText = e.SourceName.value
+      } else {
+        header.innerText = 'EVENT'
       }
       if (e.EventType) {
         header.innerText = header.innerText + ' (Type: ' + eventTypeValue + ')'
-      }
-      if (!header.innerText) {
-        header.innerText = 'EVENT'
       }
       header.appendChild(content)
       supportDataTypePrinting(e, content)

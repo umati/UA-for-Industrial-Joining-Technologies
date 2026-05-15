@@ -18,7 +18,10 @@ public static class IjtLog
     /// </summary>
     public static readonly object ConsoleLock = new();
 
-    private static readonly ILoggerFactory _factory = LoggerFactory.Create(builder =>
+    private static readonly object FactoryLock = new();
+    private static ILoggerFactory _factory = CreateFactory();
+
+    private static ILoggerFactory CreateFactory() => LoggerFactory.Create(builder =>
     {
         var levelStr = Environment.GetEnvironmentVariable("IJT_LOG_LEVEL") ?? "Information";
         var level = Enum.TryParse<LogLevel>(levelStr, ignoreCase: true, out var parsed)
@@ -32,13 +35,32 @@ public static class IjtLog
     });
 
     /// <summary>Creates a typed logger for <typeparamref name="T"/>.</summary>
-    public static ILogger<T> For<T>() => _factory.CreateLogger<T>();
+    public static ILogger<T> For<T>()
+    {
+        lock (FactoryLock)
+        {
+            return _factory.CreateLogger<T>();
+        }
+    }
 
     /// <summary>Creates a named logger for a free-form category string.</summary>
-    public static ILogger ForCategory(string category) => _factory.CreateLogger(category);
+    public static ILogger ForCategory(string category)
+    {
+        lock (FactoryLock)
+        {
+            return _factory.CreateLogger(category);
+        }
+    }
 
     /// <summary>Flushes and disposes the logger factory. Call once on application exit.</summary>
-    public static void Shutdown() => _factory.Dispose();
+    public static void Shutdown()
+    {
+        lock (FactoryLock)
+        {
+            _factory.Dispose();
+            _factory = CreateFactory();
+        }
+    }
 
     private sealed class SynchronousConsoleLoggerProvider(LogLevel minLevel) : ILoggerProvider
     {

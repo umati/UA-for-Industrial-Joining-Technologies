@@ -89,6 +89,27 @@ describe('result-serialization', () => {
     expect(() => serializeResultForStorage(cyclic)).toThrow(/\.loop'/)
   })
 
+  it('rejects circular arrays to prevent infinite recursion', () => {
+    const cyclic = {
+      ResultMetaData: { ResultId: 'array-loop-1', Classification: '1' },
+      ResultContent: []
+    }
+    cyclic.ResultContent.push(cyclic.ResultContent)
+
+    expect(() => serializeResultForStorage(cyclic)).toThrow(/Circular reference detected/)
+    expect(() => serializeResultForStorage(cyclic)).toThrow(/\$\.ResultContent\[0\]/)
+  })
+
+  it('converts exotic property values to null', () => {
+    const serialized = serializeResultForStorage({
+      ResultMetaData: { ResultId: 'exotic-1', Classification: '1' },
+      ResultContent: [],
+      ExoticValue: Symbol('not-json')
+    })
+
+    expect(serialized.ExoticValue).toBeNull()
+  })
+
   it('skips parent relations instead of recursing upward', () => {
     const top = {
       ResultMetaData: { ResultId: 'top-1', Classification: '4' },
@@ -196,5 +217,13 @@ describe('result-serialization', () => {
       version: RESULT_BUNDLE_CONSTANTS.EXPORT_VERSION,
       results: [{ ResultMetaData: { ResultId: 'one' }, ResultContent: [] }]
     }, { maxResultsCount: 0 })).toThrow(/Too many results in bundle/)
+  })
+
+  it('rejects bundles whose results member is not an array', () => {
+    expect(() => validateResultBundle({
+      type: RESULT_BUNDLE_CONSTANTS.EXPORT_TYPE,
+      version: RESULT_BUNDLE_CONSTANTS.EXPORT_VERSION,
+      results: { ResultMetaData: { ResultId: 'not-array' } }
+    })).toThrow(/results must be an array/)
   })
 })

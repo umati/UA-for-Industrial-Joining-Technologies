@@ -118,8 +118,56 @@ describe('AssetManager', () => {
     expect(Array.isArray(result)).toBe(true)
   })
 
+  it('loadAllAssetsSupport() resolves [] when relationsToNodes rejects', async () => {
+    const amWithFailure = new AssetManager(
+      { ...addressSpace, relationsToNodes: vi.fn().mockRejectedValue(new Error('browse failed')) },
+      connectionManager
+    )
+    const nodeWithChild = {
+      getChildRelations: (type) => type === 'component' ? [{ nodeId: 'ns=1;i=100' }] : []
+    }
+
+    await expect(amWithFailure.loadAllAssetsSupport(nodeWithChild)).resolves.toEqual([])
+  })
+
+  it('loadAllAssetsSupport() resolves [] when recursive child loading rejects', async () => {
+    const child = {
+      displayName: 'BadChild',
+      getChildRelations: (type) => {
+        if (type === 'hasAddin') {
+          return []
+        }
+        throw new Error(`cannot load ${type}`)
+      }
+    }
+    const amWithBadChild = new AssetManager(
+      { ...addressSpace, relationsToNodes: vi.fn().mockResolvedValue([child]) },
+      connectionManager
+    )
+    const nodeWithChild = {
+      getChildRelations: (type) => type === 'component' ? [{ nodeId: 'ns=1;i=100' }] : []
+    }
+
+    await expect(amWithBadChild.loadAllAssetsSupport(nodeWithChild)).resolves.toEqual([])
+  })
+
   it('setupAndLoadAllAssets() — returns empty object when assets folder has no children', async () => {
     const result = await am.setupAndLoadAllAssets()
     expect(typeof result).toBe('object')
+  })
+
+  it('setupAndLoadAllAssets() — builds returnObject from nodeList', async () => {
+    const asWithData = new AssetManager(addressSpace, connectionManager)
+    asWithData.getAssetFolder = vi.fn(() => Promise.resolve({ nodeId: 'ns=1;i=123' }))
+    asWithData.loadAllAssetsSupport = vi.fn(() => Promise.resolve([
+      ['Asset1', { nodeId: 'ns=1;i=201' }],
+      ['Asset2', { nodeId: 'ns=1;i=202' }]
+    ]))
+
+    const result = await asWithData.setupAndLoadAllAssets()
+    expect(result).toEqual({
+      Asset1: { nodeId: 'ns=1;i=201' },
+      Asset2: { nodeId: 'ns=1;i=202' }
+    })
   })
 })

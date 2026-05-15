@@ -371,8 +371,10 @@ describe('Step', () => {
     })
 
     it('handles PHYS_CURRENT (11) — no crash', () => {
+      step.calculateData()
       const value = { physicalQuantity: 11, value: 3 }
-      expect(() => step.interpretPoint(value)).not.toThrow()
+      const result = step.interpretPoint(value)
+      expect(result.value).toEqual({ x: 30, y: -1, type: '' })
     })
 
     it('throws for unknown physicalQuantity', () => {
@@ -384,6 +386,58 @@ describe('Step', () => {
       const value = { physicalQuantity: 2, value: 10, highLimit: 20, lowLimit: 5, targetValue: 15 }
       const result = step.interpretPoint(value)
       expect(Array.isArray(result.limits)).toBe(true)
+    })
+
+    it('falls back to the last trace x coordinate for y-only values', () => {
+      step.calculateData()
+      owner.displayOffset = 5
+      const result = step.interpretPoint({
+        physicalQuantity: 2,
+        value: 12,
+        highLimit: null,
+        lowLimit: null,
+        targetValue: null
+      })
+      expect(result.value.x).toBe(25)
+      expect(result.value.y).toBe(12)
+    })
+
+    it('uses a y fallback for x-only values', () => {
+      step.angle = [10]
+      const result = step.interpretPoint({
+        physicalQuantity: 3,
+        value: 45,
+        highLimit: null,
+        lowLimit: null,
+        targetValue: null
+      })
+      expect(result.value.y).toBe(-1)
+      expect(Number.isNaN(result.value.x)).toBe(false)
+    })
+
+    it('omits zero y limit spans instead of emitting NaN points', () => {
+      step.calculateData()
+      const result = step.interpretPoint({
+        physicalQuantity: 2,
+        value: 10,
+        highLimit: 0,
+        lowLimit: 0,
+        targetValue: null
+      })
+      expect(result.limits).toEqual([])
+      expect(Number.isNaN(result.value.x)).toBe(false)
+    })
+
+    it('omits zero x limit spans instead of emitting NaN points', () => {
+      const result = step.interpretPoint({
+        physicalQuantity: 3,
+        value: 10,
+        highLimit: 0,
+        lowLimit: 0,
+        targetValue: null
+      })
+      expect(result.limits).toEqual([])
+      expect(Number.isNaN(result.value.y)).toBe(false)
     })
   })
 })

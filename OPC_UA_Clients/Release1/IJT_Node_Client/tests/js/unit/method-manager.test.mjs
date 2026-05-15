@@ -180,6 +180,44 @@ describe('MethodManager.call() — type handling', () => {
     expect(addressSpace.methodCall).toHaveBeenCalledWith('ns=1;i=10', 'ns=1;i=20', [])
   })
 
+  it('setupMethod() filters null argContent correctly', async () => {
+    const infoSpy = vi.spyOn(ijtLog, 'info').mockImplementation(() => {})
+
+    const methodNode = {
+      nodeId: 'ns=1;i=50',
+      getChildRelations: vi.fn(() => [
+        { browseName: { name: 'InputArguments' }, nodeId: 'ns=1;i=60' }
+      ])
+    }
+
+    addressSpace.relationsToNodes = vi.fn(() => Promise.resolve([
+      {
+        data: {
+          value: {
+            message: {
+              dataValue: {
+                value: {
+                  value: [
+                    { dataType: 'ns=0;i=12', name: 'param1' },
+                    null,  // This will trigger the else branch on line 93
+                    { dataType: 'ns=0;i=7', name: 'param2' }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    ]))
+
+    const result = await mm.setupMethod(methodNode)
+
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('Method arguments could not be found'))
+    expect(result.arguments).toHaveLength(2)
+
+    infoSpy.mockRestore()
+  })
+
   it('call() sends multiple arguments in correct order', () => {
     const methodData = {
       parentNode: { nodeId: 'ns=1;i=10' },

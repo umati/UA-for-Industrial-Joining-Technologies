@@ -68,3 +68,61 @@ def test_collect_trace_entries_returns_paths_and_content_indexes():
     ]
     assert collect_trace_entries_from_content(root.ResultContent) == [(0, trace_a)]
     assert collect_trace_entries_from_content(None) == []
+
+
+def test_unwrap_variant_handles_exception():
+    """Test that unwrap_variant returns item unchanged on exception."""
+
+    # Create an object that will raise an exception when accessing Value
+    class BadVariant:
+        @property
+        def Value(self):
+            raise RuntimeError("Cannot read Value")
+
+    bad_variant = BadVariant()
+    result = unwrap_variant(bad_variant)
+    assert result is bad_variant
+
+
+def test_unwrap_variant_handles_none_inner():
+    """Test that unwrap_variant returns None when inner Value is None."""
+    result = unwrap_variant(ua.Variant(None))
+    assert result is None
+
+
+def test_iter_joining_results_handles_none_result_content():
+    """Test that iter_joining_results handles None ResultContent gracefully."""
+    root = SimpleNamespace(OverallResultValues=[], StepResults=[], Trace=None)
+    paths = list(iter_joining_results(root))
+    assert len(paths) == 1
+    assert paths[0][0] == "$"
+
+
+def test_unwrap_variant_returns_inner_when_double_wrapped():
+    """Test that unwrap_variant handles double-wrapped Variants."""
+    inner = SimpleNamespace(ResultId="r1")
+    result = unwrap_variant(ua.Variant(ua.Variant(inner)))
+    assert result is inner
+
+
+def test_iter_joining_results_skips_none_items():
+    """Test that iter_joining_results skips None items in ResultContent."""
+    child = SimpleNamespace(OverallResultValues=[])
+    root = SimpleNamespace(ResultContent=[ua.Variant(child), ua.Variant(None)])
+
+    paths = list(iter_joining_results(root))
+
+    # Should yield child but skip None (root doesn't have joining result attributes)
+    assert len(paths) == 1
+
+
+def test_collect_trace_entries_from_content_skips_none_joining_results():
+    """Test that collect_trace_entries_from_content skips None joining results."""
+    trace = SimpleNamespace(TraceId="a")
+    child = SimpleNamespace(Trace=ua.Variant(trace))
+    content = [ua.Variant(child), ua.Variant(None)]
+
+    result = collect_trace_entries_from_content(content)
+
+    assert len(result) == 1
+    assert result[0] == (0, trace)

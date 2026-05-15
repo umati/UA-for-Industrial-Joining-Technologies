@@ -57,12 +57,8 @@ export class AssetManager {
               promiseList.push(
                 new Promise((resolve, reject) => {
                   this.loadAllAssetsSupport(childNode).then((list) => {
-                    if (list && list.length > 0) {
-                      resolve([childNode.displayName, list])
-                    } else {
-                      resolve([childNode.displayName, list])
-                    }
-                  })
+                    resolve([childNode.displayName, list])
+                  }).catch(reject)
                 })
               )
             }
@@ -75,6 +71,9 @@ export class AssetManager {
           } else {
             _resolve([])
           }
+        }).catch((err) => {
+          ijtLog.error('Asset load failed:', err)
+          _resolve([])
         })
       } else {
         _resolve([])

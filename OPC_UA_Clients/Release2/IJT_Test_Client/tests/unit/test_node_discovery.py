@@ -161,6 +161,20 @@ async def test_find_child_by_browse_name_any_skips_none_and_duplicate_namespaces
 
 
 @pytest.mark.asyncio
+async def test_find_child_by_browse_name_any_returns_none_when_all_fail(monkeypatch):
+    """Test that find_child_by_browse_name_any returns None when no namespace has the child."""
+
+    async def fake_find(parent, name, ns_index, timeout=node_discovery._BROWSE_TIMEOUT):
+        return None
+
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name", fake_find)
+
+    result = await node_discovery.find_child_by_browse_name_any(object(), "MethodSet", [3, 4, 5])
+
+    assert result is None
+
+
+@pytest.mark.asyncio
 async def test_browse_folder_instances_formats_browse_names_and_handles_errors():
     folder = FakeNode(refs=[ref("ToolA", ns=7, node_id=42)])
 
@@ -197,6 +211,16 @@ async def test_interface_and_associated_asset_helpers():
     assert (await node_discovery.get_associated_assets(node))[0].nodeid == ua.NodeId(22, 2)
     assert (await node_discovery.get_add_in_nodes(node))[0].nodeid == ua.NodeId(33, 2)
     assert await node_discovery.get_interface_types(FakeNode(exc=RuntimeError("boom"))) == []
+
+
+@pytest.mark.asyncio
+async def test_get_associated_assets_handles_exception():
+    """Test that get_associated_assets returns empty list on exception."""
+    node = FakeNode(exc=RuntimeError("get_references failed"))
+
+    result = await node_discovery.get_associated_assets(node)
+
+    assert result == []
 
 
 @pytest.mark.asyncio
@@ -341,3 +365,348 @@ async def test_read_tool_product_instance_uri_returns_empty_on_missing_or_except
 
     monkeypatch.setattr(node_discovery, "find_joining_system", failing_joining_system)
     assert await node_discovery.read_tool_product_instance_uri(object(), ns_ijt=7, ns_di=5) == ""
+
+
+@pytest.mark.asyncio
+async def test_find_joining_system_handles_exception_in_nested_browse(monkeypatch):
+    """Test that exceptions in nested browse are caught and iteration continues."""
+    objects = FakeNode()
+    top1 = FakeNode()
+    top2 = FakeNode()
+    nested = FakeNode()
+    ref1 = ref("Folder1", node_id=1)
+    ref2 = ref("Folder2", node_id=2)
+    nested_ref = ref("JoiningSystem", node_id=3)
+
+    browse_call_count = [0]
+
+    async def fake_browse(node, timeout=node_discovery._BROWSE_TIMEOUT):
+        browse_call_count[0] += 1
+        if node is objects:
+            return [ref1, ref2]
+        if node is top1:
+            raise RuntimeError("browse failed on first child")
+        if node is top2:
+            return [nested_ref]
+        return []
+
+    def fake_node_from_ref(source, node_id):
+        if node_id == ref1.NodeId:
+            return top1
+        if node_id == ref2.NodeId:
+            return top2
+        return nested
+
+    async def fake_type_definition(node, ns_opc_ua=0):
+        return ua.NodeId(IJTTypes.JOINING_SYSTEM_TYPE, 2) if node is nested else None
+
+    monkeypatch.setattr(node_discovery, "_browse_refs", fake_browse)
+    monkeypatch.setattr(node_discovery, "_node_from_ref", fake_node_from_ref)
+    monkeypatch.setattr(node_discovery, "get_type_definition", fake_type_definition)
+
+    result = await node_discovery.find_joining_system(FakeClient(objects))
+
+    # Should find nested in top2 despite top1 browse failing
+    assert result is nested
+
+
+@pytest.mark.asyncio
+async def test_find_joining_system_returns_none_when_type_not_found(monkeypatch):
+    """Test that find_joining_system returns None when no matching type is found."""
+    objects = FakeNode()
+    top = FakeNode()
+    child_ref = ref("NotAJoiningSystem", node_id=1)
+
+    async def fake_browse(node, timeout=node_discovery._BROWSE_TIMEOUT):
+        if node is objects:
+            return [child_ref]
+        return []
+
+    def fake_node_from_ref(source, node_id):
+        return top
+
+    async def fake_type_definition(node, ns_opc_ua=0):
+        # Return wrong type
+        return ua.NodeId(9999, 2)
+
+    monkeypatch.setattr(node_discovery, "_browse_refs", fake_browse)
+    monkeypatch.setattr(node_discovery, "_node_from_ref", fake_node_from_ref)
+    monkeypatch.setattr(node_discovery, "get_type_definition", fake_type_definition)
+
+    result = await node_discovery.find_joining_system(FakeClient(objects))
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_find_joining_system_returns_top_level_match(monkeypatch):
+    """Test that find_joining_system returns a match at top level."""
+    objects = FakeNode()
+    top = FakeNode()
+    child_ref = ref("JoiningSystem", node_id=1)
+
+    async def fake_browse(node, timeout=node_discovery._BROWSE_TIMEOUT):
+        if node is objects:
+            return [child_ref]
+        return []
+
+    def fake_node_from_ref(source, node_id):
+        return top
+
+    async def fake_type_definition(node, ns_opc_ua=0):
+        # Return matching type
+        return ua.NodeId(IJTTypes.JOINING_SYSTEM_TYPE, 2)
+
+    monkeypatch.setattr(node_discovery, "_browse_refs", fake_browse)
+    monkeypatch.setattr(node_discovery, "_node_from_ref", fake_node_from_ref)
+    monkeypatch.setattr(node_discovery, "get_type_definition", fake_type_definition)
+
+    result = await node_discovery.find_joining_system(FakeClient(objects))
+
+    assert result is top
+
+
+@pytest.mark.asyncio
+async def test_find_child_by_reference_type_handles_exception(monkeypatch):
+    """Test that find_child_by_reference_type returns None on exception."""
+    parent = FakeNode(exc=RuntimeError("get_references failed"))
+
+    result = await node_discovery.find_child_by_reference_type(parent, "Test", 2, RefTypes.HAS_COMPONENT)
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_find_method_set_returns_none_when_all_namespaces_fail(monkeypatch):
+    """Test that find_method_set returns None when MethodSet not found in any namespace."""
+
+    async def fake_find(parent, browse_name, ns_index):
+        return None
+
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name", fake_find)
+
+    result = await node_discovery.find_method_set(object(), ns_di=5, ns_ijt=7, ns_app=8)
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_read_tool_product_instance_uri_handles_missing_navigation_nodes(monkeypatch):
+    """Test that read_tool_product_instance_uri returns empty string when navigation fails."""
+    js = object()
+    am = object()
+    assets = object()
+
+    async def fake_find_joining_system(client):
+        return js
+
+    async def fake_find_child(parent, name, ns_index, timeout=node_discovery._BROWSE_TIMEOUT):
+        mapping = {
+            (js, "AssetManagement"): am,
+            (am, "Assets"): assets,
+            (assets, "Tools"): None,  # Tools folder not found
+        }
+        return mapping.get((parent, name))
+
+    monkeypatch.setattr(node_discovery, "find_joining_system", fake_find_joining_system)
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name", fake_find_child)
+
+    result = await node_discovery.read_tool_product_instance_uri(object(), ns_ijt=7, ns_di=5)
+
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_read_tool_product_instance_uri_handles_missing_asset_management(monkeypatch):
+    """Test that read_tool_product_instance_uri returns empty string when AssetManagement is missing."""
+    js = object()
+
+    async def fake_find_joining_system(client):
+        return js
+
+    async def fake_find_child(parent, name, ns_index, timeout=node_discovery._BROWSE_TIMEOUT):
+        mapping = {
+            (js, "AssetManagement"): None,  # AssetManagement not found
+        }
+        return mapping.get((parent, name))
+
+    monkeypatch.setattr(node_discovery, "find_joining_system", fake_find_joining_system)
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name", fake_find_child)
+
+    result = await node_discovery.read_tool_product_instance_uri(object(), ns_ijt=7, ns_di=5)
+
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_read_tool_product_instance_uri_handles_missing_assets(monkeypatch):
+    """Test that read_tool_product_instance_uri returns empty string when Assets is missing."""
+    js = object()
+    am = object()
+
+    async def fake_find_joining_system(client):
+        return js
+
+    async def fake_find_child(parent, name, ns_index, timeout=node_discovery._BROWSE_TIMEOUT):
+        mapping = {
+            (js, "AssetManagement"): am,
+            (am, "Assets"): None,  # Assets not found
+        }
+        return mapping.get((parent, name))
+
+    monkeypatch.setattr(node_discovery, "find_joining_system", fake_find_joining_system)
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name", fake_find_child)
+
+    result = await node_discovery.read_tool_product_instance_uri(object(), ns_ijt=7, ns_di=5)
+
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_read_tool_product_instance_uri_handles_empty_tools_folder(monkeypatch):
+    """Test that read_tool_product_instance_uri returns empty string when Tools folder is empty."""
+    js = object()
+    am = object()
+    assets = object()
+    tools = object()
+
+    async def fake_find_joining_system(client):
+        return js
+
+    async def fake_find_child(parent, name, ns_index, timeout=node_discovery._BROWSE_TIMEOUT):
+        mapping = {
+            (js, "AssetManagement"): am,
+            (am, "Assets"): assets,
+            (assets, "Tools"): tools,
+        }
+        return mapping.get((parent, name))
+
+    async def fake_browse(node, timeout=node_discovery._BROWSE_TIMEOUT):
+        return []  # Empty Tools folder
+
+    monkeypatch.setattr(node_discovery, "find_joining_system", fake_find_joining_system)
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name", fake_find_child)
+    monkeypatch.setattr(node_discovery, "_browse_refs", fake_browse)
+
+    result = await node_discovery.read_tool_product_instance_uri(object(), ns_ijt=7, ns_di=5)
+
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_read_tool_product_instance_uri_handles_missing_identification(monkeypatch):
+    """Test that read_tool_product_instance_uri returns empty when Identification node is missing."""
+    js = object()
+    am = object()
+    assets = object()
+    tools = object()
+    tool = object()
+    tool_ref = ref("ToolA", node_id=101)
+
+    async def fake_find_joining_system(client):
+        return js
+
+    async def fake_find_child(parent, name, ns_index, timeout=node_discovery._BROWSE_TIMEOUT):
+        mapping = {
+            (js, "AssetManagement"): am,
+            (am, "Assets"): assets,
+            (assets, "Tools"): tools,
+            (tool, "Identification"): None,  # Identification not found
+        }
+        return mapping.get((parent, name))
+
+    async def fake_browse(node, timeout=node_discovery._BROWSE_TIMEOUT):
+        return [tool_ref] if node is tools else []
+
+    def fake_node_from_ref(source, node_id):
+        return tool
+
+    monkeypatch.setattr(node_discovery, "find_joining_system", fake_find_joining_system)
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name", fake_find_child)
+    monkeypatch.setattr(node_discovery, "_browse_refs", fake_browse)
+    monkeypatch.setattr(node_discovery, "_node_from_ref", fake_node_from_ref)
+
+    result = await node_discovery.read_tool_product_instance_uri(object(), ns_ijt=7, ns_di=5)
+
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_read_tool_product_instance_uri_handles_missing_product_instance_uri(monkeypatch):
+    """Test that read_tool_product_instance_uri returns empty when ProductInstanceUri is missing."""
+    js = object()
+    am = object()
+    assets = object()
+    tools = object()
+    tool = object()
+    ident = object()
+    tool_ref = ref("ToolA", node_id=101)
+
+    async def fake_find_joining_system(client):
+        return js
+
+    async def fake_find_child(parent, name, ns_index, timeout=node_discovery._BROWSE_TIMEOUT):
+        mapping = {
+            (js, "AssetManagement"): am,
+            (am, "Assets"): assets,
+            (assets, "Tools"): tools,
+            (tool, "Identification"): ident,
+            (ident, "ProductInstanceUri"): None,  # ProductInstanceUri not found
+        }
+        return mapping.get((parent, name))
+
+    async def fake_browse(node, timeout=node_discovery._BROWSE_TIMEOUT):
+        return [tool_ref] if node is tools else []
+
+    def fake_node_from_ref(source, node_id):
+        return tool
+
+    monkeypatch.setattr(node_discovery, "find_joining_system", fake_find_joining_system)
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name", fake_find_child)
+    monkeypatch.setattr(node_discovery, "_browse_refs", fake_browse)
+    monkeypatch.setattr(node_discovery, "_node_from_ref", fake_node_from_ref)
+
+    result = await node_discovery.read_tool_product_instance_uri(object(), ns_ijt=7, ns_di=5, ns_app=8)
+
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_read_tool_product_instance_uri_handles_none_value(monkeypatch):
+    """Test that read_tool_product_instance_uri returns empty string when value is None."""
+    js = object()
+    am = object()
+    assets = object()
+    tools = object()
+    tool = object()
+    ident = object()
+    pi_node = FakeNode(value=None)  # None value
+    tool_ref = ref("ToolA", node_id=101)
+
+    async def fake_find_joining_system(client):
+        return js
+
+    async def fake_find_child(parent, name, ns_index, timeout=node_discovery._BROWSE_TIMEOUT):
+        mapping = {
+            (js, "AssetManagement"): am,
+            (am, "Assets"): assets,
+            (assets, "Tools"): tools,
+            (tool, "Identification"): ident,
+            (ident, "ProductInstanceUri"): pi_node,
+        }
+        return mapping.get((parent, name))
+
+    async def fake_browse(node, timeout=node_discovery._BROWSE_TIMEOUT):
+        return [tool_ref] if node is tools else []
+
+    def fake_node_from_ref(source, node_id):
+        return tool
+
+    monkeypatch.setattr(node_discovery, "find_joining_system", fake_find_joining_system)
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name", fake_find_child)
+    monkeypatch.setattr(node_discovery, "_browse_refs", fake_browse)
+    monkeypatch.setattr(node_discovery, "_node_from_ref", fake_node_from_ref)
+
+    result = await node_discovery.read_tool_product_instance_uri(object(), ns_ijt=7, ns_di=5)
+
+    assert result == ""

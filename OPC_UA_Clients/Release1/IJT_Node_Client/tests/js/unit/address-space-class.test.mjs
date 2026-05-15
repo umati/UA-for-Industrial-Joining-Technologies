@@ -45,6 +45,10 @@ function makeConnectionManager (socketHandler) {
   }
 }
 
+function flushTimers () {
+  return new Promise(resolve => setTimeout(resolve, 0))
+}
+
 function makeBrowseResponse (nodeid, nodeclass = 1) {
   return {
     message: {
@@ -439,6 +443,72 @@ describe('AddressSpace — session state trigger', () => {
 
     cm._triggerState('session', true)
     expect(initiateSpy).toHaveBeenCalled()
+  })
+})
+
+describe('AddressSpace.initiate()', () => {
+  it('loads the object folder, finds a tightening system, and triggers setup', async () => {
+    const rootFolder = { nodeId: 'ns=0;i=84' }
+    const objectFolder = {
+      nodeId: 'ns=0;i=85',
+      getTypeDefinitionRelations: vi.fn().mockReturnValue([{ nodeId: 'ns=2;i=1001' }])
+    }
+    const tighteningSystem = { nodeId: 'ns=2;i=1001' }
+    const sh = makeSocketHandler()
+    const cm = makeConnectionManager(sh)
+    const as = new AddressSpace(cm)
+    vi.spyOn(as, 'findOrLoadNode')
+      .mockResolvedValueOnce(rootFolder)
+      .mockResolvedValueOnce(objectFolder)
+      .mockResolvedValueOnce(tighteningSystem)
+
+    as.initiate()
+    await flushTimers()
+
+    expect(as.objectFolder).toBe(objectFolder)
+    expect(as.tighteningSystem).toBe(tighteningSystem)
+    expect(as.status).toContain('tighteningsystem')
+    expect(cm.trigger).toHaveBeenCalledWith('tighteningsystem', true)
+  })
+
+  it('logs and does not throw when the object folder has no tightening system', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const objectFolder = {
+      nodeId: 'ns=0;i=85',
+      getTypeDefinitionRelations: vi.fn().mockReturnValue([])
+    }
+    const sh = makeSocketHandler()
+    const cm = makeConnectionManager(sh)
+    const as = new AddressSpace(cm)
+    vi.spyOn(as, 'findOrLoadNode')
+      .mockResolvedValueOnce({ nodeId: 'ns=0;i=84' })
+      .mockResolvedValueOnce(objectFolder)
+
+    try {
+      as.initiate()
+      await flushTimers()
+      expect(errorSpy).toHaveBeenCalledWith('AddressSpace initiate failed:', expect.any(Error))
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+})
+
+describe('AddressSpace.findNodeFromPathPromise()', () => {
+  it('resolves the node at the translated browse path', async () => {
+    const foundNode = { nodeId: 'ns=2;i=5000' }
+    const sh = makeSocketHandler({
+      pathtoidPromise: vi.fn().mockResolvedValue({ message: { nodeid: 'ns=2;i=5000' } })
+    })
+    const cm = makeConnectionManager(sh)
+    const as = new AddressSpace(cm)
+    as.status = ['namespaces', 'datatypes', 'tighteningsystem']
+    as.tighteningSystem = { nodeId: 'ns=2;i=1001' }
+    vi.spyOn(as, 'findOrLoadNode').mockResolvedValue(foundNode)
+
+    await expect(as.findNodeFromPathPromise('/2:AssetManagement')).resolves.toBe(foundNode)
+    expect(sh.pathtoidPromise).toHaveBeenCalledWith('ns=2;i=1001', '/2:AssetManagement')
+    expect(as.findOrLoadNode).toHaveBeenCalledWith('ns=2;i=5000')
   })
 })
 

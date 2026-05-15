@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import runpy
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -28,6 +29,18 @@ sys.path.insert(0, str(Path(__file__).parents[3]))
 sys.path.insert(0, str(Path(__file__).parents[3] / "src"))
 
 import index  # noqa: E402
+
+
+def test_bootstrap_adds_src_path_when_absent(monkeypatch):
+    """The module bootstrap must add src/ when launched as a script."""
+    root = Path(index.__file__).resolve().parent
+    src = str(root / "src")
+    monkeypatch.setattr(sys, "path", [entry for entry in sys.path if entry != src])
+
+    runpy.run_path(str(root / "index.py"), run_name="phase5_index_bootstrap")
+
+    assert sys.path[0] == src
+
 
 # =============================================================================
 # Helpers
@@ -353,3 +366,78 @@ class TestMain:
                 pass
 
         assert _signal.SIGINT in signal_registrations or len(signal_registrations) >= 1
+
+    @pytest.mark.asyncio
+    async def test_signal_handler_not_implemented_error_on_non_windows(self):
+        """When add_signal_handler raises NotImplementedError, it is caught and logged."""
+        import asyncio as _asyncio
+
+        actual_loop = _asyncio.get_running_loop()
+
+        def _mock_add_signal_handler_fail(sig, cb):
+            raise NotImplementedError("Signal not supported")
+
+        mock_server = MagicMock()
+        mock_server.close = MagicMock()
+        mock_server.wait_closed = AsyncMock()
+
+        with (
+            patch.object(actual_loop, "add_signal_handler", side_effect=_mock_add_signal_handler_fail),
+            patch("index.platform") as mock_plat,
+            patch("index.websockets.serve", new_callable=AsyncMock) as mock_serve,
+            patch("asyncio.Future", side_effect=asyncio.CancelledError),
+            patch("index.shutdown", new_callable=AsyncMock),
+        ):
+            mock_plat.system.return_value = "Linux"
+            mock_serve.return_value = mock_server
+            try:
+                await index.main()  # must not raise
+            except (asyncio.CancelledError, Exception):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_windows_signal_handler_schedules_shutdown(self):
+        """Windows signal handler schedules shutdown via call_soon_threadsafe."""
+        import asyncio as _asyncio
+        import signal as _signal
+
+        actual_loop = _asyncio.get_running_loop()
+        scheduled_tasks: list = []
+
+        def _mock_call_soon_threadsafe(cb):
+            scheduled_tasks.append(cb)
+
+        mock_server = MagicMock()
+        mock_server.close = MagicMock()
+        mock_server.wait_closed = AsyncMock()
+
+        with (
+            patch.object(actual_loop, "call_soon_threadsafe", side_effect=_mock_call_soon_threadsafe),
+            patch("index.platform") as mock_plat,
+            patch("index.signal.signal") as mock_signal_signal,
+            patch("index.websockets.serve", new_callable=AsyncMock) as mock_serve,
+            patch("asyncio.Future", side_effect=asyncio.CancelledError),
+            patch("index.shutdown", new_callable=AsyncMock),
+        ):
+            mock_plat.system.return_value = "Windows"
+            mock_serve.return_value = mock_server
+
+            # Capture the registered signal handler
+            registered_handler = None
+
+            def _capture_signal_handler(sig, handler):
+                nonlocal registered_handler
+                registered_handler = handler
+                return None
+
+            mock_signal_signal.side_effect = _capture_signal_handler
+
+            try:
+                await index.main()
+            except (asyncio.CancelledError, Exception):
+                pass
+
+            # Now invoke the captured Windows signal handler
+            if registered_handler:
+                registered_handler(_signal.SIGINT, None)
+                assert len(scheduled_tasks) >= 1

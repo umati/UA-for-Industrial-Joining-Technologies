@@ -261,6 +261,46 @@ describe('Connection — constructor, isActive, setupClient', () => {
     expect(conn.connectionState).toBe('error')
   })
 
+  it('setupClient async success path emits connection lifecycle events', async () => {
+    const { mockOPCUA, mockClient } = makeMockOpcua(() => Promise.resolve())
+    const mockSubscription = { id: 123 }
+    const mockSession = {
+      createSubscription2: vi.fn().mockResolvedValue(mockSubscription),
+      readNamespaceArray: vi.fn().mockResolvedValue([
+        'http://opcfoundation.org/UA/',
+        'http://opcfoundation.org/UA/IJT/Base/'
+      ])
+    }
+    mockClient.createSession = vi.fn().mockResolvedValue(mockSession)
+    mockOPCUA.DataType = { String: 12, UInt32: 7 }
+
+    iface.setupSocketIO(mockOPCUA)
+    connectionCallback(socket)
+    socket._handlers['connect to']('opc.tcp://localhost:4840')
+
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    const conn = iface.connectionList['opc.tcp://localhost:4840']
+    expect(conn.connectionState).toBe('connected')
+    expect(mockClient.connect).toHaveBeenCalledWith('opc.tcp://localhost:4840')
+    expect(mockClient.createSession).toHaveBeenCalledOnce()
+    expect(mockSession.createSubscription2).toHaveBeenCalledWith(expect.objectContaining({
+      publishingEnabled: true,
+      requestedPublishingInterval: 2000
+    }))
+    expect(io.emit).toHaveBeenCalledWith('connection established', { endpointurl: 'opc.tcp://localhost:4840' })
+    expect(io.emit).toHaveBeenCalledWith('session established', { endpointurl: 'opc.tcp://localhost:4840' })
+    expect(io.emit).toHaveBeenCalledWith('subscription created', { endpointurl: 'opc.tcp://localhost:4840' })
+    expect(io.emit).toHaveBeenCalledWith('datatypes', {
+      endpointurl: 'opc.tcp://localhost:4840',
+      datatype: mockOPCUA.DataType
+    })
+    expect(io.emit).toHaveBeenCalledWith('namespaces', {
+      endpointurl: 'opc.tcp://localhost:4840',
+      namespaces: ['http://opcfoundation.org/UA/', 'http://opcfoundation.org/UA/IJT/Base/']
+    })
+  })
+
   it('closeConnection with only client (no session/subscription) completes cleanly', async () => {
     const { mockOPCUA, mockClient } = makeMockOpcua()
     iface.setupSocketIO(mockOPCUA)

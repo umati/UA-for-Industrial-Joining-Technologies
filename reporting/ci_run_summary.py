@@ -11,13 +11,36 @@ from collections import Counter
 
 
 def parse_xml_root(path):
-    """Parse a local CI XML artifact without allowing DTD/entity declarations."""
+    """Parse a local CI XML artifact without allowing entity injection.
+
+    Vitest's cobertura coverage emitter writes a bare external DOCTYPE pointing
+    at ``http://cobertura.sourceforge.net/xml/coverage-04.dtd``. The Python
+    standard-library ``xml.etree.ElementTree`` parser does **not** fetch
+    external DTDs and does **not** expand external entity references, so a
+    bare ``<!DOCTYPE name SYSTEM "url">`` carries no XXE risk. We therefore
+    accept that shape and reject only the actual injection vectors:
+
+    * ``<!ENTITY ...>`` declarations (entity-expansion / billion-laughs).
+    * Internal-subset DOCTYPE forms (``<!DOCTYPE name [ ... ]>``) which are
+      the standard place to declare entities.
+    """
     with open(path, "rb") as fh:
         payload = fh.read()
-    header = payload[:2048].lower()
-    if b"<!doctype" in header or b"<!entity" in header:
+    lowered_payload = payload.lower()
+    if b"<!entity" in lowered_payload:
         raise ValueError("DTD/entity declarations are not supported in CI XML artifacts")
-    # safe: local CI artifact parser rejects DTD/entity declarations before parsing.
+    # Reject internal-subset DOCTYPE (the entity-injection vector); allow
+    # bare external DOCTYPE such as Vitest's cobertura output.
+    doctype_index = lowered_payload.find(b"<!doctype")
+    while doctype_index != -1:
+        end_index = lowered_payload.find(b">", doctype_index)
+        bracket_index = lowered_payload.find(b"[", doctype_index)
+        if end_index == -1:
+            raise ValueError("Unterminated DOCTYPE is not supported in CI XML artifacts")
+        if bracket_index != -1 and (end_index == -1 or bracket_index < end_index):
+            raise ValueError("DTD/entity declarations are not supported in CI XML artifacts")
+        doctype_index = lowered_payload.find(b"<!doctype", end_index + 1)
+    # safe: local CI artifact parser rejects entity declarations before parsing.
     return ET.fromstring(payload)  # noqa: S314
 
 
@@ -198,6 +221,7 @@ def lint(*items):
 
 
 def main() -> None:
+    # Reason: CLI orchestration tested via snapshot tests
     # ── Load ENV ─────────────────────────────────────────────────────────
 
     E = os.environ.get

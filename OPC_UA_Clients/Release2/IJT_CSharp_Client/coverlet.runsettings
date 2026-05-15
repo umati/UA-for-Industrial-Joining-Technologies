@@ -6,6 +6,8 @@
         <Configuration>
           <!-- Only measure the IJT client assembly; UAModel.* are generated OPC UA type assemblies -->
           <Include>[IJT_CSharp_Client]*</Include>
+          <!-- Explicitly exclude generated UAModel assemblies and the interactive Program entry point -->
+          <Exclude>[UAModel.*]*,[IJT_CSharp_Client]Program,[IJT_CSharp_Client]IJT_CSharp_Client.Program</Exclude>
           <!-- Exclude any class decorated with [GeneratedCode] within the client assembly -->
           <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
         </Configuration>

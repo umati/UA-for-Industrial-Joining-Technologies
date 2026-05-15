@@ -60,10 +60,10 @@ export default class ServerGraphics extends BasicScreen {
   }
 
   /**
-   * Clears the message area
+   * Clears the displayed connection point rows.
    */
   clearDisplay () {
-    this.messages.innerHTML = ''
+    this.rows.innerHTML = ''
   }
 
   /**

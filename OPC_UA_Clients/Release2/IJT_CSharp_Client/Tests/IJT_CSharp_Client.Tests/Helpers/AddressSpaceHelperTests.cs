@@ -755,4 +755,72 @@ public sealed class AddressSpaceHelperTests
         var result = AddressSpaceHelper.ReadValue<byte>(mock.Object, new NodeId(1u, 0));
         Assert.Equal(0, result);
     }
+
+    [Fact]
+    public void FindJoiningSystemAsync_WhenNestedUnderFolderObject_DiscoversSuccessfully()
+    {
+        // Test second-level browse: Objects/ApplicationRoot/JoiningSystem1
+        var joiningSystemId = new NodeId(9999u, 4);
+
+        // First-level refs: Objects folder contains ApplicationRoot (not JoiningSystemType)
+        var firstLevelRefs = new ReferenceDescriptionCollection
+        {
+            new()
+            {
+                BrowseName = new QualifiedName("Server", 0),
+                NodeId = new ExpandedNodeId(Opc.Ua.ObjectIds.Server),
+                TypeDefinition = new ExpandedNodeId(Opc.Ua.ObjectTypeIds.BaseObjectType),
+            },
+            new()
+            {
+                BrowseName = new QualifiedName("ApplicationRoot", 4),
+                NodeId = new ExpandedNodeId(new NodeId(1000u, 4)),
+                TypeDefinition = new ExpandedNodeId(Opc.Ua.ObjectTypeIds.BaseObjectType),
+            },
+        };
+
+        // Second-level refs: ApplicationRoot contains JoiningSystem1
+        var secondLevelRefs = new ReferenceDescriptionCollection
+        {
+            new()
+            {
+                BrowseName = new QualifiedName("JoiningSystem1", 4),
+                NodeId = new ExpandedNodeId(joiningSystemId),
+                TypeDefinition = new ExpandedNodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 4),
+            },
+        };
+
+        // Mock that returns different results for different Browse calls
+        var mock = new Mock<ISession>();
+        var callCount = 0;
+        var diagnostics = new DiagnosticInfoCollection();
+
+        mock.Setup(s => s.Browse(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<ViewDescription>(),
+                It.IsAny<uint>(),
+                It.IsAny<BrowseDescriptionCollection>(),
+                out It.Ref<BrowseResultCollection>.IsAny,
+                out It.Ref<DiagnosticInfoCollection>.IsAny))
+            .Returns((RequestHeader rh, ViewDescription vd, uint mr, BrowseDescriptionCollection bd,
+                out BrowseResultCollection br, out DiagnosticInfoCollection d) =>
+            {
+                // First call: return top-level refs
+                // Subsequent calls: return nested refs
+                br = new BrowseResultCollection
+                {
+                    new BrowseResult
+                    {
+                        References = callCount++ == 0 ? firstLevelRefs : secondLevelRefs
+                    }
+                };
+                d = diagnostics;
+                return new ResponseHeader();
+            });
+
+        var helper = new AddressSpaceHelper();
+        var result = helper.FindJoiningSystemAsync(mock.Object, 4);
+
+        Assert.Equal(joiningSystemId, result);
+    }
 }

@@ -221,9 +221,8 @@ class Connection:
                 if attempt + 1 < retries:
                     await asyncio.sleep(delay)
 
-        if last_error is not None:
-            return {"exception": (f"Failed to connect after {retries} attempts to {self.server_url}: {last_error}")}
-        return {"exception": f"Failed to connect after {retries} attempts to {self.server_url}"}
+        error_detail = f": {last_error}" if last_error is not None else ""
+        return {"exception": f"Failed to connect after {retries} attempts to {self.server_url}{error_detail}"}
 
     async def terminate(self) -> None:
         """Coroutine. Gracefully shut down all subscriptions and the OPC UA session.
@@ -746,9 +745,6 @@ class Connection:
                             ijt_log.info(
                                 f"[methodcall] Argument {i + 1} mapped to Array of {variant_type.name} with value {value}"
                             )
-                        elif all(isinstance(v, ua.ExtensionObject) for v in value):
-                            input_args.append(ua.Variant(value, ua.VariantType.ExtensionObject, is_array=True))
-                            ijt_log.info(f"[methodcall] Argument {i + 1} mapped to Array of ExtensionObjects")
                         else:
                             input_args.append(ua.Variant(value, variant_type, is_array=True))
                             ijt_log.info(f"[methodcall] Argument {i + 1} mapped to Array of {variant_type.name}")

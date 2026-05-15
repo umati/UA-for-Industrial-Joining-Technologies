@@ -229,6 +229,19 @@ describe('EventManager', () => {
     expect(callback).toHaveBeenCalled()
   })
 
+  it('registered event handler accepts malformed event without Result', () => {
+    callbacks.event({ SourceName: 'malformed' })
+
+    expect(mm.createModelFromEvent).toHaveBeenCalledWith({ SourceName: 'malformed' })
+  })
+
+  it('receivedEvent catches errors thrown by makeCalls', () => {
+    em.makeCalls = vi.fn(() => { throw new Error('broken makeCalls') })
+
+    expect(() => em.receivedEvent({ EventType: { Identifier: 9999 } })).not.toThrow()
+    expect(em.makeCalls).toHaveBeenCalledOnce()
+  })
+
   it('receivedEvent enqueues when queue is active', () => {
     em.queueState(true)
     const msg = { EventType: { Identifier: 9999 } }

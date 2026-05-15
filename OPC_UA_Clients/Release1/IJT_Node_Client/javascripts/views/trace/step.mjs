@@ -135,7 +135,15 @@ export default class Step {
    * @returns a structure with target, limits and name where the values have been recalculated to the selected mode of displaying the trace
    */
   interpretPoint (value) {
-    let x; let y; let xHigh; let yHigh; let xLow; let yLow; let xTarget; let yTarget; let xOffset = 0
+    let x = null
+    let y = null
+    let xHigh = null
+    let yHigh = null
+    let xLow = null
+    let yLow = null
+    let xTarget = null
+    let yTarget = null
+    let xOffset = 0
     switch (value.physicalQuantity) {
       case PHYS_TIME: // Time
         x = value.value

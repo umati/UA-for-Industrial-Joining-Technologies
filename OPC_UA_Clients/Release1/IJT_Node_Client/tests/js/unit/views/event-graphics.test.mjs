@@ -71,6 +71,16 @@ describe('EventGraphics', () => {
     expect(filter({ anything: 1 })).toBe(true)
   })
 
+  it('the listenEvent callback renders the received event', () => {
+    const [, callback] = em.listenEvent.mock.calls[0]
+    const renderSpy = vi.spyOn(eg, 'eventToHTML')
+    const event = { EventType: { value: 'ns=1;i=999' }, SourceName: { value: 'Src' } }
+
+    callback(event)
+
+    expect(renderSpy).toHaveBeenCalledWith(event)
+  })
+
   // ── initiate ────────────────────────────────────────────────────────────────
 
   it('initiate() is a no-op', () => {
@@ -135,6 +145,13 @@ describe('EventGraphics', () => {
     it('does not crash when SourceName is absent', () => {
       const e = { EventType: { value: 'T' } }
       expect(() => eg.eventToHTML(e)).not.toThrow()
+    })
+
+    it('uses EVENT as the header base when SourceName is absent', () => {
+      const e = { EventType: { value: 'T' } }
+      eg.eventToHTML(e)
+      expect(eg.messages.children[0].innerText).toContain('EVENT')
+      expect(eg.messages.children[0].innerText).toContain('T')
     })
   })
 

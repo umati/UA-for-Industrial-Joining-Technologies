@@ -652,6 +652,23 @@ public sealed class AssetManagementUnitTests
         Assert.False(am.IsAssetVarSubscribed);
     }
 
+    [Fact]
+    public void FlushAssetJson_WithEmptyAssetKey_DoesNotThrow()
+    {
+        var session = MockSessionBuilder.Create();
+        using var am = new AssetManagement(session.Object);
+
+        // Access FlushAssetJson via reflection
+        var method = typeof(AssetManagement).GetMethod(
+            "FlushAssetJson",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        var ex = Record.Exception(() => method!.Invoke(am, new object[] { "nonexistent-key" }));
+
+        Assert.Null(ex); // should return early if key not found
+    }
+
+
     // ── SetNestedValue — private static method (via reflection) ──────────────
 
     private static readonly System.Reflection.MethodInfo s_setNestedValue =
