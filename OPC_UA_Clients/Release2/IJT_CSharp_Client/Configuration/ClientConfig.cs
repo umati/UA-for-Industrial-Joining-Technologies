@@ -25,6 +25,13 @@ public sealed class ClientConfig
     public bool AutoAcceptServerCertificate { get; init; } = false;
 
     /// <summary>
+    /// Reuses endpoint discovery metadata for repeated connections to the same URL.
+    /// Keep disabled for production clients that must observe endpoint changes immediately;
+    /// enable for live test suites that open many short-lived sessions against one stable server.
+    /// </summary>
+    public bool CacheEndpointDiscovery { get; init; } = false;
+
+    /// <summary>
     /// Reads overrides from well-known environment variables so the client can be
     /// configured without recompiling:
     /// <list type="bullet">

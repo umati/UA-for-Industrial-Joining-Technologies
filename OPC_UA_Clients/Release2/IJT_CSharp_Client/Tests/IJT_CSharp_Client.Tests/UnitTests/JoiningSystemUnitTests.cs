@@ -812,6 +812,91 @@ public sealed class JoiningSystemUnitTests
         Assert.True(appConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates);
     }
 
+    [Fact]
+    public void EndpointDiscoveryCacheKey_IncludesServerUrlAndSecurityMode()
+    {
+        var key = JoiningSystem.EndpointDiscoveryCacheKey(new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40464",
+        });
+
+        Assert.Equal("opc.tcp://localhost:40464|security=false", key);
+    }
+
+    [Fact]
+    public void EndpointDiscoveryCacheKey_DiffersByServerUrl()
+    {
+        var first = JoiningSystem.EndpointDiscoveryCacheKey(new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40464",
+        });
+        var second = JoiningSystem.EndpointDiscoveryCacheKey(new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40465",
+        });
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void ClearEndpointDiscoveryCacheForTesting_IsSafeWhenCacheIsEmpty()
+    {
+        var ex = Record.Exception(JoiningSystem.ClearEndpointDiscoveryCacheForTesting);
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void SelectEndpointDescription_WhenCacheDisabled_CallsDiscoveryEachTime()
+    {
+        JoiningSystem.ClearEndpointDiscoveryCacheForTesting();
+        var calls = 0;
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40464",
+            CacheEndpointDiscovery = false,
+        };
+
+        EndpointDescription Discover() => new()
+        {
+            EndpointUrl = $"{config.ServerUrl}/{++calls}",
+            SecurityMode = MessageSecurityMode.None,
+            SecurityPolicyUri = SecurityPolicies.None,
+        };
+
+        var first = JoiningSystem.SelectEndpointDescription(config, Discover);
+        var second = JoiningSystem.SelectEndpointDescription(config, Discover);
+
+        Assert.Equal(2, calls);
+        Assert.NotSame(first, second);
+    }
+
+    [Fact]
+    public void SelectEndpointDescription_WhenCacheEnabled_ReusesDiscoveredEndpoint()
+    {
+        JoiningSystem.ClearEndpointDiscoveryCacheForTesting();
+        var calls = 0;
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40464",
+            CacheEndpointDiscovery = true,
+        };
+
+        EndpointDescription Discover() => new()
+        {
+            EndpointUrl = $"{config.ServerUrl}/{++calls}",
+            SecurityMode = MessageSecurityMode.None,
+            SecurityPolicyUri = SecurityPolicies.None,
+        };
+
+        var first = JoiningSystem.SelectEndpointDescription(config, Discover);
+        var second = JoiningSystem.SelectEndpointDescription(config, Discover);
+
+        Assert.Equal(1, calls);
+        Assert.Same(first, second);
+        Assert.Equal("opc.tcp://localhost:40464/1", second.EndpointUrl);
+    }
+
     // ── DisposeAsync ──────────────────────────────────────────────────────────
 
     [Fact]

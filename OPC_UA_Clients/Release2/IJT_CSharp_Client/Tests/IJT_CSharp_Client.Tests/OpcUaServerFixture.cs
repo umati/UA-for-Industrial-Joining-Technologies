@@ -3,6 +3,8 @@
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using IJT_CSharp_Client.Client;
+using IJT_CSharp_Client.Configuration;
 using IJT_CSharp_Client.Helpers;
 using Microsoft.Extensions.Logging;
 
@@ -34,6 +36,8 @@ public sealed class OpcUaServerFixture : IDisposable
     private bool _dockerStarted;
     private string? _dockerComposeDir;
     private string? _tempServerDir;
+    private readonly SemaphoreSlim _reusableSessionLock = new(1, 1);
+    private JoiningSystem? _reusableSession;
 
     public bool IsAvailable { get; private set; }
     public string ServerUrl { get; } = $"opc.tcp://localhost:{_port}";
@@ -175,6 +179,52 @@ public sealed class OpcUaServerFixture : IDisposable
             _log.LogWarning("{Message}", catchMsg);
             Console.Error.WriteLine(catchMsg);
             IsAvailable = false;
+        }
+    }
+
+    public async Task<JoiningSystem> OpenReusableSessionAsync(
+        ClientConfig config,
+        CancellationToken ct = default)
+    {
+        if (!IsAvailable)
+            throw new InvalidOperationException("OPC UA server not available.");
+
+        await _reusableSessionLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (_reusableSession is null || !_reusableSession.IsConnected)
+            {
+                if (_reusableSession is not null)
+                {
+                    await _reusableSession.DisposeAsync().ConfigureAwait(false);
+                    _reusableSession = null;
+                }
+
+                _reusableSession = await JoiningSystem.ConnectAsync(config, ct).ConfigureAwait(false);
+            }
+
+            return _reusableSession;
+        }
+        finally
+        {
+            _reusableSessionLock.Release();
+        }
+    }
+
+    public async Task CloseReusableSessionAsync(CancellationToken ct = default)
+    {
+        await _reusableSessionLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (_reusableSession is not null)
+            {
+                await _reusableSession.DisposeAsync().ConfigureAwait(false);
+                _reusableSession = null;
+            }
+        }
+        finally
+        {
+            _reusableSessionLock.Release();
         }
     }
 
@@ -528,6 +578,24 @@ public sealed class OpcUaServerFixture : IDisposable
 
     public void Dispose()
     {
+        if (_reusableSession is not null)
+        {
+            try
+            {
+                _reusableSession.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning("Error closing reusable C# live-test session: {Message}", ex.Message);
+            }
+            finally
+            {
+                _reusableSession = null;
+            }
+        }
+
+        _reusableSessionLock.Dispose();
+
         if (_serverProcess is not null)
         {
             try

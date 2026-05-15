@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Collections.Concurrent;
 using IJT_CSharp_Client.Configuration;
 using IJT_CSharp_Client.Helpers;
 using Microsoft.Extensions.Logging;
@@ -58,6 +59,8 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     private const int KeepAliveIntervalMs = 5_000;
     private const int EndpointDiscoveryTimeoutMs = 15_000;
+    private const bool UseSecurityPolicyForEndpointDiscovery = false;
+    private static readonly ConcurrentDictionary<string, EndpointDescription> EndpointDiscoveryCache = new(StringComparer.Ordinal);
 
     private readonly ISession _session;
     private readonly ILogger<JoiningSystem> _log = IjtLog.For<JoiningSystem>();
@@ -203,8 +206,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        var endpointDesc = CoreClientUtils.SelectEndpoint(
-            appConfig, config.ServerUrl, useSecurity: false, discoverTimeout: EndpointDiscoveryTimeoutMs);
+        var endpointDesc = SelectEndpointDescription(appConfig, config, log);
 
         var endpoint = new ConfiguredEndpoint(
             null, endpointDesc, EndpointConfiguration.Create(appConfig));
@@ -218,6 +220,49 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             sessionTimeout: (uint)config.SessionTimeoutMs,
             identity: new UserIdentity(new AnonymousIdentityToken()),
             preferredLocales: null).ConfigureAwait(false);
+    }
+
+    internal static string EndpointDiscoveryCacheKey(ClientConfig config)
+        => $"{config.ServerUrl}|security={(UseSecurityPolicyForEndpointDiscovery ? "true" : "false")}";
+
+    internal static void ClearEndpointDiscoveryCacheForTesting()
+        => EndpointDiscoveryCache.Clear();
+
+    private static EndpointDescription SelectEndpointDescription(
+        ApplicationConfiguration appConfig,
+        ClientConfig config,
+        ILogger log)
+        => SelectEndpointDescription(
+            config,
+            () => CoreClientUtils.SelectEndpoint(
+                appConfig,
+                config.ServerUrl,
+                useSecurity: UseSecurityPolicyForEndpointDiscovery,
+                discoverTimeout: EndpointDiscoveryTimeoutMs),
+            log);
+
+    internal static EndpointDescription SelectEndpointDescription(
+        ClientConfig config,
+        Func<EndpointDescription> discoverEndpoint,
+        ILogger? log = null)
+    {
+        if (!config.CacheEndpointDiscovery)
+        {
+            return discoverEndpoint();
+        }
+
+        var cacheKey = EndpointDiscoveryCacheKey(config);
+        if (EndpointDiscoveryCache.TryGetValue(cacheKey, out var cachedEndpoint))
+        {
+            log?.LogDebug("Using cached endpoint discovery metadata for {Url}.", config.ServerUrl);
+            return cachedEndpoint;
+        }
+
+        // A concurrent cache miss may do duplicate discovery work before GetOrAdd
+        // collapses to one value. That is acceptable: the cache avoids repeated
+        // serial live-test discovery, while keeping production discovery default-off.
+        var discoveredEndpoint = discoverEndpoint();
+        return EndpointDiscoveryCache.GetOrAdd(cacheKey, discoveredEndpoint);
     }
 
     // -- Namespace resolution --------------------------------------------------
