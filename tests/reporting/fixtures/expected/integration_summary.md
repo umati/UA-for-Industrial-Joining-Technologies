@@ -2,13 +2,15 @@
 
 > ✅ **All 7 / 7 jobs passed &nbsp;·&nbsp; 2,586 tests &nbsp;·&nbsp; 0 failed &nbsp;·&nbsp; 154 skipped**
 > **Branch:** `c2-phase-1b` &nbsp;·&nbsp; **Commit:** `abcdef12` &nbsp;·&nbsp; **Run:** [#84](https://github.example/ijt/actions/runs/84)
-> Nightly and manual system tests — live OPC UA server behavior, browser E2E suites, Docker packaging, and conformance evidence.
+> Nightly and manual system tests — live OPC UA server behavior, browser E2E suites, Docker packaging, and conformance verification.
 
 ---
 
+<a id="system-validation-overview"></a>
+
 ### Validation Overview
 
-| Lane | Result | Evidence |
+| Lane | Result | Test Results |
 |:-----|:-------|:---------|
 | OPC UA Server Docker smoke | ✅ success | ✅ 10; 0 skipped |
 | Web Client Docker tests | ✅ success | Python ✅ 680; 0 skipped; JavaScript ✅ 522; 0 skipped |
@@ -20,9 +22,11 @@
 
 ---
 
-### Component Evidence
+<a id="system-component-test-results"></a>
 
-| Component | Validation Scope | Container Evidence | Live/System Evidence | Notes |
+### Component Test Results
+
+| Component | Validation Scope | Container Test Results | Live/System Test Results | Notes |
 |:----------|:-----------------|:-------------------|:---------------------|:------|
 | OPC UA Server | Linux container plus Windows live server processes | ✅ 10; 0 skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
 | Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | Python ✅ 680; 0 skipped; JS ✅ 522; 0 skipped | Live ✅ 127; 0 skipped; browser ✅ 66; 0 skipped | Headless Chromium baked into the IJT Browser CI image |
@@ -32,18 +36,22 @@
 
 ---
 
+<a id="system-conformance-overview"></a>
+
 ### Conformance Overview
 
-| Suite | Port | Tests Run | Skipped | Notes |
+| Suite | Port | Live Tests | Skipped | Notes |
 |:------|-----:|----------:|--------:|:------|
 | Test Client — Smoke sanity | 40462 | ✅ 10 | 0 | Server and namespace reachability |
 | Test Client — Conformance | 40462 | ✅ 1,043 | 154 | Not Implemented fixture marker |
 
 ---
 
-### Duration and Bottlenecks
+<a id="system-performance-hotspots"></a>
 
-> Source order: current workflow run jobs API first, then Web Client timing JSON and C# TRX artifacts when available. Missing timing data is omitted rather than estimated.
+### Performance Hotspots
+
+> Source order: current workflow run jobs API first, then Web Client timing JSON, C# TRX artifacts, and Test Client JUnit durations when available. Missing timing data is omitted rather than estimated.
 
 ```mermaid
 %%{init: {"themeVariables": {"taskBkgColor": "#9ca3af", "taskTextColor": "#111827", "critBkgColor": "#ef4444", "doneTaskBkgColor": "#22c55e"}}}%%
@@ -91,7 +99,15 @@ gantt
 
 </details>
 
+<details><summary><b>Test Client Conformance Timing Details</b></summary>
+
+Per-test durations are not available in the current JUnit artifact.
+
+</details>
+
 ---
+
+<a id="system-warnings-drift"></a>
 
 ### Warnings and Drift
 
@@ -114,3 +130,17 @@ No skip policy failures, test-count drift warnings, or artifact warnings.
 | Not Implemented fixture marker | 1 |
 
 </details>
+
+---
+
+<a id="system-per-client-quick-index"></a>
+
+### Per-Client Quick Index
+
+| Client / Component | Appears In |
+|:-------------------|:-----------|
+| OPC UA Server | [Validation Overview](#system-validation-overview); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
+| Web Client | [Validation Overview](#system-validation-overview); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
+| Test Client | [Validation Overview](#system-validation-overview); [Component Test Results](#system-component-test-results); [Conformance Overview](#system-conformance-overview); [Performance Hotspots](#system-performance-hotspots) |
+| Console Client | [Validation Overview](#system-validation-overview); [Component Test Results](#system-component-test-results) |
+| C# Client | [Validation Overview](#system-validation-overview); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |

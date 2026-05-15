@@ -257,7 +257,7 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Console Client
-  #   Python: pytest + bandit (pyproject.toml)
+  #   Python: pytest + bandit (pyproject.toml) + report-only pip-audit JSON
   # ───────────────────────────────────────────────────────────────────────────
   console-client:
     name: "Console Client"
@@ -305,6 +305,11 @@ jobs:
         id: bandit
         continue-on-error: true
         run: python -m bandit -r . -c pyproject.toml --severity-level medium -f json -o test-results/bandit.json
+
+      - name: pip-audit (Python Dependency Audit Report)
+        id: pip_audit
+        continue-on-error: true
+        run: python -m pip_audit --format json -o test-results/pip-audit.json --progress-spinner off
 
       - name: Ruff (Python Linting)
         id: pylint
@@ -682,7 +687,7 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # Test Client
-  #   Python: pytest unit tests (tests/unit/ — no server) + bandit + ruff + mypy
+  #   Python: pytest unit tests (tests/unit/ — no server) + bandit + ruff + mypy + report-only pip-audit JSON
   # ───────────────────────────────────────────────────────────────────────────
   test-client:
     name: "Test Client"
@@ -733,6 +738,11 @@ jobs:
         id: bandit
         continue-on-error: true
         run: python -m bandit -r . -c pyproject.toml --severity-level medium -f json -o test-results/bandit.json
+
+      - name: pip-audit (Python Dependency Audit Report)
+        id: pip_audit
+        continue-on-error: true
+        run: python -m pip_audit --format json -o test-results/pip-audit.json --progress-spinner off
 
       - name: Ruff (Python Linting)
         id: pylint

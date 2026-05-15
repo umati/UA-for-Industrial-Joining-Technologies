@@ -45,6 +45,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 # Shared report logic lives in helpers/*.py.
 # Markdown and Excel generators must use the same helpers to stay in sync.
+from helpers.cu_registry import cu_display_name  # noqa: E402
 from helpers.git_info import short_git_sha as _short_git_sha  # noqa: E402
 from helpers.report_scoring import (
     ACTION_ITEM_LABEL_ORDER as _ACTION_ITEM_LABEL_ORDER,
@@ -84,9 +85,6 @@ from helpers.report_scoring import (
 )
 from helpers.report_scoring import (
     format_delta_summary as _format_delta_summary,
-)
-from helpers.report_scoring import (
-    format_kpi_strip as _format_kpi_strip,
 )
 from helpers.report_scoring import (
     format_outcome_label as _format_outcome_label,
@@ -400,10 +398,6 @@ def _compliance_label(counts: Counter[str], total: int) -> str:
     return _format_status_label(_NO_COMPLIANCE_LABEL)
 
 
-def _cu_display_name(cu_key: str) -> str:
-    return f"IJT {_title_from_key(cu_key)}"
-
-
 def _cu_facet_map(facets: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
     mapping: dict[str, list[str]] = {}
     rollups: list[dict[str, Any]] = []
@@ -552,7 +546,7 @@ def _build_report_context(cu_payload: dict[str, Any] | None, baseline: dict[str,
         findings.append(
             {
                 "cu_key": cu_key,
-                "cu": _cu_display_name(cu_key),
+                "cu": cu_display_name(cu_key),
                 "facets": ", ".join(facet_map.get(cu_key, [])),
                 "server_supported": _in_server_profile(cu_key, supported),
                 "outcome": outcome,
@@ -664,11 +658,11 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
         counts = _count_outcomes(cu_keys, by_cu)
         server_supported_count = _server_profile_cu_count(cu_keys, supported)
         if counts["action_needed"] or counts["blocked"] or server_supported_count == 0:
-            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["not_supported"], 0, "not supported by this server"
+            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["not_supported"], 0, "Not Supported by This Server"
         elif counts["partial"] or counts["not_supported"] or server_supported_count != len(cu_keys):
-            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["partial"], 1, "partially supported"
+            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["partial"], 1, "Partially Supported"
         else:
-            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["supported"], 2, "supported"
+            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["supported"], 2, "Supported"
         name = str(facet.get("display_name") or "Facet").removeprefix("IJT ").removesuffix(" Server Facet")
         description = str(facet.get("description") or "").strip().replace("\n", " ")
         rows.append((rank, name, icon, label, description))
@@ -683,9 +677,9 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
         lines.append("")
         lines.append(
             "_Capability area counts: "
-            f"{summary_counts['supported']} supported · "
-            f"{summary_counts['partially supported']} partially supported · "
-            f"{summary_counts['not supported by this server']} not supported by this server._"
+            f"{summary_counts['Supported']} Supported · "
+            f"{summary_counts['Partially Supported']} Partially Supported · "
+            f"{summary_counts['Not Supported by This Server']} Not Supported by This Server._"
         )
         lines.append("")
         lines.append("<details open>")
@@ -712,7 +706,7 @@ def _append_review_table(
     for finding in findings[:limit]:
         status = f"{finding['status_icon']} {finding['status']}"
         lines.append(
-            f"| {status} | `{_md_cell(str(finding['cu_key']))}` | {finding['result']} | "
+            f"| {status} | {_md_cell(str(finding['cu']))} | {finding['result']} | "
             f"{_md_cell(str(finding['reason']) or 'See CU details')} | {finding['delta']} |"
         )
     if len(findings) > limit:
@@ -910,7 +904,7 @@ def _render_profile_facet_summary(
         in_server_profile = _in_server_profile(cu_key, supported)
         outcome = _cu_compliance_key(data)
         lines.append(
-            f"| {_md_cell(_cu_display_name(cu_key))} | {_md_cell(', '.join(facet_map.get(cu_key, [])))} | "
+            f"| {_md_cell(cu_display_name(cu_key))} | {_md_cell(', '.join(facet_map.get(cu_key, [])))} | "
             f"{in_server_profile} | {_outcome_label(outcome)} | "
             f"{int(data.get('test_count', 0) or 0)} | {int(data.get('passed', 0) or 0)} | "
             f"{int(data.get('not_supported', 0) or 0)} | {int(data.get('blocked', 0) or 0)} | {failed} | "
@@ -1031,16 +1025,21 @@ def render_conformance_summary(
         findings_count: Counter[str] = context["findings_count"]
         lines.append("## Conformance Overview")
         lines.append("")
-        lines.append(f"| Server Support Coverage | {_TEST_RESULT_ICONS['passed']} Validation Health | CU Status |")
-        lines.append("|:---:|:---:|:---:|")
+        lines.append(
+            f"| Server Support Coverage | {_TEST_RESULT_ICONS['passed']} Validation Health | "
+            "Action Items | Capability Notes |"
+        )
+        lines.append("|:---:|:---:|:---:|:---:|")
         lines.append(
             f"| **{_fmt_pct(context['spec_coverage_value'])}** | "
             f"**{_fmt_pct(context['validation_health_value'])}** | "
-            f"**{_format_kpi_strip(findings_count)}** |"
+            f"**{_format_status_counts(_ACTION_ITEM_LABEL_ORDER, findings_count)}** | "
+            f"**{_format_status_counts(_CAPABILITY_NOTE_LABEL_ORDER, findings_count)}** |"
         )
         lines.append(
             f"| {supported} / {total_active} CUs server-supported | "
-            f"{validated} / {supported} server-supported CUs validated | Failed items and capability notes below |"
+            f"{validated} / {supported} server-supported CUs validated | "
+            "Failures and blocked preconditions | Not supported CUs and supported-with-notes details |"
         )
         lines.append("")
 

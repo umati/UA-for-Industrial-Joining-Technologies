@@ -103,7 +103,14 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 # Shared report logic lives in helpers/*.py.
 # Markdown and Excel generators must use the same helpers to stay in sync.
+from helpers.cu_registry import cu_display_name  # noqa: E402
 from helpers.git_info import short_git_sha as _short_git_sha  # noqa: E402
+from helpers.report_scoring import (
+    ACTION_ITEM_LABEL_ORDER as _ACTION_ITEM_LABEL_ORDER,
+)
+from helpers.report_scoring import (
+    CAPABILITY_NOTE_LABEL_ORDER as _CAPABILITY_NOTE_LABEL_ORDER,
+)
 from helpers.report_scoring import (
     CAPABILITY_SUPPORT_ICONS as _CAPABILITY_SUPPORT_ICONS,
 )
@@ -123,10 +130,10 @@ from helpers.report_scoring import (
     format_delta_summary as _format_delta_summary,
 )
 from helpers.report_scoring import (
-    format_kpi_strip as _format_kpi_strip,
+    format_pct as _fmt_pct,
 )
 from helpers.report_scoring import (
-    format_pct as _fmt_pct,
+    format_status_counts as _format_status_counts,
 )
 from helpers.report_scoring import (
     outcome_label as _outcome_label,
@@ -328,10 +335,6 @@ def _load_capabilities(path: Path | None) -> CapabilitiesInfo | None:
 def _title_from_key(key: str) -> str:
     acronyms = {"cu": "CU", "id": "ID", "io": "IO", "ijt": "IJT"}
     return " ".join(acronyms.get(token, token.capitalize()) for token in key.split("_"))
-
-
-def _cu_display_name(cu_key: str) -> str:
-    return f"IJT {_title_from_key(cu_key)}"
 
 
 def _supported_set(cu_payload: dict[str, Any]) -> set[str] | None:
@@ -609,7 +612,7 @@ def _build_report_context(
         findings.append(
             {
                 "cu_key": cu_key,
-                "cu": _cu_display_name(cu_key),
+                "cu": cu_display_name(cu_key),
                 "facets": ", ".join(facet_map.get(cu_key, [])),
                 "outcome": outcome,
                 "result": _cu_compliance_label(outcome),
@@ -679,11 +682,11 @@ def _support_rows(context: dict[str, Any], facets: dict[str, FacetInfo], limit: 
         counts = _count_cu_outcomes(facet.conformance_units, by_cu)
         server_supported_count = _server_profile_cu_count(facet.conformance_units, supported)
         if counts["action_needed"] or counts["blocked"] or server_supported_count == 0:
-            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["not_supported"], 0, "not supported by this server"
+            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["not_supported"], 0, "Not Supported by This Server"
         elif counts["partial"] or counts["not_supported"] or server_supported_count != len(facet.conformance_units):
-            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["partial"], 1, "partially supported"
+            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["partial"], 1, "Partially Supported"
         else:
-            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["supported"], 2, "supported"
+            icon, rank, label = _CAPABILITY_SUPPORT_ICONS["supported"], 2, "Supported"
         name = facet.display_name.removeprefix("IJT ").removesuffix(" Server Facet")
         rows.append((rank, name, f"{icon} {label}. {facet.description}"))
     rows.sort(key=lambda item: (item[0], item[1]))
@@ -843,16 +846,21 @@ def _build_cover(
                 f"{validated} / {supported} server-supported CUs validated",
             ),
             (
-                "CU Status",
-                _format_kpi_strip(findings_count),
-                "Failed items and Capability Notes",
+                "Action Items",
+                _format_status_counts(_ACTION_ITEM_LABEL_ORDER, findings_count),
+                "Failures and blocked preconditions",
+            ),
+            (
+                "Capability Notes",
+                _format_status_counts(_CAPABILITY_NOTE_LABEL_ORDER, findings_count),
+                "Not supported CUs and supported-with-notes details",
             ),
         ]
         for offset, (metric, value, note) in enumerate(metrics, start=1):
             ws.cell(row=row + offset, column=1, value=metric).font = Font(bold=True)
             value_cell = ws.cell(row=row + offset, column=2, value=value)
             value_cell.font = Font(bold=True)
-            if metric != "CU Status":
+            if metric in {"Server Support Coverage", "Validation Health"}:
                 value_cell.fill = _percentage_fill(
                     context["spec_coverage_value" if metric == "Server Support Coverage" else "validation_health_value"]
                 )
@@ -1301,7 +1309,7 @@ def _build_cu_coverage(
         values = [
             f"{status_icon} {status}",
             _delta_symbol(cu_key, compliance, baseline),
-            _cu_display_name(cu_key),
+            cu_display_name(cu_key),
             cu_key,
             ", ".join(facet_map.get(cu_key, [])),
             support,

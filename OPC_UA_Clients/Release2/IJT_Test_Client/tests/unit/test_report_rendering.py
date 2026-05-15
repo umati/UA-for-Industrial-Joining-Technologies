@@ -291,9 +291,9 @@ def test_markdown_and_excel_share_report_scoring_helpers():
     assert _excel_report._delta_symbol is _report_scoring.delta_symbol
 
 
-def test_markdown_and_excel_use_same_kpi_formatter():
-    assert _ci_summary._format_kpi_strip is _report_scoring.format_kpi_strip
-    assert _excel_report._format_kpi_strip is _report_scoring.format_kpi_strip
+def test_markdown_and_excel_use_same_status_count_formatter():
+    assert _ci_summary._format_status_counts is _report_scoring.format_status_counts
+    assert _excel_report._format_status_counts is _report_scoring.format_status_counts
 
 
 def test_report_scoring_public_maps_are_immutable():
@@ -485,9 +485,15 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
     assert "## What This Server Supports" in lines
     assert "## Action Items" in lines
     assert "## Capability Notes" in lines
-    assert "CU Status" in rendered
-    assert _assert_kpi_strip(rendered, _context["findings_count"]) == _report_scoring.format_kpi_strip(
-        _context["findings_count"]
+    assert "Action Items" in rendered
+    assert "Capability Notes" in rendered
+    assert (
+        _report_scoring.format_status_counts(_report_scoring.ACTION_ITEM_LABEL_ORDER, _context["findings_count"])
+        in rendered
+    )
+    assert (
+        _report_scoring.format_status_counts(_report_scoring.CAPABILITY_NOTE_LABEL_ORDER, _context["findings_count"])
+        in rendered
     )
     assert "<summary><b>Full CU Coverage</b></summary>" in rendered
     assert "<summary><b>Test Environment</b></summary>" in rendered
@@ -572,13 +578,17 @@ def test_excel_cover_sheet_exists_and_first():
 
     assert wb.sheetnames[0] == "Cover"
     assert wb["Cover"]["A1"].value == "PASSED - Score 90 / 100"
-    assert wb["Cover"]["A8"].value == "CU Status"
-    assert _assert_kpi_strip(
-        str(wb["Cover"]["B8"].value), context["findings_count"]
-    ) == _report_scoring.format_kpi_strip(context["findings_count"])
+    assert wb["Cover"]["A8"].value == "Action Items"
+    assert wb["Cover"]["B8"].value == _report_scoring.format_status_counts(
+        _report_scoring.ACTION_ITEM_LABEL_ORDER, context["findings_count"]
+    )
+    assert wb["Cover"]["A9"].value == "Capability Notes"
+    assert wb["Cover"]["B9"].value == _report_scoring.format_status_counts(
+        _report_scoring.CAPABILITY_NOTE_LABEL_ORDER, context["findings_count"]
+    )
 
 
-def test_excel_cover_uses_kpi_separator():
+def test_excel_cover_status_counts_use_separator():
     profiles, facets, capabilities = _excel_metadata()
     context = _excel_report._build_report_context(_sample_payload(), profiles, facets, capabilities, baseline=None)
     wb = _excel_report.openpyxl.Workbook()

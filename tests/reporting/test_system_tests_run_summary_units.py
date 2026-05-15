@@ -506,17 +506,17 @@ def test_skips_formatter():
     assert system_tests_run_summary.skips(None) == "—"
 
 
-def test_count_evidence():
-    """count_evidence combines tests and skips formatting."""
-    result = system_tests_run_summary.count_evidence((100, 95, 5, 3))
+def test_count_test_results():
+    """count_test_results combines tests and skips formatting."""
+    result = system_tests_run_summary.count_test_results((100, 95, 5, 3))
     assert "95 / 100" in result
     assert "3 skipped" in result
 
 
-def test_count_evidence_with_baseline():
-    """count_evidence includes baseline delta."""
+def test_count_test_results_with_baseline():
+    """count_test_results includes baseline delta."""
     baseline = {"tests": 98}
-    result = system_tests_run_summary.count_evidence((100, 95, 5, 3), baseline)
+    result = system_tests_run_summary.count_test_results((100, 95, 5, 3), baseline)
     assert "(+2)" in result
 
 

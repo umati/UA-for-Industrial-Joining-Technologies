@@ -11,9 +11,10 @@ This glossary defines every term that appears in:
 - the Test Client conformance summary (`scripts/reporting/conformance_summary.py`,
  invoked via `scripts/make_conformance_summary.py` from
  `.github/workflows/integration.yml`)
-- the repo-wide CI summary table (inline Python in
- `.github/workflows/ci.yml` job `report`; will move to its own module in
- Phase 1B)
+- the repo-wide CI summary table (`reporting/ci_run_summary.py`, invoked by
+ `.github/workflows/ci.yml` job `report`)
+- the System Tests summary (`reporting/system_tests_run_summary.py`, invoked by
+ `.github/workflows/integration.yml`)
 - the Excel parity report (`scripts/make_excel_report.py`)
 - the workflow display names and Checks tab
 
@@ -41,9 +42,9 @@ it as a glossary bug and fix it in the same PR that touches the symbol.
 
 | Visual meaning | Mermaid binding | Color |
 |---|---|---|
-| Pass / completed | `pie1`, `doneTaskBkgColor` | Green `#22c55e` |
-| Failure / current bottleneck | `pie2`, `critBkgColor` | Red `#ef4444` |
-| Skipped / neutral | `pie3`, `taskBkgColor` | Gray `#9ca3af` |
+| Pass / completed | `doneTaskBkgColor` | Green `#22c55e` |
+| Failure / current bottleneck | `critBkgColor` | Red `#ef4444` |
+| Skipped / neutral | `taskBkgColor` | Gray `#9ca3af` |
 
 ---
 
@@ -51,9 +52,9 @@ it as a glossary bug and fix it in the same PR that touches the symbol.
 
 ### 2.1 `Conformance Overview` 👔 🛠️ 🧪 📦
 Source: `scripts/reporting/conformance_summary.py` (`## Conformance Overview` heading and KPI table emitted in `render_conformance_summary()`).
-Rendered as a **three-column KPI strip** (`Server Support Coverage` | `Validation Health` | `CU Status`) **plus a three-cell context row** beneath it.
+Rendered as a **four-column KPI strip** (`Server Support Coverage` | `Validation Health` | `Action Items` | `Capability Notes`) **plus a four-cell context row** beneath it.
 
-The `CU Status` cell renders the four KPI labels defined by `KPI_LABELS` in `helpers/report_scoring.py`: **`Failed` · `Blocked` · `Not Supported` · `With Notes`** (no `Supported` count in this strip; `format_kpi_strip()` in `helpers/report_scoring.py` only emits the four KPI labels).
+`Action Items` renders **`Failed` · `Blocked`**. `Capability Notes` renders **`Not Supported` · `With Notes`**. The split keeps immediate follow-up work separate from capability explanations.
 
 **Why renamed:** the old "At a Glance" wording was informal; non-IJT readers (management, customers) parsed it as "look here for everything," not "high-level KPIs." `Conformance Overview` says exactly what the block contains.
 
@@ -73,15 +74,16 @@ The share of server-supported CUs that this run validated as **Supported** or **
 - Example: 95% means 95% of the CUs the server claims to support were proven by tests.
 **Note:** Formula stays as-is. Any future weighting change requires a separate proposal document and PR.
 
-### 2.4 `CU Status` (label unchanged) 👔 🛠️ 🧪 📦
-Source: `scripts/reporting/conformance_summary.py` — `CU Status` column header in the `## Conformance Overview` KPI table; strip rendered via `_format_kpi_strip(findings_count)` (the `findings_count` Counter is built in `render_conformance_summary()`).
-Compressed status counts across all CUs. The strip renders the four KPI labels from `KPI_LABELS` in `helpers/report_scoring.py`:
+### 2.4 `Action Items` and `Capability Notes` 👔 🛠️ 🧪 📦
+Source: `scripts/reporting/conformance_summary.py` — `Action Items` and `Capability Notes` column headers in the `## Conformance Overview` KPI table; cells rendered via `_format_status_counts(...)` from `helpers/report_scoring.py` (the `findings_count` Counter is built in `render_conformance_summary()`).
+Compressed status counts across all CUs. The split renders the four KPI labels from `KPI_LABELS` in `helpers/report_scoring.py` as two reader layers:
 
 ```
-Failed · Blocked · Not Supported · With Notes
+Action Items: Failed · Blocked
+Capability Notes: Not Supported · With Notes
 ```
 
-There is **no `Supported` count in this strip** — the strip only highlights the four buckets that need attention.
+There is **no `Supported` count in these cells** — they only highlight buckets that need follow-up or explanation.
 
 There is no formula change and no new bucket. The internal JSON key remains `action_needed`; the public report label is `Failed`.
 
@@ -170,13 +172,13 @@ When no baseline exists, the block is **hidden**, not shown with an empty messag
 ## 6. Timing diagnostics terms
 
 ### 6.1 `Bottleneck Spotlight` (new in Phase 3) 🛠️ 🧪
-Auto-detects the slowest current job/suite and shows the top-5 slowest tests in that suite. Replaces the hardcoded "Top C# Live Tests" section.
+Auto-detects the slowest current job/suite and appears inside the System Tests `Performance Hotspots` section. Replaces the former hardcoded C# live-test spotlight.
 **Why auto:** the longest pole changes over time (Phase 3 Q15). Hardcoding "C# Live Tests" hid Web Client regressions when they became slower than C#.
 
-### 6.2 Timing layers (Phase 3) 🛠️ 🧪
+### 6.2 Timing layers (Phase 8) 🛠️ 🧪
 - **Layer 1 (always visible):** Mermaid gantt of all job durations.
 - **Layer 2 (always visible):** `Bottleneck Spotlight`.
-- **Layer 3 (`<details>` collapsed):** per-suite top-5 for every suite with wall time > 60s.
+- **Layer 3 (`<details>` collapsed):** top-10 detail tables for available Web Browser, C# Live, and Test Client Conformance timing artifacts.
 
 ---
 

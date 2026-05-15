@@ -139,6 +139,23 @@ def parse_npm_audit(pattern):
     return None, None
 
 
+def parse_pip_audit(pattern):
+    for path in glob.glob(pattern, recursive=True):
+        with contextlib.suppress(Exception):
+            with open(path) as _f:
+                data = json.load(_f)
+            vulns = [
+                vuln
+                for dependency in data.get("dependencies", [])
+                if isinstance(dependency, dict)
+                for vuln in dependency.get("vulns", [])
+                if isinstance(vuln, dict)
+            ]
+            fixable = sum(1 for vuln in vulns if vuln.get("fix_versions"))
+            return len(vulns), fixable, True
+    return None, None, False
+
+
 def parse_eslint(pattern):
     for path in glob.glob(pattern, recursive=True):
         with contextlib.suppress(Exception):
@@ -191,16 +208,36 @@ def bandit_fmt(high, medium):
     if high is None:
         return "—"
     if high == 0 and medium == 0:
-        return "✅ No issues"
-    return f"❌ {high} high, {medium} medium"
+        return "bandit ✅ 0 issues"
+    return f"bandit ❌ {high} high, {medium} medium"
+
+
+def pip_audit_fmt(total, fixable, available):
+    if not available:
+        return "pip-audit ⚠️ unavailable"
+    if total is None or fixable is None:
+        return "pip-audit ⚠️ unavailable"
+    if total == 0:
+        return "pip-audit ✅ 0 CVEs"
+    if fixable > 0:
+        return f"pip-audit ❌ {fixable} fixable CVE{'s' if fixable != 1 else ''}"
+    return f"pip-audit ⚠️ {total} advisory CVE{'s' if total != 1 else ''}"
 
 
 def npm_fmt(crit, high):
     if crit is None:
         return "—"
     if crit == 0 and high == 0:
-        return "✅ No issues"
-    return f"❌ {crit} critical, {high} high"
+        return "npm-audit ✅ 0 critical"
+    return f"npm-audit ❌ {crit} critical, {high} high"
+
+
+def nuget_fmt(result):
+    if result == "success":
+        return "nuget ✅ 0 vulnerable"
+    if result == "failure":
+        return "nuget ❌ vulnerable packages detected"
+    return tool(result, "nuget")
 
 
 def eslint_fmt(step_r, esl_tuple):
@@ -262,12 +299,14 @@ def main() -> None:
     web_js_t = parse_junit("all-results/results-web-client-js/vitest.xml")
     web_esl = parse_eslint("all-results/results-web-client-js/eslint.json")
     web_ban = parse_bandit("all-results/results-web-client-python/bandit.json")
+    web_pip = parse_pip_audit("all-results/results-web-client-python/pip-audit.json")
     web_npm = parse_npm_audit("all-results/results-web-client-js/npm-audit.json")
     web_cov = parse_coverage("all-results/results-web-client-python/coverage.xml")
     web_js_cov = parse_coverage("all-results/results-web-client-js/coverage/cobertura-coverage.xml")
 
     con_py_t = parse_junit("all-results/results-console-client/pytest.xml")
     con_ban = parse_bandit("all-results/results-console-client/bandit.json")
+    con_pip = parse_pip_audit("all-results/results-console-client/pip-audit.json")
     con_cov = parse_coverage("all-results/results-console-client/coverage.xml")
 
     nod_js_t = parse_junit("all-results/results-node-client/vitest.xml")
@@ -279,6 +318,7 @@ def main() -> None:
 
     tc_py_t = parse_junit("all-results/results-test-client/pytest.xml")
     tc_ban = parse_bandit("all-results/results-test-client/bandit.json")
+    tc_pip = parse_pip_audit("all-results/results-test-client/pip-audit.json")
     tc_cov = parse_coverage("all-results/results-test-client/coverage.xml")
 
     nod_cov = parse_coverage("all-results/results-node-client/coverage/cobertura-coverage.xml")
@@ -370,11 +410,6 @@ def main() -> None:
     total_sk = sum(s[3] for s in suites if s[3] is not None)
     total_passed = max(total_t - total_f - total_sk, 0)
 
-    if total_t > 0:
-        totals = f"{total_t:,} tests  ·  {total_f} failed  ·  {total_sk} skipped"
-    else:
-        totals = "no test data"
-
     run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
     sha_str = f"`{sha}`" if sha else "—"
 
@@ -383,7 +418,7 @@ def main() -> None:
     out = [
         "## IJT OPC UA — CI",
         "",
-        f"> {status_icon} **{status_msg}** &nbsp;·&nbsp; {totals}",
+        f"> {status_icon} **{status_msg}**",
         (
             f"> **Branch:** `{branch}` &nbsp;·&nbsp; **Commit:** {sha_str} "
             f"&nbsp;·&nbsp; **Run:** {run_link}"
@@ -391,16 +426,11 @@ def main() -> None:
         "",
         "---",
         "",
+        '<a id="ci-outcome-overview"></a>',
+        "",
         "### 📊 Outcome Overview",
         "",
-        "```mermaid",
-        '%%{init: {"themeVariables": {"pie1": "#22c55e", "pie2": "#ef4444", "pie3": "#9ca3af"}}}%%',
-        "pie showData",
-        "  title CI test outcomes",
-        f'  "Passed" : {total_passed}',
-        f'  "Failed" : {total_f}',
-        f'  "Skipped" : {total_sk}',
-        "```",
+        f"✅ Passed: {total_passed:,} · ❌ Failed: {total_f:,} · ⏭️ Skipped: {total_sk:,}",
         "",
         "| Outcome | Count |",
         "|:--------|------:|",
@@ -410,9 +440,11 @@ def main() -> None:
         "",
         "---",
         "",
+        '<a id="ci-validation-results"></a>',
+        "",
         "### 🧪 Validation Results",
         "",
-        "| Component | Validation Scope | Tests Run | Skipped | Coverage / Threshold |",
+        "| Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |",
         "|:----------|:-----------------|----------:|--------:|:---------------------:|",
         (
             f"| Web Client — Python | Ubuntu Release 2 Python unit lane | {tests(*web_py_t)} | "
@@ -447,6 +479,8 @@ def main() -> None:
         "",
         "---",
         "",
+        '<a id="ci-code-quality-checks"></a>',
+        "",
         "### 🧹 Code Quality Checks",
         "",
         "| Component | Validation Scope | Lint / Format | Type Check / Build |",
@@ -476,17 +510,38 @@ def main() -> None:
         "",
         "---",
         "",
-        "### 🔒 Security Checks",
+        '<a id="ci-source-dependency-security"></a>',
+        "",
+        "### 🔒 Source and Dependency Security",
+        "",
+        (
+            "Static source analysis (bandit) and dependency vulnerability audit "
+            "(pip-audit, npm-audit, nuget)."
+        ),
+        "",
+        (
+            "For workflow security see CI Infrastructure → zizmor; for secret scanning see "
+            "Pre-commit Hooks → detect-secrets; for deep semantic analysis see "
+            "the Security — CodeQL workflow."
+        ),
         "",
         "| Component | Security Scan | Dependency Audit |",
         "|:----------|:--------------|:-----------------|",
-        f"| Web Client | {bandit_fmt(*web_ban)} | {npm_fmt(*web_npm)} |",
-        f"| Console Client | {bandit_fmt(*con_ban)} | Not Applicable |",
-        f"| Node Client — Legacy JavaScript | Not Configured | {npm_fmt(*nod_npm)} |",
-        f"| C# Client | Not Applicable | {tool(cs_vuln, 'nuget')} |",
-        f"| Test Client | {bandit_fmt(*tc_ban)} | Not Applicable |",
+        (
+            f"| Web Client | {bandit_fmt(*web_ban)} | "
+            f"{lint(pip_audit_fmt(*web_pip), npm_fmt(*web_npm))} |"
+        ),
+        f"| Console Client | {bandit_fmt(*con_ban)} | {pip_audit_fmt(*con_pip)} |",
+        (
+            "| Node Client — Legacy JavaScript | Not Configured "
+            f"(no eslint-plugin-security) | {npm_fmt(*nod_npm)} |"
+        ),
+        f"| C# Client | Not Applicable | {nuget_fmt(cs_vuln)} |",
+        f"| Test Client | {bandit_fmt(*tc_ban)} | {pip_audit_fmt(*tc_pip)} |",
         "",
         "---",
+        "",
+        '<a id="ci-infrastructure"></a>',
         "",
         "### ⚙️ CI Infrastructure",
         "",
@@ -499,15 +554,28 @@ def main() -> None:
         "",
         "---",
         "",
-        (
-            "> 📦 **Artifacts** — JUnit XML · Coverage XML · ESLint JSON · "
-            "Bandit JSON &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down"
-        ),
-        (
-            "> Coverage key: ✅ meets declared threshold &nbsp;·&nbsp; ⚠️ below "
-            "threshold but ≥ 80% &nbsp;·&nbsp; ❌ < 80% &nbsp;·&nbsp; thresholds "
-            "come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage gate"
-        ),
+        '<a id="ci-raw-data"></a>',
+        "",
+        "### Where to find raw data",
+        "",
+        "- JUnit XML",
+        "- Coverage XML",
+        "- ESLint JSON",
+        "- Bandit JSON",
+        "- pip-audit / npm-audit JSON",
+        "- Per-test drill-down: Checks tab",
+        "",
+        '<a id="ci-coverage-legend"></a>',
+        "",
+        "### Coverage Legend",
+        "",
+        "| Icon | Meaning |",
+        "|:-----|:--------|",
+        "| ✅ | Meets the declared threshold |",
+        "| ⚠️ | Below threshold but at least 80% |",
+        "| ❌ | Below 80% |",
+        "",
+        "Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage gate.",
     ]
 
     # ── Inline skip details (collapsible) ─────────────────────────────
@@ -604,6 +672,47 @@ def main() -> None:
     if artifact_warnings:
         out += ["", "---", "", "### ⚠️ Artifact Warnings", ""]
         out += artifact_warnings
+
+    out += [
+        "",
+        "---",
+        "",
+        '<a id="ci-per-client-quick-index"></a>',
+        "",
+        "### Per-Client Quick Index",
+        "",
+        "| Client / Component | Appears In |",
+        "|:-------------------|:-----------|",
+        (
+            "| Web Client | [Validation Results](#ci-validation-results); "
+            "[Code Quality Checks](#ci-code-quality-checks); "
+            "[Source and Dependency Security](#ci-source-dependency-security) |"
+        ),
+        (
+            "| Console Client | [Validation Results](#ci-validation-results); "
+            "[Code Quality Checks](#ci-code-quality-checks); "
+            "[Source and Dependency Security](#ci-source-dependency-security) |"
+        ),
+        (
+            "| Node Client — Legacy JavaScript | [Validation Results](#ci-validation-results); "
+            "[Code Quality Checks](#ci-code-quality-checks); "
+            "[Source and Dependency Security](#ci-source-dependency-security) |"
+        ),
+        (
+            "| C# Client | [Validation Results](#ci-validation-results); "
+            "[Code Quality Checks](#ci-code-quality-checks); "
+            "[Source and Dependency Security](#ci-source-dependency-security) |"
+        ),
+        (
+            "| Test Client | [Validation Results](#ci-validation-results); "
+            "[Code Quality Checks](#ci-code-quality-checks); "
+            "[Source and Dependency Security](#ci-source-dependency-security) |"
+        ),
+        (
+            "| OPC UA Server | [Validation Results](#ci-validation-results); "
+            "[CI Infrastructure](#ci-infrastructure) |"
+        ),
+    ]
 
     with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8") as fh:
         fh.write("\n".join(out) + "\n")

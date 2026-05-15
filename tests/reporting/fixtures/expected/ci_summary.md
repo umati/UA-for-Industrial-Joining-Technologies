@@ -1,20 +1,15 @@
 ## IJT OPC UA — CI
 
-> ✅ **All 12 / 12 jobs passed** &nbsp;·&nbsp; 39 tests  ·  0 failed  ·  18 skipped
+> ✅ **All 12 / 12 jobs passed**
 > **Branch:** `c2-phase-1b` &nbsp;·&nbsp; **Commit:** `12345678` &nbsp;·&nbsp; **Run:** [#42](https://github.example/ijt/actions/runs/42)
 
 ---
 
+<a id="ci-outcome-overview"></a>
+
 ### 📊 Outcome Overview
 
-```mermaid
-%%{init: {"themeVariables": {"pie1": "#22c55e", "pie2": "#ef4444", "pie3": "#9ca3af"}}}%%
-pie showData
-  title CI test outcomes
-  "Passed" : 21
-  "Failed" : 0
-  "Skipped" : 18
-```
+✅ Passed: 21 · ❌ Failed: 0 · ⏭️ Skipped: 18
 
 | Outcome | Count |
 |:--------|------:|
@@ -24,9 +19,11 @@ pie showData
 
 ---
 
+<a id="ci-validation-results"></a>
+
 ### 🧪 Validation Results
 
-| Component | Validation Scope | Tests Run | Skipped | Coverage / Threshold |
+| Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |
 |:----------|:-----------------|----------:|--------:|:---------------------:|
 | Web Client — Python | Ubuntu Release 2 Python unit lane | ✅ 4 | 2 | 97.0% / 95% ✅ |
 | Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | ✅ 3 | 0 | 96.0% / 95% ✅ |
@@ -37,6 +34,8 @@ pie showData
 | OPC UA Server — Smoke | Windows native server smoke lane | ✅ 10 | 0 | Not Applicable |
 
 ---
+
+<a id="ci-code-quality-checks"></a>
 
 ### 🧹 Code Quality Checks
 
@@ -50,17 +49,25 @@ pie showData
 
 ---
 
-### 🔒 Security Checks
+<a id="ci-source-dependency-security"></a>
+
+### 🔒 Source and Dependency Security
+
+Static source analysis (bandit) and dependency vulnerability audit (pip-audit, npm-audit, nuget).
+
+For workflow security see CI Infrastructure → zizmor; for secret scanning see Pre-commit Hooks → detect-secrets; for deep semantic analysis see the Security — CodeQL workflow.
 
 | Component | Security Scan | Dependency Audit |
 |:----------|:--------------|:-----------------|
-| Web Client | ✅ No issues | ✅ No issues |
-| Console Client | ✅ No issues | Not Applicable |
-| Node Client — Legacy JavaScript | Not Configured | ✅ No issues |
-| C# Client | Not Applicable | nuget ✅ |
-| Test Client | ✅ No issues | Not Applicable |
+| Web Client | bandit ✅ 0 issues | pip-audit ✅ 0 CVEs · npm-audit ✅ 0 critical |
+| Console Client | bandit ✅ 0 issues | pip-audit ✅ 0 CVEs |
+| Node Client — Legacy JavaScript | Not Configured (no eslint-plugin-security) | npm-audit ✅ 0 critical |
+| C# Client | Not Applicable | nuget ✅ 0 vulnerable |
+| Test Client | bandit ✅ 0 issues | pip-audit ✅ 0 CVEs |
 
 ---
+
+<a id="ci-infrastructure"></a>
 
 ### ⚙️ CI Infrastructure
 
@@ -73,8 +80,28 @@ pie showData
 
 ---
 
-> 📦 **Artifacts** — JUnit XML · Coverage XML · ESLint JSON · Bandit JSON &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down
-> Coverage key: ✅ meets declared threshold &nbsp;·&nbsp; ⚠️ below threshold but ≥ 80% &nbsp;·&nbsp; ❌ < 80% &nbsp;·&nbsp; thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage gate
+<a id="ci-raw-data"></a>
+
+### Where to find raw data
+
+- JUnit XML
+- Coverage XML
+- ESLint JSON
+- Bandit JSON
+- pip-audit / npm-audit JSON
+- Per-test drill-down: Checks tab
+
+<a id="ci-coverage-legend"></a>
+
+### Coverage Legend
+
+| Icon | Meaning |
+|:-----|:--------|
+| ✅ | Meets the declared threshold |
+| ⚠️ | Below threshold but at least 80% |
+| ❌ | Below 80% |
+
+Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage gate.
 
 ---
 
@@ -84,8 +111,8 @@ pie showData
 
 | Reason | Count |
 |:-------|------:|
-| node_modules absent in split Python lane | 1 |
-| eslint runs in JavaScript lane | 1 |
+| node_modules absent in Web Client - Python lane; chart.js vendoring is gated by sibling 'Web Client - JavaScript' lane | 1 |
+| ESLint binary absent in Web Client - Python lane; JS lint is gated by sibling 'Web Client - JavaScript' lane | 1 |
 
 </details>
 
@@ -105,3 +132,18 @@ pie showData
 | IJT_PHASE1_ONLY filter | 1 |
 
 </details>
+
+---
+
+<a id="ci-per-client-quick-index"></a>
+
+### Per-Client Quick Index
+
+| Client / Component | Appears In |
+|:-------------------|:-----------|
+| Web Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security) |
+| Console Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security) |
+| Node Client — Legacy JavaScript | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security) |
+| C# Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security) |
+| Test Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security) |
+| OPC UA Server | [Validation Results](#ci-validation-results); [CI Infrastructure](#ci-infrastructure) |

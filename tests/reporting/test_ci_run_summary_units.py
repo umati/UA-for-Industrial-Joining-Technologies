@@ -392,7 +392,7 @@ def test_bandit_fmt_none_returns_dash():
 
 def test_bandit_fmt_no_issues():
     """bandit_fmt returns success message when no issues."""
-    assert ci_run_summary.bandit_fmt(0, 0) == "✅ No issues"
+    assert ci_run_summary.bandit_fmt(0, 0) == "bandit ✅ 0 issues"
 
 
 def test_bandit_fmt_with_issues():
@@ -410,7 +410,7 @@ def test_npm_fmt_none_returns_dash():
 
 def test_npm_fmt_no_issues():
     """npm_fmt returns success message when no issues."""
-    assert ci_run_summary.npm_fmt(0, 0) == "✅ No issues"
+    assert ci_run_summary.npm_fmt(0, 0) == "npm-audit ✅ 0 critical"
 
 
 def test_npm_fmt_with_issues():
@@ -419,6 +419,42 @@ def test_npm_fmt_with_issues():
     assert "❌" in result
     assert "2 critical" in result
     assert "4 high" in result
+
+
+def test_parse_pip_audit_counts_fixable_and_advisory(tmp_path):
+    """parse_pip_audit uses pip-audit's dependencies[].vulns[] JSON shape."""
+    report = tmp_path / "pip-audit.json"
+    report.write_text(
+        json.dumps(
+            {
+                "dependencies": [
+                    {
+                        "name": "pkg-a",
+                        "vulns": [
+                            {"id": "CVE-1", "fix_versions": ["1.2.3"]},
+                            {"id": "CVE-2", "fix_versions": []},
+                        ],
+                    },
+                    {"name": "pkg-b", "vulns": []},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert ci_run_summary.parse_pip_audit(str(report)) == (2, 1, True)
+
+
+def test_pip_audit_fmt_states():
+    assert ci_run_summary.pip_audit_fmt(0, 0, True) == "pip-audit ✅ 0 CVEs"
+    assert ci_run_summary.pip_audit_fmt(2, 1, True) == "pip-audit ❌ 1 fixable CVE"
+    assert ci_run_summary.pip_audit_fmt(2, 0, True) == "pip-audit ⚠️ 2 advisory CVEs"
+    assert ci_run_summary.pip_audit_fmt(None, None, False) == "pip-audit ⚠️ unavailable"
+
+
+def test_nuget_fmt_uses_countless_failure():
+    assert ci_run_summary.nuget_fmt("success") == "nuget ✅ 0 vulnerable"
+    assert ci_run_summary.nuget_fmt("failure") == "nuget ❌ vulnerable packages detected"
 
 
 def test_eslint_fmt_none_uses_step_result():

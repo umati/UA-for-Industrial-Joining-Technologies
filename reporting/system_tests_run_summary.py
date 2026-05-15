@@ -430,6 +430,38 @@ def csharp_live_timings(pattern):
     return {"classes": class_rows, "top": top_rows}
 
 
+def junit_case_timings(pattern, label):
+    """Load per-test durations from JUnit XML artifacts when time attributes exist."""
+    rows = []
+    for path in sorted(glob.glob(pattern, recursive=True)):
+        try:
+            root = parse_xml_root(path)
+        except Exception as exc:
+            print(f"[WARN] junit_case_timings({path}): {exc}")
+            continue
+
+        for testcase in root.findall(".//testcase"):
+            if testcase.get("time") is None:
+                continue
+            outcome = "success"
+            if testcase.find("failure") is not None or testcase.find("error") is not None:
+                outcome = "failure"
+            elif testcase.find("skipped") is not None:
+                outcome = "skipped"
+            rows.append(
+                {
+                    "suite": label,
+                    "class": testcase.get("classname") or "unknown",
+                    "method": testcase.get("name") or "unknown",
+                    "duration": seconds(testcase.get("time")),
+                    "outcome": outcome,
+                }
+            )
+    if not rows:
+        return None
+    return {"top": sorted(rows, key=lambda row: row["duration"], reverse=True)[:10]}
+
+
 # ── Formatters ───────────────────────────────────────────────────
 
 
@@ -456,8 +488,8 @@ def skips(sk):
     return "—" if sk is None else str(sk)
 
 
-def count_evidence(counts, baseline=None):
-    """Compact evidence cell for a suite's tests and skips."""
+def count_test_results(counts, baseline=None):
+    """Compact test-results cell for a suite's tests and skips."""
     return f"{tests(*counts, baseline=baseline)}; {skips(counts[3])} skipped"
 
 
@@ -531,6 +563,10 @@ def main() -> None:
         "all-results/results-live-webclient-web-client-e2e-features*/**/timing-latest.json"
     )
     cs_live_timings = csharp_live_timings("all-results/results-csharp-live/**/*.trx")
+    tc_live_timings = junit_case_timings(
+        "all-results/results-testclient/pytest.xml",
+        "Test Client Conformance",
+    )
     job_timings = job_durations(
         f"repos/{E('GH_REPOSITORY', '')}/actions/runs/{E('GH_RUN_ID', '')}/jobs"
     )
@@ -650,75 +686,86 @@ def main() -> None:
         ),
         (
             "> Nightly and manual system tests — live OPC UA server behavior, browser "
-            "E2E suites, Docker packaging, and conformance evidence."
+            "E2E suites, Docker packaging, and conformance verification."
         ),
         "",
         "---",
         "",
+        '<a id="system-validation-overview"></a>',
+        "",
         "### Validation Overview",
         "",
-        "| Lane | Result | Evidence |",
+        "| Lane | Result | Test Results |",
         "|:-----|:-------|:---------|",
         f"| OPC UA Server Docker smoke | {job_icon(sd_r)} {md_cell(sd_r)} | "
-        f"{count_evidence(sd_smoke, baseline_suite(integration_baseline, 'sd_smoke'))} |",
+        f"{count_test_results(sd_smoke, baseline_suite(integration_baseline, 'sd_smoke'))} |",
         f"| Web Client Docker tests | {job_icon(wd_r)} {md_cell(wd_r)} | "
-        f"Python {count_evidence(wd_py, baseline_suite(integration_baseline, 'wd_py'))}; "
-        f"JavaScript {count_evidence(wd_js, baseline_suite(integration_baseline, 'wd_js'))} |",
+        f"Python {count_test_results(wd_py, baseline_suite(integration_baseline, 'wd_py'))}; "
+        f"JavaScript {count_test_results(wd_js, baseline_suite(integration_baseline, 'wd_js'))} |",
         f"| Test Client conformance | {job_icon(tc_r)} {md_cell(tc_r)} | "
-        f"{count_evidence(tc_tests, baseline_suite(integration_baseline, 'tc_tests'))} |",
+        f"{count_test_results(tc_tests, baseline_suite(integration_baseline, 'tc_tests'))} |",
         f"| Web Client live suites | {job_icon(wc_r)} {md_cell(wc_r)} | "
-        f"{count_evidence(wc_live, baseline_suite(integration_baseline, 'wc_live'))} |",
+        f"{count_test_results(wc_live, baseline_suite(integration_baseline, 'wc_live'))} |",
         f"| Browser E2E suites | {job_icon(wb_r)} {md_cell(wb_r)} | "
-        f"{count_evidence(wc_browser, baseline_suite(integration_baseline, 'wc_browser'))} |",
+        f"{count_test_results(wc_browser, baseline_suite(integration_baseline, 'wc_browser'))} |",
         f"| Console Client live | {job_icon(con_r)} {md_cell(con_r)} | "
-        f"{count_evidence(con_live, baseline_suite(integration_baseline, 'con_live'))} |",
+        f"{count_test_results(con_live, baseline_suite(integration_baseline, 'con_live'))} |",
         f"| C# Client live | {job_icon(cs_r)} {md_cell(cs_r)} | "
-        f"{count_evidence(cs_live, baseline_suite(integration_baseline, 'cs_live'))} |",
+        f"{count_test_results(cs_live, baseline_suite(integration_baseline, 'cs_live'))} |",
         "",
         "---",
         "",
-        "### Component Evidence",
+        '<a id="system-component-test-results"></a>',
         "",
-        "| Component | Validation Scope | Container Evidence | Live/System Evidence | Notes |",
+        "### Component Test Results",
+        "",
+        (
+            "| Component | Validation Scope | Container Test Results | "
+            "Live/System Test Results | Notes |"
+        ),
         "|:----------|:-----------------|:-------------------|:---------------------|:------|",
         (
             "| OPC UA Server | Linux container plus Windows live server processes | "
-            f"{count_evidence(sd_smoke, baseline_suite(integration_baseline, 'sd_smoke'))} | "
+            f"{count_test_results(sd_smoke, baseline_suite(integration_baseline, 'sd_smoke'))} | "
             "Dedicated Windows ports 40461/40462/40464 feed client live suites | "
             "Docker smoke proves packaged Linux startup and namespace reachability |"
         ),
         (
             "| Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | "
-            f"Python {count_evidence(wd_py, baseline_suite(integration_baseline, 'wd_py'))}; "
-            f"JS {count_evidence(wd_js, baseline_suite(integration_baseline, 'wd_js'))} | "
-            f"Live {count_evidence(wc_live, baseline_suite(integration_baseline, 'wc_live'))}; "
+            f"Python {count_test_results(wd_py, baseline_suite(integration_baseline, 'wd_py'))}; "
+            f"JS {count_test_results(wd_js, baseline_suite(integration_baseline, 'wd_js'))} | "
+            f"Live {count_test_results(wc_live, baseline_suite(integration_baseline, 'wc_live'))}; "
             "browser "
-            f"{count_evidence(wc_browser, baseline_suite(integration_baseline, 'wc_browser'))} | "
+            f"{count_test_results(wc_browser, baseline_suite(integration_baseline, 'wc_browser'))} "
+            "| "
             f"{wc_browser_note} |"
         ),
         (
             "| Test Client | Live conformance harness against OPC UA server | — | "
-            f"Smoke {count_evidence(tc_smoke, baseline_suite(integration_baseline, 'tc_smoke'))}; "
+            "Smoke "
+            f"{count_test_results(tc_smoke, baseline_suite(integration_baseline, 'tc_smoke'))}; "
             "conformance "
-            f"{count_evidence(tc_tests, baseline_suite(integration_baseline, 'tc_tests'))} | "
+            f"{count_test_results(tc_tests, baseline_suite(integration_baseline, 'tc_tests'))} | "
             f"{skip_note_inline(tc_conf_skips, tc_tests[3])} |"
         ),
         (
             "| Console Client | Live Python client behavior against OPC UA server | — | "
-            f"{count_evidence(con_live, baseline_suite(integration_baseline, 'con_live'))} | "
+            f"{count_test_results(con_live, baseline_suite(integration_baseline, 'con_live'))} | "
             f"{skip_note_inline(con_live_skips, con_live[3])} |"
         ),
         (
             "| C# Client | Nightly xUnit live behavior against OPC UA server | — | "
-            f"{count_evidence(cs_live, baseline_suite(integration_baseline, 'cs_live'))} | "
+            f"{count_test_results(cs_live, baseline_suite(integration_baseline, 'cs_live'))} | "
             f"{skip_note_inline(cs_live_skips, cs_live[3], 'Nightly drift detection')} |"
         ),
         "",
         "---",
         "",
+        '<a id="system-conformance-overview"></a>',
+        "",
         "### Conformance Overview",
         "",
-        "| Suite | Port | Tests Run | Skipped | Notes |",
+        "| Suite | Port | Live Tests | Skipped | Notes |",
         "|:------|-----:|----------:|--------:|:------|",
         (
             "| Test Client — Smoke sanity | 40462 | "
@@ -733,13 +780,21 @@ def main() -> None:
     ]
 
     timing_rows = bottleneck_candidates(job_timings, wc_feature_timings, cs_live_timings)
-    out += ["", "---", "", "### Duration and Bottlenecks", ""]
+    out += [
+        "",
+        "---",
+        "",
+        '<a id="system-performance-hotspots"></a>',
+        "",
+        "### Performance Hotspots",
+        "",
+    ]
     if timing_rows:
         out += [
             (
                 "> Source order: current workflow run jobs API first, then Web Client "
-                "timing JSON and C# TRX artifacts when available. Missing timing data "
-                "is omitted rather than estimated."
+                "timing JSON, C# TRX artifacts, and Test Client JUnit durations when "
+                "available. Missing timing data is omitted rather than estimated."
             ),
             "",
             "```mermaid",
@@ -823,7 +878,7 @@ def main() -> None:
             "| Class | Tests | Total | Avg | Max |",
             "|:------|------:|------:|----:|----:|",
         ]
-        for row in cs_live_timings["classes"]:
+        for row in cs_live_timings["classes"][:10]:
             avg = row["total"] / row["tests"] if row["tests"] else 0.0
             out.append(
                 f"| {md_cell(short_csharp_class(row['class']))} | {row['tests']} | "
@@ -845,7 +900,31 @@ def main() -> None:
             )
         out += ["", "</details>"]
 
-    out += ["", "---", "", "### Warnings and Drift", ""]
+    if tc_live_timings:
+        out += [
+            "",
+            "<details><summary><b>Test Client Conformance Timing Details</b></summary>",
+            "",
+            "| Test | Duration | Outcome |",
+            "|:-----|---------:|:--------|",
+        ]
+        for row in tc_live_timings["top"]:
+            out.append(
+                f"| {md_cell(row['method'])} | {format_duration(row['duration'])} | "
+                f"{md_cell(row['outcome'])} |"
+            )
+        out += ["", "</details>"]
+    else:
+        out += [
+            "",
+            "<details><summary><b>Test Client Conformance Timing Details</b></summary>",
+            "",
+            "Per-test durations are not available in the current JUnit artifact.",
+            "",
+            "</details>",
+        ]
+
+    out += ["", "---", "", '<a id="system-warnings-drift"></a>', "", "### Warnings and Drift", ""]
     if skip_policy_failures:
         out += ["#### Skip Policy Failures", ""]
         out += skip_policy_failures
@@ -893,6 +972,43 @@ def main() -> None:
     if skip_sections:
         out += ["", "#### Skip Details"]
         out += skip_sections
+
+    out += [
+        "",
+        "---",
+        "",
+        '<a id="system-per-client-quick-index"></a>',
+        "",
+        "### Per-Client Quick Index",
+        "",
+        "| Client / Component | Appears In |",
+        "|:-------------------|:-----------|",
+        (
+            "| OPC UA Server | [Validation Overview](#system-validation-overview); "
+            "[Component Test Results](#system-component-test-results); "
+            "[Performance Hotspots](#system-performance-hotspots) |"
+        ),
+        (
+            "| Web Client | [Validation Overview](#system-validation-overview); "
+            "[Component Test Results](#system-component-test-results); "
+            "[Performance Hotspots](#system-performance-hotspots) |"
+        ),
+        (
+            "| Test Client | [Validation Overview](#system-validation-overview); "
+            "[Component Test Results](#system-component-test-results); "
+            "[Conformance Overview](#system-conformance-overview); "
+            "[Performance Hotspots](#system-performance-hotspots) |"
+        ),
+        (
+            "| Console Client | [Validation Overview](#system-validation-overview); "
+            "[Component Test Results](#system-component-test-results) |"
+        ),
+        (
+            "| C# Client | [Validation Overview](#system-validation-overview); "
+            "[Component Test Results](#system-component-test-results); "
+            "[Performance Hotspots](#system-performance-hotspots) |"
+        ),
+    ]
 
     with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8") as fh:
         fh.write("\n".join(out) + "\n")

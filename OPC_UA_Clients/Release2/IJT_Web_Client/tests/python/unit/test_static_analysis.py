@@ -106,7 +106,9 @@ def test_bandit_no_high_severity_issues():
 
 @pytest.mark.skipif(
     not _eslint_executable(),
-    reason="eslint binary not executable in this environment — skipping JS lint gate",
+    reason=(
+        "ESLint binary absent in Web Client - Python lane; JS lint is gated by sibling 'Web Client - JavaScript' lane"
+    ),
 )
 def test_eslint_passes():
     """npm run lint must exit 0 (no ESLint errors in src/javascripts/)."""

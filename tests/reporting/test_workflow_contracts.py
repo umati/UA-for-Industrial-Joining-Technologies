@@ -82,16 +82,15 @@ def test_ci_dorny_actions_keep_check_runs_but_suppress_step_summaries() -> None:
     assert all(step["with"]["use-actions-summary"] is False for step in dorny_steps)
 
 
-def test_ci_outcome_pie_uses_semantic_colors_and_locked_slice_order() -> None:
+def test_ci_outcome_pie_chart_removed_q11() -> None:
     report_script = (REPO_ROOT / "reporting" / "ci_run_summary.py").read_text(encoding="utf-8")
 
-    assert (
-        '%%{init: {"themeVariables": {"pie1": "#22c55e", "pie2": "#ef4444", "pie3": "#9ca3af"}}}%%'
-    ) in report_script
-    assert report_script.index('"pie1"') < report_script.index('"pie2"')
-    assert report_script.index('"pie2"') < report_script.index('"pie3"')
-    assert report_script.index('"Passed"') < report_script.index('"Failed"')
-    assert report_script.index('"Failed"') < report_script.index('"Skipped"')
+    assert '"pie1"' not in report_script
+    assert '"pie2"' not in report_script
+    assert '"pie3"' not in report_script
+    assert "pie showData" not in report_script
+    assert "✅ Passed:" in report_script
+    assert "⏭️ Skipped:" in report_script
 
 
 def test_ci_docker_smoke_suppresses_docker_build_summary_noise() -> None:

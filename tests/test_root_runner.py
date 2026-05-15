@@ -1358,7 +1358,7 @@ def test_integration_report_surfaces_job_durations() -> None:
     assert "def job_durations(path):" in report_script
     assert "excluding this report job" in report_script
     assert "name == report_job_name" in report_script
-    assert "### Duration and Bottlenecks" in report_script
+    assert "### Performance Hotspots" in report_script
     assert "Bottleneck Spotlight" in report_script
     assert "current workflow run jobs API" in report_script
     assert "Missing timing data" in report_script
@@ -1545,7 +1545,7 @@ def test_web_client_e2e_suite_has_no_runtime_skip_calls() -> None:
 def test_ci_report_uses_declared_coverage_thresholds() -> None:
     report_script = _CI_REPORT_SCRIPT.read_text(encoding="utf-8")
     expected_header = (
-        "| Component | Validation Scope | Tests Run | Skipped | Coverage / Threshold |"
+        "| Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |"
     )
 
     assert expected_header in report_script

@@ -11,10 +11,10 @@
 
 ## Conformance Overview
 
-| Server Support Coverage | ✅ Validation Health | CU Status |
-|:---:|:---:|:---:|
-| **79.7%** | **100.0%** | **🔴 0 Failed · 🟠 0 Blocked · ⚪ 25 Not Supported · ℹ️ 3 With Notes** |
-| 98 / 123 CUs server-supported | 98 / 98 server-supported CUs validated | Failed items and capability notes below |
+| Server Support Coverage | ✅ Validation Health | Action Items | Capability Notes |
+|:---:|:---:|:---:|:---:|
+| **79.7%** | **100.0%** | **🔴 0 Failed · 🟠 0 Blocked** | **⚪ 25 Not Supported · ℹ️ 3 With Notes** |
+| 98 / 123 CUs server-supported | 98 / 98 server-supported CUs validated | Failures and blocked preconditions | Not supported CUs and supported-with-notes details |
 
 ### Δ Since Last Run (commit `2068e58`, 1 day ago)
 
@@ -27,45 +27,45 @@
 
 _Auto-generated from facet outcomes. Full detail is in Facet and CU Coverage._
 
-- ❌ **Joint Component** — not supported by this server. Joint component send, list, read, data, and delete coverage.
-- ❌ **Joint Design** — not supported by this server. Joint design send, list, read, data, and delete coverage.
-- ⚠️ **Additional Asset Methods** — partially supported. Optional asset operation methods beyond the asset topology baseline.
-- ⚠️ **Additional Process Methods** — partially supported. Optional joining process definition, mapping, counter, delete, and revision-list methods.
-- ⚠️ **Asset Connection** — partially supported. Asset connection facet for DisconnectAsset and asset connection event coverage.
-- ⚠️ **Joining Process Base** — partially supported. JoiningProcessManagement base object and list access for joining process definitions.
-- ⚠️ **Joint** — partially supported. Joint management base object and methods for sending, listing, selecting, reading, deleting, and revising joints.
-- ⚠️ **Stored Result** — partially supported. Stored/requested result workflows including result requests, requested-result access, acknowledgements, and unacknowledged-result requests.
-- ✅ **Asset Management Assets** — supported. Asset topology, asset identification, Machinery building blocks, health, service, calibration, and individual IJT asset type coverage.
-- ✅ **Basic Joining System** — supported. Minimum conformance requirement for any OPC UA IJT server: JoiningSystem structure, identification, and Machinery building blocks.
-- ✅ **Batch Result** — supported. Batch and intervention result support with related result counters.
-- ✅ **Enable Tool** — supported. EnableAsset/enable-tool workflow support and corresponding asset enable state event coverage.
+- ❌ **Joint Component** — Not Supported by This Server. Joint component send, list, read, data, and delete coverage.
+- ❌ **Joint Design** — Not Supported by This Server. Joint design send, list, read, data, and delete coverage.
+- ⚠️ **Additional Asset Methods** — Partially Supported. Optional asset operation methods beyond the asset topology baseline.
+- ⚠️ **Additional Process Methods** — Partially Supported. Optional joining process definition, mapping, counter, delete, and revision-list methods.
+- ⚠️ **Asset Connection** — Partially Supported. Asset connection facet for DisconnectAsset and asset connection event coverage.
+- ⚠️ **Joining Process Base** — Partially Supported. JoiningProcessManagement base object and list access for joining process definitions.
+- ⚠️ **Joint** — Partially Supported. Joint management base object and methods for sending, listing, selecting, reading, deleting, and revising joints.
+- ⚠️ **Stored Result** — Partially Supported. Stored/requested result workflows including result requests, requested-result access, acknowledgements, and unacknowledged-result requests.
+- ✅ **Asset Management Assets** — Supported. Asset topology, asset identification, Machinery building blocks, health, service, calibration, and individual IJT asset type coverage.
+- ✅ **Basic Joining System** — Supported. Minimum conformance requirement for any OPC UA IJT server: JoiningSystem structure, identification, and Machinery building blocks.
+- ✅ **Batch Result** — Supported. Batch and intervention result support with related result counters.
+- ✅ **Enable Tool** — Supported. EnableAsset/enable-tool workflow support and corresponding asset enable state event coverage.
 
-_Capability area counts: 11 supported · 6 partially supported · 2 not supported by this server._
+_Capability area counts: 11 Supported · 6 Partially Supported · 2 Not Supported by This Server._
 
 <details open>
 <summary><b>All capability areas</b></summary>
 
 | Capability Area | Status | Notes |
 |---|---|---|
-| Joint Component | ❌ not supported by this server | Joint component send, list, read, data, and delete coverage. |
-| Joint Design | ❌ not supported by this server | Joint design send, list, read, data, and delete coverage. |
-| Additional Asset Methods | ⚠️ partially supported | Optional asset operation methods beyond the asset topology baseline. |
-| Additional Process Methods | ⚠️ partially supported | Optional joining process definition, mapping, counter, delete, and revision-list methods. |
-| Asset Connection | ⚠️ partially supported | Asset connection facet for DisconnectAsset and asset connection event coverage. |
-| Joining Process Base | ⚠️ partially supported | JoiningProcessManagement base object and list access for joining process definitions. |
-| Joint | ⚠️ partially supported | Joint management base object and methods for sending, listing, selecting, reading, deleting, and revising joints. |
-| Stored Result | ⚠️ partially supported | Stored/requested result workflows including result requests, requested-result access, acknowledgements, and unacknowledged-result requests. |
-| Asset Management Assets | ✅ supported | Asset topology, asset identification, Machinery building blocks, health, service, calibration, and individual IJT asset type coverage. |
-| Basic Joining System | ✅ supported | Minimum conformance requirement for any OPC UA IJT server: JoiningSystem structure, identification, and Machinery building blocks. |
-| Batch Result | ✅ supported | Batch and intervention result support with related result counters. |
-| Enable Tool | ✅ supported | EnableAsset/enable-tool workflow support and corresponding asset enable state event coverage. |
-| Event Management | ✅ supported | Joining system event payload, condition classes, asset connection events, identifier events, process selection events, and event content fields. |
-| General Process Operations | ✅ supported | Selecting, starting, aborting, resetting, and reading the selected joining process. |
-| Identifiers Methods | ✅ supported | SendIdentifiers, GetIdentifiers, and ResetIdentifiers methods for attaching external entity identifiers to results. |
-| Joining Result | ✅ supported | Joining-result payload details such as failure reason, result values, step results, errors, and trace data. |
-| Result | ✅ supported | Result management baseline: result objects, result access methods, result event access, and basic result metadata. |
-| Sequential Process Operations | ✅ supported | Sequential joining process execution and process counter/size operations. |
-| Sync Result | ✅ supported | Synchronisation result support and related result counters. |
+| Joint Component | ❌ Not Supported by This Server | Joint component send, list, read, data, and delete coverage. |
+| Joint Design | ❌ Not Supported by This Server | Joint design send, list, read, data, and delete coverage. |
+| Additional Asset Methods | ⚠️ Partially Supported | Optional asset operation methods beyond the asset topology baseline. |
+| Additional Process Methods | ⚠️ Partially Supported | Optional joining process definition, mapping, counter, delete, and revision-list methods. |
+| Asset Connection | ⚠️ Partially Supported | Asset connection facet for DisconnectAsset and asset connection event coverage. |
+| Joining Process Base | ⚠️ Partially Supported | JoiningProcessManagement base object and list access for joining process definitions. |
+| Joint | ⚠️ Partially Supported | Joint management base object and methods for sending, listing, selecting, reading, deleting, and revising joints. |
+| Stored Result | ⚠️ Partially Supported | Stored/requested result workflows including result requests, requested-result access, acknowledgements, and unacknowledged-result requests. |
+| Asset Management Assets | ✅ Supported | Asset topology, asset identification, Machinery building blocks, health, service, calibration, and individual IJT asset type coverage. |
+| Basic Joining System | ✅ Supported | Minimum conformance requirement for any OPC UA IJT server: JoiningSystem structure, identification, and Machinery building blocks. |
+| Batch Result | ✅ Supported | Batch and intervention result support with related result counters. |
+| Enable Tool | ✅ Supported | EnableAsset/enable-tool workflow support and corresponding asset enable state event coverage. |
+| Event Management | ✅ Supported | Joining system event payload, condition classes, asset connection events, identifier events, process selection events, and event content fields. |
+| General Process Operations | ✅ Supported | Selecting, starting, aborting, resetting, and reading the selected joining process. |
+| Identifiers Methods | ✅ Supported | SendIdentifiers, GetIdentifiers, and ResetIdentifiers methods for attaching external entity identifiers to results. |
+| Joining Result | ✅ Supported | Joining-result payload details such as failure reason, result values, step results, errors, and trace data. |
+| Result | ✅ Supported | Result management baseline: result objects, result access methods, result event access, and basic result metadata. |
+| Sequential Process Operations | ✅ Supported | Sequential joining process execution and process counter/size operations. |
+| Sync Result | ✅ Supported | Synchronisation result support and related result counters. |
 
 </details>
 
@@ -84,16 +84,16 @@ _No action items — server validation passed cleanly._
 
 | Review Status | CU | Outcome | Primary Reason | Δ |
 |---|---|---|---|---|
-| ⚪ Not Supported | `acknowledge_results` | ⚪ Not Supported | Not Supported: IJT Acknowledge Results - Method: AcknowledgeResults NOT SUPPORTED | ✓ |
-| ⚪ Not Supported | `delete_joining_process` | ⚪ Not Supported | Not Supported: IJT Delete Joining Process - Method: DeleteJoiningProcess NOT SUPPORTED | ✓ |
-| ⚪ Not Supported | `delete_joint_component` | ⚪ Not Supported | Not Supported: IJT Delete Joint Component - Method: DeleteJointComponent NOT SUPPORTED | ✓ |
-| ⚪ Not Supported | `delete_joint_design` | ⚪ Not Supported | Not Supported: IJT Delete Joint Design - Method: DeleteJointDesign NOT SUPPORTED | ✓ |
-| ⚪ Not Supported | `disconnect_asset` | ⚪ Not Supported | Not Supported: IJT Disconnect Asset - Method: DisconnectAsset NOT SUPPORTED | ✓ |
-| ⚪ Not Supported | `execute_operation` | ⚪ Not Supported | Not Supported: IJT Execute Operation - Method: ExecuteOperation NOT SUPPORTED | ✓ |
-| ⚪ Not Supported | `feedback_methods` | ⚪ Not Supported | Not Supported: IJT Feedback Methods - Methods: GetFeedbackFileList, SendFeedback NOT SUPPORTED | ✓ |
-| ⚪ Not Supported | `get_error_information` | ⚪ Not Supported | Not Supported: IJT Get Error Information - Method: GetErrorInformation NOT SUPPORTED | ✓ |
-| ⚪ Not Supported | `get_joining_process` | ⚪ Not Supported | Not Supported: IJT Get Joining Process - Method: GetJoiningProcess NOT SUPPORTED | ✓ |
-| ⚪ Not Supported | `get_joining_process_revision_list` | ⚪ Not Supported | Not Supported: IJT Get Joining Process Revision List - Method: GetJoiningProcessRevisionList NOT SUPPORTED | ✓ |
+| ⚪ Not Supported | IJT Acknowledge Results | ⚪ Not Supported | Not Supported: IJT Acknowledge Results - Method: AcknowledgeResults NOT SUPPORTED | ✓ |
+| ⚪ Not Supported | IJT Delete Joining Process | ⚪ Not Supported | Not Supported: IJT Delete Joining Process - Method: DeleteJoiningProcess NOT SUPPORTED | ✓ |
+| ⚪ Not Supported | IJT Delete Joint Component | ⚪ Not Supported | Not Supported: IJT Delete Joint Component - Method: DeleteJointComponent NOT SUPPORTED | ✓ |
+| ⚪ Not Supported | IJT Delete Joint Design | ⚪ Not Supported | Not Supported: IJT Delete Joint Design - Method: DeleteJointDesign NOT SUPPORTED | ✓ |
+| ⚪ Not Supported | IJT Disconnect Asset | ⚪ Not Supported | Not Supported: IJT Disconnect Asset - Method: DisconnectAsset NOT SUPPORTED | ✓ |
+| ⚪ Not Supported | IJT Execute Operation | ⚪ Not Supported | Not Supported: IJT Execute Operation - Method: ExecuteOperation NOT SUPPORTED | ✓ |
+| ⚪ Not Supported | IJT Feedback Methods | ⚪ Not Supported | Not Supported: IJT Feedback Methods - Methods: GetFeedbackFileList, SendFeedback NOT SUPPORTED | ✓ |
+| ⚪ Not Supported | IJT Get Error Information | ⚪ Not Supported | Not Supported: IJT Get Error Information - Method: GetErrorInformation NOT SUPPORTED | ✓ |
+| ⚪ Not Supported | IJT Get Joining Process | ⚪ Not Supported | Not Supported: IJT Get Joining Process - Method: GetJoiningProcess NOT SUPPORTED | ✓ |
+| ⚪ Not Supported | IJT Get Joining Process Revision List | ⚪ Not Supported | Not Supported: IJT Get Joining Process Revision List - Method: GetJoiningProcessRevisionList NOT SUPPORTED | ✓ |
 | … | … | … | 18 more items in Conformance Status |  |
 
 </details>
