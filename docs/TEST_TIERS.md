@@ -57,7 +57,7 @@ both produce a non-failing report warning so this table stays current.
 |------|--------|---------------------|
 | Web Client Python `test_required_static_asset_exists[node_modules/chart.js/dist/chart.umd.js]` | The `web-client-python` CI lane intentionally skips npm install; JavaScript dependency validation is owned by `web-client-js` | Install npm dependencies in the Python lane, or move this asset assertion fully to the JavaScript lane |
 | Web Client Python `test_static_analysis.py::test_eslint_passes` | ESLint is owned by the separate `web-client-js` CI lane after the Web Client Phase 1 split | Install npm dependencies in the Python lane, or remove this legacy Python-side ESLint gate once the JavaScript lane remains the sole lint owner |
-| C# `LiveIntegrationTests` × 15 | `IJT_PHASE1_ONLY=true` suppresses server auto-launch in the unit-test CI phase (`csharp-unit`) | These same tests **pass** in the `csharp-live` integration job where the server is launched on port 40464 |
+| C# live integration tests | `IJT_PHASE1_ONLY=true` suppresses server auto-launch in the unit-test CI phase (`csharp-unit`) | These same tests **pass** in the `csharp-live` integration job where the server is launched on port 40464; the CI report tracks the expected skip identities |
 | Vitest `source-coverage` git check | `git` unavailable in bare zip-export environments | Not applicable in CI — git is always present; this protects zip-distribution consumers |
 
 ---
@@ -169,9 +169,8 @@ run their live/integration tests in parallel without port conflicts.
 > suites stay on GitHub-hosted Windows runners. Every `web-client-e2e-*`
 > Playwright suite runs inside the owned
 > `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci` image,
-> normally resolved from the reviewed `.github/docker/ijt-browser-ci/image-pin.json`
-> digest. Dependency-input PR/push runs resolve the matching PR/SHA image tag to
-> a digest first, then start that immutable image with `docker run --network=none`.
+> resolved from the reviewed `.github/docker/ijt-browser-ci/image-pin.json`
+> digest, then started as an immutable image with `docker run --network=none`.
 > Chromium, its Linux system dependencies, the locked `@playwright/test` version,
 > Python 3.14, and Node 24 are all baked into the image — the host runner never reaches
 > `npx playwright install chromium --with-deps`. No job-level `container:`
@@ -181,13 +180,14 @@ run their live/integration tests in parallel without port conflicts.
 > fallback, or diagnostics. Browser Features keeps two shards; CI
 > defaults to two feature workers per shard, and local root validation
 > defaults to four workers.
-> Web Client Compatibility Smoke is intentionally separate from Integration:
+> Web Client — Browser Compatibility Smoke is intentionally separate from Integration:
 > `.github/workflows/web-client-compatibility-smoke.yml` runs only at `04:30 UTC`
 > or by manual dispatch, reuses the Web Client runner-owned Windows
 > simulator/backend stack, and currently contains one matrix cell:
 > `windows-latest` / `msedge`. It executes only the two audited browser file
 > specs. It is a non-required detection workflow; failures stay red and
-> create/update `[Web Client Compatibility Smoke] windows-latest / msedge`.
+> create/update the stable issue key
+> `[Web Client Compatibility Smoke] windows-latest / msedge`.
 >
 > **Local Playwright browser install:** local browser runs need Chromium
 > from `https://cdn.playwright.dev` over HTTPS — the same path CI now uses.
@@ -209,7 +209,7 @@ run their live/integration tests in parallel without port conflicts.
 | Web Client Playwright smoke | HTTP 3004 | `.venv_test` + Playwright | Browser smoke project only |
 | Web Client Playwright features | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | `.venv_test` + Playwright | Feature specs with four owned backend/server worker pairs |
 | Web Client Playwright regression | OPC UA 40480 / WS 8010 / HTTP 3006 | `.venv_test` + Playwright | Regression spec with owned backend and UI ports |
-| Web Client Compatibility Smoke | OPC UA 40468 / WS 8004 / HTTP 3007 | `.venv_test` + Playwright + real browser channel | Scheduled/manual smoke for audited browser file surfaces; current matrix runs `windows-latest` / `msedge` |
+| Web Client — Browser Compatibility Smoke | OPC UA 40468 / WS 8004 / HTTP 3007 | `.venv_test` + Playwright + real browser channel | Scheduled/manual smoke for audited browser file surfaces; current matrix runs `windows-latest` / `msedge` |
 | Web Client Docker smoke | HTTP 3000 / WS 8001 | Docker | Builds the Web Client production image through `--docker-only`; independent from live/browser suites; root runner skips when Docker is unavailable |
 | IJT_Node_Client    | **40451** (fixed) | N/A (Node) | **Release 1 legacy** — server port is hardcoded, dynamic isolation not supported |
 | Server smoke/native default | 40451  | —            | Built-in default (from `server_configuration.json`); root runner Phase 2 validates this package path |

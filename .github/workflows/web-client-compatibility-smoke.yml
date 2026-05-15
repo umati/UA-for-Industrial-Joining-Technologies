@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Web Client Compatibility Smoke
+# Web Client — Browser Compatibility Smoke
 #
 # This scheduled/manual workflow runs Web Client compatibility smoke specs
 # against configured (OS, browser) cells. Today: windows-latest with the
@@ -8,7 +8,7 @@
 # download.
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: "Web Client Compatibility Smoke"
+name: "Web Client — Browser Compatibility Smoke"
 
 on:
   schedule:
@@ -24,7 +24,7 @@ env:
 
 jobs:
   web-client-compatibility-smoke:
-    name: "Web Client Compatibility Smoke"
+    name: "Web Client — Browser Compatibility Smoke"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     defaults:
@@ -75,7 +75,7 @@ jobs:
           "image_os=$env:ImageOS" >> $env:GITHUB_OUTPUT
           "image_version=$env:ImageVersion" >> $env:GITHUB_OUTPUT
 
-      - name: Run Web Client Compatibility Smoke
+      - name: Run Web Client — Browser Compatibility Smoke
         run: python OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py --compatibility-smoke-only
 
       - name: Write compatibility smoke environment artifact
@@ -100,7 +100,7 @@ jobs:
           RunURL=$env:RUN_URL
           "@ | Set-Content -Path "$dir/compatibility-smoke-environment.txt" -Encoding UTF8
 
-      - name: Upload Web Client Compatibility Smoke results
+      - name: Upload Web Client — Browser Compatibility Smoke results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
@@ -125,7 +125,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $title = "[Web Client Compatibility Smoke] $env:MATRIX_OS / $env:MATRIX_BROWSER"
           $body = @"
-          Web Client Compatibility Smoke failed.
+          Web Client — Browser Compatibility Smoke failed.
 
           - Run: $env:RUN_URL
           - OS: $env:MATRIX_OS
@@ -172,7 +172,7 @@ jobs:
           }
 
           $comment = @"
-          Web Client Compatibility Smoke recovered.
+          Web Client — Browser Compatibility Smoke recovered.
 
           - Green run: $env:RUN_URL
           - OS: $env:MATRIX_OS
@@ -272,11 +272,11 @@ jobs:
           }
 
           if ($total -eq 0) {
-            $headline = "## Web Client Compatibility Smoke - $($env:MATRIX_OS) / $($env:MATRIX_BROWSER)`n`nStatus: results unavailable."
+            $headline = "## Web Client — Browser Compatibility Smoke - $($env:MATRIX_OS) / $($env:MATRIX_BROWSER)`n`nStatus: results unavailable."
           } elseif ($failed -gt 0) {
-            $headline = "## Web Client Compatibility Smoke - $($env:MATRIX_OS) / $($env:MATRIX_BROWSER)`n`nStatus: failed - $failed of $total specs failed."
+            $headline = "## Web Client — Browser Compatibility Smoke - $($env:MATRIX_OS) / $($env:MATRIX_BROWSER)`n`nStatus: failed - $failed of $total specs failed."
           } else {
-            $headline = "## Web Client Compatibility Smoke - $($env:MATRIX_OS) / $($env:MATRIX_BROWSER)`n`nStatus: passed - all $total specs passed."
+            $headline = "## Web Client — Browser Compatibility Smoke - $($env:MATRIX_OS) / $($env:MATRIX_BROWSER)`n`nStatus: passed - all $total specs passed."
           }
 
           $lines = @(

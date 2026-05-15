@@ -438,9 +438,8 @@ runs the same root-runner Web Client live/e2e suites as local validation, split
 by execution surface. `web-client-live-*` suites stay on `windows-latest` with
 the Windows simulator package. Every `web-client-e2e-*` suite runs inside the
 owned `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci`
-image, normally resolved from the reviewed
-`.github/docker/ijt-browser-ci/image-pin.json` digest or from the
-matching PR/SHA image tag for dependency-input updates, then started with
+image, resolved from the reviewed
+`.github/docker/ijt-browser-ci/image-pin.json` digest, then started with
 `docker run --network=none`; Chromium, its Linux system dependencies, the
 locked `@playwright/test` version, Python 3.14, and Node 24 are all baked into
 the image. The host runner never executes
@@ -452,18 +451,19 @@ fallback, or diagnostics. Browser Features keeps two Playwright shards
 and each suite receives an isolated `IJT_WEB_TEST_RESULTS_DIR`, so
 JUnit, coverage, Playwright, and timing artifacts cannot overwrite another
 suite's files.
-Web Client Compatibility Smoke is deliberately outside the bulk browser logic
-lane. `python run_all_tests.py --compatibility-smoke-only` uses default ports
-OPC UA 40468, WebSocket 8004, and HTTP 3007 unless explicit endpoint/env
-overrides are provided. It runs `playwright.compatibility-smoke.config.mjs`,
+Web Client — Browser Compatibility Smoke is deliberately outside the bulk
+browser logic lane. `python run_all_tests.py --compatibility-smoke-only` uses
+default ports OPC UA 40468, WebSocket 8004, and HTTP 3007 unless explicit
+endpoint/env overrides are provided. It runs
+`playwright.compatibility-smoke.config.mjs`,
 launches the configured real browser channel, and executes only the two
 audit-derived specs under `tests/e2e-compatibility-smoke/`: Result bundle import
 through the visible file chooser and Result bundle JSON export through browser
 download handling. The GitHub workflow
 `.github/workflows/web-client-compatibility-smoke.yml` is schedule/manual only
-and opens or closes the canonical
-`[Web Client Compatibility Smoke] windows-latest / msedge` issue from real
-red/green results.
+and opens or closes the stable issue key
+`[Web Client Compatibility Smoke] windows-latest / msedge` from real red/green
+results.
 
 If the checked-in simulator binary directory is absent in CI, the runner
 extracts the Release 2 platform-specific simulator ZIP from

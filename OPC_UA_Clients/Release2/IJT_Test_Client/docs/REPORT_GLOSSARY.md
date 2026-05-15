@@ -26,14 +26,14 @@ it as a glossary bug and fix it in the same PR that touches the symbol.
 
 ## 1. Workflow names (top of run page) 👔 🛠️ 🧪 📦
 
-| New display name (Phase 2) | Old display name | Source anchor | What it means |
-|---|---|---|---|
-| `CI — Required Checks` | `CI — Fast Checks` | `.github/workflows/ci.yml` (`name:` field) | Pull-request gate. Builds, unit tests, lint, vulnerability scan, and required Docker checks. |
-| `System Tests — Live OPC UA, Browser, Docker, Conformance` | `Integration — Live System Tests` | `.github/workflows/integration.yml` (`name:` field) | Nightly + manual full system run against live OPC UA server, browser end-to-end suites, Docker compose, and conformance harness. |
-| `Security — CodeQL` | `CodeQL Analysis` | `.github/workflows/codeql.yml` | GitHub native code scanning. **Matrix job names `Analyze (csharp)`, `Analyze (javascript)`, and `Analyze (python)` are unchanged to preserve branch-protection required-context names.** Matrix languages live in the `matrix.language` list (`["csharp", "python", "javascript"]`); job-name template is `Analyze (${{ matrix.language }})`. |
-| `Web Client — Browser Compatibility Smoke` | `Web Client Compatibility Smoke` | `.github/workflows/web-client-compatibility-smoke.yml` (`name:` field) | Cross-browser smoke against the Web Client. |
+| Current display name | Source anchor | What it means |
+|---|---|---|
+| `CI — Fast Checks` | `.github/workflows/ci.yml` (`name:` field) | Pull-request fast gate for builds, unit tests, lint, vulnerability scan, and required Docker checks. |
+| `System Tests — Live OPC UA, Browser, Docker, Conformance` | `.github/workflows/integration.yml` (`name:` field) | Nightly + manual full system run against live OPC UA server, browser end-to-end suites, Docker compose, and conformance harness. |
+| `Security — CodeQL` | `.github/workflows/codeql.yml` (`name:` field) | GitHub native code scanning. Matrix job names `Analyze (javascript)`, `Analyze (csharp)`, and `Analyze (python)` stay unchanged because ruleset `15294123` requires those contexts. |
+| `Web Client — Browser Compatibility Smoke` | `.github/workflows/web-client-compatibility-smoke.yml` (`name:` field) | Scheduled/manual browser smoke for audited Web Client file surfaces. The issue key `[Web Client Compatibility Smoke]` stays unchanged for continuity. |
 
-> 👔 management: the new names tell you the **purpose** of the run, not just the file. `Required Checks` is what blocks merge; `System Tests` is what proves the system works end-to-end against a live server.
+> 👔 management: the names describe the purpose of the run. Required branch-protection contexts are governed by the GitHub ruleset, not by these display labels.
 
 ---
 
@@ -188,7 +188,7 @@ Auto-detects the slowest current job/suite and shows the top-5 slowest tests in 
 ---
 
 ## 8. Out of scope for this glossary
-- Tier definitions (`docs/TEST_TIERS.md`). Phase 7 separately fixes the stale C# skip-count claim in that file.
+- Tier definitions (`docs/TEST_TIERS.md`). The stale C# skip-count claim was fixed in Phase 7.
 - Internal-only Python identifiers (`_ACTION_ITEM_LABEL_ORDER`, etc.) — these are implementation details and not user-facing.
 - CI/CD plumbing terms not appearing in the rendered report.
 

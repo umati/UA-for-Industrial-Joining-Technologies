@@ -215,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
         allow_decrease=args.allow_decrease,
     )
     text = json.dumps(updated, indent=2, ensure_ascii=False) + "\n"
-    BASELINE_PATH.write_text(text, encoding="utf-8")
+    BASELINE_PATH.write_text(text, encoding="utf-8", newline="\n")
     return 0
 
 

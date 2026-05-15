@@ -969,9 +969,8 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
     block once ran every browser suite, but a job-level container image is
     pulled by GitHub *before* any workflow step runs, so a transient registry
     outage took the whole job down with no in-job retry. The owned
-    ``ghcr.io/.../ijt-browser-ci`` image is resolved to an immutable digest
-    (reviewed pin for normal runs, matching PR/SHA digest for dependency-input
-    updates) and wired into this job via a step-level
+    ``ghcr.io/.../ijt-browser-ci`` image is resolved to the reviewed
+    ``image-pin.json`` digest and wired into this job via a step-level
     ``docker run --network=none``, so pull + run + diagnostics all happen
     inside steps the job controls end-to-end. This
     regression gate prevents re-introducing a job-level ``container:`` block,
@@ -1018,7 +1017,7 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
             if step.get("uses", "").startswith("docker/login-action@")
         )
         assert login_index < resolve_index, (
-            "Resolve step may pull PR/SHA image tags from GHCR; docker login "
+            "Resolve step may pull the reviewed GHCR image digest; docker login "
             "must happen before resolving the browser image reference."
         )
 
@@ -1127,6 +1126,28 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
         )
 
 
+def test_codeql_workflow_display_name_preserves_required_contexts() -> None:
+    import yaml
+
+    workflow_path = _runner.REPO_ROOT / ".github" / "workflows" / "codeql.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+
+    assert workflow["name"] == "Security — CodeQL"
+    assert set(workflow["jobs"]) == {"analyze"}
+    analyze = workflow["jobs"]["analyze"]
+    assert analyze["name"] == "Analyze (${{ matrix.language }})"
+    assert analyze["strategy"]["matrix"]["language"] == [
+        "csharp",
+        "python",
+        "javascript",
+    ]
+    assert any(
+        step.get("uses", "").startswith("github/codeql-action/analyze@")
+        for step in analyze["steps"]
+        if isinstance(step, dict)
+    )
+
+
 def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> None:
     import yaml
 
@@ -1137,6 +1158,7 @@ def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> Non
     workflow = yaml.safe_load(workflow_text)
     triggers = workflow.get("on", workflow.get(True, {}))
 
+    assert workflow["name"] == "Web Client — Browser Compatibility Smoke"
     assert set(triggers) == {"schedule", "workflow_dispatch"}
     assert triggers["schedule"] == [{"cron": "30 4 * * *"}]
     assert "push" not in triggers
@@ -1150,6 +1172,7 @@ def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> Non
     jobs = workflow["jobs"]
     assert set(jobs) == {"web-client-compatibility-smoke"}
     job = jobs["web-client-compatibility-smoke"]
+    assert job["name"] == "Web Client — Browser Compatibility Smoke"
     assert job["runs-on"] == "${{ matrix.os }}"
     assert job["defaults"]["run"]["shell"] == "pwsh"
     assert job["strategy"]["fail-fast"] is False
@@ -1167,7 +1190,7 @@ def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> Non
     upload_index = next(
         index
         for index, step in enumerate(steps)
-        if step.get("name") == "Upload Web Client Compatibility Smoke results"
+        if step.get("name") == "Upload Web Client — Browser Compatibility Smoke results"
     )
     issue_close_index = next(
         index
@@ -1190,6 +1213,10 @@ def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> Non
     )
     assert "### Specs" in summary_run
     assert "### Environment" in summary_run
+    assert "## Web Client — Browser Compatibility Smoke - " in summary_run
+    assert "Status: results unavailable." in summary_run
+    assert "Status: failed - $failed of $total specs failed." in summary_run
+    assert "Status: passed - all $total specs passed." in summary_run
     assert "results-web-client-compatibility-smoke-$($env:MATRIX_OS)-$($env:MATRIX_BROWSER)" in (
         summary_run
     )
@@ -1207,6 +1234,7 @@ def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> Non
     assert "gh issue comment" in run_commands
     assert "gh issue close" in run_commands
     assert "[Web Client Compatibility Smoke] $env:MATRIX_OS / $env:MATRIX_BROWSER" in run_commands
+    assert "[Web Client — Browser Compatibility Smoke]" not in run_commands
     for forbidden_expression in (
         "${{ matrix.",
         "${{ steps.browser_probe.outputs.",
@@ -1224,6 +1252,42 @@ def test_compatibility_smoke_workflow_is_schedule_only_matrix_detection() -> Non
         "L" + "2 Edge Compat",
     ):
         assert forbidden not in workflow_text
+
+
+def test_phase_6_7_docs_do_not_keep_rejected_or_removed_workflow_terms() -> None:
+    glossary = (
+        _runner.REPO_ROOT
+        / "OPC_UA_Clients"
+        / "Release2"
+        / "IJT_Test_Client"
+        / "docs"
+        / "REPORT_GLOSSARY.md"
+    ).read_text(encoding="utf-8")
+    root_skills = (_runner.REPO_ROOT / "docs" / "SKILLS.md").read_text(encoding="utf-8")
+    test_tiers = (_runner.REPO_ROOT / "docs" / "TEST_TIERS.md").read_text(encoding="utf-8")
+    web_skills = (
+        _runner.REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "docs" / "SKILLS.md"
+    ).read_text(encoding="utf-8")
+
+    assert "CI — Required Checks" not in glossary
+    assert "New display name (Phase 2)" not in glossary
+    assert "CodeQL Analysis" not in glossary
+    assert "Security — CodeQL" in glossary
+    assert "Web Client — Browser Compatibility Smoke" in glossary
+    assert "[Web Client Compatibility Smoke]" in glossary
+
+    for text in (root_skills, web_skills):
+        assert "matching PR/SHA" not in text
+        assert "dependency-input updates" not in text
+        assert "reviewed" in text
+        assert "image-pin.json" in text
+        assert "Web Client — Browser Compatibility Smoke" in text
+        assert "[Web Client Compatibility Smoke]" in text
+
+    assert "LiveIntegrationTests` × 15" not in test_tiers
+    assert "C# live integration tests" in test_tiers
+    assert "Web Client — Browser Compatibility Smoke" in test_tiers
+    assert "[Web Client Compatibility Smoke]" in test_tiers
 
 
 def test_compatibility_smoke_playwright_scope_is_two_edge_specs_only() -> None:
