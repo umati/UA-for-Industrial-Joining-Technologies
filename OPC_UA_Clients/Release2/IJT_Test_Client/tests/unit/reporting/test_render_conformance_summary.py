@@ -163,6 +163,35 @@ def test_renderer_ignores_live_environment_when_frozen_env_passed(monkeypatch: p
     )
 
 
+def test_failure_overflow_row_uses_explicit_wording() -> None:
+    """Failure overflow rows must not use ellipsis placeholders."""
+    data = {
+        "passed": 0,
+        "failed": 31,
+        "errors": 0,
+        "skipped": 0,
+        "xfailed": 0,
+        "total": 31,
+        "duration_s": 1,
+        "failures": [{"name": f"test_failure_{index}", "message": "boom"} for index in range(31)],
+        "skip_reasons": {},
+        "xfail_reasons": {},
+    }
+
+    produced, _context = render_conformance_summary(
+        data,
+        FIXED_SERVER_URL,
+        FIXED_RUN_TS,
+        cu_payload=None,
+        baseline=None,
+        report_environment=FROZEN_ENV,
+    )
+
+    assert "| Additional rows | 1 additional failure item(s) are listed in full in `report.xlsx` |" in produced
+    assert "| … |" not in produced
+    assert "more — see report.xlsx" not in produced
+
+
 def test_runtime_report_environment_reads_live_state(monkeypatch: pytest.MonkeyPatch) -> None:
     """Companion guard: ``ReportEnvironment.from_runtime()`` reads live state.
 

@@ -20,13 +20,18 @@ from helpers.method_signature import JOINT_METHOD_INPUTS, assert_input_argument_
 from helpers.namespaces import NS_APP, NS_DI, NS_IJT_BASE, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system, read_tool_product_instance_uri
 from helpers.result_collector import ResultCollector
-from helpers.result_navigation import collect_result_values, unwrap_variant
+from helpers.result_navigation import (
+    collect_result_values,
+    collect_trace_entries,
+    unwrap_sequence,
+    unwrap_variant,
+)
 from helpers.result_validator import (
     ResultValueValidator,
     ValidationContext,
     ValidationResult,
 )
-from helpers.skip_reasons import skip_accepted_policy
+from helpers.skip_reasons import skip_blocked, skip_not_supported
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -389,26 +394,16 @@ async def test_trace_content_data_type_has_engineering_units(subscription_client
         pytest.skip("No ResultContent in result — trace content EU check not possible")
 
     trace_values: list = []
-    for item in content:
-        item = getattr(item, "Value", item)  # unwrap asyncua Variant
-        step_results = getattr(item, "StepResults", None)
-        if not isinstance(step_results, (list, tuple)):
-            continue
-        for step in step_results:
-            step = unwrap_variant(step)
-            step_traces = getattr(step, "StepTraces", None)
-            if not isinstance(step_traces, (list, tuple)):
-                continue
-            for trace in step_traces:
-                trace = unwrap_variant(trace)
-                trace_content = getattr(trace, "StepTraceContent", None)
-                if isinstance(trace_content, (list, tuple)):
-                    trace_values.extend(unwrap_variant(tc) for tc in trace_content)
+    for _trace_path, trace in collect_trace_entries(result_data):
+        for step_trace in unwrap_sequence(getattr(trace, "StepTraces", None)):
+            trace_values.extend(unwrap_sequence(getattr(step_trace, "StepTraceContent", None)))
 
     if not trace_values:
-        skip_accepted_policy(
-            "trace content is not present in this result; result-value engineering-unit coverage remains available",
-            method="Result Trace",
+        skip_blocked(
+            "Trace-content EngineeringUnits validation not applicable: no "
+            "Result.ResultContent[].Trace.StepTraces[].StepTraceContent[] entries "
+            "were returned after requesting traces; trace presence is covered by "
+            "the Joining Result Trace CU"
         )
 
     failures: list[str] = []
@@ -464,8 +459,9 @@ async def test_reported_value_data_type_in_event_has_engineering_units(subscript
                     reported_values.extend(unwrap_variant(v) for v in vals)
 
     if not reported_values:
-        logger.info("No ReportedValueDataType entries found in result — optional field absent")
-        return
+        skip_blocked(
+            "Reported-value EngineeringUnits validation not applicable: no ReportedValueDataType entries found"
+        )
 
     failures: list[str] = []
     for idx, rv in enumerate(reported_values):
@@ -500,10 +496,7 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
 
     list_node = await find_child_by_browse_name(jm, "GetJointDesignList", ns_ijt)
     if list_node is None:
-        skip_accepted_policy(
-            "optional joint-design data is unavailable; result-value engineering-unit coverage remains available",
-            method="GetJointDesignList",
-        )
+        skip_not_supported("GetJointDesignList", detail="method node absent")
     await assert_input_argument_names(
         list_node,
         JOINT_METHOD_INPUTS["GetJointDesignList"],
@@ -519,28 +512,29 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
         method_name="GetJointDesignList",
     )
     if not list_result.success:
-        skip_accepted_policy(
-            "optional joint-design data is unavailable; result-value engineering-unit coverage remains available",
+        error_text = str(list_result.error)
+        if "not supported" in error_text.casefold():
+            skip_not_supported("GetJointDesignList", detail=error_text)
+        skip_blocked(
+            "Design-value EngineeringUnits validation not applicable: GetJointDesignList "
+            "returned no usable design list",
             method="GetJointDesignList",
-            status=str(list_result.error),
+            status=error_text,
         )
 
     outputs = list_result.output_list
     design_list = outputs[0] if outputs and isinstance(outputs[0], (list, tuple)) else outputs
 
     if not design_list:
-        skip_accepted_policy(
-            "no joint designs are configured on the server; result-value engineering-unit coverage remains available",
+        skip_blocked(
+            "Design-value EngineeringUnits validation not applicable: GetJointDesignList returned no joint designs",
             method="GetJointDesignList",
         )
 
     first_id = str(design_list[0] if isinstance(design_list, (list, tuple)) else design_list)
     get_node = await find_child_by_browse_name(jm, "GetJointDesign", ns_ijt)
     if get_node is None:
-        skip_accepted_policy(
-            "optional joint-design data is unavailable; result-value engineering-unit coverage remains available",
-            method="GetJointDesign",
-        )
+        skip_not_supported("GetJointDesign", detail="method node absent")
     await assert_input_argument_names(
         get_node,
         JOINT_METHOD_INPUTS["GetJointDesign"],
@@ -556,16 +550,19 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
         method_name="GetJointDesign",
     )
     if not get_result.success:
-        skip_accepted_policy(
-            "optional joint-design data is unavailable; result-value engineering-unit coverage remains available",
+        error_text = str(get_result.error)
+        if "not supported" in error_text.casefold():
+            skip_not_supported("GetJointDesign", detail=error_text)
+        skip_blocked(
+            "Design-value EngineeringUnits validation not applicable: GetJointDesign returned no usable design data",
             method="GetJointDesign",
-            status=str(get_result.error),
+            status=error_text,
         )
     design_data = get_result.output_list[0] if get_result.output_list else None
 
     if design_data is None:
-        skip_accepted_policy(
-            "joint-design data was empty; result-value engineering-unit coverage remains available",
+        skip_blocked(
+            "Design-value EngineeringUnits validation not applicable: GetJointDesign returned empty design data",
             method="GetJointDesign",
         )
 
@@ -576,8 +573,8 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
             design_values.extend(vals)
 
     if not design_values:
-        skip_accepted_policy(
-            "joint design has no DesignValueDataType entries; result-value engineering-unit coverage remains available",
+        skip_blocked(
+            "Design-value EngineeringUnits validation not applicable: joint design has no DesignValueDataType entries",
             method="GetJointDesign",
         )
 

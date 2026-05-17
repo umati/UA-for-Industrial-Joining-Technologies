@@ -37,13 +37,13 @@ def test_parse_junit_exception_continues_parsing(tmp_path):
 
 def test_browser_feature_timings_shard_2of2(tmp_path):
     """browser_feature_timings recognizes shard 2of2."""
-    artifact_dir = tmp_path / "results-shard-2of2"
-    artifact_dir.mkdir()
+    artifact_dir = tmp_path / "results-shard-2of2" / "timing"
+    artifact_dir.mkdir(parents=True)
     timing_file = artifact_dir / "timing-latest.json"
     timing_file.write_text('{"total_seconds": 50.0, "stages": []}')
 
     rows = system_tests_run_summary.browser_feature_timings(
-        str(tmp_path / "*shard-2of2*" / "timing-latest.json")
+        str(tmp_path / "*shard-2of2*" / "**" / "timing-latest.json")
     )
     assert len(rows) == 1
     assert rows[0]["shard"] == "2/2"

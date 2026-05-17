@@ -59,6 +59,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -93,6 +94,14 @@ _USE_COLOUR: bool = False  # resolved in main() after arg parsing
 
 def _c(ansi: str, text: str) -> str:
     return f"{ansi}{text}\033[0m" if _USE_COLOUR else text
+
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove terminal colour/control sequences before parsing tool summaries."""
+    return _ANSI_RE.sub("", text)
 
 
 # ---------------------------------------------------------------------------
@@ -460,20 +469,37 @@ def _emit_suite_output(result: SuiteResult) -> None:
 def _parse_suite_counts(text: str) -> str:
     """Return the most informative test-count string from sub-runner captured output.
 
-    Handles four output formats:
+    Handles common output formats:
       - pytest:  "1298 passed, 267 skipped, 2 xfailed in 409.92s"
+      - pytest:  "2 failed, 795 passed in 22.26s"
       - C# dotnet test:  "Failed: 0, Passed: 800, Skipped: 0, Total: 800"
       - Vitest raw:  "Tests  152 passed (152)"
       - Node sub-runner:  "[PHASE 1] Vitest (unit) .... PASS (299/299)"
+      - Playwright:  "1 failed" + "64 passed (2.0m)"
+      - smoke runners:  "10/10 passed"
+      - static runners:  "Checks: 7 passed, 0 failed, 2 skipped"
     For suites that run both Python and JS (Web Client), combines both counts.
     """
-    _WORD = r"(?:failed|error|errors|skipped|xfailed|xpassed|warnings?|deselected)"
+    text = _strip_ansi(text).replace("\r", "\n")
+    _WORD = r"(?:passed|failed|error|errors|skipped|xfailed|xpassed|warnings?|deselected)"
+
+    def _normalise_snippet(snippet: str) -> tuple[int, str]:
+        parts: list[str] = []
+        total = 0
+        for count, word in re.findall(rf"(\d+)\s+({_WORD})\b", snippet):
+            value = int(count)
+            if value == 0:
+                continue
+            total += value
+            parts.append(f"{value} {word}")
+        return total, ", ".join(parts)
+
     best: tuple[int, str] = (0, "")
-    for m in re.finditer(rf"(\d+ passed(?:,\s*\d+ {_WORD})*)\s+in\s+[\d.]+s", text):
+    for m in re.finditer(rf"((?:\d+\s+{_WORD})(?:,\s*\d+\s+{_WORD})*)\s+in\s+[\d.]+s", text):
         snippet = m.group(1)
-        total = sum(int(n) for n in re.findall(r"\d+", snippet))
+        total, clean = _normalise_snippet(snippet)
         if total > best[0]:
-            best = (total, snippet)
+            best = (total, clean)
     py_counts = best[1]
 
     # Raw vitest output: "Tests  152 passed (152)"
@@ -500,7 +526,79 @@ def _parse_suite_counts(text: str) -> str:
             parts.append(f"{cs_skipped.group(1)} skipped")
         return ", ".join(parts)
 
+    generic_best: tuple[int, str] = (0, "")
+    for pattern in (
+        rf"\bChecks:\s*((?:\d+\s+{_WORD})(?:,\s*\d+\s+{_WORD})*)",
+        rf"\bResult:\s+\w+\s+((?:\d+\s+{_WORD})(?:,\s*\d+\s+{_WORD})*)",
+    ):
+        for m in re.finditer(pattern, text):
+            total, clean = _normalise_snippet(m.group(1))
+            if clean and total > generic_best[0]:
+                generic_best = (total, clean)
+    if generic_best[1]:
+        return generic_best[1]
+
+    playwright_parts: list[str] = []
+    for word in ("failed", "passed", "skipped"):
+        match = re.search(rf"^\s*(\d+)\s+{word}\b", text, flags=re.MULTILINE)
+        if match and match.group(1) != "0":
+            playwright_parts.append(f"{match.group(1)} {word}")
+    if playwright_parts:
+        return ", ".join(playwright_parts)
+
+    fraction_passed = re.search(r"\b(\d+)/(\d+)\s+passed\b", text)
+    if fraction_passed:
+        passed, total = fraction_passed.groups()
+        return f"{passed} passed" if passed == total else f"{passed}/{total} passed"
+
     return ""
+
+
+def _count_tests_from_detail(counts: str) -> int:
+    """Return executable test total from a parsed Detail cell count string."""
+    return sum(_test_outcome_counts_from_detail(counts).values())
+
+
+def _test_outcome_counts_from_detail(counts: str) -> Counter[str]:
+    """Return normalized test outcome counts from a parsed Detail cell."""
+    totals: Counter[str] = Counter()
+    test_words = r"(?:passed|failed|error|errors|skipped|xfailed|xpassed)"
+    for count, word in re.findall(rf"\b(\d+)\s+({test_words})\b", counts):
+        key = "errors" if word in {"error", "errors"} else word
+        totals[key] += int(count)
+    return totals
+
+
+def _test_outcome_counts_from_results(results: list[SuiteResult]) -> Counter[str]:
+    """Sum parsed test outcome counts across all suites."""
+    totals: Counter[str] = Counter()
+    for result in results:
+        if result.counts:
+            totals.update(_test_outcome_counts_from_detail(result.counts))
+    return totals
+
+
+def _count_tests_from_results(results: list[SuiteResult]) -> int:
+    """Sum parsed test counts across suites; non-test repo checks contribute zero."""
+    return sum(_test_outcome_counts_from_results(results).values())
+
+
+def _format_total_test_outcomes(totals: Counter[str]) -> str:
+    """Return a readable aggregate test-outcome line for the final summary."""
+    total = sum(totals.values())
+    if not total:
+        return "0 total tests reported"
+    parts = [
+        f"{totals['passed']:,} passed",
+        f"{totals['failed']:,} failed",
+        f"{totals['errors']:,} errors",
+        f"{totals['skipped']:,} skipped",
+    ]
+    if totals["xfailed"]:
+        parts.append(f"{totals['xfailed']:,} xfailed")
+    if totals["xpassed"]:
+        parts.append(f"{totals['xpassed']:,} xpassed")
+    return f"{total:,} total tests; " + ", ".join(parts)
 
 
 def _delegate_to_runner(
@@ -1478,7 +1576,14 @@ def _suite_server_smoke() -> SuiteResult:
             label="smoke_test.py --tcp-timeout 30",
         )
         outputs.append(out)
-        return SuiteResult(name, rc == 0, time.monotonic() - t0, output="\n".join(outputs))
+        output = "\n".join(outputs)
+        return SuiteResult(
+            name,
+            rc == 0,
+            time.monotonic() - t0,
+            output=output,
+            counts=_parse_suite_counts(output),
+        )
     finally:
         if started_server:
             _stop_server()
@@ -1630,7 +1735,15 @@ def _suite_server_linux_package_smoke() -> SuiteResult:
             notes.append("docker cleanup failed")
             ok = False
 
-    return SuiteResult(name, ok, time.monotonic() - t0, output="\n".join(outputs), notes=notes)
+    output = "\n".join(outputs)
+    return SuiteResult(
+        name,
+        ok,
+        time.monotonic() - t0,
+        output=output,
+        notes=notes,
+        counts=_parse_suite_counts(output),
+    )
 
 
 def _suite_csharp_live() -> SuiteResult:
@@ -2156,17 +2269,33 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
     p1_rows = [r for r in results if r.name in phase1_names]
     p2_rows = [r for r in results if r.name in phase2_names]
 
+    def _detail_for_row(result: SuiteResult) -> str:
+        if result.counts:
+            return result.counts
+        if result.notes:
+            return result.notes[0]
+        return "Not reported"
+
     # ── Column content widths (each cell = " {content} " → adds 2 chars) ──────
     nw = max(max((len(_suite_display_name(r.name)) for r in results), default=14), 18)
     sw = 6  # "Status" / center-padded "PASS" etc. → 8 chars per cell total
     tw = 8  # time right-aligned                   → 10 chars per cell total
+    test_totals = _test_outcome_counts_from_results(results)
+    total_test_detail = _format_total_test_outcomes(test_totals)
     # Detail column: auto-sized to fit the longest detail string (min 38)
     _all_details: list[str] = []
     for _r in results:
-        _det = _r.counts or (_r.notes[0] if _r.notes else "")
+        _det = _detail_for_row(_r)
         _all_details.append(_det)
         for _note in _r.notes if _r.counts else _r.notes[1:]:
             _all_details.append(f"  \u2514 {_note}")
+    n_pass = sum(1 for r in results if r.ok and not r.skipped)
+    n_skip = sum(1 for r in results if r.skipped)
+    n_fail = sum(1 for r in results if not r.ok and not r.skipped)
+    suite_totals = (
+        f"{len(results)} total suites; {n_pass} passed, {n_fail} failed, {n_skip} skipped"
+    )
+    _all_details.extend([suite_totals, f"  \u2514 {total_test_detail}"])
     dw = max(max((len(d) for d in _all_details), default=14), 38)
 
     # Visible chars between the two outer │ borders in a spanning (section) row:
@@ -2243,7 +2372,7 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
             if not r.ok and not r.skipped:
                 overall = 1
             t = f"{r.duration:.1f}s"
-            det = r.counts or (r.notes[0] if r.notes else "")
+            det = _detail_for_row(r)
             out(_row(_suite_display_name(r.name), _scell(r), t, det) + "\n")
             # Show extra notes as indented continuation rows
             extra = r.notes if r.counts else r.notes[1:]
@@ -2255,17 +2384,9 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
     _emit_group("Phase 2 \u2014 Live / Integration", p2_rows)
 
     # ── Totals row ────────────────────────────────────────────────────────────
-    n_pass = sum(1 for r in results if r.ok and not r.skipped)
-    n_skip = sum(1 for r in results if r.skipped)
-    n_fail = sum(1 for r in results if not r.ok and not r.skipped)
-    totals = (
-        f"{len(results)} suites"
-        + (f"   \u2714 {n_pass}" if n_pass else "")
-        + (f"   \u25cb {n_skip}" if n_skip else "")
-        + (f"   \u2718 {n_fail}" if n_fail else "")
-    )
     out(_hcols(LM, CR, RM) + "\n")
-    out(_row("TOTAL", blank_s, f"{total_time:.1f}s", totals) + "\n")
+    out(_row("TOTAL", blank_s, f"{total_time:.1f}s", suite_totals) + "\n")
+    out(_row("", blank_s, "", f"  \u2514 {total_test_detail}") + "\n")
     out(_hcols(BL, BT, BR) + "\n\n")
 
     # ── Verdict ───────────────────────────────────────────────────────────────

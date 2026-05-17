@@ -357,8 +357,8 @@ def test_next_link_returns_none_for_empty():
 
 def test_browser_feature_timings_parses_artifacts(tmp_path):
     """browser_feature_timings extracts timing data from JSON artifacts."""
-    artifact_dir = tmp_path / "results-shard-1of2"
-    artifact_dir.mkdir()
+    artifact_dir = tmp_path / "results-shard-1of2" / "timing"
+    artifact_dir.mkdir(parents=True)
     timing_file = artifact_dir / "timing-latest.json"
     timing_file.write_text(
         json.dumps(
@@ -375,7 +375,7 @@ def test_browser_feature_timings_parses_artifacts(tmp_path):
     )
 
     rows = system_tests_run_summary.browser_feature_timings(
-        str(tmp_path / "*shard-1of2*" / "timing-latest.json")
+        str(tmp_path / "*shard-1of2*" / "**" / "timing-latest.json")
     )
     assert len(rows) == 1
     assert rows[0]["shard"] == "1/2"
@@ -386,13 +386,13 @@ def test_browser_feature_timings_parses_artifacts(tmp_path):
 
 def test_browser_feature_timings_handles_full_shard(tmp_path):
     """browser_feature_timings recognizes non-sharded runs."""
-    artifact_dir = tmp_path / "results-full"
-    artifact_dir.mkdir()
+    artifact_dir = tmp_path / "results-full" / "timing"
+    artifact_dir.mkdir(parents=True)
     timing_file = artifact_dir / "timing-latest.json"
     timing_file.write_text(json.dumps({"total_seconds": 100.0, "stages": []}))
 
     rows = system_tests_run_summary.browser_feature_timings(
-        str(tmp_path / "*" / "timing-latest.json")
+        str(tmp_path / "*" / "**" / "timing-latest.json")
     )
     assert rows[0]["shard"] == "full"
 

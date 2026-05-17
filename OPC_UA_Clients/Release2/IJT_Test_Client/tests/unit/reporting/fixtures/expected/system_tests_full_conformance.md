@@ -84,17 +84,17 @@ _No action items — server validation passed cleanly._
 
 | Review Status | CU | Outcome | Primary Reason |
 |---|---|---|---|
-| ⚪ Not Supported | IJT Acknowledge Results | ⚪ Not Supported | Not Supported: IJT Acknowledge Results - Method: AcknowledgeResults NOT SUPPORTED |
-| ⚪ Not Supported | IJT Delete Joining Process | ⚪ Not Supported | Not Supported: IJT Delete Joining Process - Method: DeleteJoiningProcess NOT SUPPORTED |
-| ⚪ Not Supported | IJT Delete Joint Component | ⚪ Not Supported | Not Supported: IJT Delete Joint Component - Method: DeleteJointComponent NOT SUPPORTED |
-| ⚪ Not Supported | IJT Delete Joint Design | ⚪ Not Supported | Not Supported: IJT Delete Joint Design - Method: DeleteJointDesign NOT SUPPORTED |
-| ⚪ Not Supported | IJT Disconnect Asset | ⚪ Not Supported | Not Supported: IJT Disconnect Asset - Method: DisconnectAsset NOT SUPPORTED |
-| ⚪ Not Supported | IJT Execute Operation | ⚪ Not Supported | Not Supported: IJT Execute Operation - Method: ExecuteOperation NOT SUPPORTED |
-| ⚪ Not Supported | IJT Feedback Methods | ⚪ Not Supported | Not Supported: IJT Feedback Methods - Methods: GetFeedbackFileList, SendFeedback NOT SUPPORTED |
-| ⚪ Not Supported | IJT Get Error Information | ⚪ Not Supported | Not Supported: IJT Get Error Information - Method: GetErrorInformation NOT SUPPORTED |
-| ⚪ Not Supported | IJT Get Joining Process | ⚪ Not Supported | Not Supported: IJT Get Joining Process - Method: GetJoiningProcess NOT SUPPORTED |
-| ⚪ Not Supported | IJT Get Joining Process Revision List | ⚪ Not Supported | Not Supported: IJT Get Joining Process Revision List - Method: GetJoiningProcessRevisionList NOT SUPPORTED |
-| … | … | … | 18 more items in Conformance Status |
+| ⚪ Not Supported | IJT Acknowledge Results | ⚪ Not Supported | IJT Acknowledge Results - Method: AcknowledgeResults |
+| ⚪ Not Supported | IJT Delete Joining Process | ⚪ Not Supported | IJT Delete Joining Process - Method: DeleteJoiningProcess |
+| ⚪ Not Supported | IJT Delete Joint Component | ⚪ Not Supported | IJT Delete Joint Component - Method: DeleteJointComponent |
+| ⚪ Not Supported | IJT Delete Joint Design | ⚪ Not Supported | IJT Delete Joint Design - Method: DeleteJointDesign |
+| ⚪ Not Supported | IJT Disconnect Asset | ⚪ Not Supported | IJT Disconnect Asset - Method: DisconnectAsset |
+| ⚪ Not Supported | IJT Execute Operation | ⚪ Not Supported | IJT Execute Operation - Method: ExecuteOperation |
+| ⚪ Not Supported | IJT Feedback Methods | ⚪ Not Supported | IJT Feedback Methods - Methods: GetFeedbackFileList, SendFeedback |
+| ⚪ Not Supported | IJT Get Error Information | ⚪ Not Supported | IJT Get Error Information - Method: GetErrorInformation |
+| ⚪ Not Supported | IJT Get Joining Process | ⚪ Not Supported | IJT Get Joining Process - Method: GetJoiningProcess |
+| ⚪ Not Supported | IJT Get Joining Process Revision List | ⚪ Not Supported | IJT Get Joining Process Revision List - Method: GetJoiningProcessRevisionList |
+| Additional rows | See full Conformance Status section below | Preview limited | 18 additional items are listed in full in Conformance Status |
 
 </details>
 
@@ -148,34 +148,34 @@ _Review-level detail for CUs that need explanation or follow-up: Supported with 
 
 | Review Status | CU | Facet(s) | Server Supported | Outcome | Primary Reason | Tests | Passed | Not Supported | Blocked | Failures |
 |---|---|---|---|---|---|---:|---:|---:|---:|---:|
-| ⚪ Not Supported | IJT Acknowledge Results | IJT Stored Result Server Facet | No | ⚪ Not Supported | Not Supported: IJT Acknowledge Results - Method: AcknowledgeResults NOT SUPPORTED | 7 | 0 | 7 | 0 | 0 |
-| ⚪ Not Supported | IJT Delete Joining Process | IJT Additional Process Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Delete Joining Process - Method: DeleteJoiningProcess NOT SUPPORTED | 2 | 0 | 2 | 0 | 0 |
-| ⚪ Not Supported | IJT Delete Joint Component | IJT Joint Component Server Facet | No | ⚪ Not Supported | Not Supported: IJT Delete Joint Component - Method: DeleteJointComponent NOT SUPPORTED | 3 | 0 | 3 | 0 | 0 |
-| ⚪ Not Supported | IJT Delete Joint Design | IJT Joint Design Server Facet | No | ⚪ Not Supported | Not Supported: IJT Delete Joint Design - Method: DeleteJointDesign NOT SUPPORTED | 3 | 0 | 3 | 0 | 0 |
-| ⚪ Not Supported | IJT Disconnect Asset | IJT Additional Asset Methods Server Facet, IJT Asset Connection Server Facet | No | ⚪ Not Supported | Not Supported: IJT Disconnect Asset - Method: DisconnectAsset NOT SUPPORTED | 4 | 0 | 4 | 0 | 0 |
-| ⚪ Not Supported | IJT Execute Operation | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Execute Operation - Method: ExecuteOperation NOT SUPPORTED | 4 | 0 | 4 | 0 | 0 |
-| ⚪ Not Supported | IJT Feedback Methods | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Feedback Methods - Methods: GetFeedbackFileList, SendFeedback NOT SUPPORTED | 6 | 0 | 6 | 0 | 0 |
-| ⚪ Not Supported | IJT Get Error Information | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Get Error Information - Method: GetErrorInformation NOT SUPPORTED | 4 | 0 | 4 | 0 | 0 |
-| ⚪ Not Supported | IJT Get Joining Process | IJT Additional Process Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Get Joining Process - Method: GetJoiningProcess NOT SUPPORTED | 5 | 0 | 5 | 0 | 0 |
-| ⚪ Not Supported | IJT Get Joining Process Revision List | IJT Additional Process Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Get Joining Process Revision List - Method: GetJoiningProcessRevisionList NOT SUPPORTED | 4 | 0 | 4 | 0 | 0 |
-| ⚪ Not Supported | IJT Get Joint Component | IJT Joint Component Server Facet | No | ⚪ Not Supported | Not Supported: IJT Get Joint Component - Method: GetJointComponent NOT SUPPORTED | 5 | 0 | 5 | 0 | 0 |
-| ⚪ Not Supported | IJT Get Joint Component List | IJT Joint Component Server Facet | No | ⚪ Not Supported | Not Supported: IJT Get Joint Component List - Method: GetJointComponentList NOT SUPPORTED | 4 | 0 | 4 | 0 | 0 |
-| ⚪ Not Supported | IJT Get Joint Design | IJT Joint Design Server Facet | No | ⚪ Not Supported | Not Supported: IJT Get Joint Design - Method: GetJointDesign NOT SUPPORTED | 5 | 0 | 5 | 0 | 0 |
-| ⚪ Not Supported | IJT Get Joint Design List | IJT Joint Design Server Facet | No | ⚪ Not Supported | Not Supported: IJT Get Joint Design List - Method: GetJointDesignList NOT SUPPORTED | 4 | 0 | 4 | 0 | 0 |
-| ⚪ Not Supported | IJT Get Joint Revision List | IJT Joint Server Facet | No | ⚪ Not Supported | Not Supported: IJT Get Joint Revision List - Method: GetJointRevisionList NOT SUPPORTED | 5 | 0 | 5 | 0 | 0 |
-| ⚪ Not Supported | IJT Joint Component Data | IJT Joint Component Server Facet | No | ⚪ Not Supported | Not Supported: IJT Joint Component Data NOT SUPPORTED | 4 | 0 | 4 | 0 | 0 |
-| ⚪ Not Supported | IJT Joint Design Data | IJT Joint Design Server Facet | No | ⚪ Not Supported | Not Supported: IJT Joint Design Data NOT SUPPORTED | 3 | 0 | 3 | 0 | 0 |
-| ⚪ Not Supported | IJT Reboot Asset | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Reboot Asset - Method: RebootAsset NOT SUPPORTED | 4 | 0 | 4 | 0 | 0 |
-| ⚪ Not Supported | IJT Request Unacknowledged Results | IJT Stored Result Server Facet | No | ⚪ Not Supported | Not Supported: IJT Request Unacknowledged Results - Method: RequestUnacknowledgedResults NOT SUPPORTED | 7 | 0 | 7 | 0 | 0 |
-| ⚪ Not Supported | IJT Send Joining Process | IJT Additional Process Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED | 5 | 0 | 5 | 0 | 0 |
-| ⚪ Not Supported | IJT Send Joint Component | IJT Joint Component Server Facet | No | ⚪ Not Supported | Not Supported: IJT Send Joint Component - Method: SendJointComponent NOT SUPPORTED | 6 | 0 | 6 | 0 | 0 |
-| ⚪ Not Supported | IJT Send Joint Design | IJT Joint Design Server Facet | No | ⚪ Not Supported | Not Supported: IJT Send Joint Design - Method: SendJointDesign NOT SUPPORTED | 6 | 0 | 6 | 0 | 0 |
-| ⚪ Not Supported | IJT Set Calibration | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Set Calibration - Method: SetCalibration NOT SUPPORTED | 4 | 0 | 4 | 0 | 0 |
-| ⚪ Not Supported | IJT Set Joining Process Mapping | IJT Additional Process Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Set Joining Process Mapping - Method: SetJoiningProcessMapping NOT SUPPORTED | 3 | 0 | 3 | 0 | 0 |
-| ⚪ Not Supported | IJT Set Offline Timer | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | Not Supported: IJT Set Offline Timer - Method: SetOfflineTimer NOT SUPPORTED | 4 | 0 | 4 | 0 | 0 |
-| ℹ️ With Notes | IJT Joining Process Management | IJT Joining Process Base Server Facet | Yes | 🟩 Supported with Notes | Not Supported: Optional method 'DeleteJoiningProcess': Not Supported — skipping | 37 | 27 | 10 | 0 | 0 |
-| ℹ️ With Notes | IJT Joint Management | IJT Joint Server Facet | Yes | 🟩 Supported with Notes | Not Supported: Optional method 'DeleteJointComponent': Not Supported | 25 | 16 | 9 | 0 | 0 |
-| ℹ️ With Notes | IJT Method Input Argument | General Joining System Server Facet | Yes | 🟩 Supported with Notes | Not Supported: DisconnectAsset: Not Supported — cannot validate method signature | 13 | 8 | 5 | 0 | 0 |
+| ⚪ Not Supported | IJT Acknowledge Results | IJT Stored Result Server Facet | No | ⚪ Not Supported | IJT Acknowledge Results - Method: AcknowledgeResults | 7 | 0 | 7 | 0 | 0 |
+| ⚪ Not Supported | IJT Delete Joining Process | IJT Additional Process Methods Server Facet | No | ⚪ Not Supported | IJT Delete Joining Process - Method: DeleteJoiningProcess | 2 | 0 | 2 | 0 | 0 |
+| ⚪ Not Supported | IJT Delete Joint Component | IJT Joint Component Server Facet | No | ⚪ Not Supported | IJT Delete Joint Component - Method: DeleteJointComponent | 3 | 0 | 3 | 0 | 0 |
+| ⚪ Not Supported | IJT Delete Joint Design | IJT Joint Design Server Facet | No | ⚪ Not Supported | IJT Delete Joint Design - Method: DeleteJointDesign | 3 | 0 | 3 | 0 | 0 |
+| ⚪ Not Supported | IJT Disconnect Asset | IJT Additional Asset Methods Server Facet, IJT Asset Connection Server Facet | No | ⚪ Not Supported | IJT Disconnect Asset - Method: DisconnectAsset | 4 | 0 | 4 | 0 | 0 |
+| ⚪ Not Supported | IJT Execute Operation | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | IJT Execute Operation - Method: ExecuteOperation | 4 | 0 | 4 | 0 | 0 |
+| ⚪ Not Supported | IJT Feedback Methods | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | IJT Feedback Methods - Methods: GetFeedbackFileList, SendFeedback | 6 | 0 | 6 | 0 | 0 |
+| ⚪ Not Supported | IJT Get Error Information | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | IJT Get Error Information - Method: GetErrorInformation | 4 | 0 | 4 | 0 | 0 |
+| ⚪ Not Supported | IJT Get Joining Process | IJT Additional Process Methods Server Facet | No | ⚪ Not Supported | IJT Get Joining Process - Method: GetJoiningProcess | 5 | 0 | 5 | 0 | 0 |
+| ⚪ Not Supported | IJT Get Joining Process Revision List | IJT Additional Process Methods Server Facet | No | ⚪ Not Supported | IJT Get Joining Process Revision List - Method: GetJoiningProcessRevisionList | 4 | 0 | 4 | 0 | 0 |
+| ⚪ Not Supported | IJT Get Joint Component | IJT Joint Component Server Facet | No | ⚪ Not Supported | IJT Get Joint Component - Method: GetJointComponent | 5 | 0 | 5 | 0 | 0 |
+| ⚪ Not Supported | IJT Get Joint Component List | IJT Joint Component Server Facet | No | ⚪ Not Supported | IJT Get Joint Component List - Method: GetJointComponentList | 4 | 0 | 4 | 0 | 0 |
+| ⚪ Not Supported | IJT Get Joint Design | IJT Joint Design Server Facet | No | ⚪ Not Supported | IJT Get Joint Design - Method: GetJointDesign | 5 | 0 | 5 | 0 | 0 |
+| ⚪ Not Supported | IJT Get Joint Design List | IJT Joint Design Server Facet | No | ⚪ Not Supported | IJT Get Joint Design List - Method: GetJointDesignList | 4 | 0 | 4 | 0 | 0 |
+| ⚪ Not Supported | IJT Get Joint Revision List | IJT Joint Server Facet | No | ⚪ Not Supported | IJT Get Joint Revision List - Method: GetJointRevisionList | 5 | 0 | 5 | 0 | 0 |
+| ⚪ Not Supported | IJT Joint Component Data | IJT Joint Component Server Facet | No | ⚪ Not Supported | IJT Joint Component Data | 4 | 0 | 4 | 0 | 0 |
+| ⚪ Not Supported | IJT Joint Design Data | IJT Joint Design Server Facet | No | ⚪ Not Supported | IJT Joint Design Data | 3 | 0 | 3 | 0 | 0 |
+| ⚪ Not Supported | IJT Reboot Asset | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | IJT Reboot Asset - Method: RebootAsset | 4 | 0 | 4 | 0 | 0 |
+| ⚪ Not Supported | IJT Request Unacknowledged Results | IJT Stored Result Server Facet | No | ⚪ Not Supported | IJT Request Unacknowledged Results - Method: RequestUnacknowledgedResults | 7 | 0 | 7 | 0 | 0 |
+| ⚪ Not Supported | IJT Send Joining Process | IJT Additional Process Methods Server Facet | No | ⚪ Not Supported | IJT Send Joining Process - Method: SendJoiningProcess | 5 | 0 | 5 | 0 | 0 |
+| ⚪ Not Supported | IJT Send Joint Component | IJT Joint Component Server Facet | No | ⚪ Not Supported | IJT Send Joint Component - Method: SendJointComponent | 6 | 0 | 6 | 0 | 0 |
+| ⚪ Not Supported | IJT Send Joint Design | IJT Joint Design Server Facet | No | ⚪ Not Supported | IJT Send Joint Design - Method: SendJointDesign | 6 | 0 | 6 | 0 | 0 |
+| ⚪ Not Supported | IJT Set Calibration | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | IJT Set Calibration - Method: SetCalibration | 4 | 0 | 4 | 0 | 0 |
+| ⚪ Not Supported | IJT Set Joining Process Mapping | IJT Additional Process Methods Server Facet | No | ⚪ Not Supported | IJT Set Joining Process Mapping - Method: SetJoiningProcessMapping | 3 | 0 | 3 | 0 | 0 |
+| ⚪ Not Supported | IJT Set Offline Timer | IJT Additional Asset Methods Server Facet | No | ⚪ Not Supported | IJT Set Offline Timer - Method: SetOfflineTimer | 4 | 0 | 4 | 0 | 0 |
+| ℹ️ With Notes | IJT Joining Process Management | IJT Joining Process Base Server Facet | Yes | 🟩 Supported with Notes | Optional method 'DeleteJoiningProcess': Not Supported — skipping | 37 | 27 | 10 | 0 | 0 |
+| ℹ️ With Notes | IJT Joint Management | IJT Joint Server Facet | Yes | 🟩 Supported with Notes | Optional method 'DeleteJointComponent': Not Supported | 25 | 16 | 9 | 0 | 0 |
+| ℹ️ With Notes | IJT Method Input Argument | General Joining System Server Facet | Yes | 🟩 Supported with Notes | DisconnectAsset: Not Supported — cannot validate method signature | 13 | 8 | 5 | 0 | 0 |
 
 </details>
 
@@ -306,7 +306,7 @@ _Review-level detail for CUs that need explanation or follow-up: Supported with 
 | IJT Self Contained Consolidated Result | Joining System Selectable Features Server Facet | Yes | 🟢 Supported | 8 | 8 | 0 | 0 | 0 | 11 |
 | IJT Consolidated Result With References | Joining System Selectable Features Server Facet | Yes | 🟢 Supported | 5 | 5 | 0 | 0 | 0 | 10 |
 | IJT Partial Consolidated Result | Joining System Selectable Features Server Facet | Yes | 🟢 Supported | 3 | 3 | 0 | 0 | 0 | 11 |
-| IJT Engineering Units | Joining System Selectable Features Server Facet | Yes | 🟢 Supported | 12 | 10 | 0 | 0 | 0 | 10 |
+| IJT Engineering Units | Joining System Selectable Features Server Facet | Yes | 🟢 Supported | 12 | 12 | 0 | 0 | 0 | 10 |
 
 </details>
 
@@ -361,26 +361,26 @@ Diagnostic skip buckets from pytest. These may overlap with conformance status i
 
 | Reason | Count |
 |--------|------:|
-| IJT Acknowledge Results - Method: AcknowledgeResults NOT SUPPORTED | 7 |
-| IJT Request Unacknowledged Results - Method: RequestUnacknowledgedResults NOT SUPPORTED | 7 |
-| IJT Feedback Methods - Methods: GetFeedbackFileList, SendFeedback NOT SUPPORTED | 6 |
-| IJT Send Joint Design - Method: SendJointDesign NOT SUPPORTED | 6 |
-| IJT Send Joint Component - Method: SendJointComponent NOT SUPPORTED | 6 |
-| IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED | 5 |
-| IJT Get Joining Process - Method: GetJoiningProcess NOT SUPPORTED | 5 |
-| IJT Get Joint Design - Method: GetJointDesign NOT SUPPORTED | 5 |
-| IJT Get Joint Component - Method: GetJointComponent NOT SUPPORTED | 5 |
-| IJT Get Joint Revision List - Method: GetJointRevisionList NOT SUPPORTED | 5 |
-| IJT Disconnect Asset - Method: DisconnectAsset NOT SUPPORTED | 4 |
-| IJT Set Calibration - Method: SetCalibration NOT SUPPORTED | 4 |
-| IJT Reboot Asset - Method: RebootAsset NOT SUPPORTED | 4 |
-| IJT Get Error Information - Method: GetErrorInformation NOT SUPPORTED | 4 |
-| IJT Execute Operation - Method: ExecuteOperation NOT SUPPORTED | 4 |
-| IJT Set Offline Timer - Method: SetOfflineTimer NOT SUPPORTED | 4 |
-| IJT Get Joining Process Revision List - Method: GetJoiningProcessRevisionList NOT SUPPORTED | 4 |
-| IJT Get Joint Design List - Method: GetJointDesignList NOT SUPPORTED | 4 |
-| IJT Get Joint Component List - Method: GetJointComponentList NOT SUPPORTED | 4 |
-| IJT Joint Component Data NOT SUPPORTED | 4 |
+| Not Supported: IJT Acknowledge Results - Method: AcknowledgeResults | 7 |
+| Not Supported: IJT Request Unacknowledged Results - Method: RequestUnacknowledgedResults | 7 |
+| Not Supported: IJT Feedback Methods - Methods: GetFeedbackFileList, SendFeedback | 6 |
+| Not Supported: IJT Send Joint Design - Method: SendJointDesign | 6 |
+| Not Supported: IJT Send Joint Component - Method: SendJointComponent | 6 |
+| Not Supported: IJT Send Joining Process - Method: SendJoiningProcess | 5 |
+| Not Supported: IJT Get Joining Process - Method: GetJoiningProcess | 5 |
+| Not Supported: IJT Get Joint Design - Method: GetJointDesign | 5 |
+| Not Supported: IJT Get Joint Component - Method: GetJointComponent | 5 |
+| Not Supported: IJT Get Joint Revision List - Method: GetJointRevisionList | 5 |
+| Not Supported: IJT Disconnect Asset - Method: DisconnectAsset | 4 |
+| Not Supported: IJT Set Calibration - Method: SetCalibration | 4 |
+| Not Supported: IJT Reboot Asset - Method: RebootAsset | 4 |
+| Not Supported: IJT Get Error Information - Method: GetErrorInformation | 4 |
+| Not Supported: IJT Execute Operation - Method: ExecuteOperation | 4 |
+| Not Supported: IJT Set Offline Timer - Method: SetOfflineTimer | 4 |
+| Not Supported: IJT Get Joining Process Revision List - Method: GetJoiningProcessRevisionList | 4 |
+| Not Supported: IJT Get Joint Design List - Method: GetJointDesignList | 4 |
+| Not Supported: IJT Get Joint Component List - Method: GetJointComponentList | 4 |
+| Not Supported: IJT Joint Component Data | 4 |
 
 </details>
 

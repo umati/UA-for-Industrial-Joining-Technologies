@@ -118,7 +118,7 @@ def format_skip_section(label, skips_list, skip_count=None):
     return lines
 
 
-def skip_note_inline(skips_list, skip_count=None, default="—"):
+def skip_note_inline(skips_list, skip_count=None, default="No additional notes"):
     """Short inline note for table Notes column."""
     if skips_list:
         reasons = Counter(msg for _, msg in skips_list)
@@ -326,13 +326,14 @@ def browser_feature_timings(pattern):
             print(f"[WARN] browser_feature_timings({path}): {exc}")
             continue
 
-        artifact = os.path.basename(os.path.dirname(path))
-        if artifact.endswith("-shard-1of2"):
-            shard = "1/2"
-        elif artifact.endswith("-shard-2of2"):
-            shard = "2/2"
-        else:
-            shard = "full"
+        shard = "full"
+        for component in path.replace("\\", "/").split("/"):
+            if component.endswith("-shard-1of2"):
+                shard = "1/2"
+                break
+            if component.endswith("-shard-2of2"):
+                shard = "2/2"
+                break
 
         stages = {
             stage.get("name", ""): seconds(stage.get("duration_seconds"))
@@ -494,7 +495,14 @@ def skips(sk):
 
 def count_test_results(counts, baseline=None):
     """Compact test-results cell for a suite's tests and skips."""
-    return f"{tests_cell(counts, baseline)}; {skips(counts[3])} skipped"
+    if counts[0] is None:
+        return "Not reported"
+    return f"{tests_cell(counts, baseline)}, {skips(counts[3])} skipped"
+
+
+def labeled_test_results(label, counts, baseline=None):
+    """Single labelled test-result line for multi-lane table cells."""
+    return f"{label}: {count_test_results(counts, baseline)}"
 
 
 def bottleneck_candidates(job_timings, wc_feature_timings, cs_live_timings):
@@ -669,6 +677,34 @@ def main() -> None:
         wc_browser[3],
         "Headless Chromium baked into the IJT Browser CI image",
     )
+    sd_smoke_base = baseline_suite(integration_baseline, "sd_smoke")
+    wd_py_base = baseline_suite(integration_baseline, "wd_py")
+    wd_js_base = baseline_suite(integration_baseline, "wd_js")
+    tc_smoke_base = baseline_suite(integration_baseline, "tc_smoke")
+    tc_tests_base = baseline_suite(integration_baseline, "tc_tests")
+    wc_live_base = baseline_suite(integration_baseline, "wc_live")
+    wc_browser_base = baseline_suite(integration_baseline, "wc_browser")
+    con_live_base = baseline_suite(integration_baseline, "con_live")
+    cs_live_base = baseline_suite(integration_baseline, "cs_live")
+
+    web_docker_results = "<br>".join(
+        (
+            labeled_test_results("Python", wd_py, wd_py_base),
+            labeled_test_results("JavaScript", wd_js, wd_js_base),
+        )
+    )
+    web_live_results = "<br>".join(
+        (
+            labeled_test_results("Python/WebSocket live", wc_live, wc_live_base),
+            labeled_test_results("Browser E2E", wc_browser, wc_browser_base),
+        )
+    )
+    test_client_live_results = "<br>".join(
+        (
+            labeled_test_results("Smoke", tc_smoke, tc_smoke_base),
+            labeled_test_results("Conformance", tc_tests, tc_tests_base),
+        )
+    )
 
     # ── Build report ──────────────────────────────────────────────────
 
@@ -694,20 +730,18 @@ def main() -> None:
         "| Lane | Result | Test Results |",
         "|:-----|:-------|:---------|",
         f"| OPC UA Server Docker smoke | {job_icon(sd_r)} {md_cell(sd_r)} | "
-        f"{count_test_results(sd_smoke, baseline_suite(integration_baseline, 'sd_smoke'))} |",
-        f"| Web Client Docker tests | {job_icon(wd_r)} {md_cell(wd_r)} | "
-        f"Python {count_test_results(wd_py, baseline_suite(integration_baseline, 'wd_py'))}; "
-        f"JavaScript {count_test_results(wd_js, baseline_suite(integration_baseline, 'wd_js'))} |",
+        f"{count_test_results(sd_smoke, sd_smoke_base)} |",
+        f"| Web Client Docker tests | {job_icon(wd_r)} {md_cell(wd_r)} | {web_docker_results} |",
         f"| Test Client conformance | {job_icon(tc_r)} {md_cell(tc_r)} | "
-        f"{count_test_results(tc_tests, baseline_suite(integration_baseline, 'tc_tests'))} |",
+        f"{count_test_results(tc_tests, tc_tests_base)} |",
         f"| Web Client live suites | {job_icon(wc_r)} {md_cell(wc_r)} | "
-        f"{count_test_results(wc_live, baseline_suite(integration_baseline, 'wc_live'))} |",
+        f"{count_test_results(wc_live, wc_live_base)} |",
         f"| Browser E2E suites | {job_icon(wb_r)} {md_cell(wb_r)} | "
-        f"{count_test_results(wc_browser, baseline_suite(integration_baseline, 'wc_browser'))} |",
+        f"{count_test_results(wc_browser, wc_browser_base)} |",
         f"| Console Client live | {job_icon(con_r)} {md_cell(con_r)} | "
-        f"{count_test_results(con_live, baseline_suite(integration_baseline, 'con_live'))} |",
+        f"{count_test_results(con_live, con_live_base)} |",
         f"| C# Client live | {job_icon(cs_r)} {md_cell(cs_r)} | "
-        f"{count_test_results(cs_live, baseline_suite(integration_baseline, 'cs_live'))} |",
+        f"{count_test_results(cs_live, cs_live_base)} |",
         "",
         "---",
         "",
@@ -722,36 +756,30 @@ def main() -> None:
         "|:----------|:-----------------|:-------------------|:---------------------|:------|",
         (
             "| OPC UA Server | Linux container plus Windows live server processes | "
-            f"{count_test_results(sd_smoke, baseline_suite(integration_baseline, 'sd_smoke'))} | "
+            f"{count_test_results(sd_smoke, sd_smoke_base)} | "
             "Dedicated Windows ports 40461/40462/40464 feed client live suites | "
             "Docker smoke proves packaged Linux startup and namespace reachability |"
         ),
         (
             "| Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | "
-            f"Python {count_test_results(wd_py, baseline_suite(integration_baseline, 'wd_py'))}; "
-            f"JS {count_test_results(wd_js, baseline_suite(integration_baseline, 'wd_js'))} | "
-            f"Live {count_test_results(wc_live, baseline_suite(integration_baseline, 'wc_live'))}; "
-            "browser "
-            f"{count_test_results(wc_browser, baseline_suite(integration_baseline, 'wc_browser'))} "
-            "| "
+            f"{web_docker_results} | "
+            f"{web_live_results} | "
             f"{wc_browser_note} |"
         ),
         (
-            "| Test Client | Live conformance harness against OPC UA server | — | "
-            "Smoke "
-            f"{count_test_results(tc_smoke, baseline_suite(integration_baseline, 'tc_smoke'))}; "
-            "conformance "
-            f"{count_test_results(tc_tests, baseline_suite(integration_baseline, 'tc_tests'))} | "
+            "| Test Client | Live conformance harness against OPC UA server | Not applicable | "
+            f"{test_client_live_results} | "
             f"{skip_note_inline(tc_conf_skips, tc_tests[3])} |"
         ),
         (
-            "| Console Client | Live Python client behavior against OPC UA server | — | "
-            f"{count_test_results(con_live, baseline_suite(integration_baseline, 'con_live'))} | "
+            "| Console Client | Live Python client behavior against OPC UA server | "
+            "Not applicable | "
+            f"{count_test_results(con_live, con_live_base)} | "
             f"{skip_note_inline(con_live_skips, con_live[3])} |"
         ),
         (
-            "| C# Client | Nightly xUnit live behavior against OPC UA server | — | "
-            f"{count_test_results(cs_live, baseline_suite(integration_baseline, 'cs_live'))} | "
+            "| C# Client | Nightly xUnit live behavior against OPC UA server | Not applicable | "
+            f"{count_test_results(cs_live, cs_live_base)} | "
             f"{skip_note_inline(cs_live_skips, cs_live[3], 'Nightly drift detection')} |"
         ),
         "",
@@ -765,12 +793,12 @@ def main() -> None:
         "|:------|-----:|----------:|--------:|:------|",
         (
             "| Test Client — Smoke sanity | 40462 | "
-            f"{tests_cell(tc_smoke, baseline_suite(integration_baseline, 'tc_smoke'))} | "
+            f"{tests_cell(tc_smoke, tc_smoke_base)} | "
             f"{skips(tc_smoke[3])} | Server and namespace reachability |"
         ),
         (
             "| Test Client — Conformance | 40462 | "
-            f"{tests_cell(tc_tests, baseline_suite(integration_baseline, 'tc_tests'))} | "
+            f"{tests_cell(tc_tests, tc_tests_base)} | "
             f"{skips(tc_tests[3])} | {skip_note_inline(tc_conf_skips, tc_tests[3])} |"
         ),
     ]

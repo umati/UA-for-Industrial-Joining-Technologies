@@ -36,6 +36,90 @@ def teardown_function() -> None:
     _runner._server_smoke_requirements_ready = False
 
 
+def test_parse_suite_counts_keeps_failed_pytest_counts() -> None:
+    output = "======================= 2 failed, 795 passed in 22.26s ========================"
+
+    assert _runner._parse_suite_counts(output) == "2 failed, 795 passed"
+
+
+def test_parse_suite_counts_keeps_skipped_pytest_counts() -> None:
+    output = "================= 713 passed, 140 skipped in 88.01s (0:01:28) ================="
+
+    assert _runner._parse_suite_counts(output) == "713 passed, 140 skipped"
+
+
+def test_parse_suite_counts_keeps_web_python_and_js_counts() -> None:
+    output = """
+    ============================ 707 passed in 48.90s =============================
+     Test Files  32 passed (32)
+          Tests  634 passed (634)
+    """
+
+    assert _runner._parse_suite_counts(output) == "707 passed (py), 634 passed (js)"
+
+
+def test_parse_suite_counts_handles_static_check_summary() -> None:
+    output = "Result: PASS   Checks: 7 passed, 0 failed, 2 skipped"
+
+    assert _runner._parse_suite_counts(output) == "7 passed, 2 skipped"
+
+
+def test_parse_suite_counts_handles_fraction_smoke_summary() -> None:
+    output = "  10/10 passed"
+
+    assert _runner._parse_suite_counts(output) == "10 passed"
+
+
+def test_parse_suite_counts_handles_playwright_failure_summary() -> None:
+    output = """
+      1 failed
+        [chromium] › tests/e2e/features.spec.ts:12:1 › feature flow
+      64 passed (2.0m)
+    """
+
+    assert _runner._parse_suite_counts(output) == "1 failed, 64 passed"
+
+
+def test_parse_suite_counts_handles_ansi_playwright_summary() -> None:
+    output = "\x1b[32m  65 passed\x1b[39m (2.0m)"
+
+    assert _runner._parse_suite_counts(output) == "65 passed"
+
+
+def test_count_tests_from_detail_sums_only_test_outcomes() -> None:
+    detail = "707 passed (py), 634 passed (js), 2 warnings, 1 deselected"
+
+    assert _runner._count_tests_from_detail(detail) == 1341
+
+
+def test_count_tests_from_results_ignores_non_test_notes() -> None:
+    results = [
+        _runner.SuiteResult(
+            "repo-static-gitignore-check",
+            True,
+            notes=["586 source files checked"],
+        ),
+        _runner.SuiteResult("web-client-static", True, counts="707 passed (py), 634 passed (js)"),
+        _runner.SuiteResult("web-client-e2e-features", False, counts="1 failed, 64 passed"),
+    ]
+
+    assert _runner._count_tests_from_results(results) == 1406
+
+
+def test_total_test_outcomes_show_pass_fail_skip_breakdown() -> None:
+    results = [
+        _runner.SuiteResult("web-client-static", True, counts="707 passed (py), 634 passed (js)"),
+        _runner.SuiteResult("web-client-e2e-features", False, counts="1 failed, 64 passed"),
+        _runner.SuiteResult("test-client-live-conformance", True, counts="713 passed, 140 skipped"),
+    ]
+
+    totals = _runner._test_outcome_counts_from_results(results)
+
+    assert _runner._format_total_test_outcomes(totals) == (
+        "2,259 total tests; 2,118 passed, 1 failed, 0 errors, 140 skipped"
+    )
+
+
 def test_root_runner_writes_timing_artifacts(monkeypatch) -> None:
     scratch = _runner.REPO_ROOT / "test-results" / "root-runner-timing-unit"
     if scratch.exists():
@@ -519,6 +603,30 @@ def test_delegate_to_runner_reports_child_failure(monkeypatch, capsys) -> None:
     assert "Web Client - Browser feature coverage" in output
     assert "FAIL" in output
     assert "ONE OR MORE SUITES FAILED" in output
+
+
+def test_print_summary_reports_suite_and_test_totals(capsys) -> None:
+    results = [
+        _runner.SuiteResult("server-smoke", True, duration=1.0, counts="10 passed"),
+        _runner.SuiteResult("web-client-docker-smoke", True, duration=2.0),
+        _runner.SuiteResult(
+            "test-client-live-conformance",
+            True,
+            duration=3.0,
+            counts="713 passed, 140 skipped",
+        ),
+    ]
+
+    rc = _runner._print_summary(results, total_time=6.0)
+
+    output = capsys.readouterr().out
+    assert rc == 0
+    assert "Server - Native smoke" in output
+    assert "10 passed" in output
+    assert "Web Client - Docker image smoke" in output
+    assert "Not reported" in output
+    assert "3 total suites; 3 passed, 0 failed, 0 skipped" in output
+    assert "863 total tests; 723 passed, 0 failed, 0 errors, 140 skipped" in output
 
 
 def test_server_linux_package_smoke_skips_without_docker(monkeypatch) -> None:

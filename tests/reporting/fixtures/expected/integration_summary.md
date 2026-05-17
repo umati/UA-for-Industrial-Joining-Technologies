@@ -12,13 +12,13 @@
 
 | Lane | Result | Test Results |
 |:-----|:-------|:---------|
-| OPC UA Server Docker smoke | ✅ success | ✅ 10; 0 skipped |
-| Web Client Docker tests | ✅ success | Python ✅ 680; 0 skipped; JavaScript ✅ 522; 0 skipped |
-| Test Client conformance | ✅ success | ✅ 1,043; 154 skipped |
-| Web Client live suites | ✅ success | ✅ 127; 0 skipped |
-| Browser E2E suites | ✅ success | ✅ 66; 0 skipped |
-| Console Client live | ✅ success | ✅ 18; 0 skipped |
-| C# Client live | ✅ success | ✅ 110; 0 skipped |
+| OPC UA Server Docker smoke | ✅ success | ✅ 10, 0 skipped |
+| Web Client Docker tests | ✅ success | Python: ✅ 680, 0 skipped<br>JavaScript: ✅ 522, 0 skipped |
+| Test Client conformance | ✅ success | ✅ 1,043, 154 skipped |
+| Web Client live suites | ✅ success | ✅ 127, 0 skipped |
+| Browser E2E suites | ✅ success | ✅ 66, 0 skipped |
+| Console Client live | ✅ success | ✅ 18, 0 skipped |
+| C# Client live | ✅ success | ✅ 110, 0 skipped |
 
 ---
 
@@ -28,11 +28,11 @@
 
 | Component | Validation Scope | Container Test Results | Live/System Test Results | Notes |
 |:----------|:-----------------|:-------------------|:---------------------|:------|
-| OPC UA Server | Linux container plus Windows live server processes | ✅ 10; 0 skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
-| Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | Python ✅ 680; 0 skipped; JS ✅ 522; 0 skipped | Live ✅ 127; 0 skipped; browser ✅ 66; 0 skipped | Headless Chromium baked into the IJT Browser CI image |
-| Test Client | Live conformance harness against OPC UA server | — | Smoke ✅ 10; 0 skipped; conformance ✅ 1,043; 154 skipped | Not Implemented fixture marker |
-| Console Client | Live Python client behavior against OPC UA server | — | ✅ 18; 0 skipped | — |
-| C# Client | Nightly xUnit live behavior against OPC UA server | — | ✅ 110; 0 skipped | Nightly drift detection |
+| OPC UA Server | Linux container plus Windows live server processes | ✅ 10, 0 skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
+| Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | Python: ✅ 680, 0 skipped<br>JavaScript: ✅ 522, 0 skipped | Python/WebSocket live: ✅ 127, 0 skipped<br>Browser E2E: ✅ 66, 0 skipped | Headless Chromium baked into the IJT Browser CI image |
+| Test Client | Live conformance harness against OPC UA server | Not applicable | Smoke: ✅ 10, 0 skipped<br>Conformance: ✅ 1,043, 154 skipped | Not Implemented fixture marker |
+| Console Client | Live Python client behavior against OPC UA server | Not applicable | ✅ 18, 0 skipped | No additional notes |
+| C# Client | Nightly xUnit live behavior against OPC UA server | Not applicable | ✅ 110, 0 skipped | Nightly drift detection |
 
 ---
 
@@ -55,19 +55,19 @@
 
 | Source | Item | Duration | Status |
 |:-------|:-----|---------:|:-------|
-| Browser timing artifact | 🏁 Browser Features (full) | 2.1 min | 📊 recorded |
+| Browser timing artifact | 🏁 Browser Features (1/2) | 2.1 min | 📊 recorded |
 | C# TRX class | C# Live — SlowTests | 1.2 min | 📊 recorded |
 | C# TRX class | C# Live — FastTests | 5.5 s | 📊 recorded |
 
 #### Bottleneck Spotlight
 
-> 🏁 **Browser Features (full)** is the current longest reliable timing source (2.1 min, Browser timing artifact).
+> 🏁 **Browser Features (1/2)** is the current longest reliable timing source (2.1 min, Browser timing artifact).
 
 <details><summary><b>Browser Feature Stage Timing</b></summary>
 
 | Shard | Total | pip-install | npm-install | Playwright install | Playwright features | Other |
 |:------|------:|------------:|------------:|-------------------:|--------------------:|------:|
-| full | 2.1 min | 10.0 s | 20.0 s | 30.0 s | 1.0 min | 3.4 s |
+| 1/2 | 2.1 min | 10.0 s | 20.0 s | 30.0 s | 1.0 min | 3.4 s |
 
 </details>
 

@@ -458,6 +458,10 @@ def _skip_reason_bucket(message: str) -> str:
     msg = re.split(r"\.\s+To enable:\s*", msg, maxsplit=1)[0].strip()
     msg = re.split(r"\s+Config file:\s*", msg, maxsplit=1)[0].strip()
 
+    if msg.casefold().startswith("not supported:"):
+        detail = msg.split(":", 1)[1].strip()
+        return detail or "Not Supported"
+
     not_supported = " NOT SUPPORTED"
     if not_supported in msg:
         end = msg.find(not_supported) + len(not_supported)
@@ -466,6 +470,39 @@ def _skip_reason_bucket(message: str) -> str:
     if len(msg) > 140:
         return f"{msg[:137].rstrip()}..."
     return msg
+
+
+def _skip_reason_display(reason: str) -> str:
+    """Render skip buckets with a leading category without changing raw labels."""
+    display_reason = reason.strip()
+    if display_reason.casefold().startswith("not supported:"):
+        detail = display_reason.split(":", 1)[1].strip()
+        detail = re.sub(r"\s+NOT SUPPORTED$", "", detail)
+        return f"Not Supported: {detail}"
+
+    not_supported = " NOT SUPPORTED"
+    if not_supported in display_reason:
+        detail = display_reason[: display_reason.find(not_supported)].strip()
+        return f"Not Supported: {detail}"
+
+    return display_reason
+
+
+def _primary_reason_note(outcome: str, label: str, reason: str) -> str:
+    """Render a concise end-user reason without repeating the row status."""
+    display_reason = reason.strip()
+    if outcome == "not_supported":
+        display_reason = re.sub(
+            r"^Not Supported:\s*",
+            "",
+            display_reason,
+            flags=re.IGNORECASE,
+        )
+        display_reason = re.sub(r"\s+NOT SUPPORTED$", "", display_reason)
+        return display_reason
+    if display_reason.casefold().startswith(f"{label}:".casefold()):
+        return display_reason
+    return f"{label}: {display_reason}"
 
 
 def _cu_test_index(cu_payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -503,7 +540,7 @@ def _cu_note_summary(cu_key: str, tests_by_cu: dict[str, list[dict[str, Any]]]) 
             (_skip_reason_bucket(str(test.get("reason") or "")) for test in matching if test.get("reason")), ""
         )
         if reason and reason != "no reason":
-            notes.append(f"{label}: {reason}")
+            notes.append(_primary_reason_note(outcome, label, reason))
         else:
             notes.append(f"{label}: {len(matching)} test(s)")
     if not notes:
@@ -730,9 +767,15 @@ def _append_review_table(
             cells.append(str(finding.get("change") or ""))
         lines.append("| " + " | ".join(cells) + " |")
     if len(findings) > limit:
-        cells = ["…", "…", "…", f"{len(findings) - limit} more items in {more_target}"]
+        remaining = len(findings) - limit
+        cells = [
+            "Additional rows",
+            f"See full {more_target} section below",
+            "Preview limited",
+            f"{remaining} additional items are listed in full in {more_target}",
+        ]
         if show_change:
-            cells.append("")
+            cells.append("Not applicable")
         lines.append("| " + " | ".join(cells) + " |")
 
 
@@ -1129,7 +1172,10 @@ def render_conformance_summary(
             msg = fl["message"].replace("\n", " ").replace("|", "\\|")[:200]
             lines.append(f"| `{name}` | {msg} |")
         if len(data["failures"]) > 30:
-            lines.append(f"| … | *{len(data['failures']) - 30} more — see report.xlsx* |")
+            remaining = len(data["failures"]) - 30
+            lines.append(
+                f"| Additional rows | {remaining} additional failure item(s) are listed in full in `report.xlsx` |"
+            )
         lines.append("")
         lines.append("</details>")
         lines.append("")
@@ -1147,7 +1193,7 @@ def render_conformance_summary(
         lines.append("| Reason | Count |")
         lines.append("|--------|------:|")
         for reason, count in data["skip_reasons"].items():
-            lines.append(f"| {_md_cell(reason)} | {count} |")
+            lines.append(f"| {_md_cell(_skip_reason_display(reason))} | {count} |")
         lines.append("")
         lines.append("</details>")
         lines.append("")
