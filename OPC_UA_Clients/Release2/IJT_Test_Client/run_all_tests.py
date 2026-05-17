@@ -497,8 +497,10 @@ def install_requirements() -> None:
     pip = str(_venv_pip(VENV))
     python = str(_venv_python(VENV))
     pip_cache = _TMP_DIR / "pip-cache"
-    pip_cache.mkdir(parents=True, exist_ok=True)
-    pip_env = {**os.environ, "PIP_CACHE_DIR": str(pip_cache)}
+    pip_env = os.environ.copy()
+    if "PIP_CACHE_DIR" not in pip_env:
+        pip_cache.mkdir(parents=True, exist_ok=True)
+        pip_env["PIP_CACHE_DIR"] = str(pip_cache)
     # Keep the bootstrap installer current even when dependency files are unchanged.
     # pip-audit scans the active environment, so stale pip can fail an otherwise clean run.
     subprocess.run(

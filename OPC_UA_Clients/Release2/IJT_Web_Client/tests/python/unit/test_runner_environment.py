@@ -107,6 +107,40 @@ def test_pip_install_creates_venv_dir_for_hash_file_in_ci(monkeypatch, tmp_path)
     assert (venv_dir / ".req-hash").read_text() == "abc123"
 
 
+def test_pip_install_preserves_explicit_pip_cache_dir(monkeypatch, tmp_path):
+    runner = _load_runner()
+    venv_dir = tmp_path / ".venv_test"
+    req = tmp_path / "requirements.txt"
+    req.write_text("pytest\n", encoding="utf-8")
+    runner_cache = tmp_path / "runner-pip-cache"
+    caller_cache = tmp_path / "caller-pip-cache"
+    envs: list[dict[str, str]] = []
+
+    def fake_run(_cmd, **kwargs):
+        envs.append(kwargs["env"])
+        return 0
+
+    monkeypatch.setattr(runner, "_VENV", venv_dir)
+    monkeypatch.setattr(runner, "_PIP_CACHE", runner_cache)
+    monkeypatch.setattr(runner, "_REQUIREMENTS", req)
+    monkeypatch.setattr(runner, "_REQUIREMENTS_DEV", tmp_path / "missing-requirements-dev.txt")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_info", lambda msg: None)
+    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_requirements_hash", lambda: "abc123")
+    monkeypatch.setattr(runner, "_ensure_precommit_hooks", lambda: None)
+    monkeypatch.setattr(runner, "_missing_py_modules", lambda python, modules: [])
+    monkeypatch.setenv("PIP_CACHE_DIR", str(caller_cache))
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+
+    result = runner._stage_pip_install(Path(sys.executable))
+
+    assert result.rc == 0
+    assert envs
+    assert all(env["PIP_CACHE_DIR"] == str(caller_cache) for env in envs)
+    assert not runner_cache.exists()
+
+
 def test_pip_install_reinstalls_when_hash_matches_but_required_modules_missing(monkeypatch, tmp_path):
     runner = _load_runner()
     venv_dir = tmp_path / ".venv_test"

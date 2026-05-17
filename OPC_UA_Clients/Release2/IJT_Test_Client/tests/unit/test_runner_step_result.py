@@ -164,6 +164,41 @@ def test_install_requirements_does_not_mark_hash_current_after_pip_failure(monke
     assert not (venv / ".req-hash").exists()
 
 
+def test_install_requirements_preserves_explicit_pip_cache_dir(monkeypatch, tmp_path):
+    venv = tmp_path / ".venv_test"
+    venv.mkdir()
+    requirements = tmp_path / "requirements.txt"
+    requirements_dev = tmp_path / "requirements-dev.txt"
+    requirements.write_text("PyYAML>=6.0\n", encoding="utf-8")
+    requirements_dev.write_text("urllib3>=2.7.0\n", encoding="utf-8")
+    caller_cache = tmp_path / "caller-pip-cache"
+    runner_cache = tmp_path / "tmp" / "pip-cache"
+    envs: list[dict[str, str]] = []
+
+    def fake_run(_cmd, **kwargs):
+        envs.append(kwargs["env"])
+
+    def fake_check_call(_cmd, **kwargs):
+        envs.append(kwargs["env"])
+
+    monkeypatch.setattr(_mod, "VENV", venv)
+    monkeypatch.setattr(_mod, "REQUIREMENTS", requirements)
+    monkeypatch.setattr(_mod, "_REQUIREMENTS_DEV", requirements_dev)
+    monkeypatch.setattr(_mod, "_TMP_DIR", tmp_path / "tmp")
+    monkeypatch.setattr(_mod, "_venv_pip", lambda path: Path("pip"))
+    monkeypatch.setattr(_mod, "_venv_python", lambda path: Path("python"))
+    monkeypatch.setattr(_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(_mod.subprocess, "check_call", fake_check_call)
+    monkeypatch.setenv("PIP_CACHE_DIR", str(caller_cache))
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+
+    _mod.install_requirements()
+
+    assert envs
+    assert all(env["PIP_CACHE_DIR"] == str(caller_cache) for env in envs)
+    assert not runner_cache.exists()
+
+
 def test_phase1_mypy_runs_ci_equivalent_command():
     with (
         patch.object(_mod, "_ensure_python_tool", return_value=(True, "")),

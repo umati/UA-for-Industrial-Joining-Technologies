@@ -256,8 +256,10 @@ def _install_requirements() -> None:
         _log("  Skipping pip install (SKIP_VENV_INSTALL=1)")
         return
     pip_cache = _TMP_DIR / "pip-cache"
-    pip_cache.mkdir(parents=True, exist_ok=True)
-    pip_env = {**os.environ, "PIP_CACHE_DIR": str(pip_cache)}
+    pip_env = os.environ.copy()
+    if "PIP_CACHE_DIR" not in pip_env:
+        pip_cache.mkdir(parents=True, exist_ok=True)
+        pip_env["PIP_CACHE_DIR"] = str(pip_cache)
     pip = str(_venv_pip(_VENV))
     python = str(_venv_python(_VENV))
     # Keep bootstrap tooling current even when dependency files are unchanged.

@@ -802,8 +802,10 @@ def _stage_pip_install(python: Path, *, required_modules: tuple[str, ...] = ()) 
                 notes=["missing Python requirements: " + ", ".join(missing)],
             )
         return StageResult("pip-install", 0, duration=time.monotonic() - t0, notes=["skipped via SKIP_VENV_INSTALL"])
-    _PIP_CACHE.mkdir(parents=True, exist_ok=True)
-    pip_env = {**os.environ, "PIP_CACHE_DIR": str(_PIP_CACHE)}
+    pip_env = os.environ.copy()
+    if "PIP_CACHE_DIR" not in pip_env:
+        _PIP_CACHE.mkdir(parents=True, exist_ok=True)
+        pip_env["PIP_CACHE_DIR"] = str(_PIP_CACHE)
     # Keep bootstrap tooling current even when dependency files are unchanged.
     # pip-audit scans the active environment, so stale pip can fail a clean run.
     _run(

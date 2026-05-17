@@ -129,6 +129,37 @@ def test_pip_audit_timeout_is_advisory_skip():
     assert run_cmd.call_args.kwargs["timeout_label"] == "pip-audit"
 
 
+def test_install_requirements_preserves_explicit_pip_cache_dir(monkeypatch, tmp_path):
+    venv = tmp_path / ".venv_test"
+    venv.mkdir()
+    requirements = tmp_path / "requirements.txt"
+    requirements_dev = tmp_path / "requirements-dev.txt"
+    requirements.write_text("PyYAML>=6.0\n", encoding="utf-8")
+    requirements_dev.write_text("urllib3>=2.7.0\n", encoding="utf-8")
+    caller_cache = tmp_path / "caller-pip-cache"
+    runner_cache = tmp_path / "tmp" / "pip-cache"
+    envs: list[dict[str, str]] = []
+
+    def fake_check_call(_cmd, **kwargs):
+        envs.append(kwargs["env"])
+
+    monkeypatch.setattr(_mod, "_VENV", venv)
+    monkeypatch.setattr(_mod, "_REQUIREMENTS", requirements)
+    monkeypatch.setattr(_mod, "_REQUIREMENTS_DEV", requirements_dev)
+    monkeypatch.setattr(_mod, "_TMP_DIR", tmp_path / "tmp")
+    monkeypatch.setattr(_mod, "_venv_pip", lambda path: Path("pip"))
+    monkeypatch.setattr(_mod, "_venv_python", lambda path: Path("python"))
+    monkeypatch.setattr(_mod.subprocess, "check_call", fake_check_call)
+    monkeypatch.setenv("PIP_CACHE_DIR", str(caller_cache))
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+
+    _mod._install_requirements()
+
+    assert envs
+    assert all(env["PIP_CACHE_DIR"] == str(caller_cache) for env in envs)
+    assert not runner_cache.exists()
+
+
 # ---------------------------------------------------------------------------
 # Suite counter logic — mirrors the counters in main()
 # ---------------------------------------------------------------------------
