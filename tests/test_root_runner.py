@@ -86,10 +86,52 @@ def test_parse_suite_counts_handles_ansi_playwright_summary() -> None:
     assert _runner._parse_suite_counts(output) == "65 passed"
 
 
+def test_parse_suite_counts_handles_single_child_runner_check() -> None:
+    output = """
+    TEST SUMMARY
+    =================================================================
+      [PASS]  docker-smoke                        exit=0  14.5s
+
+      Total time: 24.0s
+      ALL TESTS PASSED
+    """
+
+    assert _runner._parse_suite_counts(output) == "1 check passed"
+
+
+def test_parse_suite_counts_handles_multiple_child_runner_checks() -> None:
+    output = """
+    TEST SUMMARY
+    =================================================================
+      [PASS]  pip-install                         exit=0  0.2s
+      [PASS]  playwright-install                  exit=0  0.4s
+      [PASS]  playwright-features                 exit=0  122.6s
+    """
+
+    assert _runner._parse_suite_counts(output) == "3 checks passed"
+
+
+def test_parse_suite_counts_handles_mixed_child_runner_checks() -> None:
+    output = """
+    TEST SUMMARY
+    =================================================================
+      [PASS]  pip-install                         exit=0  0.2s
+      [FAIL]  docker-smoke                        exit=1  14.5s
+      [PASS]  docker-cleanup                      exit=0  1.0s
+    """
+
+    assert _runner._parse_suite_counts(output) == "2 checks passed, 1 check failed"
+
+
 def test_count_tests_from_detail_sums_only_test_outcomes() -> None:
     detail = "707 passed (py), 634 passed (js), 2 warnings, 1 deselected"
 
     assert _runner._count_tests_from_detail(detail) == 1341
+
+
+def test_check_counts_do_not_contribute_to_test_totals() -> None:
+    assert _runner._count_tests_from_detail("1 check passed") == 0
+    assert not _runner._test_outcome_counts_from_detail("2 checks passed, 1 check failed")
 
 
 def test_count_tests_from_results_ignores_non_test_notes() -> None:

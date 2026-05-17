@@ -551,6 +551,21 @@ def _parse_suite_counts(text: str) -> str:
         passed, total = fraction_passed.groups()
         return f"{passed} passed" if passed == total else f"{passed}/{total} passed"
 
+    # Stage-result lines from child runners such as Web Client Docker smoke.
+    # These are checks, not executable tests, so keep them out of aggregate
+    # test totals by using "check(s)" instead of the test-outcome words.
+    pass_checks = len(re.findall(r"^\s*\[PASS\]\s+\S+", text, flags=re.MULTILINE))
+    fail_checks = len(re.findall(r"^\s*\[FAIL\]\s+\S+", text, flags=re.MULTILINE))
+    if pass_checks or fail_checks:
+        parts: list[str] = []
+        if pass_checks:
+            noun = "check" if pass_checks == 1 else "checks"
+            parts.append(f"{pass_checks} {noun} passed")
+        if fail_checks:
+            noun = "check" if fail_checks == 1 else "checks"
+            parts.append(f"{fail_checks} {noun} failed")
+        return ", ".join(parts)
+
     return ""
 
 
