@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/umati/UA-for-Industrial-Joining-Technologies/timing_schema.v1.json",
+  "title": "IJT Timing Artifact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_utc",
+    "source",
+    "run",
+    "summary",
+    "jobs",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "generated_utc": {
+      "type": "string"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "kind",
+        "workflow_name",
+        "measurement"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "workflow_name": {
+          "type": "string"
+        },
+        "measurement": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "run_id",
+        "run_number",
+        "sha",
+        "branch",
+        "url"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "run_number": {
+          "type": "string"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_count",
+        "completed_job_count",
+        "total_job_seconds",
+        "longest_job_name",
+        "longest_job_seconds"
+      ],
+      "properties": {
+        "job_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "completed_job_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_job_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "longest_job_name": {
+          "type": "string"
+        },
+        "longest_job_seconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "jobs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/job"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "status",
+        "conclusion",
+        "duration_seconds"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "string"
+        },
+        "completed_at": {
+          "type": "string"
+        },
+        "duration_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "status",
+        "conclusion",
+        "duration_seconds",
+        "stages"
+      ],
+      "properties": {
+        "id": {},
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "string"
+        },
+        "completed_at": {
+          "type": "string"
+        },
+        "duration_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "runner_name": {
+          "type": "string"
+        },
+        "runner_group_name": {
+          "type": "string"
+        },
+        "html_url": {
+          "type": "string"
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stage"
+          }
+        }
+      }
+    }
+  }
+}

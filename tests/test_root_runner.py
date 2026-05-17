@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +34,34 @@ def setup_function() -> None:
 
 def teardown_function() -> None:
     _runner._server_smoke_requirements_ready = False
+
+
+def test_root_runner_writes_timing_artifacts(monkeypatch) -> None:
+    scratch = _runner.REPO_ROOT / "test-results" / "root-runner-timing-unit"
+    if scratch.exists():
+        shutil.rmtree(scratch)
+    monkeypatch.setattr(_runner, "ROOT", scratch)
+    result = _runner.SuiteResult(
+        "repo-static-gitignore-check",
+        True,
+        duration=1.25,
+        notes=["ok"],
+    )
+
+    try:
+        _runner._write_timing_artifacts([result], 2.5, "suite:repo-static-gitignore-check")
+
+        aggregate_path = scratch / "test-results" / "timing" / "timing-aggregate.json"
+        per_job_path = scratch / "test-results" / "timing" / "jobs" / "01-local-root-runner.json"
+        payload = json.loads(aggregate_path.read_text(encoding="utf-8"))
+        per_job = json.loads(per_job_path.read_text(encoding="utf-8"))
+        assert payload["schema_version"] == 1
+        assert payload["source"]["mode"] == "suite:repo-static-gitignore-check"
+        assert payload["jobs"][0]["stages"][0]["name"] == "repo-static-gitignore-check"
+        assert per_job["jobs"][0]["name"] == "Local Root Runner"
+    finally:
+        if scratch.exists():
+            shutil.rmtree(scratch)
 
 
 def test_suite_ids_match_naming_pattern() -> None:

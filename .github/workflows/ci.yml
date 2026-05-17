@@ -879,6 +879,7 @@ jobs:
     needs: [changes, web-client-python, web-client-js, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor, pre-commit]
     if: always()
     permissions:
+      actions: read
       contents: read
       checks: write
 
@@ -1014,6 +1015,31 @@ jobs:
           GH_RUN_URL:      ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           python3 reporting/ci_run_summary.py
+
+      - name: Collect Timing JSON
+        if: always()
+        env:
+          TIMING_WORKFLOW_NAME: "CI — Fast Checks"
+          TIMING_OUTPUT_DIR: timing-results
+          GH_REPOSITORY:  ${{ github.repository }}
+          GH_RUN_ID:      ${{ github.run_id }}
+          GH_RUN_NUMBER:  ${{ github.run_number }}
+          GH_SHA:         ${{ github.sha }}
+          GH_BRANCH:      ${{ github.ref_name }}
+          GH_RUN_URL:     ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_API_URL:     ${{ github.api_url }}
+          GH_TOKEN:       ${{ github.token }}
+          REPORT_JOB_NAME: "📋 Test Report"
+        run: |
+          python3 scripts/reporting/collect_timing.py
+
+      - name: Upload Timing Artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: timing-ci
+          path: timing-results/
+          retention-days: 14
 
   # ───────────────────────────────────────────────────────────────────────────
   # GitHub Actions Workflow Lint (actionlint)

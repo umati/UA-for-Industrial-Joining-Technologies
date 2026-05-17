@@ -20,9 +20,17 @@ def _summary_step(workflow_name: str):
     return next(step for step in steps if step.get("name") == "Generate Summary Table")
 
 
+def _report_step(workflow_name: str, step_name: str):
+    workflow = _workflow(workflow_name)
+    steps = workflow["jobs"]["report"]["steps"]
+    return next(step for step in steps if step.get("name") == step_name)
+
+
 def test_ci_summary_step_invokes_extracted_module() -> None:
     step = _summary_step("ci.yml")
+    workflow = _workflow("ci.yml")
 
+    assert workflow["jobs"]["report"]["permissions"]["actions"] == "read"
     assert step["run"].strip() == "python3 reporting/ci_run_summary.py"
     assert "PYEOF" not in step["run"]
     assert set(step["env"]) == {
@@ -54,6 +62,18 @@ def test_ci_summary_step_invokes_extracted_module() -> None:
         "GH_RUN_NUMBER",
         "GH_RUN_URL",
     }
+
+
+def test_ci_timing_artifacts_are_collected_from_report_job() -> None:
+    collect_step = _report_step("ci.yml", "Collect Timing JSON")
+    upload_step = _report_step("ci.yml", "Upload Timing Artifacts")
+
+    assert collect_step["run"].strip() == "python3 scripts/reporting/collect_timing.py"
+    assert collect_step["env"]["TIMING_WORKFLOW_NAME"] == "CI — Fast Checks"
+    assert collect_step["env"]["TIMING_OUTPUT_DIR"] == "timing-results"
+    assert collect_step["env"]["REPORT_JOB_NAME"] == "📋 Test Report"
+    assert upload_step["with"]["name"] == "timing-ci"
+    assert upload_step["with"]["path"] == "timing-results/"
 
 
 def test_ci_dorny_actions_keep_check_runs_but_suppress_step_summaries() -> None:
@@ -153,6 +173,21 @@ def test_integration_summary_step_invokes_extracted_module() -> None:
     }
 
 
+def test_integration_timing_artifacts_are_collected_from_report_job() -> None:
+    collect_step = _report_step("integration.yml", "Collect Timing JSON")
+    upload_step = _report_step("integration.yml", "Upload Timing Artifacts")
+
+    assert collect_step["run"].strip() == "python3 scripts/reporting/collect_timing.py"
+    assert (
+        collect_step["env"]["TIMING_WORKFLOW_NAME"]
+        == "System Tests — Live OPC UA, Browser, Docker, Conformance"
+    )
+    assert collect_step["env"]["TIMING_OUTPUT_DIR"] == "timing-results"
+    assert collect_step["env"]["REPORT_JOB_NAME"] == "📋 System Tests Summary"
+    assert upload_step["with"]["name"] == "timing-system-tests"
+    assert upload_step["with"]["path"] == "timing-results/"
+
+
 def test_integration_dorny_actions_keep_check_runs_but_suppress_step_summaries() -> None:
     workflow = _workflow("integration.yml")
     expected_names = [
@@ -203,3 +238,5 @@ def test_integration_paths_include_reporting_modules() -> None:
 
     assert "reporting/**" in triggers["push"]["paths"]
     assert "reporting/**" in triggers["pull_request"]["paths"]
+    assert "scripts/reporting/**" in triggers["push"]["paths"]
+    assert "scripts/reporting/**" in triggers["pull_request"]["paths"]

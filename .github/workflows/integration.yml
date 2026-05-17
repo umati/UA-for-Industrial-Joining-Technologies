@@ -49,6 +49,7 @@ on:
       - '.github/docker/ijt-browser-ci/image-pin.json'
       # Reporting code — summary generation is part of Integration correctness
       - 'reporting/**'
+      - 'scripts/reporting/**'
       # Any workflow file — zizmor audits all of .github/workflows/
       - '.github/workflows/**'
   pull_request:
@@ -70,6 +71,7 @@ on:
       - '.github/docker/ijt-browser-ci/image-pin.json'
       # Reporting code — summary generation is part of Integration correctness
       - 'reporting/**'
+      - 'scripts/reporting/**'
       # Any workflow file — zizmor audits all of .github/workflows/
       - '.github/workflows/**'
 
@@ -1094,3 +1096,28 @@ jobs:
           REPORT_JOB_NAME: "📋 System Tests Summary"
         run: |
           python3 reporting/system_tests_run_summary.py
+
+      - name: Collect Timing JSON
+        if: always()
+        env:
+          TIMING_WORKFLOW_NAME: "System Tests — Live OPC UA, Browser, Docker, Conformance"
+          TIMING_OUTPUT_DIR: timing-results
+          GH_REPOSITORY:  ${{ github.repository }}
+          GH_RUN_ID:      ${{ github.run_id }}
+          GH_RUN_NUMBER:  ${{ github.run_number }}
+          GH_SHA:         ${{ github.sha }}
+          GH_BRANCH:      ${{ github.ref_name }}
+          GH_RUN_URL:     ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_API_URL:     ${{ github.api_url }}
+          GH_TOKEN:       ${{ github.token }}
+          REPORT_JOB_NAME: "📋 System Tests Summary"
+        run: |
+          python3 scripts/reporting/collect_timing.py
+
+      - name: Upload Timing Artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: timing-system-tests
+          path: timing-results/
+          retention-days: 14

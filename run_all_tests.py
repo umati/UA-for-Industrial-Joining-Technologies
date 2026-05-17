@@ -65,6 +65,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+from reporting.timing_artifacts import local_runner_timing_payload, write_timing_bundle
+
 # ---------------------------------------------------------------------------
 # Colour / ANSI helpers
 # ---------------------------------------------------------------------------
@@ -2276,6 +2278,30 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
     return overall
 
 
+def _timing_mode(args: argparse.Namespace) -> str:
+    if args.suite:
+        return f"suite:{args.suite}"
+    if args.phase1:
+        return "phase1"
+    if args.phase2:
+        return "phase2"
+    return "full"
+
+
+def _write_timing_artifacts(results: list[SuiteResult], total_time: float, mode: str) -> None:
+    """Write local timing JSON without changing the test verdict."""
+    try:
+        payload = local_runner_timing_payload(
+            results=results,
+            total_seconds=total_time,
+            mode=mode,
+        )
+        paths = write_timing_bundle(payload, ROOT / "test-results" / "timing")
+        log.info("Timing JSON: %s", paths["aggregate"])
+    except Exception as exc:
+        log.warning("Timing JSON could not be written: %s", exc)
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -2427,6 +2453,8 @@ def main() -> int:
             log.info("Running single suite: %s", args.suite)
             result = spec.runner()
             _emit_suite_output(result)
+            total_time = time.monotonic() - t_total
+            _write_timing_artifacts([result], total_time, _timing_mode(args))
             return 0 if (result.ok or result.skipped) else 1
 
         # -- Phase 1 ---------------------------------------------------------
@@ -2445,7 +2473,9 @@ def main() -> int:
     finally:
         _cleanup_caches(ROOT)  # always runs: normal exit, Ctrl+C, or exception
 
-    rc = _print_summary(all_results, time.monotonic() - t_total)
+    total_time = time.monotonic() - t_total
+    _write_timing_artifacts(all_results, total_time, _timing_mode(args))
+    rc = _print_summary(all_results, total_time)
     return rc
 
 
