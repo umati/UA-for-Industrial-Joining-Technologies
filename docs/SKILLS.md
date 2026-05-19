@@ -61,17 +61,18 @@ If any hook modifies files, the commit is aborted. **Run `git add -u && git comm
 
 ### Virtual Environment Naming Convention
 
-Each Python project creates two independent environments:
+Each Python project uses separate environments for runtime, tests, and containerized runs:
 
 | Directory | Created by | Contents | Typical use |
 |-----------|-----------|----------|-------------|
 | `.venv` | `setup_client.py` / `setup_project.py` | `requirements.txt` only | `python main.py` / standalone launch (Windows, Linux, macOS, WSL) |
-| `.venv_test` | `run_all_tests.py` | `requirements.txt` + `requirements-dev.txt` | Test runs, CI |
+| `.venv_test` | `run_all_tests.py` | `requirements.txt` + `requirements-dev.txt` | Normal local test runs |
+| `.venv_ci` | `run_all_tests.py --ci-mode` (local only) | `requirements.txt` + `requirements-dev.txt` | Local CI-mode mirror without using system Python |
 | `/opt/ijt_venv` | Docker `ENTRYPOINT` | `requirements.txt` | Docker container runtime |
 
 > **WSL**: `bootstrap_wsl.sh` calls `setup_project.py` after OS provisioning — uses `.venv` like every other host.
 
-Use `.venv` for running the application and `.venv_test` for running tests — do not mix them.
+Use `.venv` for running the application, `.venv_test` for normal local tests, and `.venv_ci` for local `--ci-mode` runs. Do not mix them.
 
 Both `setup_*.py` and `run_all_tests.py` remove stale legacy directories (`venv/`, `venv_test/`, `env/`, `ENV/`, `.venv_backup/`) on startup. A fresh clone always starts clean automatically.
 
@@ -98,6 +99,8 @@ runner banners, skip reasons, and advisory tool messages render consistently on
 Windows terminals and captured logs.
 Use `python run_all_tests.py --ci-mode` when a local run must exercise the same
 CI codepaths as GitHub Actions; the flag sets `CI=1` before child runners start.
+Local `--ci-mode` Python suites use `.venv_ci`; only `GITHUB_ACTIONS=true` or
+`IS_DOCKER=true` may use the provided `sys.executable` directly.
 
 ---
 
@@ -490,7 +493,7 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 | asyncua ≥1.2b2 (pre-release) | Python 3.14 support not in asyncua 1.1.x stable |
 | Monkey-patch `_send_request` timeout | asyncua `UaClient.call()` has hardcoded 1s timeout |
 | Subscribe events on Server node, not method nodes | Subscribing on individual nodes causes `BadNoSubscription` under load |
-| Skip venv in Docker (`IS_DOCKER=true`) | Container runs as non-root; `/opt/ijt_venv` not writable |
+| Use provided Python only in pre-isolated environments (`IS_DOCKER=true` or `GITHUB_ACTIONS=true`) | Docker and GitHub Actions already provide isolation; local runs use IJT-owned venvs |
 | No `scripts/` at repo root | Each project owns its own helpers; nothing shared at root level |
 | `Python/network_utils.py` canonical | Shared network helpers live in this module; all imports use `from Python.network_utils import ...` |
 | `ruff target-version = "py313"` (not py314) | ruff 0.15.x bug #24041: `ruff format` with py314 strips parens from `except (A, B):` → Python 2 syntax. py313 is the workaround; guard test `test_ruff_format_guard.py` in Console + Test Client unit suites catches any regression. Restore to py314 once upstream fixes #24041 |

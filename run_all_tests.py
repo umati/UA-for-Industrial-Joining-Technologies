@@ -23,15 +23,20 @@ Architecture: Two-phase execution
                             - Web Client      → dedicated per-suite ports        (40463+)
                             - C# Client       → OPCUA_SERVER_PORT_CSHARP_CLIENT  (40464)
                             - Linux package   → Docker smoke port (40465)
+                            - Security Matrix → opt-in A1/A2/B1/B2 cells (40475+)
                           Release 2 clients do not share 40451.
 
 Usage:
   python run_all_tests.py                    # full run (Phase 1 + Phase 2)
   python run_all_tests.py --phase1           # static + unit tests only (no server)
   python run_all_tests.py --phase2           # server smoke + live tests
+  python run_all_tests.py --phase2 --security-matrix
+      # Phase 2 plus A1/A2/B1/B2 security-flow matrix cells
   python run_all_tests.py --suite repo-static-markdown-leak-check # single suite by name
   python run_all_tests.py --suite server-smoke  # focused server smoke on port 40451
   python run_all_tests.py --suite server-linux-package-smoke  # Docker smoke on port 40465
+  python run_all_tests.py --suite csharp-client-security-matrix-a1
+      # one focused security-flow matrix cell
   python run_all_tests.py --suite web-client-compatibility-smoke
       # Windows + Edge opt-in compatibility smoke
   python run_all_tests.py --ci-mode         # force child runners through CI codepaths
@@ -186,6 +191,7 @@ def _result_line(ok: bool, skipped: bool, name: str, duration: float, note: str 
 
 REPO_ROOT = Path(__file__).resolve().parent
 ROOT = REPO_ROOT  # alias used by GHA validation helpers
+PYTHON_CONSTRAINTS = REPO_ROOT / "constraints.txt"
 SERVER_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2"
 _NATIVE_BINARY_WIN = SERVER_DIR / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe"
 _NATIVE_BINARY_LINUX = (
@@ -225,6 +231,10 @@ OPCUA_SERVER_PORT_WEB_CLIENT_BACKEND = 40466
 OPCUA_SERVER_PORT_WEB_CLIENT_LIFECYCLE = 40467
 OPCUA_SERVER_PORT_WEB_CLIENT_E2E_SMOKE = 40468
 OPCUA_SERVER_PORT_WEB_CLIENT_E2E_FEATURES = 40469
+OPCUA_SERVER_PORT_CSHARP_SECURITY_MATRIX_A1 = 40475
+OPCUA_SERVER_PORT_CSHARP_SECURITY_MATRIX_A2 = 40476
+OPCUA_SERVER_PORT_CONSOLE_SECURITY_MATRIX_B1 = 40477
+OPCUA_SERVER_PORT_CONSOLE_SECURITY_MATRIX_B2 = 40478
 OPCUA_SERVER_PORT_WEB_CLIENT_E2E_REGRESSION = 40480
 WEB_CLIENT_WS_PORT_BACKEND = 8002
 WEB_CLIENT_WS_PORT_LIFECYCLE = 8003
@@ -274,6 +284,11 @@ DOCKER_BUILD_TIMEOUT = _int_env("IJT_DOCKER_BUILD_TIMEOUT", 1200)
 _RUNNER_ENV_DIR = REPO_ROOT / "tmp" / "runner-env"
 _SERVER_SMOKE_REQUIREMENTS_LOCK = threading.Lock()
 _server_smoke_requirements_ready = False
+
+
+def _pip_constraint_args() -> list[str]:
+    return ["-c", str(PYTHON_CONSTRAINTS)] if PYTHON_CONSTRAINTS.exists() else []
+
 
 # ---------------------------------------------------------------------------
 # Suite result
@@ -397,6 +412,8 @@ def _run_captured(
     run_env.setdefault("DOTNET_NOLOGO", "1")
     run_env.setdefault("DOTNET_ADD_GLOBAL_TOOLS_TO_PATH", "0")
     run_env.setdefault("DOTNET_GENERATE_ASPNET_CERTIFICATE", "false")
+    run_env.setdefault("MSBUILDDISABLENODEREUSE", "1")
+    run_env.setdefault("UseSharedCompilation", "false")
     run_env.setdefault("npm_config_cache", str(_RUNNER_ENV_DIR / "npm-cache"))
     run_env.setdefault("npm_config_update_notifier", "false")
     run_env.setdefault("PIP_CACHE_DIR", str(_RUNNER_ENV_DIR / "pip-cache"))
@@ -915,6 +932,7 @@ def _ensure_client_venv(client_dir: Path, outputs: list[str]) -> Path:
                     "--quiet",
                     "--disable-pip-version-check",
                     "--pre",
+                    *_pip_constraint_args(),
                     "-r",
                     str(req_path),
                 ],
@@ -955,6 +973,8 @@ def _dotnet_env(**extra: str) -> dict:
     return {
         **os.environ,
         "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+        "MSBUILDDISABLENODEREUSE": "1",
+        "UseSharedCompilation": "false",
         **extra,
     }
 
@@ -1545,6 +1565,7 @@ def _ensure_server_smoke_requirements(python: str, outputs: list[str], label: st
                 "install",
                 "-q",
                 "--disable-pip-version-check",
+                *_pip_constraint_args(),
                 "-r",
                 str(smoke_reqs),
             ],
@@ -1794,6 +1815,91 @@ def _suite_console_live() -> SuiteResult:
     )
 
 
+def _security_matrix_env(*, cell: str, sut: str, port: int) -> dict[str, str]:
+    endpoint = f"opc.tcp://localhost:{port}"
+    env = {
+        "IJT_SECURITY_MATRIX_CELL": cell,
+        "IJT_SUT": sut,
+        "OPCUA_SERVER_PORT": str(port),
+        "OPCUA_SERVER_URL": endpoint,
+    }
+    if sut == "linux":
+        env["IJT_DOCKER_COMPOSE_BUILD"] = "1"
+    return env
+
+
+def _suite_csharp_security_matrix(*, cell: str, sut: str, port: int) -> SuiteResult:
+    env = _security_matrix_env(cell=cell, sut=sut, port=port)
+    env["IJT_SERVER_URL"] = env["OPCUA_SERVER_URL"]
+    return _delegate_to_runner(
+        name=f"csharp-client-security-matrix-{cell.lower()}",
+        runner_dir=CSHARP_DIR,
+        phase_args=[
+            "--security-matrix",
+            "--security-matrix-cell",
+            cell,
+            "--security-matrix-sut",
+            sut,
+            "--junit-xml",
+            f"test-results/security-matrix-{cell}.xml",
+        ],
+        label=f"csharp runner (security matrix {cell})",
+        extra_env=env,
+        timeout=1200,
+    )
+
+
+def _suite_csharp_security_matrix_a1() -> SuiteResult:
+    return _suite_csharp_security_matrix(
+        cell="A1",
+        sut="windows",
+        port=OPCUA_SERVER_PORT_CSHARP_SECURITY_MATRIX_A1,
+    )
+
+
+def _suite_csharp_security_matrix_a2() -> SuiteResult:
+    return _suite_csharp_security_matrix(
+        cell="A2",
+        sut="linux",
+        port=OPCUA_SERVER_PORT_CSHARP_SECURITY_MATRIX_A2,
+    )
+
+
+def _suite_console_security_matrix(*, cell: str, sut: str, port: int) -> SuiteResult:
+    return _delegate_to_runner(
+        name=f"console-client-security-matrix-{cell.lower()}",
+        runner_dir=CONSOLE_DIR,
+        phase_args=[
+            "--security-matrix",
+            "--security-matrix-cell",
+            cell,
+            "--security-matrix-sut",
+            sut,
+            "--junit-xml",
+            f"test-results/security-matrix-{cell}.xml",
+        ],
+        label=f"console runner (security matrix {cell})",
+        extra_env=_security_matrix_env(cell=cell, sut=sut, port=port),
+        timeout=1200,
+    )
+
+
+def _suite_console_security_matrix_b1() -> SuiteResult:
+    return _suite_console_security_matrix(
+        cell="B1",
+        sut="windows",
+        port=OPCUA_SERVER_PORT_CONSOLE_SECURITY_MATRIX_B1,
+    )
+
+
+def _suite_console_security_matrix_b2() -> SuiteResult:
+    return _suite_console_security_matrix(
+        cell="B2",
+        sut="linux",
+        port=OPCUA_SERVER_PORT_CONSOLE_SECURITY_MATRIX_B2,
+    )
+
+
 def _suite_testclient_full() -> SuiteResult:
     """Test Client -- Phase 2 (live conformance).  Delegates to sub-project runner.
 
@@ -1996,6 +2102,7 @@ class SuiteGroup(StrEnum):
     PHASE1_STATIC = "phase1-static"
     PHASE2_LIVE = "phase2-live"
     PHASE2_PACKAGE = "phase2-package"
+    PHASE2_SECURITY_MATRIX = "phase2-security-matrix"
     PHASE2_WEB_LIVE = "phase2-web-live"
     PHASE2_WEB_COMPATIBILITY = "phase2-web-compatibility"
 
@@ -2088,6 +2195,30 @@ SUITE_REGISTRY: dict[str, SuiteSpec] = {
         group=SuiteGroup.PHASE2_LIVE,
         runner=_suite_console_live,
     ),
+    "csharp-client-security-matrix-a1": SuiteSpec(
+        id="csharp-client-security-matrix-a1",
+        display_name="C# Client - Security Matrix A1 (Windows)",
+        group=SuiteGroup.PHASE2_SECURITY_MATRIX,
+        runner=_suite_csharp_security_matrix_a1,
+    ),
+    "csharp-client-security-matrix-a2": SuiteSpec(
+        id="csharp-client-security-matrix-a2",
+        display_name="C# Client - Security Matrix A2 (Linux Docker)",
+        group=SuiteGroup.PHASE2_SECURITY_MATRIX,
+        runner=_suite_csharp_security_matrix_a2,
+    ),
+    "console-client-security-matrix-b1": SuiteSpec(
+        id="console-client-security-matrix-b1",
+        display_name="Console Client - Security Matrix B1 (Windows)",
+        group=SuiteGroup.PHASE2_SECURITY_MATRIX,
+        runner=_suite_console_security_matrix_b1,
+    ),
+    "console-client-security-matrix-b2": SuiteSpec(
+        id="console-client-security-matrix-b2",
+        display_name="Console Client - Security Matrix B2 (Linux Docker)",
+        group=SuiteGroup.PHASE2_SECURITY_MATRIX,
+        runner=_suite_console_security_matrix_b2,
+    ),
     "test-client-live-conformance": SuiteSpec(
         id="test-client-live-conformance",
         display_name="Test Client - Live conformance",
@@ -2155,10 +2286,15 @@ def phase1_specs() -> dict[str, SuiteSpec]:
     return _specs_for_groups({SuiteGroup.REPO_CHECKS, SuiteGroup.PHASE1_STATIC})
 
 
-def phase2_specs() -> dict[str, SuiteSpec]:
-    return _specs_for_groups(
-        {SuiteGroup.PHASE2_LIVE, SuiteGroup.PHASE2_PACKAGE, SuiteGroup.PHASE2_WEB_LIVE}
-    )
+def phase2_specs(*, include_security_matrix: bool = False) -> dict[str, SuiteSpec]:
+    groups = {
+        SuiteGroup.PHASE2_LIVE,
+        SuiteGroup.PHASE2_PACKAGE,
+        SuiteGroup.PHASE2_WEB_LIVE,
+    }
+    if include_security_matrix:
+        groups.add(SuiteGroup.PHASE2_SECURITY_MATRIX)
+    return _specs_for_groups(groups)
 
 
 def _suite_display_name(suite_id: str) -> str:
@@ -2212,6 +2348,7 @@ def run_phase2(suites: dict[str, SuiteSpec]) -> list[SuiteResult]:
         Web Client       → OPCUA_SERVER_PORT_WEB_CLIENT     (40463)
         C# Client        → OPCUA_SERVER_PORT_CSHARP_CLIENT  (40464)
         Linux package    → OPCUA_SERVER_PORT_SERVER_DOCKER  (40465)
+        Matrix A1/A2/B1/B2 → dedicated ports                (40475-40478)
 
     Results are emitted as each suite completes; order is non-deterministic
     (fastest finishes first).
@@ -2277,7 +2414,7 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
         for suite_id, spec in SUITE_REGISTRY.items()
         if spec.group is SuiteGroup.PHASE1_STATIC
     }
-    phase2_names = set(phase2_specs())
+    phase2_names = set(phase2_specs(include_security_matrix=True))
     registered_names = set(SUITE_REGISTRY)
 
     gha_rows = [r for r in results if r.name not in registered_names or r.name in repo_check_names]
@@ -2420,8 +2557,8 @@ def _timing_mode(args: argparse.Namespace) -> str:
     if args.phase1:
         return "phase1"
     if args.phase2:
-        return "phase2"
-    return "full"
+        return "phase2+security-matrix" if args.security_matrix else "phase2"
+    return "full+security-matrix" if args.security_matrix else "full"
 
 
 def _write_timing_artifacts(results: list[SuiteResult], total_time: float, mode: str) -> None:
@@ -2477,12 +2614,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="List all available suite names and exit",
     )
     parser.add_argument(
+        "--security-matrix",
+        action="store_true",
+        help=(
+            "Include the opt-in A1/A2/B1/B2 security-flow matrix cells in a full "
+            "or --phase2 run. Individual cells can also be run with --suite."
+        ),
+    )
+    parser.add_argument(
         "--ci-mode",
         action="store_true",
         help=(
-            "Run as if executing in GitHub CI: sets CI=1 in the environment "
-            "before any suite runs, so client runners take their CI codepath "
-            "(skip venv relaunch, etc.). Use locally to surface CI-only bugs."
+            "Run as if executing in GitHub CI: sets CI=1 before any suite runs. "
+            "Local Python runners still use an IJT-owned CI mirror venv; only "
+            "GITHUB_ACTIONS=true or IS_DOCKER=true may use sys.executable directly."
         ),
     )
     return parser
@@ -2507,6 +2652,10 @@ def _print_suite_list() -> None:
             "Phase 2 package suites (parallel, Docker/package validation):",
         ),
         (
+            SuiteGroup.PHASE2_SECURITY_MATRIX,
+            "Opt-in security matrix suites (use --security-matrix or --suite):",
+        ),
+        (
             SuiteGroup.PHASE2_WEB_LIVE,
             "Phase 2 Web live suites (parallel, isolated Web runtime ports):",
         ),
@@ -2527,6 +2676,12 @@ def _print_suite_list() -> None:
 def _validate_suite_arg(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if args.suite and args.suite not in SUITE_REGISTRY:
         parser.error(f"unknown suite: {args.suite}\n{SUITE_RENAMED_GUIDANCE}")
+    if args.phase1 and args.security_matrix:
+        parser.error("--security-matrix requires a full run or --phase2")
+    if args.suite and args.security_matrix:
+        parser.error(
+            "--security-matrix is not needed with --suite; select the matrix suite directly"
+        )
 
 
 def _configure_stdio_utf8() -> None:
@@ -2546,9 +2701,10 @@ def main() -> int:
     _validate_suite_arg(parser, args)
 
     if args.ci_mode:
-        # Force the CI codepath in every child runner (venv relaunch skipped,
-        # CI-equivalent commands chosen, etc.) so local runs surface bugs that
-        # would otherwise only show up in GitHub Actions.
+        # Force the CI codepath in every child runner so local runs surface bugs
+        # that would otherwise only show up in GitHub Actions. Python sub-runners
+        # still use an IJT-owned local CI-mode venv unless they are already in
+        # GitHub Actions or Docker.
         os.environ["CI"] = "1"
 
     if args.list:
@@ -2603,7 +2759,7 @@ def main() -> int:
 
         # -- Phase 2 (parallel — each sub-runner owns its server) ------------
         if not args.phase1:
-            p2 = run_phase2(phase2_specs())
+            p2 = run_phase2(phase2_specs(include_security_matrix=args.security_matrix))
             all_results.extend(p2)
 
     finally:

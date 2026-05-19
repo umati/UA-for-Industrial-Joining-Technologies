@@ -102,25 +102,31 @@ jobs:
         with:
           filters: |
             web:
+              - 'constraints.txt'
               - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
               - '.github/workflows/ci.yml'
             console:
+              - 'constraints.txt'
               - 'OPC_UA_Clients/Release2/IJT_Console_Client/**'
               - '.github/workflows/ci.yml'
             node:
               - 'OPC_UA_Clients/Release1/IJT_Node_Client/**'
               - '.github/workflows/ci.yml'
             docker:
+              - '.dockerignore'
+              - 'constraints.txt'
               - 'OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile'
               - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
               - '.github/workflows/ci.yml'
             testclient:
+              - 'constraints.txt'
               - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
               - '.github/workflows/ci.yml'
             csharp:
               - 'OPC_UA_Clients/Release2/IJT_CSharp_Client/**'
               - '.github/workflows/ci.yml'
             server:
+              - 'constraints.txt'
               - 'OPC_UA_Servers/**'
               - '.github/workflows/ci.yml'
             workflows:
@@ -287,7 +293,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -c "${{ github.workspace }}/constraints.txt" -r requirements.txt -r requirements-dev.txt
 
       - run: mkdir -p test-results
 
@@ -472,7 +478,8 @@ jobs:
       - name: Build Docker Image
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
         with:
-          context: OPC_UA_Clients/Release2/IJT_Web_Client
+          context: .
+          file: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
           tags: ijt_web_client:latest
           load: true
           cache-from: type=gha
@@ -717,7 +724,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -c "${{ github.workspace }}/constraints.txt" -r requirements.txt -r requirements-dev.txt
 
       - run: mkdir -p test-results
 
@@ -843,7 +850,7 @@ jobs:
           python-version: "3.14"
 
       - name: Install smoke test dependencies
-        run: pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
+        run: pip install -c "${{ github.workspace }}/constraints.txt" -r OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Run smoke test (10 checks)
         run: |
@@ -1013,6 +1020,11 @@ jobs:
           GH_BRANCH:       ${{ github.ref_name }}
           GH_RUN_NUMBER:   ${{ github.run_number }}
           GH_RUN_URL:      ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_REPOSITORY:   ${{ github.repository }}
+          GH_RUN_ID:       ${{ github.run_id }}
+          GH_API_URL:      ${{ github.api_url }}
+          GH_TOKEN:        ${{ github.token }}
+          REPORT_JOB_NAME: "📋 Test Report"
         run: |
           python3 reporting/ci_run_summary.py
 
@@ -1124,7 +1136,7 @@ jobs:
           python-version: "3.14"
 
       - name: Install pre-commit and root test dependency
-        run: python -m pip install --upgrade "pre-commit==4.5.1" "pytest~=9.0"
+        run: python -m pip install --upgrade -c "${{ github.workspace }}/constraints.txt" "pre-commit==4.5.1" "pytest~=9.0"
 
       - name: Run pre-commit on all files
         run: pre-commit run --all-files --show-diff-on-failure --color=always

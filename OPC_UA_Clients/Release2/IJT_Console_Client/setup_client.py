@@ -43,6 +43,7 @@ IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 PROJECT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = _detect_repo_root(PROJECT_DIR)
+PYTHON_CONSTRAINTS = REPO_ROOT / "constraints.txt"
 SIMULATOR_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
 SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
@@ -51,6 +52,10 @@ SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
 # Detected and removed automatically so users who pull fresh code do not keep
 # orphaned, potentially-conflicting environments on disk.
 _STALE_VENV_NAMES: tuple[str, ...] = ("venv", "venv_test", "env", "ENV", ".venv_backup")
+
+
+def _pip_constraint_args() -> list[str]:
+    return ["-c", str(PYTHON_CONSTRAINTS)] if PYTHON_CONSTRAINTS.exists() else []
 
 
 def _remove_stale_venvs(project_dir: Path) -> None:
@@ -520,7 +525,18 @@ def _install_python_packages() -> None:
     # safe: fixed pip command using this project's virtual environment.
     subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip"])  # nosec B603
     # safe: requirements.txt path is fixed to this project directory.
-    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_file)])  # nosec B603
+    subprocess.check_call(  # nosec B603
+        [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            *_pip_constraint_args(),
+            "-r",
+            str(req_file),
+        ]
+    )
 
     try:
         # safe: fixed optional crypto package upgrade command.
@@ -531,6 +547,7 @@ def _install_python_packages() -> None:
                 "pip",
                 "install",
                 "--upgrade",
+                *_pip_constraint_args(),
                 "cryptography",
                 "pyOpenSSL",
             ]
@@ -552,6 +569,7 @@ def _install_python_packages() -> None:
             "install",
             "--upgrade",
             "--pre",
+            *_pip_constraint_args(),
             asyncua_spec,
         ]
     )

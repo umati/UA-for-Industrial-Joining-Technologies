@@ -345,6 +345,7 @@ class TestIsRuntimeReady:
 
         monkeypatch.setattr(sp, "VENV_DIR", venv)
         monkeypatch.setattr(sp, "IS_DOCKER", docker)
+        monkeypatch.setattr(sp, "_ENV_IS_PRE_ISOLATED", docker)
         monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm" if npm else None)
         monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx" if npx else None)
         if deps_ok:
@@ -612,6 +613,7 @@ class TestVenvScenarios:
     def test_docker_ready_without_venv(self, monkeypatch, fs):
         monkeypatch.setattr(sp, "VENV_DIR", Path("/fake/venv"))  # doesn't exist
         monkeypatch.setattr(sp, "IS_DOCKER", True)
+        monkeypatch.setattr(sp, "_ENV_IS_PRE_ISOLATED", True)
         fake_python = Path("/fake/python.exe" if sp.IS_WINDOWS else "/fake/python")
         fake_python.parent.mkdir(parents=True, exist_ok=True)
         fake_python.write_bytes(b"fake")
@@ -1528,11 +1530,14 @@ class TestVenvPathHelpers:
         assert sp._pip_in_venv() == expected
 
     def test_get_python_path_docker(self, monkeypatch):
-        monkeypatch.setattr(sp, "IS_DOCKER", True)
+        # _get_python_path() consults the module-level _ENV_IS_PRE_ISOLATED
+        # flag (computed at import time from IS_DOCKER or IS_GITHUB_ACTIONS),
+        # so patch that directly rather than the underlying env booleans.
+        monkeypatch.setattr(sp, "_ENV_IS_PRE_ISOLATED", True)
         assert sp._get_python_path() == Path(sys.executable)
 
     def test_get_python_path_non_docker(self, monkeypatch):
-        monkeypatch.setattr(sp, "IS_DOCKER", False)
+        monkeypatch.setattr(sp, "_ENV_IS_PRE_ISOLATED", False)
         monkeypatch.setattr(sp, "VENV_DIR", Path("/fake/venv"))
         p = sp._get_python_path()
         assert "venv" in str(p)
@@ -2417,6 +2422,7 @@ class TestMain:
         monkeypatch.setattr(sp, "_check_internet", lambda: True)
         monkeypatch.setattr(sp, "_find_latest_python_executable", lambda: (["python3.14"], "3.14"))
         monkeypatch.setattr(sp, "IS_DOCKER", True)
+        monkeypatch.setattr(sp, "_ENV_IS_PRE_ISOLATED", True)
         monkeypatch.setattr(sp, "_install_python_packages", lambda: calls.append("py_pkgs"))
         monkeypatch.setattr(sp, "_create_nodeenv", lambda: None)
         monkeypatch.setattr(sp, "_install_js_packages", lambda dev_mode=False: None)

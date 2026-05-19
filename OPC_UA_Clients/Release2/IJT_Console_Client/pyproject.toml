@@ -17,23 +17,24 @@ norecursedirs = ["live", "fixtures", "tmp", "pytest-cache-files-*"]
 markers = [
     "integration: tests requiring a running OPC UA server",
     "live: tests requiring a live OPC UA server connection",
+    "security_matrix: security-flow matrix tests against packaged OPC UA servers",
 ]
 
 [tool.bandit]
-exclude_dirs = [".venv", ".venv_test", ".venv_wsl", ".venv_wsl_backup", "tests", "__pycache__", ".git"]
+exclude_dirs = [".venv", ".venv_test", ".venv_ci", ".venv_wsl", ".venv_wsl_backup", "tests", "__pycache__", ".git"]
 
 [tool.vulture]
 # Vulture finds dead code in source. Tests are excluded because pytest fixture
 # injection makes parameter names appear "unused" — they are not; pytest wires
 # them by name. Scanning tests adds only false positives with no value.
-exclude = ["tests/", ".venv/", ".venv_test/", "tmp/", "test-results/", "logs/"]
+exclude = ["tests/", ".venv/", ".venv_test/", ".venv_ci/", "tmp/", "test-results/", "logs/"]
 ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
 
 [tool.interrogate]
 # Calibrated floor based on real in-repo coverage after excluding venv/cache
 # artefacts. Keep tests included for an honest signal and ratchet upward over time.
 fail-under = 25
-exclude = [".venv/*", ".venv_test/*", "tmp/*", "test-results/*", ".state/*"]
+exclude = [".venv/*", ".venv_test/*", ".venv_ci/*", "tmp/*", "test-results/*", ".state/*"]
 ignore-init-method = true
 ignore-magic = true
 ignore-semiprivate = true
@@ -63,6 +64,7 @@ omit = [
     "tests/**",
     ".venv/*",
     ".venv_test/*",
+    ".venv_ci/*",
 ]
 
 [tool.coverage.report]
@@ -103,7 +105,7 @@ reportOperatorIssue = "none"
 [tool.pylint.main]
 # asyncua members are generated at runtime from OPC UA NodeSet XML;
 # orjson is a C-extension whose .dumps member is not visible to pylint.
-ignore-paths = ["^\\.venv.*", "^\\.venv_test.*", "^\\.venv_wsl.*", "^pytest-cache-files-.*"]
+ignore-paths = ["^\\.venv.*", "^\\.venv_test.*", "^\\.venv_ci.*", "^\\.venv_wsl.*", "^pytest-cache-files-.*"]
 
 [tool.pylint.messages-control]
 disable = [

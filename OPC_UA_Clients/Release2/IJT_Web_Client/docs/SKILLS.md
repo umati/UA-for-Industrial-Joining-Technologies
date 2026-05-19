@@ -234,24 +234,29 @@ sim_node = client.get_node('ns=1;s=TighteningSystem/Simulations/SimulateResults'
 - Base image: `nikolaik/python-nodejs:python3.14-nodejs24`
 - Runs as **non-root `appuser`** (uid/gid 1001)
 - Packages pre-installed globally via `RUN pip install ...` (no venv needed in container)
-- `IS_DOCKER=true` env var controls venv skip logic
+- `IS_DOCKER=true` and `GITHUB_ACTIONS=true` mark Python as pre-isolated
 
 ### Venv Skip Pattern (in `setup_project.py` at project root)
 ```python
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
+IS_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+_ENV_IS_PRE_ISOLATED = IS_DOCKER or IS_GITHUB_ACTIONS
 
 def _get_python_path():
-    if IS_DOCKER:
-        return Path(sys.executable)  # system Python, already set up
+    if _ENV_IS_PRE_ISOLATED:
+        return Path(sys.executable)  # environment-provided isolated Python
     return VENV_DIR / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
 
 # In _is_runtime_ready():
-venv_ok = True if IS_DOCKER else VENV_DIR.exists()
+venv_ok = True if _ENV_IS_PRE_ISOLATED else VENV_DIR.exists()
 
 # In main setup flow:
-if not IS_DOCKER:
+if not _ENV_IS_PRE_ISOLATED:
     _create_virtualenv(latest_cmd)
 ```
+
+Local `run_all_tests.py --ci-mode` uses `.venv_ci`. It must not fall back to the
+developer's global Python.
 
 ### Ports
 - HTTP frontend: 3000
@@ -550,7 +555,7 @@ and `SimulateBulkEvents` defaults to event type `1` and count `3`.
 9. **Never** use positional result-header selectors in Playwright; use `data-ijt-result-control`.
 10. **Never** assert raw arrays for backend WS `namespaces` / `browse`; assert `data.namespaces` / `data.nodes`.
 11. **Never** send empty numeric simulator method arguments from the Web UI; define a valid default or require user input before calling.
-12. **Never** include local virtualenvs or generated test artifacts in Docker build context; keep `.venv_test/`, `.venv/`, `node_modules/`, `test-results/`, and `tmp/` ignored by `.dockerignore`.
+12. **Never** include local virtualenvs or generated test artifacts in Docker build context; keep `.venv/`, `.venv_test/`, `.venv_ci/`, `node_modules/`, `test-results/`, and `tmp/` ignored by `.dockerignore`.
 13. **Never** reintroduce a broad root Web Client live suite; add or adjust the narrow live/browser suite that owns the affected test type and service lifecycle.
 
 
@@ -565,7 +570,9 @@ and `SimulateBulkEvents` defaults to event type `1` and count `3`.
 | `UI_TEST_PORT` | `3000` | Playwright static UI server port; root split suites override this per browser suite |
 | `UI_TEST_BASE_URL` | `http://127.0.0.1:3000` | Playwright base URL; root split suites override this per browser suite |
 | `IJT_PLAYWRIGHT_WORKERS` | `2` in CI, `1` in direct local Playwright config | Playwright worker count consumed by `playwright.config.mjs`; the runner sets it for project-specific runs |
-| `IS_DOCKER` | (unset) | Set to `true` inside Docker containers; skips venv creation |
+| `IS_DOCKER` | (unset) | Set to `true` inside Docker containers; uses container-provided Python |
+| `GITHUB_ACTIONS` | (unset) | Set by GitHub Actions; uses runner-provided Python |
+| `CI` | (unset) | Enables CI behavior; local `--ci-mode` still uses `.venv_ci` |
 | `OPCUA_SIMULATOR_EXE` | (unset) | Path to simulator binary for auto-launch |
 | `IJT_SIMULATOR_INSTANCE_ROOT` | `{RUNNER_TEMP or temp}/ijt-sim` | Optional short root for runner-owned simulator copies; each port gets its own child directory |
 | `IJT_DOCKER_BUILD_TIMEOUT` | `1200` | Docker image build timeout in seconds |

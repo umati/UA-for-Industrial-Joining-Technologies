@@ -66,7 +66,7 @@ unit stage and is currently 95%.
 `semgrep` (static analysis), `pyright` (strict type checking — **advisory, non-blocking**), `detect-secrets` (secrets).
 pip-audit uses the PyPI JSON endpoint preflight, local project cache, spinner disabled, and short timeouts; network/TLS/timeout outcomes are SKIP, not PASS/FAIL. Fixable CVEs fail the suite; advisory-only CVEs may pass with an explicit note.
 The runner refreshes `pip` before the requirements-hash fast path so stale bootstrap tooling does not create false CVE failures.
-Pyright is configured in `pyproject.toml` to use `.venv_test` so installed project dependencies are resolved consistently during local runner checks.
+The runner invokes Pyright with the active Python interpreter (`.venv_test` normally, `.venv_ci` for local `--ci-mode`) so installed dependencies are resolved consistently during local checks.
 `mypy` is blocking in local Phase 1 and uses the same command as CI:
 `python -m mypy . --ignore-missing-imports --no-error-summary`. Its output is
 written to `test-results/mypy.txt`, so strict type issues in conformance files
@@ -106,10 +106,10 @@ from the IJT specification.
 ```
 Endpoint:       opc.tcp://localhost:40451   (override: OPCUA_SERVER_URL env var)
 Binary:         OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe
-Python:         3.14+  (test venv at .venv_test/)
+Python:         3.14+  (normal test venv at .venv_test/; local --ci-mode venv at .venv_ci/)
 Key packages:   asyncua>=1.2b2, PyYAML>=6.0, pytest>=9.0.2, pytest-asyncio>=1.3.0, pytest-timeout>=2.4.0
-Run tests:      .venv_test/bin/python -m pytest -v          (Linux)
-                .venv_test\Scripts\python -m pytest -v      (Windows)
+Run tests:      .venv_test/bin/python -m pytest -v          (Linux, normal mode)
+                .venv_test\Scripts\python -m pytest -v      (Windows, normal mode)
 Auto-launch:    set OPCUA_SIMULATOR_EXE=<path>  to auto-start server if not running
 ```
 

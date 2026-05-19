@@ -1,5 +1,7 @@
 #nullable enable
 
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Configuration;
 using Moq;
@@ -813,6 +815,25 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
+    public void BuildApplicationConfig_WithCustomPkiRoot_UsesConfiguredStores()
+    {
+        var method = typeof(JoiningSystem).GetMethod(
+            "BuildApplicationConfig",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40451",
+            PkiRootPath = Path.Combine(Path.GetTempPath(), "ijt-custom-pki"),
+        };
+        var appConfig = (Opc.Ua.ApplicationConfiguration)method!.Invoke(null, new object[] { config })!;
+
+        Assert.Equal(Path.Combine(config.PkiRootPath, "own"), appConfig.SecurityConfiguration.ApplicationCertificate.StorePath);
+        Assert.Equal(Path.Combine(config.PkiRootPath, "trusted"), appConfig.SecurityConfiguration.TrustedPeerCertificates.StorePath);
+        Assert.Equal(Path.Combine(config.PkiRootPath, "rejected"), appConfig.SecurityConfiguration.RejectedCertificateStore.StorePath);
+    }
+
+    [Fact]
     public void EndpointDiscoveryCacheKey_IncludesServerUrlAndSecurityMode()
     {
         var key = JoiningSystem.EndpointDiscoveryCacheKey(new ClientConfig
@@ -820,7 +841,7 @@ public sealed class JoiningSystemUnitTests
             ServerUrl = "opc.tcp://localhost:40464",
         });
 
-        Assert.Equal("opc.tcp://localhost:40464|security=false", key);
+        Assert.Equal("opc.tcp://localhost:40464|security=false|policy=<default>|mode=<default>", key);
     }
 
     [Fact]
@@ -833,6 +854,25 @@ public sealed class JoiningSystemUnitTests
         var second = JoiningSystem.EndpointDiscoveryCacheKey(new ClientConfig
         {
             ServerUrl = "opc.tcp://localhost:40465",
+        });
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void EndpointDiscoveryCacheKey_DiffersBySecurityPolicyAndMode()
+    {
+        var first = JoiningSystem.EndpointDiscoveryCacheKey(new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40464",
+            SecurityPolicyUri = SecurityPolicies.Basic256Sha256,
+            MessageSecurityMode = MessageSecurityMode.Sign,
+        });
+        var second = JoiningSystem.EndpointDiscoveryCacheKey(new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40464",
+            SecurityPolicyUri = SecurityPolicies.Basic256Sha256,
+            MessageSecurityMode = MessageSecurityMode.SignAndEncrypt,
         });
 
         Assert.NotEqual(first, second);
@@ -895,6 +935,253 @@ public sealed class JoiningSystemUnitTests
         Assert.Equal(1, calls);
         Assert.Same(first, second);
         Assert.Equal("opc.tcp://localhost:40464/1", second.EndpointUrl);
+    }
+
+    [Fact]
+    public void SelectEndpointDescription_WithExactPolicyAndMode_ReturnsMatchingEndpoint()
+    {
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40464",
+            SecurityPolicyUri = SecurityPolicies.Aes256_Sha256_RsaPss,
+            MessageSecurityMode = MessageSecurityMode.SignAndEncrypt,
+        };
+
+        var selected = JoiningSystem.SelectEndpointDescription(
+            config,
+            () => new EndpointDescriptionCollection
+            {
+                new()
+                {
+                    EndpointUrl = config.ServerUrl,
+                    SecurityMode = MessageSecurityMode.Sign,
+                    SecurityPolicyUri = SecurityPolicies.Basic256Sha256,
+                },
+                new()
+                {
+                    EndpointUrl = config.ServerUrl,
+                    SecurityMode = MessageSecurityMode.SignAndEncrypt,
+                    SecurityPolicyUri = SecurityPolicies.Aes256_Sha256_RsaPss,
+                },
+            });
+
+        Assert.Equal(SecurityPolicies.Aes256_Sha256_RsaPss, selected.SecurityPolicyUri);
+        Assert.Equal(MessageSecurityMode.SignAndEncrypt, selected.SecurityMode);
+    }
+
+    [Fact]
+    public void SelectEndpointDescription_WithMissingExactEndpoint_Throws()
+    {
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40464",
+            SecurityPolicyUri = SecurityPolicies.Aes256_Sha256_RsaPss,
+            MessageSecurityMode = MessageSecurityMode.SignAndEncrypt,
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.SelectEndpointDescription(
+                config,
+                () => new EndpointDescriptionCollection
+                {
+                    new()
+                    {
+                        EndpointUrl = config.ServerUrl,
+                        SecurityMode = MessageSecurityMode.Sign,
+                        SecurityPolicyUri = SecurityPolicies.Basic256Sha256,
+                    },
+                }));
+        Assert.Contains("Endpoint not found", ex.Message);
+        Assert.Contains(SecurityPolicies.Basic256Sha256, ex.Message);
+    }
+
+    [Fact]
+    public void BuildUserIdentity_WithUserNameConfig_ReturnsUserNameIdentity()
+    {
+        var identity = JoiningSystem.BuildUserIdentity(new ClientConfig
+        {
+            UserIdentityKind = UserIdentityKind.UserName,
+            UserName = "user1",
+            Password = "password",
+        });
+
+        Assert.Equal(UserTokenType.UserName, identity.TokenType);
+    }
+
+    [Fact]
+    public void ValidateX509UserTokenPolicy_AcceptsEndpointDefaultUri()
+    {
+        var tokenPolicy = new UserTokenPolicy
+        {
+            TokenType = UserTokenType.Certificate,
+            PolicyId = "certificate",
+            SecurityPolicyUri = string.Empty,
+        };
+
+        JoiningSystem.ValidateX509UserTokenPolicy(tokenPolicy, SecurityPolicies.Basic256Sha256);
+    }
+
+    [Fact]
+    public void ValidateX509UserTokenPolicy_RejectsSecurityPolicyNoneEndpointDefault()
+    {
+        var tokenPolicy = new UserTokenPolicy
+        {
+            TokenType = UserTokenType.Certificate,
+            PolicyId = "certificate",
+            SecurityPolicyUri = string.Empty,
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.ValidateX509UserTokenPolicy(tokenPolicy, SecurityPolicies.None));
+
+        Assert.Contains("requires a secure endpoint", ex.Message);
+    }
+
+    [Fact]
+    public void ValidateX509UserTokenPolicy_RejectsSecurityPolicyNone()
+    {
+        var tokenPolicy = new UserTokenPolicy
+        {
+            TokenType = UserTokenType.Certificate,
+            PolicyId = "certificate",
+            SecurityPolicyUri = SecurityPolicies.None,
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.ValidateX509UserTokenPolicy(tokenPolicy, SecurityPolicies.Basic256Sha256));
+
+        Assert.Contains("SecurityPolicy#None", ex.Message);
+    }
+
+    [Fact]
+    public void ValidateX509UserTokenPolicy_RejectsPolicyMismatch()
+    {
+        var tokenPolicy = new UserTokenPolicy
+        {
+            TokenType = UserTokenType.Certificate,
+            PolicyId = "certificate",
+            SecurityPolicyUri = SecurityPolicies.Aes256_Sha256_RsaPss,
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.ValidateX509UserTokenPolicy(tokenPolicy, SecurityPolicies.Basic256Sha256));
+
+        Assert.Contains("does not match", ex.Message);
+    }
+
+    [Fact]
+    public void ValidateX509UserTokenPolicy_RequiresCertificateTokenPolicy()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.ValidateX509UserTokenPolicy(null, SecurityPolicies.Basic256Sha256));
+
+        Assert.Contains("Certificate user-token policy", ex.Message);
+    }
+
+    [Fact]
+    public void ValidateUserNameUserTokenPolicy_AcceptsEndpointDefaultUri()
+    {
+        var tokenPolicy = new UserTokenPolicy
+        {
+            TokenType = UserTokenType.UserName,
+            PolicyId = "username",
+            SecurityPolicyUri = string.Empty,
+        };
+
+        JoiningSystem.ValidateUserNameUserTokenPolicy(tokenPolicy, SecurityPolicies.Basic256Sha256);
+    }
+
+    [Fact]
+    public void ValidateUserNameUserTokenPolicy_RejectsSecurityPolicyNoneEndpointDefault()
+    {
+        var tokenPolicy = new UserTokenPolicy
+        {
+            TokenType = UserTokenType.UserName,
+            PolicyId = "username",
+            SecurityPolicyUri = string.Empty,
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.ValidateUserNameUserTokenPolicy(tokenPolicy, SecurityPolicies.None));
+
+        Assert.Contains("requires a secure endpoint", ex.Message);
+    }
+
+    [Fact]
+    public void ValidateUserNameUserTokenPolicy_RejectsSecurityPolicyNone()
+    {
+        var tokenPolicy = new UserTokenPolicy
+        {
+            TokenType = UserTokenType.UserName,
+            PolicyId = "username",
+            SecurityPolicyUri = SecurityPolicies.None,
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.ValidateUserNameUserTokenPolicy(tokenPolicy, SecurityPolicies.Basic256Sha256));
+
+        Assert.Contains("SecurityPolicy#None", ex.Message);
+    }
+
+    [Fact]
+    public void ValidateUserNameUserTokenPolicy_RejectsPolicyMismatch()
+    {
+        var tokenPolicy = new UserTokenPolicy
+        {
+            TokenType = UserTokenType.UserName,
+            PolicyId = "username",
+            SecurityPolicyUri = SecurityPolicies.Aes256_Sha256_RsaPss,
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.ValidateUserNameUserTokenPolicy(tokenPolicy, SecurityPolicies.Basic256Sha256));
+
+        Assert.Contains("does not match", ex.Message);
+    }
+
+    [Fact]
+    public void ValidateUserNameUserTokenPolicy_RequiresUserNameTokenPolicy()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.ValidateUserNameUserTokenPolicy(null, SecurityPolicies.Basic256Sha256));
+
+        Assert.Contains("UserName user-token policy", ex.Message);
+    }
+
+    [Fact]
+    public void LoadX509IdentityCertificate_WithPemAndKey_RetainsPrivateKey()
+    {
+        var root = Path.Combine(AppContext.BaseDirectory, "tmp", "unit-x509", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=user1",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+        var subjectKeyIdentifier = new X509SubjectKeyIdentifierExtension(request.PublicKey, false);
+        request.CertificateExtensions.Add(subjectKeyIdentifier);
+        request.CertificateExtensions.Add(
+            X509AuthorityKeyIdentifierExtension.CreateFromSubjectKeyIdentifier(subjectKeyIdentifier));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, false));
+
+        using var certificate = request.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow.AddDays(30));
+        var certPath = Path.Combine(root, "user1.pem");
+        var keyPath = Path.Combine(root, "user1.key.pem");
+        File.WriteAllText(certPath, certificate.ExportCertificatePem());
+        File.WriteAllText(keyPath, rsa.ExportPkcs8PrivateKeyPem());
+
+        using var loaded = JoiningSystem.LoadX509IdentityCertificate(new ClientConfig
+        {
+            X509IdentityCertificatePath = certPath,
+            X509IdentityPrivateKeyPath = keyPath,
+        });
+
+        Assert.True(loaded.HasPrivateKey);
     }
 
     // ── DisposeAsync ──────────────────────────────────────────────────────────

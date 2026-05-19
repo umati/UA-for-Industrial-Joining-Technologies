@@ -1750,6 +1750,14 @@ def test_e2e_fixture_passes_runtime_websocket_query():
     assert "new AppPage(page, runtime.appUrl)" in source
 
 
+def test_docker_smoke_builds_web_image_from_repo_root():
+    source = (_PROJECT_ROOT / "run_all_tests.py").read_text(encoding="utf-8")
+
+    assert 'str(ROOT.relative_to(_REPO_ROOT) / "Dockerfile")' in source
+    assert 'label="docker build (BuildKit)",' in source
+    assert "cwd=_REPO_ROOT," in source
+
+
 def test_joint_demo_uses_server_discovered_joint_ids():
     source = (_PROJECT_ROOT / "src" / "javascripts" / "views" / "standard-demo" / "joint-demo.mjs").read_text(
         encoding="utf-8"

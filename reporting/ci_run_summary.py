@@ -1,9 +1,12 @@
 """Generate the IJT fast CI GitHub Actions summary."""
 
 import contextlib
+import datetime
 import glob
 import json
 import os
+import urllib.parse
+import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter
 
@@ -84,6 +87,93 @@ def md_cell(value):
     """Escape text for a GitHub markdown table cell."""
     text = str(value or "").replace("\r", " ").replace("\n", " ")
     return text.replace("|", "\\|").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def seconds(value):
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def format_duration(value):
+    value = seconds(value)
+    if value >= 60.0:
+        return f"{value / 60.0:.1f} min"
+    return f"{value:.1f} s"
+
+
+def parse_actions_time(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def next_link(header):
+    for part in str(header or "").split(","):
+        pieces = [piece.strip() for piece in part.split(";")]
+        if len(pieces) < 2 or pieces[1] != 'rel="next"':
+            continue
+        target = pieces[0]
+        if target.startswith("<") and target.endswith(">"):
+            return target[1:-1]
+    return None
+
+
+def job_durations(path):
+    """Load completed current-run job durations, excluding this report job."""
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if not path or not token:
+        return []
+    report_job_name = os.environ.get("REPORT_JOB_NAME", "").strip()
+    api_root = (
+        os.environ.get("GH_API_URL") or os.environ.get("GITHUB_API_URL") or "https://api.github.com"
+    ).rstrip("/")
+    url = f"{api_root}/{path.lstrip('/')}"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "ijt-ci-report",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    rows = []
+    try:
+        while url:
+            parsed_url = urllib.parse.urlparse(url)
+            if parsed_url.scheme != "https":
+                raise ValueError(f"GitHub API URL must use https: {url}")
+            # safe: GitHub Actions supplies api_url; HTTPS is enforced above.
+            request = urllib.request.Request(url, headers=headers)  # noqa: S310
+            # safe: GitHub Actions supplies api_url; HTTPS is enforced above.
+            with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+                payload = json.load(response)
+                for job in payload.get("jobs", []):
+                    name = str(job.get("name") or "unknown")
+                    if report_job_name and name == report_job_name:
+                        continue
+                    started = parse_actions_time(job.get("started_at"))
+                    completed = parse_actions_time(job.get("completed_at"))
+                    duration = None
+                    if started and completed:
+                        duration = max((completed - started).total_seconds(), 0.0)
+                    if duration is None and job.get("status") != "completed":
+                        continue
+                    rows.append(
+                        (
+                            name,
+                            duration,
+                            str(job.get("conclusion") or job.get("status") or "unknown"),
+                        )
+                    )
+                url = next_link(response.headers.get("Link"))
+    except Exception as exc:
+        print(f"[WARN] job_durations({path}): {exc}")
+        return []
+    return sorted(rows, key=lambda row: (row[1] is None, -(row[1] or 0.0), row[0]))
 
 
 def format_skip_section(label, skips_list, skip_count=None):
@@ -317,6 +407,9 @@ def main() -> None:
     branch = E("GH_BRANCH", "main")
     run_num = E("GH_RUN_NUMBER", "")
     run_url = E("GH_RUN_URL", "")
+    job_timings = job_durations(
+        f"repos/{E('GH_REPOSITORY', '')}/actions/runs/{E('GH_RUN_ID', '')}/jobs"
+    )
 
     # ── Parse artifacts ──────────────────────────────────────────────────
 
@@ -600,6 +693,32 @@ def main() -> None:
         "",
         "---",
         "",
+        '<a id="ci-performance-timings"></a>',
+        "",
+        "### ⏱️ Timing",
+        "",
+    ]
+    if job_timings:
+        out += [
+            "| Job | Duration | Status |",
+            "|:----|---------:|:-------|",
+        ]
+        for name, duration, conclusion in job_timings[:10]:
+            out.append(
+                f"| {md_cell(name)} | {format_duration(duration)} | "
+                f"{job_icon(conclusion)} {md_cell(conclusion)} |"
+            )
+    else:
+        out += [
+            (
+                "No reliable job duration source was available. Job durations require "
+                "the current-run Jobs API."
+            ),
+        ]
+    out += [
+        "",
+        "---",
+        "",
         '<a id="ci-raw-data"></a>',
         "",
         "### Where to find raw data",
@@ -732,31 +851,36 @@ def main() -> None:
         (
             "| Web Client | [Validation Results](#ci-validation-results); "
             "[Code Quality Checks](#ci-code-quality-checks); "
-            "[Source and Dependency Security](#ci-source-dependency-security) |"
+            "[Source and Dependency Security](#ci-source-dependency-security); "
+            "[Timing](#ci-performance-timings) |"
         ),
         (
             "| Console Client | [Validation Results](#ci-validation-results); "
             "[Code Quality Checks](#ci-code-quality-checks); "
-            "[Source and Dependency Security](#ci-source-dependency-security) |"
+            "[Source and Dependency Security](#ci-source-dependency-security); "
+            "[Timing](#ci-performance-timings) |"
         ),
         (
             "| Node Client — Legacy JavaScript | [Validation Results](#ci-validation-results); "
             "[Code Quality Checks](#ci-code-quality-checks); "
-            "[Source and Dependency Security](#ci-source-dependency-security) |"
+            "[Source and Dependency Security](#ci-source-dependency-security); "
+            "[Timing](#ci-performance-timings) |"
         ),
         (
             "| C# Client | [Validation Results](#ci-validation-results); "
             "[Code Quality Checks](#ci-code-quality-checks); "
-            "[Source and Dependency Security](#ci-source-dependency-security) |"
+            "[Source and Dependency Security](#ci-source-dependency-security); "
+            "[Timing](#ci-performance-timings) |"
         ),
         (
             "| Test Client | [Validation Results](#ci-validation-results); "
             "[Code Quality Checks](#ci-code-quality-checks); "
-            "[Source and Dependency Security](#ci-source-dependency-security) |"
+            "[Source and Dependency Security](#ci-source-dependency-security); "
+            "[Timing](#ci-performance-timings) |"
         ),
         (
             "| OPC UA Server | [Validation Results](#ci-validation-results); "
-            "[CI Infrastructure](#ci-infrastructure) |"
+            "[CI Infrastructure](#ci-infrastructure); [Timing](#ci-performance-timings) |"
         ),
     ]
 

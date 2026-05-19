@@ -36,6 +36,184 @@ def teardown_function() -> None:
     _runner._server_smoke_requirements_ready = False
 
 
+def test_python_dependency_security_floors_are_centralized() -> None:
+    constraints = _runner.REPO_ROOT / "constraints.txt"
+    assert constraints.exists(), "Add repo-wide Python security floors to constraints.txt"
+
+    constraints_text = constraints.read_text(encoding="utf-8")
+    assert "idna>=3.15" in constraints_text
+
+    requirement_files = [
+        _runner.CONSOLE_DIR / "requirements.txt",
+        _runner.CONSOLE_DIR / "requirements-dev.txt",
+        _runner.TEST_CLIENT_DIR / "requirements.txt",
+        _runner.TEST_CLIENT_DIR / "requirements-dev.txt",
+        _runner.WEB_CLIENT_DIR / "requirements.txt",
+        _runner.WEB_CLIENT_DIR / "requirements-dev.txt",
+        _runner.SERVER_DIR / "tests" / "requirements.txt",
+    ]
+    for req_file in requirement_files:
+        text = req_file.read_text(encoding="utf-8")
+        assert "constraints.txt" in text, f"{req_file} must document repo-wide constraints usage"
+        assert not re.search(r"(?im)^idna\s*[<>=!~]", text), (
+            f"{req_file} must not pin transitive idna directly; use constraints.txt"
+        )
+
+
+def test_python_requirement_installs_use_constraints_file() -> None:
+    checked_files = [
+        _runner.REPO_ROOT / "run_all_tests.py",
+        _runner.SERVER_DIR / "run_all_tests.py",
+        _runner.CONSOLE_DIR / "run_all_tests.py",
+        _runner.CONSOLE_DIR / "setup_client.py",
+        _runner.TEST_CLIENT_DIR / "run_all_tests.py",
+        _runner.WEB_CLIENT_DIR / "run_all_tests.py",
+        _runner.WEB_CLIENT_DIR / "setup_project.py",
+        _runner.WEB_CLIENT_DIR / "scripts" / "venv_bootstrap.py",
+        _runner.WEB_CLIENT_DIR / "Dockerfile",
+        _runner.WEB_CLIENT_DIR / "docker-compose.yml",
+        _runner.REPO_ROOT / ".github" / "docker" / "ijt-browser-ci" / "Dockerfile",
+        _runner.REPO_ROOT / ".github" / "workflows" / "ci.yml",
+        _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml",
+        _runner.REPO_ROOT / ".github" / "workflows" / "build-browser-ci-image.yml",
+    ]
+    missing: list[str] = []
+    for path in checked_files:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            stripped = line.strip()
+            if (
+                stripped.startswith(("_skip(", "result.note =", "log.", "logger.", "print("))
+                or "not installed" in stripped
+                or "Install:" in stripped
+            ):
+                continue
+            starts_pip_command = (
+                stripped.startswith(
+                    (
+                        "pip install",
+                        "python -m pip install",
+                        "RUN pip install",
+                        "RUN python -m pip install",
+                        "&& pip install",
+                        "&& python -m pip install",
+                    )
+                )
+                or stripped in {'"pip",', "'pip',"}
+                or '"pip", "install"' in stripped
+                or "'pip', 'install'" in stripped
+            )
+            if not starts_pip_command:
+                continue
+            if stripped in {'"pip",', "'pip',"}:
+                block_lines = []
+                for command_line in lines[index : index + 20]:
+                    block_lines.append(command_line)
+                    if command_line.strip().startswith("]"):
+                        break
+                block = "\n".join(block_lines)
+            else:
+                block = "\n".join(lines[index : index + 20])
+            if "install" not in block:
+                continue
+            if "-r" not in block and "requirements" not in block and "pip_package" not in block:
+                package_names = (
+                    "asyncua_spec",
+                    "asyncua>=",
+                    '"cryptography"',
+                    "'cryptography'",
+                    '"pyOpenSSL"',
+                    "'pyOpenSSL'",
+                )
+                if not any(token in block for token in package_names):
+                    continue
+            installs_dependencies = any(
+                token in block
+                for token in (
+                    "requirements.txt",
+                    "requirements-dev.txt",
+                    '"-r"',
+                    "'-r'",
+                    "pip_package",
+                    "asyncua_spec",
+                    "asyncua>=",
+                    '"cryptography"',
+                    "'cryptography'",
+                    '"pyOpenSSL"',
+                    "'pyOpenSSL'",
+                )
+            )
+            if (
+                installs_dependencies
+                and "constraints.txt" not in block
+                and "PYTHON_CONSTRAINTS" not in block
+                and "_pip_constraint_args" not in block
+            ):
+                rel_path = path.relative_to(_runner.REPO_ROOT)
+                missing.append(f"{rel_path}:{index + 1}")
+
+    assert not missing, (
+        "Python dependency install surfaces must use repo-wide constraints.txt. "
+        "Add -c <repo>/constraints.txt or _pip_constraint_args() at: " + ", ".join(missing)
+    )
+
+
+def test_local_ci_mode_uses_isolated_python_client_venvs() -> None:
+    root_runner = (_runner.REPO_ROOT / "run_all_tests.py").read_text(encoding="utf-8")
+    console_runner = (_runner.CONSOLE_DIR / "run_all_tests.py").read_text(encoding="utf-8")
+    test_client_runner = (_runner.TEST_CLIENT_DIR / "run_all_tests.py").read_text(encoding="utf-8")
+    web_runner = (_runner.WEB_CLIENT_DIR / "run_all_tests.py").read_text(encoding="utf-8")
+    web_setup = (_runner.WEB_CLIENT_DIR / "setup_project.py").read_text(encoding="utf-8")
+
+    for runner_source in (console_runner, test_client_runner, web_runner):
+        assert ".venv_ci" in runner_source
+        assert "GITHUB_ACTIONS" in runner_source
+        assert "_ENV_IS_PRE_ISOLATED" in runner_source
+
+    assert "if not _ENV_IS_PRE_ISOLATED and not _inside_venv()" in web_runner
+    assert "if not IS_CI and not IS_DOCKER and not _inside_venv()" not in web_runner
+    assert "skip venv relaunch" not in root_runner
+    assert "_ENV_IS_PRE_ISOLATED = IS_DOCKER or IS_GITHUB_ACTIONS" in web_setup
+    assert "if _ENV_IS_PRE_ISOLATED:" in web_setup
+
+
+def test_managed_console_matrix_does_not_reuse_stale_server_port() -> None:
+    fixture_source = (_runner.CONSOLE_DIR / "tests" / "live" / "conftest.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "def _isolated_server_requested()" in fixture_source
+    assert "IJT_SECURITY_MATRIX_CELL" in fixture_source
+    assert "def _stop_docker_containers_publishing_port(port: int)" in fixture_source
+    assert "def _kill_process_on_port(port: int)" in fixture_source
+    assert "_stop_docker_containers_publishing_port(port)" in fixture_source
+    assert "if isolated_server and _port_open(host, port):" in fixture_source
+    assert "_kill_process_on_port(port)" in fixture_source
+    assert "could not be cleared for an isolated managed run" in fixture_source
+
+
+def test_csharp_fixture_clears_docker_port_before_native_kill() -> None:
+    fixture_source = (
+        _runner.CSHARP_DIR / "Tests" / "IJT_CSharp_Client.Tests" / "OpcUaServerFixture.cs"
+    ).read_text(encoding="utf-8")
+
+    assert "StopDockerContainersPublishingPort(port)" in fixture_source
+    assert "FindDockerExecutable()" in fixture_source
+    assert 'FindInPath("docker.exe")' in fixture_source
+    assert "ps --filter publish={port}" in fixture_source
+    assert 'Environment.GetEnvironmentVariable("IJT_SUT")' in fixture_source
+    assert '"linux"' in fixture_source
+
+
+def test_dotnet_runners_disable_worker_reuse() -> None:
+    csharp_runner = (_runner.CSHARP_DIR / "run_all_tests.py").read_text(encoding="utf-8")
+    root_runner = (_runner.REPO_ROOT / "run_all_tests.py").read_text(encoding="utf-8")
+
+    for source in (root_runner, csharp_runner):
+        assert "MSBUILDDISABLENODEREUSE" in source
+        assert "UseSharedCompilation" in source
+
+
 def test_parse_suite_counts_keeps_failed_pytest_counts() -> None:
     output = "======================= 2 failed, 795 passed in 22.26s ========================"
 
@@ -216,6 +394,7 @@ def test_suite_ids_match_naming_pattern() -> None:
                 "e2e",
                 "smoke",
                 "docker-smoke",
+                "security-matrix",
                 "compatibility-smoke",
                 "linux-package-smoke",
             ),
@@ -278,6 +457,7 @@ def test_suite_ids_match_naming_pattern() -> None:
         "e2e",
         "smoke",
         "docker-smoke",
+        "security-matrix",
         "compatibility-smoke",
         "linux-package-smoke",
     }
@@ -299,6 +479,7 @@ def test_suite_groups_are_known_enum_values() -> None:
         "phase1-static",
         "phase2-live",
         "phase2-package",
+        "phase2-security-matrix",
         "phase2-web-live",
         "phase2-web-compatibility",
     }
@@ -308,7 +489,7 @@ def test_suite_groups_are_known_enum_values() -> None:
 
 
 def test_suite_registry_has_no_duplicate_ids() -> None:
-    assert len(_runner.SUITE_REGISTRY) == 21
+    assert len(_runner.SUITE_REGISTRY) == 25
     assert len(set(_runner.SUITE_REGISTRY)) == len(_runner.SUITE_REGISTRY)
 
     runners = [spec.runner for spec in _runner.SUITE_REGISTRY.values()]
@@ -493,6 +674,57 @@ def test_server_linux_package_smoke_is_default_phase2_suite() -> None:
     )
 
 
+def test_security_matrix_suites_are_opt_in_phase2_suites() -> None:
+    matrix_suite_ids = {
+        "csharp-client-security-matrix-a1",
+        "csharp-client-security-matrix-a2",
+        "console-client-security-matrix-b1",
+        "console-client-security-matrix-b2",
+    }
+
+    assert matrix_suite_ids.isdisjoint(_runner.phase2_specs())
+    assert matrix_suite_ids <= set(_runner.phase2_specs(include_security_matrix=True))
+
+
+def test_security_matrix_suites_delegate_to_sub_runners(monkeypatch) -> None:
+    calls: list[dict] = []
+
+    def _fake_delegate_to_runner(**kwargs):
+        calls.append(kwargs)
+        return _runner.SuiteResult(kwargs["name"], True, 0.0)
+
+    monkeypatch.setattr(_runner, "_delegate_to_runner", _fake_delegate_to_runner)
+
+    results = [
+        _runner._suite_csharp_security_matrix_a1(),
+        _runner._suite_csharp_security_matrix_a2(),
+        _runner._suite_console_security_matrix_b1(),
+        _runner._suite_console_security_matrix_b2(),
+    ]
+
+    assert all(result.ok for result in results)
+    assert [call["name"] for call in calls] == [
+        "csharp-client-security-matrix-a1",
+        "csharp-client-security-matrix-a2",
+        "console-client-security-matrix-b1",
+        "console-client-security-matrix-b2",
+    ]
+    assert [call["phase_args"][:5] for call in calls] == [
+        ["--security-matrix", "--security-matrix-cell", "A1", "--security-matrix-sut", "windows"],
+        ["--security-matrix", "--security-matrix-cell", "A2", "--security-matrix-sut", "linux"],
+        ["--security-matrix", "--security-matrix-cell", "B1", "--security-matrix-sut", "windows"],
+        ["--security-matrix", "--security-matrix-cell", "B2", "--security-matrix-sut", "linux"],
+    ]
+    assert calls[0]["extra_env"]["OPCUA_SERVER_PORT"] == str(
+        _runner.OPCUA_SERVER_PORT_CSHARP_SECURITY_MATRIX_A1
+    )
+    assert calls[0]["extra_env"]["IJT_SERVER_URL"].endswith(":40475")
+    assert calls[1]["extra_env"]["IJT_DOCKER_COMPOSE_BUILD"] == "1"
+    assert calls[2]["extra_env"]["OPCUA_SERVER_URL"].endswith(":40477")
+    assert calls[3]["extra_env"]["IJT_DOCKER_COMPOSE_BUILD"] == "1"
+    assert all(call["timeout"] == 1200 for call in calls)
+
+
 def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
     calls: list[dict] = []
 
@@ -652,6 +884,12 @@ def test_print_summary_reports_suite_and_test_totals(capsys) -> None:
         _runner.SuiteResult("server-smoke", True, duration=1.0, counts="10 passed"),
         _runner.SuiteResult("web-client-docker-smoke", True, duration=2.0),
         _runner.SuiteResult(
+            "csharp-client-security-matrix-a1",
+            True,
+            duration=2.5,
+            counts="9 passed",
+        ),
+        _runner.SuiteResult(
             "test-client-live-conformance",
             True,
             duration=3.0,
@@ -666,9 +904,10 @@ def test_print_summary_reports_suite_and_test_totals(capsys) -> None:
     assert "Server - Native smoke" in output
     assert "10 passed" in output
     assert "Web Client - Docker image smoke" in output
+    assert "C# Client - Security Matrix A1" in output
     assert "Not reported" in output
-    assert "3 total suites; 3 passed, 0 failed, 0 skipped" in output
-    assert "863 total tests; 723 passed, 0 failed, 0 errors, 140 skipped" in output
+    assert "4 total suites; 4 passed, 0 failed, 0 skipped" in output
+    assert "872 total tests; 732 passed, 0 failed, 0 errors, 140 skipped" in output
 
 
 def test_server_linux_package_smoke_skips_without_docker(monkeypatch) -> None:
@@ -929,6 +1168,8 @@ def test_run_capture_forces_child_python_utf8(monkeypatch) -> None:
     assert captured["DOTNET_NOLOGO"] == "1"
     assert captured["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] == "0"
     assert captured["DOTNET_GENERATE_ASPNET_CERTIFICATE"] == "false"
+    assert captured["MSBUILDDISABLENODEREUSE"] == "1"
+    assert captured["UseSharedCompilation"] == "false"
     assert Path(captured["npm_config_cache"]).parts[-3:] == ("tmp", "runner-env", "npm-cache")
     assert captured["npm_config_update_notifier"] == "false"
     assert Path(captured["PIP_CACHE_DIR"]).parts[-3:] == ("tmp", "runner-env", "pip-cache")
@@ -1869,6 +2110,7 @@ def test_ci_mode_flag_is_advertised_in_help() -> None:
     help_text = parser.format_help()
 
     assert "--ci-mode" in help_text
+    assert "--security-matrix" in help_text
     assert "CI=1" in help_text
 
 
@@ -1884,11 +2126,36 @@ def test_ci_mode_flag_parses_independently_of_phase_flags() -> None:
     assert args.ci_mode is True
     assert args.phase1 is True
 
+    args = parser.parse_args(["--security-matrix", "--phase2"])
+    assert args.security_matrix is True
+    assert args.phase2 is True
+    assert _runner._timing_mode(args) == "phase2+security-matrix"
+
+    args = parser.parse_args(["--security-matrix"])
+    assert args.security_matrix is True
+    assert _runner._timing_mode(args) == "full+security-matrix"
+
+
+def test_security_matrix_flag_rejects_invalid_combinations(capsys) -> None:
+    parser = _runner._build_parser()
+
+    args = parser.parse_args(["--phase1", "--security-matrix"])
+    with pytest.raises(SystemExit) as excinfo:
+        _runner._validate_suite_arg(parser, args)
+    assert excinfo.value.code == 2
+    assert "--security-matrix requires a full run or --phase2" in capsys.readouterr().err
+
+    args = parser.parse_args(["--suite", "csharp-client-security-matrix-a1", "--security-matrix"])
+    with pytest.raises(SystemExit) as excinfo:
+        _runner._validate_suite_arg(parser, args)
+    assert excinfo.value.code == 2
+    assert "--security-matrix is not needed with --suite" in capsys.readouterr().err
+
 
 def test_ci_mode_flag_sets_ci_env_for_child_runners(monkeypatch, capsys) -> None:
     """--ci-mode must inject CI=1 into the environment so client subrunners
-    take their CI codepath (skip venv relaunch, etc.). Without this, bugs
-    that only fail in GitHub Actions cannot be reproduced locally."""
+    take their CI codepath. Without this, bugs that only fail in GitHub Actions
+    cannot be reproduced locally."""
     import os as _os
 
     monkeypatch.delenv("CI", raising=False)

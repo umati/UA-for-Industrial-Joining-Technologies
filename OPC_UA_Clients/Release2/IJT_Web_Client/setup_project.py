@@ -62,6 +62,8 @@ log = logging.getLogger(__name__)
 # Constants & Paths
 # ---------------------------------------------------------------------------
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
+IS_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+_ENV_IS_PRE_ISOLATED = IS_DOCKER or IS_GITHUB_ACTIONS
 IS_WSL = bool(os.getenv("WSL_DISTRO_NAME")) or (
     os.path.exists("/proc/version")
     and "microsoft" in Path("/proc/version").read_text(encoding="utf-8", errors="ignore").lower()
@@ -69,27 +71,35 @@ IS_WSL = bool(os.getenv("WSL_DISTRO_NAME")) or (
 # Venv naming convention:
 #   .venv          — runtime launch (this script, Windows/Linux/macOS/WSL non-Docker)
 #   .venv_test     — test runner (run_all_tests.py, full dev deps)
+#   .venv_ci       — local CI-mode test runner (run_all_tests.py --ci-mode)
 #   /opt/ijt_venv  — Docker container (avoids Windows bind-mount conflicts)
+# GitHub Actions uses the runner-provided Python environment.
 # Note: .venv_wsl was previously documented as a separate WSL env but bootstrap_wsl.sh
 # calls this script, so WSL non-Docker also ends up using .venv (same as all other hosts).
 VENV_DIR = Path("/opt/ijt_venv") if IS_DOCKER else Path(".venv")
 SETUP_TIMESTAMP_FILE = STATE_DIR / "setup_timestamp"
 IS_WINDOWS = os.name == "nt"
 REPO_ROOT = _detect_repo_root(PROJECT_DIR)
+PYTHON_CONSTRAINTS = REPO_ROOT / "constraints.txt"
 SIMULATOR_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
 SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
 SETUP_LOCK_FILE = STATE_DIR / "setup.lock"
 RUNTIME_STATE_FILE = STATE_DIR / "runtime_processes.json"
 
-# Legacy venv directory names that pre-date the .venv / .venv_test convention.
+# Legacy venv directory names that pre-date the .venv / .venv_test / .venv_ci convention.
 _STALE_VENV_NAMES: tuple[str, ...] = ("venv", "venv_test", "env", "ENV", ".venv_backup")
+
+
+def _pip_constraint_args() -> list[str]:
+    return ["-c", str(PYTHON_CONSTRAINTS)] if PYTHON_CONSTRAINTS.exists() else []
 
 
 def _remove_stale_venvs(project_dir: Path) -> None:
     """Delete any legacy virtual-environment directories under *project_dir*.
 
-    Only ``.venv`` and ``.venv_test`` are canonical on all hosts (including WSL).
+    Only ``.venv``, ``.venv_test``, and ``.venv_ci`` are canonical on all hosts
+    (including WSL).
     The Docker path ``/opt/ijt_venv`` is canonical only inside containers.
     Anything matching :data:`_STALE_VENV_NAMES` is obsolete and removed automatically so that
     fresh clones start from a known-clean state.
@@ -773,10 +783,10 @@ def _pip_in_venv() -> Path:
 
 def _get_python_path() -> Path:
     """
-    Inside Docker, use system python (already set up by Dockerfile).
-    Otherwise use the venv python.
+    In pre-isolated environments, use the provided Python.
+    Otherwise use the local runtime venv Python.
     """
-    if IS_DOCKER:
+    if _ENV_IS_PRE_ISOLATED:
         return Path(sys.executable)
     return _python_in_venv()
 
@@ -929,7 +939,18 @@ def _install_python_packages():
 
     # Install core from requirements (stable channel)
     log.info("Installing packages from requirements.txt (stable channel)...")
-    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "-r", str(req_file)])
+    subprocess.check_call(
+        [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            *_pip_constraint_args(),
+            "-r",
+            str(req_file),
+        ]
+    )
 
     # Proactively upgrade crypto stack for asyncua (often required by newer wheels)
     # (The asyncua project lists cryptography / pyOpenSSL among dependencies.)
@@ -942,6 +963,7 @@ def _install_python_packages():
                 "pip",
                 "install",
                 "--upgrade",
+                *_pip_constraint_args(),
                 "cryptography",
                 "pyOpenSSL",
             ]
@@ -956,7 +978,18 @@ def _install_python_packages():
     # support.
     asyncua_spec = os.getenv("ASYNCUA_VERSION_SPEC", "asyncua>=1.2b2").strip()
     log.info("Installing asyncua (--pre enabled for 1.2b2+ / Python 3.14): %s", asyncua_spec)
-    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "--pre", asyncua_spec])
+    subprocess.check_call(
+        [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "--pre",
+            *_pip_constraint_args(),
+            asyncua_spec,
+        ]
+    )
 
     # Verify the installed asyncua satisfies the minimum version.
     try:
@@ -1222,8 +1255,8 @@ def _is_runtime_ready():
     npm = _get_npm_path()
     npx = _get_npx_path()
 
-    if IS_DOCKER:
-        # In Docker, packages are installed globally by Dockerfile; no venv needed.
+    if _ENV_IS_PRE_ISOLATED:
+        # Docker and GitHub Actions provide the Python isolation boundary.
         venv_ok = True
     else:
         venv_ok = VENV_DIR.exists()
@@ -1600,8 +1633,8 @@ def main():
     _warn_if_untested_python(latest_ver)
     log.info("Newest Python detected on this system: %s", latest_ver)
 
-    if IS_DOCKER:
-        log.info("Docker mode: skipping venv creation (packages installed by Dockerfile).")
+    if _ENV_IS_PRE_ISOLATED:
+        log.info("Pre-isolated Python environment detected. Skipping local venv creation.")
     else:
         _create_virtualenv(latest_cmd)
     _install_python_packages()

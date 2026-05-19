@@ -146,6 +146,7 @@ class TestDockerIgnore:
         for pattern in {
             ".venv/",
             ".venv_test/",
+            ".venv_ci/",
             "venv/",
             "venv_test/",
             "node_modules/",

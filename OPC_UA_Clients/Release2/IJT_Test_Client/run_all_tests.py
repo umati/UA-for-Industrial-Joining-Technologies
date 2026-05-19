@@ -54,12 +54,26 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 _HERE = Path(__file__).resolve().parent
 _PYPROJECT = _HERE / "pyproject.toml"
-# .venv_test is the test-runner venv (requirements.txt + requirements-dev.txt).
+_IS_CI = bool(os.getenv("CI"))
+_IS_DOCKER = os.getenv("IS_DOCKER") == "true"
+_IS_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+_ENV_IS_PRE_ISOLATED = _IS_DOCKER or _IS_GITHUB_ACTIONS
+
+
+def _target_venv_dir() -> Path:
+    if _IS_CI and not _ENV_IS_PRE_ISOLATED:
+        return _HERE / ".venv_ci"
+    return _HERE / ".venv_test"
+
+
+# .venv_test is the normal test-runner venv (requirements.txt + requirements-dev.txt).
+# .venv_ci mirrors CI locally when the root runner passes CI=1 via --ci-mode.
 # .venv is the runtime-only venv — kept separate so tests never alter the
 # launch environment and vice versa.
-VENV = _HERE / ".venv_test"
+VENV = _target_venv_dir()
 REQUIREMENTS = _HERE / "requirements.txt"
 _REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
+_PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
 _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest-live.xml"
 _DEFAULT_EXCEL_OUT = _RESULTS_DIR / "report.xlsx"
@@ -117,6 +131,10 @@ def _venv_python(venv_dir: Path) -> Path:
 
 def _venv_pip(venv_dir: Path) -> Path:
     return venv_dir / ("Scripts" if os.name == "nt" else "bin") / ("pip.exe" if os.name == "nt" else "pip")
+
+
+def _pip_constraint_args() -> list[str]:
+    return ["-c", str(_PYTHON_CONSTRAINTS)] if _PYTHON_CONSTRAINTS.exists() else []
 
 
 def _is_port_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
@@ -374,7 +392,15 @@ def _ensure_python_tool(*, module_name: str, pip_package: str, label: str) -> tu
 
     _log(f"  [setup] Installing missing tool: {label} ({pip_package}) ...")
     rc, output = _run(
-        [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", pip_package],
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            *_pip_constraint_args(),
+            pip_package,
+        ],
         timeout=300,
     )
     if rc == 0 and _tool_available(module_name):
@@ -406,7 +432,15 @@ def _ensure_cli_tool(
 
     _log(f"  [setup] Installing missing tool: {label} ({pip_package}) ...")
     rc, output = _run(
-        [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", pip_package],
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            *_pip_constraint_args(),
+            pip_package,
+        ],
         timeout=300,
     )
     has_tool = _binary_available(binary_name) or (module_name and _tool_available(module_name))
@@ -449,14 +483,15 @@ def _ensure_precommit_hooks() -> None:
 # Venv management
 # ---------------------------------------------------------------------------
 
-# Legacy venv directory names predating the .venv / .venv_test convention.
+# Legacy venv directory names predating the .venv / .venv_test / .venv_ci convention.
 _STALE_VENV_NAMES: tuple[str, ...] = ("venv", "venv_test", "env", "ENV", ".venv_backup")
 
 
 def _remove_stale_venvs() -> None:
     """Delete obsolete virtual-environment directories from the project root.
 
-    Canonical dirs (``.venv`` runtime, ``.venv_test`` tests) are never touched.
+    Canonical dirs (``.venv`` runtime, ``.venv_test`` tests, and ``.venv_ci``
+    local CI-mode) are never touched.
     Legacy aliases (for example ``.venv_wsl``) are also preserved.
     Everything in :data:`_STALE_VENV_NAMES` is removed so that users who pull
     fresh code start from a known-clean state.
@@ -483,7 +518,7 @@ def _requirements_hash() -> str:
     import hashlib
 
     h = hashlib.sha256()
-    for req in (REQUIREMENTS, _REQUIREMENTS_DEV):
+    for req in (_PYTHON_CONSTRAINTS, REQUIREMENTS, _REQUIREMENTS_DEV):
         if req.exists():
             h.update(req.read_bytes())
     return h.hexdigest()[:16]
@@ -517,7 +552,7 @@ def install_requirements() -> None:
         if req_file.exists():
             logger.info("Installing requirements from %s...", req_file.name)
             subprocess.check_call(
-                [pip, "install", "--quiet", "-r", str(req_file)],
+                [pip, "install", "--quiet", *_pip_constraint_args(), "-r", str(req_file)],
                 env=pip_env,
             )
         else:
@@ -1137,7 +1172,7 @@ def _step_semgrep() -> _StepResult:
             "--json",
             "--output",
             str(_RESULTS_DIR / "semgrep.json"),
-            "--exclude=.venv,.venv_test",
+            "--exclude=.venv,.venv_test,.venv_ci",
             "--exclude=test-results",
             ".",
         ],

@@ -16,6 +16,17 @@ STATE_DIR = PROJECT_ROOT / ".state"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _detect_repo_root(start_dir: Path) -> Path:
+    for candidate in [start_dir] + list(start_dir.parents):
+        if (candidate / "OPC_UA_Clients").exists() and (candidate / "OPC_UA_Servers").exists():
+            return candidate
+    return start_dir
+
+
+REPO_ROOT = _detect_repo_root(PROJECT_ROOT)
+PYTHON_CONSTRAINTS = REPO_ROOT / "constraints.txt"
+
+
 def _python_in_venv(venv_dir: Path) -> Path:
     return venv_dir / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
 
@@ -57,10 +68,14 @@ def _read_text(path: Path) -> str:
 def _fingerprint(requirement_files: list[Path], python_executable: Path) -> str:
     digest = hashlib.sha256()
     digest.update(str(python_executable).encode("utf-8"))
-    for req in requirement_files:
+    for req in [PYTHON_CONSTRAINTS, *requirement_files]:
         digest.update(req.name.encode("utf-8"))
         digest.update(_read_text(req).encode("utf-8"))
     return digest.hexdigest()
+
+
+def _pip_constraint_args() -> list[str]:
+    return ["-c", str(PYTHON_CONSTRAINTS)] if PYTHON_CONSTRAINTS.exists() else []
 
 
 def _load_state(state_file: Path) -> dict:
@@ -168,6 +183,7 @@ def _ensure_requirements(
                 "install",
                 "--disable-pip-version-check",
                 "--upgrade",
+                *_pip_constraint_args(),
                 "-r",
                 str(req),
             ],

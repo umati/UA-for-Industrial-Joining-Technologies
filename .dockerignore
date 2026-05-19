@@ -1,0 +1,33 @@
+# Keep repo-root Docker builds small. The Web Client and Browser CI image use
+# the repo root as build context so they can consume constraints.txt.
+*
+
+!constraints.txt
+
+!.github/
+.github/*
+!.github/docker/
+.github/docker/*
+!.github/docker/ijt-browser-ci/**
+
+!OPC_UA_Clients/
+OPC_UA_Clients/*
+!OPC_UA_Clients/Release2/
+OPC_UA_Clients/Release2/*
+!OPC_UA_Clients/Release2/IJT_Web_Client/**
+
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/.venv_test/
+**/.venv_ci/
+**/venv/
+**/venv_test/
+**/node_modules/
+**/logs/
+**/.state/
+**/tmp/
+**/test-results/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/

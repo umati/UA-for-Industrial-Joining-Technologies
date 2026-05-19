@@ -61,6 +61,11 @@ def test_ci_summary_step_invokes_extracted_module() -> None:
         "GH_BRANCH",
         "GH_RUN_NUMBER",
         "GH_RUN_URL",
+        "GH_REPOSITORY",
+        "GH_RUN_ID",
+        "GH_API_URL",
+        "GH_TOKEN",
+        "REPORT_JOB_NAME",
     }
 
 
@@ -161,6 +166,8 @@ def test_integration_summary_step_invokes_extracted_module() -> None:
         "WB_RESULT",
         "CON_RESULT",
         "CS_RESULT",
+        "CSM_RESULT",
+        "CONSM_RESULT",
         "GH_SHA",
         "GH_BRANCH",
         "GH_RUN_NUMBER",
@@ -198,6 +205,8 @@ def test_integration_dorny_actions_keep_check_runs_but_suppress_step_summaries()
         "Web Client — Local Live Suites",
         "Console Client — Live Tests",
         "C# Client — Live Tests (xUnit)",
+        "C# Client — Security Matrix",
+        "Console Client — Security Matrix",
     ]
 
     dorny_steps = [

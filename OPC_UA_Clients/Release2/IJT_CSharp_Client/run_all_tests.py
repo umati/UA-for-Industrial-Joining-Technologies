@@ -6,14 +6,19 @@ Usage:
     python run_all_tests.py              # full run (Phase 1 + Phase 2 if server reachable)
     python run_all_tests.py --phase1     # build + unit tests only (no server)
     python run_all_tests.py --phase2     # live integration tests only
+    python run_all_tests.py --security-matrix --security-matrix-cell A1
     python run_all_tests.py --help
 
 Environment variables:
     OPCUA_SERVER_URL         OPC UA server endpoint (default: opc.tcp://localhost:40451)
     OPCUA_SERVER_PORT        Alt: port only — constructs opc.tcp://localhost:PORT
     OPCUA_SIMULATOR_EXE      Path to OPC UA simulator EXE (auto-launched if server unreachable)
+    IJT_SUT                  Security matrix SUT selector: windows | linux
+    IJT_SECURITY_MATRIX_CELL Security matrix cell: A1 | A2
     SKIP_DOTNET_RESTORE=1    Skip `dotnet restore` (deps already restored in CI)
     IJT_CSHARP_CLEAN=1       Remove build artifacts (`bin/`, `obj/`) before and after run
+    IJT_PRESERVE_TEST_ARTIFACTS=1
+                             Preserve generated test artifacts and skip runner cleanup
 
 Flags:
     --junit-xml=PATH         Write combined JUnit XML (default: test-results/run_all_tests.xml)
@@ -49,12 +54,17 @@ _MIN_DOTNET_MAJOR = 10
 _COVERAGE_THRESHOLD = 95.0
 _PHASE1_TEST_FILTER = "FullyQualifiedName!~LiveIntegration"
 _PHASE2_TEST_FILTER = "FullyQualifiedName~LiveIntegration"
+_SECURITY_MATRIX_TEST_FILTER = "Category=SecurityMatrix"
 
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 _SERVER_NATIVE_PORT = 40451  # server binary default — used for fallback pre-flight
 _OPCUA_SERVER_PORT = 40464  # dedicated port for C# client test isolation (copy-and-patch)
+_SECURITY_MATRIX_CELLS = {
+    "A1": ("windows", 40475),
+    "A2": ("linux", 40476),
+}
 _WELL_KNOWN_SIMULATOR_PATHS = [
     _REPO_ROOT
     / "OPC_UA_Servers"
@@ -207,6 +217,8 @@ def _run(
     merged_env.setdefault("DOTNET_NOLOGO", "1")
     merged_env.setdefault("DOTNET_ADD_GLOBAL_TOOLS_TO_PATH", "0")
     merged_env.setdefault("DOTNET_GENERATE_ASPNET_CERTIFICATE", "false")
+    merged_env.setdefault("MSBUILDDISABLENODEREUSE", "1")
+    merged_env.setdefault("UseSharedCompilation", "false")
     result = subprocess.run(
         cmd,
         cwd=str(cwd),
@@ -407,6 +419,30 @@ def _step_build() -> StepResult:
     if rc != 0:
         return StepResult(label, "PHASE 1", "FAIL", detail, dur)
     return StepResult(label, "PHASE 1", "PASS", detail, dur)
+
+
+def _step_build_test_project(phase: str = "MATRIX") -> StepResult:
+    label = "dotnet build (tests)"
+    t0 = time.monotonic()
+    rc, stdout = _run(
+        [
+            "dotnet",
+            "build",
+            str(_TEST_PROJ),
+            "--no-restore",
+            "--configuration",
+            "Release",
+        ],
+        capture_stdout=True,
+    )
+    if stdout:
+        print(stdout, end="")
+    dur = time.monotonic() - t0
+    warnings = _parse_build_warnings(stdout)
+    detail = f"{warnings} warnings"
+    if rc != 0:
+        return StepResult(label, phase, "FAIL", detail, dur)
+    return StepResult(label, phase, "PASS", detail, dur)
 
 
 def _step_format() -> StepResult:
@@ -690,6 +726,73 @@ def _step_live_tests(server_url: str, verbose: bool = False) -> StepResult:
     return StepResult(label, "PHASE 2", "PASS", detail, dur, passed, failed, skipped, total)
 
 
+def _step_security_matrix_tests(
+    cell: str,
+    sut: str,
+    port: int,
+    verbose: bool = False,
+) -> StepResult:
+    label = f"Security Matrix {cell} ({sut})"
+    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    trx_path = _RESULTS_DIR / "security-matrix.trx"
+    server_url = f"opc.tcp://localhost:{port}"
+    t0 = time.monotonic()
+    verbosity = ["--verbosity", "normal"] if verbose else ["--verbosity", "minimal"]
+    rc, stdout = _run(
+        [
+            "dotnet",
+            "test",
+            str(_TEST_PROJ),
+            "--no-build",
+            "--no-restore",
+            "--configuration",
+            "Release",
+            *verbosity,
+            "--filter",
+            _SECURITY_MATRIX_TEST_FILTER,
+            "--logger",
+            "trx;LogFileName=security-matrix.trx",
+            "--logger",
+            "console;verbosity=normal",
+            "--results-directory",
+            str(_RESULTS_DIR),
+            "--blame-hang",
+            "--blame-hang-timeout",
+            "120s",
+        ],
+        env={
+            "IJT_AUTO_ACCEPT": "true",
+            "IJT_PHASE1_ONLY": "false",
+            "IJT_SUT": sut,
+            "IJT_SECURITY_MATRIX_CELL": cell,
+            "OPCUA_SERVER_PORT": str(port),
+            "OPCUA_SERVER_URL": server_url,
+            "IJT_SERVER_URL": server_url,
+        },
+        capture_stdout=True,
+    )
+    if stdout:
+        print(stdout, end="")
+    dur = time.monotonic() - t0
+    passed, failed, skipped, total = _parse_trx(trx_path)
+    detail = f"{passed}/{total}" if not skipped else f"{passed}/{total}, {skipped} skipped"
+    if rc != 0 or failed > 0:
+        return StepResult(label, "MATRIX", "FAIL", detail, dur, passed, failed, skipped, total)
+    if passed == 0:
+        return StepResult(
+            label,
+            "MATRIX",
+            "FAIL",
+            f"{detail} (no security matrix tests executed)",
+            dur,
+            passed,
+            failed,
+            skipped,
+            total,
+        )
+    return StepResult(label, "MATRIX", "PASS", detail, dur, passed, failed, skipped, total)
+
+
 def _enforce_managed_live_coverage(result: StepResult, port_override: str) -> StepResult:
     """Fail runner-managed live testing when the fixture skipped every test."""
     if port_override and result.status == "PASS" and result.passed == 0 and result.total > 0:
@@ -723,6 +826,21 @@ def _parse_args() -> argparse.Namespace:
     group = p.add_mutually_exclusive_group()
     group.add_argument("--phase1", action="store_true", help="Build + unit tests only (no server)")
     group.add_argument("--phase2", action="store_true", help="Live integration tests only")
+    group.add_argument(
+        "--security-matrix",
+        action="store_true",
+        help="Run one C# security-flow matrix cell (A1/A2)",
+    )
+    p.add_argument(
+        "--security-matrix-cell",
+        choices=sorted(_SECURITY_MATRIX_CELLS),
+        help="Security matrix cell to run (A1=Windows SUT, A2=Linux Docker SUT)",
+    )
+    p.add_argument(
+        "--security-matrix-sut",
+        choices=["windows", "linux"],
+        help="SUT override for --security-matrix; defaults from the selected cell",
+    )
     p.add_argument(
         "--verbose",
         "-v",
@@ -743,31 +861,93 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _resolve_security_matrix_target(args: argparse.Namespace) -> tuple[str, str, int]:
+    cell = (
+        (args.security_matrix_cell or os.environ.get("IJT_SECURITY_MATRIX_CELL", ""))
+        .strip()
+        .upper()
+    )
+    sut = (args.security_matrix_sut or os.environ.get("IJT_SUT", "")).strip().lower()
+
+    if not cell:
+        cell = "A2" if sut == "linux" else "A1"
+
+    if cell not in _SECURITY_MATRIX_CELLS:
+        raise ValueError(f"Unsupported security matrix cell: {cell}")
+
+    default_sut, default_port = _SECURITY_MATRIX_CELLS[cell]
+    if not sut:
+        sut = default_sut
+    if sut not in {"windows", "linux"}:
+        raise ValueError(f"Unsupported security matrix SUT: {sut}")
+
+    port_env = os.environ.get("OPCUA_SERVER_PORT", "").strip()
+    port = default_port
+    if port_env:
+        with contextlib.suppress(ValueError):
+            port = int(port_env)
+
+    return cell, sut, port
+
+
 def main() -> int:
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     args = _parse_args()
     clean_build_artifacts = args.clean or (
         os.environ.get("IJT_CSHARP_CLEAN", "0").strip().lower() in {"1", "true", "yes"}
     )
-    _cleanup_caches(
-        _PROJECT_DIR, include_build_artifacts=clean_build_artifacts
-    )  # pre-run: clear stale caches from interrupted runs
+    preserve_artifacts = _preserve_test_artifacts()
+    if not preserve_artifacts:
+        _cleanup_caches(
+            _PROJECT_DIR, include_build_artifacts=clean_build_artifacts
+        )  # pre-run: clear stale caches from interrupted runs
 
-    run_phase1 = not args.phase2
-    run_phase2 = not args.phase1
+    run_security_matrix = args.security_matrix
+    run_phase1 = not args.phase2 and not run_security_matrix
+    run_phase2 = not args.phase1 and not run_security_matrix
 
     _banner("IJT C# Client — Test Suite")
 
     if not _check_prerequisites():
         return 1
 
-    shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
+    if not preserve_artifacts:
+        shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     results: list[StepResult] = []
     t_start = time.monotonic()
 
     skip_restore = os.environ.get("SKIP_DOTNET_RESTORE", "0").strip() in {"1", "true", "yes"}
+
+    # -- Security matrix ------------------------------------------------------
+    if run_security_matrix:
+        try:
+            cell, sut, port = _resolve_security_matrix_target(args)
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+        if not skip_restore:
+            r = _step_restore()
+            results.append(r)
+            _row(r.phase, r.label, r.status, r.detail)
+            if r.status == "FAIL":
+                _footer(False, time.monotonic() - t_start, results)
+                _write_junit_xml(_PROJECT_DIR / args.junit_xml, results)
+                return 1
+
+        r = _step_build_test_project()
+        results.append(r)
+        _row(r.phase, r.label, r.status, r.detail)
+        if r.status == "FAIL":
+            _footer(False, time.monotonic() - t_start, results)
+            _write_junit_xml(_PROJECT_DIR / args.junit_xml, results)
+            return 1
+
+        r = _step_security_matrix_tests(cell, sut, port, verbose=args.verbose)
+        results.append(r)
+        _row(r.phase, r.label, r.status, r.detail)
 
     # -- Phase 1 --------------------------------------------------------------
     if run_phase1:
@@ -893,8 +1073,17 @@ def main() -> int:
 
     _write_junit_xml(_PROJECT_DIR / args.junit_xml, results)
 
-    _cleanup_caches(_PROJECT_DIR, include_build_artifacts=clean_build_artifacts)
+    if not preserve_artifacts:
+        _cleanup_caches(_PROJECT_DIR, include_build_artifacts=clean_build_artifacts)
     return 1 if any_fail else 0
+
+
+def _preserve_test_artifacts() -> bool:
+    return os.environ.get("IJT_PRESERVE_TEST_ARTIFACTS", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
 
 def _force_rmtree(path: Path) -> None:

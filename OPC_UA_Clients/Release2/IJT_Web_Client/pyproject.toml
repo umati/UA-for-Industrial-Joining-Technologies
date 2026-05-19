@@ -22,13 +22,13 @@ markers = [
 ]
 
 [tool.bandit]
-exclude_dirs = [".venv", ".venv_test", ".venv_wsl", ".venv_wsl_backup", "tests", "node_modules", "__pycache__", ".git", ".state"]
+exclude_dirs = [".venv", ".venv_test", ".venv_ci", ".venv_wsl", ".venv_wsl_backup", "tests", "node_modules", "__pycache__", ".git", ".state"]
 
 [tool.vulture]
 # Vulture finds dead code in source. Tests are excluded because pytest fixture
 # injection makes parameter names appear "unused" — they are not; pytest wires
 # them by name. Scanning tests adds only false positives with no value.
-exclude = ["tests/", ".venv/", ".venv_test/", "tmp/", "test-results/", "logs/"]
+exclude = ["tests/", ".venv/", ".venv_test/", ".venv_ci/", "tmp/", "test-results/", "logs/"]
 ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
 
 [tool.interrogate]
@@ -39,6 +39,7 @@ exclude = [
     "node_modules/*",
     ".venv/*",
     ".venv_test/*",
+    ".venv_ci/*",
     "tmp/*",
     "test-results/*",
     ".state/*",
@@ -85,6 +86,7 @@ omit = [
     "tests/python/_asyncua_compat.py",
     ".venv/*",
     ".venv_test/*",
+    ".venv_ci/*",
 ]
 
 [tool.coverage.report]
@@ -114,7 +116,7 @@ cache_dir = "tmp/mypy-cache"
 
 [tool.pylint.main]
 # Exclude pyfakefs/pytest bookkeeping dirs that may be locked on Windows.
-ignore-paths = ["^pytest-cache-files-.*", "^\\.venv.*", "^\\.venv_test.*"]
+ignore-paths = ["^pytest-cache-files-.*", "^\\.venv.*", "^\\.venv_test.*", "^\\.venv_ci.*"]
 
 [tool.pylint.messages-control]
 disable = [

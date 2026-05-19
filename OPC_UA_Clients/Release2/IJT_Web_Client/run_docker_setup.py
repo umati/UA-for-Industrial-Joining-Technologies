@@ -19,14 +19,25 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 SETUP_SCRIPT = PROJECT_ROOT / "setup_project.py"
+DOCKERFILE = PROJECT_ROOT / "Dockerfile"
+
+
+def detect_repo_root(start_dir: Path) -> Path:
+    for candidate in [start_dir] + list(start_dir.parents):
+        if (candidate / "OPC_UA_Clients").exists() and (candidate / "OPC_UA_Servers").exists():
+            return candidate
+    return start_dir
+
+
+REPO_ROOT = detect_repo_root(PROJECT_ROOT)
 
 CONTAINER_NAME = "ijt_web_client"
 IMAGE_NAME = "ijt_web_client"
 
 
-def run_command(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
+def run_command(cmd: list[str], check: bool = True, cwd: Path | None = None) -> subprocess.CompletedProcess:
     print("Running:", " ".join(str(c) for c in cmd))
-    return subprocess.run(cmd, check=check)
+    return subprocess.run(cmd, check=check, cwd=str(cwd) if cwd else None)
 
 
 def docker_available() -> bool:
@@ -65,15 +76,15 @@ def run_docker(setup_args: list[str], follow_logs: bool = True) -> None:
     run_command(["docker", "rmi", IMAGE_NAME], check=False)
 
     print("Cleaning stale docker resources...")
-    run_command(compose_cmd + ["down", "-v"], check=False)
+    run_command(compose_cmd + ["down", "-v"], check=False, cwd=PROJECT_ROOT)
     run_command(["docker", "image", "prune", "-f"], check=False)
     run_command(["docker", "volume", "prune", "-f"], check=False)
 
     print("Building docker image...")
-    run_command(["docker", "build", "--no-cache", "-t", IMAGE_NAME, str(PROJECT_ROOT)])
+    run_command(["docker", "build", "--no-cache", "-f", str(DOCKERFILE), "-t", IMAGE_NAME, str(REPO_ROOT)])
 
     print("Starting docker compose stack...")
-    run_command(compose_cmd + ["up", "-d"])
+    run_command(compose_cmd + ["up", "-d"], cwd=PROJECT_ROOT)
 
     if follow_logs:
         print("Streaming container logs (Ctrl+C to stop following)...")

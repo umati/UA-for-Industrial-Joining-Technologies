@@ -13,6 +13,9 @@
 #   live-webclient-browser Web Client           Linux ubuntu-latest: web-client-e2e-* matrix; runs inside owned ghcr.io/.../ijt-browser-ci image (digest pinned in .github/docker/ijt-browser-ci/image-pin.json) with --network=none
 #   live-console         Console Client         Windows: Console Client live tests (port 40461)
 #   csharp-live          C# Client              Windows: xUnit live tests (port 40464) - nightly
+#   crypto-path-filter   Security Matrix        Decides whether crypto/security matrix jobs should run
+#   csharp-security-matrix C# Client            A1 Windows + A2 Linux Docker security-flow matrix
+#   console-security-matrix Console Client      B1 Windows + B2 Linux Docker security-flow matrix
 #   report               Combined summary                 Always runs after all jobs
 # (zizmor promoted to ci.yml — removed from integration)
 #
@@ -31,9 +34,15 @@ on:
   push:
     branches: [main]
     paths:
+      - '.dockerignore'
+      - 'constraints.txt'
       # OPC UA Server — code/binary/Dockerfile/test changes (docs-only changes excluded)
       - 'OPC_UA_Servers/Release2/*.zip'
+      - 'OPC_UA_Servers/Release2/*.json'
+      - 'OPC_UA_Servers/Release2/run_all_tests.py'
+      - 'OPC_UA_Servers/Release2/security_matrix.users.yaml'
       - 'OPC_UA_Servers/Release2/Dockerfile'
+      - 'OPC_UA_Servers/Release2/docker-compose.yml'
       - 'OPC_UA_Servers/Release2/tests/**'
       - 'OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/**'
       - 'OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_Linux/**'
@@ -41,10 +50,10 @@ on:
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
       # Test Client — every change is an OPC UA conformance test change
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
-      # Console Client — live tests run here (not in fast CI)
-      - 'OPC_UA_Clients/Release2/IJT_Console_Client/*.py'
-      - 'OPC_UA_Clients/Release2/IJT_Console_Client/tests/live/**'
-      - 'OPC_UA_Clients/Release2/IJT_Console_Client/requirements*.txt'
+      # Console Client — live/security matrix tests run here (not in fast CI)
+      - 'OPC_UA_Clients/Release2/IJT_Console_Client/**'
+      # C# Client — security matrix and live tests
+      - 'OPC_UA_Clients/Release2/IJT_CSharp_Client/**'
       # Browser CI image pin — the live browser job consumes this reviewed digest
       - '.github/docker/ijt-browser-ci/image-pin.json'
       # Reporting code — summary generation is part of Integration correctness
@@ -55,18 +64,23 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - '.dockerignore'
+      - 'constraints.txt'
       # Same paths as push — run live tests on PRs that touch server/client code
       # so regressions are caught before merge, not after.
       - 'OPC_UA_Servers/Release2/*.zip'
+      - 'OPC_UA_Servers/Release2/*.json'
+      - 'OPC_UA_Servers/Release2/run_all_tests.py'
+      - 'OPC_UA_Servers/Release2/security_matrix.users.yaml'
       - 'OPC_UA_Servers/Release2/Dockerfile'
+      - 'OPC_UA_Servers/Release2/docker-compose.yml'
       - 'OPC_UA_Servers/Release2/tests/**'
       - 'OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/**'
       - 'OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_Linux/**'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
-      - 'OPC_UA_Clients/Release2/IJT_Console_Client/*.py'
-      - 'OPC_UA_Clients/Release2/IJT_Console_Client/tests/live/**'
-      - 'OPC_UA_Clients/Release2/IJT_Console_Client/requirements*.txt'
+      - 'OPC_UA_Clients/Release2/IJT_Console_Client/**'
+      - 'OPC_UA_Clients/Release2/IJT_CSharp_Client/**'
       # Browser CI image pin — the live browser job consumes this reviewed digest
       - '.github/docker/ijt-browser-ci/image-pin.json'
       # Reporting code — summary generation is part of Integration correctness
@@ -87,6 +101,53 @@ concurrency:
 
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Security Matrix Path Filter
+  #   Runs the security matrix only for nightly/manual runs or PRs/pushes that
+  #   touch crypto-relevant server/client paths.
+  # ───────────────────────────────────────────────────────────────────────────
+  crypto-path-filter:
+    name: "Security Matrix Path Filter"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      run_security_matrix: ${{ steps.filter.outputs.run_security_matrix }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - id: filter
+        name: Detect crypto-relevant changes
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "run_security_matrix=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          base="${{ github.event.pull_request.base.sha || github.event.before || '' }}"
+          head="${{ github.event.pull_request.head.sha || github.sha }}"
+
+          if [[ -n "$base" ]] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            changed="$(git diff --name-only "$base" "$head")"
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+            changed="$(git diff --name-only HEAD^ HEAD)"
+          else
+            changed="$(git show --name-only --format= HEAD)"
+          fi
+
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(\.dockerignore|constraints\.txt|OPC_UA_Servers/Release2/.*\.zip|OPC_UA_Servers/Release2/.*\.json|OPC_UA_Servers/Release2/run_all_tests\.py|OPC_UA_Servers/Release2/security_matrix\.users\.yaml|OPC_UA_Servers/Release2/Dockerfile|OPC_UA_Servers/Release2/docker-compose\.yml|OPC_UA_Servers/Release2/tests/|OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/|OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_Linux/|OPC_UA_Clients/Release2/IJT_CSharp_Client/|OPC_UA_Clients/Release2/IJT_Console_Client/|\.github/workflows/integration\.yml)'; then
+            echo "run_security_matrix=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_security_matrix=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # ───────────────────────────────────────────────────────────────────────────
   # OPC UA Server - Docker Smoke
@@ -190,7 +251,7 @@ jobs:
       - name: Install smoke test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
+          pip install -c "${{ github.workspace }}/constraints.txt" -r OPC_UA_Servers/Release2/tests/requirements.txt
 
       - name: Run smoke test (10 checks)
         run: |
@@ -250,7 +311,8 @@ jobs:
       - name: Build Web Client Docker image (test target)
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
         with:
-          context: OPC_UA_Clients/Release2/IJT_Web_Client
+          context: .
+          file: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
           target: test
           tags: ijt-web-client:test-ci
           load: true
@@ -286,7 +348,8 @@ jobs:
       - name: Build Web Client Docker image (production target)
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
         with:
-          context: OPC_UA_Clients/Release2/IJT_Web_Client
+          context: .
+          file: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
           target: production
           tags: ijt-web-client:prod-ci
           load: true
@@ -342,6 +405,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install `
+            -c "${{ github.workspace }}/constraints.txt" `
             -r OPC_UA_Servers/Release2/tests/requirements.txt `
             -r OPC_UA_Clients/Release2/IJT_Test_Client/requirements.txt `
             -r OPC_UA_Clients/Release2/IJT_Test_Client/requirements-dev.txt
@@ -557,6 +621,12 @@ jobs:
             while IFS= read -r changed; do
               [[ -n "$changed" ]] || continue
               case "$changed" in
+                .dockerignore)
+                  image_build_logic_changed=true
+                  ;;
+                constraints.txt)
+                  dependency_inputs_changed=true
+                  ;;
                 OPC_UA_Clients/Release2/IJT_Web_Client/package.json)
                   dependency_inputs_changed=true
                   ;;
@@ -768,6 +838,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install `
+            -c "${{ github.workspace }}/constraints.txt" `
             -r OPC_UA_Clients/Release2/IJT_Console_Client/requirements.txt `
             -r OPC_UA_Clients/Release2/IJT_Console_Client/requirements-dev.txt
 
@@ -964,6 +1035,135 @@ jobs:
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
+  # C# Client - Security Matrix (A1/A2)
+  #   A1: C# client against Windows server package on port 40475.
+  #   A2: C# client against Linux Docker server package on port 40476.
+  #   These jobs are intended to become required checks after Phase 1 evidence
+  #   and the deferred branch-ruleset update.
+  # ───────────────────────────────────────────────────────────────────────────
+  csharp-security-matrix:
+    name: "C# Security Matrix - ${{ matrix.cell }} (${{ matrix.sut }})"
+    needs: crypto-path-filter
+    if: needs.crypto-path-filter.outputs.run_security_matrix == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cell: A1
+            sut: windows
+            port: 40475
+            os: windows-latest
+          - cell: A2
+            sut: linux
+            port: 40476
+            os: ubuntu-latest
+    defaults:
+      run:
+        working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.14"
+
+      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7  # v5
+        with:
+          dotnet-version: '10.x'
+
+      - name: Extract Windows server ZIP
+        if: matrix.sut == 'windows'
+        working-directory: ${{ github.workspace }}
+        shell: pwsh
+        run: |
+          Expand-Archive `
+            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+            -DestinationPath "OPC_UA_Servers\Release2\" `
+            -Force
+
+      - name: Run C# security matrix cell
+        env:
+          IJT_SUT: ${{ matrix.sut }}
+          IJT_SECURITY_MATRIX_CELL: ${{ matrix.cell }}
+          IJT_DOCKER_COMPOSE_BUILD: "1"
+          OPCUA_SERVER_PORT: ${{ matrix.port }}
+          OPCUA_SERVER_URL: opc.tcp://localhost:${{ matrix.port }}
+          IJT_SERVER_URL: opc.tcp://localhost:${{ matrix.port }}
+        run: python run_all_tests.py --security-matrix --security-matrix-cell ${{ matrix.cell }} --security-matrix-sut ${{ matrix.sut }} --junit-xml test-results/security-matrix-${{ matrix.cell }}.xml
+
+      - name: Upload C# security matrix artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        if: always()
+        with:
+          name: results-csharp-security-matrix-${{ matrix.cell }}
+          path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
+          retention-days: 14
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Console Client - Security Matrix (B1/B2)
+  #   B1: Console client against Windows server package on port 40477.
+  #   B2: Console client against Linux Docker server package on port 40478.
+  #   These jobs are intended to become required checks after Phase 1 evidence
+  #   and the deferred branch-ruleset update.
+  # ───────────────────────────────────────────────────────────────────────────
+  console-security-matrix:
+    name: "Console Security Matrix - ${{ matrix.cell }} (${{ matrix.sut }})"
+    needs: crypto-path-filter
+    if: needs.crypto-path-filter.outputs.run_security_matrix == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cell: B1
+            sut: windows
+            port: 40477
+            os: windows-latest
+          - cell: B2
+            sut: linux
+            port: 40478
+            os: ubuntu-latest
+    defaults:
+      run:
+        working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.14"
+
+      - name: Run Console security matrix cell
+        env:
+          IJT_SUT: ${{ matrix.sut }}
+          IJT_SECURITY_MATRIX_CELL: ${{ matrix.cell }}
+          IJT_DOCKER_COMPOSE_BUILD: "1"
+          OPCUA_SERVER_PORT: ${{ matrix.port }}
+          OPCUA_SERVER_URL: opc.tcp://localhost:${{ matrix.port }}
+        run: python run_all_tests.py --security-matrix --security-matrix-cell ${{ matrix.cell }} --security-matrix-sut ${{ matrix.sut }} --junit-xml test-results/security-matrix-${{ matrix.cell }}.xml
+
+      - name: Upload Console security matrix artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        if: always()
+        with:
+          name: results-console-security-matrix-${{ matrix.cell }}
+          path: OPC_UA_Clients/Release2/IJT_Console_Client/test-results/
+          retention-days: 14
+
+  # ───────────────────────────────────────────────────────────────────────────
   # Combined Report — always runs after all jobs.
   # Writes the root-level summary table to the Actions Summary page.
   # ───────────────────────────────────────────────────────────────────────────
@@ -971,7 +1171,7 @@ jobs:
     name: "📋 System Tests Summary"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [server-smoke-docker, webclient-docker, int-testclient, live-webclient, live-webclient-browser, live-console, csharp-live]
+    needs: [server-smoke-docker, webclient-docker, int-testclient, live-webclient, live-webclient-browser, live-console, csharp-live, csharp-security-matrix, console-security-matrix]
     if: always()
     permissions:
       actions: read
@@ -1076,6 +1276,30 @@ jobs:
           fail-on-error: false
           fail-on-empty: false
 
+      - name: "Report — C# Security Matrix"
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
+        with:
+          name: "C# Client — Security Matrix"
+          path: all-results/results-csharp-security-matrix-*/security-matrix-*.xml
+          reporter: java-junit
+          use-actions-summary: false
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: "Report — Console Security Matrix"
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
+        with:
+          name: "Console Client — Security Matrix"
+          path: all-results/results-console-security-matrix-*/security-matrix-*.xml
+          reporter: java-junit
+          use-actions-summary: false
+          fail-on-error: false
+          fail-on-empty: false
+
       - name: Generate Summary Table
         env:
           SD_RESULT:   ${{ needs.server-smoke-docker.result }}
@@ -1085,6 +1309,8 @@ jobs:
           WB_RESULT:   ${{ needs.live-webclient-browser.result }}
           CON_RESULT:  ${{ needs.live-console.result }}
           CS_RESULT:   ${{ needs.csharp-live.result }}
+          CSM_RESULT:  ${{ needs.csharp-security-matrix.result }}
+          CONSM_RESULT: ${{ needs.console-security-matrix.result }}
           GH_SHA:         ${{ github.sha }}
           GH_BRANCH:      ${{ github.ref_name }}
           GH_RUN_NUMBER:  ${{ github.run_number }}

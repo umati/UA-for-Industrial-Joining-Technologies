@@ -1,4 +1,5 @@
 using IJT_CSharp_Client.Configuration;
+using Opc.Ua;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Configuration;
@@ -10,6 +11,15 @@ public class ClientConfigTests
         Environment.SetEnvironmentVariable("IJT_SERVER_URL", null);
         Environment.SetEnvironmentVariable("IJT_APP_NAME", null);
         Environment.SetEnvironmentVariable("IJT_AUTO_ACCEPT", null);
+        Environment.SetEnvironmentVariable("IJT_USE_SECURITY_FOR_DISCOVERY", null);
+        Environment.SetEnvironmentVariable("IJT_SECURITY_POLICY_URI", null);
+        Environment.SetEnvironmentVariable("IJT_MESSAGE_SECURITY_MODE", null);
+        Environment.SetEnvironmentVariable("IJT_USER_IDENTITY_KIND", null);
+        Environment.SetEnvironmentVariable("IJT_USERNAME", null);
+        Environment.SetEnvironmentVariable("IJT_PASSWORD", null);
+        Environment.SetEnvironmentVariable("IJT_X509_IDENTITY_CERT", null);
+        Environment.SetEnvironmentVariable("IJT_X509_IDENTITY_KEY", null);
+        Environment.SetEnvironmentVariable("IJT_PKI_ROOT", null);
     }
 
     [Fact]
@@ -24,6 +34,10 @@ public class ClientConfigTests
         Assert.Equal("IJT CSharp Client", config.ApplicationName);
         Assert.False(config.AutoAcceptServerCertificate);
         Assert.False(config.CacheEndpointDiscovery);
+        Assert.False(config.UseSecurityPolicyForEndpointDiscovery);
+        Assert.Null(config.SecurityPolicyUri);
+        Assert.Null(config.MessageSecurityMode);
+        Assert.Equal(UserIdentityKind.Anonymous, config.UserIdentityKind);
     }
 
     [Fact]
@@ -100,5 +114,34 @@ public class ClientConfigTests
         var config = new ClientConfig { CacheEndpointDiscovery = true };
 
         Assert.True(config.CacheEndpointDiscovery);
+    }
+
+    [Fact]
+    public void FromEnvironment_SecurityOverrides_AreParsed()
+    {
+        ClearEnvironment();
+        Environment.SetEnvironmentVariable("IJT_USE_SECURITY_FOR_DISCOVERY", "true");
+        Environment.SetEnvironmentVariable("IJT_SECURITY_POLICY_URI", SecurityPolicies.Basic256Sha256);
+        Environment.SetEnvironmentVariable("IJT_MESSAGE_SECURITY_MODE", "SignAndEncrypt");
+        Environment.SetEnvironmentVariable("IJT_USER_IDENTITY_KIND", "UserName");
+        Environment.SetEnvironmentVariable("IJT_USERNAME", "user1");
+        Environment.SetEnvironmentVariable("IJT_PASSWORD", "password");
+        Environment.SetEnvironmentVariable("IJT_PKI_ROOT", "C:\\Temp\\ijt-pki");
+        try
+        {
+            var config = ClientConfig.FromEnvironment();
+
+            Assert.True(config.UseSecurityPolicyForEndpointDiscovery);
+            Assert.Equal(SecurityPolicies.Basic256Sha256, config.SecurityPolicyUri);
+            Assert.Equal(MessageSecurityMode.SignAndEncrypt, config.MessageSecurityMode);
+            Assert.Equal(UserIdentityKind.UserName, config.UserIdentityKind);
+            Assert.Equal("user1", config.UserName);
+            Assert.Equal("password", config.Password);
+            Assert.Equal("C:\\Temp\\ijt-pki", config.PkiRootPath);
+        }
+        finally
+        {
+            ClearEnvironment();
+        }
     }
 }

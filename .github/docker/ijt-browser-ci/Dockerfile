@@ -110,16 +110,19 @@ RUN mkdir -p /opt/ijt-browser-ci/home \
 #    Client requirements. PIP_FIND_LINKS at runtime points here, plus
 #    PIP_NO_INDEX=1, so the runtime venv-create + pip install is offline.
 # ---------------------------------------------------------------------------
+COPY constraints.txt /tmp/constraints.txt
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt /tmp/requirements.txt
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt /tmp/requirements-dev.txt
 RUN python -m pip install --upgrade pip \
  && python -m pip wheel --pre \
+        -c /tmp/constraints.txt \
         -r /tmp/requirements.txt \
         -r /tmp/requirements-dev.txt \
         --wheel-dir /opt/ijt-browser-ci/pip-wheelhouse \
  && python -m pip install --pre \
         --no-index \
         --find-links /opt/ijt-browser-ci/pip-wheelhouse \
+        -c /tmp/constraints.txt \
         -r /tmp/requirements.txt \
         -r /tmp/requirements-dev.txt \
  && python -c "import pytest, pytest_asyncio, pytest_timeout, asyncua, websockets, dotenv, aiofiles, pytz; print('python deps OK')"

@@ -4,9 +4,12 @@ import os
 import socket
 import time
 import traceback
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
-from asyncua import Client
+from asyncua import Client, ua
+from asyncua.crypto import security_policies
 from asyncua.ua.uaerrors import UaError
 
 from event_handler import EventHandler
@@ -27,9 +30,86 @@ logging.getLogger("asyncua").setLevel(logging.CRITICAL)
 logging.getLogger("asyncua.client.ua_client").setLevel(logging.CRITICAL)
 
 
+UserIdentityKind = Literal["anonymous", "username", "x509"]
+
+
+@dataclass(frozen=True)
+class OPCUASecurityConfig:
+    security_policy_uri: str | None = None
+    security_mode: ua.MessageSecurityMode | None = None
+    client_certificate_path: Path | None = None
+    client_private_key_path: Path | None = None
+    user_identity: UserIdentityKind = "anonymous"
+    username: str | None = None
+    password: str | None = None
+    x509_certificate_path: Path | None = None
+    x509_private_key_path: Path | None = None
+
+
+_SECURITY_POLICY_CLASSES = {
+    security_policies.SecurityPolicyBasic256Sha256.URI: security_policies.SecurityPolicyBasic256Sha256,
+    security_policies.SecurityPolicyAes128Sha256RsaOaep.URI: security_policies.SecurityPolicyAes128Sha256RsaOaep,
+    security_policies.SecurityPolicyAes256Sha256RsaPss.URI: security_policies.SecurityPolicyAes256Sha256RsaPss,
+}
+
+
+def validate_user_token_policy(
+    endpoint: ua.EndpointDescription,
+    token_type: ua.UserTokenType,
+    token_name: str,
+    expected_security_policy_uri: str,
+) -> None:
+    token = next(
+        (policy for policy in endpoint.UserIdentityTokens if policy.TokenType == token_type),
+        None,
+    )
+    if token is None:
+        raise ValueError(f"Selected endpoint does not advertise a {token_name} user-token policy.")
+
+    if expected_security_policy_uri == security_policies.SecurityPolicyNone.URI:
+        raise ValueError(f"{token_name} user-token policy requires a secure endpoint policy.")
+
+    token_policy_uri = token.SecurityPolicyUri or ""
+    if token_policy_uri == security_policies.SecurityPolicyNone.URI:
+        raise ValueError(
+            f"{token_name} user-token policy must not use SecurityPolicy#None. "
+            "Rebuild the IJT simulator package from source that registers concrete "
+            f"{token_name} token policies for secure endpoints."
+        )
+    if token_policy_uri and token_policy_uri != expected_security_policy_uri:
+        raise ValueError(
+            f"{token_name} user-token policy URI "
+            f"{token_policy_uri!r} does not match endpoint policy {expected_security_policy_uri!r}."
+        )
+
+
+def validate_x509_user_token_policy(endpoint: ua.EndpointDescription, expected_security_policy_uri: str) -> None:
+    validate_user_token_policy(
+        endpoint,
+        ua.UserTokenType.Certificate,
+        "X509 Certificate",
+        expected_security_policy_uri,
+    )
+
+
+def validate_username_user_token_policy(endpoint: ua.EndpointDescription, expected_security_policy_uri: str) -> None:
+    validate_user_token_policy(
+        endpoint,
+        ua.UserTokenType.UserName,
+        "UserName",
+        expected_security_policy_uri,
+    )
+
+
+def _preserve_test_artifacts() -> bool:
+    return os.environ.get("IJT_PRESERVE_TEST_ARTIFACTS", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
 class OPCUAClient:
-    def __init__(self, server_url: str) -> None:
+    def __init__(self, server_url: str, security_config: OPCUASecurityConfig | None = None) -> None:
         self.server_url = server_url
+        self.security_config = security_config or OPCUASecurityConfig()
+        self._security_configured = False
         # 60-second service-call timeout — methods like SimulateJobResult fire
         # many separate OPC UA publish messages before returning; the default
         # asyncua 4-second window is far too short.
@@ -52,6 +132,7 @@ class OPCUAClient:
     async def connect(self):
         await self.clear_old_logs()
         self.setup_client_metadata()
+        await self.configure_security()
 
         max_attempts = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT)))
         base_backoff = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT)))
@@ -77,6 +158,82 @@ class OPCUAClient:
                 else:
                     ijt_log.error(f"All connection attempts failed for {self.server_url} after {max_attempts} tries.")
                     raise
+
+    async def configure_security(self) -> None:
+        if self._security_configured:
+            return
+
+        config = self.security_config
+        if config.security_policy_uri and config.security_policy_uri != security_policies.SecurityPolicyNone.URI:
+            policy_class = _SECURITY_POLICY_CLASSES.get(config.security_policy_uri)
+            if policy_class is None:
+                raise ValueError(f"Unsupported OPC UA security policy: {config.security_policy_uri}")
+            if config.client_certificate_path is None or config.client_private_key_path is None:
+                raise ValueError("Secure OPC UA connections require a client certificate and private key.")
+            await self.client.set_security(
+                policy_class,  # type: ignore[type-abstract]
+                str(config.client_certificate_path),
+                str(config.client_private_key_path),
+                mode=config.security_mode or ua.MessageSecurityMode.SignAndEncrypt,
+            )
+
+        if config.user_identity == "username":
+            if config.username is None or config.password is None:
+                raise ValueError("UserName identity requires username and password.")
+            await self.validate_configured_user_token_policy(
+                config,
+                ua.UserTokenType.UserName,
+                "UserName",
+            )
+            self.client.set_user(config.username)
+            self.client.set_password(config.password)
+        elif config.user_identity == "x509":
+            if config.x509_certificate_path is None or config.x509_private_key_path is None:
+                raise ValueError("X509 identity requires a certificate and private key.")
+            await self.client.load_client_certificate(str(config.x509_certificate_path))
+            await self.client.load_private_key(config.x509_private_key_path)
+            await self.validate_configured_user_token_policy(
+                config,
+                ua.UserTokenType.Certificate,
+                "X509 Certificate",
+            )
+        elif config.user_identity != "anonymous":
+            raise ValueError(f"Unsupported user identity kind: {config.user_identity}")
+
+        self._security_configured = True
+
+    async def validate_configured_user_token_policy(
+        self,
+        config: OPCUASecurityConfig,
+        token_type: ua.UserTokenType,
+        token_name: str,
+    ) -> None:
+        expected_policy_uri = config.security_policy_uri or security_policies.SecurityPolicyNone.URI
+        expected_mode = config.security_mode or (
+            ua.MessageSecurityMode.None_
+            if expected_policy_uri == security_policies.SecurityPolicyNone.URI
+            else ua.MessageSecurityMode.SignAndEncrypt
+        )
+        probe = Client(self.server_url, timeout=_OPCUA_TIMEOUT_S)
+        endpoints = await probe.connect_and_get_server_endpoints()
+        endpoint = next(
+            (
+                candidate
+                for candidate in endpoints
+                if candidate.SecurityPolicyUri == expected_policy_uri and candidate.SecurityMode == expected_mode
+            ),
+            None,
+        )
+        if endpoint is None:
+            raise ValueError(f"Endpoint not found for policy={expected_policy_uri!r}, mode={expected_mode!r}.")
+        validate_user_token_policy(endpoint, token_type, token_name, expected_policy_uri)
+
+    async def validate_configured_x509_user_token_policy(self, config: OPCUASecurityConfig) -> None:
+        await self.validate_configured_user_token_policy(
+            config,
+            ua.UserTokenType.Certificate,
+            "X509 Certificate",
+        )
 
     async def subscribe_to_events(self):
         try:
@@ -177,6 +334,9 @@ class OPCUAClient:
             ijt_log.error(traceback.format_exc())
 
     async def clear_old_logs(self):
+        if _preserve_test_artifacts():
+            return
+
         log_dir = Path("logs") / "results"
         if log_dir.exists():
             for file in log_dir.glob("*.json"):

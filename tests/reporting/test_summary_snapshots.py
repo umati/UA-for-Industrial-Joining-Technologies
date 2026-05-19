@@ -38,6 +38,11 @@ CI_ENV = {
     "GH_BRANCH": "c2-phase-1b",
     "GH_RUN_NUMBER": "42",
     "GH_RUN_URL": "https://github.example/ijt/actions/runs/42",
+    "GH_REPOSITORY": "umati/UA-for-Industrial-Joining-Technologies",
+    "GH_RUN_ID": "42",
+    "GH_API_URL": "https://api.github.example",
+    "GH_TOKEN": "",
+    "REPORT_JOB_NAME": "📋 Test Report",
 }
 
 
@@ -49,6 +54,8 @@ INTEGRATION_ENV = {
     "WB_RESULT": "success",
     "CON_RESULT": "success",
     "CS_RESULT": "success",
+    "CSM_RESULT": "skipped",
+    "CONSM_RESULT": "skipped",
     "GH_SHA": "abcdef1234567890",
     "GH_BRANCH": "c2-phase-1b",
     "GH_RUN_NUMBER": "84",

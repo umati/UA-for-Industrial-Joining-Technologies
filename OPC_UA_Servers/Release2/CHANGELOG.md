@@ -1,5 +1,16 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-05-19
+
+1. Updated the simulator version to 1.14.0.
+2. Added user identity validation. The simulator now accepts UserName and password sign-in and X.509 certificate sign-in, in addition to Anonymous access.
+3. Added a configurable user file `user_identity_configuration.json` next to the server binary, where users, passwords or X.509 SHA-1 thumbprints, and assigned roles can be configured for the simulator.
+4. Removed the deprecated `Basic128Rsa15` and `Basic256` security policies from the simulator endpoints.
+5. UserName and X.509 user credentials are now always encrypted on the wire, including on no-security endpoints.
+6. Improved shutdown behavior. The simulator now stops cleanly on Ctrl+C on Windows and on SIGINT/SIGTERM on Linux.
+7. Updated the OpenSSL crypto wrapper to support current OpenSSL 1.1.1, 3.0, 3.1, and 3.5 releases.
+8. Multiple bug fixes and optimizations.
+
 ## 2026-05-06
 
 1. Updated the simulator version to 1.13.0.

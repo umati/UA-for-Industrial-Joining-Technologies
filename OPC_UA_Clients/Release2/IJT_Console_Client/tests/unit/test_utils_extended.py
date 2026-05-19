@@ -1,6 +1,7 @@
 # ruff: noqa: E402
 """Extended tests for utils.py — covers remaining coverage gaps."""
 
+import os
 import shutil
 import sys
 import uuid
@@ -33,6 +34,11 @@ from utils import (
     read_server_time,
     read_tool_identifier,
 )
+
+
+def _preserve_test_artifacts() -> bool:
+    return os.environ.get("IJT_PRESERVE_TEST_ARTIFACTS", "").lower() in {"1", "true", "yes", "on"}
+
 
 # ── _to_json_str / _to_json_bytes ──
 
@@ -605,7 +611,8 @@ async def test_log_result_to_file_enabled_writes_file(monkeypatch):
         assert len(json_files) >= 1
     finally:
         monkeypatch.chdir(orig_cwd)
-        shutil.rmtree(work_dir, ignore_errors=True)
+        if not _preserve_test_artifacts():
+            shutil.rmtree(work_dir, ignore_errors=True)
 
 
 @pytest.mark.asyncio
@@ -625,7 +632,8 @@ async def test_log_result_to_file_disabled_does_nothing(monkeypatch):
         assert not result_dir.exists()
     finally:
         monkeypatch.chdir(orig_cwd)
-        shutil.rmtree(work_dir, ignore_errors=True)
+        if not _preserve_test_artifacts():
+            shutil.rmtree(work_dir, ignore_errors=True)
 
 
 @pytest.mark.asyncio
@@ -649,7 +657,8 @@ async def test_log_result_to_file_exception_is_caught(monkeypatch):
                 mock_log.error.assert_called()
     finally:
         monkeypatch.chdir(orig_cwd)
-        shutil.rmtree(work_dir, ignore_errors=True)
+        if not _preserve_test_artifacts():
+            shutil.rmtree(work_dir, ignore_errors=True)
 
 
 # ── _to_json_str — orjson.dumps raises (L23-24) ──

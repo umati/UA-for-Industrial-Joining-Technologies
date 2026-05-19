@@ -23,11 +23,21 @@ import tempfile
 from pathlib import Path
 
 
+def _preserve_test_artifacts() -> bool:
+    return os.environ.get("IJT_PRESERVE_TEST_ARTIFACTS", "").lower() in {"1", "true", "yes", "on"}
+
+
 def pytest_configure(config):
     """Set absolute basetemp to keep all pytest temp files inside this project."""
     _project_root = Path(__file__).resolve().parent
     _use_system = os.environ.get("IJT_USE_SYSTEM_BASETEMP", "").lower() in {"1", "true", "yes"}
     if config.option.basetemp is None and not _use_system:
+        if _preserve_test_artifacts():
+            _preserved = _project_root / "tmp" / f"pytest_preserve_{os.getpid()}"
+            _preserved.mkdir(parents=True, exist_ok=True)
+            config.option.basetemp = str(_preserved)
+            return
+
         _basetemp_chosen = None
         _pid = os.getpid()
         _tmp_root = _project_root / "tmp"
@@ -61,6 +71,9 @@ def pytest_configure(config):
 
 def _sessionfinish_cleanup(session: object) -> None:
     """Best-effort cleanup — called by pytest_sessionfinish inside a try/except."""
+    if _preserve_test_artifacts():
+        return
+
     _project_root = Path(__file__).resolve().parent
 
     # Remove __pycache__ dirs.  os.walk is used instead of rglob so that

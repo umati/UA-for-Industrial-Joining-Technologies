@@ -80,6 +80,14 @@ For workflow security see CI Infrastructure → zizmor; for secret scanning see 
 
 ---
 
+<a id="ci-performance-timings"></a>
+
+### ⏱️ Timing
+
+No reliable job duration source was available. Job durations require the current-run Jobs API.
+
+---
+
 <a id="ci-raw-data"></a>
 
 ### Where to find raw data
@@ -141,9 +149,9 @@ Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage 
 
 | Client / Component | Appears In |
 |:-------------------|:-----------|
-| Web Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security) |
-| Console Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security) |
-| Node Client — Legacy JavaScript | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security) |
-| C# Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security) |
-| Test Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security) |
-| OPC UA Server | [Validation Results](#ci-validation-results); [CI Infrastructure](#ci-infrastructure) |
+| Web Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security); [Timing](#ci-performance-timings) |
+| Console Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security); [Timing](#ci-performance-timings) |
+| Node Client — Legacy JavaScript | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security); [Timing](#ci-performance-timings) |
+| C# Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security); [Timing](#ci-performance-timings) |
+| Test Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security); [Timing](#ci-performance-timings) |
+| OPC UA Server | [Validation Results](#ci-validation-results); [CI Infrastructure](#ci-infrastructure); [Timing](#ci-performance-timings) |

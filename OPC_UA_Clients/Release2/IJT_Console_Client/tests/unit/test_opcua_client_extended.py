@@ -3,6 +3,7 @@
 
 import asyncio
 import contextlib
+import os
 import shutil
 import sys
 import uuid
@@ -15,9 +16,42 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 _ = pytest.importorskip("asyncua", reason="asyncua not installed")
 
+from asyncua import ua
+from asyncua.crypto import security_policies
 from asyncua.ua.uaerrors import UaError
 
-from opcua_client import OPCUAClient
+from opcua_client import OPCUAClient, validate_username_user_token_policy, validate_x509_user_token_policy
+
+
+def _preserve_test_artifacts() -> bool:
+    return os.environ.get("IJT_PRESERVE_TEST_ARTIFACTS", "").lower() in {"1", "true", "yes", "on"}
+
+
+def _endpoint_with_certificate_token(token_security_policy_uri: str) -> ua.EndpointDescription:
+    token = ua.UserTokenPolicy()
+    token.PolicyId = "certificate"
+    token.TokenType = ua.UserTokenType.Certificate
+    token.SecurityPolicyUri = token_security_policy_uri
+
+    endpoint = ua.EndpointDescription()
+    endpoint.SecurityPolicyUri = security_policies.SecurityPolicyBasic256Sha256.URI
+    endpoint.SecurityMode = ua.MessageSecurityMode.SignAndEncrypt
+    endpoint.UserIdentityTokens = [token]
+    return endpoint
+
+
+def _endpoint_with_username_token(token_security_policy_uri: str) -> ua.EndpointDescription:
+    token = ua.UserTokenPolicy()
+    token.PolicyId = "username"
+    token.TokenType = ua.UserTokenType.UserName
+    token.SecurityPolicyUri = token_security_policy_uri
+
+    endpoint = ua.EndpointDescription()
+    endpoint.SecurityPolicyUri = security_policies.SecurityPolicyBasic256Sha256.URI
+    endpoint.SecurityMode = ua.MessageSecurityMode.SignAndEncrypt
+    endpoint.UserIdentityTokens = [token]
+    return endpoint
+
 
 # ── connect() — retry then success ──
 
@@ -89,6 +123,80 @@ async def test_connect_logs_retry_message():
         # "Retrying in" should appear in one of the info calls
         info_calls = [str(call) for call in mock_log.info.call_args_list]
         assert any("Retrying" in s for s in info_calls)
+
+
+def test_validate_x509_user_token_policy_accepts_endpoint_default_uri():
+    endpoint = _endpoint_with_certificate_token("")
+
+    validate_x509_user_token_policy(endpoint, security_policies.SecurityPolicyBasic256Sha256.URI)
+
+
+def test_validate_x509_user_token_policy_rejects_security_policy_none_endpoint_default():
+    endpoint = _endpoint_with_certificate_token("")
+
+    with pytest.raises(ValueError, match="requires a secure endpoint"):
+        validate_x509_user_token_policy(endpoint, security_policies.SecurityPolicyNone.URI)
+
+
+def test_validate_x509_user_token_policy_rejects_security_policy_none():
+    endpoint = _endpoint_with_certificate_token(security_policies.SecurityPolicyNone.URI)
+
+    with pytest.raises(ValueError, match="SecurityPolicy#None"):
+        validate_x509_user_token_policy(endpoint, security_policies.SecurityPolicyBasic256Sha256.URI)
+
+
+def test_validate_x509_user_token_policy_rejects_policy_mismatch():
+    endpoint = _endpoint_with_certificate_token(security_policies.SecurityPolicyAes256Sha256RsaPss.URI)
+
+    with pytest.raises(ValueError, match="does not match"):
+        validate_x509_user_token_policy(endpoint, security_policies.SecurityPolicyBasic256Sha256.URI)
+
+
+def test_validate_x509_user_token_policy_requires_certificate_token():
+    endpoint = ua.EndpointDescription()
+    endpoint.SecurityPolicyUri = security_policies.SecurityPolicyBasic256Sha256.URI
+    endpoint.SecurityMode = ua.MessageSecurityMode.SignAndEncrypt
+    endpoint.UserIdentityTokens = []
+
+    with pytest.raises(ValueError, match="Certificate user-token policy"):
+        validate_x509_user_token_policy(endpoint, security_policies.SecurityPolicyBasic256Sha256.URI)
+
+
+def test_validate_username_user_token_policy_accepts_endpoint_default_uri():
+    endpoint = _endpoint_with_username_token("")
+
+    validate_username_user_token_policy(endpoint, security_policies.SecurityPolicyBasic256Sha256.URI)
+
+
+def test_validate_username_user_token_policy_rejects_security_policy_none_endpoint_default():
+    endpoint = _endpoint_with_username_token("")
+
+    with pytest.raises(ValueError, match="requires a secure endpoint"):
+        validate_username_user_token_policy(endpoint, security_policies.SecurityPolicyNone.URI)
+
+
+def test_validate_username_user_token_policy_rejects_security_policy_none():
+    endpoint = _endpoint_with_username_token(security_policies.SecurityPolicyNone.URI)
+
+    with pytest.raises(ValueError, match="SecurityPolicy#None"):
+        validate_username_user_token_policy(endpoint, security_policies.SecurityPolicyBasic256Sha256.URI)
+
+
+def test_validate_username_user_token_policy_rejects_policy_mismatch():
+    endpoint = _endpoint_with_username_token(security_policies.SecurityPolicyAes256Sha256RsaPss.URI)
+
+    with pytest.raises(ValueError, match="does not match"):
+        validate_username_user_token_policy(endpoint, security_policies.SecurityPolicyBasic256Sha256.URI)
+
+
+def test_validate_username_user_token_policy_requires_username_token():
+    endpoint = ua.EndpointDescription()
+    endpoint.SecurityPolicyUri = security_policies.SecurityPolicyBasic256Sha256.URI
+    endpoint.SecurityMode = ua.MessageSecurityMode.SignAndEncrypt
+    endpoint.UserIdentityTokens = []
+
+    with pytest.raises(ValueError, match="UserName user-token policy"):
+        validate_username_user_token_policy(endpoint, security_policies.SecurityPolicyBasic256Sha256.URI)
 
 
 # ── subscribe_to_events() — happy path ──
@@ -295,11 +403,15 @@ async def test_clear_old_logs_deletes_json_files(monkeypatch):
         await c.clear_old_logs()
 
         remaining = list(log_dir.glob("*.json"))
-        assert len(remaining) == 0
+        if _preserve_test_artifacts():
+            assert len(remaining) == 2
+        else:
+            assert len(remaining) == 0
         assert (log_dir / "keep.txt").exists()
     finally:
         monkeypatch.chdir(orig_cwd)
-        shutil.rmtree(work_dir, ignore_errors=True)
+        if not _preserve_test_artifacts():
+            shutil.rmtree(work_dir, ignore_errors=True)
 
 
 @pytest.mark.asyncio
@@ -321,10 +433,14 @@ async def test_clear_old_logs_creates_directory_if_missing(monkeypatch):
 
         await c.clear_old_logs()
 
-        assert log_dir.exists()
+        if _preserve_test_artifacts():
+            assert not log_dir.exists()
+        else:
+            assert log_dir.exists()
     finally:
         monkeypatch.chdir(orig_cwd)
-        shutil.rmtree(work_dir, ignore_errors=True)
+        if not _preserve_test_artifacts():
+            shutil.rmtree(work_dir, ignore_errors=True)
 
 
 # ── cleanup() — outer except catches unexpected error (L175-177) ──

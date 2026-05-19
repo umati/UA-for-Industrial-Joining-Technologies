@@ -26,6 +26,8 @@ on:
       - '!.github/docker/ijt-browser-ci/README.md'
       - '.github/scripts/update_browser_ci_image_pin.py'
       - '.github/workflows/build-browser-ci-image.yml'
+      - '.dockerignore'
+      - 'constraints.txt'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package.json'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt'
@@ -37,6 +39,8 @@ on:
       - '!.github/docker/ijt-browser-ci/README.md'
       - '.github/scripts/update_browser_ci_image_pin.py'
       - '.github/workflows/build-browser-ci-image.yml'
+      - '.dockerignore'
+      - 'constraints.txt'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package.json'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt'
@@ -121,6 +125,12 @@ jobs:
             while IFS= read -r changed; do
               [[ -n "$changed" ]] || continue
               case "$changed" in
+                .dockerignore)
+                  image_build_logic_changed=true
+                  ;;
+                constraints.txt)
+                  dependency_inputs_changed=true
+                  ;;
                 OPC_UA_Clients/Release2/IJT_Web_Client/package.json)
                   dependency_inputs_changed=true
                   ;;

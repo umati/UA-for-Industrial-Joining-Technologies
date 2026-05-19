@@ -25,14 +25,14 @@ markers = [
 ]
 
 [tool.bandit]
-exclude_dirs = [".venv", ".venv_test", ".venv_wsl", ".venv_wsl_backup", "tests", "__pycache__", ".git"]
+exclude_dirs = [".venv", ".venv_test", ".venv_ci", ".venv_wsl", ".venv_wsl_backup", "tests", "__pycache__", ".git"]
 skips = ["B101"]
 
 [tool.vulture]
 # Vulture finds dead code in source. Tests are excluded because pytest fixture
 # injection makes parameter names appear "unused" — they are not; pytest wires
 # them by name. Scanning tests adds only false positives with no value.
-exclude = ["tests/", "conftest.py", ".venv/", ".venv_test/", "tmp/", "test-results/", "logs/"]
+exclude = ["tests/", "conftest.py", ".venv/", ".venv_test/", ".venv_ci/", "tmp/", "test-results/", "logs/"]
 ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
 
 [tool.interrogate]
@@ -69,6 +69,7 @@ omit = [
     "run_all_tests.py",
     ".venv/*",
     ".venv_test/*",
+    ".venv_ci/*",
     "helpers/server_manager.py",
 ]
 
@@ -141,8 +142,6 @@ exclude = ["(?:^|.*[/\\\\])tmp[/\\\\]", "pytest-cache-files-.*"]
 cache_dir = "tmp/mypy-cache"
 
 [tool.pyright]
-venvPath = "."
-venv = ".venv_test"
 # asyncua 1.2b2 uses class-based OPC UA primitive types (Int32, UInt32, etc.)
 # that inherit from int/str/bytes. Plain int literals are not directly assignable
 # to these types in pyright's type system, but are equivalent at runtime. Remove

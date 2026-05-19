@@ -10,12 +10,17 @@ Usage:
   python run_all_tests.py                    # full run (Phase 1 + Phase 2)
   python run_all_tests.py --phase1           # unit / static only
   python run_all_tests.py --phase2           # live tests only
+  python run_all_tests.py --security-matrix --security-matrix-cell B1
   python run_all_tests.py --junit-xml=PATH   # write JUnit XML to PATH
   python run_all_tests.py --help
 
 Environment variables:
   OPCUA_SERVER_URL      Override server URL (default: opc.tcp://localhost:40461)
   OPCUA_SIMULATOR_EXE   Path to opcua_ijt_demo_application(.exe)
+  IJT_SECURITY_MATRIX_CELL Security matrix cell: B1 | B2
+  IJT_SUT              Security matrix SUT: windows | linux
+  IJT_PRESERVE_TEST_ARTIFACTS=1
+                         Preserve generated test artifacts and skip runner cleanup
   SKIP_VENV_INSTALL     Set to "1" to skip pip install (for CI where deps are pre-installed)
 """
 
@@ -49,12 +54,26 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 # ---------------------------------------------------------------------------
 
 _HERE = Path(__file__).resolve().parent
-# .venv_test is the test-runner venv (requirements.txt + requirements-dev.txt).
+_IS_CI = bool(os.getenv("CI"))
+_IS_DOCKER = os.getenv("IS_DOCKER") == "true"
+_IS_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+_ENV_IS_PRE_ISOLATED = _IS_DOCKER or _IS_GITHUB_ACTIONS
+
+
+def _target_venv_dir() -> Path:
+    if _IS_CI and not _ENV_IS_PRE_ISOLATED:
+        return _HERE / ".venv_ci"
+    return _HERE / ".venv_test"
+
+
+# .venv_test is the normal test-runner venv (requirements.txt + requirements-dev.txt).
+# .venv_ci mirrors CI locally when the root runner passes CI=1 via --ci-mode.
 # .venv is the runtime-only venv created by setup_client.py — kept separate so
 # running tests never alters the launch environment and vice versa.
-_VENV = _HERE / ".venv_test"
+_VENV = _target_venv_dir()
 _REQUIREMENTS = _HERE / "requirements.txt"
 _REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
+_PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
 _PYPROJECT = _HERE / "pyproject.toml"
 _TESTS_DIR = _HERE / "tests"
 _TESTS_UNIT = _TESTS_DIR / "unit"
@@ -68,6 +87,10 @@ _OPCUA_SERVER_PORT = 40461
 
 _DEFAULT_SERVER_URL = f"opc.tcp://localhost:{_OPCUA_SERVER_PORT}"
 _MIN_PYTHON = (3, 14)
+_SECURITY_MATRIX_CELLS = {
+    "B1": ("windows", 40477),
+    "B2": ("linux", 40478),
+}
 
 _WELL_KNOWN_SIMULATOR_PATHS = [
     # Windows native binary (checked first on Windows)
@@ -94,9 +117,17 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return val in ("1", "true", "yes", "on") if val else default
 
 
+def _preserve_test_artifacts() -> bool:
+    return _env_bool("IJT_PRESERVE_TEST_ARTIFACTS")
+
+
 def _prepare_tmp_dir() -> None:
     """Reset runner-managed tmp workspace and recreate tmp/pytest/."""
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
+    if _preserve_test_artifacts():
+        (_TMP_DIR / "pytest").mkdir(parents=True, exist_ok=True)
+        return
+
     for child in _TMP_DIR.iterdir():
         name = child.name
         managed = name in {"pytest", "pip-audit-cache", "pip-cache", "ruff-cache"} or name.startswith(
@@ -211,7 +242,11 @@ def _inside_venv() -> bool:
         return str(sys.executable).startswith(str(_VENV))
 
 
-# Legacy venv directory names predating the .venv / .venv_test convention.
+def _pip_constraint_args() -> list[str]:
+    return ["-c", str(_PYTHON_CONSTRAINTS)] if _PYTHON_CONSTRAINTS.exists() else []
+
+
+# Legacy venv directory names predating the .venv / .venv_test / .venv_ci convention.
 _STALE_VENV_NAMES: tuple[str, ...] = ("venv", "venv_test", "env", "ENV", ".venv_backup")
 
 
@@ -220,9 +255,13 @@ def _remove_stale_venvs() -> None:
 
     Runs at startup so that users who pull fresh code are not left with
     orphaned, potentially-conflicting environments.
-    Canonical dirs (``.venv`` runtime, ``.venv_test`` tests) are never touched.
+    Canonical dirs (``.venv`` runtime, ``.venv_test`` tests, and ``.venv_ci``
+    local CI-mode) are never touched.
     Legacy aliases (for example ``.venv_wsl``) are also preserved.
     """
+    if _preserve_test_artifacts():
+        return
+
     for name in _STALE_VENV_NAMES:
         stale = _HERE / name
         if stale.is_dir():
@@ -244,7 +283,7 @@ def _requirements_hash() -> str:
     import hashlib
 
     h = hashlib.sha256()
-    for req in (_REQUIREMENTS, _REQUIREMENTS_DEV):
+    for req in (_PYTHON_CONSTRAINTS, _REQUIREMENTS, _REQUIREMENTS_DEV):
         if req.exists():
             h.update(req.read_bytes())
     return h.hexdigest()[:16]
@@ -276,7 +315,7 @@ def _install_requirements() -> None:
         if req.exists():
             _log(f"  Installing {req.name} …")
             subprocess.check_call(
-                [pip, "install", "--quiet", "--pre", "-r", str(req)],
+                [pip, "install", "--quiet", "--pre", *_pip_constraint_args(), "-r", str(req)],
                 env=pip_env,
             )
     hash_file.write_text(current_hash)
@@ -365,6 +404,8 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
 
     src_dir = exe_path.parent
     tmp_dir = _TMP_DIR / f"server_instance_{port}"
+    if tmp_dir.exists() and _preserve_test_artifacts():
+        tmp_dir = _TMP_DIR / f"server_instance_{port}_{int(time.time())}"
     _log(f"  [server] Launching simulator on port {port} (copied to {tmp_dir})")
     try:
         if tmp_dir.exists():
@@ -372,7 +413,8 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
         shutil.copytree(src_dir, tmp_dir)
     except OSError as exc:
         _log(f"  [server] Failed to copy binary dir: {exc}")
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        if not _preserve_test_artifacts():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
         return None
 
     cfg_path = tmp_dir / "server_configuration.json"
@@ -385,7 +427,8 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
                 json.dump(cfg, fh, indent=2)
         except (OSError, ValueError) as exc:
             _log(f"  [server] Failed to patch server_configuration.json: {exc}")
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+            if not _preserve_test_artifacts():
+                shutil.rmtree(tmp_dir, ignore_errors=True)
             return None
 
     try:
@@ -397,7 +440,8 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
         )
     except OSError as exc:
         _log(f"  [server] Failed to launch binary: {exc}")
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        if not _preserve_test_artifacts():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
         return None
 
     for _ in range(30):
@@ -410,7 +454,8 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
 
     _log("  [server] Timed out waiting for simulator — terminating")
     proc.terminate()
-    shutil.rmtree(tmp_dir, ignore_errors=True)
+    if not _preserve_test_artifacts():
+        shutil.rmtree(tmp_dir, ignore_errors=True)
     return None
 
 
@@ -927,7 +972,7 @@ def _step_semgrep() -> _StepResult:
             "--json",
             "--output",
             str(_RESULTS_DIR / "semgrep.json"),
-            "--exclude=.venv,.venv_test",
+            "--exclude=.venv,.venv_test,.venv_ci",
             "--exclude=test-results",
             ".",
         ],
@@ -1090,6 +1135,74 @@ def _step_live_tests(_junit_xml: str | None, verbose: bool = False) -> _StepResu
     return result
 
 
+def _resolve_security_matrix_target(args: argparse.Namespace) -> tuple[str, str, int]:
+    cell = (args.security_matrix_cell or os.environ.get("IJT_SECURITY_MATRIX_CELL", "")).strip().upper()
+    if not cell:
+        cell = "B1"
+    if cell not in _SECURITY_MATRIX_CELLS:
+        raise ValueError(f"Unknown Console security matrix cell: {cell}")
+
+    default_sut, default_port = _SECURITY_MATRIX_CELLS[cell]
+    sut = (args.security_matrix_sut or os.environ.get("IJT_SUT") or default_sut).strip().lower()
+    if sut not in {"windows", "linux"}:
+        raise ValueError(f"Unsupported Console security matrix SUT: {sut}")
+
+    port = default_port
+    port_env = os.environ.get("OPCUA_SERVER_PORT")
+    if port_env:
+        port = int(port_env)
+    return cell, sut, port
+
+
+def _step_security_matrix_tests(cell: str, sut: str, port: int, verbose: bool = False) -> _StepResult:
+    """Run one Console security-flow matrix cell."""
+    result = _StepResult(f"[MATRIX] Security Matrix {cell} ({sut})")
+    t0 = time.monotonic()
+    server_url = f"opc.tcp://localhost:{port}"
+    matrix_xml = str(_RESULTS_DIR / f"security-matrix-{cell}.xml")
+    verbosity = "-v" if verbose else "-q"
+    cmd: list[str] = [
+        sys.executable,
+        "-m",
+        "pytest",
+        str(_TESTS_LIVE / "test_security_matrix.py"),
+        verbosity,
+        "--tb=short",
+        f"--junitxml={matrix_xml}",
+        "-m",
+        "security_matrix",
+    ]
+    if _tool_available("pytest_timeout"):
+        cmd += ["--timeout=120"]
+
+    rc, output = _run(
+        cmd,
+        extra_env={
+            "IJT_AUTO_ACCEPT": "true",
+            "IJT_PHASE1_ONLY": "false",
+            "IJT_SUT": sut,
+            "IJT_SECURITY_MATRIX_CELL": cell,
+            "OPCUA_SERVER_PORT": str(port),
+            "OPCUA_SERVER_URL": server_url,
+            "OPCUA_CONNECT_RETRIES": "2",
+            "OPCUA_CONNECT_DELAY_SEC": "0.5",
+            "OPCUA_CONNECT_MAX_DELAY_SEC": "1.0",
+        },
+        timeout=240,
+        timeout_label=f"Console security matrix {cell}",
+    )
+    result.duration = time.monotonic() - t0
+    result.ok = rc == 0
+    for line in reversed(output.splitlines()):
+        stripped = line.strip()
+        if "passed" in stripped or "failed" in stripped or "error" in stripped:
+            result.note = stripped.strip("= ").strip()
+            break
+    if not result.ok or verbose:
+        _log(output)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -1104,6 +1217,21 @@ def _build_parser() -> argparse.ArgumentParser:
     group = p.add_mutually_exclusive_group()
     group.add_argument("--phase1", action="store_true", help="Unit / static tests only")
     group.add_argument("--phase2", action="store_true", help="Live tests only (server must be up)")
+    group.add_argument(
+        "--security-matrix",
+        action="store_true",
+        help="Run one Console security-flow matrix cell (B1/B2)",
+    )
+    p.add_argument(
+        "--security-matrix-cell",
+        choices=sorted(_SECURITY_MATRIX_CELLS),
+        help="Security matrix cell to run (B1=Windows SUT, B2=Linux Docker SUT)",
+    )
+    p.add_argument(
+        "--security-matrix-sut",
+        choices=["windows", "linux"],
+        help="SUT override for --security-matrix; defaults from the selected cell",
+    )
     p.add_argument("--verbose", "-v", action="store_true", help="Verbose pytest output (-v flag)")
     p.add_argument(
         "--junit-xml",
@@ -1122,7 +1250,9 @@ def _build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     """Entry point; returns 0 on success, 1 on any failure."""
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
-    _cleanup_caches(_HERE)  # pre-run: clear stale caches from interrupted runs
+    preserve_artifacts = _preserve_test_artifacts()
+    if not preserve_artifacts:
+        _cleanup_caches(_HERE)  # pre-run: clear stale caches from interrupted runs
     global _USE_COLOUR, _VERBOSE
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
     _prepare_tmp_dir()
@@ -1139,11 +1269,13 @@ def main() -> int:
         _relaunch_under_venv()
         return 0  # unreachable after sys.exit(); satisfies type checker
 
-    shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
+    if not preserve_artifacts:
+        shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    run_phase1 = not args.phase2
-    run_phase2 = not args.phase1
+    run_security_matrix = args.security_matrix
+    run_phase1 = not args.phase2 and not run_security_matrix
+    run_phase2 = not args.phase1 and not run_security_matrix
 
     _banner("IJT Console Client — Test Suite")
 
@@ -1172,6 +1304,18 @@ def main() -> int:
             server_proc = _ensure_server()
             results.append(_step_live_tests(junit_xml, verbose=args.verbose))
 
+        if run_security_matrix:
+            _section("Security Matrix")
+            try:
+                cell, sut, port = _resolve_security_matrix_target(args)
+            except ValueError as exc:
+                failed_step = _StepResult("[MATRIX] resolve target")
+                failed_step.ok = False
+                failed_step.note = str(exc)
+                results.append(failed_step)
+            else:
+                results.append(_step_security_matrix_tests(cell, sut, port, verbose=args.verbose))
+
     finally:
         if server_proc is not None:
             _log("  [server] Stopping simulator …")
@@ -1183,7 +1327,8 @@ def main() -> int:
             # Clean up env var and temp dir we set
             os.environ.pop("OPCUA_SERVER_URL", None)
             global _server_tmp_dir
-            shutil.rmtree(_server_tmp_dir, ignore_errors=True) if _server_tmp_dir else None
+            if _server_tmp_dir and not preserve_artifacts:
+                shutil.rmtree(_server_tmp_dir, ignore_errors=True)
             _server_tmp_dir = None
 
     elapsed = time.monotonic() - t_start
@@ -1205,7 +1350,8 @@ def main() -> int:
     _log(_c(_ANSI_CYAN, "═" * 52))
     _log("")
 
-    _cleanup_caches(_HERE)
+    if not preserve_artifacts:
+        _cleanup_caches(_HERE)
     return 1 if any_failed else 0
 
 
@@ -1227,6 +1373,9 @@ def _force_rmtree(path: Path) -> None:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
+    if _preserve_test_artifacts():
+        return
+
     _SKIP = {"node_modules", ".git", "test-results", "tmp"}  # tmp workspace is handled by _prepare_tmp_dir()
     _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "htmlcov"}
     for dirpath, dirs, files in os.walk(root, topdown=True):

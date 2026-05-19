@@ -546,6 +546,8 @@ def main() -> None:
     wb_r = E("WB_RESULT", "unknown")
     con_r = E("CON_RESULT", "unknown")
     cs_r = E("CS_RESULT", "unknown")
+    csm_r = E("CSM_RESULT", "unknown")
+    consm_r = E("CONSM_RESULT", "unknown")
 
     sha = (E("GH_SHA", "") or "")[:8]
     branch = E("GH_BRANCH", "main")
@@ -563,6 +565,12 @@ def main() -> None:
     wc_browser = parse_junit("all-results/results-live-webclient-web-client-e2e-*/**/*.xml")
     con_live = parse_junit("all-results/results-live-console/**/pytest-live.xml")
     cs_live = parse_junit("all-results/results-csharp-live/tests.xml")
+    csharp_security_matrix = parse_junit(
+        "all-results/results-csharp-security-matrix-*/security-matrix-*.xml"
+    )
+    console_security_matrix = parse_junit(
+        "all-results/results-console-security-matrix-*/security-matrix-*.xml"
+    )
     wc_feature_timings = browser_feature_timings(
         "all-results/results-live-webclient-web-client-e2e-features*/**/timing-latest.json"
     )
@@ -587,6 +595,12 @@ def main() -> None:
     wc_live_skips = collect_skips("all-results/results-live-webclient-web-client-live-*/**/*.xml")
     wc_browser_skips = collect_skips("all-results/results-live-webclient-web-client-e2e-*/**/*.xml")
     cs_live_skips = collect_skips("all-results/results-csharp-live/tests.xml")
+    csharp_security_matrix_skips = collect_skips(
+        "all-results/results-csharp-security-matrix-*/security-matrix-*.xml"
+    )
+    console_security_matrix_skips = collect_skips(
+        "all-results/results-console-security-matrix-*/security-matrix-*.xml"
+    )
 
     # ── Artifact sanity gate ─────────────────────────────────────────
 
@@ -608,6 +622,8 @@ def main() -> None:
     _warn(wb_r, wc_browser[0], "live-webclient-browser", "JUnit XML")
     _warn(con_r, con_live[0], "live-console", "pytest-live.xml")
     _warn(cs_r, cs_live[0], "csharp-live", "tests.xml")
+    _warn(csm_r, csharp_security_matrix[0], "csharp-security-matrix", "security-matrix XML")
+    _warn(consm_r, console_security_matrix[0], "console-security-matrix", "security-matrix XML")
 
     suite_counts = [
         ("sd_smoke", "OPC UA Server — Docker Smoke", sd_smoke),
@@ -619,6 +635,8 @@ def main() -> None:
         ("wc_browser", "Web Client — Browser E2E", wc_browser),
         ("con_live", "Console Client — Live", con_live),
         ("cs_live", "C# Client — Live", cs_live),
+        ("csharp_security_matrix", "C# Client — Security Matrix", csharp_security_matrix),
+        ("console_security_matrix", "Console Client — Security Matrix", console_security_matrix),
     ]
     skip_policy_failures = non_test_client_skip_failures(suite_counts)
     report_warnings = integration_drift_warnings(
@@ -641,6 +659,8 @@ def main() -> None:
         wc_browser,
         con_live,
         cs_live,
+        csharp_security_matrix,
+        console_security_matrix,
     ]
     total_t = sum(s[0] for s in all_suites_data if s[0] is not None)
     total_f = sum(s[2] for s in all_suites_data if s[2] is not None)
@@ -652,9 +672,13 @@ def main() -> None:
     else:
         totals_str = "no test data"
 
-    core_jobs = [sd_r, wd_r, tc_r, wc_r, wb_r, con_r, cs_r]
+    core_jobs = [
+        result
+        for result in [sd_r, wd_r, tc_r, wc_r, wb_r, con_r, cs_r, csm_r, consm_r]
+        if result not in {"unknown", "skipped"}
+    ]
     n_pass = sum(1 for r in core_jobs if r == "success")
-    n_fail = sum(1 for r in core_jobs if r == "failure")
+    n_fail = sum(1 for r in core_jobs if r != "success")
     n_total = len(core_jobs)
 
     if n_fail == 0 and not skip_policy_failures:
@@ -686,6 +710,8 @@ def main() -> None:
     wc_browser_base = baseline_suite(integration_baseline, "wc_browser")
     con_live_base = baseline_suite(integration_baseline, "con_live")
     cs_live_base = baseline_suite(integration_baseline, "cs_live")
+    csharp_security_matrix_base = baseline_suite(integration_baseline, "csharp_security_matrix")
+    console_security_matrix_base = baseline_suite(integration_baseline, "console_security_matrix")
 
     web_docker_results = "<br>".join(
         (
@@ -704,6 +730,15 @@ def main() -> None:
             labeled_test_results("Smoke", tc_smoke, tc_smoke_base),
             labeled_test_results("Conformance", tc_tests, tc_tests_base),
         )
+    )
+    console_security_note = skip_note_inline(
+        con_live_skips + console_security_matrix_skips,
+        (con_live[3] or 0) + (console_security_matrix[3] or 0),
+    )
+    csharp_security_note = skip_note_inline(
+        cs_live_skips + csharp_security_matrix_skips,
+        (cs_live[3] or 0) + (csharp_security_matrix[3] or 0),
+        "Nightly drift detection",
     )
 
     # ── Build report ──────────────────────────────────────────────────
@@ -740,8 +775,12 @@ def main() -> None:
         f"{count_test_results(wc_browser, wc_browser_base)} |",
         f"| Console Client live | {job_icon(con_r)} {md_cell(con_r)} | "
         f"{count_test_results(con_live, con_live_base)} |",
+        f"| Console Client security matrix | {job_icon(consm_r)} {md_cell(consm_r)} | "
+        f"{count_test_results(console_security_matrix, console_security_matrix_base)} |",
         f"| C# Client live | {job_icon(cs_r)} {md_cell(cs_r)} | "
         f"{count_test_results(cs_live, cs_live_base)} |",
+        f"| C# Client security matrix | {job_icon(csm_r)} {md_cell(csm_r)} | "
+        f"{count_test_results(csharp_security_matrix, csharp_security_matrix_base)} |",
         "",
         "---",
         "",
@@ -772,15 +811,18 @@ def main() -> None:
             f"{skip_note_inline(tc_conf_skips, tc_tests[3])} |"
         ),
         (
-            "| Console Client | Live Python client behavior against OPC UA server | "
-            "Not applicable | "
+            "| Console Client | Live Python client behavior and security-flow matrix "
+            "against OPC UA server | "
+            f"{count_test_results(console_security_matrix, console_security_matrix_base)} | "
             f"{count_test_results(con_live, con_live_base)} | "
-            f"{skip_note_inline(con_live_skips, con_live[3])} |"
+            f"{console_security_note} |"
         ),
         (
-            "| C# Client | Nightly xUnit live behavior against OPC UA server | Not applicable | "
+            "| C# Client | Nightly xUnit live behavior and security-flow matrix "
+            "against OPC UA server | "
+            f"{count_test_results(csharp_security_matrix, csharp_security_matrix_base)} | "
             f"{count_test_results(cs_live, cs_live_base)} | "
-            f"{skip_note_inline(cs_live_skips, cs_live[3], 'Nightly drift detection')} |"
+            f"{csharp_security_note} |"
         ),
         "",
         "---",
@@ -952,12 +994,22 @@ def main() -> None:
     skip_sections += format_skip_section("Test Client — Conformance", tc_conf_skips, tc_tests[3])
     skip_sections += format_skip_section("Console Client — Live", con_live_skips, con_live[3])
     skip_sections += format_skip_section(
+        "Console Client — Security Matrix",
+        console_security_matrix_skips,
+        console_security_matrix[3],
+    )
+    skip_sections += format_skip_section(
         "Web Client — Python/WebSocket Live", wc_live_skips, wc_live[3]
     )
     skip_sections += format_skip_section(
         "Web Client — Browser E2E", wc_browser_skips, wc_browser[3]
     )
     skip_sections += format_skip_section("C# Client — Live", cs_live_skips, cs_live[3])
+    skip_sections += format_skip_section(
+        "C# Client — Security Matrix",
+        csharp_security_matrix_skips,
+        csharp_security_matrix[3],
+    )
 
     out += [
         "",

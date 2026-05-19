@@ -76,6 +76,7 @@ if hasattr(sys.stderr, "reconfigure"):
 # Paths
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -90,10 +91,23 @@ from tests.python._live_server_readiness import (  # noqa: E402
 IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 IS_CI = bool(os.getenv("CI"))
-# .venv_test is the test-runner venv (requirements.txt + requirements-dev.txt).
+IS_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+_ENV_IS_PRE_ISOLATED = IS_DOCKER or IS_GITHUB_ACTIONS
+
+
+def _target_venv_dir() -> Path:
+    # Real CI and Docker already provide an isolated Python. Local CI-mode uses
+    # a separate test venv so global developer packages cannot affect results.
+    if IS_CI and not _ENV_IS_PRE_ISOLATED:
+        return ROOT / ".venv_ci"
+    return ROOT / ".venv_test"
+
+
+# .venv_test is the normal test-runner venv (requirements.txt + requirements-dev.txt).
+# .venv_ci mirrors CI locally when the root runner passes CI=1 via --ci-mode.
 # .venv is the runtime-only venv created by setup_project.py — kept separate so
 # running tests never alters the launch environment and vice versa.
-_VENV = ROOT / ".venv_test"
+_VENV = _target_venv_dir()
 _TMP_DIR = ROOT / "tmp"
 _NPM_CACHE = _TMP_DIR / "npm-cache"
 _PIP_CACHE = _TMP_DIR / "pip-cache"
@@ -101,6 +115,7 @@ _STATE_DIR = ROOT / ".state"
 _TIMING_HISTORY = _STATE_DIR / "timing-history.jsonl"
 _REQUIREMENTS = ROOT / "requirements.txt"
 _REQUIREMENTS_DEV = ROOT / "requirements-dev.txt"
+_PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
 _NPM_INSTALL_FLAGS = ["--legacy-peer-deps", "--no-audit", "--no-fund"]
 # Minimum smoke-import contract for focused live/browser targets. Keep this
 # aligned with requirements.txt and requirements-dev.txt when target deps change.
@@ -135,17 +150,18 @@ _SIMULATOR_LAUNCH_NOTES: list[str] = []
 
 
 # ---------------------------------------------------------------------------
-# Venv bootstrap — ensure isolated Python environment (skipped in CI/Docker)
+# Venv bootstrap — ensure isolated Python environment
 # ---------------------------------------------------------------------------
 
-# Legacy venv directory names predating the .venv / .venv_test convention.
+# Legacy venv directory names predating the .venv / .venv_test / .venv_ci convention.
 _STALE_VENV_NAMES: tuple[str, ...] = ("venv", "venv_test", "env", "ENV", ".venv_backup")
 
 
 def _remove_stale_venvs() -> None:
     """Delete obsolete virtual-environment directories from the project root.
 
-    Canonical dirs (``.venv`` runtime, ``.venv_test`` tests) are never touched.
+    Canonical dirs (``.venv`` runtime, ``.venv_test`` tests, and ``.venv_ci``
+    local CI-mode) are never touched.
     Legacy aliases (for example ``.venv_wsl``) are also preserved.
     Everything in :data:`_STALE_VENV_NAMES` is removed so that users who pull
     fresh code start from a known-clean state.
@@ -166,7 +182,7 @@ def _inside_venv() -> bool:
 
 
 def _relaunch_under_venv() -> None:
-    """Create .venv_test if needed, then re-exec this script inside it."""
+    """Create the selected test venv if needed, then re-exec this script inside it."""
     _remove_stale_venvs()
     if not _VENV.exists():
         print(f"[bootstrap] Creating venv: {_VENV}")
@@ -502,10 +518,14 @@ def _requirements_hash() -> str:
     import hashlib
 
     h = hashlib.sha256()
-    for req in (_REQUIREMENTS, _REQUIREMENTS_DEV):
+    for req in (_PYTHON_CONSTRAINTS, _REQUIREMENTS, _REQUIREMENTS_DEV):
         if req.exists():
             h.update(req.read_bytes())
     return h.hexdigest()[:16]
+
+
+def _pip_constraint_args() -> list[str]:
+    return ["-c", str(_PYTHON_CONSTRAINTS)] if _PYTHON_CONSTRAINTS.exists() else []
 
 
 def _ensure_precommit_hooks() -> None:
@@ -826,7 +846,18 @@ def _stage_pip_install(python: Path, *, required_modules: tuple[str, ...] = ()) 
     for req in (_REQUIREMENTS, _REQUIREMENTS_DEV):
         if req.exists():
             rc = _run(
-                [python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--pre", "-r", str(req)],
+                [
+                    python,
+                    "-m",
+                    "pip",
+                    "install",
+                    "--quiet",
+                    "--disable-pip-version-check",
+                    "--pre",
+                    *_pip_constraint_args(),
+                    "-r",
+                    str(req),
+                ],
                 label=f"pip install {req.name}",
                 env=pip_env,
             )
@@ -1044,7 +1075,7 @@ def _stage_python_lint(python: Path) -> StageResult:
                     "--json",
                     "--output",
                     str(results_dir / "semgrep.json"),
-                    "--exclude=.venv,.venv_test",
+                    "--exclude=.venv,.venv_test,.venv_ci",
                     "--exclude=test-results",
                     ".",
                 ],
@@ -2422,11 +2453,14 @@ def _stage_docker_smoke() -> StageResult:
         "ijt_web_client:latest",
         "-t",
         "ijt_web_client",
+        "-f",
+        str(ROOT.relative_to(_REPO_ROOT) / "Dockerfile"),
         ".",
     ]
     rc = _run(
         build_cmd,
         label="docker build (BuildKit)",
+        cwd=_REPO_ROOT,
         env=build_env,
         timeout=_DOCKER_BUILD_TIMEOUT,
     )
@@ -2706,8 +2740,9 @@ def main() -> int:
         if conflicts:
             parser.error(f"--phase1-python/--phase1-js cannot be combined with {', '.join(conflicts)}")
 
-    # Bootstrap: run inside isolated .venv (skipped when already in venv, CI, or Docker)
-    if not IS_CI and not IS_DOCKER and not _inside_venv():
+    # Bootstrap: local runs always use an IJT-owned venv. GitHub Actions and
+    # Docker are already isolated and may use their provided Python directly.
+    if not _ENV_IS_PRE_ISOLATED and not _inside_venv():
         _relaunch_under_venv()
         return 0  # unreachable after sys.exit(); satisfies type checker
 

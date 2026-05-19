@@ -275,15 +275,19 @@ readiness probe must not open OPC UA sessions.
 
 ### `.venv_test` Isolation Pattern
 
-Python clients use **two separate virtual environments**:
+Python clients use separate virtual environments for runtime, tests, and local CI-mode:
 
 | venv | Purpose | Created by |
 |------|---------|-----------|
 | `.venv` | Runtime-only — production dependencies | `setup_client.py` / `setup_project.py` |
 | `.venv_test` | Test runner + dev tools (`pytest`, `ruff`, `mypy`, …) | `run_all_tests.py` (first run) |
+| `.venv_ci` | Local `--ci-mode` test mirror | `run_all_tests.py --ci-mode` (first local CI-mode run) |
 
 Keeping them separate ensures that installing test tooling never alters the production
 environment, and vice versa.
+Local `--ci-mode` uses `.venv_ci` so global developer packages cannot affect CI-mode
+results. Real GitHub Actions and Docker jobs are already isolated and may use their
+provided Python directly.
 
 ### `OPCUA_SERVER_URL` Override
 

@@ -18,7 +18,9 @@
 | Web Client live suites | ✅ success | ✅ 127, 0 skipped |
 | Browser E2E suites | ✅ success | ✅ 66, 0 skipped |
 | Console Client live | ✅ success | ✅ 18, 0 skipped |
+| Console Client security matrix | ⏭️ skipped | Not reported |
 | C# Client live | ✅ success | ✅ 110, 0 skipped |
+| C# Client security matrix | ⏭️ skipped | Not reported |
 
 ---
 
@@ -31,8 +33,8 @@
 | OPC UA Server | Linux container plus Windows live server processes | ✅ 10, 0 skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
 | Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | Python: ✅ 680, 0 skipped<br>JavaScript: ✅ 522, 0 skipped | Python/WebSocket live: ✅ 127, 0 skipped<br>Browser E2E: ✅ 66, 0 skipped | Headless Chromium baked into the IJT Browser CI image |
 | Test Client | Live conformance harness against OPC UA server | Not applicable | Smoke: ✅ 10, 0 skipped<br>Conformance: ✅ 1,043, 154 skipped | Not Implemented fixture marker |
-| Console Client | Live Python client behavior against OPC UA server | Not applicable | ✅ 18, 0 skipped | No additional notes |
-| C# Client | Nightly xUnit live behavior against OPC UA server | Not applicable | ✅ 110, 0 skipped | Nightly drift detection |
+| Console Client | Live Python client behavior and security-flow matrix against OPC UA server | Not reported | ✅ 18, 0 skipped | No additional notes |
+| C# Client | Nightly xUnit live behavior and security-flow matrix against OPC UA server | Not reported | ✅ 110, 0 skipped | Nightly drift detection |
 
 ---
 

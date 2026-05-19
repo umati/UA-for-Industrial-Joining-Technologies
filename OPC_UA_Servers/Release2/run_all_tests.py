@@ -8,12 +8,12 @@ Phase 1 (static — always runs):
   2.  docker-compose.yml  — yamllint + stdlib YAML parse + service check
   3.  shellcheck          — *.sh files  (skipped if none found / shellcheck absent)
   4.  server_configuration.json — stdlib JSON + required-key check
-  5.  simulated_data.json — stdlib JSON  (skipped if absent)
+  5.  simulated_data.json / user_identity_configuration.json — stdlib JSON
   6.  detect-secrets      — secrets scan  (skipped if not installed)
   7.  pip-audit           — tests/requirements.txt CVE scan  (skipped if not installed)
   8.  docker validate     — docker compose config --quiet  (skipped if Docker offline)
   9.  trivy               — container image scan  (skipped if trivy absent)
-  10. packages check      — require Windows and Linux package ZIPs
+  10. packages check      — require Windows/Linux ZIPs with required JSON files
 
 Phase 2 (live smoke test — needs a running OPC UA server):
   - Auto-detect/launch server (in order):
@@ -51,6 +51,7 @@ import subprocess
 import sys
 import time
 import venv
+import zipfile
 from pathlib import Path
 
 # Ensure stdout/stderr use UTF-8 on Windows (cp1252 can't encode box-drawing chars)
@@ -65,6 +66,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 PROJ_DIR = Path(__file__).resolve().parent  # OPC_UA_Servers/Release2
 _REPO_ROOT = Path(__file__).resolve().parents[2]  # repo root
+_PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
 RESULTS_DIR = PROJ_DIR / "test-results"
 
 _IS_WINDOWS = sys.platform == "win32"
@@ -75,6 +77,11 @@ _WINDOWS_ZIP = PROJ_DIR / "OPC_UA_IJT_Server_Simulator.zip"
 
 _DEFAULT_PORT = 40451
 _DEFAULT_URL = f"opc.tcp://localhost:{_DEFAULT_PORT}"
+
+
+def _pip_constraint_args() -> list[str]:
+    return ["-c", str(_PYTHON_CONSTRAINTS)] if _PYTHON_CONSTRAINTS.exists() else []
+
 
 # ---------------------------------------------------------------------------
 # Output helpers
@@ -380,6 +387,106 @@ def _check_simulated_data(results: list) -> None:
         _record(results, 1, label, False, f"FAIL ({exc})")
 
 
+def _validate_user_identity_config_payload(data: object) -> str | None:
+    if not isinstance(data, dict):
+        return "top-level JSON value must be an object"
+
+    user_identity_data = data.get("userIdentityData")
+    if not isinstance(user_identity_data, dict):
+        return "missing userIdentityData object"
+
+    enabled = user_identity_data.get("enabled")
+    if not isinstance(enabled, bool):
+        return "enabled must be a boolean"
+
+    users = user_identity_data.get("users", [])
+    if users is None:
+        return None
+    if not isinstance(users, list):
+        return "users must be an array"
+
+    seen_user_names: set[str] = set()
+    seen_x509_thumbprints: set[str] = set()
+    for index, user in enumerate(users):
+        if not isinstance(user, dict):
+            return f"users[{index}] must be an object"
+
+        user_name = user.get("userName")
+        if not isinstance(user_name, str) or not user_name.strip():
+            return f"users[{index}].userName must be a non-empty string"
+        if user_name in seen_user_names:
+            return f"duplicate userName: {user_name}"
+        seen_user_names.add(user_name)
+
+        password = user.get("password")
+        if password is not None and not isinstance(password, str):
+            return f"users[{index}].password must be a string"
+        has_password = isinstance(password, str) and len(password) > 0
+
+        thumbprint = user.get("x509ThumbprintSha1Hex")
+        certificate_path = user.get("x509CertificatePath")
+        if thumbprint is not None and certificate_path is not None:
+            return f"users[{index}] must not set both x509ThumbprintSha1Hex and x509CertificatePath"
+        if thumbprint is not None:
+            if not isinstance(thumbprint, str):
+                return f"users[{index}].x509ThumbprintSha1Hex must be a string"
+            if len(thumbprint) != 40 or any(
+                ch not in "0123456789abcdefABCDEF" for ch in thumbprint
+            ):
+                return (
+                    f"users[{index}].x509ThumbprintSha1Hex must be a 40-character SHA-1 hex string"
+                )
+            canonical_thumbprint = thumbprint.lower()
+            if canonical_thumbprint in seen_x509_thumbprints:
+                return f"duplicate x509ThumbprintSha1Hex: {thumbprint}"
+            seen_x509_thumbprints.add(canonical_thumbprint)
+        if certificate_path is not None and not isinstance(certificate_path, str):
+            return f"users[{index}].x509CertificatePath must be a string"
+        if not has_password and thumbprint is None and certificate_path is None:
+            return f"users[{index}] must define password or X509 identity material"
+
+        roles = user.get("roles", [])
+        if roles is not None:
+            if not isinstance(roles, list):
+                return f"users[{index}].roles must be an array"
+            for role_index, role in enumerate(roles):
+                if isinstance(role, bool) or not isinstance(role, (str, int)):
+                    return f"users[{index}].roles[{role_index}] must be a string or integer"
+                if role == 0 or role == "Anonymous":
+                    return f"users[{index}].roles[{role_index}] must not grant Anonymous"
+
+        description = user.get("description")
+        if description is not None and not isinstance(description, str):
+            return f"users[{index}].description must be a string"
+
+    return None
+
+
+def _check_user_identity_config(results: list) -> None:
+    """Validate user_identity_configuration.json if an extracted package is present."""
+    label = "user_identity_configuration.json"
+    candidates = [
+        PROJ_DIR / "user_identity_configuration.json",
+        PROJ_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "user_identity_configuration.json",
+        PROJ_DIR / "OPC_UA_IJT_Server_Simulator" / "user_identity_configuration.json",
+    ]
+    path = next((p for p in candidates if p.exists()), None)
+    if path is None:
+        _record(results, 1, label, True, "SKIP (file not present)")
+        return
+
+    try:
+        with path.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+        error = _validate_user_identity_config_payload(data)
+        if error:
+            _record(results, 1, label, False, f"FAIL ({error})")
+            return
+        _record(results, 1, label, True, f"PASS (valid JSON — {path.name})")
+    except Exception as exc:
+        _record(results, 1, label, False, f"FAIL ({exc})")
+
+
 def _check_detect_secrets(results: list) -> None:
     label = "Secrets scan (detect-secrets)"
     if not _cmd_available("detect-secrets"):
@@ -462,6 +569,7 @@ def _check_pip_audit(results: list) -> None:
                 "pip_audit",
                 "-r",
                 str(reqs),
+                *(["-r", str(_PYTHON_CONSTRAINTS)] if _PYTHON_CONSTRAINTS.exists() else []),
                 "--format",
                 "json",
                 "-o",
@@ -609,7 +717,53 @@ def _check_binaries(results: list) -> None:
     if missing:
         _record(results, 1, label, False, f"FAIL (missing {', '.join(missing)})")
         return
-    _record(results, 1, label, True, f"PASS ({', '.join(parts)})")
+
+    missing_entries: list[str] = []
+    for name, path in required:
+        try:
+            with zipfile.ZipFile(path) as zf:
+                entries = set(zf.namelist())
+                expected_root = path.stem
+                for json_name in (
+                    "server_configuration.json",
+                    "simulated_asset_data.json",
+                    "user_identity_configuration.json",
+                ):
+                    entry = f"{expected_root}/{json_name}"
+                    if entry not in entries:
+                        missing_entries.append(f"{path.name}:{json_name}")
+                        continue
+                    try:
+                        data = json.loads(zf.read(entry))
+                    except Exception as exc:
+                        _record(
+                            results,
+                            1,
+                            label,
+                            False,
+                            f"FAIL ({path.name}:{json_name} is invalid JSON: {exc})",
+                        )
+                        return
+                    if json_name == "user_identity_configuration.json":
+                        error = _validate_user_identity_config_payload(data)
+                        if error:
+                            _record(
+                                results,
+                                1,
+                                label,
+                                False,
+                                f"FAIL ({path.name}:{json_name}: {error})",
+                            )
+                            return
+        except zipfile.BadZipFile:
+            _record(results, 1, label, False, f"FAIL ({name} is not a valid ZIP)")
+            return
+
+    if missing_entries:
+        _record(results, 1, label, False, f"FAIL (missing {', '.join(missing_entries)})")
+        return
+
+    _record(results, 1, label, True, f"PASS ({', '.join(parts)}, required JSON files present)")
 
 
 def _check_semgrep(results: list) -> None:
@@ -701,6 +855,7 @@ def _venv_python() -> Path:
                 "-q",
                 "--disable-pip-version-check",
                 "--pre",
+                *_pip_constraint_args(),
                 "-r",
                 str(reqs),
             ],
@@ -781,6 +936,7 @@ def run_phase1(results: list) -> None:
     _check_shellcheck(results)
     _check_server_config(results)
     _check_simulated_data(results)
+    _check_user_identity_config(results)
     _check_detect_secrets(results)
     _check_pip_audit(results)
     _check_docker_validate(results)

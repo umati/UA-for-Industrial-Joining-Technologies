@@ -3,6 +3,9 @@
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Configuration;
 using IJT_CSharp_Client.Helpers;
@@ -15,9 +18,11 @@ namespace IJT_CSharp_Client.Tests;
 /// tests run and stops it afterwards.
 ///
 /// Resolution order for the server executable:
-///   1. OPCUA_SIMULATOR_EXE environment variable
-///   2. Well-known path relative to repo root (walks up from test assembly location)
-///   3. Already-running OPC UA-ready server on the resolved port
+///   1. IJT_SUT=windows uses the native copied-EXE path.
+///   2. IJT_SUT=linux uses Docker Compose with the Linux server package.
+///   3. When IJT_SUT is unset, the legacy native-then-Docker fallback remains.
+///   4. Already-running OPC UA-ready server on the resolved port is reused only
+///      when the runner did not request an explicit managed SUT.
 ///
 /// Port resolution order (first match wins):
 ///   1. <c>OPCUA_SERVER_PORT</c> environment variable (integer)
@@ -35,17 +40,64 @@ public sealed class OpcUaServerFixture : IDisposable
     private Process? _serverProcess;
     private bool _dockerStarted;
     private string? _dockerComposeDir;
+    private string? _dockerComposeProjectName;
     private string? _tempServerDir;
+    private string? _tempServerPkiDir;
     private readonly SemaphoreSlim _reusableSessionLock = new(1, 1);
     private JoiningSystem? _reusableSession;
 
     public bool IsAvailable { get; private set; }
     public string ServerUrl { get; } = $"opc.tcp://localhost:{_port}";
+    public string? ClientPkiRootPath { get; private set; }
+    public string? KnownX509UserCertificatePfxPath { get; private set; }
+
+    public void TrustClientApplicationCertificates(string? clientPkiRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(clientPkiRootPath) || _tempServerPkiDir is null)
+            return;
+
+        var sourceDir = Path.Combine(clientPkiRootPath, "own", "certs");
+        if (!Directory.Exists(sourceDir))
+            return;
+
+        var targetDir = Path.Combine(_tempServerPkiDir, "pki", "DefaultApplicationGroup", "trusted", "certs");
+        Directory.CreateDirectory(targetDir);
+        foreach (var certificatePath in Directory.GetFiles(sourceDir, "*.der"))
+        {
+            var targetPath = Path.Combine(targetDir, Path.GetFileName(certificatePath));
+            File.Copy(certificatePath, targetPath, overwrite: true);
+            _log.LogInformation(
+                "Trusted client application certificate {Certificate} for local simulator.",
+                targetPath);
+        }
+    }
+
+    /// <summary>
+    /// Place a single X509 user-identity certificate (DER bytes) into the
+    /// server's <c>DefaultUserTokenGroup/trusted/certs</c> store. Used by the
+    /// X509 happy-path security-matrix cell before the live simulator starts.
+    /// </summary>
+    public void TrustUserTokenCertificate(byte[] certificateDer, string fileNameStem)
+    {
+        if (_tempServerPkiDir is null || certificateDer.Length == 0)
+            return;
+
+        var targetDir = Path.Combine(_tempServerPkiDir, "pki", "DefaultUserTokenGroup", "trusted", "certs");
+        Directory.CreateDirectory(targetDir);
+        var safeStem = string.Concat(fileNameStem.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_'));
+        var targetPath = Path.Combine(targetDir, $"{safeStem}.der");
+        File.WriteAllBytes(targetPath, certificateDer);
+        _log.LogInformation(
+            "Trusted X509 user-identity certificate {Certificate} in DefaultUserTokenGroup for local simulator.",
+            targetPath);
+    }
 
     public OpcUaServerFixture()
     {
         var testRunnerPort = Environment.GetEnvironmentVariable("OPCUA_SERVER_PORT");
         var managedByRunner = !string.IsNullOrWhiteSpace(testRunnerPort);
+        var requestedSut = ResolveRequestedSut();
+        var explicitManagedSut = requestedSut is not null && managedByRunner;
 
         // IJT_PHASE1_ONLY=true means we're in the unit-test phase of the root runner.
         // Auto-launching the server here would race with test execution; skip it and
@@ -60,41 +112,113 @@ public sealed class OpcUaServerFixture : IDisposable
             return;
         }
 
+        byte[]? knownX509UserCertificateDer = null;
+        if (IsSecurityMatrixRun())
+        {
+            ClientPkiRootPath = PrepareSecurityMatrixClientPkiRoot();
+            (KnownX509UserCertificatePfxPath, knownX509UserCertificateDer) =
+                PrepareSecurityMatrixKnownX509UserCertificate();
+        }
+
         if (IsPortOpen(_port))
         {
-            var attempts = ProbeMaxAttempts();
-            if (ProbeOpcUaReady(_port, maxAttempts: attempts, delayMs: 1000))
+            if (explicitManagedSut)
             {
                 _log.LogInformation(
-                    "OPC UA server already ready on port {Port} — reusing existing server.",
-                    _port);
-                IsAvailable = true;
-                return;
-            }
-
-            if (managedByRunner)
-            {
-                _log.LogInformation(
-                    "OPCUA_SERVER_PORT is set but port {Port} did not pass OPC UA readiness — killing stale process before fresh launch.",
+                    "Explicit IJT_SUT={Sut} with OPCUA_SERVER_PORT set — killing stale process before isolated launch on port {Port}.",
+                    requestedSut,
                     _port);
                 KillProcessOnPort(_port);
-                Thread.Sleep(500); // brief pause for the OS to release the port
+                if (!WaitForPortClosed(_port, timeoutSeconds: 15))
+                {
+                    HandleExplicitSutUnavailable(
+                        $"[OpcUaServerFixture] Port {_port} is still in use after stale-server cleanup.",
+                        requestedSut);
+                    return;
+                }
             }
             else
             {
-                var msg = $"[OpcUaServerFixture] Port {_port} is open, but OPC UA did not become ready. Live tests will be skipped.";
-                _log.LogWarning("{Message}", msg);
-                Console.Error.WriteLine(msg);
-                IsAvailable = false;
+                var attempts = ProbeMaxAttempts();
+                if (ProbeOpcUaReady(_port, maxAttempts: attempts, delayMs: 1000))
+                {
+                    _log.LogInformation(
+                        "OPC UA server already ready on port {Port} — reusing existing server.",
+                        _port);
+                    IsAvailable = true;
+                    return;
+                }
+
+                if (managedByRunner)
+                {
+                    _log.LogInformation(
+                        "OPCUA_SERVER_PORT is set but port {Port} did not pass OPC UA readiness — killing stale process before fresh launch.",
+                        _port);
+                    KillProcessOnPort(_port);
+                    if (!WaitForPortClosed(_port, timeoutSeconds: 15))
+                    {
+                        var msg = $"[OpcUaServerFixture] Port {_port} is still in use after stale-server cleanup. Live tests will be skipped.";
+                        _log.LogWarning("{Message}", msg);
+                        Console.Error.WriteLine(msg);
+                        IsAvailable = false;
+                        return;
+                    }
+                }
+                else
+                {
+                    var msg = $"[OpcUaServerFixture] Port {_port} is open, but OPC UA did not become ready. Live tests will be skipped.";
+                    _log.LogWarning("{Message}", msg);
+                    Console.Error.WriteLine(msg);
+                    IsAvailable = false;
+                    return;
+                }
+            }
+        }
+
+        if (string.Equals(requestedSut, "linux", StringComparison.OrdinalIgnoreCase))
+        {
+            if (TryLaunchViaDocker(knownX509UserCertificateDer))
+            {
+                IsAvailable = WaitForPort(_port, timeoutSeconds: 60)
+                    && ProbeOpcUaReady(_port, maxAttempts: ProbeMaxAttempts(), delayMs: 1000);
+                if (!IsAvailable)
+                {
+                    var msg = $"[OpcUaServerFixture] Docker OPC UA server did not become ready on port {_port}.";
+                    HandleExplicitSutUnavailable(msg, requestedSut);
+                }
+                else
+                    _log.LogInformation("OPC UA server (Docker) ready on port {Port}.", _port);
                 return;
             }
+
+            HandleExplicitSutUnavailable(
+                $"[OpcUaServerFixture] IJT_SUT=linux requested, but Docker launch is unavailable on port {_port}.",
+                requestedSut);
+            return;
+        }
+
+        if (string.Equals(requestedSut, "windows", StringComparison.OrdinalIgnoreCase)
+            && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            HandleExplicitSutUnavailable(
+                $"[OpcUaServerFixture] IJT_SUT=windows requested on {RuntimeInformation.OSDescription}; run this matrix cell on Windows.",
+                requestedSut);
+            return;
         }
 
         var exePath = FindServerExecutable();
         if (exePath is null)
         {
+            if (string.Equals(requestedSut, "windows", StringComparison.OrdinalIgnoreCase))
+            {
+                HandleExplicitSutUnavailable(
+                    $"[OpcUaServerFixture] IJT_SUT=windows requested, but the Windows simulator executable was not found for port {_port}.",
+                    requestedSut);
+                return;
+            }
+
             // No native binary — try Docker fallback
-            if (TryLaunchViaDocker())
+            if (TryLaunchViaDocker(knownX509UserCertificateDer))
             {
                 IsAvailable = WaitForPort(_port, timeoutSeconds: 60)
                     && ProbeOpcUaReady(_port, maxAttempts: ProbeMaxAttempts(), delayMs: 1000);
@@ -118,18 +242,22 @@ public sealed class OpcUaServerFixture : IDisposable
         _log.LogInformation("Starting OPC UA server: {Path}", exePath);
         try
         {
-            // When using a non-default port, copy the server binary dir and patch the
-            // server_configuration.json so the server starts on the requested port.
-            // This mirrors the same copy-patch mechanism used by the Python clients.
-            if (_port != 40451)
+            // Managed security runs use an isolated copy so server JSON and PKI
+            // changes never touch the checked-in package directory.
+            if (_port != 40451 || IsSecurityMatrixRun())
             {
                 _log.LogInformation(
                     "Preparing isolated server copy for port {Port}. Source executable: {ExePath}",
                     _port, exePath);
-                exePath = PrepareCopiedServerDir(exePath, _port, out _tempServerDir);
+                exePath = PrepareCopiedServerDir(exePath, _port, out _tempServerDir, out _tempServerPkiDir);
                 _log.LogInformation(
-                    "Isolated server copy prepared. Copied executable: {ExePath}, temp directory: {TempDir}",
-                    exePath, _tempServerDir);
+                    "Isolated server copy prepared. Copied executable: {ExePath}, temp directory: {TempDir}, PKI directory: {PkiDir}",
+                    exePath, _tempServerDir, _tempServerPkiDir);
+                if (knownX509UserCertificateDer is not null && _tempServerDir is not null)
+                    WriteSecurityMatrixUserIdentityConfiguration(_tempServerDir, knownX509UserCertificateDer);
+                TrustClientApplicationCertificates(ClientPkiRootPath);
+                if (knownX509UserCertificateDer is not null)
+                    TrustUserTokenCertificate(knownX509UserCertificateDer, "user1");
             }
 
             _serverProcess = new Process
@@ -144,6 +272,16 @@ public sealed class OpcUaServerFixture : IDisposable
                     RedirectStandardError = true,
                 },
                 EnableRaisingEvents = true,
+            };
+            _serverProcess.OutputDataReceived += (_, e) =>
+            {
+                if (!string.IsNullOrWhiteSpace(e.Data))
+                    LogServerOutput(e.Data);
+            };
+            _serverProcess.ErrorDataReceived += (_, e) =>
+            {
+                if (!string.IsNullOrWhiteSpace(e.Data))
+                    _log.LogWarning("server stderr: {Line}", e.Data);
             };
             _serverProcess.Start();
             _serverProcess.BeginOutputReadLine();
@@ -258,6 +396,33 @@ public sealed class OpcUaServerFixture : IDisposable
         return isCi ? 30 : 20;
     }
 
+    private static string? ResolveRequestedSut()
+    {
+        var sut = Environment.GetEnvironmentVariable("IJT_SUT");
+        if (string.IsNullOrWhiteSpace(sut))
+            return null;
+
+        if (string.Equals(sut, "windows", StringComparison.OrdinalIgnoreCase))
+            return "windows";
+        if (string.Equals(sut, "linux", StringComparison.OrdinalIgnoreCase))
+            return "linux";
+
+        throw new InvalidOperationException($"Unsupported IJT_SUT value: {sut}. Expected windows or linux.");
+    }
+
+    private static bool IsCiLike()
+        => string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase);
+
+    private void HandleExplicitSutUnavailable(string message, string? requestedSut)
+    {
+        _log.LogWarning("{Message}", message);
+        Console.Error.WriteLine(message);
+        IsAvailable = false;
+        if (requestedSut is not null && IsCiLike())
+            throw new InvalidOperationException(message);
+    }
+
     private static string? FindServerExecutable()
     {
         // 1 — env var
@@ -293,9 +458,9 @@ public sealed class OpcUaServerFixture : IDisposable
     }
 
     /// <summary>Try to start the OPC UA server via Docker Compose.</summary>
-    private bool TryLaunchViaDocker()
+    private bool TryLaunchViaDocker(byte[]? knownX509UserCertificateDer)
     {
-        var dockerExe = FindInPath("docker") ?? FindInPath("docker.exe");
+        var dockerExe = FindDockerExecutable();
         if (dockerExe is null)
         {
             _log.LogInformation("Docker not found in PATH — skipping Docker fallback.");
@@ -323,26 +488,51 @@ public sealed class OpcUaServerFixture : IDisposable
             return false;
         }
 
-        _log.LogInformation("Starting OPC UA server via Docker in {Dir}", composeDir);
+        _dockerComposeProjectName = ResolveDockerComposeProjectName();
+        _log.LogInformation(
+            "Starting OPC UA server via Docker in {Dir} with compose project {ProjectName}",
+            composeDir,
+            _dockerComposeProjectName);
         try
         {
+            var composeFile = Path.Combine(composeDir, "docker-compose.yml");
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = dockerExe,
+                WorkingDirectory = composeDir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            startInfo.ArgumentList.Add("compose");
+
+            if (knownX509UserCertificateDer is not null)
+            {
+                var overrideFile = PrepareDockerSecurityMatrixOverride(
+                    knownX509UserCertificateDer,
+                    out _tempServerDir,
+                    out _tempServerPkiDir);
+                startInfo.ArgumentList.Add("-f");
+                startInfo.ArgumentList.Add(composeFile);
+                startInfo.ArgumentList.Add("-f");
+                startInfo.ArgumentList.Add(overrideFile);
+            }
+
+            startInfo.ArgumentList.Add("up");
+            startInfo.ArgumentList.Add("-d");
+            if (ShouldBuildDockerImage())
+                startInfo.ArgumentList.Add("--build");
+
             using var r = new Process
             {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = dockerExe,
-                    Arguments = "compose up -d",
-                    WorkingDirectory = composeDir,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true,
-                },
+                StartInfo = startInfo,
             };
             // Enforce the resolved port so docker-compose uses the same port the test
             // fixture is about to connect to (avoids mismatch when _port was parsed from
             // OPCUA_SERVER_URL rather than being set via OPCUA_SERVER_PORT directly).
             r.StartInfo.Environment["OPCUA_SERVER_PORT"] = _port.ToString();
+            r.StartInfo.Environment["COMPOSE_PROJECT_NAME"] = _dockerComposeProjectName;
             r.Start();
             r.WaitForExit(30_000);
             if (r.ExitCode == 0)
@@ -362,6 +552,103 @@ public sealed class OpcUaServerFixture : IDisposable
         }
     }
 
+    private string PrepareDockerSecurityMatrixOverride(
+        byte[] knownX509UserCertificateDer,
+        out string tmpDir,
+        out string pkiDir)
+    {
+        tmpDir = Path.Combine(
+            ResolveProjectTempRoot("docker-overrides"),
+            $"csharp_{_port}_{Guid.NewGuid():N}");
+        pkiDir = ResolveShortServerPkiDirectory(_port);
+        Directory.CreateDirectory(tmpDir);
+
+        WriteSecurityMatrixUserIdentityConfiguration(tmpDir, knownX509UserCertificateDer);
+        TrustDockerClientApplicationCertificates(pkiDir, ClientPkiRootPath);
+        TrustDockerCertificate(pkiDir, "DefaultUserTokenGroup", knownX509UserCertificateDer, "user1");
+        AllowContainerWrite(pkiDir);
+
+        var configPath = Path.Combine(tmpDir, "user_identity_configuration.json");
+        var overridePath = Path.Combine(tmpDir, "docker-compose.security-matrix.yml");
+        File.WriteAllText(
+            overridePath,
+            string.Join(
+                Environment.NewLine,
+                [
+                    "services:",
+                    "  opcua-ijt-server:",
+                    "    volumes:",
+                    $"      - \"{ToDockerBindPath(configPath)}:/app/user_identity_configuration.json:ro\"",
+                    $"      - \"{ToDockerBindPath(pkiDir)}:/app/pki\"",
+                    "",
+                ]),
+            System.Text.Encoding.UTF8);
+        return overridePath;
+    }
+
+    private static void TrustDockerClientApplicationCertificates(string pkiDir, string? clientPkiRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(clientPkiRootPath))
+            return;
+
+        var sourceDir = Path.Combine(clientPkiRootPath, "own", "certs");
+        if (!Directory.Exists(sourceDir))
+            return;
+
+        foreach (var certificatePath in Directory.GetFiles(sourceDir, "*.der"))
+            TrustDockerCertificate(
+                pkiDir,
+                "DefaultApplicationGroup",
+                File.ReadAllBytes(certificatePath),
+                Path.GetFileNameWithoutExtension(certificatePath));
+    }
+
+    private static void TrustDockerCertificate(
+        string pkiDir,
+        string groupName,
+        byte[] certificateDer,
+        string fileNameStem)
+    {
+        var targetDir = Path.Combine(pkiDir, groupName, "trusted", "certs");
+        Directory.CreateDirectory(targetDir);
+        var safeStem = string.Concat(fileNameStem.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_'));
+        File.WriteAllBytes(Path.Combine(targetDir, $"{safeStem}.der"), certificateDer);
+    }
+
+    private static void AllowContainerWrite(string path)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
+
+        try
+        {
+            using var chmod = Process.Start(new ProcessStartInfo
+            {
+                FileName = "chmod",
+                ArgumentList = { "-R", "777", path },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            chmod?.WaitForExit(3000);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning("Could not relax Docker PKI directory permissions: {Message}", ex.Message);
+        }
+    }
+
+    private static string ToDockerBindPath(string path)
+        => Path.GetFullPath(path).Replace('\\', '/');
+
+    private static bool ShouldBuildDockerImage()
+    {
+        var value = Environment.GetEnvironmentVariable("IJT_DOCKER_COMPOSE_BUILD");
+        return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string? FindInPath(string exe)
     {
         var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
@@ -372,6 +659,215 @@ public sealed class OpcUaServerFixture : IDisposable
         }
         return null;
     }
+
+    private static string? FindDockerExecutable()
+        => RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? FindInPath("docker.exe")
+            : FindInPath("docker");
+
+    private static string ResolveDockerComposeProjectName()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable("COMPOSE_PROJECT_NAME");
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+            return fromEnv;
+
+        var cell = Environment.GetEnvironmentVariable("IJT_SECURITY_MATRIX_CELL");
+        var suffix = string.IsNullOrWhiteSpace(cell) ? _port.ToString() : cell.ToLowerInvariant();
+        return $"ijt_csharp_sec_matrix_{suffix}";
+    }
+
+    private static bool IsSecurityMatrixRun()
+        => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("IJT_SECURITY_MATRIX_CELL"))
+           || string.Equals(Environment.GetEnvironmentVariable("IJT_SUT"), "windows", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(Environment.GetEnvironmentVariable("IJT_SUT"), "linux", StringComparison.OrdinalIgnoreCase);
+
+    private static string PrepareSecurityMatrixClientPkiRoot()
+    {
+        var cell = Environment.GetEnvironmentVariable("IJT_SECURITY_MATRIX_CELL");
+        cell = string.IsNullOrWhiteSpace(cell) ? "local" : cell.ToLowerInvariant();
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var pkiRoot = Path.Combine(ResolveProjectTempRoot("client-pki"), $"{cell}_{suffix}");
+        Directory.CreateDirectory(pkiRoot);
+
+        var config = new ClientConfig
+        {
+            ServerUrl = $"opc.tcp://localhost:{_port}",
+            ApplicationName = $"IJT CSharp Security Matrix {cell.ToUpperInvariant()}",
+            AutoAcceptServerCertificate = true,
+            UseSecurityPolicyForEndpointDiscovery = true,
+            SecurityPolicyUri = Opc.Ua.SecurityPolicies.Basic256Sha256,
+            MessageSecurityMode = Opc.Ua.MessageSecurityMode.SignAndEncrypt,
+            PkiRootPath = pkiRoot,
+        };
+        JoiningSystem.EnsureApplicationCertificateForTestingAsync(config).GetAwaiter().GetResult();
+        return pkiRoot;
+    }
+
+    private static (string PfxPath, byte[] CertificateDer) PrepareSecurityMatrixKnownX509UserCertificate()
+    {
+        var cell = Environment.GetEnvironmentVariable("IJT_SECURITY_MATRIX_CELL");
+        cell = string.IsNullOrWhiteSpace(cell) ? "local" : cell.ToLowerInvariant();
+        var root = Path.Combine(ResolveProjectTempRoot("client-pki"), $"{cell}_x509_user1_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=user1",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+        var subjectKeyIdentifier = new X509SubjectKeyIdentifierExtension(request.PublicKey, false);
+        request.CertificateExtensions.Add(subjectKeyIdentifier);
+        request.CertificateExtensions.Add(
+            X509AuthorityKeyIdentifierExtension.CreateFromSubjectKeyIdentifier(subjectKeyIdentifier));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, false));
+
+        using var certificate = request.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow.AddDays(30));
+
+        var pfxPath = Path.Combine(root, "x509-user1.pfx");
+        File.WriteAllBytes(pfxPath, certificate.Export(X509ContentType.Pkcs12));
+        return (pfxPath, certificate.Export(X509ContentType.Cert));
+    }
+
+    private static void WriteSecurityMatrixUserIdentityConfiguration(
+        string serverDir,
+        byte[] knownX509UserCertificateDer)
+    {
+        var users = LoadSecurityMatrixUsersForFixture();
+        var configuredUsers = new Dictionary<string, Dictionary<string, object>>(StringComparer.Ordinal);
+
+        configuredUsers[users.Positive.UserName] = User(
+            users.Positive.UserName,
+            users.Positive.Password,
+            users.Positive.UserName == "SecurityAdmin" ? ["SecurityAdmin"] : [],
+            "Security matrix positive user");
+
+        configuredUsers.TryAdd(
+            users.WrongPassword.UserName,
+            User(users.WrongPassword.UserName, "password", [], "Security matrix wrong-password target"));
+
+        configuredUsers.TryAdd("user1", User("user1", "password", [], "Security matrix X509 user"));
+        configuredUsers["user1"]["x509ThumbprintSha1Hex"] = Convert.ToHexString(
+            SHA1.HashData(knownX509UserCertificateDer)).ToLowerInvariant();
+
+        var payload = new
+        {
+            userIdentityData = new
+            {
+                enabled = true,
+                users = configuredUsers.Values,
+            },
+        };
+        var json = JsonSerializer.Serialize(
+            payload,
+            new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(
+            Path.Combine(serverDir, "user_identity_configuration.json"),
+            json + Environment.NewLine,
+            System.Text.Encoding.UTF8);
+    }
+
+    private static Dictionary<string, object> User(
+        string userName,
+        string password,
+        string[] roles,
+        string description)
+        => new(StringComparer.Ordinal)
+        {
+            ["userName"] = userName,
+            ["password"] = password,
+            ["roles"] = roles,
+            ["description"] = description,
+        };
+
+    private static FixtureSecurityMatrixUsers LoadSecurityMatrixUsersForFixture()
+    {
+        var path = Environment.GetEnvironmentVariable("SECURITY_MATRIX_USERS_FILE");
+        if (string.IsNullOrWhiteSpace(path))
+            path = FindDefaultUsersFileForFixture();
+
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return new FixtureSecurityMatrixUsers(
+                new FixtureCredentials("SecurityAdmin", "password"),
+                new FixtureCredentials("user1", "wrong_xxxxx"));
+
+        var sections = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        string? currentSection = null;
+        foreach (var rawLine in File.ReadAllLines(path))
+        {
+            var trimmed = rawLine.Trim();
+            if (trimmed.Length == 0 || trimmed.StartsWith('#'))
+                continue;
+
+            if (!char.IsWhiteSpace(rawLine[0]) && trimmed.EndsWith(':'))
+            {
+                currentSection = trimmed.TrimEnd(':').Trim();
+                sections[currentSection] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                continue;
+            }
+
+            if (currentSection is null)
+                continue;
+
+            var parts = trimmed.Split(':', count: 2);
+            if (parts.Length == 2)
+                sections[currentSection][parts[0].Trim()] = parts[1].Trim().Trim('"', '\'');
+        }
+
+        return new FixtureSecurityMatrixUsers(
+            ReadFixtureCredentials(sections, "positive", new FixtureCredentials("SecurityAdmin", "password")),
+            ReadFixtureCredentials(sections, "wrong_password", new FixtureCredentials("user1", "wrong_xxxxx")));
+    }
+
+    private static FixtureCredentials ReadFixtureCredentials(
+        IReadOnlyDictionary<string, Dictionary<string, string>> sections,
+        string section,
+        FixtureCredentials fallback)
+    {
+        if (!sections.TryGetValue(section, out var values)
+            || !values.TryGetValue("username", out var userName)
+            || !values.TryGetValue("password", out var password))
+        {
+            return fallback;
+        }
+
+        return new FixtureCredentials(userName, password);
+    }
+
+    private static string? FindDefaultUsersFileForFixture()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var sharedCandidate = Path.Combine(
+                dir.FullName,
+                "OPC_UA_Servers",
+                "Release2",
+                "security_matrix.users.yaml");
+            if (File.Exists(sharedCandidate))
+                return sharedCandidate;
+
+            foreach (var testsDirectoryName in new[] { "Tests", "tests" })
+            {
+                var candidate = Path.Combine(dir.FullName, testsDirectoryName, "security_matrix.users.yaml");
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+
+            dir = dir.Parent;
+        }
+
+        return null;
+    }
+
+    private sealed record FixtureCredentials(string UserName, string Password);
+
+    private sealed record FixtureSecurityMatrixUsers(
+        FixtureCredentials Positive,
+        FixtureCredentials WrongPassword);
 
     private static bool IsPortOpen(int port)
     {
@@ -385,14 +881,27 @@ public sealed class OpcUaServerFixture : IDisposable
     }
 
     /// <summary>
-    /// Kills any process currently listening on <paramref name="port"/> using
-    /// platform-specific commands (netstat + taskkill on Windows, fuser on Linux/macOS).
-    /// Best-effort — logs a warning and continues if it fails.
+    /// Clears an isolated test port before a managed launch. Docker containers
+    /// publishing the port are stopped first; native listeners use platform-specific
+    /// commands (netstat + taskkill on Windows, fuser on Linux/macOS).
     /// </summary>
     private static void KillProcessOnPort(int port)
     {
         try
         {
+            if (StopDockerContainersPublishingPort(port))
+            {
+                return;
+            }
+
+            if (string.Equals(
+                    Environment.GetEnvironmentVariable("IJT_SUT"),
+                    "linux",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 // netstat -ano lists PID in the last column for LISTENING entries
@@ -449,6 +958,61 @@ public sealed class OpcUaServerFixture : IDisposable
         }
     }
 
+    private static bool StopDockerContainersPublishingPort(int port)
+    {
+        var dockerExe = FindDockerExecutable();
+        if (dockerExe is null)
+            return false;
+
+        try
+        {
+            using var ps = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = dockerExe,
+                    Arguments = $"ps --filter publish={port} --format \"{{{{.ID}}}}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                },
+            };
+            ps.Start();
+            if (!ps.WaitForExit(5000))
+            {
+                ps.Kill(entireProcessTree: true);
+                return false;
+            }
+            var output = ps.StandardOutput.ReadToEnd();
+            if (ps.ExitCode != 0)
+            {
+                return false;
+            }
+
+            var stoppedAny = false;
+            foreach (var containerId in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                using var stop = Process.Start(new ProcessStartInfo
+                {
+                    FileName = dockerExe,
+                    Arguments = $"stop {containerId}",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                });
+                stop?.WaitForExit(10000);
+                stoppedAny = true;
+            }
+
+            return stoppedAny;
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug("Docker port cleanup for port {Port} was skipped: {Message}", port, ex.Message);
+            return false;
+        }
+    }
+
 
     private static bool WaitForPort(int port, int timeoutSeconds)
     {
@@ -459,6 +1023,17 @@ public sealed class OpcUaServerFixture : IDisposable
             Thread.Sleep(500);
         }
         return false;
+    }
+
+    private static bool WaitForPortClosed(int port, int timeoutSeconds)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (!IsPortOpen(port)) return true;
+            Thread.Sleep(500);
+        }
+        return !IsPortOpen(port);
     }
 
     /// <summary>
@@ -546,10 +1121,13 @@ public sealed class OpcUaServerFixture : IDisposable
     /// binary directory to a temp location and patch the JSON in the copy. This is
     /// the same copy-patch pattern used by the Python clients via <c>run_all_tests.py</c>.
     /// </remarks>
-    private static string PrepareCopiedServerDir(string srcExePath, int port, out string tmpDir)
+    private static string PrepareCopiedServerDir(string srcExePath, int port, out string tmpDir, out string pkiDir)
     {
         var srcDir = Path.GetDirectoryName(srcExePath)!;
-        tmpDir = Path.Combine(Path.GetTempPath(), $"opcua_csharp_{port}_{Guid.NewGuid():N}");
+        var tmpRoot = ResolveProjectTempRoot("server-copies");
+        Directory.CreateDirectory(tmpRoot);
+        tmpDir = Path.Combine(tmpRoot, $"opcua_csharp_{port}_{Guid.NewGuid():N}");
+        pkiDir = ResolveShortServerPkiDirectory(port);
 
         CopyDirectoryRecursive(srcDir, tmpDir);
 
@@ -561,6 +1139,17 @@ public sealed class OpcUaServerFixture : IDisposable
                 json,
                 @"""serverEndpointTCPPort""\s*:\s*\d+",
                 $@"""serverEndpointTCPPort"": {port}");
+            patched = System.Text.RegularExpressions.Regex.Replace(
+                patched,
+                @"""pkiDirectoryPath""\s*:\s*""[^""]*""",
+                $@"""pkiDirectoryPath"": {System.Text.Json.JsonSerializer.Serialize(pkiDir)}");
+            if (IsSecurityMatrixRun())
+            {
+                patched = System.Text.RegularExpressions.Regex.Replace(
+                    patched,
+                    @"""autoTrustCertificates""\s*:\s*(true|false)",
+                    @"""autoTrustCertificates"": false");
+            }
             File.WriteAllText(cfgPath, patched, System.Text.Encoding.UTF8);
         }
 
@@ -575,6 +1164,54 @@ public sealed class OpcUaServerFixture : IDisposable
         foreach (var subDir in Directory.GetDirectories(srcDir))
             CopyDirectoryRecursive(subDir, Path.Combine(dstDir, Path.GetFileName(subDir)));
     }
+
+    private static void LogServerOutput(string line)
+    {
+        if (line.Contains("ERROR", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("WARNING", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("CRITICAL", StringComparison.OrdinalIgnoreCase))
+        {
+            _log.LogWarning("server stdout: {Line}", line);
+            return;
+        }
+
+        _log.LogDebug("server stdout: {Line}", line);
+    }
+
+    private static string ResolveProjectTempRoot(string childDirectory)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "IJT_CSharp_Client.csproj")))
+                return Path.Combine(dir.FullName, "tmp", childDirectory);
+
+            var projectRoot = Path.Combine(dir.FullName, "OPC_UA_Clients", "Release2", "IJT_CSharp_Client");
+            if (File.Exists(Path.Combine(projectRoot, "IJT_CSharp_Client.csproj")))
+                return Path.Combine(projectRoot, "tmp", childDirectory);
+
+            dir = dir.Parent;
+        }
+
+        return Path.Combine(AppContext.BaseDirectory, "tmp", childDirectory);
+    }
+
+    private static string ResolveShortServerPkiDirectory(int port)
+    {
+        var root = Environment.GetEnvironmentVariable("IJT_SERVER_PKI_ROOT");
+        if (string.IsNullOrWhiteSpace(root))
+            root = ResolveProjectTempRoot("p");
+
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var pkiDir = Path.Combine(root, $"{port}_{suffix}");
+        Directory.CreateDirectory(pkiDir);
+        return pkiDir;
+    }
+
+    private static bool PreserveTestArtifacts()
+        => string.Equals(Environment.GetEnvironmentVariable("IJT_PRESERVE_TEST_ARTIFACTS"), "1", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(Environment.GetEnvironmentVariable("IJT_PRESERVE_TEST_ARTIFACTS"), "true", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(Environment.GetEnvironmentVariable("IJT_PRESERVE_TEST_ARTIFACTS"), "yes", StringComparison.OrdinalIgnoreCase);
 
     public void Dispose()
     {
@@ -612,10 +1249,12 @@ public sealed class OpcUaServerFixture : IDisposable
 
         if (_dockerStarted && !string.IsNullOrEmpty(_dockerComposeDir))
         {
-            _log.LogInformation("Stopping Docker OPC UA server (docker compose down)...");
+            _log.LogInformation(
+                "Stopping Docker OPC UA server ({Command})...",
+                PreserveTestArtifacts() ? "docker compose down" : "docker compose down --volumes");
             try
             {
-                var dockerExe = FindInPath("docker") ?? FindInPath("docker.exe");
+                var dockerExe = FindDockerExecutable();
                 if (dockerExe is not null)
                 {
                     using var r = new Process
@@ -623,13 +1262,15 @@ public sealed class OpcUaServerFixture : IDisposable
                         StartInfo = new ProcessStartInfo
                         {
                             FileName = dockerExe,
-                            Arguments = "compose down",
+                            Arguments = PreserveTestArtifacts() ? "compose down" : "compose down --volumes",
                             WorkingDirectory = _dockerComposeDir,
                             UseShellExecute = false,
                             CreateNoWindow = true,
                         },
                     };
                     r.StartInfo.Environment["OPCUA_SERVER_PORT"] = _port.ToString();
+                    if (!string.IsNullOrWhiteSpace(_dockerComposeProjectName))
+                        r.StartInfo.Environment["COMPOSE_PROJECT_NAME"] = _dockerComposeProjectName;
                     r.Start();
                     r.WaitForExit(30_000);
                 }
@@ -639,8 +1280,41 @@ public sealed class OpcUaServerFixture : IDisposable
 
         if (_tempServerDir is not null)
         {
-            try { Directory.Delete(_tempServerDir, recursive: true); }
-            catch (Exception ex) { _log.LogWarning("Error cleaning up temp server dir {Dir}: {Message}", _tempServerDir, ex.Message); }
+            if (PreserveTestArtifacts())
+            {
+                _log.LogInformation("Preserving temp server dir {Dir} because IJT_PRESERVE_TEST_ARTIFACTS is set.", _tempServerDir);
+            }
+            else
+            {
+                try { Directory.Delete(_tempServerDir, recursive: true); }
+                catch (Exception ex) { _log.LogWarning("Error cleaning up temp server dir {Dir}: {Message}", _tempServerDir, ex.Message); }
+            }
+        }
+
+        if (_tempServerPkiDir is not null)
+        {
+            if (PreserveTestArtifacts())
+            {
+                _log.LogInformation("Preserving temp server PKI dir {Dir} because IJT_PRESERVE_TEST_ARTIFACTS is set.", _tempServerPkiDir);
+            }
+            else
+            {
+                try { Directory.Delete(_tempServerPkiDir, recursive: true); }
+                catch (Exception ex) { _log.LogWarning("Error cleaning up temp server PKI dir {Dir}: {Message}", _tempServerPkiDir, ex.Message); }
+            }
+        }
+
+        if (ClientPkiRootPath is not null)
+        {
+            if (PreserveTestArtifacts())
+            {
+                _log.LogInformation("Preserving matrix client PKI dir {Dir} because IJT_PRESERVE_TEST_ARTIFACTS is set.", ClientPkiRootPath);
+            }
+            else
+            {
+                try { Directory.Delete(ClientPkiRootPath, recursive: true); }
+                catch (Exception ex) { _log.LogWarning("Error cleaning up matrix client PKI dir {Dir}: {Message}", ClientPkiRootPath, ex.Message); }
+            }
         }
 
         GC.SuppressFinalize(this);
