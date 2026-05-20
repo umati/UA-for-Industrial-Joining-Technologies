@@ -254,14 +254,14 @@ jobs:
               asyncua_version="${asyncua_version%%-*}"
               awk -v version="$asyncua_version" \
                 '\''BEGIN { replaced=0 } tolower($0) ~ /^asyncua([[:space:]]|[=<>!~@]|$)/ { print "asyncua==" version; replaced=1; next } { print } END { if (replaced == 0) print "asyncua==" version }'\'' \
-                constraints.txt > /tmp/runtime-constraints.txt
-              python -m venv /tmp/ijt-browser-probe
-              /tmp/ijt-browser-probe/bin/python -m pip install --pre --no-index \
+                constraints.txt > "$HOME/runtime-constraints.txt"
+              python -m venv "$HOME/ijt-browser-probe"
+              "$HOME/ijt-browser-probe/bin/python" -m pip install --pre --no-index \
                 --find-links /opt/ijt-browser-ci/pip-wheelhouse \
-                -c /tmp/runtime-constraints.txt \
+                -c "$HOME/runtime-constraints.txt" \
                 -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt \
                 -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
-              /tmp/ijt-browser-probe/bin/python -c "import asyncua, pytest, pytest_timeout, websockets; print(\"offline python closure OK\")"
+              "$HOME/ijt-browser-probe/bin/python" -c "import asyncua, pytest, pytest_timeout, websockets; print(\"offline python closure OK\")"
               cd OPC_UA_Clients/Release2/IJT_Web_Client
               npm ci --legacy-peer-deps --offline --no-audit --no-fund
               node -e "require(\"@playwright/test\"); console.log(\"offline node closure OK\")"

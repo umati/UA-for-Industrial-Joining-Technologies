@@ -264,11 +264,20 @@ def _venv_pip(venv: Path) -> Path:
 
 
 def _inside_venv() -> bool:
-    """Return True if the current interpreter is already inside *_VENV*."""
+    """Return True if the current interpreter is already inside *_VENV*.
+
+    Uses ``sys.prefix`` rather than ``sys.executable`` because on Linux the
+    venv's ``bin/python`` is a symlink to the underlying interpreter (e.g.
+    ``/opt/hostedtoolcache/Python/.../bin/python``). ``Path.resolve()`` on
+    ``sys.executable`` follows that symlink and escapes the venv, which
+    caused an infinite re-launch loop in the security-matrix B2 Linux job.
+    ``sys.prefix`` is set by the Python interpreter to the venv root when
+    running under a venv, regardless of symlinks, so it is the safe anchor.
+    """
     try:
-        return Path(sys.executable).resolve().is_relative_to(_VENV.resolve())
-    except AttributeError:
-        return str(sys.executable).startswith(str(_VENV))
+        return Path(sys.prefix).resolve() == _VENV.resolve()
+    except (OSError, RuntimeError):
+        return str(Path(sys.prefix)) == str(_VENV)
 
 
 def _pip_constraint_args() -> list[str]:

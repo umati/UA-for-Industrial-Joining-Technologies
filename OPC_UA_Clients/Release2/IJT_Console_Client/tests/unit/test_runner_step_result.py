@@ -178,6 +178,34 @@ def test_security_matrix_step_uses_configured_wall_clock_timeout(monkeypatch, tm
     assert calls[0]["timeout_label"] == "Console security matrix B1"
 
 
+def test_inside_venv_uses_prefix_not_resolved_executable(monkeypatch, tmp_path):
+    """Linux venv bin/python symlinks must not trigger recursive relaunch."""
+    venv = tmp_path / ".venv_test"
+    venv.mkdir()
+    hosted_python = tmp_path / "hostedtoolcache" / "Python" / "3.14.5" / "x64" / "bin"
+    hosted_python.mkdir(parents=True)
+    python = hosted_python / "python3.14"
+    python.write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(_mod, "_VENV", venv)
+    monkeypatch.setattr(_mod.sys, "prefix", str(venv))
+    monkeypatch.setattr(_mod.sys, "executable", str(python))
+
+    assert _mod._inside_venv()
+
+
+def test_inside_venv_rejects_other_venv(monkeypatch, tmp_path):
+    project_venv = tmp_path / "project" / ".venv_test"
+    other_venv = tmp_path / "other" / ".venv"
+    project_venv.mkdir(parents=True)
+    other_venv.mkdir(parents=True)
+
+    monkeypatch.setattr(_mod, "_VENV", project_venv)
+    monkeypatch.setattr(_mod.sys, "prefix", str(other_venv))
+
+    assert not _mod._inside_venv()
+
+
 def test_install_requirements_preserves_explicit_pip_cache_dir(monkeypatch, tmp_path):
     venv = tmp_path / ".venv_test"
     venv.mkdir()

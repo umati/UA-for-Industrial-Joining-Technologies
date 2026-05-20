@@ -401,6 +401,13 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert "npm ci --legacy-peer-deps --offline --no-audit --no-fund" in build_body
     assert "--find-links /opt/ijt-browser-ci/pip-wheelhouse" in build_body
     assert "IS_DOCKER=true" in build_body
+    assert 'constraints.txt > "$HOME/runtime-constraints.txt"' in build_body
+    assert 'python -m venv "$HOME/ijt-browser-probe"' in build_body
+    assert '-c "$HOME/runtime-constraints.txt"' in build_body
+    forbidden_probe_python = "/" + "tmp" + "/ijt-browser-probe/bin/python"
+    forbidden_runtime_constraints = "/" + "tmp" + "/runtime-constraints.txt"
+    assert f'"{forbidden_probe_python}"' not in build_body
+    assert forbidden_runtime_constraints not in build_body
 
     assert jobs["publish"]["permissions"] == {
         "contents": "read",
@@ -453,6 +460,30 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
         publish_verify_step["env"]["EXPECTED_SOURCE_SHA"] == "${{ needs.build.outputs.source_sha }}"
     )
     assert "actual_sha" in publish_verify_step["run"]
+
+
+def test_browser_ci_phase0_runtime_probe_uses_writable_home_paths() -> None:
+    """The non-root runtime probe must not overwrite root-owned /tmp build files."""
+    import yaml
+
+    workflow = yaml.safe_load(_IMAGE_BUILD_WORKFLOW.read_text(encoding="utf-8"))
+    build_job = workflow["jobs"]["build"]
+    probe_step = next(
+        step
+        for step in build_job["steps"]
+        if step.get("name") == "Phase 0 smoke - offline dependency closure probe"
+    )
+    body = probe_step["run"]
+
+    assert "-e HOME=/opt/ijt-browser-ci/home" in body
+    assert 'constraints.txt > "$HOME/runtime-constraints.txt"' in body
+    assert 'python -m venv "$HOME/ijt-browser-probe"' in body
+    assert '"$HOME/ijt-browser-probe/bin/python" -m pip install' in body
+    assert '-c "$HOME/runtime-constraints.txt"' in body
+    forbidden_probe_python = "/" + "tmp" + "/ijt-browser-probe/bin/python"
+    forbidden_runtime_constraints = "/" + "tmp" + "/runtime-constraints.txt"
+    assert f'"{forbidden_probe_python}"' not in body
+    assert forbidden_runtime_constraints not in body
 
 
 def test_integration_workflow_runs_for_image_pin_updates() -> None:
