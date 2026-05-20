@@ -103,7 +103,7 @@ async def connected_client() -> AsyncGenerator:
     """
     Yields a fully-connected OPCUAClient.  One connection is shared across all
     method tests in this module so we avoid the overhead of repeated connect /
-    load_type_definitions calls.
+    load_data_type_definitions calls.
     """
     from opcua_client import OPCUAClient
 

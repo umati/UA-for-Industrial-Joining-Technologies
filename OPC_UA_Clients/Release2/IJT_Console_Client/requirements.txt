@@ -1,9 +1,10 @@
 # Python 3.14+ compatible requirements
 # Install with: pip install -c <repo>/constraints.txt -r requirements.txt
 # constraints.txt enforces repo-wide transitive dependency security floors.
-# asyncua >= 1.2b2 is required for Python 3.14 support; installed with --pre via setup_client.py
-# so pre-releases are found; once asyncua 1.2.x stable ships pip picks that automatically.
-asyncua>=1.2b2
+#
+# asyncua is pinned in repo-root constraints.txt to upstream SHA 35a77c6b
+# (post-1.2b2; 2026-05-11) for Python 3.14.4 compatibility.
+asyncua
 pytz~=2026.1
 aiofiles~=25.1
 orjson~=3.11

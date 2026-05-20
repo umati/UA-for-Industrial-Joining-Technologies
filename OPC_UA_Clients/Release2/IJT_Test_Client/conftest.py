@@ -16,7 +16,7 @@ Design rules enforced here:
   - Namespace indices are resolved once and cached in ns_indices dict.
   - Two separate client fixtures prevent asyncua concurrency issues with subscriptions.
   - Module-scoped clients depend on session_client (not managed_server) so that
-    load_type_definitions() runs exactly once per session — not once per module.
+    load_data_type_definitions() runs exactly once per session — not once per module.
     This cuts per-test connection overhead from ~4 s to ~0.5 s.
 """
 # pylint: disable=redefined-outer-name,unused-argument,broad-exception-caught
@@ -257,10 +257,6 @@ async def session_client(managed_server):
         await client.connect()
     except Exception as exc:
         pytest.fail(f"Could not connect to OPC UA server at {SERVER_URL}: {exc}")
-    try:
-        await client.load_type_definitions()
-    except Exception as exc:
-        logger.warning("load_type_definitions() failed (non-fatal): %s", exc)
     try:
         await client.load_data_type_definitions()
     except Exception as exc:
@@ -603,7 +599,7 @@ async def opcua_client(session_client):
     ~400 per-test connections added ~20 minutes.  With ~30 modules the overhead
     drops to under a minute.
 
-    Depends on session_client so that load_type_definitions() has already run
+    Depends on session_client so that load_data_type_definitions() has already run
     once before any per-module client connects.
 
     Use subscription_client (module-scoped) for event subscription tests —
@@ -632,7 +628,7 @@ async def subscription_client(session_client):
     every call regardless of the underlying connection scope.  Tests remain
     sequential so no cross-test event noise can occur.
 
-    Depends on session_client so that load_type_definitions() has already
+    Depends on session_client so that load_data_type_definitions() has already
     run before any per-module client connects — no redundant type loading.
     """
     client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)

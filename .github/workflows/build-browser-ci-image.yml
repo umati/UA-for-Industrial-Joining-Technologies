@@ -13,9 +13,10 @@ name: Build Browser CI Image
 #   - build:   loads image locally, runs Phase 0 smoke under the exact
 #              runtime contract. NO packages: write.
 #   - publish: depends on build; only runs when push == true. Main/scheduled/
-#              manual publishes refresh the reviewed pin path; trusted same-
-#              repo dependency-bot PRs publish a PR-scoped tag consumed by
-#              integration.yml so the offline cache matches the PR lockfile.
+#              manual publishes refresh the reviewed pin path; same-repo PRs
+#              that change browser image inputs publish a PR-scoped source-SHA
+#              tag consumed by integration.yml so offline browser tests exercise
+#              the image built from the same checkout.
 
 on:
   push:
@@ -97,60 +98,54 @@ jobs:
           REF: ${{ github.ref }}
           DISPATCH_PUSH: ${{ inputs.push }}
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login || '' }}
           PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
         run: |
           set -euo pipefail
-          SOURCE_SHA="${PR_HEAD_SHA:-$GITHUB_SHA}"
+          SOURCE_SHA="$GITHUB_SHA"
           SHORT_SHA="${SOURCE_SHA::7}"
           PUBLISH_MODE="none"
           PR_IMAGE_TAG=""
           PUSH_OUTPUT="false"
-          trusted_dependency_bot=false
+          browser_image_inputs_changed=false
 
-          dependency_inputs_changed=false
-          image_build_logic_changed=false
-
-          case "$PR_AUTHOR" in
-            app/renovate|renovate\[bot\]|dependabot\[bot\])
-              trusted_dependency_bot=true
-              ;;
-          esac
-
-          if [[ "$EVENT_NAME" == "pull_request" && "$PR_HEAD_REPO" == "$GITHUB_REPOSITORY" && "$trusted_dependency_bot" == "true" ]]; then
+          if [[ "$EVENT_NAME" == "pull_request" && "$PR_HEAD_REPO" == "$GITHUB_REPOSITORY" ]]; then
             git fetch --no-tags --depth=1 origin "$PR_BASE_SHA" "$PR_HEAD_SHA"
             changed_files="$(git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA")"
             while IFS= read -r changed; do
               [[ -n "$changed" ]] || continue
               case "$changed" in
                 .dockerignore)
-                  image_build_logic_changed=true
+                  browser_image_inputs_changed=true
                   ;;
                 constraints.txt)
-                  dependency_inputs_changed=true
+                  browser_image_inputs_changed=true
                   ;;
                 OPC_UA_Clients/Release2/IJT_Web_Client/package.json)
-                  dependency_inputs_changed=true
+                  browser_image_inputs_changed=true
                   ;;
                 OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json)
-                  dependency_inputs_changed=true
+                  browser_image_inputs_changed=true
                   ;;
                 OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt)
-                  dependency_inputs_changed=true
+                  browser_image_inputs_changed=true
                   ;;
                 OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt)
-                  dependency_inputs_changed=true
+                  browser_image_inputs_changed=true
+                  ;;
+                .github/docker/ijt-browser-ci/image-pin.json)
+                  ;;
+                .github/docker/ijt-browser-ci/README.md)
                   ;;
                 .github/docker/ijt-browser-ci/*)
-                  image_build_logic_changed=true
+                  browser_image_inputs_changed=true
                   ;;
                 .github/scripts/update_browser_ci_image_pin.py)
-                  image_build_logic_changed=true
+                  browser_image_inputs_changed=true
                   ;;
                 .github/workflows/build-browser-ci-image.yml)
-                  image_build_logic_changed=true
+                  browser_image_inputs_changed=true
                   ;;
               esac
             done <<< "$changed_files"
@@ -167,7 +162,7 @@ jobs:
             if [[ "$DISPATCH_PUSH" == "true" ]]; then
               PUBLISH_MODE="pin"
             fi
-          elif [[ "$dependency_inputs_changed" == "true" && "$image_build_logic_changed" == "false" ]]; then
+          elif [[ "$browser_image_inputs_changed" == "true" ]]; then
             PUSH_OUTPUT="true"
             PUBLISH_MODE="pr"
             PR_IMAGE_TAG="${IMAGE_NAME}:pr-${PR_NUMBER}-${SHORT_SHA}"

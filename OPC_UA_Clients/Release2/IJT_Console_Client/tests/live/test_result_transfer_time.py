@@ -86,9 +86,9 @@ async def _method_client() -> AsyncGenerator:
     client = Client(_SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
     await client.connect()
     try:
-        await client.load_type_definitions()
+        await client.load_data_type_definitions()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("load_type_definitions failed (non-fatal): %s", exc)
+        logger.warning("load_data_type_definitions failed (non-fatal): %s", exc)
     try:
         yield client
     finally:
@@ -109,9 +109,9 @@ async def _sub_client() -> AsyncGenerator:
     client = Client(_SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
     await client.connect()
     try:
-        await client.load_type_definitions()
+        await client.load_data_type_definitions()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("load_type_definitions failed (non-fatal): %s", exc)
+        logger.warning("load_data_type_definitions failed (non-fatal): %s", exc)
     try:
         yield client
     finally:

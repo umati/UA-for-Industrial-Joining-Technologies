@@ -54,6 +54,10 @@ on:
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/**'
       # C# Client — security matrix and live tests
       - 'OPC_UA_Clients/Release2/IJT_CSharp_Client/**'
+      # Browser CI image inputs — live browser job consumes PR/main SHA image
+      # when these changed, otherwise the reviewed image pin.
+      - '.github/docker/ijt-browser-ci/**'
+      - '!.github/docker/ijt-browser-ci/README.md'
       # Browser CI image pin — the live browser job consumes this reviewed digest
       - '.github/docker/ijt-browser-ci/image-pin.json'
       # Reporting code — summary generation is part of Integration correctness
@@ -81,6 +85,10 @@ on:
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/**'
       - 'OPC_UA_Clients/Release2/IJT_CSharp_Client/**'
+      # Browser CI image inputs — live browser job consumes PR/main SHA image
+      # when these changed, otherwise the reviewed image pin.
+      - '.github/docker/ijt-browser-ci/**'
+      - '!.github/docker/ijt-browser-ci/README.md'
       # Browser CI image pin — the live browser job consumes this reviewed digest
       - '.github/docker/ijt-browser-ci/image-pin.json'
       # Reporting code — summary generation is part of Integration correctness
@@ -556,7 +564,7 @@ jobs:
   live-webclient-browser:
     name: "Web Client Browser - ${{ matrix.label }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: read
@@ -601,7 +609,6 @@ jobs:
           REF: ${{ github.ref }}
           BEFORE_SHA: ${{ github.event.before || '' }}
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login || '' }}
           PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
@@ -610,11 +617,10 @@ jobs:
           IMG="$(jq -r .image "$PIN_PATH")"
           DIG="$(jq -r .digest "$PIN_PATH")"
 
-          dependency_image_inputs_changed() {
+          browser_image_inputs_changed() {
             local base_sha="$1"
             local head_sha="$2"
-            local dependency_inputs_changed=false
-            local image_build_logic_changed=false
+            local changed_browser_image_input=false
 
             git fetch --no-tags --depth=1 origin "$base_sha" "$head_sha"
             changed_files="$(git diff --name-only "$base_sha" "$head_sha")"
@@ -622,36 +628,40 @@ jobs:
               [[ -n "$changed" ]] || continue
               case "$changed" in
                 .dockerignore)
-                  image_build_logic_changed=true
+                  changed_browser_image_input=true
                   ;;
                 constraints.txt)
-                  dependency_inputs_changed=true
+                  changed_browser_image_input=true
                   ;;
                 OPC_UA_Clients/Release2/IJT_Web_Client/package.json)
-                  dependency_inputs_changed=true
+                  changed_browser_image_input=true
                   ;;
                 OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json)
-                  dependency_inputs_changed=true
+                  changed_browser_image_input=true
                   ;;
                 OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt)
-                  dependency_inputs_changed=true
+                  changed_browser_image_input=true
                   ;;
                 OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt)
-                  dependency_inputs_changed=true
+                  changed_browser_image_input=true
+                  ;;
+                .github/docker/ijt-browser-ci/image-pin.json)
+                  ;;
+                .github/docker/ijt-browser-ci/README.md)
                   ;;
                 .github/docker/ijt-browser-ci/*)
-                  image_build_logic_changed=true
+                  changed_browser_image_input=true
                   ;;
                 .github/scripts/update_browser_ci_image_pin.py)
-                  image_build_logic_changed=true
+                  changed_browser_image_input=true
                   ;;
                 .github/workflows/build-browser-ci-image.yml)
-                  image_build_logic_changed=true
+                  changed_browser_image_input=true
                   ;;
               esac
             done <<< "$changed_files"
 
-            [[ "$dependency_inputs_changed" == "true" && "$image_build_logic_changed" == "false" ]]
+            [[ "$changed_browser_image_input" == "true" ]]
           }
 
           pull_tag_and_resolve_digest() {
@@ -669,7 +679,7 @@ jobs:
                 echo "::error file=${PIN_PATH}::Timed out waiting for ${source}." >&2
                 echo "::error::  tag:      ${tag}" >&2
                 echo "::error::  workflow: .github/workflows/build-browser-ci-image.yml" >&2
-                echo "::error::  reason:   dependency input changed, but no matching PR/SHA image was published." >&2
+                echo "::error::  reason:   browser image input changed, but no matching PR/SHA image was published." >&2
                 exit 1
               fi
               echo "image tag not ready (${attempt}/${max_attempts}); retrying in ${delay}s..." >&2
@@ -701,30 +711,19 @@ jobs:
             fi
           }
 
-          trusted_dependency_bot() {
-            case "$PR_AUTHOR" in
-              app/renovate|renovate\[bot\]|dependabot\[bot\])
-                return 0
-                ;;
-              *)
-                return 1
-                ;;
-            esac
-          }
-
           image_source="reviewed image-pin.json"
           null_sha="0000000000000000000000000000000000000000"
-          if [[ "$EVENT_NAME" == "pull_request" && "$PR_HEAD_REPO" == "$GITHUB_REPOSITORY" ]] && trusted_dependency_bot; then
-            if dependency_image_inputs_changed "$PR_BASE_SHA" "$PR_HEAD_SHA"; then
-              short_sha="${PR_HEAD_SHA::7}"
-              pull_tag_and_resolve_digest "${IMG}:pr-${PR_NUMBER}-${short_sha}" "PR-scoped dependency image" "$PR_HEAD_SHA"
-              image_source="PR-scoped dependency image"
+          if [[ "$EVENT_NAME" == "pull_request" && "$PR_HEAD_REPO" == "$GITHUB_REPOSITORY" ]]; then
+            if browser_image_inputs_changed "$PR_BASE_SHA" "$PR_HEAD_SHA"; then
+              short_sha="${GITHUB_SHA::7}"
+              pull_tag_and_resolve_digest "${IMG}:pr-${PR_NUMBER}-${short_sha}" "PR-scoped browser image" "$GITHUB_SHA"
+              image_source="PR-scoped browser image"
             fi
           elif [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" && -n "$BEFORE_SHA" && "$BEFORE_SHA" != "$null_sha" ]]; then
-            if dependency_image_inputs_changed "$BEFORE_SHA" "$GITHUB_SHA"; then
+            if browser_image_inputs_changed "$BEFORE_SHA" "$GITHUB_SHA"; then
               short_sha="${GITHUB_SHA::7}"
-              pull_tag_and_resolve_digest "${IMG}:sha-${short_sha}" "main SHA dependency image" "$GITHUB_SHA"
-              image_source="main SHA dependency image"
+              pull_tag_and_resolve_digest "${IMG}:sha-${short_sha}" "main SHA browser image" "$GITHUB_SHA"
+              image_source="main SHA browser image"
             fi
           fi
 

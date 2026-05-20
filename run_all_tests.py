@@ -47,6 +47,12 @@ Environment variables:
   IJT_SUITE_TIMEOUT     Per-suite timeout in seconds (default: 600)
   IJT_DOCKER_BUILD_TIMEOUT
                         Docker image build timeout in seconds (default: 1200)
+  IJT_WEB_E2E_REGRESSION_TIMEOUT
+                        Override timeout for the web-client-e2e-regression
+                        suite (default: 1800). This suite owns its budget
+                        independently because it bundles OPC UA server boot,
+                        WebSocket bridge, UI dev server, and a full Playwright
+                        regression project run.
 """
 
 from __future__ import annotations
@@ -281,6 +287,12 @@ IS_CI = bool(os.getenv("CI"))
 
 SUITE_TIMEOUT = _int_env("IJT_SUITE_TIMEOUT", 600)  # 10 min default
 DOCKER_BUILD_TIMEOUT = _int_env("IJT_DOCKER_BUILD_TIMEOUT", 1200)
+# Web Client Playwright regression suite owns its budget independently of the
+# generic SUITE_TIMEOUT: it boots an OPC UA server, a WebSocket bridge, the UI
+# dev server, then runs the full `--project=regression` Playwright journey
+# (currently >600s in CI). Bumped to 30 min with env override so future growth
+# in regression coverage does not silently exceed the default 600s budget.
+WEB_CLIENT_E2E_REGRESSION_TIMEOUT = _int_env("IJT_WEB_E2E_REGRESSION_TIMEOUT", 1800)
 _RUNNER_ENV_DIR = REPO_ROOT / "tmp" / "runner-env"
 _SERVER_SMOKE_REQUIREMENTS_LOCK = threading.Lock()
 _server_smoke_requirements_ready = False
@@ -919,7 +931,8 @@ def _ensure_client_venv(client_dir: Path, outputs: list[str]) -> Path:
             return Path(sys.executable)  # fallback — suite will likely fail naturally
 
     # Install from requirements.txt then requirements-dev.txt (if they exist).
-    # --pre allows asyncua pre-release builds on Python 3.14+.
+    # `--pre` is kept harmlessly so future tagged pre-release overrides still
+    # work. asyncua itself is pinned by repo-root constraints.txt.
     for req_name in ("requirements.txt", "requirements-dev.txt"):
         req_path = client_dir / req_name
         if req_path.exists():
@@ -2020,7 +2033,15 @@ def _suite_webclient_live_e2e_features() -> SuiteResult:
 
 
 def _suite_webclient_live_e2e_regression() -> SuiteResult:
-    """Web Client Playwright regression spec with owned runtime ports."""
+    """Web Client Playwright regression spec with owned runtime ports.
+
+    Uses an explicit long timeout (WEB_CLIENT_E2E_REGRESSION_TIMEOUT) instead
+    of the generic SUITE_TIMEOUT because the full regression journey - OPC UA
+    server boot + WebSocket bridge + UI dev server + Playwright project run -
+    legitimately exceeds the 600s default in CI (see Browser CI Image runs
+    for SHAs 51cc18e / bad3bfa where this suite was killed at the default
+    budget).
+    """
     return _delegate_to_runner(
         name="web-client-e2e-regression",
         runner_dir=WEB_CLIENT_DIR,
@@ -2032,6 +2053,7 @@ def _suite_webclient_live_e2e_regression() -> SuiteResult:
             ws_port=WEB_CLIENT_WS_PORT_E2E_REGRESSION,
             ui_port=WEB_CLIENT_UI_PORT_E2E_REGRESSION,
         ),
+        timeout=WEB_CLIENT_E2E_REGRESSION_TIMEOUT,
     )
 
 

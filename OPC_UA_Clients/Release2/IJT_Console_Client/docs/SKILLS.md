@@ -8,7 +8,7 @@
 |------|-------|
 | **Location** | `OPC_UA_Clients/Release2/IJT_Console_Client/` |
 | **Purpose** | Minimal reference OPC UA IJT console client — events, methods, results |
-| **Stack** | Python 3.14+, asyncua ≥1.2b2, asyncio |
+| **Stack** | Python 3.14+, asyncua pinned via repo-root constraints.txt, asyncio |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
 | **Server default** | `opc.tcp://localhost:40451` |
 
@@ -30,7 +30,7 @@ IJT_Console_Client/
 ├── serialize_data.py        # OPC UA → dict/JSON serialisation (shared pattern with Web Client)
 ├── ijt_logger.py            # Logging setup (ijt_log)
 ├── utils.py                 # nodeid_to_str, localizedtext_to_str, log_joining_system_event
-├── requirements.txt         # asyncua>=1.2b2, pytz, aiofiles, orjson, cryptography, pyOpenSSL
+├── requirements.txt         # asyncua (pin lives in repo-root constraints.txt), pytz, aiofiles, orjson, cryptography, pyOpenSSL
 ├── pyproject.toml           # asyncio_mode=auto (+ ruff, coverage, bandit, mypy)
 ├── docs/
 │   └── SKILLS.md             # ← this file — developer reference (includes method quick reference)
@@ -154,12 +154,12 @@ python3 setup_client.py --url="opc.tcp://<ip>:<port>"
 ## asyncua Known Issues (Python 3.14)
 
 ### `UaClient.call()` hardcoded 1-second timeout
-Centralized patch in `IJT_Web_Client/tests/python/_asyncua_compat.py` (version-gated, auto-expires when asyncua ≥ 1.2.0 stable):
+Centralized patch in `IJT_Web_Client/tests/python/_asyncua_compat.py` (version-gated, auto-expires when asyncua ≥ 1.3.0):
 ```python
 from tests.python._asyncua_compat import apply_send_request_timeout_patch
 apply_send_request_timeout_patch()
 ```
-The patch wraps `UaClient._send_request` to use `self._timeout` instead of the 1-second hard-coded fallback. A `DeprecationWarning` is emitted automatically when asyncua ships 1.2.0 stable, signalling the patch can be removed.
+The patch wraps `UaClient._send_request` to use `self._timeout` instead of the 1-second hard-coded fallback. A `DeprecationWarning` is emitted automatically when asyncua ships 1.3.0 (the next minor after the master SHA pin), signalling that the upstream timeout fix should be re-verified.  As of master SHA `35a77c6b` (2026-05-11) the upstream fix has NOT landed.
 
 ### `BadTooManyOperations` on bulk simulation
 Retry 5× with 1s sleep before raising.

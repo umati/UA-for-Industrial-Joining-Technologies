@@ -11,12 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY constraints.txt /tmp/constraints.txt
 COPY constraints.txt ./constraints.txt
 
-# Upgrade pip and install Python bootstrap deps
-# asyncua >=1.2b2 requires --pre for Python 3.14 compat;
-# once 1.2.x stable ships pip will prefer it automatically.
+# Upgrade pip and install Python bootstrap deps.
+# asyncua is pinned in repo-root constraints.txt to upstream SHA 35a77c6b
+# (post-1.2b2; 2026-05-11) for Python 3.14.4 compatibility.
 RUN pip install --upgrade pip --no-cache-dir && \
-    pip install --no-cache-dir --pre -c /tmp/constraints.txt \
-        "asyncua>=1.2b2,<2" \
+    pip install --no-cache-dir -c /tmp/constraints.txt \
+        asyncua \
         python-dotenv \
         websockets \
         packaging
@@ -32,7 +32,7 @@ ENV IS_DOCKER=true \
 # shared by local runners, CI, and images.
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt \
      OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt* ./
-RUN pip install --no-cache-dir --pre -c /tmp/constraints.txt -r requirements.txt
+RUN pip install --no-cache-dir -c /tmp/constraints.txt -r requirements.txt
 
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/package.json \
      OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json* ./

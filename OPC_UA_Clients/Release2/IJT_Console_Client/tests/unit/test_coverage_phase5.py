@@ -371,8 +371,13 @@ async def test_read_tool_identifier_exception_returns_none():
     """read_tool_identifier returns None and logs warning when exception occurs."""
     mock_client = MagicMock()
 
-    # Make _namespace_index itself raise an exception
-    with patch("utils._namespace_index", AsyncMock(side_effect=Exception("connection lost"))):
+    # Make _namespace_index raise a CONNECTION error — the narrow exception
+    # policy in utils.read_tool_identifier (see A2 fix in utils.py) only
+    # swallows OPC UA / network errors (UaError, TimeoutError, ConnectionError,
+    # OSError).  A bare `Exception("...")` would correctly bubble up so that
+    # NameError / AttributeError / ImportError are never masked as a
+    # misleading "ProductInstanceUri missing" failure.
+    with patch("utils._namespace_index", AsyncMock(side_effect=ConnectionError("connection lost"))):
         with patch("utils.ijt_log") as mock_log:
             result = await utils.read_tool_identifier(mock_client)
             assert result is None

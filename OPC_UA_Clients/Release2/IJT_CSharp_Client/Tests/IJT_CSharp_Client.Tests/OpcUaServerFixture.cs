@@ -273,6 +273,10 @@ public sealed class OpcUaServerFixture : IDisposable
                 },
                 EnableRaisingEvents = true,
             };
+            // No fixture-level simulator environment override here. Windows
+            // path-length safety is handled by ResolveShortFixtureRoot() below
+            // so this fixture does not depend on an undocumented simulator
+            // switch.
             _serverProcess.OutputDataReceived += (_, e) =>
             {
                 if (!string.IsNullOrWhiteSpace(e.Data))
@@ -1124,7 +1128,11 @@ public sealed class OpcUaServerFixture : IDisposable
     private static string PrepareCopiedServerDir(string srcExePath, int port, out string tmpDir, out string pkiDir)
     {
         var srcDir = Path.GetDirectoryName(srcExePath)!;
-        var tmpRoot = ResolveProjectTempRoot("server-copies");
+        // Use the short-root helper for the EXE copy as well. Avoids spurious
+        // "Path Length exceeds Safe Threshold" warnings from the simulator
+        // when the GitHub Actions workspace prefix plus the project-nested
+        // bin path push the binary install path past 145 chars on Windows.
+        var tmpRoot = ResolveShortFixtureRoot("server-copies");
         Directory.CreateDirectory(tmpRoot);
         tmpDir = Path.Combine(tmpRoot, $"opcua_csharp_{port}_{Guid.NewGuid():N}");
         pkiDir = ResolveShortServerPkiDirectory(port);
@@ -1167,9 +1175,18 @@ public sealed class OpcUaServerFixture : IDisposable
 
     private static void LogServerOutput(string line)
     {
+        // Escalate the simulator's own long-path / MAX_PATH diagnostics to
+        // Warning so they always surface in CI output, instead of being
+        // silently dropped to Debug. Without this, a path-length cliff on
+        // Windows runners is invisible until a downstream port-timeout
+        // cascade buries the root cause.
         if (line.Contains("ERROR", StringComparison.OrdinalIgnoreCase)
             || line.Contains("WARNING", StringComparison.OrdinalIgnoreCase)
-            || line.Contains("CRITICAL", StringComparison.OrdinalIgnoreCase))
+            || line.Contains("CRITICAL", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Safe Threshold", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Path Length", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("MAX_PATH", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("long path", StringComparison.OrdinalIgnoreCase))
         {
             _log.LogWarning("server stdout: {Line}", line);
             return;
@@ -1196,11 +1213,34 @@ public sealed class OpcUaServerFixture : IDisposable
         return Path.Combine(AppContext.BaseDirectory, "tmp", childDirectory);
     }
 
+    /// <summary>
+    /// Resolve a short root for ephemeral simulator artefacts (EXE copies, server
+    /// PKI) on Windows. The project-nested default ("&lt;project&gt;/tmp/...")
+    /// plus the GitHub Actions "D:\a\&lt;repo&gt;\&lt;repo&gt;\" workspace prefix can
+    /// push simulator-generated cert filenames close to Windows MAX_PATH(260).
+    /// The native simulator also emits path-length diagnostics before trust
+    /// setup failures, so routing through RUNNER_TEMP (GitHub Actions =
+    /// D:\a\_temp) gives the simulator and PKI directory layout predictable
+    /// headroom without depending on long-path OS policy.
+    ///
+    /// On Linux paths are practically unbounded, so the project-local default
+    /// is kept for repo-locality of artefacts.
+    /// </summary>
+    private static string ResolveShortFixtureRoot(string childDirectory)
+    {
+        if (!OperatingSystem.IsWindows())
+            return ResolveProjectTempRoot(childDirectory);
+
+        var runnerTemp = Environment.GetEnvironmentVariable("RUNNER_TEMP");
+        var baseRoot = !string.IsNullOrWhiteSpace(runnerTemp) ? runnerTemp : Path.GetTempPath();
+        return Path.Combine(baseRoot, "ijt-sim", childDirectory);
+    }
+
     private static string ResolveShortServerPkiDirectory(int port)
     {
         var root = Environment.GetEnvironmentVariable("IJT_SERVER_PKI_ROOT");
         if (string.IsNullOrWhiteSpace(root))
-            root = ResolveProjectTempRoot("p");
+            root = ResolveShortFixtureRoot("server-pki");
 
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var pkiDir = Path.Combine(root, $"{port}_{suffix}");

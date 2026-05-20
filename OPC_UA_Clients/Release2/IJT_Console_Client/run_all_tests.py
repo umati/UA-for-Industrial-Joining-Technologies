@@ -19,6 +19,14 @@ Environment variables:
   OPCUA_SIMULATOR_EXE   Path to opcua_ijt_demo_application(.exe)
   IJT_SECURITY_MATRIX_CELL Security matrix cell: B1 | B2
   IJT_SUT              Security matrix SUT: windows | linux
+  IJT_CONSOLE_SECURITY_MATRIX_TIMEOUT
+                          Wall-clock budget (seconds) for the full Console
+                          security-matrix pytest invocation. Default 1200s
+                          covers the ~33 parametrised cases (5 tests × 6
+                          policy/mode cells + 3 standalone) each performing a
+                          full OPC UA handshake against the local simulator.
+                          The legacy 240s budget was insufficient on cold
+                          CI runners and caused spurious TIMEOUT failures.
   IJT_PRESERVE_TEST_ARTIFACTS=1
                          Preserve generated test artifacts and skip runner cleanup
   SKIP_VENV_INSTALL     Set to "1" to skip pip install (for CI where deps are pre-installed)
@@ -54,6 +62,27 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 # ---------------------------------------------------------------------------
 
 _HERE = Path(__file__).resolve().parent
+
+
+def _int_env(name: str, default: int) -> int:
+    """Read a positive integer from the environment, falling back on parse errors."""
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        value = int(raw.strip())
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+# Wall-clock budget for the full Console security-matrix pytest invocation.
+# The legacy 240 s default was hard-coded inline and proved too tight on cold
+# CI runners (33 parametrised live cases × full OPC UA handshake). Override
+# via IJT_CONSOLE_SECURITY_MATRIX_TIMEOUT when investigating perf regressions.
+_SECURITY_MATRIX_TIMEOUT_SEC = _int_env("IJT_CONSOLE_SECURITY_MATRIX_TIMEOUT", 1200)
+
+
 _IS_CI = bool(os.getenv("CI"))
 _IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 _IS_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
@@ -568,6 +597,11 @@ def _run(
     env = os.environ.copy()
     if extra_env:
         env.update(extra_env)
+    popen_kwargs: dict[str, object] = {}
+    if sys.platform != "win32":
+        # Place the child in its own process group so timeout cleanup can kill
+        # only the command tree, not this runner's own group.
+        popen_kwargs["start_new_session"] = True
     try:
         with subprocess.Popen(
             [str(c) for c in cmd],
@@ -576,13 +610,15 @@ def _run(
             stderr=subprocess.PIPE,
             text=True,
             env=env,
+            **popen_kwargs,
         ) as proc:
             try:
                 stdout, stderr = proc.communicate(timeout=timeout)
                 return proc.returncode, (stdout or "") + (stderr or "")
             except subprocess.TimeoutExpired:
                 _kill_proc_tree(proc.pid)
-                proc.kill()
+                with contextlib.suppress(OSError, ProcessLookupError):
+                    proc.kill()
                 try:
                     stdout, stderr = proc.communicate(timeout=5)
                 except subprocess.TimeoutExpired:
@@ -1188,7 +1224,7 @@ def _step_security_matrix_tests(cell: str, sut: str, port: int, verbose: bool = 
             "OPCUA_CONNECT_DELAY_SEC": "0.5",
             "OPCUA_CONNECT_MAX_DELAY_SEC": "1.0",
         },
-        timeout=240,
+        timeout=_SECURITY_MATRIX_TIMEOUT_SEC,
         timeout_label=f"Console security matrix {cell}",
     )
     result.duration = time.monotonic() - t0

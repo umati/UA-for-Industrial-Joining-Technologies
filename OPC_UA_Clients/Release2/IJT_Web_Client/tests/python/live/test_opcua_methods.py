@@ -2,7 +2,8 @@
 Live OPC UA method-call tests — IJT Tightening Server (OPCUA_TEST_ENDPOINT)
 
 Infrastructure mirrors IJT_Console_Client/opcua_client.py exactly:
-  * load_type_definitions() then load_data_type_definitions() (same order)
+  * load_data_type_definitions() (single call — load_type_definitions is deprecated
+    upstream and dispatches to load_data_type_definitions internally)
   * server_node = root.get_child(["0:Objects","0:Server"])
   * Event types resolved by namespace URI (same as Console Client event_types.py)
   * TWO persistent module-scoped subscriptions — result events + system events
@@ -119,8 +120,8 @@ async def ijt_session():
     c = Client(OPCUA_URL, timeout=60)  # generous timeout for heavy simulation calls
     await c.connect()
 
-    # Same as Console Client connect(): load standard type definitions first
-    await c.load_type_definitions()
+    # Same as Console Client connect(): load standard data type definitions
+    await c.load_data_type_definitions()
 
     root = c.nodes.root
     server_node = await root.get_child(["0:Objects", "0:Server"])

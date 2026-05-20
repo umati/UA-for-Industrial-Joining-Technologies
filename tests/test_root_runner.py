@@ -788,6 +788,7 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
     assert calls[6]["extra_env"]["IJT_WEB_TEST_RESULTS_DIR"] == str(
         _runner.WEB_CLIENT_RESULTS_DIR / "docker-smoke"
     )
+    assert calls[5]["timeout"] == _runner.WEB_CLIENT_E2E_REGRESSION_TIMEOUT
     assert calls[6]["timeout"] == _runner.DOCKER_BUILD_TIMEOUT + 180
 
 
@@ -1415,6 +1416,11 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
 
         assert job_name == "live-webclient-browser"
         assert job["runs-on"] == "ubuntu-latest"
+        assert job["timeout-minutes"] == 45, (
+            "live-webclient-browser must leave overhead above the root runner's "
+            "30-minute web-client-e2e-regression timeout; otherwise GitHub can "
+            "kill the job before the runner emits diagnostics and artifacts."
+        )
         assert "container" not in job, (
             "live-webclient-browser must not use a job-level container image: "
             "GitHub pulls container-job images before any step runs, so a "
@@ -1466,16 +1472,17 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
             "Resolve step must guard that the digest is sha256:<64hex>."
         )
         assert "PR_HEAD_SHA" in resolve_step["env"], (
-            "Resolve step must know the PR head SHA so dependency-update PRs "
-            "can use the PR-scoped browser image built from the same lockfile."
+            "Resolve step must know the PR head SHA so browser-image-input PRs "
+            "can detect whether browser image inputs changed."
         )
-        assert "PR_AUTHOR" in resolve_step["env"]
-        assert "trusted_dependency_bot" in resolve_step["run"]
-        assert r"app/renovate|renovate\[bot\]|dependabot\[bot\]" in resolve_step["run"]
-        assert "dependency_image_inputs_changed" in resolve_step["run"]
+        assert 'short_sha="${GITHUB_SHA::7}"' in resolve_step["run"]
+        assert '"$GITHUB_SHA"' in resolve_step["run"]
+        assert "trusted_dependency_bot" not in resolve_step["run"]
+        assert "browser_image_inputs_changed" in resolve_step["run"]
+        assert ".github/docker/ijt-browser-ci/*" in resolve_step["run"]
         assert "OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json" in resolve_step["run"]
-        assert "PR-scoped dependency image" in resolve_step["run"]
-        assert "main SHA dependency image" in resolve_step["run"]
+        assert "PR-scoped browser image" in resolve_step["run"]
+        assert "main SHA browser image" in resolve_step["run"]
         assert 'docker pull "$tag"' in resolve_step["run"]
         assert "/opt/ijt-browser-ci/metadata.json" in resolve_step["run"]
         assert "actual_sha" in resolve_step["run"]

@@ -144,7 +144,7 @@ class OPCUAClient:
             try:
                 start_time = time.time()
                 await self.client.connect()  # type: ignore[union-attr]
-                await self.client.load_type_definitions()  # type: ignore[union-attr]
+                await self.client.load_data_type_definitions()  # type: ignore[union-attr]
                 duration = time.time() - start_time
                 ijt_log.info(f"Connected to OPC UA server at {self.server_url} in {duration:.2f}s")
                 return

@@ -26,11 +26,12 @@ The workflow has two permission-separated jobs:
   smoke path under `--network=none`.
 - `publish` — the only job with `packages: write`; pushes the verified image
   to GHCR and pull-verifies the digest. Pushes to `main`, schedules, and
-  manual `push=true` dispatches publish the reviewed pin path. Same-repo
-  dependency-bot pull requests that change only Web Client dependency inputs
-  (`package.json`, `package-lock.json`, `requirements*.txt`) publish a
-  PR-scoped tag (`pr-<number>-<head-sha>`) for Integration to resolve to a
-  digest before running the offline browser matrix.
+  manual `push=true` dispatches publish the reviewed pin path. Same-repo pull
+  requests that change browser image inputs (`.dockerignore`, `constraints.txt`,
+  Web Client `package*.json`, `requirements*.txt`, the image Dockerfile, the
+  image-pin updater, or this build workflow) publish a PR-scoped source-SHA tag
+  (`pr-<number>-<checkout-sha>`) for Integration to resolve to a digest before
+  running the offline browser matrix.
 
 ## Runtime contract
 
@@ -50,21 +51,18 @@ Local Web E2E remains native. Neither the root runner nor the Web Client
 runner reads `IJT_BROWSER_CI_IMAGE`; the owned image is wired only in the
 GitHub Actions Integration workflow.
 
-## Dependency-update PRs
+## Browser Image Input PRs
 
-Renovate/Dependabot same-repo dependency PRs can update the Web Client lockfile
-before `image-pin.json` has been refreshed on `main`. For that case, the image
-build workflow publishes a PR-scoped image after Phase 0 smoke, and
-`integration.yml` resolves that tag to an immutable digest before the browser
-suites run under `--network=none`. This keeps PR validation automatic without
-allowing live npm/pip/Playwright fetches during the browser test job.
+Same-repo PRs can update browser image dependencies or image build logic before
+`image-pin.json` has been refreshed on `main`. For that case, the image build
+workflow publishes a PR-scoped image after Phase 0 smoke, and `integration.yml`
+resolves that tag to an immutable digest before the browser suites run under
+`--network=none`. This keeps PR validation automatic without allowing live
+npm/pip/Playwright fetches during the browser test job.
 
-PR-scoped publish is intentionally disabled when the PR also changes the image
-build logic (`.github/docker/ijt-browser-ci/**`,
-`.github/scripts/update_browser_ci_image_pin.py`, or
-`.github/workflows/build-browser-ci-image.yml`). Those changes must be reviewed
-through the normal image-build path instead of auto-publishing a modified image
-builder from the PR.
+Fork PRs cannot publish GHCR images with the repository token. If a fork needs
+to change browser image inputs, a maintainer must replay the branch from this
+repository or use the manual image-pin flow below.
 
 ## Manual image-pin PR flow
 

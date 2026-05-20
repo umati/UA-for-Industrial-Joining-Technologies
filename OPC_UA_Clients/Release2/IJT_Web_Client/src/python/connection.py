@@ -8,7 +8,6 @@ the front-end.
 """
 
 import asyncio
-import inspect
 import json
 import os
 import socket
@@ -24,7 +23,7 @@ from python.serialize_data import serialize_full_event, serialize_tuple, seriali
 
 _OPCUA_TIMEOUT_S = 60  # per-request timeout for long-running operations (method calls, reads)
 _OPCUA_TIMEOUT_SHORT_S = 15  # wall-clock limit for OPC UA session establishment (SecureChannel + Session handshake)
-_OPCUA_TIMEOUT_BROWSE_S = 30  # wall-clock limit for type-definition loading (load_type_definitions)
+_OPCUA_TIMEOUT_BROWSE_S = 30  # wall-clock limit for type-definition loading (load_data_type_definitions)
 _SUBSCRIPTION_PERIOD_MS = 100
 _CONNECT_RETRIES_DEFAULT = "8"
 _CONNECT_DELAY_DEFAULT = "1.0"
@@ -93,9 +92,17 @@ class Connection:
         Returns:
             ``True`` if the channel protocol state is ``"open"``, ``False``
             otherwise (e.g. never connected, disconnected, or faulted).
+
+        Note:
+            This reads `client.uaclient.protocol.state` — an INTERNAL asyncua
+            attribute path with no public alternative as of master SHA
+            35a77c6b (2026-05-11).  Wrapped in defensive `getattr` chain so an
+            upstream rename returns False instead of raising AttributeError.
+            Revisit if a public connection-status API is added upstream.
         """
         if not hasattr(self, "client") or self.client is None:
             return False
+        # FRAGILE: internal asyncua attribute chain (no public equivalent yet).
         protocol = getattr(getattr(self.client, "uaclient", None), "protocol", None)
         state = getattr(protocol, "state", None)
         return str(state).lower() == "open"
@@ -135,20 +142,15 @@ class Connection:
         # "Unhandled exception while sending request to OPC UA server".
         self.client = Client(server_url, timeout=_OPCUA_TIMEOUT_S)
 
-        # --- Security policy: await if your asyncua version returns a coroutine ---
-        try:
-            maybe_coro = self.client.set_security_string("None")  # use None if server allows it
-            if inspect.isawaitable(maybe_coro):
-                await maybe_coro
-        except (ua.UaError, ValueError, TypeError) as exc:
-            # If your server requires secure policy, replace with e.g.:
-            # maybe_coro = self.client.set_security_string("Basic256Sha256,Sign")  # or SignAndEncrypt
-            # if inspect.isawaitable(maybe_coro):
-            #     await maybe_coro
-            ijt_log.debug(
-                "Security policy 'None' not applied (server may not require it): %s",
-                exc,
-            )
+        # Security policy: asyncua Client defaults to no-security (SecurityPolicy.None_,
+        # MessageSecurityMode.None_), which is exactly what this client requires.
+        # If a future deployment needs a secure policy, add e.g.:
+        #   maybe_coro = self.client.set_security_string("Basic256Sha256,Sign,<cert>,<key>")
+        #   if inspect.isawaitable(maybe_coro):
+        #       await maybe_coro
+        # Note: passing "None" to set_security_string() always raises
+        # "Wrong format" — historically this code swallowed that error in a
+        # try/except no-op, which has been removed for clarity.
 
         retries = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT)))
         base_delay = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT)))
@@ -174,7 +176,7 @@ class Connection:
                 # Small wait to avoid races right after SecureChannel/Session creation
                 await asyncio.sleep(0.1)
 
-                await asyncio.wait_for(self.client.load_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S)
+                await asyncio.wait_for(self.client.load_data_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S)
                 self.root = self.client.get_root_node()
 
                 # Connect the dedicated subscription client (separate OPC UA session).
@@ -192,7 +194,7 @@ class Connection:
                     )
                     await asyncio.sleep(0.1)
                     await asyncio.wait_for(
-                        self.subscription_client.load_type_definitions(),
+                        self.subscription_client.load_data_type_definitions(),
                         timeout=_OPCUA_TIMEOUT_BROWSE_S,
                     )
                     ijt_log.info("Subscription client connected.")
@@ -512,11 +514,13 @@ class Connection:
                 element.TargetName = ua.QualifiedName(step["identifier"], step["namespaceindex"])
                 relative_path.Elements.append(element)
 
-            browse_path = ua.BrowsePath()
-            browse_path.StartingNode = node.nodeid
-            browse_path.RelativePath = relative_path
-
-            result = await self.client.uaclient.translate_browsepaths_to_nodeids([browse_path])
+            # Prefer the public Client.translate_browsepaths() API over the
+            # internal client.uaclient.translate_browsepaths_to_nodeids()
+            # method — avoids the `.uaclient` private-attribute dependency.
+            # As of master SHA 35a77c6b (2026-05-11) the public method signature
+            # is translate_browsepaths(starting_node: NodeId, [RelativePath]).
+            # It wraps BrowsePath construction internally.
+            result = await self.client.translate_browsepaths(node.nodeid, [relative_path])
             return {"nodeid": serialize_full_event(result[0].Targets[0].TargetId)}
         except Exception as e:
             ijt_log.error("Exception in PathToId path")

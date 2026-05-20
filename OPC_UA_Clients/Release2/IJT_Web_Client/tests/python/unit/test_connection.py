@@ -132,7 +132,7 @@ async def test_connect_sends_connection_established_on_success(monkeypatch):
     ws = AsyncMock()
     mock_client = MagicMock()
     mock_client.connect = AsyncMock(return_value=None)
-    mock_client.load_type_definitions = AsyncMock(return_value=None)
+    mock_client.load_data_type_definitions = AsyncMock(return_value=None)
     mock_client.get_root_node = MagicMock(return_value=MagicMock())
     mock_client.set_security_string = MagicMock(return_value=None)
 
@@ -561,35 +561,6 @@ async def test_connect_returns_immediately_when_already_open():
 
 
 # ---------------------------------------------------------------------------
-# connect — set_security_string returns awaitable that raises UaError (lines 142-148)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_connect_security_string_awaitable_raises_ua_error_is_caught(monkeypatch):
-    """When set_security_string returns a coroutine that raises UaError, the
-    except block is hit and connect() continues (single-session fallback test)."""
-    from asyncua import ua
-
-    monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "1")
-    monkeypatch.setenv("OPCUA_CONNECT_DELAY_SEC", "0.01")
-    monkeypatch.setenv("OPCUA_CONNECT_MAX_DELAY_SEC", "0.01")
-
-    async def _raise_ua_error():
-        raise ua.UaError("security policy not supported")
-
-    mock_client = MagicMock()
-    mock_client.set_security_string = MagicMock(return_value=_raise_ua_error())
-    mock_client.connect = AsyncMock(side_effect=ConnectionRefusedError("refused"))
-
-    with patch("python.connection.Client", return_value=mock_client):
-        conn = _make_connection()
-        result = await conn.connect()
-
-    assert "exception" in result
-
-
-# ---------------------------------------------------------------------------
 # connect — subscription_client.connect() fails → single-session fallback (lines 199-206)
 # ---------------------------------------------------------------------------
 
@@ -602,14 +573,14 @@ async def test_connect_subscription_client_fails_falls_back_to_single_session(mo
 
     main_mock = MagicMock()
     main_mock.connect = AsyncMock(return_value=None)
-    main_mock.load_type_definitions = AsyncMock(return_value=None)
+    main_mock.load_data_type_definitions = AsyncMock(return_value=None)
     main_mock.get_root_node = MagicMock(return_value=MagicMock())
     main_mock.set_security_string = MagicMock(return_value=None)
 
     sub_mock = MagicMock()
     sub_mock.connect = AsyncMock(side_effect=RuntimeError("sub connection refused"))
     sub_mock.set_security_string = MagicMock(return_value=None)
-    sub_mock.load_type_definitions = AsyncMock(side_effect=RuntimeError("not reached"))
+    sub_mock.load_data_type_definitions = AsyncMock(side_effect=RuntimeError("not reached"))
 
     ws = AsyncMock()
     with patch("python.connection.Client", side_effect=[main_mock, sub_mock]):
@@ -1100,7 +1071,7 @@ async def test_pathtoid_success_returns_serialized_nodeid():
 
     conn.client = MagicMock()
     conn.client.get_node = MagicMock(return_value=mock_node)
-    conn.client.uaclient.translate_browsepaths_to_nodeids = AsyncMock(return_value=[mock_result_item])
+    conn.client.translate_browsepaths = AsyncMock(return_value=[mock_result_item])
 
     path_json = json.dumps([{"identifier": "Child", "namespaceindex": 1}])
     with patch("python.connection.serialize_full_event", return_value="ns=1;s=Child"):
@@ -1123,7 +1094,7 @@ async def test_pathtoid_exception_returns_exception_dict():
     mock_node.nodeid = MagicMock()
     conn.client = MagicMock()
     conn.client.get_node = MagicMock(return_value=mock_node)
-    conn.client.uaclient.translate_browsepaths_to_nodeids = AsyncMock(side_effect=RuntimeError("translate failed"))
+    conn.client.translate_browsepaths = AsyncMock(side_effect=RuntimeError("translate failed"))
 
     path_json = json.dumps([{"identifier": "Child", "namespaceindex": 1}])
     result = await conn.pathtoid(

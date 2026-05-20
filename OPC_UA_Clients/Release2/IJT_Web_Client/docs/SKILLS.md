@@ -8,7 +8,7 @@
 |------|-------|
 | **Location** | `OPC_UA_Clients/Release2/IJT_Web_Client/` |
 | **Purpose** | Reference OPC UA IJT client: Python WebSocket backend + Node.js browser frontend |
-| **Stack** | Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vite/Vitest, ESLint |
+| **Stack** | Python 3.14+, asyncua pinned via repo-root constraints.txt, Node.js 24+, Vite/Vitest, ESLint |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
 | **Docker** | Container healthy on HTTP:3000 + WS:8001 (non-root `appuser`) |
 
@@ -297,7 +297,7 @@ test image intentionally contains the Web Client project without the repository
 root `.git` metadata and root-level files.
 | Action versions | `actions/checkout@v6`, `setup-python@v6`, `setup-node@v6` (all current) |
 | Python version | `3.14` (stable in actions manifest) |
-| asyncua | `asyncua>=1.2b2` — pip resolves pre-release when specifier explicitly includes it |
+| asyncua | pinned in repo-root `constraints.txt` to upstream SHA 35a77c6b (self-reports 1.2b2) — fixes Python 3.14.4 NameError(Optional) inside get_type_hints() |
 
 ---
 

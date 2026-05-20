@@ -2447,6 +2447,11 @@ class TestMain:
         monkeypatch.setattr(sp, "_check_internet", lambda: True)
         monkeypatch.setattr(sp, "_find_latest_python_executable", lambda: (["python3.14"], "3.14"))
         monkeypatch.setattr(sp, "IS_DOCKER", False)
+        # _ENV_IS_PRE_ISOLATED is computed at import time from IS_DOCKER or IS_GITHUB_ACTIONS.
+        # In CI (IS_GITHUB_ACTIONS=True) it would be True, causing main() to skip
+        # _create_virtualenv. Force False here so this non-Docker path exercises the
+        # virtualenv-creation branch under test.
+        monkeypatch.setattr(sp, "_ENV_IS_PRE_ISOLATED", False)
         monkeypatch.setattr(sp, "_create_virtualenv", lambda cmd: calls.append("venv"))
         monkeypatch.setattr(sp, "_install_python_packages", lambda: None)
         monkeypatch.setattr(sp, "_create_nodeenv", lambda: None)

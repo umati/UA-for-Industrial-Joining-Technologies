@@ -1,5 +1,12 @@
 # Repo-wide Python dependency security floors.
 # Install Python requirements with: pip install -c <repo>/constraints.txt -r requirements.txt
 
+# asyncua is pinned to upstream master SHA 35a77c6b (post-1.2b2; 2026-05-11):
+#   * fixes Python 3.14.4 NameError: 'Optional' is not defined inside
+#     get_type_hints() from PyPI 1.2b2's generated uaprotocol_auto.py.
+#   * self-reports as version 1.2b2 because upstream pyproject.toml is unchanged.
+#   * replace with a tagged PyPI release once one ships including this fix.
+asyncua @ https://github.com/FreeOpcUa/opcua-asyncio/archive/35a77c6b128a4f1226a685cde3b46abd59975258.zip
+
 # CVE-2026-45409 / GHSA-65pc-fj4g-8rjx
 idna>=3.15

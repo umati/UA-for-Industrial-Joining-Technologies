@@ -555,11 +555,13 @@ def _install_python_packages() -> None:
     except Exception as exc:
         log.debug("Optional crypto stack upgrade skipped: %s", exc)
 
-    asyncua_spec = os.getenv("ASYNCUA_VERSION_SPEC", "asyncua>=1.2b2").strip()
-    # asyncua 1.2b2+ is required for Python 3.14 support. Always install with --pre so pip
-    # can find the current pre-release. --pre does NOT force a pre-release: once asyncua
-    # 1.2.x stable is published, pip automatically picks that as the highest matching version.
-    log.info("Installing asyncua (--pre enabled for 1.2b2+ / Python 3.14): %s", asyncua_spec)
+    # asyncua is pinned in repo-root constraints.txt to upstream SHA 35a77c6b
+    # (post-1.2b2; 2026-05-11). ASYNCUA_VERSION_SPEC is a deliberate operator
+    # escape hatch for testing a future tagged release; when set, this final
+    # asyncua install intentionally bypasses constraints so the override wins.
+    asyncua_override = os.getenv("ASYNCUA_VERSION_SPEC")
+    asyncua_spec = (asyncua_override or "asyncua").strip() or "asyncua"
+    log.info("Installing asyncua (constraints pin or explicit ASYNCUA_VERSION_SPEC): %s", asyncua_spec)
     # safe: asyncua version spec comes from a dedicated package-spec env var, not a shell string.
     subprocess.check_call(  # nosec B603
         [
@@ -568,8 +570,7 @@ def _install_python_packages() -> None:
             "pip",
             "install",
             "--upgrade",
-            "--pre",
-            *_pip_constraint_args(),
+            *([] if asyncua_override and asyncua_override.strip() else _pip_constraint_args()),
             asyncua_spec,
         ]
     )

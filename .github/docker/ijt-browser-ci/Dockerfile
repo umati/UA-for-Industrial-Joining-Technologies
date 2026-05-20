@@ -19,20 +19,22 @@
 
 # ---------------------------------------------------------------------------
 # Stage 1: Node 24 source stage (digest-pinned).
-#   node:24-bookworm-slim - manifest-list HEAD digest captured 2026-05-13.
+#   node:24-bookworm-slim - manifest-list HEAD digest captured 2026-05-20
+#   (Renovate PR #394 superseded by this update).
 # ---------------------------------------------------------------------------
-FROM node:24-bookworm-slim@sha256:24dc26ef1e3c3690f27ebc4136c9c186c3133b25563ae4d7f0692e4d1fe5db0e AS node
+FROM node:24-bookworm-slim@sha256:b809ce06df0b8f49f8a3015e23a38f47fabfa1052d4d6916655eaae0d9950ff9 AS node
 
 # ---------------------------------------------------------------------------
 # Stage 2: Python 3.14 source stage (digest-pinned).
-#   python:3.14-slim-bookworm - manifest-list HEAD digest captured 2026-05-13.
+#   python:3.14-slim-bookworm - manifest-list HEAD digest captured 2026-05-20
+#   (Renovate PR #395 superseded by this update).
 #   Used only as a donor of /usr/local (interpreter, stdlib, pip). The runtime
 #   final stage is Ubuntu Noble so the image's glibc matches the IJT Linux
 #   simulator binary requirement (GLIBC_2.38). CPython is forward-compatible
 #   across glibc versions, so a binary linked on bookworm (glibc 2.36) runs on
 #   Noble (glibc 2.39).
 # ---------------------------------------------------------------------------
-FROM python:3.14-slim-bookworm@sha256:a3974109d36f164ca70024bc0d0828ac706e4ccda849f8638d879e91f79e90ec AS python
+FROM python:3.14-slim-bookworm@sha256:eae5d4c3ba20e5f89782e37950bb4815460e8f27564fd25112c3d950cd5351c9 AS python
 
 # ---------------------------------------------------------------------------
 # Stage 3: Ubuntu 24.04 Noble final image (digest-pinned).
@@ -109,6 +111,9 @@ RUN mkdir -p /opt/ijt-browser-ci/home \
 # 5. Bake Python wheelhouse (complete closure, wheels only) from IJT Web
 #    Client requirements. PIP_FIND_LINKS at runtime points here, plus
 #    PIP_NO_INDEX=1, so the runtime venv-create + pip install is offline.
+#    asyncua is resolved from the repo-root constraints.txt pin at image build
+#    time, then the no-index verification install constrains it by the version
+#    in the built wheel so pip cannot follow a direct archive URL at runtime.
 # ---------------------------------------------------------------------------
 COPY constraints.txt /tmp/constraints.txt
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt /tmp/requirements.txt
@@ -119,10 +124,17 @@ RUN python -m pip install --upgrade pip \
         -r /tmp/requirements.txt \
         -r /tmp/requirements-dev.txt \
         --wheel-dir /opt/ijt-browser-ci/pip-wheelhouse \
+ && asyncua_wheel="$(find /opt/ijt-browser-ci/pip-wheelhouse -maxdepth 1 -name 'asyncua-*.whl' -printf '%f\n' | sort | tail -n 1)" \
+ && test -n "$asyncua_wheel" \
+ && asyncua_version="${asyncua_wheel#asyncua-}" \
+ && asyncua_version="${asyncua_version%%-*}" \
+ && awk -v version="$asyncua_version" \
+        'BEGIN { replaced=0 } tolower($0) ~ /^asyncua([[:space:]]|[=<>!~@]|$)/ { print "asyncua==" version; replaced=1; next } { print } END { if (replaced == 0) print "asyncua==" version }' \
+        /tmp/constraints.txt > /tmp/runtime-constraints.txt \
  && python -m pip install --pre \
         --no-index \
         --find-links /opt/ijt-browser-ci/pip-wheelhouse \
-        -c /tmp/constraints.txt \
+        -c /tmp/runtime-constraints.txt \
         -r /tmp/requirements.txt \
         -r /tmp/requirements-dev.txt \
  && python -c "import pytest, pytest_asyncio, pytest_timeout, asyncua, websockets, dotenv, aiofiles, pytz; print('python deps OK')"
@@ -169,8 +181,8 @@ RUN python -c "import json,sys,subprocess; \
           'build_created':'${IMAGE_BUILD_CREATED}',\
           'base_digests':{\
             'ubuntu':'sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b',\
-            'python':'sha256:a3974109d36f164ca70024bc0d0828ac706e4ccda849f8638d879e91f79e90ec',\
-            'node':'sha256:24dc26ef1e3c3690f27ebc4136c9c186c3133b25563ae4d7f0692e4d1fe5db0e'},\
+            'python':'sha256:eae5d4c3ba20e5f89782e37950bb4815460e8f27564fd25112c3d950cd5351c9',\
+            'node':'sha256:b809ce06df0b8f49f8a3015e23a38f47fabfa1052d4d6916655eaae0d9950ff9'},\
           'cache_paths':{\
             'pip_wheelhouse':'/opt/ijt-browser-ci/pip-wheelhouse',\
             'pip_cache':'/opt/ijt-browser-ci/pip-cache',\
@@ -195,5 +207,5 @@ LABEL org.opencontainers.image.title="ijt-browser-ci" \
       org.umati.ijt.node_version="24.x" \
       org.umati.ijt.playwright_version="1.60.0" \
       org.umati.ijt.base_ubuntu_digest="sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b" \
-      org.umati.ijt.base_python_digest="sha256:a3974109d36f164ca70024bc0d0828ac706e4ccda849f8638d879e91f79e90ec" \
-      org.umati.ijt.base_node_digest="sha256:24dc26ef1e3c3690f27ebc4136c9c186c3133b25563ae4d7f0692e4d1fe5db0e"
+      org.umati.ijt.base_python_digest="sha256:eae5d4c3ba20e5f89782e37950bb4815460e8f27564fd25112c3d950cd5351c9" \
+      org.umati.ijt.base_node_digest="sha256:b809ce06df0b8f49f8a3015e23a38f47fabfa1052d4d6916655eaae0d9950ff9"

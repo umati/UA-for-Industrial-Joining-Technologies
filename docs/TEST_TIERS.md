@@ -37,7 +37,7 @@ is part of the required check set. It skips only npm-backed JavaScript hooks
 because the dedicated Web and Node JavaScript jobs already run those checks
 after a full `npm ci`.
 
-### Jobs
+### CI Jobs
 
 For full job descriptions, test baselines, and toolchain versions, see the **CI/CD** section in [`docs/SKILLS.md`](../docs/SKILLS.md).
 
@@ -71,7 +71,7 @@ cache writes are limited to trusted `main` runs. The smoke-test Python
 dependencies intentionally do not use `actions/setup-python` pip caching in
 this artifact-producing job.
 
-### Jobs
+### Integration Jobs
 
 For full job descriptions, test baselines, and toolchain versions, see the **CI/CD** section in [`docs/SKILLS.md`](../docs/SKILLS.md).
 

@@ -76,7 +76,13 @@ if hasattr(sys.stderr, "reconfigure"):
 # Paths
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+# Repo root is normally 3 levels above this runner (…/OPC_UA_Clients/Release2/
+# IJT_Web_Client/run_all_tests.py → repo). Inside the Web Client Docker image
+# the script lives at /app/run_all_tests.py with only 1 parent, so fall back
+# to ROOT (the project dir); the Dockerfile already places constraints.txt
+# alongside the runner there.
+_runner_parents = Path(__file__).resolve().parents
+_REPO_ROOT = _runner_parents[3] if len(_runner_parents) > 3 else ROOT
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

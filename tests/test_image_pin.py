@@ -19,6 +19,7 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _PIN_PATH = _REPO_ROOT / ".github" / "docker" / "ijt-browser-ci" / "image-pin.json"
+_IMAGE_DOCKERFILE = _REPO_ROOT / ".github" / "docker" / "ijt-browser-ci" / "Dockerfile"
 _PIN_UPDATE_SCRIPT = _REPO_ROOT / ".github" / "scripts" / "update_browser_ci_image_pin.py"
 _IMAGE_BUILD_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "build-browser-ci-image.yml"
 _INTEGRATION_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "integration.yml"
@@ -364,7 +365,8 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     checkout_step = next(step for step in build_job["steps"] if step.get("name") == "Checkout")
     assert "ref" not in checkout_step["with"], (
         "Build context should stay on the workflow checkout default: pull_request "
-        "events use the merge tree, while IMAGE_BUILD_SHA records the PR head SHA."
+        "events use the merge tree, while IMAGE_BUILD_SHA records the exact "
+        "workflow checkout SHA."
     )
 
     decide_step = next(
@@ -374,13 +376,20 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     )
     decide_body = decide_step["run"]
     assert "PR_HEAD_REPO" in decide_step["env"]
-    assert "PR_AUTHOR" in decide_step["env"]
     assert "PR_HEAD_SHA" in decide_step["env"]
-    assert "trusted_dependency_bot=false" in decide_body
-    assert r"app/renovate|renovate\[bot\]|dependabot\[bot\]" in decide_body
+    assert 'SOURCE_SHA="$GITHUB_SHA"' in decide_body
+    assert "trusted_dependency_bot" not in decide_body
+    assert "browser_image_inputs_changed=false" in decide_body
     assert "OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json" in decide_body
     assert ".github/docker/ijt-browser-ci/*" in decide_body
-    assert "image_build_logic_changed=false" in decide_body
+    assert ".github/docker/ijt-browser-ci/image-pin.json)" in decide_body
+    assert ".github/docker/ijt-browser-ci/README.md)" in decide_body
+    assert decide_body.index(".github/docker/ijt-browser-ci/image-pin.json)") < decide_body.index(
+        ".github/docker/ijt-browser-ci/*)"
+    )
+    assert decide_body.index(".github/docker/ijt-browser-ci/README.md)") < decide_body.index(
+        ".github/docker/ijt-browser-ci/*)"
+    )
     assert 'PUBLISH_MODE="pr"' in decide_body
     assert 'PR_IMAGE_TAG="${IMAGE_NAME}:pr-${PR_NUMBER}-${SHORT_SHA}"' in decide_body
 
@@ -428,3 +437,27 @@ def test_integration_workflow_runs_for_image_pin_updates() -> None:
         "image-pin merges to main must trigger Integration so post-merge closure has a "
         "main-branch run for the reviewed digest."
     )
+
+    resolve_step = next(
+        step
+        for step in workflow["jobs"]["live-webclient-browser"]["steps"]
+        if step.get("name") == "Resolve IJT Browser CI image reference (digest-qualified)"
+    )
+    resolve_body = resolve_step["run"]
+    assert ".github/docker/ijt-browser-ci/image-pin.json)" in resolve_body
+    assert ".github/docker/ijt-browser-ci/README.md)" in resolve_body
+    assert resolve_body.index(".github/docker/ijt-browser-ci/image-pin.json)") < resolve_body.index(
+        ".github/docker/ijt-browser-ci/*)"
+    )
+    assert resolve_body.index(".github/docker/ijt-browser-ci/README.md)") < resolve_body.index(
+        ".github/docker/ijt-browser-ci/*)"
+    )
+
+
+def test_browser_ci_dockerfile_derives_asyncua_runtime_constraint_from_wheel() -> None:
+    """Offline verification must not duplicate asyncua's version pin by hand."""
+    dockerfile = _IMAGE_DOCKERFILE.read_text(encoding="utf-8")
+    assert "asyncua_wheel=" in dockerfile
+    assert "asyncua_version=" in dockerfile
+    assert "asyncua==" + "1.2b2" not in dockerfile
+    assert "runtime-constraints.txt" in dockerfile

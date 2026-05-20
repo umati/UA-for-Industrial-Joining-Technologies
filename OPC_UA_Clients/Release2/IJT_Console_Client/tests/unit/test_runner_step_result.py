@@ -129,6 +129,55 @@ def test_pip_audit_timeout_is_advisory_skip():
     assert run_cmd.call_args.kwargs["timeout_label"] == "pip-audit"
 
 
+def test_run_uses_own_process_group_on_posix(monkeypatch, tmp_path):
+    captured_kwargs: dict[str, Any] = {}
+
+    class _FakeProcess:
+        pid = 12345
+        returncode = 0
+
+        def __init__(self, *_args, **kwargs):
+            captured_kwargs.update(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def communicate(self, timeout):
+            assert timeout == 10
+            return "ok\n", ""
+
+    monkeypatch.setattr(_mod.sys, "platform", "linux")
+    monkeypatch.setattr(_mod.subprocess, "Popen", _FakeProcess)
+
+    rc, output = _mod._run(["python", "--version"], cwd=tmp_path, timeout=10)
+
+    assert rc == 0
+    assert output == "ok\n"
+    assert captured_kwargs["start_new_session"] is True
+
+
+def test_security_matrix_step_uses_configured_wall_clock_timeout(monkeypatch, tmp_path):
+    calls: list[dict[str, Any]] = []
+
+    def _fake_run(_cmd, **kwargs):
+        calls.append(kwargs)
+        return 0, "33 passed in 1.23s"
+
+    monkeypatch.setattr(_mod, "_RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(_mod, "_tool_available", lambda _name: False)
+    monkeypatch.setattr(_mod, "_run", _fake_run)
+
+    result = _mod._step_security_matrix_tests("B1", "windows", 40461)
+
+    assert result.ok
+    assert calls
+    assert calls[0]["timeout"] == _mod._SECURITY_MATRIX_TIMEOUT_SEC
+    assert calls[0]["timeout_label"] == "Console security matrix B1"
+
+
 def test_install_requirements_preserves_explicit_pip_cache_dir(monkeypatch, tmp_path):
     venv = tmp_path / ".venv_test"
     venv.mkdir()

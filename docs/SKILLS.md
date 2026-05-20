@@ -294,21 +294,21 @@ UA-for-Industrial-Joining-Technologies/
 ## Sub-Project Summary
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
-- **Stack**: Python 3.14+, asyncua ≥1.2b2, Node.js 24+, Vitest, ESLint, Docker
+- **Stack**: Python 3.14+, asyncua pinned via repo-root constraints.txt, Node.js 24+, Vitest, ESLint, Docker
 - **Tests**: Python unit (`tests/python/unit/`), JS unit (`src/javascripts/`), and split live suites for Python OPC UA, Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and Playwright regression. Each live/browser suite owns its own OPC UA/WS/UI ports; root Phase 2 runs Docker as a separate `web-client-docker-smoke` suite.
 - **One test command**: `python run_all_tests.py`
 - **Docker**: healthy on HTTP:3000 + WS:8001
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md`
 
 ### IJT Console Client (`OPC_UA_Clients/Release2/IJT_Console_Client/`)
-- **Stack**: Python 3.14+, asyncua ≥1.2b2
+- **Stack**: Python 3.14+, asyncua pinned via repo-root constraints.txt
 - **Tests**: unit (`tests/unit/` — no server needed); live (`tests/live/` — calls `pytest.fail()` if server unreachable, no silent skips)
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Entry point**: `python setup_client.py --url="opc.tcp://..."`
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md`
 
 ### IJT Test Client (`OPC_UA_Clients/Release2/IJT_Test_Client/`)
-- **Stack**: Python 3.14+, asyncua ≥1.2b2, pytest
+- **Stack**: Python 3.14+, asyncua pinned via repo-root constraints.txt, pytest
 - **Purpose**: OPC UA IJT spec conformance test suite — validates server against OPC 40450-1 / 40451-1
 - **Tests**: conformance (`conformance/` — requires running OPC UA server); unit (`tests/unit/` — pure-logic helper coverage, no server needed)
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
@@ -490,7 +490,7 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 
 | Decision | Reason |
 |----------|--------|
-| asyncua ≥1.2b2 (pre-release) | Python 3.14 support not in asyncua 1.1.x stable |
+| asyncua pinned in `constraints.txt` | Python 3.14.4 support requires upstream SHA `35a77c6b` until a tagged PyPI release carries the fix |
 | Monkey-patch `_send_request` timeout | asyncua `UaClient.call()` has hardcoded 1s timeout |
 | Subscribe events on Server node, not method nodes | Subscribing on individual nodes causes `BadNoSubscription` under load |
 | Use provided Python only in pre-isolated environments (`IS_DOCKER=true` or `GITHUB_ACTIONS=true`) | Docker and GitHub Actions already provide isolation; local runs use IJT-owned venvs |

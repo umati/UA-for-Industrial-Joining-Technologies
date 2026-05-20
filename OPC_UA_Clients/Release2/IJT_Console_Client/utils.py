@@ -123,6 +123,19 @@ async def _find_child_by_browse_name(parent_node, browse_name: str, ns_idx: int 
 
 
 async def read_tool_identifier(client: Client) -> String | str | None:
+    """Return the first Tool's ProductInstanceUri exposed by the server, or
+    ``None`` when the address-space legitimately has no such node.
+
+    Exception policy (deliberate):
+    Only swallow errors that genuinely mean *the server's address space does
+    not currently expose a tool identifier* — OPC UA status errors, network
+    timeouts, and transport-level connection drops. Any other exception
+    (``NameError``, ``AttributeError``, ``ImportError``, internal asyncua
+    bugs, asyncio cancellation propagated through user code, etc.) indicates
+    a real programming or environment problem and is re-raised so callers see
+    the true root cause instead of a misleading "ProductInstanceUri missing"
+    test failure.
+    """
     try:
         ns_app = await _namespace_index(client, _NS_APP_URI)
         objects = client.nodes.objects
@@ -156,7 +169,7 @@ async def read_tool_identifier(client: Client) -> String | str | None:
             if value is not None and str(value).strip():
                 return value
         return None
-    except Exception as e:
+    except (UaError, TimeoutError, ConnectionError, OSError) as e:
         ijt_log.warning(f"{'Tool Identifier Read Failed':<40} : {e}")
         return None
 

@@ -3,17 +3,20 @@
 Central location for all workarounds targeting known asyncua bugs.  Each patch
 is guarded by a version check:
 
-  * While asyncua < 1.2.0 stable  → patch is applied silently.
-  * Once asyncua >= 1.2.0 stable  → patch is skipped and a DeprecationWarning
-    is emitted so the call site is easy to locate and remove.
+  * While asyncua < 1.3.0           → patch is applied silently.
+  * Once asyncua >= 1.3.0           → patch is skipped and a DeprecationWarning
+    is emitted so the call site is easy to locate and re-verify.
 
 Usage (from any tests/python/{live,integration} file)::
 
     from .._asyncua_compat import apply_send_request_timeout_patch
     apply_send_request_timeout_patch()
 
-Remove the call (and this module) once asyncua 1.2.0 stable ships and the
-upstream fix is confirmed.
+The 1.3.0 threshold was chosen because the upstream timeout bug is NOT yet
+fixed at master SHA 35a77c6b (2026-05-11 — the SHA pinned in our
+repo-root constraints.txt).  When asyncua publishes a release that includes the
+fix, bump the gate, re-verify, and remove this module + every call to
+apply_send_request_timeout_patch().
 """
 
 from __future__ import annotations
@@ -41,26 +44,29 @@ ASYNCUA_VERSION: Version = _asyncua_version()
 #             asyncua falls back to a hard-coded 1-second default instead of
 #             using the configured client timeout.  Heavy server calls that
 #             take >1 s (e.g. SimulateJobResult with refs=True, or
-#             load_type_definitions) raise spurious timeout errors.
+#             load_data_type_definitions) raise spurious timeout errors.
 # Affected  : asyncua 1.2b2 and all earlier releases (confirmed on 1.1.5).
-# Fixed in  : not yet merged upstream as of asyncua 1.2b2.
-# Remove    : when asyncua >= 1.2.0 stable — verify upstream fix, then delete
-#             every call to apply_send_request_timeout_patch().
+# Fixed in  : NOT YET FIXED upstream.  Verified absent at master SHA
+#             35a77c6b128a4f1226a685cde3b46abd59975258 (2026-05-11) — the
+#             commit currently pinned by repo-root constraints.txt.
+# Remove    : when asyncua >= 1.3.0 stable ships — verify upstream fix is
+#             actually present, then delete every call to
+#             apply_send_request_timeout_patch() and this module.
 # ---------------------------------------------------------------------------
 def apply_send_request_timeout_patch() -> None:
     """Wrap UaClient._send_request so timeout=None inherits self._timeout.
 
     Safe to call multiple times — re-patching is a no-op after the first call.
-    Emits DeprecationWarning when asyncua >= 1.2.0 so the call site is found
-    automatically once the upstream fix ships.
+    Emits DeprecationWarning when asyncua >= 1.3.0 so the call site is found
+    automatically once the upstream fix has potentially shipped.
     """
-    if ASYNCUA_VERSION >= Version("1.2.0"):
+    if ASYNCUA_VERSION >= Version("1.3.0"):
         warnings.warn(
-            f"asyncua {ASYNCUA_VERSION} >= 1.2.0 stable: the _send_request "
-            "timeout workaround in tests/python/_asyncua_compat.py is likely "
-            "obsolete.  Verify that the upstream fix is in place, then remove "
-            "every call to apply_send_request_timeout_patch() and delete "
-            "_asyncua_compat.py.",
+            f"asyncua {ASYNCUA_VERSION} >= 1.3.0: re-verify that the "
+            "_send_request timeout fix has actually landed upstream "
+            "(absent at master SHA 35a77c6b on 2026-05-11).  If present, "
+            "remove every call to apply_send_request_timeout_patch() and "
+            "delete tests/python/_asyncua_compat.py.",
             DeprecationWarning,
             stacklevel=2,
         )

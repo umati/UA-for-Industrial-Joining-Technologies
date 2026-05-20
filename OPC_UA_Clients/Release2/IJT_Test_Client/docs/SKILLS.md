@@ -107,7 +107,7 @@ from the IJT specification.
 Endpoint:       opc.tcp://localhost:40451   (override: OPCUA_SERVER_URL env var)
 Binary:         OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe
 Python:         3.14+  (normal test venv at .venv_test/; local --ci-mode venv at .venv_ci/)
-Key packages:   asyncua>=1.2b2, PyYAML>=6.0, pytest>=9.0.2, pytest-asyncio>=1.3.0, pytest-timeout>=2.4.0
+Key packages:   asyncua (pin lives in repo-root constraints.txt; current SHA 35a77c6b self-reports 1.2b2), PyYAML>=6.0, pytest>=9.0.2, pytest-asyncio>=1.3.0, pytest-timeout>=2.4.0
 Run tests:      .venv_test/bin/python -m pytest -v          (Linux, normal mode)
                 .venv_test\Scripts\python -m pytest -v      (Windows, normal mode)
 Auto-launch:    set OPCUA_SIMULATOR_EXE=<path>  to auto-start server if not running
