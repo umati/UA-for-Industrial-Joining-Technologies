@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_FINGERPRINT_RE = re.compile(r"^[0-9a-f]{64}$")
 _IMAGE_RE = re.compile(r"^ghcr\.io/[a-z0-9._/-]+$")
 
 _COMMENT = (
@@ -43,6 +44,11 @@ def _validate_digest(digest: str) -> None:
         raise ValueError(f"digest must match ^sha256:[0-9a-f]{{64}}$, got {digest!r}")
 
 
+def _validate_fingerprint(fingerprint: str) -> None:
+    if not _FINGERPRINT_RE.fullmatch(fingerprint):
+        raise ValueError(f"inputs_fingerprint must be 64 lowercase hex chars, got {fingerprint!r}")
+
+
 def _required_value(source: dict[str, Any], key: str) -> str:
     value = source.get(key)
     if not isinstance(value, str) or not value.strip():
@@ -63,12 +69,19 @@ def build_updated_pin(
     """Build the next image-pin.json object from verified publish metadata."""
     _validate_image(image)
     _validate_digest(digest)
-    if current.get("image") == image and current.get("digest") == digest:
+    inputs_fingerprint = _required_value(metadata, "inputs_fingerprint")
+    _validate_fingerprint(inputs_fingerprint)
+    if (
+        current.get("image") == image
+        and current.get("digest") == digest
+        and current.get("inputs_fingerprint") == inputs_fingerprint
+    ):
         return dict(current)
 
     updated: dict[str, Any] = {
         "image": image,
         "digest": digest,
+        "inputs_fingerprint": inputs_fingerprint,
         "playwright_version": _required_value(metadata, "playwright_version"),
         "node_version": _required_value(metadata, "node_version"),
         "python_version": _required_value(metadata, "python_version"),

@@ -60,6 +60,7 @@ on:
       - '!.github/docker/ijt-browser-ci/README.md'
       # Browser CI image pin — the live browser job consumes this reviewed digest
       - '.github/docker/ijt-browser-ci/image-pin.json'
+      - '.github/scripts/compute_browser_image_fingerprint.py'
       # Reporting code — summary generation is part of Integration correctness
       - 'reporting/**'
       - 'scripts/reporting/**'
@@ -91,6 +92,7 @@ on:
       - '!.github/docker/ijt-browser-ci/README.md'
       # Browser CI image pin — the live browser job consumes this reviewed digest
       - '.github/docker/ijt-browser-ci/image-pin.json'
+      - '.github/scripts/compute_browser_image_fingerprint.py'
       # Reporting code — summary generation is part of Integration correctness
       - 'reporting/**'
       - 'scripts/reporting/**'
@@ -617,6 +619,8 @@ jobs:
           set -euo pipefail
           IMG="$(jq -r .image "$PIN_PATH")"
           DIG="$(jq -r .digest "$PIN_PATH")"
+          CURRENT_INPUTS_FINGERPRINT="$(python .github/scripts/compute_browser_image_fingerprint.py --format value)"
+          PIN_INPUTS_FINGERPRINT="$(jq -r '.inputs_fingerprint // empty' "$PIN_PATH")"
 
           browser_image_inputs_changed() {
             local base_sha="$1"
@@ -654,6 +658,9 @@ jobs:
                   changed_browser_image_input=true
                   ;;
                 .github/scripts/update_browser_ci_image_pin.py)
+                  changed_browser_image_input=true
+                  ;;
+                .github/scripts/compute_browser_image_fingerprint.py)
                   changed_browser_image_input=true
                   ;;
                 .github/workflows/build-browser-ci-image.yml)
@@ -710,6 +717,19 @@ jobs:
               echo "::error::  image:    ${IMG}@${DIG}" >&2
               exit 1
             fi
+
+            actual_fingerprint="$(
+              docker run --rm --network=none "${IMG}@${DIG}" \
+                python -c "import json; print(json.load(open('/opt/ijt-browser-ci/metadata.json')).get('inputs_fingerprint',''))"
+            )"
+            if [[ "$actual_fingerprint" != "$CURRENT_INPUTS_FINGERPRINT" ]]; then
+              echo "::error file=${PIN_PATH}::Resolved ${source}, but image metadata does not match the current Browser CI input fingerprint." >&2
+              echo "::error::  expected: ${CURRENT_INPUTS_FINGERPRINT}" >&2
+              echo "::error::  actual:   ${actual_fingerprint}" >&2
+              echo "::error::  image:    ${IMG}@${DIG}" >&2
+              echo "::error::  manifest: .github/docker/ijt-browser-ci/inputs-manifest.json" >&2
+              exit 1
+            fi
           }
 
           image_source="reviewed image-pin.json"
@@ -728,6 +748,39 @@ jobs:
             fi
           fi
 
+          if [[ "$image_source" == "reviewed image-pin.json" ]]; then
+            if ! [[ "$PIN_INPUTS_FINGERPRINT" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "::error file=${PIN_PATH}::Reviewed Browser CI image pin is missing inputs_fingerprint." >&2
+              echo "::error::  current:  ${CURRENT_INPUTS_FINGERPRINT}" >&2
+              echo "::error::  manifest: .github/docker/ijt-browser-ci/inputs-manifest.json" >&2
+              echo "::error::  action:   rebuild/publish ijt-browser-ci and refresh image-pin.json through the reviewed pin flow." >&2
+              exit 1
+            fi
+            if [[ "$PIN_INPUTS_FINGERPRINT" != "$CURRENT_INPUTS_FINGERPRINT" ]]; then
+              echo "::error file=${PIN_PATH}::Browser CI image pin is stale for the current dependency inputs." >&2
+              echo "::error::  pinned:   ${PIN_INPUTS_FINGERPRINT}" >&2
+              echo "::error::  current:  ${CURRENT_INPUTS_FINGERPRINT}" >&2
+              echo "::error::  image:    ${IMG}@${DIG}" >&2
+              echo "::error::  manifest: .github/docker/ijt-browser-ci/inputs-manifest.json" >&2
+              echo "::error::  action:   rebuild/publish ijt-browser-ci and refresh image-pin.json through the reviewed pin flow." >&2
+              exit 1
+            fi
+            actual_fingerprint="$(
+              docker run --rm --network=none "${IMG}@${DIG}" \
+                python -c "import json; print(json.load(open('/opt/ijt-browser-ci/metadata.json')).get('inputs_fingerprint',''))"
+            )"
+            if [[ "$actual_fingerprint" != "$CURRENT_INPUTS_FINGERPRINT" ]]; then
+              echo "::error file=${PIN_PATH}::Reviewed Browser CI image metadata does not match the current input fingerprint." >&2
+              echo "::error::  pinned:   ${PIN_INPUTS_FINGERPRINT}" >&2
+              echo "::error::  current:  ${CURRENT_INPUTS_FINGERPRINT}" >&2
+              echo "::error::  actual:   ${actual_fingerprint}" >&2
+              echo "::error::  image:    ${IMG}@${DIG}" >&2
+              echo "::error::  manifest: .github/docker/ijt-browser-ci/inputs-manifest.json" >&2
+              echo "::error::  action:   rebuild/publish ijt-browser-ci and refresh image-pin.json through the reviewed pin flow." >&2
+              exit 1
+            fi
+          fi
+
           if ! [[ "$DIG" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "::error file=$PIN_PATH::digest is not a valid sha256:<64hex> reference: $DIG" >&2
             exit 1
@@ -739,7 +792,7 @@ jobs:
           fi
           echo "ijt_browser_ci_image=$REF" >> "$GITHUB_OUTPUT"
           echo "image_source=${image_source}" >> "$GITHUB_OUTPUT"
-          echo "Resolved IJT_BROWSER_CI_IMAGE=$REF (${image_source})"
+          echo "Resolved IJT_BROWSER_CI_IMAGE=$REF (${image_source}; inputs=${CURRENT_INPUTS_FINGERPRINT})"
 
       - name: Pull IJT Browser CI image (3-attempt retry)
         env:

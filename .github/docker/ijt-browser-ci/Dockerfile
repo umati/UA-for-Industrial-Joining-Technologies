@@ -171,6 +171,7 @@ RUN chmod -R a+rwX /opt/ijt-browser-ci/npm-cache \
 ARG IMAGE_BUILD_REF=unknown
 ARG IMAGE_BUILD_SHA=unknown
 ARG IMAGE_BUILD_CREATED=unknown
+ARG IMAGE_INPUTS_FINGERPRINT=unknown
 RUN python -c "import json,sys,subprocess; \
     py=sys.version.split()[0]; \
     node=subprocess.check_output(['node','--version'],text=True).strip(); \
@@ -178,6 +179,7 @@ RUN python -c "import json,sys,subprocess; \
     meta={'python_version':py,'node_version':node,'npm_version':npm,\
           'playwright_version':'1.60.0',\
           'build_ref':'${IMAGE_BUILD_REF}','build_sha':'${IMAGE_BUILD_SHA}',\
+          'inputs_fingerprint':'${IMAGE_INPUTS_FINGERPRINT}',\
           'build_created':'${IMAGE_BUILD_CREATED}',\
           'base_digests':{\
             'ubuntu':'sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b',\
@@ -206,6 +208,7 @@ LABEL org.opencontainers.image.title="ijt-browser-ci" \
       org.umati.ijt.python_version="3.14" \
       org.umati.ijt.node_version="24.x" \
       org.umati.ijt.playwright_version="1.60.0" \
+      org.umati.ijt.inputs_fingerprint="${IMAGE_INPUTS_FINGERPRINT}" \
       org.umati.ijt.base_ubuntu_digest="sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b" \
       org.umati.ijt.base_python_digest="sha256:eae5d4c3ba20e5f89782e37950bb4815460e8f27564fd25112c3d950cd5351c9" \
       org.umati.ijt.base_node_digest="sha256:b809ce06df0b8f49f8a3015e23a38f47fabfa1052d4d6916655eaae0d9950ff9"

@@ -1943,10 +1943,10 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
     assert 'return "" if delta == 0 else f" ({delta:+d})"' in report_script
     assert "def integration_drift_warnings(baseline, suite_counts, run_id):" in report_script
     assert 'E("GH_RUN_ID", "")' in report_script
-    assert "non_test_client_skip_failures(" in report_script
+    assert "must_not_skip_failures(" in report_script
     assert "skip_policy_failures" in report_script
     assert "#### Skip Policy Failures" in report_script
-    assert "only IJT Test Client conformance" in report_script
+    assert "smoke and unit suites" in report_script
     assert "sys.exit(1)" in report_script
     assert "tests/baselines/integration-test-counts.json" in report_script
     assert "### Warnings and Drift" in report_script

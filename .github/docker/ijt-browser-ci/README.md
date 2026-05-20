@@ -10,6 +10,9 @@ commit `4ad418b5`.
 
 - `Dockerfile` — image definition (Python 3.14, Node 24, Playwright 1.60.0
   + Chromium + Linux system libs; wheelhouse + npm cache pre-warmed).
+- `inputs-manifest.json` — canonical file list for the image dependency/cache
+  fingerprint. Build, publish, pin refresh, and Integration use the same
+  manifest so stale reviewed pins fail fast before browser suites run.
 - `image-pin.json` — reviewed digest consumed by the Integration workflow.
   This file is updated by normal reviewed pull requests after a verified
   publish; it is excluded from image-build path triggers to prevent a
@@ -29,9 +32,8 @@ The workflow has three permission-separated jobs:
 - `publish` — the only job with `packages: write`; pushes the verified image
   to GHCR and pull-verifies the digest. Pushes to `main`, schedules, and
   manual `push=true` dispatches publish the reviewed pin path. Same-repo pull
-  requests that change browser image inputs (`.dockerignore`, `constraints.txt`,
-  Web Client `package*.json`, `requirements*.txt`, the image Dockerfile, the
-  image-pin updater, or this build workflow) publish a PR-scoped source-SHA tag
+  requests that change browser image inputs from `inputs-manifest.json` or the
+  build workflow publish a PR-scoped source-SHA tag
   (`pr-<number>-<checkout-sha>`) for Integration to resolve to a digest before
   running the offline browser matrix.
 - `offline-e2e` — runs the full `web-client-e2e-regression` root-runner path
@@ -71,6 +73,14 @@ suites run under `--network=none`. The build workflow then runs the full
 offline E2E regression as a separate post-publish job. This keeps PR validation
 automatic without allowing live npm/pip/Playwright fetches during the browser
 test job.
+
+The image metadata and reviewed pin carry an `inputs_fingerprint` computed from
+`inputs-manifest.json`. When Integration consumes a PR/SHA image, it verifies
+the image metadata fingerprint against the current checkout. When Integration
+consumes the reviewed `image-pin.json` digest, it verifies the pin fingerprint
+against the current checkout before pulling/running the browser matrix. A stale
+pin therefore fails with a direct image-pin diagnostic instead of a late
+offline npm/pip cache miss.
 
 Fork PRs cannot publish GHCR images with the repository token. If a fork needs
 to change browser image inputs, a maintainer must replay the branch from this

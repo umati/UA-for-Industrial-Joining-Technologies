@@ -267,20 +267,42 @@ def test_integration_drift_warnings_skip_within_tolerance():
     assert len(warnings) == 0
 
 
-def test_non_test_client_skip_failures_allows_tc_tests():
-    """non_test_client_skip_failures allows skips in tc_tests suite."""
-    suite_counts = [("tc_tests", "Test Client", (100, 95, 0, 5))]
-    failures = system_tests_run_summary.non_test_client_skip_failures(suite_counts)
-    assert len(failures) == 0
+def test_must_not_skip_failures_allows_legitimate_skip_suites():
+    """must_not_skip_failures allows skips in conformance/live/security suites."""
+    suite_counts = [
+        ("tc_tests", "Test Client", (100, 95, 0, 5)),
+        ("con_live", "Console Client Live", (57, 19, 0, 38)),
+        ("cs_live", "C# Client Live", (110, 110, 0, 0)),
+        ("wc_live", "Web Client Live", (100, 97, 0, 3)),
+        ("wc_browser", "Web Client Browser", (65, 65, 0, 0)),
+        ("csharp_opcua_security", "C# OPC UA Security", (39, 30, 0, 9)),
+        ("console_opcua_security", "Console OPC UA Security", (12, 11, 0, 1)),
+    ]
+    failures = system_tests_run_summary.must_not_skip_failures(suite_counts)
+    assert failures == []
 
 
-def test_non_test_client_skip_failures_rejects_other_skips():
-    """non_test_client_skip_failures rejects skips in non-tc_tests suites."""
-    suite_counts = [("wc_live", "Web Client Live", (100, 97, 0, 3))]
-    failures = system_tests_run_summary.non_test_client_skip_failures(suite_counts)
-    assert len(failures) == 1
-    assert "Web Client Live" in failures[0]
-    assert "3" in failures[0]
+def test_must_not_skip_failures_rejects_skips_in_smoke_and_unit_suites():
+    """must_not_skip_failures fires when a smoke or unit suite has any skip."""
+    suite_counts = [
+        ("sd_smoke", "Server Smoke", (10, 9, 0, 1)),
+        ("wd_py", "Web Docker Python Unit", (50, 48, 0, 2)),
+        ("wd_js", "Web Docker JS Unit", (40, 40, 0, 0)),
+        ("tc_smoke", "Test Client Smoke", (10, 8, 0, 2)),
+    ]
+    failures = system_tests_run_summary.must_not_skip_failures(suite_counts)
+    assert len(failures) == 3
+    assert any("Server Smoke" in f and "1" in f for f in failures)
+    assert any("Web Docker Python Unit" in f and "2" in f for f in failures)
+    assert any("Test Client Smoke" in f and "2" in f for f in failures)
+    assert all("smoke and unit suites" in f for f in failures)
+
+
+def test_must_not_skip_failures_handles_missing_artifacts():
+    """A suite with no JUnit XML (counts[3] is None) does not trip the gate."""
+    suite_counts = [("sd_smoke", "Server Smoke", (None, None, None, None))]
+    failures = system_tests_run_summary.must_not_skip_failures(suite_counts)
+    assert failures == []
 
 
 def test_seconds_parses_float_string():

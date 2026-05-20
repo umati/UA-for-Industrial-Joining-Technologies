@@ -204,17 +204,31 @@ def integration_drift_warnings(baseline, suite_counts, run_id):
     return warnings
 
 
-def non_test_client_skip_failures(suite_counts):
-    """Build hard failures for skips outside IJT Test Client conformance."""
+# Suite keys whose JUnit XML must report zero skipped tests. Smoke and unit
+# suites must always run their full case set; any skip there is a regression.
+# All conformance / live / OPC UA Security suites legitimately skip cases when
+# a CU, server target, or security identity is intentionally not exercised, so
+# they are NOT listed here and never trip this gate.
+_MUST_NOT_SKIP_SUITE_KEYS = frozenset({"sd_smoke", "wd_py", "wd_js", "tc_smoke"})
+
+
+def must_not_skip_failures(suite_counts):
+    """Build hard failures for skips in suites that must never skip.
+
+    Only smoke and unit suites are gated here. Conformance, live, and OPC UA
+    Security suites have legitimate conditional skips and are excluded so the
+    Summary gate does not flag normal Not-Implemented / Not-Supported coverage.
+    """
     failures = []
     for key, label, counts in suite_counts:
-        if key == "tc_tests" or counts[3] is None:
+        if key not in _MUST_NOT_SKIP_SUITE_KEYS or counts[3] is None:
             continue
         skipped = int(counts[3])
         if skipped:
             failures.append(
-                f"❌ **{label}**: {skipped:,} skipped — only IJT Test Client conformance "
-                "may skip Not Implemented / Not Supported coverage."
+                f"❌ **{label}**: {skipped:,} skipped — smoke and unit suites "
+                "must run their full case set; conditional skips belong only "
+                "in conformance, live, and OPC UA Security suites."
             )
     return failures
 
@@ -648,7 +662,7 @@ def main() -> None:
         ("csharp_opcua_security", "C# Client — OPC UA Security", csharp_opcua_security),
         ("console_opcua_security", "Console Client — OPC UA Security", console_opcua_security),
     ]
-    skip_policy_failures = non_test_client_skip_failures(suite_counts)
+    skip_policy_failures = must_not_skip_failures(suite_counts)
     report_warnings = integration_drift_warnings(
         integration_baseline,
         suite_counts,

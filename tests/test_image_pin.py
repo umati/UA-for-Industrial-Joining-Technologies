@@ -13,6 +13,7 @@ import json
 import re
 import shutil
 import subprocess
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 import pytest
@@ -20,11 +21,14 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _PIN_PATH = _REPO_ROOT / ".github" / "docker" / "ijt-browser-ci" / "image-pin.json"
 _IMAGE_DOCKERFILE = _REPO_ROOT / ".github" / "docker" / "ijt-browser-ci" / "Dockerfile"
+_INPUTS_MANIFEST = _REPO_ROOT / ".github" / "docker" / "ijt-browser-ci" / "inputs-manifest.json"
 _PIN_UPDATE_SCRIPT = _REPO_ROOT / ".github" / "scripts" / "update_browser_ci_image_pin.py"
+_FINGERPRINT_SCRIPT = _REPO_ROOT / ".github" / "scripts" / "compute_browser_image_fingerprint.py"
 _IMAGE_BUILD_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "build-browser-ci-image.yml"
 _INTEGRATION_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "integration.yml"
 
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_FINGERPRINT_RE = re.compile(r"^[0-9a-f]{64}$")
 _DIGEST_REF_SUFFIX_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
 _IMAGE_RE = re.compile(r"^ghcr\.io/[a-z0-9._/-]+$")
 
@@ -67,6 +71,16 @@ def test_image_pin_no_floating_tag(pin: dict) -> None:
     )
 
 
+def test_image_pin_inputs_fingerprint_is_valid_when_present(pin: dict) -> None:
+    fingerprint = pin.get("inputs_fingerprint")
+    if fingerprint is None:
+        return
+    assert isinstance(fingerprint, str)
+    assert _FINGERPRINT_RE.fullmatch(fingerprint), (
+        "image-pin.json inputs_fingerprint must be 64 lowercase hex chars when present"
+    )
+
+
 def test_image_pin_playwright_version_matches_package_lock(pin: dict) -> None:
     """The pinned CI image must track the Web Client's locked Playwright version."""
     lock_path = _IJT_WEB_CLIENT_DIR / "package-lock.json"
@@ -79,6 +93,75 @@ def test_image_pin_playwright_version_matches_package_lock(pin: dict) -> None:
         "node_modules/@playwright/test. Rebuild/publish ijt-browser-ci and "
         "update image-pin.json in the same Playwright bump."
     )
+
+
+def _load_fingerprint_module():
+    spec = importlib.util.spec_from_file_location(
+        "compute_browser_image_fingerprint",
+        _FINGERPRINT_SCRIPT,
+    )
+    assert spec and spec.loader, f"unable to import {_FINGERPRINT_SCRIPT}"
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_inputs_manifest() -> dict:
+    assert _INPUTS_MANIFEST.is_file(), f"missing inputs manifest: {_INPUTS_MANIFEST}"
+    return json.loads(_INPUTS_MANIFEST.read_text(encoding="utf-8"))
+
+
+def _path_matches(path: str, pattern: str) -> bool:
+    if pattern.endswith("/**"):
+        return path.startswith(pattern[:-3].rstrip("/") + "/")
+    return fnmatchcase(path, pattern)
+
+
+def _workflow_path_includes(path: str, patterns: list[str]) -> bool:
+    included = any(
+        _path_matches(path, pattern) for pattern in patterns if not pattern.startswith("!")
+    )
+    excluded = any(
+        _path_matches(path, pattern[1:]) for pattern in patterns if pattern.startswith("!")
+    )
+    return included and not excluded
+
+
+def test_browser_ci_inputs_manifest_is_canonical_and_fingerprintable() -> None:
+    manifest = _load_inputs_manifest()
+    assert manifest["schema_version"] == 1
+    assert manifest["algorithm"] == "sha256-v1"
+    paths = manifest["paths"]
+    assert paths == sorted(paths), "manifest paths should stay sorted for reviewable diffs"
+    assert len(paths) == len(set(paths)), "manifest paths must be unique"
+    for rel in paths:
+        assert not rel.startswith("/")
+        assert ".." not in Path(rel).parts
+        assert (_REPO_ROOT / rel).is_file(), f"manifest path is missing: {rel}"
+
+    module = _load_fingerprint_module()
+    result = module.compute_fingerprint(repo_root=_REPO_ROOT, manifest_path=_INPUTS_MANIFEST)
+    assert result["algorithm"] == "sha256-v1"
+    assert _FINGERPRINT_RE.fullmatch(result["fingerprint"])
+    assert result["paths"] == paths
+
+
+def test_build_workflow_path_filters_cover_browser_ci_inputs_manifest() -> None:
+    import yaml
+
+    workflow = yaml.safe_load(_IMAGE_BUILD_WORKFLOW.read_text(encoding="utf-8"))
+    triggers = workflow.get("on", workflow.get(True, {}))
+    manifest_paths = _load_inputs_manifest()["paths"]
+    for event_name in ("push", "pull_request"):
+        paths = triggers[event_name]["paths"]
+        missing = [path for path in manifest_paths if not _workflow_path_includes(path, paths)]
+        assert not missing, (
+            f"build-browser-ci-image.yml {event_name} paths must cover every "
+            "Browser CI image input manifest path: " + ", ".join(missing)
+        )
+
+        assert not _workflow_path_includes(".github/docker/ijt-browser-ci/image-pin.json", paths)
+        assert not _workflow_path_includes(".github/docker/ijt-browser-ci/README.md", paths)
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +318,7 @@ def test_update_browser_ci_image_pin_script_writes_verified_publish_metadata() -
             "_comment": "old manual comment",
         },
         metadata={
+            "inputs_fingerprint": "2" * 64,
             "playwright_version": "1.60.0",
             "node_version": "v24.11.1",
             "python_version": "Python 3.14.0",
@@ -254,6 +338,7 @@ def test_update_browser_ci_image_pin_script_writes_verified_publish_metadata() -
     )
 
     assert updated["digest"] == "sha256:" + "1" * 64
+    assert updated["inputs_fingerprint"] == "2" * 64
     assert updated["node_version"] == "v24.11.1"
     assert updated["python_version"] == "Python 3.14.0"
     assert updated["base_digests"]["ubuntu"] == "sha256:" + "a" * 64
@@ -273,12 +358,14 @@ def test_update_browser_ci_image_pin_script_keeps_current_pin_when_digest_matche
         "image_revision": "old",
         "image_created": "old",
         "image_workflow_run": "old",
+        "inputs_fingerprint": "2" * 64,
         "_comment": "already reviewed",
     }
 
     updated = module.build_updated_pin(
         current=current,
         metadata={
+            "inputs_fingerprint": "2" * 64,
             "playwright_version": "1.60.0",
             "node_version": "v24.11.1",
             "python_version": "Python 3.14.0",
@@ -291,6 +378,41 @@ def test_update_browser_ci_image_pin_script_keeps_current_pin_when_digest_matche
     )
 
     assert updated == current
+
+
+def test_update_browser_ci_image_pin_script_refreshes_same_digest_stale_fingerprint() -> None:
+    """A matching digest must not preserve a stale or manually edited input fingerprint."""
+    module = _load_pin_update_module()
+    current = {
+        "image": "ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci",
+        "digest": "sha256:" + "1" * 64,
+        "playwright_version": "1.60.0",
+        "node_version": "24.x",
+        "python_version": "3.14.x",
+        "image_revision": "old",
+        "image_created": "old",
+        "image_workflow_run": "old",
+        "inputs_fingerprint": "2" * 64,
+    }
+
+    updated = module.build_updated_pin(
+        current=current,
+        metadata={
+            "inputs_fingerprint": "3" * 64,
+            "playwright_version": "1.60.0",
+            "node_version": "v24.11.1",
+            "python_version": "Python 3.14.0",
+        },
+        image=current["image"],
+        digest=current["digest"],
+        image_revision="new",
+        image_created="2026-05-13T23:00:00Z",
+        image_workflow_run="https://github.com/example/repo/actions/runs/2",
+    )
+
+    assert updated["digest"] == current["digest"]
+    assert updated["inputs_fingerprint"] == "3" * 64
+    assert updated["image_revision"] == "new"
 
 
 @pytest.mark.parametrize(
@@ -324,6 +446,7 @@ def test_update_browser_ci_image_pin_script_rejects_unsafe_references(
         module.build_updated_pin(
             current={},
             metadata={
+                "inputs_fingerprint": "2" * 64,
                 "playwright_version": "1.60.0",
                 "node_version": "v24.11.1",
                 "python_version": "Python 3.14.0",
@@ -363,6 +486,10 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert build_job["outputs"]["publish_mode"] == "${{ steps.decide.outputs.publish_mode }}"
     assert build_job["outputs"]["source_sha"] == "${{ steps.decide.outputs.source_sha }}"
     assert build_job["outputs"]["pr_image_tag"] == "${{ steps.decide.outputs.pr_image_tag }}"
+    assert (
+        build_job["outputs"]["inputs_fingerprint"]
+        == "${{ steps.fingerprint.outputs.inputs_fingerprint }}"
+    )
 
     checkout_step = next(step for step in build_job["steps"] if step.get("name") == "Checkout")
     assert "ref" not in checkout_step["with"], (
@@ -384,6 +511,7 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert "browser_image_inputs_changed=false" in decide_body
     assert "OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json" in decide_body
     assert ".github/docker/ijt-browser-ci/*" in decide_body
+    assert ".github/scripts/compute_browser_image_fingerprint.py" in decide_body
     assert ".github/docker/ijt-browser-ci/image-pin.json)" in decide_body
     assert ".github/docker/ijt-browser-ci/README.md)" in decide_body
     assert decide_body.index(".github/docker/ijt-browser-ci/image-pin.json)") < decide_body.index(
@@ -395,6 +523,11 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert 'PUBLISH_MODE="pr"' in decide_body
     assert 'PR_IMAGE_TAG="${IMAGE_NAME}:pr-${PR_NUMBER}-${SHORT_SHA}"' in decide_body
     build_body = "\n".join(str(step.get("run", "")) for step in build_job["steps"])
+    assert "compute_browser_image_fingerprint.py --format github-output" in build_body
+    assert "inputs_fingerprint" in build_body
+    assert "IMAGE_INPUTS_FINGERPRINT=${{ steps.fingerprint.outputs.inputs_fingerprint }}" in str(
+        build_job
+    )
     assert "web-client-e2e-regression" not in build_body, (
         "The image publish gate must validate image integrity only. Full browser "
         "behavior belongs in the post-publish offline-e2e job so product "
@@ -441,6 +574,12 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert "python run_all_tests.py --suite web-client-e2e-regression --verbose" in offline_body
 
     publish_job = jobs["publish"]
+    publish_body = "\n".join(str(step.get("run", "")) for step in publish_job["steps"])
+    assert "IMAGE_INPUTS_FINGERPRINT=${{ needs.build.outputs.inputs_fingerprint }}" in str(
+        publish_job
+    )
+    assert "EXPECTED_INPUTS_FINGERPRINT" in publish_body
+    assert "inputs_fingerprint" in publish_body
     publish_checkout_step = next(
         step for step in publish_job["steps"] if step.get("name") == "Checkout"
     )
@@ -463,7 +602,12 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert (
         publish_verify_step["env"]["EXPECTED_SOURCE_SHA"] == "${{ needs.build.outputs.source_sha }}"
     )
+    assert (
+        publish_verify_step["env"]["EXPECTED_INPUTS_FINGERPRINT"]
+        == "${{ needs.build.outputs.inputs_fingerprint }}"
+    )
     assert "actual_sha" in publish_verify_step["run"]
+    assert "actual_fingerprint" in publish_verify_step["run"]
 
 
 def test_browser_ci_phase0_runtime_probe_uses_writable_home_paths() -> None:
@@ -520,6 +664,16 @@ def test_integration_workflow_runs_for_image_pin_updates() -> None:
     assert resolve_body.index(".github/docker/ijt-browser-ci/README.md)") < resolve_body.index(
         ".github/docker/ijt-browser-ci/*)"
     )
+    assert "compute_browser_image_fingerprint.py --format value" in resolve_body
+    assert "CURRENT_INPUTS_FINGERPRINT" in resolve_body
+    assert "PIN_INPUTS_FINGERPRINT" in resolve_body
+    assert ".github/scripts/compute_browser_image_fingerprint.py" in resolve_body
+    assert "Browser CI image pin is stale for the current dependency inputs" in resolve_body
+    assert "Reviewed Browser CI image metadata does not match the current input fingerprint" in (
+        resolve_body
+    )
+    assert "inputs_fingerprint" in resolve_body
+    assert "actual_fingerprint" in resolve_body
 
 
 def test_browser_ci_dockerfile_derives_asyncua_runtime_constraint_from_wheel() -> None:
@@ -529,3 +683,6 @@ def test_browser_ci_dockerfile_derives_asyncua_runtime_constraint_from_wheel() -
     assert "asyncua_version=" in dockerfile
     assert "asyncua==" + "1.2b2" not in dockerfile
     assert "runtime-constraints.txt" in dockerfile
+    assert "ARG IMAGE_INPUTS_FINGERPRINT=unknown" in dockerfile
+    assert "'inputs_fingerprint':'${IMAGE_INPUTS_FINGERPRINT}'" in dockerfile
+    assert 'org.umati.ijt.inputs_fingerprint="${IMAGE_INPUTS_FINGERPRINT}"' in dockerfile
