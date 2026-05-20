@@ -24,6 +24,37 @@ def console_application_uri() -> str:
     return f"urn:{socket.getfqdn()}:IJT:ConsoleClient"
 
 
+def console_opcua_security_common_name(target: str) -> str:
+    """Return a stable X.509 common name for OPC UA security test certs.
+
+    X.509 common names are limited to 64 characters by the cryptography
+    library. CI target names are intentionally descriptive, but certificate
+    subjects only need the SUT identity. Keep the full target in logs and
+    artifact names; use this compact identity only for generated certificates.
+    """
+
+    lower_target = target.strip().lower()
+    if "windows" in lower_target:
+        label = "Windows"
+    elif "linux" in lower_target:
+        label = "Linux"
+    elif lower_target == "local":
+        label = "Local"
+    elif lower_target:
+        compact = "".join(ch for ch in target if ch.isalnum())
+        if len(compact) > 24:
+            compact = f"Target{hashlib.sha256(target.encode('utf-8')).hexdigest()[:8]}"
+        label = compact or "Local"
+    else:
+        label = "Local"
+
+    common_name = f"IJT Console OPC UA Security {label}"
+    if len(common_name) > 64:
+        digest = hashlib.sha256(target.encode("utf-8")).hexdigest()[:8]
+        common_name = f"IJT Console OPC UA Security Target{digest}"
+    return common_name
+
+
 @dataclass(frozen=True)
 class GeneratedCertificate:
     certificate_pem: Path

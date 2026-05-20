@@ -77,6 +77,38 @@ public sealed class JoiningSystemUnitTests
         return ns;
     }
 
+    private static EndpointDescription CreateEndpoint(
+        string securityPolicyUri = SecurityPolicies.None,
+        MessageSecurityMode securityMode = MessageSecurityMode.None,
+        UserTokenPolicy? userTokenPolicy = null)
+        => new()
+        {
+            EndpointUrl = "opc.tcp://localhost:40451",
+            SecurityPolicyUri = securityPolicyUri,
+            SecurityMode = securityMode,
+            UserIdentityTokens = userTokenPolicy is null
+                ? new UserTokenPolicyCollection { new() { TokenType = UserTokenType.Anonymous, PolicyId = "anonymous" } }
+                : new UserTokenPolicyCollection { userTokenPolicy },
+        };
+
+    private static Mock<ISession> CreateConnectableMockSession(NodeId joiningSystemNodeId)
+    {
+        var refs = new ReferenceDescriptionCollection
+        {
+            new()
+            {
+                BrowseName = new QualifiedName("JoiningSystem", 7),
+                NodeId = new ExpandedNodeId(joiningSystemNodeId),
+                TypeDefinition = new ExpandedNodeId(new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 7)),
+            },
+        };
+        var mock = CreateMockSessionWithBrowseResult(refs);
+        mock.Setup(s => s.NamespaceUris).Returns(CreateNamespaceTable());
+        mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.GlobalContext);
+        mock.SetupProperty(s => s.KeepAliveInterval);
+        return mock;
+    }
+
     private static JoiningSystem CreateSession(ISession session)
         => JoiningSystem.CreateForTesting(session, new ClientConfig { ServerUrl = "opc.tcp://localhost:40451" });
 
@@ -834,6 +866,131 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
+    public async Task ConnectAsync_WithInjectedRuntime_InitializesSessionAndManagementSurface()
+    {
+        var joiningSystemNodeId = new NodeId(9100u, 7);
+        var mockSession = CreateConnectableMockSession(joiningSystemNodeId);
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40451",
+            ApplicationName = "IJT CSharp Unit Test",
+            SessionTimeoutMs = 12_345,
+        };
+        var validateCalls = 0;
+        var ensureCalls = 0;
+        var selectCalls = 0;
+        var createCalls = 0;
+        IUserIdentity? capturedIdentity = null;
+        ConfiguredEndpoint? capturedEndpoint = null;
+        var endpoint = CreateEndpoint();
+        var hooks = new JoiningSystem.ConnectionHooks(
+            _ =>
+            {
+                validateCalls++;
+                return Task.CompletedTask;
+            },
+            (_, _, _) =>
+            {
+                ensureCalls++;
+                return Task.CompletedTask;
+            },
+            (_, _, _) =>
+            {
+                selectCalls++;
+                return endpoint;
+            },
+            (_, configuredEndpoint, _, identity) =>
+            {
+                createCalls++;
+                capturedEndpoint = configuredEndpoint;
+                capturedIdentity = identity;
+                return Task.FromResult<ISession>(mockSession.Object);
+            });
+
+        await using var sut = await JoiningSystem.ConnectAsync(config, hooks);
+
+        Assert.Equal(1, validateCalls);
+        Assert.Equal(1, ensureCalls);
+        Assert.Equal(1, selectCalls);
+        Assert.Equal(1, createCalls);
+        Assert.Same(mockSession.Object, sut.Session);
+        Assert.Same(config, sut.Config);
+        Assert.Equal(5_000, mockSession.Object.KeepAliveInterval);
+        Assert.Equal((ushort)1, sut.IjtBaseNsIdx);
+        Assert.Equal(joiningSystemNodeId, sut.NodeId);
+        Assert.NotNull(sut.ResultManagement);
+        Assert.NotNull(sut.AssetManagement);
+        Assert.NotNull(sut.JoiningProcessManagement);
+        Assert.NotNull(sut.JointManagement);
+        Assert.NotNull(sut.EventSubscriber);
+        Assert.NotNull(sut.SimulationManagement);
+        Assert.Equal(UserTokenType.Anonymous, capturedIdentity?.TokenType);
+        Assert.Same(endpoint, capturedEndpoint?.Description);
+    }
+
+    [Fact]
+    public async Task ConnectAsync_WithCancelledToken_StopsBeforeEndpointSelection()
+    {
+        var config = new ClientConfig { ServerUrl = "opc.tcp://localhost:40451" };
+        var selectCalls = 0;
+        var hooks = new JoiningSystem.ConnectionHooks(
+            _ => Task.CompletedTask,
+            (_, _, _) => Task.CompletedTask,
+            (_, _, _) =>
+            {
+                selectCalls++;
+                return CreateEndpoint();
+            },
+            (_, _, _, _) => Task.FromResult<ISession>(CreateConnectableMockSession(new NodeId(1u, 1)).Object));
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            JoiningSystem.ConnectAsync(config, hooks, new CancellationToken(canceled: true)));
+
+        Assert.Equal(0, selectCalls);
+    }
+
+    [Fact]
+    public async Task EnsureApplicationCertificateForTestingAsync_WithUnsecuredConfig_DoesNotCreatePki()
+    {
+        var pkiRoot = Path.Combine(AppContext.BaseDirectory, "tmp", "no-secure-pki", Guid.NewGuid().ToString("N"));
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40451",
+            PkiRootPath = pkiRoot,
+            SecurityPolicyUri = SecurityPolicies.None,
+            MessageSecurityMode = MessageSecurityMode.None,
+            UseSecurityPolicyForEndpointDiscovery = false,
+        };
+
+        await JoiningSystem.EnsureApplicationCertificateForTestingAsync(config);
+
+        Assert.False(Directory.Exists(pkiRoot));
+    }
+
+    [Fact]
+    public async Task EnsureApplicationCertificateForTestingAsync_WithSecureConfig_CanReloadPrivateKey()
+    {
+        var pkiRoot = Path.Combine(AppContext.BaseDirectory, "tmp", "secure-pki", Guid.NewGuid().ToString("N"));
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40451",
+            ApplicationName = "IJT CSharp Secure Cert Unit Test",
+            PkiRootPath = pkiRoot,
+            UseSecurityPolicyForEndpointDiscovery = true,
+            SecurityPolicyUri = SecurityPolicies.Basic256Sha256,
+            MessageSecurityMode = MessageSecurityMode.SignAndEncrypt,
+        };
+
+        await JoiningSystem.EnsureApplicationCertificateForTestingAsync(config);
+        await JoiningSystem.EnsureApplicationCertificateForTestingAsync(config);
+
+        var certFiles = Directory.GetFiles(Path.Combine(pkiRoot, "own", "certs"), "*.der");
+        var privateKeyFiles = Directory.GetFiles(Path.Combine(pkiRoot, "own", "private"), "*.pfx");
+        Assert.Single(certFiles);
+        Assert.Single(privateKeyFiles);
+    }
+
+    [Fact]
     public void EndpointDiscoveryCacheKey_IncludesServerUrlAndSecurityMode()
     {
         var key = JoiningSystem.EndpointDiscoveryCacheKey(new ClientConfig
@@ -884,6 +1041,31 @@ public sealed class JoiningSystemUnitTests
         var ex = Record.Exception(JoiningSystem.ClearEndpointDiscoveryCacheForTesting);
 
         Assert.Null(ex);
+    }
+
+    [Fact]
+    public void SelectEndpointDescription_WithEmptyDiscoveryResult_Throws()
+    {
+        var config = new ClientConfig { ServerUrl = "opc.tcp://localhost:40464" };
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.SelectEndpointDescription(config, () => []));
+
+        Assert.Contains("No OPC UA endpoints were discovered", ex.Message);
+    }
+
+    [Fact]
+    public void SelectEndpointDescription_WithoutExactSelection_ReturnsFirstEndpoint()
+    {
+        var first = CreateEndpoint();
+        var second = CreateEndpoint(SecurityPolicies.Basic256Sha256, MessageSecurityMode.Sign);
+        var config = new ClientConfig { ServerUrl = "opc.tcp://localhost:40464" };
+
+        var selected = JoiningSystem.SelectEndpointDescription(
+            config,
+            () => new EndpointDescriptionCollection { first, second });
+
+        Assert.Same(first, selected);
     }
 
     [Fact]
@@ -1006,6 +1188,59 @@ public sealed class JoiningSystemUnitTests
         });
 
         Assert.Equal(UserTokenType.UserName, identity.TokenType);
+    }
+
+    [Fact]
+    public void BuildUserIdentity_WithAnonymousEndpointPolicy_SetsPolicyId()
+    {
+        var identity = JoiningSystem.BuildUserIdentity(
+            new ClientConfig { UserIdentityKind = UserIdentityKind.Anonymous },
+            CreateEndpoint(userTokenPolicy: new UserTokenPolicy
+            {
+                TokenType = UserTokenType.Anonymous,
+                PolicyId = "anonymous-policy",
+            }));
+
+        Assert.Equal(UserTokenType.Anonymous, identity.TokenType);
+        Assert.Equal("anonymous-policy", identity.PolicyId);
+    }
+
+    [Fact]
+    public void BuildUserIdentity_WithMissingUserName_Throws()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.BuildUserIdentity(new ClientConfig
+            {
+                UserIdentityKind = UserIdentityKind.UserName,
+                Password = "password",
+            }));
+
+        Assert.Contains("UserName", ex.Message);
+    }
+
+    [Fact]
+    public void BuildUserIdentity_WithMissingPassword_Throws()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.BuildUserIdentity(new ClientConfig
+            {
+                UserIdentityKind = UserIdentityKind.UserName,
+                UserName = "user1",
+            }));
+
+        Assert.Contains("Password", ex.Message);
+    }
+
+    [Fact]
+    public void BuildUserIdentity_WithX509MissingCertificatePath_Throws()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.BuildUserIdentity(new ClientConfig
+            {
+                UserIdentityKind = UserIdentityKind.X509,
+            }));
+
+        Assert.Contains("X509 identity", ex.Message);
     }
 
     [Fact]
@@ -1182,6 +1417,73 @@ public sealed class JoiningSystemUnitTests
         });
 
         Assert.True(loaded.HasPrivateKey);
+    }
+
+    [Fact]
+    public void LoadX509IdentityCertificate_WithPemWithoutKey_LoadsPublicCertificate()
+    {
+        var root = Path.Combine(AppContext.BaseDirectory, "tmp", "unit-x509-public", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=user1",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+        using var certificate = request.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow.AddDays(30));
+        var certPath = Path.Combine(root, "user1.pem");
+        File.WriteAllText(certPath, certificate.ExportCertificatePem());
+
+        using var loaded = JoiningSystem.LoadX509IdentityCertificate(new ClientConfig
+        {
+            X509IdentityCertificatePath = certPath,
+        });
+
+        Assert.False(loaded.HasPrivateKey);
+        Assert.Equal(certificate.Thumbprint, loaded.Thumbprint);
+    }
+
+    [Fact]
+    public void LoadX509IdentityCertificate_WithMissingFile_Throws()
+    {
+        var missingPath = Path.Combine(AppContext.BaseDirectory, "tmp", "unit-x509-missing", "missing.der");
+
+        var ex = Assert.Throws<FileNotFoundException>(() =>
+            JoiningSystem.LoadX509IdentityCertificate(new ClientConfig
+            {
+                X509IdentityCertificatePath = missingPath,
+            }));
+
+        Assert.Equal(missingPath, ex.FileName);
+    }
+
+    [Fact]
+    public void LoadX509IdentityCertificate_WithPfx_LoadsCertificate()
+    {
+        var root = Path.Combine(AppContext.BaseDirectory, "tmp", "unit-x509-pfx", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=user1",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+        using var certificate = request.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow.AddDays(30));
+        var pfxPath = Path.Combine(root, "user1.pfx");
+        File.WriteAllBytes(pfxPath, certificate.Export(X509ContentType.Pkcs12));
+
+        using var loaded = JoiningSystem.LoadX509IdentityCertificate(new ClientConfig
+        {
+            X509IdentityCertificatePath = pfxPath,
+        });
+
+        Assert.Equal(certificate.Thumbprint, loaded.Thumbprint);
     }
 
     // ── DisposeAsync ──────────────────────────────────────────────────────────

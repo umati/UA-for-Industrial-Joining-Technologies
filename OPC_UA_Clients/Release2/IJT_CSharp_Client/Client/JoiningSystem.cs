@@ -116,12 +116,18 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     public static async Task<JoiningSystem> ConnectAsync(
         ClientConfig config,
         CancellationToken ct = default)
+        => await ConnectAsync(config, ConnectionHooks.Production, ct).ConfigureAwait(false);
+
+    internal static async Task<JoiningSystem> ConnectAsync(
+        ClientConfig config,
+        ConnectionHooks hooks,
+        CancellationToken ct = default)
     {
         var log = IjtLog.For<JoiningSystem>();
 
         var appConfig = BuildApplicationConfig(config);
-        await appConfig.Validate(ApplicationType.Client).ConfigureAwait(false);
-        await EnsureApplicationCertificateAsync(config, appConfig, ct).ConfigureAwait(false);
+        await hooks.ValidateApplicationConfigAsync(appConfig).ConfigureAwait(false);
+        await hooks.EnsureApplicationCertificateAsync(config, appConfig, ct).ConfigureAwait(false);
 
         if (config.AutoAcceptServerCertificate)
             appConfig.CertificateValidator.CertificateValidation += (_, e) =>
@@ -131,7 +137,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             };
 
         log.LogInformation("Discovering endpoints at {Url} ...", config.ServerUrl);
-        var session = await DiscoverAndConnectAsync(appConfig, config, log, ct).ConfigureAwait(false);
+        var session = await DiscoverAndConnectAsync(appConfig, config, log, hooks, ct).ConfigureAwait(false);
 
         // Register all IJT encodeable types so the SDK can encode/decode ExtensionObjects.
         session.MessageContext.Factory.AddEncodeableTypes(
@@ -216,10 +222,11 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         ApplicationConfiguration appConfig,
         ClientConfig config,
         ILogger log,
+        ConnectionHooks hooks,
         CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        var endpointDesc = SelectEndpointDescription(appConfig, config, log);
+        var endpointDesc = hooks.SelectEndpointDescription(appConfig, config, log);
 
         var endpoint = new ConfiguredEndpoint(
             null, endpointDesc, EndpointConfiguration.Create(appConfig));
@@ -227,13 +234,28 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
         log.LogInformation("Opening session ...");
         ct.ThrowIfCancellationRequested();
-        return await Opc.Ua.Client.Session.Create(
-            appConfig, endpoint,
-            updateBeforeConnect: false,
-            sessionName: config.ApplicationName,
-            sessionTimeout: (uint)config.SessionTimeoutMs,
-            identity: identity,
-            preferredLocales: null).ConfigureAwait(false);
+        return await hooks.CreateSessionAsync(appConfig, endpoint, config, identity).ConfigureAwait(false);
+    }
+
+    internal sealed record ConnectionHooks(
+        Func<ApplicationConfiguration, Task> ValidateApplicationConfigAsync,
+        Func<ClientConfig, ApplicationConfiguration, CancellationToken, Task> EnsureApplicationCertificateAsync,
+        Func<ApplicationConfiguration, ClientConfig, ILogger, EndpointDescription> SelectEndpointDescription,
+        Func<ApplicationConfiguration, ConfiguredEndpoint, ClientConfig, IUserIdentity, Task<ISession>> CreateSessionAsync)
+    {
+        public static ConnectionHooks Production { get; } = new(
+            appConfig => appConfig.Validate(ApplicationType.Client),
+            JoiningSystem.EnsureApplicationCertificateAsync,
+            JoiningSystem.SelectEndpointDescription,
+            async (appConfig, endpoint, config, identity) => await Opc.Ua.Client.Session.Create(
+                    appConfig,
+                    endpoint,
+                    updateBeforeConnect: false,
+                    sessionName: config.ApplicationName,
+                    sessionTimeout: (uint)config.SessionTimeoutMs,
+                    identity: identity,
+                    preferredLocales: null)
+                .ConfigureAwait(false));
     }
 
     internal static string EndpointDiscoveryCacheKey(ClientConfig config)
@@ -416,7 +438,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         if (extension.Equals(".pem", StringComparison.OrdinalIgnoreCase))
         {
             if (string.IsNullOrWhiteSpace(config.X509IdentityPrivateKeyPath))
-                return X509Certificate2.CreateFromPemFile(config.X509IdentityCertificatePath);
+                return X509Certificate2.CreateFromPem(File.ReadAllText(config.X509IdentityCertificatePath));
 
             var certificate = X509Certificate2.CreateFromPemFile(
                 config.X509IdentityCertificatePath,

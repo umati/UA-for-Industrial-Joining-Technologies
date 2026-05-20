@@ -111,8 +111,8 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
             securityMode == MessageSecurityMode.Sign,
             "Pending .NET SDK interop investigation: under MessageSecurityMode=Sign with " +
             "UserName tokens, Opc.Ua.Client.Session.OpenAsync fails its post-activation " +
-            "FetchNamespaceTablesAsync/UpdateNamespaceTable validation against the Matrikon " +
-            "Flex IJT simulator. The same SecurityAdmin credentials pass on the Python " +
+            "FetchNamespaceTablesAsync/UpdateNamespaceTable validation against the IJT Server " +
+            "Simulator. The same SecurityAdmin credentials pass on the Python " +
             "(asyncua) Console OPC UA security Windows target end-to-end on the same server, confirming the " +
             "server allows the read and the credentials are correct. Tracked in " +
             "session plan.md as 'C# OPC UA Security NamespaceArray'.");
@@ -219,7 +219,7 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
             "Pending .NET SDK interop investigation: under any signed channel (Sign or " +
             "SignAndEncrypt), Opc.Ua.Client.Session.OpenAsync with an X509 user token fails " +
             "its post-activation FetchNamespaceTablesAsync/UpdateNamespaceTable validation " +
-            "against the Matrikon Flex IJT simulator. The X509 user token policy itself " +
+            "against the IJT Server Simulator. The X509 user token policy itself " +
             "is advertised correctly (verified by " +
             "X509IdentityToken_CertificateUserTokenPolicy_UsesEndpointSecurityPolicy) and the " +
             "session activation succeeds. Tracked in session plan.md as 'C# OPC UA Security NamespaceArray'.");
@@ -275,7 +275,7 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
         => new()
         {
             ServerUrl = _fixture.ServerUrl,
-            ApplicationName = $"IJT CSharp OPC UA Security {OpcUaSecurityTargetName()}",
+            ApplicationName = OpcUaSecurityIdentity.CSharpClientApplicationName(),
             AutoAcceptServerCertificate = true,
             CacheEndpointDiscovery = false,
             UseSecurityPolicyForEndpointDiscovery = securityPolicyUri != SecurityPolicies.None,
@@ -339,7 +339,7 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
     {
         var appConfig = new ApplicationConfiguration
         {
-            ApplicationName = $"IJT CSharp OPC UA Security Discovery {OpcUaSecurityTargetName()}",
+            ApplicationName = OpcUaSecurityIdentity.CSharpDiscoveryApplicationName(),
             ApplicationType = ApplicationType.Client,
             TransportQuotas = new TransportQuotas { OperationTimeout = 15_000 },
             ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60_000 },

@@ -57,6 +57,7 @@ sys.path.insert(0, str(_CONSOLE_ROOT))
 
 from opcua_security_support import (  # noqa: E402
     console_application_uri,
+    console_opcua_security_common_name,
     load_opcua_security_users,
     preserve_test_artifacts,
     trust_application_certificate,
@@ -256,7 +257,7 @@ def _prepare_opcua_security_client_certificate() -> None:
         cert_dir = unique_temp_dir(_CLIENT_PKI_ROOT, target)
         generated = write_self_signed_certificate(
             cert_dir,
-            f"IJT Console OPC UA Security {target.upper()}",
+            console_opcua_security_common_name(target),
             application_uri=console_application_uri(),
         )
         os.environ["CONSOLE_SECURITY_CLIENT_CERT"] = str(generated.certificate_pem)

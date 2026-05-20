@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.x509.oid import NameOID
 
 from opcua_security_support import (
+    console_opcua_security_common_name,
     load_opcua_security_users,
     preserve_test_artifacts,
     sha1_thumbprint_hex,
@@ -18,6 +19,28 @@ from opcua_security_support import (
     write_self_signed_certificate,
     write_simulator_user_identity_configuration,
 )
+
+
+@pytest.mark.parametrize(
+    ("target", "expected"),
+    [
+        ("console-client-opcua-security-windows", "IJT Console OPC UA Security Windows"),
+        ("console-client-opcua-security-linux", "IJT Console OPC UA Security Linux"),
+        ("local", "IJT Console OPC UA Security Local"),
+    ],
+)
+def test_console_opcua_security_common_name_uses_compact_sut_label(target: str, expected: str) -> None:
+    assert console_opcua_security_common_name(target) == expected
+    assert len(console_opcua_security_common_name(target)) <= 64
+
+
+def test_console_opcua_security_common_name_hashes_unknown_long_targets() -> None:
+    target = "console-client-opcua-security-future-platform-with-a-very-long-target-name"
+
+    common_name = console_opcua_security_common_name(target)
+
+    assert common_name.startswith("IJT Console OPC UA Security Target")
+    assert len(common_name) <= 64
 
 
 def test_write_self_signed_certificate_creates_cert_key_and_der(tmp_path: Path) -> None:

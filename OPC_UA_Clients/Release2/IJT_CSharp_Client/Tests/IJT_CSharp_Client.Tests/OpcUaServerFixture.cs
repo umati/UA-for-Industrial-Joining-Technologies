@@ -60,7 +60,10 @@ public sealed class OpcUaServerFixture : IDisposable
         if (!Directory.Exists(sourceDir))
             return;
 
-        var targetDir = Path.Combine(_tempServerPkiDir, "pki", "DefaultApplicationGroup", "trusted", "certs");
+        var targetDir = ApplicationTrustStorePath();
+        if (targetDir is null)
+            return;
+
         Directory.CreateDirectory(targetDir);
         foreach (var certificatePath in Directory.GetFiles(sourceDir, "*.der"))
         {
@@ -72,6 +75,26 @@ public sealed class OpcUaServerFixture : IDisposable
         }
     }
 
+    private string? ApplicationTrustStorePath()
+    {
+        if (_tempServerPkiDir is null)
+            return null;
+
+        // The simulator's server_configuration.json sets pkiDirectoryPath to
+        // _tempServerPkiDir directly (no "pki" subdir), so the trust store
+        // is rooted there for BOTH native Windows and Docker. Earlier code
+        // added a "pki/" prefix on native Windows, which silently caused the
+        // simulator to treat the seeded application certificate as unknown
+        // and reject every secure handshake with BadSecurityChecksFailed.
+        return ApplicationTrustStorePath(_tempServerPkiDir);
+    }
+
+    internal static string ApplicationTrustStorePath(string serverPkiRoot)
+        => Path.Combine(serverPkiRoot, "DefaultApplicationGroup", "trusted", "certs");
+
+    internal static string UserTokenTrustStorePath(string serverPkiRoot)
+        => Path.Combine(serverPkiRoot, "DefaultUserTokenGroup", "trusted", "certs");
+
     /// <summary>
     /// Place a single X509 user-identity certificate (DER bytes) into the
     /// server's <c>DefaultUserTokenGroup/trusted/certs</c> store. Used by the
@@ -82,7 +105,7 @@ public sealed class OpcUaServerFixture : IDisposable
         if (_tempServerPkiDir is null || certificateDer.Length == 0)
             return;
 
-        var targetDir = Path.Combine(_tempServerPkiDir, "pki", "DefaultUserTokenGroup", "trusted", "certs");
+        var targetDir = UserTokenTrustStorePath(_tempServerPkiDir);
         Directory.CreateDirectory(targetDir);
         var safeStem = string.Concat(fileNameStem.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_'));
         var targetPath = Path.Combine(targetDir, $"{safeStem}.der");
@@ -687,16 +710,14 @@ public sealed class OpcUaServerFixture : IDisposable
 
     private static string PrepareOpcUaSecurityClientPkiRoot()
     {
-        var target = Environment.GetEnvironmentVariable("IJT_OPCUA_SECURITY_TARGET");
-        target = string.IsNullOrWhiteSpace(target) ? "local" : target.ToLowerInvariant();
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        var pkiRoot = Path.Combine(ResolveProjectTempRoot("client-pki"), $"{target}_{suffix}");
+        var pkiRoot = Path.Combine(ResolveProjectTempRoot("client-pki"), $"{OpcUaSecurityIdentity.TargetName()}_{suffix}");
         Directory.CreateDirectory(pkiRoot);
 
         var config = new ClientConfig
         {
             ServerUrl = $"opc.tcp://localhost:{_port}",
-            ApplicationName = $"IJT CSharp OPC UA Security {target.ToUpperInvariant()}",
+            ApplicationName = OpcUaSecurityIdentity.CSharpClientApplicationName(),
             AutoAcceptServerCertificate = true,
             UseSecurityPolicyForEndpointDiscovery = true,
             SecurityPolicyUri = Opc.Ua.SecurityPolicies.Basic256Sha256,
