@@ -53,6 +53,9 @@ container is invoked with:
   `npm_config_offline=true`, `PIP_NO_INDEX=1`,
   `PIP_FIND_LINKS=/opt/ijt-browser-ci/pip-wheelhouse`,
   `PIP_CACHE_DIR=...`, `SKIP_VENV_INSTALL=1`, plus the `GITHUB_*` whitelist.
+  The offline container intentionally does not set `IJT_OPCUA_HOST_REWRITE`;
+  with `--network=none`, rewriting `localhost` to `host.docker.internal` would
+  create a DNS dependency that the offline contract forbids.
 
 Local Web E2E remains native. Neither the root runner nor the Web Client
 runner reads `IJT_BROWSER_CI_IMAGE`; the owned image is wired only in the

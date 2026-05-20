@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from ._bandit_excludes import BANDIT_EXCLUDES as _BANDIT_EXCLUDES
+
 _CONSOLE_ROOT = Path(__file__).resolve().parent.parent.parent
 
 _SOURCE_FILES = [
@@ -36,8 +38,6 @@ _BANDIT_AVAILABLE = (
     ).returncode
     == 0
 )
-
-_BANDIT_EXCLUDES = "./tests,./.state,./venv,./venv_test,./.venv,./.venv_test,./env,./ENV"
 
 
 # ---------------------------------------------------------------------------

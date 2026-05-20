@@ -10,18 +10,20 @@ Usage:
   python run_all_tests.py                    # full run (Phase 1 + Phase 2)
   python run_all_tests.py --phase1           # unit / static only
   python run_all_tests.py --phase2           # live tests only
-  python run_all_tests.py --security-matrix --security-matrix-cell B1
+  python run_all_tests.py --opcua-security --opcua-security-target console-client-opcua-security-windows
   python run_all_tests.py --junit-xml=PATH   # write JUnit XML to PATH
   python run_all_tests.py --help
 
 Environment variables:
   OPCUA_SERVER_URL      Override server URL (default: opc.tcp://localhost:40461)
   OPCUA_SIMULATOR_EXE   Path to opcua_ijt_demo_application(.exe)
-  IJT_SECURITY_MATRIX_CELL Security matrix cell: B1 | B2
-  IJT_SUT              Security matrix SUT: windows | linux
-  IJT_CONSOLE_SECURITY_MATRIX_TIMEOUT
+  IJT_OPCUA_SECURITY_TARGET
+                         OPC UA security target: console-client-opcua-security-windows | console-client-opcua-security-linux
+  IJT_OPCUA_SECURITY_SUT
+                         OPC UA security SUT: windows | linux
+  IJT_CONSOLE_OPCUA_SECURITY_TIMEOUT
                           Wall-clock budget (seconds) for the full Console
-                          security-matrix pytest invocation. Default 1200s
+                          OPC UA security pytest invocation. Default 1200s
                           covers the ~33 parametrised cases (5 tests × 6
                           policy/mode cells + 3 standalone) each performing a
                           full OPC UA handshake against the local simulator.
@@ -76,11 +78,11 @@ def _int_env(name: str, default: int) -> int:
     return value if value > 0 else default
 
 
-# Wall-clock budget for the full Console security-matrix pytest invocation.
+# Wall-clock budget for the full Console OPC UA security pytest invocation.
 # The legacy 240 s default was hard-coded inline and proved too tight on cold
 # CI runners (33 parametrised live cases × full OPC UA handshake). Override
-# via IJT_CONSOLE_SECURITY_MATRIX_TIMEOUT when investigating perf regressions.
-_SECURITY_MATRIX_TIMEOUT_SEC = _int_env("IJT_CONSOLE_SECURITY_MATRIX_TIMEOUT", 1200)
+# via IJT_CONSOLE_OPCUA_SECURITY_TIMEOUT when investigating perf regressions.
+_OPCUA_SECURITY_TIMEOUT_SEC = _int_env("IJT_CONSOLE_OPCUA_SECURITY_TIMEOUT", 1200)
 
 
 _IS_CI = bool(os.getenv("CI"))
@@ -116,9 +118,9 @@ _OPCUA_SERVER_PORT = 40461
 
 _DEFAULT_SERVER_URL = f"opc.tcp://localhost:{_OPCUA_SERVER_PORT}"
 _MIN_PYTHON = (3, 14)
-_SECURITY_MATRIX_CELLS = {
-    "B1": ("windows", 40477),
-    "B2": ("linux", 40478),
+_OPCUA_SECURITY_TARGETS = {
+    "console-client-opcua-security-windows": ("windows", 40477),
+    "console-client-opcua-security-linux": ("linux", 40478),
 }
 
 _WELL_KNOWN_SIMULATOR_PATHS = [
@@ -270,7 +272,7 @@ def _inside_venv() -> bool:
     venv's ``bin/python`` is a symlink to the underlying interpreter (e.g.
     ``/opt/hostedtoolcache/Python/.../bin/python``). ``Path.resolve()`` on
     ``sys.executable`` follows that symlink and escapes the venv, which
-    caused an infinite re-launch loop in the security-matrix B2 Linux job.
+    caused an infinite re-launch loop in the Console OPC UA security Linux job.
     ``sys.prefix`` is set by the Python interpreter to the venv root when
     running under a venv, regardless of symlinks, so it is the safe anchor.
     """
@@ -1190,42 +1192,42 @@ def _step_live_tests(_junit_xml: str | None, verbose: bool = False) -> _StepResu
     return result
 
 
-def _resolve_security_matrix_target(args: argparse.Namespace) -> tuple[str, str, int]:
-    cell = (args.security_matrix_cell or os.environ.get("IJT_SECURITY_MATRIX_CELL", "")).strip().upper()
-    if not cell:
-        cell = "B1"
-    if cell not in _SECURITY_MATRIX_CELLS:
-        raise ValueError(f"Unknown Console security matrix cell: {cell}")
+def _resolve_opcua_security_target(args: argparse.Namespace) -> tuple[str, str, int]:
+    target = (args.opcua_security_target or os.environ.get("IJT_OPCUA_SECURITY_TARGET", "")).strip().lower()
+    if not target:
+        target = "console-client-opcua-security-windows"
+    if target not in _OPCUA_SECURITY_TARGETS:
+        raise ValueError(f"Unknown Console OPC UA security target: {target}")
 
-    default_sut, default_port = _SECURITY_MATRIX_CELLS[cell]
-    sut = (args.security_matrix_sut or os.environ.get("IJT_SUT") or default_sut).strip().lower()
+    default_sut, default_port = _OPCUA_SECURITY_TARGETS[target]
+    sut = (args.opcua_security_sut or os.environ.get("IJT_OPCUA_SECURITY_SUT") or default_sut).strip().lower()
     if sut not in {"windows", "linux"}:
-        raise ValueError(f"Unsupported Console security matrix SUT: {sut}")
+        raise ValueError(f"Unsupported Console OPC UA security SUT: {sut}")
 
     port = default_port
     port_env = os.environ.get("OPCUA_SERVER_PORT")
     if port_env:
         port = int(port_env)
-    return cell, sut, port
+    return target, sut, port
 
 
-def _step_security_matrix_tests(cell: str, sut: str, port: int, verbose: bool = False) -> _StepResult:
-    """Run one Console security-flow matrix cell."""
-    result = _StepResult(f"[MATRIX] Security Matrix {cell} ({sut})")
+def _step_opcua_security_tests(target: str, sut: str, port: int, verbose: bool = False) -> _StepResult:
+    """Run one Console OPC UA security target."""
+    result = _StepResult(f"[OPC UA SECURITY] {target} ({sut})")
     t0 = time.monotonic()
     server_url = f"opc.tcp://localhost:{port}"
-    matrix_xml = str(_RESULTS_DIR / f"security-matrix-{cell}.xml")
+    matrix_xml = str(_RESULTS_DIR / f"opcua-security-{target}.xml")
     verbosity = "-v" if verbose else "-q"
     cmd: list[str] = [
         sys.executable,
         "-m",
         "pytest",
-        str(_TESTS_LIVE / "test_security_matrix.py"),
+        str(_TESTS_LIVE / "test_opcua_security.py"),
         verbosity,
         "--tb=short",
         f"--junitxml={matrix_xml}",
         "-m",
-        "security_matrix",
+        "opcua_security",
     ]
     if _tool_available("pytest_timeout"):
         cmd += ["--timeout=120"]
@@ -1235,16 +1237,16 @@ def _step_security_matrix_tests(cell: str, sut: str, port: int, verbose: bool = 
         extra_env={
             "IJT_AUTO_ACCEPT": "true",
             "IJT_PHASE1_ONLY": "false",
-            "IJT_SUT": sut,
-            "IJT_SECURITY_MATRIX_CELL": cell,
+            "IJT_OPCUA_SECURITY_SUT": sut,
+            "IJT_OPCUA_SECURITY_TARGET": target,
             "OPCUA_SERVER_PORT": str(port),
             "OPCUA_SERVER_URL": server_url,
             "OPCUA_CONNECT_RETRIES": "2",
             "OPCUA_CONNECT_DELAY_SEC": "0.5",
             "OPCUA_CONNECT_MAX_DELAY_SEC": "1.0",
         },
-        timeout=_SECURITY_MATRIX_TIMEOUT_SEC,
-        timeout_label=f"Console security matrix {cell}",
+        timeout=_OPCUA_SECURITY_TIMEOUT_SEC,
+        timeout_label=f"Console OPC UA security {target}",
     )
     result.duration = time.monotonic() - t0
     result.ok = rc == 0
@@ -1273,19 +1275,19 @@ def _build_parser() -> argparse.ArgumentParser:
     group.add_argument("--phase1", action="store_true", help="Unit / static tests only")
     group.add_argument("--phase2", action="store_true", help="Live tests only (server must be up)")
     group.add_argument(
-        "--security-matrix",
+        "--opcua-security",
         action="store_true",
-        help="Run one Console security-flow matrix cell (B1/B2)",
+        help="Run one Console OPC UA security target",
     )
     p.add_argument(
-        "--security-matrix-cell",
-        choices=sorted(_SECURITY_MATRIX_CELLS),
-        help="Security matrix cell to run (B1=Windows SUT, B2=Linux Docker SUT)",
+        "--opcua-security-target",
+        choices=sorted(_OPCUA_SECURITY_TARGETS),
+        help="OPC UA security target to run",
     )
     p.add_argument(
-        "--security-matrix-sut",
+        "--opcua-security-sut",
         choices=["windows", "linux"],
-        help="SUT override for --security-matrix; defaults from the selected cell",
+        help="SUT override for --opcua-security; defaults from the selected target",
     )
     p.add_argument("--verbose", "-v", action="store_true", help="Verbose pytest output (-v flag)")
     p.add_argument(
@@ -1328,9 +1330,9 @@ def main() -> int:
         shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    run_security_matrix = args.security_matrix
-    run_phase1 = not args.phase2 and not run_security_matrix
-    run_phase2 = not args.phase1 and not run_security_matrix
+    run_opcua_security = args.opcua_security
+    run_phase1 = not args.phase2 and not run_opcua_security
+    run_phase2 = not args.phase1 and not run_opcua_security
 
     _banner("IJT Console Client — Test Suite")
 
@@ -1359,17 +1361,17 @@ def main() -> int:
             server_proc = _ensure_server()
             results.append(_step_live_tests(junit_xml, verbose=args.verbose))
 
-        if run_security_matrix:
-            _section("Security Matrix")
+        if run_opcua_security:
+            _section("OPC UA Security")
             try:
-                cell, sut, port = _resolve_security_matrix_target(args)
+                target, sut, port = _resolve_opcua_security_target(args)
             except ValueError as exc:
-                failed_step = _StepResult("[MATRIX] resolve target")
+                failed_step = _StepResult("[OPC UA SECURITY] resolve target")
                 failed_step.ok = False
                 failed_step.note = str(exc)
                 results.append(failed_step)
             else:
-                results.append(_step_security_matrix_tests(cell, sut, port, verbose=args.verbose))
+                results.append(_step_opcua_security_tests(target, sut, port, verbose=args.verbose))
 
     finally:
         if server_proc is not None:

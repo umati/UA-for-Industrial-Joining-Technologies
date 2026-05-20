@@ -254,7 +254,7 @@ def test_live_clients_do_not_duplicate_modern_loader_calls() -> None:
     assert test_client_conftest.count("await client.load_data_type_definitions()") == 1
 
 
-def test_security_matrix_jobs_do_not_force_compose_rebuilds() -> None:
+def test_opcua_security_jobs_do_not_force_compose_rebuilds() -> None:
     workflow = _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml"
     workflow_text = workflow.read_text(encoding="utf-8")
 
@@ -264,13 +264,13 @@ def test_security_matrix_jobs_do_not_force_compose_rebuilds() -> None:
     assert "Do not force" in workflow_text
 
 
-def test_managed_console_matrix_does_not_reuse_stale_server_port() -> None:
+def test_managed_console_opcua_security_does_not_reuse_stale_server_port() -> None:
     fixture_source = (_runner.CONSOLE_DIR / "tests" / "live" / "conftest.py").read_text(
         encoding="utf-8"
     )
 
     assert "def _isolated_server_requested()" in fixture_source
-    assert "IJT_SECURITY_MATRIX_CELL" in fixture_source
+    assert "IJT_OPCUA_SECURITY_TARGET" in fixture_source
     assert "def _stop_docker_containers_publishing_port(port: int)" in fixture_source
     assert "def _kill_process_on_port(port: int)" in fixture_source
     assert "_stop_docker_containers_publishing_port(port)" in fixture_source
@@ -288,7 +288,7 @@ def test_csharp_fixture_clears_docker_port_before_native_kill() -> None:
     assert "FindDockerExecutable()" in fixture_source
     assert 'FindInPath("docker.exe")' in fixture_source
     assert "ps --filter publish={port}" in fixture_source
-    assert 'Environment.GetEnvironmentVariable("IJT_SUT")' in fixture_source
+    assert 'Environment.GetEnvironmentVariable("IJT_OPCUA_SECURITY_SUT")' in fixture_source
     assert '"linux"' in fixture_source
 
 
@@ -481,7 +481,7 @@ def test_suite_ids_match_naming_pattern() -> None:
                 "e2e",
                 "smoke",
                 "docker-smoke",
-                "security-matrix",
+                "opcua-security",
                 "compatibility-smoke",
                 "linux-package-smoke",
             ),
@@ -544,7 +544,7 @@ def test_suite_ids_match_naming_pattern() -> None:
         "e2e",
         "smoke",
         "docker-smoke",
-        "security-matrix",
+        "opcua-security",
         "compatibility-smoke",
         "linux-package-smoke",
     }
@@ -566,7 +566,7 @@ def test_suite_groups_are_known_enum_values() -> None:
         "phase1-static",
         "phase2-live",
         "phase2-package",
-        "phase2-security-matrix",
+        "phase2-opcua-security",
         "phase2-web-live",
         "phase2-web-compatibility",
     }
@@ -761,19 +761,19 @@ def test_server_linux_package_smoke_is_default_phase2_suite() -> None:
     )
 
 
-def test_security_matrix_suites_are_opt_in_phase2_suites() -> None:
-    matrix_suite_ids = {
-        "csharp-client-security-matrix-a1",
-        "csharp-client-security-matrix-a2",
-        "console-client-security-matrix-b1",
-        "console-client-security-matrix-b2",
+def test_opcua_security_suites_are_opt_in_phase2_suites() -> None:
+    opcua_security_suite_ids = {
+        "csharp-client-opcua-security-windows",
+        "csharp-client-opcua-security-linux",
+        "console-client-opcua-security-windows",
+        "console-client-opcua-security-linux",
     }
 
-    assert matrix_suite_ids.isdisjoint(_runner.phase2_specs())
-    assert matrix_suite_ids <= set(_runner.phase2_specs(include_security_matrix=True))
+    assert opcua_security_suite_ids.isdisjoint(_runner.phase2_specs())
+    assert opcua_security_suite_ids <= set(_runner.phase2_specs(include_opcua_security=True))
 
 
-def test_security_matrix_suites_delegate_to_sub_runners(monkeypatch) -> None:
+def test_opcua_security_suites_delegate_to_sub_runners(monkeypatch) -> None:
     calls: list[dict] = []
 
     def _fake_delegate_to_runner(**kwargs):
@@ -783,32 +783,56 @@ def test_security_matrix_suites_delegate_to_sub_runners(monkeypatch) -> None:
     monkeypatch.setattr(_runner, "_delegate_to_runner", _fake_delegate_to_runner)
 
     results = [
-        _runner._suite_csharp_security_matrix_a1(),
-        _runner._suite_csharp_security_matrix_a2(),
-        _runner._suite_console_security_matrix_b1(),
-        _runner._suite_console_security_matrix_b2(),
+        _runner._suite_csharp_opcua_security_windows(),
+        _runner._suite_csharp_opcua_security_linux(),
+        _runner._suite_console_opcua_security_windows(),
+        _runner._suite_console_opcua_security_linux(),
     ]
 
     assert all(result.ok for result in results)
     assert [call["name"] for call in calls] == [
-        "csharp-client-security-matrix-a1",
-        "csharp-client-security-matrix-a2",
-        "console-client-security-matrix-b1",
-        "console-client-security-matrix-b2",
+        "csharp-client-opcua-security-windows",
+        "csharp-client-opcua-security-linux",
+        "console-client-opcua-security-windows",
+        "console-client-opcua-security-linux",
     ]
     assert [call["phase_args"][:5] for call in calls] == [
-        ["--security-matrix", "--security-matrix-cell", "A1", "--security-matrix-sut", "windows"],
-        ["--security-matrix", "--security-matrix-cell", "A2", "--security-matrix-sut", "linux"],
-        ["--security-matrix", "--security-matrix-cell", "B1", "--security-matrix-sut", "windows"],
-        ["--security-matrix", "--security-matrix-cell", "B2", "--security-matrix-sut", "linux"],
+        [
+            "--opcua-security",
+            "--opcua-security-target",
+            "csharp-client-opcua-security-windows",
+            "--opcua-security-sut",
+            "windows",
+        ],
+        [
+            "--opcua-security",
+            "--opcua-security-target",
+            "csharp-client-opcua-security-linux",
+            "--opcua-security-sut",
+            "linux",
+        ],
+        [
+            "--opcua-security",
+            "--opcua-security-target",
+            "console-client-opcua-security-windows",
+            "--opcua-security-sut",
+            "windows",
+        ],
+        [
+            "--opcua-security",
+            "--opcua-security-target",
+            "console-client-opcua-security-linux",
+            "--opcua-security-sut",
+            "linux",
+        ],
     ]
     assert calls[0]["extra_env"]["OPCUA_SERVER_PORT"] == str(
-        _runner.OPCUA_SERVER_PORT_CSHARP_SECURITY_MATRIX_A1
+        _runner.OPCUA_SERVER_PORT_CSHARP_OPCUA_SECURITY_WINDOWS
     )
     assert calls[0]["extra_env"]["IJT_SERVER_URL"].endswith(":40475")
-    assert calls[1]["extra_env"]["IJT_DOCKER_COMPOSE_BUILD"] == "1"
+    assert calls[1]["extra_env"]["IJT_DOCKER_COMPOSE_BUILD"] == "0"
     assert calls[2]["extra_env"]["OPCUA_SERVER_URL"].endswith(":40477")
-    assert calls[3]["extra_env"]["IJT_DOCKER_COMPOSE_BUILD"] == "1"
+    assert calls[3]["extra_env"]["IJT_DOCKER_COMPOSE_BUILD"] == "0"
     assert all(call["timeout"] == 1200 for call in calls)
 
 
@@ -972,7 +996,7 @@ def test_print_summary_reports_suite_and_test_totals(capsys) -> None:
         _runner.SuiteResult("server-smoke", True, duration=1.0, counts="10 passed"),
         _runner.SuiteResult("web-client-docker-smoke", True, duration=2.0),
         _runner.SuiteResult(
-            "csharp-client-security-matrix-a1",
+            "csharp-client-opcua-security-windows",
             True,
             duration=2.5,
             counts="9 passed",
@@ -992,7 +1016,7 @@ def test_print_summary_reports_suite_and_test_totals(capsys) -> None:
     assert "Server - Native smoke" in output
     assert "10 passed" in output
     assert "Web Client - Docker image smoke" in output
-    assert "C# Client - Security Matrix A1" in output
+    assert "C# OPC UA Security - Windows" in output
     assert "Not reported" in output
     assert "4 total suites; 4 passed, 0 failed, 0 skipped" in output
     assert "872 total tests; 732 passed, 0 failed, 0 errors, 140 skipped" in output
@@ -2208,7 +2232,7 @@ def test_ci_mode_flag_is_advertised_in_help() -> None:
     help_text = parser.format_help()
 
     assert "--ci-mode" in help_text
-    assert "--security-matrix" in help_text
+    assert "--opcua-security" in help_text
     assert "CI=1" in help_text
 
 
@@ -2224,30 +2248,32 @@ def test_ci_mode_flag_parses_independently_of_phase_flags() -> None:
     assert args.ci_mode is True
     assert args.phase1 is True
 
-    args = parser.parse_args(["--security-matrix", "--phase2"])
-    assert args.security_matrix is True
+    args = parser.parse_args(["--opcua-security", "--phase2"])
+    assert args.opcua_security is True
     assert args.phase2 is True
-    assert _runner._timing_mode(args) == "phase2+security-matrix"
+    assert _runner._timing_mode(args) == "phase2+opcua-security"
 
-    args = parser.parse_args(["--security-matrix"])
-    assert args.security_matrix is True
-    assert _runner._timing_mode(args) == "full+security-matrix"
+    args = parser.parse_args(["--opcua-security"])
+    assert args.opcua_security is True
+    assert _runner._timing_mode(args) == "full+opcua-security"
 
 
-def test_security_matrix_flag_rejects_invalid_combinations(capsys) -> None:
+def test_opcua_security_flag_rejects_invalid_combinations(capsys) -> None:
     parser = _runner._build_parser()
 
-    args = parser.parse_args(["--phase1", "--security-matrix"])
+    args = parser.parse_args(["--phase1", "--opcua-security"])
     with pytest.raises(SystemExit) as excinfo:
         _runner._validate_suite_arg(parser, args)
     assert excinfo.value.code == 2
-    assert "--security-matrix requires a full run or --phase2" in capsys.readouterr().err
+    assert "--opcua-security requires a full run or --phase2" in capsys.readouterr().err
 
-    args = parser.parse_args(["--suite", "csharp-client-security-matrix-a1", "--security-matrix"])
+    args = parser.parse_args(
+        ["--suite", "csharp-client-opcua-security-windows", "--opcua-security"]
+    )
     with pytest.raises(SystemExit) as excinfo:
         _runner._validate_suite_arg(parser, args)
     assert excinfo.value.code == 2
-    assert "--security-matrix is not needed with --suite" in capsys.readouterr().err
+    assert "--opcua-security is not needed with --suite" in capsys.readouterr().err
 
 
 def test_ci_mode_flag_sets_ci_env_for_child_runners(monkeypatch, capsys) -> None:

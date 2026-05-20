@@ -18,9 +18,9 @@ namespace IJT_CSharp_Client.Tests;
 /// tests run and stops it afterwards.
 ///
 /// Resolution order for the server executable:
-///   1. IJT_SUT=windows uses the native copied-EXE path.
-///   2. IJT_SUT=linux uses Docker Compose with the Linux server package.
-///   3. When IJT_SUT is unset, the legacy native-then-Docker fallback remains.
+///   1. IJT_OPCUA_SECURITY_SUT=windows uses the native copied-EXE path.
+///   2. IJT_OPCUA_SECURITY_SUT=linux uses Docker Compose with the Linux server package.
+///   3. When IJT_OPCUA_SECURITY_SUT is unset, the legacy native-then-Docker fallback remains.
 ///   4. Already-running OPC UA-ready server on the resolved port is reused only
 ///      when the runner did not request an explicit managed SUT.
 ///
@@ -75,7 +75,7 @@ public sealed class OpcUaServerFixture : IDisposable
     /// <summary>
     /// Place a single X509 user-identity certificate (DER bytes) into the
     /// server's <c>DefaultUserTokenGroup/trusted/certs</c> store. Used by the
-    /// X509 happy-path security-matrix cell before the live simulator starts.
+    /// X509 happy-path OPC UA security target before the live simulator starts.
     /// </summary>
     public void TrustUserTokenCertificate(byte[] certificateDer, string fileNameStem)
     {
@@ -113,11 +113,11 @@ public sealed class OpcUaServerFixture : IDisposable
         }
 
         byte[]? knownX509UserCertificateDer = null;
-        if (IsSecurityMatrixRun())
+        if (IsOpcUaSecurityRun())
         {
-            ClientPkiRootPath = PrepareSecurityMatrixClientPkiRoot();
+            ClientPkiRootPath = PrepareOpcUaSecurityClientPkiRoot();
             (KnownX509UserCertificatePfxPath, knownX509UserCertificateDer) =
-                PrepareSecurityMatrixKnownX509UserCertificate();
+                PrepareOpcUaSecurityKnownX509UserCertificate();
         }
 
         if (IsPortOpen(_port))
@@ -125,7 +125,7 @@ public sealed class OpcUaServerFixture : IDisposable
             if (explicitManagedSut)
             {
                 _log.LogInformation(
-                    "Explicit IJT_SUT={Sut} with OPCUA_SERVER_PORT set — killing stale process before isolated launch on port {Port}.",
+                    "Explicit IJT_OPCUA_SECURITY_SUT={Sut} with OPCUA_SERVER_PORT set — killing stale process before isolated launch on port {Port}.",
                     requestedSut,
                     _port);
                 KillProcessOnPort(_port);
@@ -192,7 +192,7 @@ public sealed class OpcUaServerFixture : IDisposable
             }
 
             HandleExplicitSutUnavailable(
-                $"[OpcUaServerFixture] IJT_SUT=linux requested, but Docker launch is unavailable on port {_port}.",
+                $"[OpcUaServerFixture] IJT_OPCUA_SECURITY_SUT=linux requested, but Docker launch is unavailable on port {_port}.",
                 requestedSut);
             return;
         }
@@ -201,7 +201,7 @@ public sealed class OpcUaServerFixture : IDisposable
             && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             HandleExplicitSutUnavailable(
-                $"[OpcUaServerFixture] IJT_SUT=windows requested on {RuntimeInformation.OSDescription}; run this matrix cell on Windows.",
+                $"[OpcUaServerFixture] IJT_OPCUA_SECURITY_SUT=windows requested on {RuntimeInformation.OSDescription}; run this OPC UA security target on Windows.",
                 requestedSut);
             return;
         }
@@ -212,7 +212,7 @@ public sealed class OpcUaServerFixture : IDisposable
             if (string.Equals(requestedSut, "windows", StringComparison.OrdinalIgnoreCase))
             {
                 HandleExplicitSutUnavailable(
-                    $"[OpcUaServerFixture] IJT_SUT=windows requested, but the Windows simulator executable was not found for port {_port}.",
+                    $"[OpcUaServerFixture] IJT_OPCUA_SECURITY_SUT=windows requested, but the Windows simulator executable was not found for port {_port}.",
                     requestedSut);
                 return;
             }
@@ -244,7 +244,7 @@ public sealed class OpcUaServerFixture : IDisposable
         {
             // Managed security runs use an isolated copy so server JSON and PKI
             // changes never touch the checked-in package directory.
-            if (_port != 40451 || IsSecurityMatrixRun())
+            if (_port != 40451 || IsOpcUaSecurityRun())
             {
                 _log.LogInformation(
                     "Preparing isolated server copy for port {Port}. Source executable: {ExePath}",
@@ -254,7 +254,7 @@ public sealed class OpcUaServerFixture : IDisposable
                     "Isolated server copy prepared. Copied executable: {ExePath}, temp directory: {TempDir}, PKI directory: {PkiDir}",
                     exePath, _tempServerDir, _tempServerPkiDir);
                 if (knownX509UserCertificateDer is not null && _tempServerDir is not null)
-                    WriteSecurityMatrixUserIdentityConfiguration(_tempServerDir, knownX509UserCertificateDer);
+                    WriteOpcUaSecurityUserIdentityConfiguration(_tempServerDir, knownX509UserCertificateDer);
                 TrustClientApplicationCertificates(ClientPkiRootPath);
                 if (knownX509UserCertificateDer is not null)
                     TrustUserTokenCertificate(knownX509UserCertificateDer, "user1");
@@ -402,7 +402,7 @@ public sealed class OpcUaServerFixture : IDisposable
 
     private static string? ResolveRequestedSut()
     {
-        var sut = Environment.GetEnvironmentVariable("IJT_SUT");
+        var sut = Environment.GetEnvironmentVariable("IJT_OPCUA_SECURITY_SUT");
         if (string.IsNullOrWhiteSpace(sut))
             return null;
 
@@ -411,7 +411,7 @@ public sealed class OpcUaServerFixture : IDisposable
         if (string.Equals(sut, "linux", StringComparison.OrdinalIgnoreCase))
             return "linux";
 
-        throw new InvalidOperationException($"Unsupported IJT_SUT value: {sut}. Expected windows or linux.");
+        throw new InvalidOperationException($"Unsupported IJT_OPCUA_SECURITY_SUT value: {sut}. Expected windows or linux.");
     }
 
     private static bool IsCiLike()
@@ -513,7 +513,7 @@ public sealed class OpcUaServerFixture : IDisposable
 
             if (knownX509UserCertificateDer is not null)
             {
-                var overrideFile = PrepareDockerSecurityMatrixOverride(
+                var overrideFile = PrepareDockerOpcUaSecurityOverride(
                     knownX509UserCertificateDer,
                     out _tempServerDir,
                     out _tempServerPkiDir);
@@ -556,7 +556,7 @@ public sealed class OpcUaServerFixture : IDisposable
         }
     }
 
-    private string PrepareDockerSecurityMatrixOverride(
+    private string PrepareDockerOpcUaSecurityOverride(
         byte[] knownX509UserCertificateDer,
         out string tmpDir,
         out string pkiDir)
@@ -567,13 +567,13 @@ public sealed class OpcUaServerFixture : IDisposable
         pkiDir = ResolveShortServerPkiDirectory(_port);
         Directory.CreateDirectory(tmpDir);
 
-        WriteSecurityMatrixUserIdentityConfiguration(tmpDir, knownX509UserCertificateDer);
+        WriteOpcUaSecurityUserIdentityConfiguration(tmpDir, knownX509UserCertificateDer);
         TrustDockerClientApplicationCertificates(pkiDir, ClientPkiRootPath);
         TrustDockerCertificate(pkiDir, "DefaultUserTokenGroup", knownX509UserCertificateDer, "user1");
         AllowContainerWrite(pkiDir);
 
         var configPath = Path.Combine(tmpDir, "user_identity_configuration.json");
-        var overridePath = Path.Combine(tmpDir, "docker-compose.security-matrix.yml");
+        var overridePath = Path.Combine(tmpDir, "docker-compose.opcua-security.yml");
         File.WriteAllText(
             overridePath,
             string.Join(
@@ -675,28 +675,28 @@ public sealed class OpcUaServerFixture : IDisposable
         if (!string.IsNullOrWhiteSpace(fromEnv))
             return fromEnv;
 
-        var cell = Environment.GetEnvironmentVariable("IJT_SECURITY_MATRIX_CELL");
-        var suffix = string.IsNullOrWhiteSpace(cell) ? _port.ToString() : cell.ToLowerInvariant();
-        return $"ijt_csharp_sec_matrix_{suffix}";
+        var target = Environment.GetEnvironmentVariable("IJT_OPCUA_SECURITY_TARGET");
+        var suffix = string.IsNullOrWhiteSpace(target) ? _port.ToString() : target.ToLowerInvariant();
+        return $"ijt_csharp_opcua_security_{suffix}";
     }
 
-    private static bool IsSecurityMatrixRun()
-        => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("IJT_SECURITY_MATRIX_CELL"))
-           || string.Equals(Environment.GetEnvironmentVariable("IJT_SUT"), "windows", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(Environment.GetEnvironmentVariable("IJT_SUT"), "linux", StringComparison.OrdinalIgnoreCase);
+    private static bool IsOpcUaSecurityRun()
+        => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("IJT_OPCUA_SECURITY_TARGET"))
+           || string.Equals(Environment.GetEnvironmentVariable("IJT_OPCUA_SECURITY_SUT"), "windows", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(Environment.GetEnvironmentVariable("IJT_OPCUA_SECURITY_SUT"), "linux", StringComparison.OrdinalIgnoreCase);
 
-    private static string PrepareSecurityMatrixClientPkiRoot()
+    private static string PrepareOpcUaSecurityClientPkiRoot()
     {
-        var cell = Environment.GetEnvironmentVariable("IJT_SECURITY_MATRIX_CELL");
-        cell = string.IsNullOrWhiteSpace(cell) ? "local" : cell.ToLowerInvariant();
+        var target = Environment.GetEnvironmentVariable("IJT_OPCUA_SECURITY_TARGET");
+        target = string.IsNullOrWhiteSpace(target) ? "local" : target.ToLowerInvariant();
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        var pkiRoot = Path.Combine(ResolveProjectTempRoot("client-pki"), $"{cell}_{suffix}");
+        var pkiRoot = Path.Combine(ResolveProjectTempRoot("client-pki"), $"{target}_{suffix}");
         Directory.CreateDirectory(pkiRoot);
 
         var config = new ClientConfig
         {
             ServerUrl = $"opc.tcp://localhost:{_port}",
-            ApplicationName = $"IJT CSharp Security Matrix {cell.ToUpperInvariant()}",
+            ApplicationName = $"IJT CSharp OPC UA Security {target.ToUpperInvariant()}",
             AutoAcceptServerCertificate = true,
             UseSecurityPolicyForEndpointDiscovery = true,
             SecurityPolicyUri = Opc.Ua.SecurityPolicies.Basic256Sha256,
@@ -707,11 +707,11 @@ public sealed class OpcUaServerFixture : IDisposable
         return pkiRoot;
     }
 
-    private static (string PfxPath, byte[] CertificateDer) PrepareSecurityMatrixKnownX509UserCertificate()
+    private static (string PfxPath, byte[] CertificateDer) PrepareOpcUaSecurityKnownX509UserCertificate()
     {
-        var cell = Environment.GetEnvironmentVariable("IJT_SECURITY_MATRIX_CELL");
-        cell = string.IsNullOrWhiteSpace(cell) ? "local" : cell.ToLowerInvariant();
-        var root = Path.Combine(ResolveProjectTempRoot("client-pki"), $"{cell}_x509_user1_{Guid.NewGuid():N}");
+        var target = Environment.GetEnvironmentVariable("IJT_OPCUA_SECURITY_TARGET");
+        target = string.IsNullOrWhiteSpace(target) ? "local" : target.ToLowerInvariant();
+        var root = Path.Combine(ResolveProjectTempRoot("client-pki"), $"{target}_x509_user1_{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
 
         using var rsa = RSA.Create(2048);
@@ -736,24 +736,24 @@ public sealed class OpcUaServerFixture : IDisposable
         return (pfxPath, certificate.Export(X509ContentType.Cert));
     }
 
-    private static void WriteSecurityMatrixUserIdentityConfiguration(
+    private static void WriteOpcUaSecurityUserIdentityConfiguration(
         string serverDir,
         byte[] knownX509UserCertificateDer)
     {
-        var users = LoadSecurityMatrixUsersForFixture();
+        var users = LoadOpcUaSecurityUsersForFixture();
         var configuredUsers = new Dictionary<string, Dictionary<string, object>>(StringComparer.Ordinal);
 
         configuredUsers[users.Positive.UserName] = User(
             users.Positive.UserName,
             users.Positive.Password,
             users.Positive.UserName == "SecurityAdmin" ? ["SecurityAdmin"] : [],
-            "Security matrix positive user");
+            "OPC UA security positive user");
 
         configuredUsers.TryAdd(
             users.WrongPassword.UserName,
-            User(users.WrongPassword.UserName, "password", [], "Security matrix wrong-password target"));
+            User(users.WrongPassword.UserName, "password", [], "OPC UA security wrong-password target"));
 
-        configuredUsers.TryAdd("user1", User("user1", "password", [], "Security matrix X509 user"));
+        configuredUsers.TryAdd("user1", User("user1", "password", [], "OPC UA security X509 user"));
         configuredUsers["user1"]["x509ThumbprintSha1Hex"] = Convert.ToHexString(
             SHA1.HashData(knownX509UserCertificateDer)).ToLowerInvariant();
 
@@ -787,14 +787,14 @@ public sealed class OpcUaServerFixture : IDisposable
             ["description"] = description,
         };
 
-    private static FixtureSecurityMatrixUsers LoadSecurityMatrixUsersForFixture()
+    private static FixtureOpcUaSecurityUsers LoadOpcUaSecurityUsersForFixture()
     {
-        var path = Environment.GetEnvironmentVariable("SECURITY_MATRIX_USERS_FILE");
+        var path = Environment.GetEnvironmentVariable("OPCUA_SECURITY_USERS_FILE");
         if (string.IsNullOrWhiteSpace(path))
             path = FindDefaultUsersFileForFixture();
 
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-            return new FixtureSecurityMatrixUsers(
+            return new FixtureOpcUaSecurityUsers(
                 new FixtureCredentials("SecurityAdmin", "password"),
                 new FixtureCredentials("user1", "wrong_xxxxx"));
 
@@ -821,7 +821,7 @@ public sealed class OpcUaServerFixture : IDisposable
                 sections[currentSection][parts[0].Trim()] = parts[1].Trim().Trim('"', '\'');
         }
 
-        return new FixtureSecurityMatrixUsers(
+        return new FixtureOpcUaSecurityUsers(
             ReadFixtureCredentials(sections, "positive", new FixtureCredentials("SecurityAdmin", "password")),
             ReadFixtureCredentials(sections, "wrong_password", new FixtureCredentials("user1", "wrong_xxxxx")));
     }
@@ -850,13 +850,13 @@ public sealed class OpcUaServerFixture : IDisposable
                 dir.FullName,
                 "OPC_UA_Servers",
                 "Release2",
-                "security_matrix.users.yaml");
+                "opcua_security.users.yaml");
             if (File.Exists(sharedCandidate))
                 return sharedCandidate;
 
             foreach (var testsDirectoryName in new[] { "Tests", "tests" })
             {
-                var candidate = Path.Combine(dir.FullName, testsDirectoryName, "security_matrix.users.yaml");
+                var candidate = Path.Combine(dir.FullName, testsDirectoryName, "opcua_security.users.yaml");
                 if (File.Exists(candidate))
                     return candidate;
             }
@@ -869,7 +869,7 @@ public sealed class OpcUaServerFixture : IDisposable
 
     private sealed record FixtureCredentials(string UserName, string Password);
 
-    private sealed record FixtureSecurityMatrixUsers(
+    private sealed record FixtureOpcUaSecurityUsers(
         FixtureCredentials Positive,
         FixtureCredentials WrongPassword);
 
@@ -899,7 +899,7 @@ public sealed class OpcUaServerFixture : IDisposable
             }
 
             if (string.Equals(
-                    Environment.GetEnvironmentVariable("IJT_SUT"),
+                    Environment.GetEnvironmentVariable("IJT_OPCUA_SECURITY_SUT"),
                     "linux",
                     StringComparison.OrdinalIgnoreCase))
             {
@@ -1151,7 +1151,7 @@ public sealed class OpcUaServerFixture : IDisposable
                 patched,
                 @"""pkiDirectoryPath""\s*:\s*""[^""]*""",
                 $@"""pkiDirectoryPath"": {System.Text.Json.JsonSerializer.Serialize(pkiDir)}");
-            if (IsSecurityMatrixRun())
+            if (IsOpcUaSecurityRun())
             {
                 patched = System.Text.RegularExpressions.Regex.Replace(
                     patched,
@@ -1348,12 +1348,12 @@ public sealed class OpcUaServerFixture : IDisposable
         {
             if (PreserveTestArtifacts())
             {
-                _log.LogInformation("Preserving matrix client PKI dir {Dir} because IJT_PRESERVE_TEST_ARTIFACTS is set.", ClientPkiRootPath);
+                _log.LogInformation("Preserving OPC UA security client PKI dir {Dir} because IJT_PRESERVE_TEST_ARTIFACTS is set.", ClientPkiRootPath);
             }
             else
             {
                 try { Directory.Delete(ClientPkiRootPath, recursive: true); }
-                catch (Exception ex) { _log.LogWarning("Error cleaning up matrix client PKI dir {Dir}: {Message}", ClientPkiRootPath, ex.Message); }
+                catch (Exception ex) { _log.LogWarning("Error cleaning up OPC UA security client PKI dir {Dir}: {Message}", ClientPkiRootPath, ex.Message); }
             }
         }
 

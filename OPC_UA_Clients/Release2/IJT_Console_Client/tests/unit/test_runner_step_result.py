@@ -159,7 +159,7 @@ def test_run_uses_own_process_group_on_posix(monkeypatch, tmp_path):
     assert captured_kwargs["start_new_session"] is True
 
 
-def test_security_matrix_step_uses_configured_wall_clock_timeout(monkeypatch, tmp_path):
+def test_opcua_security_step_uses_configured_wall_clock_timeout(monkeypatch, tmp_path):
     calls: list[dict[str, Any]] = []
 
     def _fake_run(_cmd, **kwargs):
@@ -170,12 +170,12 @@ def test_security_matrix_step_uses_configured_wall_clock_timeout(monkeypatch, tm
     monkeypatch.setattr(_mod, "_tool_available", lambda _name: False)
     monkeypatch.setattr(_mod, "_run", _fake_run)
 
-    result = _mod._step_security_matrix_tests("B1", "windows", 40461)
+    result = _mod._step_opcua_security_tests("console-client-opcua-security-windows", "windows", 40461)
 
     assert result.ok
     assert calls
-    assert calls[0]["timeout"] == _mod._SECURITY_MATRIX_TIMEOUT_SEC
-    assert calls[0]["timeout_label"] == "Console security matrix B1"
+    assert calls[0]["timeout"] == _mod._OPCUA_SECURITY_TIMEOUT_SEC
+    assert calls[0]["timeout_label"] == "Console OPC UA security console-client-opcua-security-windows"
 
 
 def test_inside_venv_uses_prefix_not_resolved_executable(monkeypatch, tmp_path):

@@ -131,9 +131,12 @@ class Connection:
     async def connect(self) -> dict[str, Any]:
         """Coroutine. Establish an OPC UA session and load type definitions.
 
-        Rewrites ``127.0.0.1``/``localhost`` to ``host.docker.internal`` when
-        the ``IS_DOCKER`` environment variable is ``"true"``.  Retries up to
-        ``OPCUA_CONNECT_RETRIES`` times (default 8) with exponential back-off.
+        Rewrites ``127.0.0.1``/``localhost`` to ``host.docker.internal`` only
+        when ``IJT_OPCUA_HOST_REWRITE`` is ``"true"``.  Docker mode by itself
+        only means the Python environment is container-provided; it does not
+        imply that the OPC UA server is reachable through the Docker host.
+        Retries up to ``OPCUA_CONNECT_RETRIES`` times (default 8) with
+        exponential back-off.
 
         Returns:
             A dict ``{"command": "connection established", "endpoint": …}`` on
@@ -149,9 +152,9 @@ class Connection:
             return {"command": "connection established", "endpoint": self.server_url}
 
         server_url = self.server_url
-        if os.getenv("IS_DOCKER") == "true" and server_url:
+        if os.getenv("IJT_OPCUA_HOST_REWRITE") == "true" and server_url:
             if "://127.0.0.1" in server_url or "://localhost" in server_url:
-                ijt_log.info("[Docker] Rewriting server_url to host.docker.internal")
+                ijt_log.info("[Docker host bridge] Rewriting server_url to host.docker.internal")
                 server_url = server_url.replace("://127.0.0.1", "://host.docker.internal")
                 server_url = server_url.replace("://localhost", "://host.docker.internal")
 

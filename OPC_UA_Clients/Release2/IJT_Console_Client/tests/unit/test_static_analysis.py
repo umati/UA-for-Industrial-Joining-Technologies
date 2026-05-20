@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from ._bandit_excludes import BANDIT_EXCLUDES as _BANDIT_EXCLUDES
+
 _CONSOLE_ROOT = Path(__file__).resolve().parent.parent.parent  # = IJT_Console_Client
 
 _SKIP_DIRS = {
@@ -27,8 +29,6 @@ _SKIP_DIRS = {
     "node_modules",
     ".git",
 }
-
-_BANDIT_EXCLUDES = "./tests,./.state,./venv,./venv_test,./.venv,./.venv_test,./env,./ENV"
 
 
 def _all_py_files(root: Path) -> list[Path]:

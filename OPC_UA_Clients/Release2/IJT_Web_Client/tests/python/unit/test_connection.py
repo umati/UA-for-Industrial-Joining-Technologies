@@ -3,7 +3,7 @@ Unit tests for IJT_Web_Client/Python/connection.py
 
 Covers:
 - is_connection_open: no client, None client, open state, non-open state
-- connect: all retries fail, Docker URL rewrite, connection established event
+- connect: all retries fail, explicit Docker-host URL rewrite, connection established event
 - terminate: already terminated, no client
 - _unsubscribe_and_cleanup: connection not open, deletes result subscription
 - methodcall: not connected returns exception
@@ -91,13 +91,14 @@ async def test_connect_returns_exception_when_all_retries_fail(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# connect — Docker URL rewrite
+# connect — explicit Docker-host URL rewrite
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_connect_docker_url_rewrite(monkeypatch):
     monkeypatch.setenv("IS_DOCKER", "true")
+    monkeypatch.setenv("IJT_OPCUA_HOST_REWRITE", "true")
     monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "1")
     monkeypatch.setenv("OPCUA_CONNECT_DELAY_SEC", "0.01")
     monkeypatch.setenv("OPCUA_CONNECT_MAX_DELAY_SEC", "0.01")
@@ -118,6 +119,30 @@ async def test_connect_docker_url_rewrite(monkeypatch):
     assert len(created_urls) == 1
     assert "host.docker.internal" in created_urls[0]
     assert "localhost" not in created_urls[0]
+
+
+@pytest.mark.asyncio
+async def test_connect_docker_mode_does_not_rewrite_without_host_bridge_opt_in(monkeypatch):
+    monkeypatch.setenv("IS_DOCKER", "true")
+    monkeypatch.delenv("IJT_OPCUA_HOST_REWRITE", raising=False)
+    monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "1")
+    monkeypatch.setenv("OPCUA_CONNECT_DELAY_SEC", "0.01")
+    monkeypatch.setenv("OPCUA_CONNECT_MAX_DELAY_SEC", "0.01")
+
+    created_urls = []
+
+    def _fake_client(url, timeout=60):
+        created_urls.append(url)
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock(side_effect=ConnectionRefusedError("refused"))
+        mock_client.set_security_string = MagicMock(return_value=None)
+        return mock_client
+
+    with patch("python.connection.Client", side_effect=_fake_client):
+        conn = _make_connection(server_url="opc.tcp://localhost:40451")
+        await conn.connect()
+
+    assert created_urls == ["opc.tcp://localhost:40451"]
 
 
 # ---------------------------------------------------------------------------

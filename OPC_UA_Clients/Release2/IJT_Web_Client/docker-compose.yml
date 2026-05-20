@@ -15,6 +15,7 @@ services:
       - "${WEB_CLIENT_WS_PORT:-8001}:8001"
     environment:
       IS_DOCKER: "true"
+      IJT_OPCUA_HOST_REWRITE: "true"
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
     # Override CMD for dev mode (setup + keep alive)
@@ -38,6 +39,7 @@ services:
     working_dir: /app
     environment:
       IS_DOCKER: "true"
+      IJT_OPCUA_HOST_REWRITE: "true"
       PYTHONUNBUFFERED: "1"
       OPCUA_TEST_ENDPOINT: "opc.tcp://host.docker.internal:40451"
       WS_TEST_URL: "ws://localhost:8001"

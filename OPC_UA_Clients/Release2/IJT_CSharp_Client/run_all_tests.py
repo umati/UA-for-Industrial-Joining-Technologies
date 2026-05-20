@@ -6,15 +6,19 @@ Usage:
     python run_all_tests.py              # full run (Phase 1 + Phase 2 if server reachable)
     python run_all_tests.py --phase1     # build + unit tests only (no server)
     python run_all_tests.py --phase2     # live integration tests only
-    python run_all_tests.py --security-matrix --security-matrix-cell A1
+    python run_all_tests.py --opcua-security \
+        --opcua-security-target csharp-client-opcua-security-windows
     python run_all_tests.py --help
 
 Environment variables:
     OPCUA_SERVER_URL         OPC UA server endpoint (default: opc.tcp://localhost:40451)
     OPCUA_SERVER_PORT        Alt: port only — constructs opc.tcp://localhost:PORT
     OPCUA_SIMULATOR_EXE      Path to OPC UA simulator EXE (auto-launched if server unreachable)
-    IJT_SUT                  Security matrix SUT selector: windows | linux
-    IJT_SECURITY_MATRIX_CELL Security matrix cell: A1 | A2
+    IJT_OPCUA_SECURITY_SUT   OPC UA security SUT selector: windows | linux
+    IJT_OPCUA_SECURITY_TARGET
+                             OPC UA security target:
+                             csharp-client-opcua-security-windows |
+                             csharp-client-opcua-security-linux
     SKIP_DOTNET_RESTORE=1    Skip `dotnet restore` (deps already restored in CI)
     IJT_CSHARP_CLEAN=1       Remove build artifacts (`bin/`, `obj/`) before and after run
     IJT_PRESERVE_TEST_ARTIFACTS=1
@@ -54,16 +58,16 @@ _MIN_DOTNET_MAJOR = 10
 _COVERAGE_THRESHOLD = 95.0
 _PHASE1_TEST_FILTER = "FullyQualifiedName!~LiveIntegration"
 _PHASE2_TEST_FILTER = "FullyQualifiedName~LiveIntegration"
-_SECURITY_MATRIX_TEST_FILTER = "Category=SecurityMatrix"
+_OPCUA_SECURITY_TEST_FILTER = "Category=OpcUaSecurity"
 
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 _SERVER_NATIVE_PORT = 40451  # server binary default — used for fallback pre-flight
 _OPCUA_SERVER_PORT = 40464  # dedicated port for C# client test isolation (copy-and-patch)
-_SECURITY_MATRIX_CELLS = {
-    "A1": ("windows", 40475),
-    "A2": ("linux", 40476),
+_OPCUA_SECURITY_TARGETS = {
+    "csharp-client-opcua-security-windows": ("windows", 40475),
+    "csharp-client-opcua-security-linux": ("linux", 40476),
 }
 _WELL_KNOWN_SIMULATOR_PATHS = [
     _REPO_ROOT
@@ -726,15 +730,15 @@ def _step_live_tests(server_url: str, verbose: bool = False) -> StepResult:
     return StepResult(label, "PHASE 2", "PASS", detail, dur, passed, failed, skipped, total)
 
 
-def _step_security_matrix_tests(
-    cell: str,
+def _step_opcua_security_tests(
+    target: str,
     sut: str,
     port: int,
     verbose: bool = False,
 ) -> StepResult:
-    label = f"Security Matrix {cell} ({sut})"
+    label = f"OPC UA Security {target} ({sut})"
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    trx_path = _RESULTS_DIR / "security-matrix.trx"
+    trx_path = _RESULTS_DIR / "opcua-security.trx"
     server_url = f"opc.tcp://localhost:{port}"
     t0 = time.monotonic()
     verbosity = ["--verbosity", "normal"] if verbose else ["--verbosity", "minimal"]
@@ -749,9 +753,9 @@ def _step_security_matrix_tests(
             "Release",
             *verbosity,
             "--filter",
-            _SECURITY_MATRIX_TEST_FILTER,
+            _OPCUA_SECURITY_TEST_FILTER,
             "--logger",
-            "trx;LogFileName=security-matrix.trx",
+            "trx;LogFileName=opcua-security.trx",
             "--logger",
             "console;verbosity=normal",
             "--results-directory",
@@ -763,8 +767,8 @@ def _step_security_matrix_tests(
         env={
             "IJT_AUTO_ACCEPT": "true",
             "IJT_PHASE1_ONLY": "false",
-            "IJT_SUT": sut,
-            "IJT_SECURITY_MATRIX_CELL": cell,
+            "IJT_OPCUA_SECURITY_SUT": sut,
+            "IJT_OPCUA_SECURITY_TARGET": target,
             "OPCUA_SERVER_PORT": str(port),
             "OPCUA_SERVER_URL": server_url,
             "IJT_SERVER_URL": server_url,
@@ -783,7 +787,7 @@ def _step_security_matrix_tests(
             label,
             "MATRIX",
             "FAIL",
-            f"{detail} (no security matrix tests executed)",
+            f"{detail} (no OPC UA security tests executed)",
             dur,
             passed,
             failed,
@@ -827,19 +831,19 @@ def _parse_args() -> argparse.Namespace:
     group.add_argument("--phase1", action="store_true", help="Build + unit tests only (no server)")
     group.add_argument("--phase2", action="store_true", help="Live integration tests only")
     group.add_argument(
-        "--security-matrix",
+        "--opcua-security",
         action="store_true",
-        help="Run one C# security-flow matrix cell (A1/A2)",
+        help="Run one C# OPC UA security target",
     )
     p.add_argument(
-        "--security-matrix-cell",
-        choices=sorted(_SECURITY_MATRIX_CELLS),
-        help="Security matrix cell to run (A1=Windows SUT, A2=Linux Docker SUT)",
+        "--opcua-security-target",
+        choices=sorted(_OPCUA_SECURITY_TARGETS),
+        help="OPC UA security target to run",
     )
     p.add_argument(
-        "--security-matrix-sut",
+        "--opcua-security-sut",
         choices=["windows", "linux"],
-        help="SUT override for --security-matrix; defaults from the selected cell",
+        help="SUT override for --opcua-security; defaults from the selected target",
     )
     p.add_argument(
         "--verbose",
@@ -861,25 +865,29 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def _resolve_security_matrix_target(args: argparse.Namespace) -> tuple[str, str, int]:
-    cell = (
-        (args.security_matrix_cell or os.environ.get("IJT_SECURITY_MATRIX_CELL", ""))
+def _resolve_opcua_security_target(args: argparse.Namespace) -> tuple[str, str, int]:
+    target = (
+        (args.opcua_security_target or os.environ.get("IJT_OPCUA_SECURITY_TARGET", ""))
         .strip()
-        .upper()
+        .lower()
     )
-    sut = (args.security_matrix_sut or os.environ.get("IJT_SUT", "")).strip().lower()
+    sut = (args.opcua_security_sut or os.environ.get("IJT_OPCUA_SECURITY_SUT", "")).strip().lower()
 
-    if not cell:
-        cell = "A2" if sut == "linux" else "A1"
+    if not target:
+        target = (
+            "csharp-client-opcua-security-linux"
+            if sut == "linux"
+            else "csharp-client-opcua-security-windows"
+        )
 
-    if cell not in _SECURITY_MATRIX_CELLS:
-        raise ValueError(f"Unsupported security matrix cell: {cell}")
+    if target not in _OPCUA_SECURITY_TARGETS:
+        raise ValueError(f"Unsupported OPC UA security target: {target}")
 
-    default_sut, default_port = _SECURITY_MATRIX_CELLS[cell]
+    default_sut, default_port = _OPCUA_SECURITY_TARGETS[target]
     if not sut:
         sut = default_sut
     if sut not in {"windows", "linux"}:
-        raise ValueError(f"Unsupported security matrix SUT: {sut}")
+        raise ValueError(f"Unsupported OPC UA security SUT: {sut}")
 
     port_env = os.environ.get("OPCUA_SERVER_PORT", "").strip()
     port = default_port
@@ -887,7 +895,7 @@ def _resolve_security_matrix_target(args: argparse.Namespace) -> tuple[str, str,
         with contextlib.suppress(ValueError):
             port = int(port_env)
 
-    return cell, sut, port
+    return target, sut, port
 
 
 def main() -> int:
@@ -902,9 +910,9 @@ def main() -> int:
             _PROJECT_DIR, include_build_artifacts=clean_build_artifacts
         )  # pre-run: clear stale caches from interrupted runs
 
-    run_security_matrix = args.security_matrix
-    run_phase1 = not args.phase2 and not run_security_matrix
-    run_phase2 = not args.phase1 and not run_security_matrix
+    run_opcua_security = args.opcua_security
+    run_phase1 = not args.phase2 and not run_opcua_security
+    run_phase2 = not args.phase1 and not run_opcua_security
 
     _banner("IJT C# Client — Test Suite")
 
@@ -920,10 +928,10 @@ def main() -> int:
 
     skip_restore = os.environ.get("SKIP_DOTNET_RESTORE", "0").strip() in {"1", "true", "yes"}
 
-    # -- Security matrix ------------------------------------------------------
-    if run_security_matrix:
+    # -- OPC UA security ------------------------------------------------------
+    if run_opcua_security:
         try:
-            cell, sut, port = _resolve_security_matrix_target(args)
+            target, sut, port = _resolve_opcua_security_target(args)
         except ValueError as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1
@@ -945,7 +953,7 @@ def main() -> int:
             _write_junit_xml(_PROJECT_DIR / args.junit_xml, results)
             return 1
 
-        r = _step_security_matrix_tests(cell, sut, port, verbose=args.verbose)
+        r = _step_opcua_security_tests(target, sut, port, verbose=args.verbose)
         results.append(r)
         _row(r.phase, r.label, r.status, r.detail)
 

@@ -235,6 +235,8 @@ sim_node = client.get_node('ns=1;s=TighteningSystem/Simulations/SimulateResults'
 - Runs as **non-root `appuser`** (uid/gid 1001)
 - Packages pre-installed globally via `RUN pip install ...` (no venv needed in container)
 - `IS_DOCKER=true` and `GITHUB_ACTIONS=true` mark Python as pre-isolated
+- `IJT_OPCUA_HOST_REWRITE=true` is a separate opt-in for Docker Compose flows
+  where a container must reach an OPC UA simulator running on the host
 
 ### Venv Skip Pattern (in `setup_project.py` at project root)
 ```python
@@ -571,6 +573,7 @@ and `SimulateBulkEvents` defaults to event type `1` and count `3`.
 | `UI_TEST_BASE_URL` | `http://127.0.0.1:3000` | Playwright base URL; root split suites override this per browser suite |
 | `IJT_PLAYWRIGHT_WORKERS` | `2` in CI, `1` in direct local Playwright config | Playwright worker count consumed by `playwright.config.mjs`; the runner sets it for project-specific runs |
 | `IS_DOCKER` | (unset) | Set to `true` inside Docker containers; uses container-provided Python |
+| `IJT_OPCUA_HOST_REWRITE` | (unset) | Set to `true` only when a Docker container must rewrite `localhost` / `127.0.0.1` OPC UA endpoints to `host.docker.internal` |
 | `GITHUB_ACTIONS` | (unset) | Set by GitHub Actions; uses runner-provided Python |
 | `CI` | (unset) | Enables CI behavior; local `--ci-mode` still uses `.venv_ci` |
 | `OPCUA_SIMULATOR_EXE` | (unset) | Path to simulator binary for auto-launch |

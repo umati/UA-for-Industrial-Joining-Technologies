@@ -23,20 +23,20 @@ Architecture: Two-phase execution
                             - Web Client      → dedicated per-suite ports        (40463+)
                             - C# Client       → OPCUA_SERVER_PORT_CSHARP_CLIENT  (40464)
                             - Linux package   → Docker smoke port (40465)
-                            - Security Matrix → opt-in A1/A2/B1/B2 cells (40475+)
+                            - OPC UA Security → opt-in C#/Console Windows/Linux targets (40475+)
                           Release 2 clients do not share 40451.
 
 Usage:
   python run_all_tests.py                    # full run (Phase 1 + Phase 2)
   python run_all_tests.py --phase1           # static + unit tests only (no server)
   python run_all_tests.py --phase2           # server smoke + live tests
-  python run_all_tests.py --phase2 --security-matrix
-      # Phase 2 plus A1/A2/B1/B2 security-flow matrix cells
+  python run_all_tests.py --phase2 --opcua-security
+      # Phase 2 plus C#/Console OPC UA security targets
   python run_all_tests.py --suite repo-static-markdown-leak-check # single suite by name
   python run_all_tests.py --suite server-smoke  # focused server smoke on port 40451
   python run_all_tests.py --suite server-linux-package-smoke  # Docker smoke on port 40465
-  python run_all_tests.py --suite csharp-client-security-matrix-a1
-      # one focused security-flow matrix cell
+  python run_all_tests.py --suite csharp-client-opcua-security-windows
+      # one focused OPC UA security target
   python run_all_tests.py --suite web-client-compatibility-smoke
       # Windows + Edge opt-in compatibility smoke
   python run_all_tests.py --ci-mode         # force child runners through CI codepaths
@@ -237,10 +237,10 @@ OPCUA_SERVER_PORT_WEB_CLIENT_BACKEND = 40466
 OPCUA_SERVER_PORT_WEB_CLIENT_LIFECYCLE = 40467
 OPCUA_SERVER_PORT_WEB_CLIENT_E2E_SMOKE = 40468
 OPCUA_SERVER_PORT_WEB_CLIENT_E2E_FEATURES = 40469
-OPCUA_SERVER_PORT_CSHARP_SECURITY_MATRIX_A1 = 40475
-OPCUA_SERVER_PORT_CSHARP_SECURITY_MATRIX_A2 = 40476
-OPCUA_SERVER_PORT_CONSOLE_SECURITY_MATRIX_B1 = 40477
-OPCUA_SERVER_PORT_CONSOLE_SECURITY_MATRIX_B2 = 40478
+OPCUA_SERVER_PORT_CSHARP_OPCUA_SECURITY_WINDOWS = 40475
+OPCUA_SERVER_PORT_CSHARP_OPCUA_SECURITY_LINUX = 40476
+OPCUA_SERVER_PORT_CONSOLE_OPCUA_SECURITY_WINDOWS = 40477
+OPCUA_SERVER_PORT_CONSOLE_OPCUA_SECURITY_LINUX = 40478
 OPCUA_SERVER_PORT_WEB_CLIENT_E2E_REGRESSION = 40480
 WEB_CLIENT_WS_PORT_BACKEND = 8002
 WEB_CLIENT_WS_PORT_LIFECYCLE = 8003
@@ -1828,88 +1828,90 @@ def _suite_console_live() -> SuiteResult:
     )
 
 
-def _security_matrix_env(*, cell: str, sut: str, port: int) -> dict[str, str]:
+def _opcua_security_env(*, target: str, sut: str, port: int) -> dict[str, str]:
     endpoint = f"opc.tcp://localhost:{port}"
     env = {
-        "IJT_SECURITY_MATRIX_CELL": cell,
-        "IJT_SUT": sut,
+        "IJT_OPCUA_SECURITY_TARGET": target,
+        "IJT_OPCUA_SECURITY_SUT": sut,
         "OPCUA_SERVER_PORT": str(port),
         "OPCUA_SERVER_URL": endpoint,
     }
     if sut == "linux":
-        env["IJT_DOCKER_COMPOSE_BUILD"] = "1"
+        # Let Docker Compose build only when the image is missing. Forcing
+        # --build here reintroduces the rebuild cost removed from CI.
+        env["IJT_DOCKER_COMPOSE_BUILD"] = "0"
     return env
 
 
-def _suite_csharp_security_matrix(*, cell: str, sut: str, port: int) -> SuiteResult:
-    env = _security_matrix_env(cell=cell, sut=sut, port=port)
+def _suite_csharp_opcua_security(*, target: str, sut: str, port: int) -> SuiteResult:
+    env = _opcua_security_env(target=target, sut=sut, port=port)
     env["IJT_SERVER_URL"] = env["OPCUA_SERVER_URL"]
     return _delegate_to_runner(
-        name=f"csharp-client-security-matrix-{cell.lower()}",
+        name=target,
         runner_dir=CSHARP_DIR,
         phase_args=[
-            "--security-matrix",
-            "--security-matrix-cell",
-            cell,
-            "--security-matrix-sut",
+            "--opcua-security",
+            "--opcua-security-target",
+            target,
+            "--opcua-security-sut",
             sut,
             "--junit-xml",
-            f"test-results/security-matrix-{cell}.xml",
+            f"test-results/opcua-security-{target}.xml",
         ],
-        label=f"csharp runner (security matrix {cell})",
+        label=f"csharp runner (OPC UA security {target})",
         extra_env=env,
         timeout=1200,
     )
 
 
-def _suite_csharp_security_matrix_a1() -> SuiteResult:
-    return _suite_csharp_security_matrix(
-        cell="A1",
+def _suite_csharp_opcua_security_windows() -> SuiteResult:
+    return _suite_csharp_opcua_security(
+        target="csharp-client-opcua-security-windows",
         sut="windows",
-        port=OPCUA_SERVER_PORT_CSHARP_SECURITY_MATRIX_A1,
+        port=OPCUA_SERVER_PORT_CSHARP_OPCUA_SECURITY_WINDOWS,
     )
 
 
-def _suite_csharp_security_matrix_a2() -> SuiteResult:
-    return _suite_csharp_security_matrix(
-        cell="A2",
+def _suite_csharp_opcua_security_linux() -> SuiteResult:
+    return _suite_csharp_opcua_security(
+        target="csharp-client-opcua-security-linux",
         sut="linux",
-        port=OPCUA_SERVER_PORT_CSHARP_SECURITY_MATRIX_A2,
+        port=OPCUA_SERVER_PORT_CSHARP_OPCUA_SECURITY_LINUX,
     )
 
 
-def _suite_console_security_matrix(*, cell: str, sut: str, port: int) -> SuiteResult:
+def _suite_console_opcua_security(*, target: str, sut: str, port: int) -> SuiteResult:
     return _delegate_to_runner(
-        name=f"console-client-security-matrix-{cell.lower()}",
+        name=target,
         runner_dir=CONSOLE_DIR,
         phase_args=[
-            "--security-matrix",
-            "--security-matrix-cell",
-            cell,
-            "--security-matrix-sut",
+            "--opcua-security",
+            "--opcua-security-target",
+            target,
+            "--opcua-security-sut",
             sut,
             "--junit-xml",
-            f"test-results/security-matrix-{cell}.xml",
+            f"test-results/opcua-security-{target}.xml",
         ],
-        label=f"console runner (security matrix {cell})",
-        extra_env=_security_matrix_env(cell=cell, sut=sut, port=port),
+        label=f"console runner (OPC UA security {target})",
+        extra_env=_opcua_security_env(target=target, sut=sut, port=port),
         timeout=1200,
     )
 
 
-def _suite_console_security_matrix_b1() -> SuiteResult:
-    return _suite_console_security_matrix(
-        cell="B1",
+def _suite_console_opcua_security_windows() -> SuiteResult:
+    return _suite_console_opcua_security(
+        target="console-client-opcua-security-windows",
         sut="windows",
-        port=OPCUA_SERVER_PORT_CONSOLE_SECURITY_MATRIX_B1,
+        port=OPCUA_SERVER_PORT_CONSOLE_OPCUA_SECURITY_WINDOWS,
     )
 
 
-def _suite_console_security_matrix_b2() -> SuiteResult:
-    return _suite_console_security_matrix(
-        cell="B2",
+def _suite_console_opcua_security_linux() -> SuiteResult:
+    return _suite_console_opcua_security(
+        target="console-client-opcua-security-linux",
         sut="linux",
-        port=OPCUA_SERVER_PORT_CONSOLE_SECURITY_MATRIX_B2,
+        port=OPCUA_SERVER_PORT_CONSOLE_OPCUA_SECURITY_LINUX,
     )
 
 
@@ -2124,7 +2126,7 @@ class SuiteGroup(StrEnum):
     PHASE1_STATIC = "phase1-static"
     PHASE2_LIVE = "phase2-live"
     PHASE2_PACKAGE = "phase2-package"
-    PHASE2_SECURITY_MATRIX = "phase2-security-matrix"
+    PHASE2_OPCUA_SECURITY = "phase2-opcua-security"
     PHASE2_WEB_LIVE = "phase2-web-live"
     PHASE2_WEB_COMPATIBILITY = "phase2-web-compatibility"
 
@@ -2217,29 +2219,29 @@ SUITE_REGISTRY: dict[str, SuiteSpec] = {
         group=SuiteGroup.PHASE2_LIVE,
         runner=_suite_console_live,
     ),
-    "csharp-client-security-matrix-a1": SuiteSpec(
-        id="csharp-client-security-matrix-a1",
-        display_name="C# Client - Security Matrix A1 (Windows)",
-        group=SuiteGroup.PHASE2_SECURITY_MATRIX,
-        runner=_suite_csharp_security_matrix_a1,
+    "csharp-client-opcua-security-windows": SuiteSpec(
+        id="csharp-client-opcua-security-windows",
+        display_name="C# OPC UA Security - Windows",
+        group=SuiteGroup.PHASE2_OPCUA_SECURITY,
+        runner=_suite_csharp_opcua_security_windows,
     ),
-    "csharp-client-security-matrix-a2": SuiteSpec(
-        id="csharp-client-security-matrix-a2",
-        display_name="C# Client - Security Matrix A2 (Linux Docker)",
-        group=SuiteGroup.PHASE2_SECURITY_MATRIX,
-        runner=_suite_csharp_security_matrix_a2,
+    "csharp-client-opcua-security-linux": SuiteSpec(
+        id="csharp-client-opcua-security-linux",
+        display_name="C# OPC UA Security - Linux",
+        group=SuiteGroup.PHASE2_OPCUA_SECURITY,
+        runner=_suite_csharp_opcua_security_linux,
     ),
-    "console-client-security-matrix-b1": SuiteSpec(
-        id="console-client-security-matrix-b1",
-        display_name="Console Client - Security Matrix B1 (Windows)",
-        group=SuiteGroup.PHASE2_SECURITY_MATRIX,
-        runner=_suite_console_security_matrix_b1,
+    "console-client-opcua-security-windows": SuiteSpec(
+        id="console-client-opcua-security-windows",
+        display_name="Console OPC UA Security - Windows",
+        group=SuiteGroup.PHASE2_OPCUA_SECURITY,
+        runner=_suite_console_opcua_security_windows,
     ),
-    "console-client-security-matrix-b2": SuiteSpec(
-        id="console-client-security-matrix-b2",
-        display_name="Console Client - Security Matrix B2 (Linux Docker)",
-        group=SuiteGroup.PHASE2_SECURITY_MATRIX,
-        runner=_suite_console_security_matrix_b2,
+    "console-client-opcua-security-linux": SuiteSpec(
+        id="console-client-opcua-security-linux",
+        display_name="Console OPC UA Security - Linux",
+        group=SuiteGroup.PHASE2_OPCUA_SECURITY,
+        runner=_suite_console_opcua_security_linux,
     ),
     "test-client-live-conformance": SuiteSpec(
         id="test-client-live-conformance",
@@ -2308,14 +2310,14 @@ def phase1_specs() -> dict[str, SuiteSpec]:
     return _specs_for_groups({SuiteGroup.REPO_CHECKS, SuiteGroup.PHASE1_STATIC})
 
 
-def phase2_specs(*, include_security_matrix: bool = False) -> dict[str, SuiteSpec]:
+def phase2_specs(*, include_opcua_security: bool = False) -> dict[str, SuiteSpec]:
     groups = {
         SuiteGroup.PHASE2_LIVE,
         SuiteGroup.PHASE2_PACKAGE,
         SuiteGroup.PHASE2_WEB_LIVE,
     }
-    if include_security_matrix:
-        groups.add(SuiteGroup.PHASE2_SECURITY_MATRIX)
+    if include_opcua_security:
+        groups.add(SuiteGroup.PHASE2_OPCUA_SECURITY)
     return _specs_for_groups(groups)
 
 
@@ -2370,7 +2372,7 @@ def run_phase2(suites: dict[str, SuiteSpec]) -> list[SuiteResult]:
         Web Client       → OPCUA_SERVER_PORT_WEB_CLIENT     (40463)
         C# Client        → OPCUA_SERVER_PORT_CSHARP_CLIENT  (40464)
         Linux package    → OPCUA_SERVER_PORT_SERVER_DOCKER  (40465)
-        Matrix A1/A2/B1/B2 → dedicated ports                (40475-40478)
+        OPC UA security targets → dedicated ports           (40475-40478)
 
     Results are emitted as each suite completes; order is non-deterministic
     (fastest finishes first).
@@ -2436,7 +2438,7 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
         for suite_id, spec in SUITE_REGISTRY.items()
         if spec.group is SuiteGroup.PHASE1_STATIC
     }
-    phase2_names = set(phase2_specs(include_security_matrix=True))
+    phase2_names = set(phase2_specs(include_opcua_security=True))
     registered_names = set(SUITE_REGISTRY)
 
     gha_rows = [r for r in results if r.name not in registered_names or r.name in repo_check_names]
@@ -2579,8 +2581,8 @@ def _timing_mode(args: argparse.Namespace) -> str:
     if args.phase1:
         return "phase1"
     if args.phase2:
-        return "phase2+security-matrix" if args.security_matrix else "phase2"
-    return "full+security-matrix" if args.security_matrix else "full"
+        return "phase2+opcua-security" if args.opcua_security else "phase2"
+    return "full+opcua-security" if args.opcua_security else "full"
 
 
 def _write_timing_artifacts(results: list[SuiteResult], total_time: float, mode: str) -> None:
@@ -2636,11 +2638,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="List all available suite names and exit",
     )
     parser.add_argument(
-        "--security-matrix",
+        "--opcua-security",
         action="store_true",
         help=(
-            "Include the opt-in A1/A2/B1/B2 security-flow matrix cells in a full "
-            "or --phase2 run. Individual cells can also be run with --suite."
+            "Include the opt-in C#/Console OPC UA security targets in a full "
+            "or --phase2 run. Individual targets can also be run with --suite."
         ),
     )
     parser.add_argument(
@@ -2674,8 +2676,8 @@ def _print_suite_list() -> None:
             "Phase 2 package suites (parallel, Docker/package validation):",
         ),
         (
-            SuiteGroup.PHASE2_SECURITY_MATRIX,
-            "Opt-in security matrix suites (use --security-matrix or --suite):",
+            SuiteGroup.PHASE2_OPCUA_SECURITY,
+            "Opt-in OPC UA security suites (use --opcua-security or --suite):",
         ),
         (
             SuiteGroup.PHASE2_WEB_LIVE,
@@ -2698,11 +2700,11 @@ def _print_suite_list() -> None:
 def _validate_suite_arg(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if args.suite and args.suite not in SUITE_REGISTRY:
         parser.error(f"unknown suite: {args.suite}\n{SUITE_RENAMED_GUIDANCE}")
-    if args.phase1 and args.security_matrix:
-        parser.error("--security-matrix requires a full run or --phase2")
-    if args.suite and args.security_matrix:
+    if args.phase1 and args.opcua_security:
+        parser.error("--opcua-security requires a full run or --phase2")
+    if args.suite and args.opcua_security:
         parser.error(
-            "--security-matrix is not needed with --suite; select the matrix suite directly"
+            "--opcua-security is not needed with --suite; select the OPC UA security suite directly"
         )
 
 
@@ -2781,7 +2783,7 @@ def main() -> int:
 
         # -- Phase 2 (parallel — each sub-runner owns its server) ------------
         if not args.phase1:
-            p2 = run_phase2(phase2_specs(include_security_matrix=args.security_matrix))
+            p2 = run_phase2(phase2_specs(include_opcua_security=args.opcua_security))
             all_results.extend(p2)
 
     finally:

@@ -55,9 +55,9 @@ _OPCUA_PORT = 40451
 
 sys.path.insert(0, str(_CONSOLE_ROOT))
 
-from security_matrix_support import (  # noqa: E402
+from opcua_security_support import (  # noqa: E402
     console_application_uri,
-    load_security_matrix_users,
+    load_opcua_security_users,
     preserve_test_artifacts,
     trust_application_certificate,
     trust_user_token_certificate,
@@ -102,8 +102,8 @@ def _port_open(host: str, port: int, timeout: float = 1.5) -> bool:
 
 
 def _isolated_server_requested() -> bool:
-    return bool(os.environ.get("IJT_SECURITY_MATRIX_CELL")) or (
-        bool(os.environ.get("IJT_SUT")) and bool(os.environ.get("OPCUA_SERVER_PORT"))
+    return bool(os.environ.get("IJT_OPCUA_SECURITY_TARGET")) or (
+        bool(os.environ.get("IJT_OPCUA_SECURITY_SUT")) and bool(os.environ.get("OPCUA_SERVER_PORT"))
     )
 
 
@@ -144,7 +144,7 @@ def _kill_process_on_port(port: int) -> None:
     if _stop_docker_containers_publishing_port(port):
         return
 
-    if os.environ.get("IJT_SUT", "").strip().lower() == "linux":
+    if os.environ.get("IJT_OPCUA_SECURITY_SUT", "").strip().lower() == "linux":
         return
 
     if platform.system() == "Windows":
@@ -244,30 +244,30 @@ def _wait_for_opcua_hello(host: str, port: int, timeout: float) -> bool:
 
 
 # ── Server launcher ───────────────────────────────────────────────────────────
-def _prepare_security_matrix_client_certificate() -> None:
-    if not os.environ.get("IJT_SECURITY_MATRIX_CELL"):
+def _prepare_opcua_security_client_certificate() -> None:
+    if not os.environ.get("IJT_OPCUA_SECURITY_TARGET"):
         return
 
-    cell = os.environ.get("IJT_SECURITY_MATRIX_CELL", "local").lower()
+    target = os.environ.get("IJT_OPCUA_SECURITY_TARGET", "local").lower()
 
     # 1) Secure-channel (application) certificate. Reused as the "self" cert
     #    for the OPC UA secure channel; trusted into DefaultApplicationGroup.
     if not (os.environ.get("CONSOLE_SECURITY_CLIENT_CERT") and os.environ.get("CONSOLE_SECURITY_CLIENT_KEY")):
-        cert_dir = unique_temp_dir(_CLIENT_PKI_ROOT, cell)
+        cert_dir = unique_temp_dir(_CLIENT_PKI_ROOT, target)
         generated = write_self_signed_certificate(
             cert_dir,
-            f"IJT Console Security Matrix {cell.upper()}",
+            f"IJT Console OPC UA Security {target.upper()}",
             application_uri=console_application_uri(),
         )
         os.environ["CONSOLE_SECURITY_CLIENT_CERT"] = str(generated.certificate_pem)
         os.environ["CONSOLE_SECURITY_CLIENT_CERT_DER"] = str(generated.certificate_der)
         os.environ["CONSOLE_SECURITY_CLIENT_KEY"] = str(generated.private_key_pem)
 
-    # 2) Known user-identity certificate for the X509 happy-path cell.
+    # 2) Known user-identity certificate for the X509 happy-path case.
     #    The managed simulator copy receives this certificate's SHA-1
     #    thumbprint in user_identity_configuration.json before startup.
     if not (os.environ.get("CONSOLE_X509_USER_CERT") and os.environ.get("CONSOLE_X509_USER_KEY")):
-        user_cert_dir = unique_temp_dir(_CLIENT_PKI_ROOT, f"{cell}_user1")
+        user_cert_dir = unique_temp_dir(_CLIENT_PKI_ROOT, f"{target}_user1")
         user_generated = write_self_signed_certificate(
             user_cert_dir,
             "user1",
@@ -279,20 +279,20 @@ def _prepare_security_matrix_client_certificate() -> None:
 
 
 def _users_file() -> Path:
-    configured = os.environ.get("SECURITY_MATRIX_USERS_FILE")
+    configured = os.environ.get("OPCUA_SECURITY_USERS_FILE")
     if configured:
         return Path(configured)
-    shared = _SERVER_RELEASE2 / "security_matrix.users.yaml"
+    shared = _SERVER_RELEASE2 / "opcua_security.users.yaml"
     if shared.exists():
         return shared
-    return _CONSOLE_ROOT / "tests" / "security_matrix.users.yaml"
+    return _CONSOLE_ROOT / "tests" / "opcua_security.users.yaml"
 
 
-def _write_security_matrix_user_identity_configuration(server_dir: Path) -> None:
+def _write_opcua_security_user_identity_configuration(server_dir: Path) -> None:
     user_cert_der = os.environ.get("CONSOLE_X509_USER_CERT_DER")
     write_simulator_user_identity_configuration(
         server_dir / "user_identity_configuration.json",
-        load_security_matrix_users(_users_file()),
+        load_opcua_security_users(_users_file()),
         x509_user_certificate_der=Path(user_cert_der) if user_cert_der else None,
     )
 
@@ -302,9 +302,9 @@ def _compose_bind_path(path: Path) -> str:
 
 
 def _write_docker_compose_override(root: Path, pki_dir: Path) -> Path:
-    _write_security_matrix_user_identity_configuration(root)
+    _write_opcua_security_user_identity_configuration(root)
     config_path = root / "user_identity_configuration.json"
-    override_path = root / "docker-compose.security-matrix.yml"
+    override_path = root / "docker-compose.opcua-security.yml"
     override_path.write_text(
         "\n".join(
             [
@@ -345,7 +345,7 @@ def _patch_server_configuration(config_path: Path, port: int, pki_dir: Path) -> 
     server_data = config.setdefault("serverConfigurationData", {})
     server_data["serverEndpointTCPPort"] = port
     server_data["pkiDirectoryPath"] = str(pki_dir)
-    if os.environ.get("IJT_SECURITY_MATRIX_CELL"):
+    if os.environ.get("IJT_OPCUA_SECURITY_TARGET"):
         server_data["autoTrustCertificates"] = False
     with config_path.open("w", encoding="utf-8") as fh:
         json.dump(config, fh, indent=2)
@@ -364,8 +364,8 @@ def _prepare_copied_windows_server(port: int) -> tuple[Path, Path, Path] | None:
     copied_exe = server_dir / _SERVER_EXE.name
     pki_dir = unique_temp_dir(_SERVER_PKI_ROOT, str(port))
     _patch_server_configuration(server_dir / "server_configuration.json", port, pki_dir)
-    if os.environ.get("IJT_SECURITY_MATRIX_CELL"):
-        _write_security_matrix_user_identity_configuration(server_dir)
+    if os.environ.get("IJT_OPCUA_SECURITY_TARGET"):
+        _write_opcua_security_user_identity_configuration(server_dir)
 
     cert_der = os.environ.get("CONSOLE_SECURITY_CLIENT_CERT_DER")
     if cert_der:
@@ -410,7 +410,7 @@ def _start_docker_server(port: int) -> StartedServer | None:
         return None
 
     project = os.environ.get("COMPOSE_PROJECT_NAME") or (
-        f"ijt-console-{os.environ.get('IJT_SECURITY_MATRIX_CELL', 'local').lower()}-{uuid.uuid4().hex[:8]}"
+        f"ijt-console-{os.environ.get('IJT_OPCUA_SECURITY_TARGET', 'local').lower()}-{uuid.uuid4().hex[:8]}"
     )
     env = os.environ.copy()
     env["OPCUA_SERVER_PORT"] = str(port)
@@ -418,7 +418,7 @@ def _start_docker_server(port: int) -> StartedServer | None:
     compose_args = [docker, "compose"]
     override_dir: Path | None = None
     pki_dir: Path | None = None
-    if os.environ.get("IJT_SECURITY_MATRIX_CELL"):
+    if os.environ.get("IJT_OPCUA_SECURITY_TARGET"):
         override_dir = unique_temp_dir(_DOCKER_OVERRIDE_ROOT, f"console_{port}")
         pki_dir = unique_temp_dir(_SERVER_PKI_ROOT, f"docker_{port}")
         cert_der = os.environ.get("CONSOLE_SECURITY_CLIENT_CERT_DER")
@@ -456,7 +456,7 @@ def _start_docker_server(port: int) -> StartedServer | None:
 
 
 def _start_opcua_server(port: int) -> StartedServer | None:
-    sut = os.environ.get("IJT_SUT", "").strip().lower()
+    sut = os.environ.get("IJT_OPCUA_SECURITY_SUT", "").strip().lower()
     if sut == "linux":
         return _start_docker_server(port)
     if sut == "windows":
@@ -503,7 +503,7 @@ def ensure_opcua_server():
     """
     host, port = _resolve_server_host_port()
     started_server: StartedServer | None = None
-    _prepare_security_matrix_client_certificate()
+    _prepare_opcua_security_client_certificate()
     isolated_server = _isolated_server_requested()
 
     if isolated_server and _port_open(host, port):

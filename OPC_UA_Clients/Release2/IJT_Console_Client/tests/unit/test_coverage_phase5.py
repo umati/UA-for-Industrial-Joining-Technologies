@@ -372,7 +372,7 @@ async def test_read_tool_identifier_exception_returns_none():
     mock_client = MagicMock()
 
     # Make _namespace_index raise a CONNECTION error — the narrow exception
-    # policy in utils.read_tool_identifier (see A2 fix in utils.py) only
+    # policy in utils.read_tool_identifier only
     # swallows OPC UA / network errors (UaError, TimeoutError, ConnectionError,
     # OSError).  A bare `Exception("...")` would correctly bubble up so that
     # NameError / AttributeError / ImportError are never masked as a

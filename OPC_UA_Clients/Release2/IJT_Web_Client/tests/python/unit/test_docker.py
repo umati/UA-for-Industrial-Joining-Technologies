@@ -218,3 +218,19 @@ class TestDockerCompose:
         """docker-compose.yml must not use the --serve flag."""
         text = _COMPOSE_FILE.read_text(encoding="utf-8")
         assert "--serve" not in text, "docker-compose.yml contains --serve (invalid flag from a previous bug)"
+
+    @pytest.mark.skipif(
+        not _YAML_AVAILABLE,
+        reason="PyYAML not installed — skipping docker-compose YAML parsing",
+    )
+    def test_compose_opts_into_docker_host_endpoint_rewrite(self):
+        """Docker Compose is the host-bridge topology and must opt in explicitly."""
+        import yaml
+
+        content = yaml.safe_load(_COMPOSE_FILE.read_text(encoding="utf-8"))
+        services = content["services"]
+
+        for service_name in ("ijt_web_client", "ijt_tests"):
+            env = services[service_name].get("environment", {})
+            assert env.get("IS_DOCKER") == "true"
+            assert env.get("IJT_OPCUA_HOST_REWRITE") == "true"
