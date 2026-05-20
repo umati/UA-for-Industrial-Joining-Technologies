@@ -69,6 +69,7 @@ async def test_connect_retries_then_succeeds():
     with patch("opcua_client.Client") as MockClient:
         mock_client = AsyncMock()
         mock_client.connect = _connect_mock
+        mock_client.load_type_definitions = AsyncMock()
         mock_client.load_data_type_definitions = AsyncMock()
         MockClient.return_value = mock_client
 
@@ -102,6 +103,7 @@ async def test_connect_logs_retry_message():
     with patch("opcua_client.Client") as MockClient:
         mock_client = AsyncMock()
         mock_client.connect = _connect_mock
+        mock_client.load_type_definitions = AsyncMock()
         mock_client.load_data_type_definitions = AsyncMock()
         MockClient.return_value = mock_client
 

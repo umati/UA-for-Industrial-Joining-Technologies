@@ -1,27 +1,27 @@
-"""asyncua compatibility shims — version-gated monkey-patches.
+"""asyncua compatibility shims — capability-gated monkey-patches.
 
 Central location for all workarounds targeting known asyncua bugs.  Each patch
-is guarded by a version check:
+is guarded by the upstream behavior it corrects, not by version alone:
 
-  * While asyncua < 1.3.0           → patch is applied silently.
-  * Once asyncua >= 1.3.0           → patch is skipped and a DeprecationWarning
-    is emitted so the call site is easy to locate and re-verify.
+  * If ``UaClient._send_request`` still defaults ``timeout`` to a hard-coded
+    numeric value, the patch is applied.
+  * If upstream changes the default to ``None`` or removes the method, the patch
+    is skipped and a DeprecationWarning marks the shim for removal.
 
 Usage (from any tests/python/{live,integration} file)::
 
     from .._asyncua_compat import apply_send_request_timeout_patch
     apply_send_request_timeout_patch()
 
-The 1.3.0 threshold was chosen because the upstream timeout bug is NOT yet
-fixed at master SHA 35a77c6b (2026-05-11 — the SHA pinned in our
-repo-root constraints.txt).  When asyncua publishes a release that includes the
-fix, bump the gate, re-verify, and remove this module + every call to
-apply_send_request_timeout_patch().
+Do not use asyncua's reported version as the only gate.  The repo-pinned master
+SHA can self-report as a pre-release while still retaining the affected
+``_send_request(..., timeout=1, ...)`` signature.
 """
 
 from __future__ import annotations
 
 import importlib.metadata
+import inspect
 import warnings
 
 from packaging.version import Version
@@ -37,6 +37,16 @@ def _asyncua_version() -> Version:
 ASYNCUA_VERSION: Version = _asyncua_version()
 
 
+def _send_request_needs_timeout_patch(send_request) -> bool:
+    try:
+        timeout_param = inspect.signature(send_request).parameters.get("timeout")
+    except (TypeError, ValueError):
+        return False
+    if timeout_param is None:
+        return False
+    return timeout_param.default not in {None, inspect.Parameter.empty}
+
+
 # ---------------------------------------------------------------------------
 # Patch 1 — _send_request timeout
 #
@@ -45,33 +55,21 @@ ASYNCUA_VERSION: Version = _asyncua_version()
 #             using the configured client timeout.  Heavy server calls that
 #             take >1 s (e.g. SimulateJobResult with refs=True, or
 #             load_data_type_definitions) raise spurious timeout errors.
-# Affected  : asyncua 1.2b2 and all earlier releases (confirmed on 1.1.5).
-# Fixed in  : NOT YET FIXED upstream.  Verified absent at master SHA
-#             35a77c6b128a4f1226a685cde3b46abd59975258 (2026-05-11) — the
-#             commit currently pinned by repo-root constraints.txt.
-# Remove    : when asyncua >= 1.3.0 stable ships — verify upstream fix is
-#             actually present, then delete every call to
+# Affected  : asyncua releases/SHA builds where UaClient._send_request has a
+#             hard-coded numeric timeout default (currently 1 second).
+# Fixed in  : unknown.  The repo-pinned SHA still has timeout=1 even when it
+#             self-reports as 2.0a0, so this shim is capability-gated.
+# Remove    : when _send_request no longer needs this patch in the pinned
+#             asyncua build; then delete every call to
 #             apply_send_request_timeout_patch() and this module.
 # ---------------------------------------------------------------------------
 def apply_send_request_timeout_patch() -> None:
     """Wrap UaClient._send_request so timeout=None inherits self._timeout.
 
     Safe to call multiple times — re-patching is a no-op after the first call.
-    Emits DeprecationWarning when asyncua >= 1.3.0 so the call site is found
-    automatically once the upstream fix has potentially shipped.
+    Emits DeprecationWarning when the installed asyncua no longer exposes the
+    affected signature so the call site is easy to find and remove.
     """
-    if ASYNCUA_VERSION >= Version("1.3.0"):
-        warnings.warn(
-            f"asyncua {ASYNCUA_VERSION} >= 1.3.0: re-verify that the "
-            "_send_request timeout fix has actually landed upstream "
-            "(absent at master SHA 35a77c6b on 2026-05-11).  If present, "
-            "remove every call to apply_send_request_timeout_patch() and "
-            "delete tests/python/_asyncua_compat.py.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return
-
     try:
         import asyncua.client.ua_client as _uc
         from asyncua import ua
@@ -87,10 +85,20 @@ def apply_send_request_timeout_patch() -> None:
         return
 
     _orig = _uc.UaClient._send_request
+    if not _send_request_needs_timeout_patch(_orig):
+        warnings.warn(
+            f"asyncua {ASYNCUA_VERSION}: _send_request no longer has the "
+            "hard-coded timeout default this shim patches. Re-verify live "
+            "tests, remove every call to apply_send_request_timeout_patch(), "
+            "and delete tests/python/_asyncua_compat.py.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return
 
     async def _fixed(self, request, timeout=None, message_type=ua.MessageType.SecureMessage):
         if timeout is None:
-            timeout = self._timeout  # use the configured timeout (e.g. 60 s)
+            timeout = getattr(self, "_timeout", getattr(self, "timeout", timeout))
         return await _orig(self, request, timeout, message_type)  # type: ignore[arg-type]
 
     _fixed._ijt_patched = True  # type: ignore[attr-defined]

@@ -132,6 +132,7 @@ async def test_connect_sends_connection_established_on_success(monkeypatch):
     ws = AsyncMock()
     mock_client = MagicMock()
     mock_client.connect = AsyncMock(return_value=None)
+    mock_client.load_type_definitions = AsyncMock(return_value=None)
     mock_client.load_data_type_definitions = AsyncMock(return_value=None)
     mock_client.get_root_node = MagicMock(return_value=MagicMock())
     mock_client.set_security_string = MagicMock(return_value=None)
@@ -145,6 +146,33 @@ async def test_connect_sends_connection_established_on_success(monkeypatch):
     sent_payload = json.loads(ws.send.call_args[0][0])
     assert sent_payload["command"] == "connection established"
     assert sent_payload["endpoint"] == "opc.tcp://localhost:40451"
+
+
+@pytest.mark.asyncio
+async def test_connect_loads_ijt_type_definitions_on_both_clients(monkeypatch):
+    monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "1")
+
+    calls: list[str] = []
+
+    main_mock = MagicMock()
+    main_mock.connect = AsyncMock(return_value=None)
+    main_mock.load_type_definitions = AsyncMock(side_effect=lambda: calls.append("main_legacy"))
+    main_mock.load_data_type_definitions = AsyncMock(side_effect=lambda: calls.append("main_modern"))
+    main_mock.get_root_node = MagicMock(return_value=MagicMock())
+    main_mock.set_security_string = MagicMock(return_value=None)
+
+    sub_mock = MagicMock()
+    sub_mock.connect = AsyncMock(return_value=None)
+    sub_mock.load_type_definitions = AsyncMock(side_effect=lambda: calls.append("sub_legacy"))
+    sub_mock.load_data_type_definitions = AsyncMock(side_effect=lambda: calls.append("sub_modern"))
+    sub_mock.set_security_string = MagicMock(return_value=None)
+
+    with patch("python.connection.Client", side_effect=[main_mock, sub_mock]):
+        conn = _make_connection(server_url="opc.tcp://localhost:40451")
+        result = await conn.connect()
+
+    assert result.get("command") == "connection established"
+    assert calls == ["main_legacy", "main_modern", "sub_legacy", "sub_modern"]
 
 
 # ---------------------------------------------------------------------------
@@ -573,6 +601,7 @@ async def test_connect_subscription_client_fails_falls_back_to_single_session(mo
 
     main_mock = MagicMock()
     main_mock.connect = AsyncMock(return_value=None)
+    main_mock.load_type_definitions = AsyncMock(return_value=None)
     main_mock.load_data_type_definitions = AsyncMock(return_value=None)
     main_mock.get_root_node = MagicMock(return_value=MagicMock())
     main_mock.set_security_string = MagicMock(return_value=None)
@@ -580,6 +609,7 @@ async def test_connect_subscription_client_fails_falls_back_to_single_session(mo
     sub_mock = MagicMock()
     sub_mock.connect = AsyncMock(side_effect=RuntimeError("sub connection refused"))
     sub_mock.set_security_string = MagicMock(return_value=None)
+    sub_mock.load_type_definitions = AsyncMock(side_effect=RuntimeError("not reached"))
     sub_mock.load_data_type_definitions = AsyncMock(side_effect=RuntimeError("not reached"))
 
     ws = AsyncMock()

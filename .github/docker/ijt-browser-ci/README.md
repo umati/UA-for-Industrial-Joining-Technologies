@@ -20,10 +20,12 @@ commit `4ad418b5`.
 Published to `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci`
 by `.github/workflows/build-browser-ci-image.yml`.
 
-The workflow has two permission-separated jobs:
+The workflow has three permission-separated jobs:
 
-- `build` — no package write permission; builds and runs the full Phase 0
-  smoke path under `--network=none`.
+- `build` — no package write permission; builds the image and runs image
+  integrity probes under `--network=none` (metadata, tool versions,
+  non-root cache permissions, offline pip wheelhouse closure, offline npm
+  cache closure, and Playwright/Chromium presence).
 - `publish` — the only job with `packages: write`; pushes the verified image
   to GHCR and pull-verifies the digest. Pushes to `main`, schedules, and
   manual `push=true` dispatches publish the reviewed pin path. Same-repo pull
@@ -32,6 +34,11 @@ The workflow has two permission-separated jobs:
   image-pin updater, or this build workflow) publish a PR-scoped source-SHA tag
   (`pr-<number>-<checkout-sha>`) for Integration to resolve to a digest before
   running the offline browser matrix.
+- `offline-e2e` — runs the full `web-client-e2e-regression` root-runner path
+  from the published digest under `--network=none`. This job is the browser
+  behavior gate; it may fail the workflow/required check, but it intentionally
+  does not block image publication. That separation prevents a product
+  regression from cascading into Integration as a missing PR/SHA image.
 
 ## Runtime contract
 
@@ -42,7 +49,7 @@ container is invoked with:
 - `--network=none` — permanent offline contract; any silent live fetch fails.
 - `--user "$(id -u):$(id -g)"` — host runner UID for artifact ownership.
 - `-w /workspace` — repo root; the ROOT runner is invoked.
-- env: `HOME=/opt/ijt-browser-ci/home`, `npm_config_cache=...`,
+- env: `IS_DOCKER=true`, `HOME=/opt/ijt-browser-ci/home`, `npm_config_cache=...`,
   `npm_config_offline=true`, `PIP_NO_INDEX=1`,
   `PIP_FIND_LINKS=/opt/ijt-browser-ci/pip-wheelhouse`,
   `PIP_CACHE_DIR=...`, `SKIP_VENV_INSTALL=1`, plus the `GITHUB_*` whitelist.
@@ -55,10 +62,12 @@ GitHub Actions Integration workflow.
 
 Same-repo PRs can update browser image dependencies or image build logic before
 `image-pin.json` has been refreshed on `main`. For that case, the image build
-workflow publishes a PR-scoped image after Phase 0 smoke, and `integration.yml`
-resolves that tag to an immutable digest before the browser suites run under
-`--network=none`. This keeps PR validation automatic without allowing live
-npm/pip/Playwright fetches during the browser test job.
+workflow publishes a PR-scoped image after image-integrity smoke, and
+`integration.yml` resolves that tag to an immutable digest before the browser
+suites run under `--network=none`. The build workflow then runs the full
+offline E2E regression as a separate post-publish job. This keeps PR validation
+automatic without allowing live npm/pip/Playwright fetches during the browser
+test job.
 
 Fork PRs cannot publish GHCR images with the repository token. If a fork needs
 to change browser image inputs, a maintainer must replay the branch from this
@@ -70,8 +79,8 @@ The build workflow publishes and verifies images. It does not open pull
 requests or require GitHub App/PAT credentials. To move `main` to a new
 reviewed digest:
 
-1. Trigger or wait for a Build Browser CI Image run that completes both
-   `build` and `publish` successfully.
+1. Trigger or wait for a Build Browser CI Image run that completes `build`,
+   `publish`, and `offline-e2e` successfully.
 2. Use the published digest from the job summary and the image metadata from
    `/opt/ijt-browser-ci/metadata.json` to update `image-pin.json` with
    `.github/scripts/update_browser_ci_image_pin.py`.

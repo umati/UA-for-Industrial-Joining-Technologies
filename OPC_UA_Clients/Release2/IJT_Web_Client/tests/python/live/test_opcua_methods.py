@@ -2,8 +2,8 @@
 Live OPC UA method-call tests — IJT Tightening Server (OPCUA_TEST_ENDPOINT)
 
 Infrastructure mirrors IJT_Console_Client/opcua_client.py exactly:
-  * load_data_type_definitions() (single call — load_type_definitions is deprecated
-    upstream and dispatches to load_data_type_definitions internally)
+  * load_type_definitions() first for the IJT simulator's OPC Binary
+    dictionary, then load_data_type_definitions() for OPC UA 1.04 metadata
   * server_node = root.get_child(["0:Objects","0:Server"])
   * Event types resolved by namespace URI (same as Console Client event_types.py)
   * TWO persistent module-scoped subscriptions — result events + system events
@@ -120,7 +120,14 @@ async def ijt_session():
     c = Client(OPCUA_URL, timeout=60)  # generous timeout for heavy simulation calls
     await c.connect()
 
-    # Same as Console Client connect(): load standard data type definitions
+    # Compatibility bridge for the IJT simulator's custom Result/Event payloads:
+    # asyncua's modern loader reads OPC UA 1.04 DataTypeDefinition attributes,
+    # while the simulator still exposes some IJT structures only through the
+    # legacy OPC Binary dictionary path. Keep the legacy load first so the
+    # following modern load does not overwrite working classes.
+    await c.load_type_definitions()
+
+    # Same as Console Client connect(): load modern data type definitions
     await c.load_data_type_definitions()
 
     root = c.nodes.root
@@ -156,8 +163,10 @@ async def ijt_session():
         ]
     )
 
-    # Same as Console Client subscribe_to_events(): load custom types AFTER resolving nodes
-    await c.load_data_type_definitions()
+    # Type definitions are already loaded above through the IJT compatibility
+    # bridge (load_type_definitions() then load_data_type_definitions()).
+    # asyncua's load_data_type_definitions() defaults to overwrite_existing=False
+    # so a second call here would only re-walk ~200 nodes for no benefit.
 
     # Create persistent subscriptions with queuesize=200 (same as Console Client).
     # MaxNotificationsPerPublish=3 prevents large PublishResponse payloads when the

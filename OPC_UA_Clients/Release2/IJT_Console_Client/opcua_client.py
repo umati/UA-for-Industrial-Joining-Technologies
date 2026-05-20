@@ -105,6 +105,20 @@ def _preserve_test_artifacts() -> bool:
     return os.environ.get("IJT_PRESERVE_TEST_ARTIFACTS", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
+async def _load_ijt_type_definitions(client: Client, label: str) -> None:
+    """Load IJT custom structures through legacy and modern asyncua loaders."""
+    try:
+        await client.load_type_definitions()
+    except Exception as exc:
+        ijt_log.warning(
+            "Legacy OPC Binary type-definition load failed for %s; continuing "
+            "with OPC UA 1.04 DataTypeDefinition loading: %s",
+            label,
+            exc,
+        )
+    await client.load_data_type_definitions()
+
+
 class OPCUAClient:
     def __init__(self, server_url: str, security_config: OPCUASecurityConfig | None = None) -> None:
         self.server_url = server_url
@@ -144,7 +158,7 @@ class OPCUAClient:
             try:
                 start_time = time.time()
                 await self.client.connect()  # type: ignore[union-attr]
-                await self.client.load_data_type_definitions()  # type: ignore[union-attr]
+                await _load_ijt_type_definitions(self.client, "console client")  # type: ignore[arg-type]
                 duration = time.time() - start_time
                 ijt_log.info(f"Connected to OPC UA server at {self.server_url} in {duration:.2f}s")
                 return
@@ -250,7 +264,10 @@ class OPCUAClient:
                 joining_system_event_node,
             ) = await get_event_types(self.client, root)
 
-            await self.client.load_data_type_definitions()  # type: ignore[union-attr]
+            # Type definitions are already loaded by connect() through
+            # _load_ijt_type_definitions().  asyncua's modern loader defaults
+            # to overwrite_existing=False so a second call would re-walk
+            # the full type hierarchy with no benefit.
 
             # Subscribe to Result and Joining Result Events
             if self.sub_result_event is None:

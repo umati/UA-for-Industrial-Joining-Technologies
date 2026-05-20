@@ -9,14 +9,16 @@ name: Build Browser CI Image
 # publish a new image and create an image-pin update loop. README updates must
 # not rebuild the browser image either.
 #
-# Two-job split:
-#   - build:   loads image locally, runs Phase 0 smoke under the exact
-#              runtime contract. NO packages: write.
-#   - publish: depends on build; only runs when push == true. Main/scheduled/
-#              manual publishes refresh the reviewed pin path; same-repo PRs
-#              that change browser image inputs publish a PR-scoped source-SHA
-#              tag consumed by integration.yml so offline browser tests exercise
-#              the image built from the same checkout.
+# Three-job split:
+#   - build:       loads image locally and validates image integrity only.
+#                  NO packages: write.
+#   - publish:     depends on build; only runs when push == true. Main/
+#                  scheduled/manual publishes refresh the reviewed pin path;
+#                  same-repo PRs that change browser image inputs publish a
+#                  PR-scoped source-SHA tag consumed by integration.yml.
+#   - offline-e2e: depends on publish and runs the full offline browser
+#                  regression contract. It fails the workflow/required check
+#                  without blocking image publication.
 
 on:
   push:
@@ -217,20 +219,18 @@ jobs:
             python -m venv /tmp/v && /tmp/v/bin/python -m pip --version
           '
 
-      - name: Phase 0 smoke - root runner under --network=none (web-client-e2e-regression)
-        # This is the production contract: repo root, root runner, full
-        # offline env, host UID. Any silent live fetch or contract violation
-        # fails this step and PR A. Artifacts are captured for inspection
-        # regardless of pass/fail via the always() upload step below.
-        id: deep_smoke
+      - name: Phase 0 smoke - offline dependency closure probe
+        # Image-integrity gate only: prove the baked pip wheelhouse, npm cache,
+        # Chromium install, and non-root permissions are usable with
+        # --network=none. Full browser behavior stays in the post-publish
+        # offline-e2e job so product regressions do not prevent publishing the
+        # PR/SHA image that Integration needs for diagnostics.
         env:
           SHORT_SHA: ${{ steps.decide.outputs.short_sha }}
         run: |
           set -euo pipefail
           IMG="${IMAGE_NAME}:phase0-${SHORT_SHA}"
           UID_GID="$(id -u):$(id -g)"
-          mkdir -p "${GITHUB_WORKSPACE}/.phase0-artifacts"
-          chmod 0777 "${GITHUB_WORKSPACE}/.phase0-artifacts"
           docker run --rm \
             --network=none \
             --user "$UID_GID" \
@@ -243,10 +243,31 @@ jobs:
             -e PIP_CACHE_DIR=/opt/ijt-browser-ci/pip-cache \
             -e PIP_NO_INDEX=1 \
             -e PIP_FIND_LINKS=/opt/ijt-browser-ci/pip-wheelhouse \
-            -e SKIP_VENV_INSTALL=1 \
+            -e IS_DOCKER=true \
             -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
             "$IMG" \
-            bash -lc 'python run_all_tests.py --suite web-client-e2e-regression --verbose'
+            bash -lc '
+              set -euo pipefail
+              asyncua_wheel="$(find /opt/ijt-browser-ci/pip-wheelhouse -maxdepth 1 -name "asyncua-*.whl" -printf "%f\n" | sort | tail -n 1)"
+              test -n "$asyncua_wheel"
+              asyncua_version="${asyncua_wheel#asyncua-}"
+              asyncua_version="${asyncua_version%%-*}"
+              awk -v version="$asyncua_version" \
+                '\''BEGIN { replaced=0 } tolower($0) ~ /^asyncua([[:space:]]|[=<>!~@]|$)/ { print "asyncua==" version; replaced=1; next } { print } END { if (replaced == 0) print "asyncua==" version }'\'' \
+                constraints.txt > /tmp/runtime-constraints.txt
+              python -m venv /tmp/ijt-browser-probe
+              /tmp/ijt-browser-probe/bin/python -m pip install --pre --no-index \
+                --find-links /opt/ijt-browser-ci/pip-wheelhouse \
+                -c /tmp/runtime-constraints.txt \
+                -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt \
+                -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
+              /tmp/ijt-browser-probe/bin/python -c "import asyncua, pytest, pytest_timeout, websockets; print(\"offline python closure OK\")"
+              cd OPC_UA_Clients/Release2/IJT_Web_Client
+              npm ci --legacy-peer-deps --offline --no-audit --no-fund
+              node -e "require(\"@playwright/test\"); console.log(\"offline node closure OK\")"
+              npx playwright --version
+              test -d /ms-playwright
+            '
 
       - name: Stage Phase 0 artifacts
         if: always()
@@ -296,6 +317,8 @@ jobs:
             if [[ -n "${PR_IMAGE_TAG}" ]]; then
               echo "- PR-scoped image tag: \`${PR_IMAGE_TAG}\`"
             fi
+            echo "- Publish gate: image integrity only"
+            echo "- Full offline browser regression: post-publish \`offline-e2e\` job"
           } >> "$GITHUB_STEP_SUMMARY"
 
   publish:
@@ -370,6 +393,7 @@ jobs:
         # IJT_BROWSER_CI_IMAGE for Integration. Hard gate.
         env:
           PUBLISHED_DIGEST: ${{ steps.push.outputs.digest }}
+          EXPECTED_SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
         run: |
           set -euo pipefail
           REF="${IMAGE_NAME}@${PUBLISHED_DIGEST}"
@@ -378,6 +402,13 @@ jobs:
           docker run --rm --network=none "$REF" cat /opt/ijt-browser-ci/metadata.json
           docker run --rm --network=none "$REF" bash -c 'python --version | grep -E "^Python 3\.14\."'
           docker run --rm --network=none "$REF" bash -c 'node --version | grep -E "^v24\."'
+          actual_sha="$(docker run --rm --network=none "$REF" python -c "import json; print(json.load(open('/opt/ijt-browser-ci/metadata.json')).get('build_sha',''))")"
+          if [[ "$actual_sha" != "$EXPECTED_SOURCE_SHA" ]]; then
+            echo "::error::Published image metadata build_sha does not match the workflow source SHA." >&2
+            echo "::error::  expected: ${EXPECTED_SOURCE_SHA}" >&2
+            echo "::error::  actual:   ${actual_sha}" >&2
+            exit 1
+          fi
 
       - name: Job summary
         env:
@@ -405,3 +436,75 @@ jobs:
               echo "_Integration resolves the PR-scoped tag above to this digest before running browser suites._"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  offline-e2e:
+    name: Required Offline Browser E2E
+    needs: [build, publish]
+    if: needs.build.outputs.should_push == 'true' && needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull published IJT Browser CI image
+        env:
+          PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          REF="${IMAGE_NAME}@${PUBLISHED_DIGEST}"
+          echo "Pulling $REF ..."
+          docker pull "$REF"
+          docker image inspect "$REF" --format 'id={{.Id}} created={{.Created}}'
+
+      - name: Run offline Web Client browser regression
+        env:
+          PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          REF="${IMAGE_NAME}@${PUBLISHED_DIGEST}"
+          docker run --rm --init \
+            --network=none \
+            --user "$(id -u):$(id -g)" \
+            -w /workspace \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            -e CI=1 \
+            -e IS_DOCKER=true \
+            -e HOME=/opt/ijt-browser-ci/home \
+            -e npm_config_cache=/opt/ijt-browser-ci/npm-cache \
+            -e npm_config_offline=true \
+            -e PIP_CACHE_DIR=/opt/ijt-browser-ci/pip-cache \
+            -e PIP_NO_INDEX=1 \
+            -e PIP_FIND_LINKS=/opt/ijt-browser-ci/pip-wheelhouse \
+            -e SKIP_VENV_INSTALL=1 \
+            -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+            -e GITHUB_RUN_ID="${GITHUB_RUN_ID}" \
+            -e GITHUB_RUN_ATTEMPT="${GITHUB_RUN_ATTEMPT}" \
+            -e GITHUB_SHA="${GITHUB_SHA}" \
+            -e GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+            -e GITHUB_SERVER_URL="${GITHUB_SERVER_URL}" \
+            "$REF" \
+            bash -lc 'python run_all_tests.py --suite web-client-e2e-regression --verbose'
+
+      - name: Upload offline browser regression artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        if: always()
+        with:
+          name: results-browser-ci-offline-e2e-${{ needs.build.outputs.short_sha }}
+          path: |
+            OPC_UA_Clients/Release2/IJT_Web_Client/test-results/**
+            test-results/**
+          if-no-files-found: ignore
+          retention-days: 14

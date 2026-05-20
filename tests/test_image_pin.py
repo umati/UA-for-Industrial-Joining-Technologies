@@ -392,6 +392,15 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     )
     assert 'PUBLISH_MODE="pr"' in decide_body
     assert 'PR_IMAGE_TAG="${IMAGE_NAME}:pr-${PR_NUMBER}-${SHORT_SHA}"' in decide_body
+    build_body = "\n".join(str(step.get("run", "")) for step in build_job["steps"])
+    assert "web-client-e2e-regression" not in build_body, (
+        "The image publish gate must validate image integrity only. Full browser "
+        "behavior belongs in the post-publish offline-e2e job so product "
+        "regressions do not prevent publishing the PR/SHA image Integration needs."
+    )
+    assert "npm ci --legacy-peer-deps --offline --no-audit --no-fund" in build_body
+    assert "--find-links /opt/ijt-browser-ci/pip-wheelhouse" in build_body
+    assert "IS_DOCKER=true" in build_body
 
     assert jobs["publish"]["permissions"] == {
         "contents": "read",
@@ -405,14 +414,29 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert "automation/ijt-browser-ci-image-pin" not in workflow_text
     assert "gh pr create" not in workflow_text
     assert "pull-requests: write" not in workflow_text
+    offline_job = jobs["offline-e2e"]
+    assert offline_job["needs"] == ["build", "publish"]
+    assert (
+        offline_job["if"]
+        == "needs.build.outputs.should_push == 'true' && needs.publish.result == 'success'"
+    )
+    assert offline_job["permissions"] == {"contents": "read", "packages": "read"}
+    assert offline_job["timeout-minutes"] == 45
+    offline_body = "\n".join(str(step.get("run", "")) for step in offline_job["steps"])
+    assert "${IMAGE_NAME}@${PUBLISHED_DIGEST}" in offline_body
+    assert "--network=none" in offline_body
+    assert "IS_DOCKER=true" in offline_body
+    assert "SKIP_VENV_INSTALL=1" in offline_body
+    assert "python run_all_tests.py --suite web-client-e2e-regression --verbose" in offline_body
 
     publish_job = jobs["publish"]
     publish_checkout_step = next(
         step for step in publish_job["steps"] if step.get("name") == "Checkout"
     )
     assert "ref" not in publish_checkout_step["with"], (
-        "Publish must rebuild the same default checkout context that Phase 0 "
-        "validated; only image metadata should use needs.build.outputs.source_sha."
+        "Publish must rebuild the same default checkout context that image "
+        "integrity validated; only image metadata should use "
+        "needs.build.outputs.source_sha."
     )
     publish_tags_step = next(
         step for step in publish_job["steps"] if step.get("name") == "Compute publish tags"
@@ -420,6 +444,15 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert "PUBLISH_MODE" in publish_tags_step["env"]
     assert "PR_IMAGE_TAG" in publish_tags_step["env"]
     assert "${PR_IMAGE_TAG}" in publish_tags_step["run"]
+    publish_verify_step = next(
+        step
+        for step in publish_job["steps"]
+        if step.get("name") == "Verify published image by digest (pull + offline smoke)"
+    )
+    assert (
+        publish_verify_step["env"]["EXPECTED_SOURCE_SHA"] == "${{ needs.build.outputs.source_sha }}"
+    )
+    assert "actual_sha" in publish_verify_step["run"]
 
 
 def test_integration_workflow_runs_for_image_pin_updates() -> None:

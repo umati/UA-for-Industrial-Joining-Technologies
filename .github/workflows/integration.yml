@@ -787,6 +787,7 @@ jobs:
             -w /workspace \
             -v "${GITHUB_WORKSPACE}:/workspace" \
             -e CI=1 \
+            -e IS_DOCKER=true \
             -e HOME=/opt/ijt-browser-ci/home \
             -e npm_config_cache=/opt/ijt-browser-ci/npm-cache \
             -e npm_config_offline=true \
@@ -1091,7 +1092,10 @@ jobs:
         env:
           IJT_SUT: ${{ matrix.sut }}
           IJT_SECURITY_MATRIX_CELL: ${{ matrix.cell }}
-          IJT_DOCKER_COMPOSE_BUILD: "1"
+          # Hosted runners start without opcua-ijt-server:latest, so
+          # docker compose builds the image once when needed. Do not force
+          # --build on every isolated server start inside the matrix cell.
+          IJT_DOCKER_COMPOSE_BUILD: "0"
           OPCUA_SERVER_PORT: ${{ matrix.port }}
           OPCUA_SERVER_URL: opc.tcp://localhost:${{ matrix.port }}
           IJT_SERVER_URL: opc.tcp://localhost:${{ matrix.port }}
@@ -1149,7 +1153,10 @@ jobs:
         env:
           IJT_SUT: ${{ matrix.sut }}
           IJT_SECURITY_MATRIX_CELL: ${{ matrix.cell }}
-          IJT_DOCKER_COMPOSE_BUILD: "1"
+          # Hosted runners start without opcua-ijt-server:latest, so
+          # docker compose builds the image once when needed. Do not force
+          # --build on every isolated server start inside the matrix cell.
+          IJT_DOCKER_COMPOSE_BUILD: "0"
           OPCUA_SERVER_PORT: ${{ matrix.port }}
           OPCUA_SERVER_URL: opc.tcp://localhost:${{ matrix.port }}
         run: python run_all_tests.py --security-matrix --security-matrix-cell ${{ matrix.cell }} --security-matrix-sut ${{ matrix.sut }} --junit-xml test-results/security-matrix-${{ matrix.cell }}.xml

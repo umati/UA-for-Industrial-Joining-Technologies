@@ -597,21 +597,31 @@ def _run(
     env = os.environ.copy()
     if extra_env:
         env.update(extra_env)
-    popen_kwargs: dict[str, object] = {}
-    if sys.platform != "win32":
-        # Place the child in its own process group so timeout cleanup can kill
-        # only the command tree, not this runner's own group.
-        popen_kwargs["start_new_session"] = True
+    # Explicit typed branches per platform: subprocess.Popen overloads do not
+    # accept a splatted dict[str, object] under mypy, so we call Popen directly
+    # with the keyword that applies to this platform. On POSIX the child is
+    # placed in its own session so killpg can reach the whole tree on timeout.
     try:
-        with subprocess.Popen(
-            [str(c) for c in cmd],
-            cwd=str(cwd),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=env,
-            **popen_kwargs,
-        ) as proc:
+        if sys.platform == "win32":
+            proc_cm = subprocess.Popen(
+                [str(c) for c in cmd],
+                cwd=str(cwd),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+            )
+        else:
+            proc_cm = subprocess.Popen(
+                [str(c) for c in cmd],
+                cwd=str(cwd),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+                start_new_session=True,
+            )
+        with proc_cm as proc:
             try:
                 stdout, stderr = proc.communicate(timeout=timeout)
                 return proc.returncode, (stdout or "") + (stderr or "")

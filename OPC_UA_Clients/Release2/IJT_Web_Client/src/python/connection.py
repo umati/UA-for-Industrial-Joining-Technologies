@@ -23,12 +23,33 @@ from python.serialize_data import serialize_full_event, serialize_tuple, seriali
 
 _OPCUA_TIMEOUT_S = 60  # per-request timeout for long-running operations (method calls, reads)
 _OPCUA_TIMEOUT_SHORT_S = 15  # wall-clock limit for OPC UA session establishment (SecureChannel + Session handshake)
-_OPCUA_TIMEOUT_BROWSE_S = 30  # wall-clock limit for type-definition loading (load_data_type_definitions)
+_OPCUA_TIMEOUT_BROWSE_S = 30  # per-loader wall-clock limit for OPC UA type-definition loading
 _SUBSCRIPTION_PERIOD_MS = 100
 _CONNECT_RETRIES_DEFAULT = "8"
 _CONNECT_DELAY_DEFAULT = "1.0"
 _CONNECT_MAX_DELAY_DEFAULT = "4.0"
 _EXPONENTIAL_BACKOFF_BASE = 2
+
+
+async def _load_ijt_type_definitions(client: Any, label: str) -> None:
+    """Load IJT custom structures through both asyncua type-definition paths.
+
+    ``load_data_type_definitions()`` is asyncua's modern OPC UA 1.04 path.  The
+    IJT simulator still leaves some Result/Event payload structures available
+    only through the legacy OPC Binary dictionary path, so seed that path first
+    and then load modern definitions without overwriting the working classes.
+    """
+    try:
+        await asyncio.wait_for(client.load_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S)
+    except Exception as exc:
+        ijt_log.warning(
+            "Legacy OPC Binary type-definition load failed for %s; continuing "
+            "with OPC UA 1.04 DataTypeDefinition loading: %s",
+            label,
+            exc,
+        )
+
+    await asyncio.wait_for(client.load_data_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S)
 
 
 def id_object_to_string(inp: Any) -> str:
@@ -176,7 +197,7 @@ class Connection:
                 # Small wait to avoid races right after SecureChannel/Session creation
                 await asyncio.sleep(0.1)
 
-                await asyncio.wait_for(self.client.load_data_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S)
+                await _load_ijt_type_definitions(self.client, "method client")
                 self.root = self.client.get_root_node()
 
                 # Connect the dedicated subscription client (separate OPC UA session).
@@ -193,10 +214,7 @@ class Connection:
                         timeout=_OPCUA_TIMEOUT_SHORT_S,
                     )
                     await asyncio.sleep(0.1)
-                    await asyncio.wait_for(
-                        self.subscription_client.load_data_type_definitions(),
-                        timeout=_OPCUA_TIMEOUT_BROWSE_S,
-                    )
+                    await _load_ijt_type_definitions(self.subscription_client, "subscription client")
                     ijt_log.info("Subscription client connected.")
                 except Exception as sub_err:
                     ijt_log.warning(
@@ -383,7 +401,8 @@ class Connection:
             )
 
             # Type definitions are already loaded during connect() for both
-            # self.client and self.subscription_client — no need to reload here.
+            # self.client and self.subscription_client through the IJT
+            # compatibility bridge — no need to reload here.
 
             event_type = data.get("eventtype", "").lower().strip()
 
