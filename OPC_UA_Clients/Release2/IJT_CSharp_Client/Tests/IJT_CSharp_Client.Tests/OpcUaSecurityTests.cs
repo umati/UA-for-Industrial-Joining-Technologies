@@ -15,7 +15,6 @@ namespace IJT_CSharp_Client.Tests;
 /// The runner selects the SUT with IJT_OPCUA_SECURITY_SUT=windows|linux and assigns the target port.
 /// </summary>
 [Collection("LiveServer")]
-[Trait("Category", "Live")]
 [Trait("Category", "OpcUaSecurity")]
 public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
 {
@@ -107,31 +106,38 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
         string caseName)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
-        Skip.If(
-            securityMode == MessageSecurityMode.Sign,
-            "Pending .NET SDK interop investigation: under MessageSecurityMode=Sign with " +
-            "UserName tokens, Opc.Ua.Client.Session.OpenAsync fails its post-activation " +
-            "FetchNamespaceTablesAsync/UpdateNamespaceTable validation against the IJT Server " +
-            "Simulator. The same SecurityAdmin credentials pass on the Python " +
-            "(asyncua) Console OPC UA security Windows target end-to-end on the same server, confirming the " +
-            "server allows the read and the credentials are correct. Tracked in " +
-            "session plan.md as 'C# OPC UA Security NamespaceArray'.");
 
         var users = LoadUsers();
         using var scope = OpcUaSecurityTempScope.Create($"UserName_HappyPath_{caseName}");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await using var session = await ConnectWithServerAutoTrustRetryAsync(
-            BuildConfig(
-                scope,
-                securityPolicyUri,
-                securityMode,
-                UserIdentityKind.UserName,
-                users.Positive.UserName,
-                users.Positive.Password),
-            cts.Token).ConfigureAwait(false);
+        var config = BuildConfig(
+            scope,
+            securityPolicyUri,
+            securityMode,
+            UserIdentityKind.UserName,
+            users.Positive.UserName,
+            users.Positive.Password);
 
-        AssertEndpoint(session, securityPolicyUri, securityMode);
-        await AssertBenignFlowAsync(session, cts.Token).ConfigureAwait(false);
+        JoiningSystem? connected = null;
+        try
+        {
+            connected = await ConnectWithServerAutoTrustRetryAsync(config, cts.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsPendingNamespaceArrayInterop(ex, config, out var diag))
+        {
+            // Evidence-collecting conditional skip: when the underlying .NET SDK / Matrikon Flex
+            // NamespaceArray interop is fixed (server-side rebuild or SDK upgrade), the connect
+            // will succeed and this test will run end-to-end automatically. Until then we surface
+            // the FULL live StatusCode chain in the skip reason so every CI run produces evidence.
+            Skip.If(true, diag);
+        }
+
+        Assert.NotNull(connected);
+        await using (connected)
+        {
+            AssertEndpoint(connected, securityPolicyUri, securityMode);
+            await AssertBenignFlowAsync(connected, cts.Token).ConfigureAwait(false);
+        }
     }
 
     [SkippableTheory]
@@ -214,28 +220,32 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
         Skip.If(
             string.IsNullOrWhiteSpace(_fixture.KnownX509UserCertificatePfxPath),
             "Known X509 user certificate was not provisioned by the fixture.");
-        Skip.If(
-            true,
-            "Pending .NET SDK interop investigation: under any signed channel (Sign or " +
-            "SignAndEncrypt), Opc.Ua.Client.Session.OpenAsync with an X509 user token fails " +
-            "its post-activation FetchNamespaceTablesAsync/UpdateNamespaceTable validation " +
-            "against the IJT Server Simulator. The X509 user token policy itself " +
-            "is advertised correctly (verified by " +
-            "X509IdentityToken_CertificateUserTokenPolicy_UsesEndpointSecurityPolicy) and the " +
-            "session activation succeeds. Tracked in session plan.md as 'C# OPC UA Security NamespaceArray'.");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await using var session = await ConnectWithServerAutoTrustRetryAsync(
-            BuildConfig(
-                scope,
-                securityPolicyUri,
-                securityMode,
-                UserIdentityKind.X509,
-                x509CertificatePath: _fixture.KnownX509UserCertificatePfxPath),
-            cts.Token).ConfigureAwait(false);
+        var config = BuildConfig(
+            scope,
+            securityPolicyUri,
+            securityMode,
+            UserIdentityKind.X509,
+            x509CertificatePath: _fixture.KnownX509UserCertificatePfxPath);
 
-        AssertEndpoint(session, securityPolicyUri, securityMode);
-        await AssertBenignFlowAsync(session, cts.Token).ConfigureAwait(false);
+        JoiningSystem? connected = null;
+        try
+        {
+            connected = await ConnectWithServerAutoTrustRetryAsync(config, cts.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsPendingNamespaceArrayInterop(ex, config, out var diag))
+        {
+            // Evidence-collecting conditional skip (see UserName_HappyPath for rationale).
+            Skip.If(true, diag);
+        }
+
+        Assert.NotNull(connected);
+        await using (connected)
+        {
+            AssertEndpoint(connected, securityPolicyUri, securityMode);
+            await AssertBenignFlowAsync(connected, cts.Token).ConfigureAwait(false);
+        }
     }
 
     [SkippableFact]
@@ -453,6 +463,87 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
             return aggregate.Flatten().InnerExceptions.Select(FindServiceResultException).FirstOrDefault(found => found is not null);
 
         return ex.InnerException is null ? null : FindServiceResultException(ex.InnerException);
+    }
+
+    /// <summary>
+    /// Whitelists the exact (UserIdentityKind × MessageSecurityMode) cells that the documented
+    /// .NET SDK / Matrikon Flex NamespaceArray interop gap is known to affect against the IJT
+    /// Server Simulator. Any other cell that throws a NamespaceArray-shaped exception must be
+    /// treated as a regression and fail the test, not be silently skipped.
+    /// </summary>
+    private static bool IsKnownPendingNamespaceArrayInteropCell(ClientConfig config)
+        => config.UserIdentityKind switch
+        {
+            UserIdentityKind.UserName => config.MessageSecurityMode == MessageSecurityMode.Sign,
+            UserIdentityKind.X509 => config.MessageSecurityMode is MessageSecurityMode.Sign or MessageSecurityMode.SignAndEncrypt,
+            _ => false,
+        };
+
+    /// <summary>
+    /// Detects the documented post-activation NamespaceArray validation failure produced by
+    /// <c>Opc.Ua.Client.Session.UpdateNamespaceTable</c> when the .NET SDK reads
+    /// <c>i=2255 (Server_NamespaceArray)</c> against the IJT Server Simulator under a signed
+    /// channel with a non-anonymous user identity. When matched on a known-pending cell, fills
+    /// <paramref name="diag"/> with a full live evidence string (StatusCode chain, security
+    /// policy, mode, identity kind, target) so callers can use it as a Skip reason that
+    /// surfaces concrete data on every CI run. Returns <c>false</c> for any other failure or
+    /// for cells outside the known-pending whitelist so genuine regressions surface as test
+    /// failures rather than being silently skipped.
+    /// </summary>
+    private static bool IsPendingNamespaceArrayInterop(Exception ex, ClientConfig config, out string diag)
+    {
+        diag = string.Empty;
+
+        if (!IsKnownPendingNamespaceArrayInteropCell(config))
+            return false;
+
+        var serviceResult = FindServiceResultException(ex);
+        if (serviceResult is null)
+            return false;
+
+        var message = serviceResult.Message ?? string.Empty;
+        var matchesNamespaceArray = message.IndexOf("NamespaceArray", StringComparison.Ordinal) >= 0
+            || message.IndexOf("Validation of returned value failed", StringComparison.Ordinal) >= 0;
+
+        if (!matchesNamespaceArray)
+            return false;
+
+        var lines = new List<string>
+        {
+            "Pending .NET SDK / Matrikon Flex NamespaceArray interop investigation (live evidence).",
+            $"Target: {OpcUaSecurityTargetName()}",
+            $"ServerUrl: {config.ServerUrl}",
+            $"SecurityPolicy: {FormatSecurityPolicy(config.SecurityPolicyUri)}",
+            $"MessageSecurityMode: {config.MessageSecurityMode}",
+            $"UserIdentityKind: {config.UserIdentityKind}",
+            $"TopLevelStatus: {FormatStatusCode(serviceResult.StatusCode)}",
+            $"TopLevelMessage: {message}",
+        };
+
+        var inner = serviceResult.Result;
+        var depth = 0;
+        while (inner is not null && depth < 8)
+        {
+            lines.Add($"InnerResult[{depth}]: {FormatStatusCode(inner.StatusCode.Code)} | {inner.SymbolicId} | {inner.AdditionalInfo}");
+            inner = inner.InnerResult;
+            depth++;
+        }
+
+        lines.Add($"ExceptionTypeChain: {string.Join(" -> ", FlattenExceptionTypes(ex))}");
+        diag = string.Join(Environment.NewLine, lines);
+        return true;
+    }
+
+    private static IEnumerable<string> FlattenExceptionTypes(Exception ex)
+    {
+        var current = ex;
+        var depth = 0;
+        while (current is not null && depth < 8)
+        {
+            yield return current.GetType().Name;
+            current = current.InnerException;
+            depth++;
+        }
     }
 
     private static string OpcUaSecurityTargetName()

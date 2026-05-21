@@ -113,6 +113,47 @@ def _dotnet_available() -> bool:
     return shutil.which("dotnet") is not None
 
 
+# ---------------------------------------------------------------------------
+# Per-target MSBuild output isolation (parallel matrix runs)
+# ---------------------------------------------------------------------------
+#
+# When the IJT root runner launches both csharp-client-opcua-security-windows
+# and csharp-client-opcua-security-linux concurrently in Phase 2, both
+# invocations build the same csproj. Without isolation, MSBuild writes to a
+# shared bin/Release/net10.0/ and obj/Release/... and races on files like
+# IJT_CSharp_Client.Tests.deps.json (MSB4018: GenerateDepsFile — file in use).
+#
+# The fix is per-target output directories rooted at tmp/dotnet/<target>/,
+# plumbed identically through `dotnet restore`, `dotnet build`, and
+# `dotnet test`. trx output is also routed under a per-target results
+# subdirectory so concurrent runs don't overwrite each other's reports.
+def _opcua_security_msbuild_props(target: str | None) -> list[str]:
+    """Return MSBuild -p:BaseOutputPath / -p:BaseIntermediateOutputPath args.
+
+    Returns an empty list when no target is provided (preserves legacy
+    behavior for Phase 1 / Phase 2 paths that share the default bin/obj).
+    """
+    if not target:
+        return []
+    base = _PROJECT_DIR / "tmp" / "dotnet" / target
+    bin_dir = str(base / "bin") + os.sep
+    obj_dir = str(base / "obj") + os.sep
+    base.mkdir(parents=True, exist_ok=True)
+    return [
+        f"-p:BaseOutputPath={bin_dir}",
+        f"-p:BaseIntermediateOutputPath={obj_dir}",
+    ]
+
+
+def _opcua_security_results_dir(target: str | None) -> Path:
+    """Per-target results directory; falls back to the shared dir if no target."""
+    if not target:
+        return _RESULTS_DIR
+    sub = _RESULTS_DIR / "opcua-security" / target
+    sub.mkdir(parents=True, exist_ok=True)
+    return sub
+
+
 def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
     """Fast preflight: return True only if a verified HTTPS connection to host succeeds.
 
@@ -386,13 +427,14 @@ def _check_prerequisites() -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _step_restore() -> StepResult:
+def _step_restore(target: str | None = None) -> StepResult:
     label = "dotnet restore"
     t0 = time.monotonic()
     lock_files = list(_PROJECT_DIR.rglob("packages.lock.json"))
     cmd = ["dotnet", "restore", str(_TEST_PROJ)]
     if lock_files:
         cmd.append("--locked-mode")
+    cmd.extend(_opcua_security_msbuild_props(target))
     rc, _ = _run(cmd)
     dur = time.monotonic() - t0
     if rc != 0:
@@ -425,7 +467,7 @@ def _step_build() -> StepResult:
     return StepResult(label, "PHASE 1", "PASS", detail, dur)
 
 
-def _step_build_test_project(phase: str = "MATRIX") -> StepResult:
+def _step_build_test_project(phase: str = "MATRIX", target: str | None = None) -> StepResult:
     label = "dotnet build (tests)"
     t0 = time.monotonic()
     rc, stdout = _run(
@@ -436,6 +478,7 @@ def _step_build_test_project(phase: str = "MATRIX") -> StepResult:
             "--no-restore",
             "--configuration",
             "Release",
+            *_opcua_security_msbuild_props(target),
         ],
         capture_stdout=True,
     )
@@ -737,8 +780,8 @@ def _step_opcua_security_tests(
     verbose: bool = False,
 ) -> StepResult:
     label = f"OPC UA Security {target} ({sut})"
-    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    trx_path = _RESULTS_DIR / "opcua-security.trx"
+    results_dir = _opcua_security_results_dir(target)
+    trx_path = results_dir / "opcua-security.trx"
     server_url = f"opc.tcp://localhost:{port}"
     t0 = time.monotonic()
     verbosity = ["--verbosity", "normal"] if verbose else ["--verbosity", "minimal"]
@@ -752,6 +795,7 @@ def _step_opcua_security_tests(
             "--configuration",
             "Release",
             *verbosity,
+            *_opcua_security_msbuild_props(target),
             "--filter",
             _OPCUA_SECURITY_TEST_FILTER,
             "--logger",
@@ -759,7 +803,7 @@ def _step_opcua_security_tests(
             "--logger",
             "console;verbosity=normal",
             "--results-directory",
-            str(_RESULTS_DIR),
+            str(results_dir),
             "--blame-hang",
             "--blame-hang-timeout",
             "120s",
@@ -919,7 +963,11 @@ def main() -> int:
     if not _check_prerequisites():
         return 1
 
-    if not preserve_artifacts:
+    # In matrix (--opcua-security) mode the shared _RESULTS_DIR is populated by
+    # both targets running concurrently; wiping it would clobber a sibling
+    # target's just-written report. Per-target subdirectories are wiped below
+    # once the target is resolved.
+    if not preserve_artifacts and not args.opcua_security:
         shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -927,6 +975,9 @@ def main() -> int:
     t_start = time.monotonic()
 
     skip_restore = os.environ.get("SKIP_DOTNET_RESTORE", "0").strip() in {"1", "true", "yes"}
+
+    # Default junit path; overridden below for matrix mode.
+    junit_xml_path = _PROJECT_DIR / args.junit_xml
 
     # -- OPC UA security ------------------------------------------------------
     if run_opcua_security:
@@ -936,21 +987,36 @@ def main() -> int:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1
 
+        # Per-target junit XML so concurrent matrix runs don't race on the
+        # same default path (test-results/run_all_tests.xml).
+        if args.junit_xml == "test-results/run_all_tests.xml":
+            junit_xml_path = (
+                _PROJECT_DIR / "test-results" / "opcua-security" / target / "run_all_tests.xml"
+            )
+        else:
+            junit_xml_path = _PROJECT_DIR / args.junit_xml
+        junit_xml_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Per-target results subdir wipe (safe — only this target writes here).
+        if not preserve_artifacts:
+            target_results_dir = _RESULTS_DIR / "opcua-security" / target
+            shutil.rmtree(target_results_dir, ignore_errors=True)
+
         if not skip_restore:
-            r = _step_restore()
+            r = _step_restore(target=target)
             results.append(r)
             _row(r.phase, r.label, r.status, r.detail)
             if r.status == "FAIL":
                 _footer(False, time.monotonic() - t_start, results)
-                _write_junit_xml(_PROJECT_DIR / args.junit_xml, results)
+                _write_junit_xml(junit_xml_path, results)
                 return 1
 
-        r = _step_build_test_project()
+        r = _step_build_test_project(target=target)
         results.append(r)
         _row(r.phase, r.label, r.status, r.detail)
         if r.status == "FAIL":
             _footer(False, time.monotonic() - t_start, results)
-            _write_junit_xml(_PROJECT_DIR / args.junit_xml, results)
+            _write_junit_xml(junit_xml_path, results)
             return 1
 
         r = _step_opcua_security_tests(target, sut, port, verbose=args.verbose)
@@ -965,7 +1031,7 @@ def main() -> int:
             _row(r.phase, r.label, r.status, r.detail)
             if r.status == "FAIL":
                 _footer(False, time.monotonic() - t_start, results)
-                _write_junit_xml(_PROJECT_DIR / args.junit_xml, results)
+                _write_junit_xml(junit_xml_path, results)
                 return 1
 
         r = _step_build()
@@ -973,7 +1039,7 @@ def main() -> int:
         _row(r.phase, r.label, r.status, r.detail)
         if r.status == "FAIL":
             _footer(False, time.monotonic() - t_start, results)
-            _write_junit_xml(_PROJECT_DIR / args.junit_xml, results)
+            _write_junit_xml(junit_xml_path, results)
             return 1
 
         r = _step_format()
@@ -1079,7 +1145,7 @@ def main() -> int:
     any_fail = any(r.status in {"FAIL", "ERROR"} for r in results)
     _footer(not any_fail, elapsed, results)
 
-    _write_junit_xml(_PROJECT_DIR / args.junit_xml, results)
+    _write_junit_xml(junit_xml_path, results)
 
     if not preserve_artifacts:
         _cleanup_caches(_PROJECT_DIR, include_build_artifacts=clean_build_artifacts)

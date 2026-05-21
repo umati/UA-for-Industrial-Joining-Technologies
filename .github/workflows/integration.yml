@@ -915,6 +915,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path test-results | Out-Null
           python -m pytest tests/live/ `
             -v --tb=short --timeout=120 `
+            -m "not opcua_security" `
             --junitxml=test-results/pytest-live.xml
 
       - name: Upload Console Client results

@@ -556,12 +556,37 @@ def _ensure_precommit_hooks() -> None:
     )
 
 
+_STALE_PYTEST_TMP_CUTOFF_SECONDS = 6 * 60 * 60  # 6h: longer than any IJT suite
+
+
 def _prepare_tmp_dir() -> None:
-    """Reset runner-managed tmp workspace and recreate tmp/pytest/."""
+    """Reset runner-managed tmp workspace.
+
+    Multiple IJT_Web_Client runner processes can run concurrently under the
+    IJT root runner's Phase 2 (e.g. web-client-static and web-client-e2e in
+    parallel), and each pytest process owns its own basetemp at
+    ``tmp/pytest_session_<pid>/`` (see ``tests/conftest.py::pytest_configure``).
+    That means another runner / pytest process may legitimately be using a
+    ``pytest_session_*`` or ``pytest_auto_*`` directory at this very moment,
+    so this function MUST NOT delete those unconditionally.
+
+    Cleanup rules:
+
+    * Tool caches and per-runner ``server_instance_*`` dirs: always safe to
+      remove (this runner owns them for the duration of its own run).
+    * ``pytest_session_*`` / ``pytest_auto_*``: only remove if older than
+      ``_STALE_PYTEST_TMP_CUTOFF_SECONDS`` (leftover from interrupted runs).
+      Live siblings keep their basetemps untouched. Same age-gated rule used
+      by ``tests/conftest.py::_sessionfinish_cleanup``.
+    * Legacy ``pytest`` / ``pytest_tmp`` shared names: removed unconditionally
+      because the new ``pytest_configure`` no longer creates them, so any
+      survivor is leftover from a pre-fix run with no live writer.
+    """
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
+    now = time.time()
     for child in _TMP_DIR.iterdir():
         name = child.name
-        managed = name in {
+        always_safe = name in {
             "pytest",
             "pytest_tmp",
             "pip-audit-cache",
@@ -569,15 +594,22 @@ def _prepare_tmp_dir() -> None:
             "npm-cache",
             "ruff-cache",
         } or name.startswith("server_instance_")
-        if not managed:
+        age_gated = name.startswith("pytest_session_") or name.startswith("pytest_auto_")
+        if not (always_safe or age_gated):
             continue
+        if age_gated:
+            try:
+                mtime = child.stat().st_mtime
+            except OSError:
+                continue
+            if (now - mtime) < _STALE_PYTEST_TMP_CUTOFF_SECONDS:
+                # Likely owned by a concurrent live pytest process — leave it.
+                continue
         with contextlib.suppress(OSError):
             if child.is_dir():
                 _force_rmtree(child)
             else:
                 child.unlink(missing_ok=True)
-    pytest_tmp = _TMP_DIR / "pytest"
-    pytest_tmp.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------

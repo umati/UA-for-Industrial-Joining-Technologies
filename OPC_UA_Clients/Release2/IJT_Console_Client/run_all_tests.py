@@ -1150,10 +1150,16 @@ def _step_live_tests(_junit_xml: str | None, verbose: bool = False) -> _StepResu
 
     if _TESTS_LIVE.exists():
         test_target: list[str] = [str(_TESTS_LIVE)]
-        extra_args: list[str] = []
+        # OPC UA Security tests live alongside other live tests but require
+        # provisioned client/user certificates and therefore have a dedicated
+        # `--opcua-security` runner step plus the `console-client-opcua-security`
+        # CI suite. Exclude them here so the conformance live run never
+        # contributes skipped-test noise just because security env vars are
+        # absent. The dedicated step runs them separately with the right setup.
+        extra_args: list[str] = ["-m", "not opcua_security"]
     elif _TESTS_DIR.exists():
         test_target = [str(_TESTS_DIR)]
-        extra_args = ["-m", "live"]
+        extra_args = ["-m", "live and not opcua_security"]
     else:
         result.skipped = True
         result.note = "no live tests found"

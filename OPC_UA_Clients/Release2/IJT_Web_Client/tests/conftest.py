@@ -14,38 +14,42 @@ def pytest_configure(config):
     """Ensure tests/fixtures/ exists for tests that materialize JSON fixtures."""
     _project_root = Path(__file__).resolve().parent.parent
     _project_root.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
-    # Default to repo-local basetemp (stable in this environment). Set
+    # Default to a process-unique basetemp under tmp/ (stable in this environment).
+    # Each pytest process owns its own tmp/pytest_session_<pid>/, so parallel suites
+    # in IJT_Web_Client (or any other project run concurrently) cannot delete each
+    # other's basetemp during pytest_sessionfinish or pytest_configure. Set
     # IJT_USE_SYSTEM_BASETEMP=1 to opt out and let pytest use system temp.
     _use_system = os.environ.get("IJT_USE_SYSTEM_BASETEMP", "").lower() in {"1", "true", "yes"}
     if config.option.basetemp is None and not _use_system:
-        _basetemp_chosen = None
+        _basetemp_chosen: Path | None = None
         _pid = os.getpid()
         _tmp_root = _project_root / "tmp"
-        for _candidate in ("pytest", "pytest_tmp", f"pytest_session_{_pid}"):
-            _candidate_path = _tmp_root / _candidate
-            try:
-                if _candidate_path.exists():
-                    shutil.rmtree(_candidate_path)
-                _candidate_path.mkdir(parents=True)
-                _probe = _candidate_path / ".acl_probe"
-                _probe.write_text("ok")
-                _probe.unlink()
-                _ = list(_candidate_path.iterdir())
-                _basetemp_chosen = _candidate_path
-                break
-            except OSError:
-                continue
-        # All named candidates failed (e.g. ACL-locked by another user/process).
-        # Try an auto-named dir in tmp/ as a last resort before falling through
-        # to pytest's system-temp default.
+        # Process-unique candidate first. The legacy shared names ("pytest",
+        # "pytest_tmp") are intentionally NOT in this list — those races are
+        # exactly what the per-pid path eliminates.
+        _candidate = _tmp_root / f"pytest_session_{_pid}"
+        try:
+            if _candidate.exists():
+                # Same pid reused for a fresh session — safe to wipe our own dir.
+                shutil.rmtree(_candidate)
+            _candidate.mkdir(parents=True)
+            _probe = _candidate / ".acl_probe"
+            _probe.write_text("ok")
+            _probe.unlink()
+            _ = list(_candidate.iterdir())
+            _basetemp_chosen = _candidate
+        except OSError:
+            _basetemp_chosen = None
+        # If the named per-pid candidate failed (e.g. ACL-locked path), fall
+        # back to an auto-named dir under tmp/ before pytest's system temp.
         if _basetemp_chosen is None:
             with contextlib.suppress(OSError):
                 _tmp_root.mkdir(parents=True, exist_ok=True)
-                _auto = Path(tempfile.mkdtemp(dir=_tmp_root, prefix="pytest_auto_"))
+                _auto = Path(tempfile.mkdtemp(dir=_tmp_root, prefix=f"pytest_auto_{_pid}_"))
                 _basetemp_chosen = _auto
         if _basetemp_chosen is None:
             sys.stderr.write(
-                "\n[conftest] WARNING: all local tmp/ candidates are ACL-locked. "
+                "\n[conftest] WARNING: tmp/ is not writable for this process. "
                 "Falling back to system temp. Set IJT_USE_SYSTEM_BASETEMP=1 to silence this.\n"
             )
         if _basetemp_chosen is not None:
@@ -118,10 +122,19 @@ def _sessionfinish_cleanup(session: object) -> None:
             _active_basetemp = Path(_bt).resolve()
 
     # Remove tool caches and stale pytest basetemp from tmp/.
-    # Skips the active basetemp (pytest still holds handles on Windows).
+    # Critical: only delete OUR own basetemp's siblings if they're clearly stale
+    # (older than the cutoff) — never blindly remove pytest_session_*  dirs since
+    # they may belong to another live pytest process running in parallel.
     _tmp_root = _project_root / "tmp"
     if _tmp_root.exists():
-        _managed = {"pytest", "pytest_tmp", "ruff-cache", "mypy-cache", "pip-audit-cache"}
+        _managed_tool_caches = {"ruff-cache", "mypy-cache", "pip-audit-cache"}
+        # 6 h is a safe staleness cutoff: longer than any legitimate IJT suite
+        # (longest is web-client-e2e-regression at ~5 min) and short enough that
+        # interrupted runs from earlier in the day still get cleaned.
+        _stale_cutoff_seconds = 6 * 60 * 60
+        import time as _time
+
+        _now = _time.time()
         for child in list(_tmp_root.iterdir()):
             try:
                 if _active_basetemp is not None and child.resolve() == _active_basetemp:
@@ -130,9 +143,24 @@ def _sessionfinish_cleanup(session: object) -> None:
                 # Cannot resolve path — skip pytest-named children conservatively
                 if child.name.startswith("pytest"):
                     continue
-            if child.name in _managed or child.name.startswith("pytest"):
+            # Tool caches: always safe to remove (no inter-process state).
+            if child.name in _managed_tool_caches:
                 shutil.rmtree(child, ignore_errors=True)
-        # Remove tmp/ itself if now empty (gitignored — safe to delete)
+                continue
+            # pytest_session_<pid>/ and pytest_auto_<pid>_*/ from OTHER processes:
+            # only delete if clearly stale. Otherwise leave them — another live
+            # pytest may still be writing to its tmp_path tree.
+            if child.name.startswith("pytest_session_") or child.name.startswith("pytest_auto_"):
+                try:
+                    if _now - child.stat().st_mtime > _stale_cutoff_seconds:
+                        shutil.rmtree(child, ignore_errors=True)
+                except OSError:
+                    continue
+                continue
+            # Legacy shared "pytest"/"pytest_tmp" names: leave them alone. New
+            # pytest_configure no longer creates these, so any survivor is from
+            # an older runner and will be cleaned by run_all_tests._prepare_tmp_dir.
+        # Remove tmp/ itself only if now empty (gitignored — safe to delete)
         with contextlib.suppress(OSError):
             _tmp_root.rmdir()
 

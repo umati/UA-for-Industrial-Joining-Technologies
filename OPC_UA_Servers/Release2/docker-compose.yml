@@ -16,7 +16,11 @@ services:
       context: .
       dockerfile: Dockerfile
     image: opcua-ijt-server:latest
-    container_name: opcua_ijt_server
+    # No container_name on purpose: hard-coding it serializes all parallel
+    # compose invocations on the host (e.g. csharp-client-opcua-security-linux
+    # racing against another suite). Compose auto-generates a per-project
+    # container name from COMPOSE_PROJECT_NAME, which is what the test
+    # fixtures already set, so each suite gets its own isolated container.
     ports:
       - "${OPCUA_SERVER_PORT:-40451}:${OPCUA_SERVER_PORT:-40451}"
     environment:

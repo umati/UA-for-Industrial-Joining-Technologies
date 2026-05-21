@@ -263,11 +263,32 @@ export class MethodsPage {
     return null
   }
 
-  /** Click the Call button for the first matching method area. */
-  async callMethod (nameOrAliases, { waitMs = 500 } = {}) {
+  /**
+   * Click the Call button for the first matching method area.
+   *
+   * Readiness model: by default this snapshots the current `.messages` list
+   * length before the click and then waits for at least one new message
+   * entry to appear after the click. This replaces the previous fixed
+   * `waitMs` sleep, which raced under parallel workers when the backend
+   * round-trip occasionally exceeded the sleep budget.
+   *
+   * Set `waitForMessage: false` for callers whose method does not produce
+   * a `.messages` entry; in that case (or as an extra settle on top of the
+   * readiness wait) `waitMs` is honoured.
+   */
+  async callMethod (nameOrAliases, { waitMs = 0, waitForMessage = true, messageTimeout = 30_000 } = {}) {
     const found = await this.findMethodArea(nameOrAliases)
     if (!found) throw new Error(`Method not found: ${JSON.stringify(nameOrAliases)}`)
+    const messages = this.page.locator(SEL.MESSAGE_ITEMS)
+    const beforeCount = waitForMessage ? await messages.count() : 0
     await found.area.locator(SEL.METHOD_CALL_BTN).first().click()
+    if (waitForMessage) {
+      await this.page.waitForFunction(
+        ([sel, min]) => document.querySelectorAll(sel).length >= min,
+        ['.messages li', beforeCount + 1],
+        { timeout: messageTimeout }
+      )
+    }
     if (waitMs > 0) await this.page.waitForTimeout(waitMs)
     return found.name
   }
@@ -286,14 +307,14 @@ export class MethodsPage {
 
   /** Simulate all four standard IJT simulation methods in sequence. */
   async runAllSimulations () {
-    await this.callMethod(['SimulateSingleResult'], { waitMs: 800 })
-    await this.callMethod(['SimulateJobResult'], { waitMs: 800 })
+    await this.callMethod(['SimulateSingleResult'])
+    await this.callMethod(['SimulateJobResult'])
     await this.callMethod([
       'Simulate_Batch_or_SYNC_Result',
       'SimulateBatch_Or_Sync_Result',
       'SimulateBatchOrSyncResult',
-    ], { waitMs: 800 })
-    await this.callMethod(['SimulateEvents', 'SimualteEvents'], { waitMs: 800 })
+    ])
+    await this.callMethod(['SimulateEvents', 'SimualteEvents'])
   }
 }
 
