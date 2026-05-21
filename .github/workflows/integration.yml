@@ -1343,7 +1343,7 @@ jobs:
 
       - name: "Report — C# OPC UA Security"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
-        if: always()
+        if: always() && needs.csharp-client-opcua-security.result != 'skipped' && needs.csharp-client-opcua-security.result != 'cancelled'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
           name: "C# Client — OPC UA Security"
@@ -1355,7 +1355,7 @@ jobs:
 
       - name: "Report — Console OPC UA Security"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
-        if: always()
+        if: always() && needs.console-client-opcua-security.result != 'skipped' && needs.console-client-opcua-security.result != 'cancelled'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
           name: "Console Client — OPC UA Security"

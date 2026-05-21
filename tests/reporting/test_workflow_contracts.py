@@ -227,6 +227,23 @@ def test_integration_dorny_actions_keep_check_runs_but_suppress_step_summaries()
     assert all(step["with"]["use-actions-summary"] is False for step in dorny_steps)
 
 
+def test_integration_security_reporters_only_run_when_security_matrices_run() -> None:
+    csharp_step = _report_step("integration.yml", "Report — C# OPC UA Security")
+    console_step = _report_step("integration.yml", "Report — Console OPC UA Security")
+
+    csharp_expected = (
+        "always() && needs.csharp-client-opcua-security.result != 'skipped' "
+        "&& needs.csharp-client-opcua-security.result != 'cancelled'"
+    )
+    console_expected = (
+        "always() && needs.console-client-opcua-security.result != 'skipped' "
+        "&& needs.console-client-opcua-security.result != 'cancelled'"
+    )
+
+    assert csharp_step["if"] == csharp_expected
+    assert console_step["if"] == console_expected
+
+
 def test_integration_docker_jobs_suppress_build_summary_noise() -> None:
     workflow = _workflow("integration.yml")
     build_action = "docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f"

@@ -858,6 +858,39 @@ def test_opcua_security_suites_delegate_to_sub_runners(monkeypatch) -> None:
     assert all(call["timeout"] == 1200 for call in calls)
 
 
+def test_csharp_client_and_generated_types_share_default_opc_foundation_version() -> None:
+    client_project = (
+        _runner.REPO_ROOT
+        / "OPC_UA_Clients"
+        / "Release2"
+        / "IJT_CSharp_Client"
+        / "IJT_CSharp_Client.csproj"
+    )
+    types_props = (
+        _runner.REPO_ROOT
+        / "OPC_UA_Clients"
+        / "Release2"
+        / "IJT_CSharp_Client"
+        / "Types"
+        / "Directory.Build.props"
+    )
+
+    client_root = ET.parse(client_project).getroot()
+    types_root = ET.parse(types_props).getroot()
+    client_version = next(
+        ref.attrib["Version"]
+        for ref in client_root.iter("PackageReference")
+        if ref.attrib.get("Include") == "OPCFoundation.NetStandard.Opc.Ua"
+    )
+    default_types_version = next(
+        prop.text
+        for prop in types_root.iter("OpcFoundationVersion")
+        if prop.attrib.get("Condition") == "'$(OpcUaClientOnly)' != 'true'"
+    )
+
+    assert default_types_version == client_version
+
+
 def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
     calls: list[dict] = []
 
