@@ -120,6 +120,9 @@ python run_all_tests.py
 # Phase 1 only (restore/build/format/CVE/unit+coverage)
 python run_all_tests.py --phase1
 
+# OPC UA Security MSBuild output-isolation contract (no server required)
+python run_all_tests.py --opcua-security-build-contract
+
 # Phase 2 live tests only
 python run_all_tests.py --phase2
 
@@ -426,8 +429,9 @@ For the full port assignment table, auto-launch mechanics, and venv rationale, s
 - `packages.lock.json` files are committed in git for deterministic restore.
 - Tool-generated lockfiles are excluded from pre-commit text-hygiene auto-fixers (`end-of-file-fixer`, `trailing-whitespace`, `mixed-line-ending`) because package managers own lockfile formatting; JSON syntax validation still applies to JSON lockfiles.
 - `run_all_tests.py` uses locked-mode restore automatically when `packages.lock.json` files are present.
+- `run_all_tests.py --opcua-security-build-contract` runs the OPC UA Security build contract explicitly. It restores and builds the real C# test project graph with `UseArtifactsOutput=true` and a per-target `ArtifactsPath`, then verifies key ProjectReference outputs under `obj/opcua-security-artifacts/csharp-client-opcua-security-build-contract/{bin,obj}/<ProjectName>/`. The artifacts root must stay under `obj/` or outside the C# project tree so generated SDK `.cs` files cannot leak into later classic `dotnet build` Compile globs. This catches unsafe MSBuild output-isolation changes before any live OPC UA server starts.
 - CI restore uses locked mode against committed lock files.
-- `ci.yml` runs the full C# gate: locked restore → build → NuGet CVE scan → xUnit tests → format check.
+- `ci.yml` runs the full C# gate: locked restore → build → OPC UA Security build contract → NuGet CVE scan → xUnit tests → format check.
 
 ---
 

@@ -6,6 +6,7 @@ Usage:
     python run_all_tests.py              # full run (Phase 1 + Phase 2 if server reachable)
     python run_all_tests.py --phase1     # build + unit tests only (no server)
     python run_all_tests.py --phase2     # live integration tests only
+    python run_all_tests.py --opcua-security-build-contract
     python run_all_tests.py --opcua-security \
         --opcua-security-target csharp-client-opcua-security-windows
     python run_all_tests.py --help
@@ -69,6 +70,14 @@ _OPCUA_SECURITY_TARGETS = {
     "csharp-client-opcua-security-windows": ("windows", 40475),
     "csharp-client-opcua-security-linux": ("linux", 40476),
 }
+_OPCUA_SECURITY_BUILD_CONTRACT_TARGET = "csharp-client-opcua-security-build-contract"
+_OPCUA_SECURITY_BUILD_CONTRACT_PROJECTS = (
+    "IJT_CSharp_Client.Tests",
+    "IJT_CSharp_Client",
+    "UAModel.IJTTightening",
+    "UAModel.IJTBase",
+    "UAModel.MachineryResult",
+)
 _WELL_KNOWN_SIMULATOR_PATHS = [
     _REPO_ROOT
     / "OPC_UA_Servers"
@@ -123,25 +132,60 @@ def _dotnet_available() -> bool:
 # shared bin/Release/net10.0/ and obj/Release/... and races on files like
 # IJT_CSharp_Client.Tests.deps.json (MSB4018: GenerateDepsFile — file in use).
 #
-# The fix is per-target output directories rooted at tmp/dotnet/<target>/,
-# plumbed identically through `dotnet restore`, `dotnet build`, and
-# `dotnet test`. trx output is also routed under a per-target results
-# subdirectory so concurrent runs don't overwrite each other's reports.
+# Implementation: use the .NET SDK 8+ "artifacts output" layout via
+# UseArtifactsOutput=true plus an ArtifactsPath under the C# project's obj/
+# build-artifact tree. The artifacts layout writes every project (including
+# transitively walked ProjectReferences such as UAModel.IJTBase,
+# UAModel.MachineryResult and IJT_CSharp_Client) into its OWN subfolder of the
+# artifacts root:
+#
+#   obj/opcua-security-artifacts/<target>/bin/<ProjectName>/<pivot>/
+#   obj/opcua-security-artifacts/<target>/obj/<ProjectName>/<pivot>/
+#
+# This is the Microsoft-supported way to share an output root across multiple
+# projects without their project.assets.json / deps.json files clobbering each
+# other. The earlier BaseOutputPath / BaseIntermediateOutputPath approach
+# propagated as MSBuild global properties to every ProjectReference and made
+# all referenced projects share a single obj folder — the last restored
+# project's project.assets.json won, and subsequent builds failed with
+# CS0234 ('Opc.Ua.Client', 'UAModel.IJTBase', 'UAModel.MachineryResult'
+# missing). See run 26212631852 on 8ab8404b for the original symptom.
+#
+# Properties are passed only via the runner (not via Directory.Build.props),
+# so day-to-day developer builds and IDE workflows keep the classic bin/obj
+# layout; only the OPC UA Security CI path opts in. Keep the artifacts root
+# under obj/ (or outside _PROJECT_DIR if this ever moves): generated *.cs files
+# under a project-local tmp/ folder are picked up by SDK default Compile globs
+# during a later classic build.
+def _opcua_security_artifacts_dir(target: str) -> Path:
+    return _PROJECT_DIR / "obj" / "opcua-security-artifacts" / target
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _is_safe_opcua_security_artifacts_dir(path: Path) -> bool:
+    return _is_relative_to(path, _PROJECT_DIR / "obj") or not _is_relative_to(path, _PROJECT_DIR)
+
+
 def _opcua_security_msbuild_props(target: str | None) -> list[str]:
-    """Return MSBuild -p:BaseOutputPath / -p:BaseIntermediateOutputPath args.
+    """Return MSBuild artifacts-output args for per-target build isolation.
 
     Returns an empty list when no target is provided (preserves legacy
     behavior for Phase 1 / Phase 2 paths that share the default bin/obj).
     """
     if not target:
         return []
-    base = _PROJECT_DIR / "tmp" / "dotnet" / target
-    bin_dir = str(base / "bin") + os.sep
-    obj_dir = str(base / "obj") + os.sep
-    base.mkdir(parents=True, exist_ok=True)
+    artifacts = _opcua_security_artifacts_dir(target)
+    artifacts.mkdir(parents=True, exist_ok=True)
     return [
-        f"-p:BaseOutputPath={bin_dir}",
-        f"-p:BaseIntermediateOutputPath={obj_dir}",
+        "-p:UseArtifactsOutput=true",
+        f"-p:ArtifactsPath={artifacts}",
     ]
 
 
@@ -489,6 +533,87 @@ def _step_build_test_project(phase: str = "MATRIX", target: str | None = None) -
     detail = f"{warnings} warnings"
     if rc != 0:
         return StepResult(label, phase, "FAIL", detail, dur)
+    return StepResult(label, phase, "PASS", detail, dur)
+
+
+def _missing_opcua_security_contract_artifacts(artifacts: Path) -> list[str]:
+    missing: list[str] = []
+    for project in _OPCUA_SECURITY_BUILD_CONTRACT_PROJECTS:
+        obj_project_dir = artifacts / "obj" / project
+        bin_project_dir = artifacts / "bin" / project
+        if not obj_project_dir.exists() or not any(obj_project_dir.rglob("project.assets.json")):
+            missing.append(f"obj/{project}/project.assets.json")
+        if not bin_project_dir.exists() or not any(bin_project_dir.rglob(f"{project}.dll")):
+            missing.append(f"bin/{project}/{project}.dll")
+    return missing
+
+
+def _step_opcua_security_build_contract(phase: str = "PHASE 1") -> StepResult:
+    """Restore and build the real test graph with OPC UA Security artifacts props.
+
+    This catches regressions where output-isolation props are safe for one
+    project but break ProjectReference restore/build resolution.
+    """
+    label = "OPC UA Security build contract"
+    target = _OPCUA_SECURITY_BUILD_CONTRACT_TARGET
+    artifacts = _opcua_security_artifacts_dir(target)
+    t0 = time.monotonic()
+
+    if not _is_safe_opcua_security_artifacts_dir(artifacts):
+        return StepResult(
+            label,
+            phase,
+            "FAIL",
+            "ArtifactsPath must stay under obj/ or outside IJT_CSharp_Client "
+            "to avoid Compile glob leaks",
+            time.monotonic() - t0,
+        )
+
+    if not _preserve_test_artifacts():
+        shutil.rmtree(artifacts, ignore_errors=True)
+
+    lock_files = list(_PROJECT_DIR.rglob("packages.lock.json"))
+    restore_cmd = ["dotnet", "restore", str(_TEST_PROJ)]
+    if lock_files:
+        restore_cmd.append("--locked-mode")
+    restore_cmd.extend(_opcua_security_msbuild_props(target))
+
+    rc, _ = _run(restore_cmd)
+    if rc != 0:
+        return StepResult(label, phase, "FAIL", f"restore exit {rc}", time.monotonic() - t0)
+
+    rc, stdout = _run(
+        [
+            "dotnet",
+            "build",
+            str(_TEST_PROJ),
+            "--no-restore",
+            "--configuration",
+            "Release",
+            *_opcua_security_msbuild_props(target),
+        ],
+        capture_stdout=True,
+    )
+    if stdout:
+        print(stdout, end="")
+    dur = time.monotonic() - t0
+    warnings = _parse_build_warnings(stdout)
+    if rc != 0:
+        return StepResult(label, phase, "FAIL", f"build exit {rc}; {warnings} warnings", dur)
+
+    missing = _missing_opcua_security_contract_artifacts(artifacts)
+    if missing:
+        sample = ", ".join(missing[:4])
+        suffix = "" if len(missing) <= 4 else f", +{len(missing) - 4} more"
+        return StepResult(
+            label,
+            phase,
+            "FAIL",
+            f"missing isolated artifacts: {sample}{suffix}",
+            dur,
+        )
+
+    detail = f"{warnings} warnings; isolated artifacts verified"
     return StepResult(label, phase, "PASS", detail, dur)
 
 
@@ -879,6 +1004,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run one C# OPC UA security target",
     )
+    group.add_argument(
+        "--opcua-security-build-contract",
+        action="store_true",
+        help="Restore/build the C# test graph with OPC UA Security artifacts-output props",
+    )
     p.add_argument(
         "--opcua-security-target",
         choices=sorted(_OPCUA_SECURITY_TARGETS),
@@ -942,6 +1072,12 @@ def _resolve_opcua_security_target(args: argparse.Namespace) -> tuple[str, str, 
     return target, sut, port
 
 
+def _cleanup_legacy_project_dotnet_artifacts() -> None:
+    legacy = _PROJECT_DIR / "tmp" / "dotnet"
+    if legacy.exists():
+        _force_rmtree(legacy)
+
+
 def main() -> int:
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     args = _parse_args()
@@ -950,13 +1086,19 @@ def main() -> int:
     )
     preserve_artifacts = _preserve_test_artifacts()
     if not preserve_artifacts:
+        _cleanup_legacy_project_dotnet_artifacts()
         _cleanup_caches(
             _PROJECT_DIR, include_build_artifacts=clean_build_artifacts
         )  # pre-run: clear stale caches from interrupted runs
 
     run_opcua_security = args.opcua_security
-    run_phase1 = not args.phase2 and not run_opcua_security
-    run_phase2 = not args.phase1 and not run_opcua_security
+    run_opcua_security_build_contract = args.opcua_security_build_contract
+    run_phase1 = (
+        not args.phase2 and not run_opcua_security and not run_opcua_security_build_contract
+    )
+    run_phase2 = (
+        not args.phase1 and not run_opcua_security and not run_opcua_security_build_contract
+    )
 
     _banner("IJT C# Client — Test Suite")
 
@@ -978,6 +1120,12 @@ def main() -> int:
 
     # Default junit path; overridden below for matrix mode.
     junit_xml_path = _PROJECT_DIR / args.junit_xml
+
+    # -- OPC UA security build contract --------------------------------------
+    if run_opcua_security_build_contract:
+        r = _step_opcua_security_build_contract(phase="CONTRACT")
+        results.append(r)
+        _row(r.phase, r.label, r.status, r.detail)
 
     # -- OPC UA security ------------------------------------------------------
     if run_opcua_security:

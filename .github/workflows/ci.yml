@@ -581,6 +581,51 @@ jobs:
         continue-on-error: true
         run: dotnet build Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj --no-restore -warnaserror --configuration Release
 
+      - name: OPC UA Security build contract
+        id: opcua_security_build_contract
+        if: steps.build.outcome == 'success'
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+          $artifacts = Join-Path (Get-Location).Path "obj\opcua-security-artifacts\csharp-client-opcua-security-build-contract"
+          if (Test-Path $artifacts) {
+            Remove-Item -LiteralPath $artifacts -Recurse -Force
+          }
+
+          $props = @("-p:UseArtifactsOutput=true", "-p:ArtifactsPath=$artifacts")
+          $lockFiles = Get-ChildItem -Path . -Recurse -Filter "packages.lock.json" -File -ErrorAction SilentlyContinue
+          if ($lockFiles.Count -gt 0) {
+            dotnet restore $target --locked-mode @props
+          } else {
+            dotnet restore $target @props
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          dotnet build $target --no-restore --configuration Release @props
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $projects = @(
+            "IJT_CSharp_Client.Tests",
+            "IJT_CSharp_Client",
+            "UAModel.IJTTightening",
+            "UAModel.IJTBase",
+            "UAModel.MachineryResult"
+          )
+          foreach ($project in $projects) {
+            $objDir = Join-Path $artifacts "obj\$project"
+            $binDir = Join-Path $artifacts "bin\$project"
+            $assets = Get-ChildItem -Path $objDir -Recurse -Filter "project.assets.json" -ErrorAction SilentlyContinue | Select-Object -First 1
+            $dll = Get-ChildItem -Path $binDir -Recurse -Filter "$project.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $assets) {
+              throw "Missing isolated obj artifact for $project under $objDir"
+            }
+            if (-not $dll) {
+              throw "Missing isolated bin artifact for $project under $binDir"
+            }
+          }
+          Write-Host "OPC UA Security build contract verified isolated artifacts under $artifacts"
+
       - name: Run xUnit Unit Tests
         id: tests
         if: steps.build.outcome == 'success'
@@ -679,17 +724,20 @@ jobs:
       - name: Fail if Any Check Failed
         if: always() && (
           steps.build.outcome     == 'failure' ||
+          steps.opcua_security_build_contract.outcome == 'failure' ||
           steps.tests.outcome     == 'failure' ||
           steps.format.outcome    == 'failure')
         env:
-          BUILD_OUTCOME:     ${{ steps.build.outcome }}
-          TESTS_OUTCOME:     ${{ steps.tests.outcome }}
-          FORMAT_OUTCOME:    ${{ steps.format.outcome }}
+          BUILD_OUTCOME:                   ${{ steps.build.outcome }}
+          OPCUA_SECURITY_CONTRACT_OUTCOME: ${{ steps.opcua_security_build_contract.outcome }}
+          TESTS_OUTCOME:                   ${{ steps.tests.outcome }}
+          FORMAT_OUTCOME:                  ${{ steps.format.outcome }}
         run: |
           echo "One or more C# unit checks failed:"
-          echo "  build     -> $BUILD_OUTCOME"
-          echo "  tests     -> $TESTS_OUTCOME"
-          echo "  format    -> $FORMAT_OUTCOME"
+          echo "  build                    -> $BUILD_OUTCOME"
+          echo "  opcua security contract  -> $OPCUA_SECURITY_CONTRACT_OUTCOME"
+          echo "  tests                    -> $TESTS_OUTCOME"
+          echo "  format                   -> $FORMAT_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
