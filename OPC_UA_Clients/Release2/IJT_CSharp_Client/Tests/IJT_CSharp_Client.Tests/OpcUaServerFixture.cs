@@ -38,6 +38,9 @@ public sealed class OpcUaServerFixture : IDisposable
 {
     private const string DockerImageName = "opcua-ijt-server:latest";
     private const string LinuxSimulatorZipName = "OPC_UA_IJT_Server_Simulator_Linux.zip";
+    private const int DockerComposeCachedUpTimeoutMs = 30_000;
+    private const int DockerComposeBuildUpTimeoutMs = 300_000;
+    private const int DockerComposeOutputTailLimit = 80;
 
     private static readonly ILogger _log = IjtLog.ForCategory("IJT.Tests.ServerFixture");
     private static readonly int _port = ResolvePort();
@@ -564,8 +567,10 @@ public sealed class OpcUaServerFixture : IDisposable
 
             startInfo.ArgumentList.Add("up");
             startInfo.ArgumentList.Add("-d");
-            if (ShouldBuildDockerImage(dockerExe, composeDir))
+            var wantsBuild = ShouldBuildDockerImage(dockerExe, composeDir);
+            if (wantsBuild)
                 startInfo.ArgumentList.Add("--build");
+            var timeoutMs = DockerComposeUpTimeoutMs(wantsBuild);
 
             using var r = new Process
             {
@@ -576,16 +581,36 @@ public sealed class OpcUaServerFixture : IDisposable
             // OPCUA_SERVER_URL rather than being set via OPCUA_SERVER_PORT directly).
             r.StartInfo.Environment["OPCUA_SERVER_PORT"] = _port.ToString();
             r.StartInfo.Environment["COMPOSE_PROJECT_NAME"] = _dockerComposeProjectName;
+            var outputLines = new List<string>();
+            var outputLock = new object();
+            r.OutputDataReceived += (_, e) => AppendDockerComposeOutput(outputLines, outputLock, "stdout", e.Data);
+            r.ErrorDataReceived += (_, e) => AppendDockerComposeOutput(outputLines, outputLock, "stderr", e.Data);
             r.Start();
-            r.WaitForExit(30_000);
+            r.BeginOutputReadLine();
+            r.BeginErrorReadLine();
+            if (!r.WaitForExit(timeoutMs))
+            {
+                _log.LogWarning(
+                    "docker compose up timed out after {TimeoutMs}ms (build={Build}); killing process tree. Recent output:{Output}",
+                    timeoutMs,
+                    wantsBuild,
+                    DockerComposeOutputTail(outputLines, outputLock));
+                KillProcessTree(r);
+                return false;
+            }
+            r.WaitForExit();
             if (r.ExitCode == 0)
             {
                 _dockerStarted = true;
                 _dockerComposeDir = composeDir;
-                _log.LogInformation("Docker compose up succeeded.");
+                _log.LogInformation("Docker compose up succeeded (build={Build}).", wantsBuild);
                 return true;
             }
-            _log.LogWarning("docker compose up exited with code {Code}.", r.ExitCode);
+            _log.LogWarning(
+                "docker compose up exited with code {Code} (build={Build}). Recent output:{Output}",
+                r.ExitCode,
+                wantsBuild,
+                DockerComposeOutputTail(outputLines, outputLock));
             return false;
         }
         catch (Exception ex)
@@ -695,6 +720,58 @@ public sealed class OpcUaServerFixture : IDisposable
         }
 
         return DockerImageIsMissingOrOlderThanSimulatorZip(dockerExe, composeDir);
+    }
+
+    private static int DockerComposeUpTimeoutMs(bool wantsBuild)
+        => wantsBuild ? DockerComposeBuildUpTimeoutMs : DockerComposeCachedUpTimeoutMs;
+
+    private static void AppendDockerComposeOutput(
+        List<string> lines,
+        object syncRoot,
+        string stream,
+        string? line)
+    {
+        if (line is null)
+            return;
+
+        lock (syncRoot)
+        {
+            lines.Add($"{stream}: {line}");
+            if (lines.Count > DockerComposeOutputTailLimit)
+                lines.RemoveRange(0, lines.Count - DockerComposeOutputTailLimit);
+        }
+    }
+
+    private static string DockerComposeOutputTail(List<string> lines, object syncRoot)
+    {
+        lock (syncRoot)
+        {
+            return lines.Count == 0
+                ? " <no output captured>"
+                : Environment.NewLine + string.Join(Environment.NewLine, lines);
+        }
+    }
+
+    private static void KillProcessTree(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning("Could not kill timed-out docker compose process: {Message}", ex.Message);
+        }
+
+        try
+        {
+            process.WaitForExit(10_000);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning("Could not wait for timed-out docker compose process to exit: {Message}", ex.Message);
+        }
     }
 
     private static bool DockerImageIsMissingOrOlderThanSimulatorZip(string dockerExe, string composeDir)

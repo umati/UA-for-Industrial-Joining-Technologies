@@ -305,6 +305,18 @@ def test_opcua_security_docker_rebuilds_when_linux_zip_is_newer() -> None:
     assert 'inspect.StartInfo.ArgumentList.Add("inspect");' in csharp_fixture
     assert "File.GetLastWriteTimeUtc(zipPath) > imageCreatedUtc.Value.UtcDateTime" in csharp_fixture
 
+    # C# must scale compose launch timeout when freshness asks Docker to build.
+    # The previous 30s-only launch path timed out cold CI builds, ignored
+    # WaitForExit's bool return, then read ExitCode from a still-running process.
+    assert "DockerComposeCachedUpTimeoutMs = 30_000" in csharp_fixture
+    assert "DockerComposeBuildUpTimeoutMs = 300_000" in csharp_fixture
+    assert "var timeoutMs = DockerComposeUpTimeoutMs(wantsBuild);" in csharp_fixture
+    assert "if (!r.WaitForExit(timeoutMs))" in csharp_fixture
+    assert "KillProcessTree(r);" in csharp_fixture
+    assert "r.BeginOutputReadLine();" in csharp_fixture
+    assert "r.BeginErrorReadLine();" in csharp_fixture
+    assert "r.WaitForExit(30_000);\n            if (r.ExitCode == 0)" not in csharp_fixture
+
     # Console fixture delegates to the shared, dependency-free helper module
     # so this regression test never has to import cryptography / asyncua.
     assert "_should_build_docker_image(docker)" in console_fixture
