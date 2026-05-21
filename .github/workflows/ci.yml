@@ -13,7 +13,7 @@
 #   docker-smoke         Web Client Docker      Docker build + HTTP/WS readiness
 #   test-client          Test Client            pytest unit (tests/unit/) · Bandit · Ruff · mypy
 #   server-smoke-windows OPC UA Server          Windows native smoke (10 checks)
-#   csharp-unit          C# Client              dotnet build · xUnit (Category!=Live) · format
+#   csharp-unit          C# Client              dotnet build · xUnit (unit-only categories) · format
 #   csharp-vuln          C# Client              NuGet vulnerability scan
 #   actionlint           GHA workflow lint             actionlint (all .github/workflows/*.yml)
 #   zizmor               GHA security audit            zizmor → SARIF upload (skipped on fork PRs)
@@ -528,7 +528,7 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   # ───────────────────────────────────────────────────────────────────────────
   # C# Client - Unit Tests (no server required)
-  #   dotnet build + xUnit (Category!=Live) + format check
+  #   dotnet build + xUnit (excludes Live and OpcUaSecurity categories) + format check
   # ───────────────────────────────────────────────────────────────────────────
   csharp-unit:
     name: "C# Client - Unit Tests"
@@ -639,7 +639,7 @@ jobs:
             --no-build `
             --no-restore `
             --configuration Release `
-            --filter "Category!=Live" `
+            --filter "Category!=Live&Category!=OpcUaSecurity" `
             --logger "trx;LogFileName=tests.trx" `
             --logger "console;verbosity=normal" `
             --results-directory test-results `

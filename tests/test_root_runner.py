@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -2181,6 +2182,92 @@ def test_ci_report_steps_skip_missing_artifacts_for_skipped_jobs() -> None:
     assert "if: always() && needs.web-client-js.result != 'skipped'" in workflow
     assert "if: always() && needs.test-client.result != 'skipped'" in workflow
     assert "if: always() && needs.csharp-unit.result != 'skipped'" in workflow
+
+
+def test_csharp_phase1_filter_excludes_dedicated_live_and_security_suites() -> None:
+    module = _load_runner_at(
+        "OPC_UA_Clients/Release2/IJT_CSharp_Client/run_all_tests.py",
+        "ijt_csharp_runner_phase1_filter",
+    )
+
+    assert "FullyQualifiedName!~LiveIntegration" in module._PHASE1_TEST_FILTER
+    assert "Category!=Live" in module._PHASE1_TEST_FILTER
+    assert "Category!=OpcUaSecurity" in module._PHASE1_TEST_FILTER
+    assert module._OPCUA_SECURITY_TEST_FILTER == "Category=OpcUaSecurity"
+
+
+def test_csharp_junit_writer_expands_trx_skip_details(tmp_path) -> None:
+    module = _load_runner_at(
+        "OPC_UA_Clients/Release2/IJT_CSharp_Client/run_all_tests.py",
+        "ijt_csharp_runner_junit",
+    )
+    trx = tmp_path / "security.trx"
+    trx.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Results>
+    <UnitTestResult testName="IJT.Security.Passes"
+        duration="00:00:01.5000000" outcome="Passed" />
+    <UnitTestResult testName="IJT.Security.Skips"
+        duration="00:00:00.0000000" outcome="NotExecuted">
+      <Output>
+        <ErrorInfo>
+          <Message>server not reachable</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult testName="IJT.Security.Fails"
+        duration="00:00:00.1250000" outcome="Failed">
+      <Output>
+        <ErrorInfo>
+          <Message>boom</Message>
+          <StackTrace>stack line</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+</TestRun>
+""",
+        encoding="utf-8",
+    )
+    result = module.StepResult(
+        "OPC UA Security csharp-client-opcua-security-windows (windows)",
+        "MATRIX",
+        "FAIL",
+        "1/3, 1 skipped",
+        1.625,
+        1,
+        1,
+        1,
+        3,
+        trx,
+    )
+    output = tmp_path / "junit.xml"
+
+    module._write_junit_xml(output, [result])
+
+    root = ET.parse(output).getroot()
+    suite = root.find(".//testsuite")
+    assert suite is not None
+    assert suite.get("tests") == "3"
+    assert suite.get("failures") == "1"
+    assert suite.get("skipped") == "1"
+
+    cases = {tc.get("name"): tc for tc in root.findall(".//testcase")}
+    assert result.label not in cases
+    skipped = cases["IJT.Security.Skips"].find("skipped")
+    failure = cases["IJT.Security.Fails"].find("failure")
+    assert skipped is not None
+    assert skipped.get("message") == "server not reachable"
+    assert failure is not None
+    assert failure.get("message") == "boom"
+    assert failure.text == "stack line"
+
+    theory_name = (
+        "IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_WrongPassword_IsRejected"
+        '(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic256")'
+    )
+    assert module._trx_classname(theory_name) == "IJT_CSharp_Client.Tests.OpcUaSecurityTests"
 
 
 def test_csharp_phase2_live_tests_clear_phase1_only_flag(monkeypatch) -> None:

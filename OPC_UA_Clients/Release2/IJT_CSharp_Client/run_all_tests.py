@@ -57,9 +57,13 @@ _RESULTS_DIR = _PROJECT_DIR / "test-results"
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40451"
 _MIN_DOTNET_MAJOR = 10
 _COVERAGE_THRESHOLD = 95.0
-_PHASE1_TEST_FILTER = "FullyQualifiedName!~LiveIntegration"
+_PHASE1_TEST_FILTER = (
+    "(FullyQualifiedName!~LiveIntegration)&(Category!=Live)&(Category!=OpcUaSecurity)"
+)
 _PHASE2_TEST_FILTER = "FullyQualifiedName~LiveIntegration"
 _OPCUA_SECURITY_TEST_FILTER = "Category=OpcUaSecurity"
+_TRX_FAILURE_OUTCOMES = {"Error", "Failed"}
+_TRX_SKIPPED_OUTCOMES = {"NotExecuted", "NotRunnable", "Skipped"}
 
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
@@ -248,6 +252,17 @@ class StepResult:
     failed: int = 0
     skipped: int = 0
     total: int = 0
+    trx_path: Path | None = None
+
+
+@dataclass
+class TrxTestCase:
+    name: str
+    classname: str
+    outcome: str
+    duration: float = 0.0
+    message: str = ""
+    stack_trace: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -324,6 +339,11 @@ def _run(
 # ---------------------------------------------------------------------------
 
 
+def _xml_namespace(root: ET.Element) -> str:
+    ns_match = re.match(r"\{[^}]+\}", root.tag)
+    return ns_match.group(0) if ns_match else ""
+
+
 def _parse_trx(path: Path) -> tuple[int, int, int, int]:
     """Return (passed, failed, skipped, total) from a dotnet TRX file."""
     if not path.exists():
@@ -331,8 +351,7 @@ def _parse_trx(path: Path) -> tuple[int, int, int, int]:
     try:
         tree = ET.parse(str(path))
         root = tree.getroot()
-        ns_match = re.match(r"\{[^}]+\}", root.tag)
-        ns = ns_match.group(0) if ns_match else ""
+        ns = _xml_namespace(root)
         counters = root.find(f".//{ns}Counters")
         if counters is None:
             return 0, 0, 0, 0
@@ -344,6 +363,69 @@ def _parse_trx(path: Path) -> tuple[int, int, int, int]:
         return passed, failed, skipped, total
     except Exception:
         return 0, 0, 0, 0
+
+
+def _trx_duration_seconds(value: str) -> float:
+    match = re.fullmatch(
+        r"(?:(?P<days>\d+)\.)?(?P<hours>\d+):(?P<minutes>\d+):(?P<seconds>\d+(?:\.\d+)?)",
+        value or "",
+    )
+    if not match:
+        return 0.0
+    days = int(match.group("days") or "0")
+    hours = int(match.group("hours"))
+    minutes = int(match.group("minutes"))
+    seconds = float(match.group("seconds"))
+    return (((days * 24) + hours) * 60 + minutes) * 60 + seconds
+
+
+def _trx_result_text(
+    result: ET.Element,
+    ns: str,
+    element_name: str,
+    include_output_fallbacks: bool = False,
+) -> str:
+    paths = [f"./{ns}Output/{ns}ErrorInfo/{ns}{element_name}"]
+    if include_output_fallbacks:
+        paths.extend((f"./{ns}Output/{ns}StdErr", f"./{ns}Output/{ns}StdOut"))
+    for path in paths:
+        node = result.find(path)
+        if node is not None and node.text and node.text.strip():
+            return node.text.strip()
+    return ""
+
+
+def _trx_classname(test_name: str) -> str:
+    method_name = test_name.split("(", 1)[0]
+    if "." not in method_name:
+        return "IJT C# Client"
+    return method_name.rsplit(".", 1)[0]
+
+
+def _parse_trx_test_cases(path: Path) -> list[TrxTestCase]:
+    """Return per-test TRX outcomes for JUnit drill-down reporting."""
+    if not path.exists():
+        return []
+    try:
+        tree = ET.parse(str(path))
+        root = tree.getroot()
+        ns = _xml_namespace(root)
+        cases: list[TrxTestCase] = []
+        for result in root.findall(f".//{ns}UnitTestResult"):
+            name = result.get("testName") or "unknown"
+            cases.append(
+                TrxTestCase(
+                    name=name,
+                    classname=_trx_classname(name),
+                    outcome=result.get("outcome") or "Unknown",
+                    duration=_trx_duration_seconds(result.get("duration") or ""),
+                    message=_trx_result_text(result, ns, "Message", True),
+                    stack_trace=_trx_result_text(result, ns, "StackTrace"),
+                )
+            )
+        return cases
+    except Exception:
+        return []
 
 
 def _parse_build_warnings(stdout: str) -> int:
@@ -417,6 +499,37 @@ def _write_junit_xml(path: Path, results: list[StepResult]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     suites = ET.Element("testsuites", name="IJT C# Client")
     for r in results:
+        trx_cases = _parse_trx_test_cases(r.trx_path) if r.trx_path else []
+        if trx_cases:
+            failures = sum(1 for case in trx_cases if case.outcome in _TRX_FAILURE_OUTCOMES)
+            skipped = sum(1 for case in trx_cases if case.outcome in _TRX_SKIPPED_OUTCOMES)
+            suite = ET.SubElement(
+                suites,
+                "testsuite",
+                name=r.label,
+                tests=str(len(trx_cases)),
+                failures=str(failures),
+                skipped=str(skipped),
+                time=f"{r.duration:.3f}",
+            )
+            for case in trx_cases:
+                tc = ET.SubElement(
+                    suite,
+                    "testcase",
+                    classname=case.classname,
+                    name=case.name,
+                    time=f"{case.duration:.3f}",
+                )
+                if case.outcome in _TRX_FAILURE_OUTCOMES:
+                    failure = ET.SubElement(tc, "failure", message=case.message)
+                    if case.stack_trace:
+                        failure.text = case.stack_trace
+                elif case.outcome in _TRX_SKIPPED_OUTCOMES:
+                    skipped_el = ET.SubElement(tc, "skipped")
+                    if case.message:
+                        skipped_el.set("message", case.message)
+            continue
+
         suite = ET.SubElement(
             suites,
             "testsuite",
@@ -722,8 +835,12 @@ def _step_test_unit(verbose: bool = False) -> StepResult:
     passed, failed, skipped, total = _parse_trx(trx_path)
     detail = f"{passed}/{total}, {skipped} skipped" if skipped else f"{passed}/{total}"
     if rc != 0 or failed > 0:
-        return StepResult(label, "PHASE 1", "FAIL", detail, dur, passed, failed, skipped, total)
-    return StepResult(label, "PHASE 1", "PASS", detail, dur, passed, failed, skipped, total)
+        return StepResult(
+            label, "PHASE 1", "FAIL", detail, dur, passed, failed, skipped, total, trx_path
+        )
+    return StepResult(
+        label, "PHASE 1", "PASS", detail, dur, passed, failed, skipped, total, trx_path
+    )
 
 
 def _step_coverage_check() -> StepResult:
@@ -894,8 +1011,12 @@ def _step_live_tests(server_url: str, verbose: bool = False) -> StepResult:
     passed, failed, skipped, total = _parse_trx(trx_path)
     detail = f"{passed}/{total}" if not skipped else f"{passed}/{total}, {skipped} skipped"
     if rc != 0 or failed > 0:
-        return StepResult(label, "PHASE 2", "FAIL", detail, dur, passed, failed, skipped, total)
-    return StepResult(label, "PHASE 2", "PASS", detail, dur, passed, failed, skipped, total)
+        return StepResult(
+            label, "PHASE 2", "FAIL", detail, dur, passed, failed, skipped, total, trx_path
+        )
+    return StepResult(
+        label, "PHASE 2", "PASS", detail, dur, passed, failed, skipped, total, trx_path
+    )
 
 
 def _step_opcua_security_tests(
@@ -950,7 +1071,9 @@ def _step_opcua_security_tests(
     passed, failed, skipped, total = _parse_trx(trx_path)
     detail = f"{passed}/{total}" if not skipped else f"{passed}/{total}, {skipped} skipped"
     if rc != 0 or failed > 0:
-        return StepResult(label, "MATRIX", "FAIL", detail, dur, passed, failed, skipped, total)
+        return StepResult(
+            label, "MATRIX", "FAIL", detail, dur, passed, failed, skipped, total, trx_path
+        )
     if passed == 0:
         return StepResult(
             label,
@@ -962,8 +1085,11 @@ def _step_opcua_security_tests(
             failed,
             skipped,
             total,
+            trx_path,
         )
-    return StepResult(label, "MATRIX", "PASS", detail, dur, passed, failed, skipped, total)
+    return StepResult(
+        label, "MATRIX", "PASS", detail, dur, passed, failed, skipped, total, trx_path
+    )
 
 
 def _enforce_managed_live_coverage(result: StepResult, port_override: str) -> StepResult:
@@ -982,6 +1108,7 @@ def _enforce_managed_live_coverage(result: StepResult, port_override: str) -> St
             result.failed,
             result.skipped,
             result.total,
+            result.trx_path,
         )
     return result
 

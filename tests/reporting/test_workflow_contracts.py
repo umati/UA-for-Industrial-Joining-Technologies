@@ -149,6 +149,16 @@ def test_ci_all_checks_comment_matches_current_ruleset_truth() -> None:
     assert old_comment not in workflow_text
 
 
+def test_ci_csharp_unit_excludes_dedicated_live_and_security_suites() -> None:
+    workflow = _workflow("ci.yml")
+    csharp_unit = workflow["jobs"]["csharp-unit"]
+    test_step = next(
+        step for step in csharp_unit["steps"] if step.get("name") == "Run xUnit Unit Tests"
+    )
+
+    assert '--filter "Category!=Live&Category!=OpcUaSecurity"' in test_step["run"]
+
+
 def test_integration_summary_step_invokes_extracted_module() -> None:
     workflow = _workflow("integration.yml")
     step = _summary_step("integration.yml")

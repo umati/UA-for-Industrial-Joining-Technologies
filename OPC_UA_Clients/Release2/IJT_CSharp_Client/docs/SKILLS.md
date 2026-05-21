@@ -377,7 +377,7 @@ Always call `JoiningSystem.BrowseMethod(objectId, name, fallbackConstant)` — n
 ## Live Test Stability Guards
 
 - `run_all_tests.py` uses `--blame-hang --blame-hang-timeout 60s` in both unit and live dotnet test runs.
-- `run_all_tests.py` avoids duplicate execution in full runs: phase1 uses `FullyQualifiedName!~LiveIntegration`; phase2 runs `FullyQualifiedName~LiveIntegration`.
+- `run_all_tests.py` avoids duplicate execution in full runs: Phase 1 excludes `Live` and `OpcUaSecurity` tests; Phase 2 runs `FullyQualifiedName~LiveIntegration`; dedicated OPC UA Security jobs run `Category=OpcUaSecurity`.
 - `LiveIntegrationTests` wraps synchronous OPC UA calls in `Task.Run` + hard timeout guards.
 - On timeout in environment-sensitive live paths, tests use explicit `Skip` messages instead of hanging.
 - `JoiningSystem.DisposeAsync` cleanup is timeout-bounded (8s management dispose, 10s session close).
@@ -430,6 +430,8 @@ For the full port assignment table, auto-launch mechanics, and venv rationale, s
 - Tool-generated lockfiles are excluded from pre-commit text-hygiene auto-fixers (`end-of-file-fixer`, `trailing-whitespace`, `mixed-line-ending`) because package managers own lockfile formatting; JSON syntax validation still applies to JSON lockfiles.
 - `run_all_tests.py` uses locked-mode restore automatically when `packages.lock.json` files are present.
 - `run_all_tests.py --opcua-security-build-contract` runs the OPC UA Security build contract explicitly. It restores and builds the real C# test project graph with `UseArtifactsOutput=true` and a per-target `ArtifactsPath`, then verifies key ProjectReference outputs under `obj/opcua-security-artifacts/csharp-client-opcua-security-build-contract/{bin,obj}/<ProjectName>/`. The artifacts root must stay under `obj/` or outside the C# project tree so generated SDK `.cs` files cannot leak into later classic `dotnet build` Compile globs. This catches unsafe MSBuild output-isolation changes before any live OPC UA server starts.
+- C# unit / Phase 1 filters must exclude `Category=OpcUaSecurity`; those tests belong only to the dedicated OPC UA Security matrix. This keeps unit reporting skip budgets tied to unit tests instead of counting live/security skips.
+- OPC UA Security JUnit output must preserve per-test TRX outcomes. The System Tests summary groups skip reasons from `<testcase><skipped message="...">`; do not replace it with aggregate-only step XML or the report will fall back to "Skip details unavailable in JUnit XML".
 - CI restore uses locked mode against committed lock files.
 - `ci.yml` runs the full C# gate: locked restore → build → OPC UA Security build contract → NuGet CVE scan → xUnit tests → format check.
 
