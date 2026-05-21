@@ -217,7 +217,7 @@ jobs:
 
       - name: Build Docker image (Linux native binary, no cache write)
         if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
         with:
           context: OPC_UA_Servers/Release2
           tags: opcua-ijt-server:ci
@@ -226,7 +226,7 @@ jobs:
 
       - name: Build Docker image (Linux native binary, trusted cache write)
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
         with:
           context: OPC_UA_Servers/Release2
           tags: opcua-ijt-server:ci
@@ -320,7 +320,7 @@ jobs:
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
 
       - name: Build Web Client Docker image (test target)
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
         with:
           context: .
           file: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
@@ -357,7 +357,7 @@ jobs:
           retention-days: 14
 
       - name: Build Web Client Docker image (production target)
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
         with:
           context: .
           file: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
