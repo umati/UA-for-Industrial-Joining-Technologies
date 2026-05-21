@@ -1,6 +1,7 @@
 #nullable enable
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -35,6 +36,9 @@ namespace IJT_CSharp_Client.Tests;
 /// </summary>
 public sealed class OpcUaServerFixture : IDisposable
 {
+    private const string DockerImageName = "opcua-ijt-server:latest";
+    private const string LinuxSimulatorZipName = "OPC_UA_IJT_Server_Simulator_Linux.zip";
+
     private static readonly ILogger _log = IjtLog.ForCategory("IJT.Tests.ServerFixture");
     private static readonly int _port = ResolvePort();
     private Process? _serverProcess;
@@ -548,7 +552,7 @@ public sealed class OpcUaServerFixture : IDisposable
 
             startInfo.ArgumentList.Add("up");
             startInfo.ArgumentList.Add("-d");
-            if (ShouldBuildDockerImage())
+            if (ShouldBuildDockerImage(dockerExe, composeDir))
                 startInfo.ArgumentList.Add("--build");
 
             using var r = new Process
@@ -667,13 +671,80 @@ public sealed class OpcUaServerFixture : IDisposable
     private static string ToDockerBindPath(string path)
         => Path.GetFullPath(path).Replace('\\', '/');
 
-    private static bool ShouldBuildDockerImage()
+    private static bool ShouldBuildDockerImage(string dockerExe, string composeDir)
     {
         var value = Environment.GetEnvironmentVariable("IJT_DOCKER_COMPOSE_BUILD");
-        return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
+        if (string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "on", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return DockerImageIsMissingOrOlderThanSimulatorZip(dockerExe, composeDir);
+    }
+
+    private static bool DockerImageIsMissingOrOlderThanSimulatorZip(string dockerExe, string composeDir)
+    {
+        var zipPath = Path.Combine(composeDir, LinuxSimulatorZipName);
+        if (!File.Exists(zipPath))
+            return false;
+
+        var imageCreatedUtc = DockerImageCreatedUtc(dockerExe, composeDir);
+        if (imageCreatedUtc is null)
+            return true;
+
+        return File.GetLastWriteTimeUtc(zipPath) > imageCreatedUtc.Value.UtcDateTime;
+    }
+
+    private static DateTimeOffset? DockerImageCreatedUtc(string dockerExe, string composeDir)
+    {
+        try
+        {
+            using var inspect = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = dockerExe,
+                    WorkingDirectory = composeDir,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                },
+            };
+            inspect.StartInfo.ArgumentList.Add("image");
+            inspect.StartInfo.ArgumentList.Add("inspect");
+            inspect.StartInfo.ArgumentList.Add(DockerImageName);
+            inspect.StartInfo.ArgumentList.Add("--format");
+            inspect.StartInfo.ArgumentList.Add("{{.Created}}");
+
+            inspect.Start();
+            if (!inspect.WaitForExit(10_000))
+            {
+                inspect.Kill(entireProcessTree: true);
+                return null;
+            }
+
+            var created = inspect.StandardOutput.ReadToEnd().Trim();
+            _ = inspect.StandardError.ReadToEnd();
+            if (inspect.ExitCode != 0)
+                return null;
+
+            return DateTimeOffset.TryParse(
+                created,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var parsed)
+                ? parsed
+                : null;
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug("Could not inspect Docker image {Image}: {Message}", DockerImageName, ex.Message);
+            return null;
+        }
     }
 
     private static string? FindInPath(string exe)
@@ -774,7 +845,13 @@ public sealed class OpcUaServerFixture : IDisposable
             users.WrongPassword.UserName,
             User(users.WrongPassword.UserName, "password", [], "OPC UA security wrong-password target"));
 
+        // user1 needs the SecurityAdmin role so the activated session has Browse/Read
+        // permission on standard ns=0 Server nodes (required by the .NET SDK to read
+        // i=2255 NamespaceArray during session activation, and by AssertBenignFlowAsync
+        // afterwards). The X509 thumbprint authentication path is still exercised end
+        // to end; only the post-authentication permission set is widened.
         configuredUsers.TryAdd("user1", User("user1", "password", [], "OPC UA security X509 user"));
+        EnsureUserHasRole(configuredUsers["user1"], "SecurityAdmin");
         configuredUsers["user1"]["x509ThumbprintSha1Hex"] = Convert.ToHexString(
             SHA1.HashData(knownX509UserCertificateDer)).ToLowerInvariant();
 
@@ -793,6 +870,20 @@ public sealed class OpcUaServerFixture : IDisposable
             Path.Combine(serverDir, "user_identity_configuration.json"),
             json + Environment.NewLine,
             System.Text.Encoding.UTF8);
+    }
+
+    private static void EnsureUserHasRole(Dictionary<string, object> user, string role)
+    {
+        var roles = user.TryGetValue("roles", out var value) && value is string[] existing
+            ? existing
+            : [];
+        if (Array.Exists(roles, current => string.Equals(current, role, StringComparison.Ordinal)))
+            return;
+
+        var merged = new string[roles.Length + 1];
+        Array.Copy(roles, merged, roles.Length);
+        merged[^1] = role;
+        user["roles"] = merged;
     }
 
     private static Dictionary<string, object> User(

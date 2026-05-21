@@ -286,6 +286,44 @@ def test_opcua_security_jobs_do_not_force_compose_rebuilds() -> None:
     assert "Do not force" in workflow_text
 
 
+def test_opcua_security_docker_rebuilds_when_linux_zip_is_newer() -> None:
+    csharp_fixture = (
+        _runner.CSHARP_DIR / "Tests" / "IJT_CSharp_Client.Tests" / "OpcUaServerFixture.cs"
+    ).read_text(encoding="utf-8")
+    console_fixture = (_runner.CONSOLE_DIR / "tests" / "live" / "conftest.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "ShouldBuildDockerImage(dockerExe, composeDir)" in csharp_fixture
+    assert "DockerImageIsMissingOrOlderThanSimulatorZip" in csharp_fixture
+    assert "OPC_UA_IJT_Server_Simulator_Linux.zip" in csharp_fixture
+    assert "docker image inspect" not in csharp_fixture
+    assert 'inspect.StartInfo.ArgumentList.Add("image");' in csharp_fixture
+    assert 'inspect.StartInfo.ArgumentList.Add("inspect");' in csharp_fixture
+    assert "File.GetLastWriteTimeUtc(zipPath) > imageCreatedUtc.Value.UtcDateTime" in csharp_fixture
+
+    assert "_should_build_docker_image(docker)" in console_fixture
+    assert "_SERVER_LINUX_ZIP = _SERVER_RELEASE2 /" in console_fixture
+    assert '"OPC_UA_IJT_Server_Simulator_Linux.zip"' in console_fixture
+    assert '[docker, "image", "inspect", _SERVER_DOCKER_IMAGE' in console_fixture
+    assert "_SERVER_LINUX_ZIP.stat().st_mtime > image_created" in console_fixture
+    assert "def _parse_docker_created_timestamp(value: str)" in console_fixture
+
+
+def test_console_docker_created_timestamp_parses_nanosecond_precision() -> None:
+    module = _load_runner_at(
+        "OPC_UA_Clients/Release2/IJT_Console_Client/tests/live/conftest.py",
+        "ijt_console_live_conftest_timestamp",
+    )
+
+    timestamp = module._parse_docker_created_timestamp("2026-05-21T13:41:19.204798168Z")
+
+    assert timestamp is not None
+    assert timestamp > 0
+    assert module._parse_docker_created_timestamp("") is None
+    assert module._parse_docker_created_timestamp("not-a-timestamp") is None
+
+
 def test_managed_console_opcua_security_does_not_reuse_stale_server_port() -> None:
     fixture_source = (_runner.CONSOLE_DIR / "tests" / "live" / "conftest.py").read_text(
         encoding="utf-8"
@@ -889,6 +927,55 @@ def test_csharp_client_and_generated_types_share_default_opc_foundation_version(
     )
 
     assert default_types_version == client_version
+
+
+def test_csharp_lockfiles_track_generated_type_opc_foundation_ranges() -> None:
+    csharp_root = _runner.REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_CSharp_Client"
+    types_props = csharp_root / "Types" / "Directory.Build.props"
+    default_types_version = next(
+        prop.text
+        for prop in ET.parse(types_props).getroot().iter("OpcFoundationVersion")
+        if prop.attrib.get("Condition") == "'$(OpcUaClientOnly)' != 'true'"
+    )
+    expected_range = f"[{default_types_version}, )"
+    generated_type_projects = {
+        "uamodel.amb",
+        "uamodel.di",
+        "uamodel.ia",
+        "uamodel.ijtbase",
+        "uamodel.ijttightening",
+        "uamodel.machinery",
+        "uamodel.machineryresult",
+    }
+    lock_paths = [
+        csharp_root / "packages.lock.json",
+        csharp_root / "Tests" / "IJT_CSharp_Client.Tests" / "packages.lock.json",
+    ]
+
+    for lock_path in lock_paths:
+        lock_data = json.loads(lock_path.read_text(encoding="utf-8"))
+        dependencies = lock_data["dependencies"]["net10.0"]
+        for project_name in generated_type_projects:
+            core_range = dependencies[project_name]["dependencies"][
+                "OPCFoundation.NetStandard.Opc.Ua.Core"
+            ]
+            assert core_range == expected_range, f"{lock_path}: {project_name}"
+
+
+def test_csharp_security_x509_user_role_is_merged_after_tryadd() -> None:
+    fixture = (
+        _runner.REPO_ROOT
+        / "OPC_UA_Clients"
+        / "Release2"
+        / "IJT_CSharp_Client"
+        / "Tests"
+        / "IJT_CSharp_Client.Tests"
+        / "OpcUaServerFixture.cs"
+    ).read_text(encoding="utf-8")
+
+    assert 'EnsureUserHasRole(configuredUsers["user1"], "SecurityAdmin");' in fixture
+    assert 'configuredUsers["user1"]["x509ThumbprintSha1Hex"]' in fixture
+    assert 'TryAdd("user1", User("user1", "password", ["SecurityAdmin"]' not in fixture
 
 
 def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:

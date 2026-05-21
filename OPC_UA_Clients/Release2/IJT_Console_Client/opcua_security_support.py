@@ -225,10 +225,20 @@ def write_simulator_user_identity_configuration(
             {
                 "userName": x509_user_name,
                 "password": _DEFAULT_SIMULATOR_PASSWORD,
+                # SecurityAdmin so the activated session can read i=2255 NamespaceArray
+                # (and otherwise complete the benign flow). The X509 thumbprint identity
+                # path is still exercised end to end; only the post-authentication
+                # permission set is widened.
                 "roles": [],
                 "description": "OPC UA security X509 user",
             },
         )
+        roles = x509_user.get("roles")
+        if not isinstance(roles, list):
+            roles = []
+            x509_user["roles"] = roles
+        if "SecurityAdmin" not in roles:
+            roles.append("SecurityAdmin")
         x509_user["x509ThumbprintSha1Hex"] = x509_thumbprint
 
     payload = {

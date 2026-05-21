@@ -139,6 +139,7 @@ unknown_user:
     configured_users = {entry["userName"]: entry for entry in data["userIdentityData"]["users"]}
     assert data["userIdentityData"]["enabled"] is True
     assert configured_users["user1"]["x509ThumbprintSha1Hex"] == result.x509_thumbprint_sha1_hex
+    assert configured_users["user1"]["roles"] == ["SecurityAdmin"]
     assert configured_users["SecurityAdmin"]["roles"] == ["SecurityAdmin"]
 
 
@@ -172,6 +173,7 @@ unknown_user:
     user1_entries = [entry for entry in entries if entry["userName"] == "user1"]
     assert len(user1_entries) == 1
     assert user1_entries[0]["password"] == "matrix_password"
+    assert user1_entries[0]["roles"] == ["SecurityAdmin"]
     assert user1_entries[0]["x509ThumbprintSha1Hex"] == result.x509_thumbprint_sha1_hex
 
 
