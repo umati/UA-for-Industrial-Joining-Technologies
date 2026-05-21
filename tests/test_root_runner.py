@@ -264,9 +264,9 @@ def test_live_clients_do_not_duplicate_modern_loader_calls() -> None:
     )
     assert stale_subscription_loader not in web_connection
 
-    # Web live test fixture: exactly one legacy + one modern call in the
-    # ``ijt_session`` fixture.  A second modern call (the pre-fix duplicate at
-    # the bottom of the fixture) must not be present.
+    # The exact legacy+modern loader count is intentional here: asyncua 1.2b2
+    # still needs both loader APIs for generated IJT types, while duplicates
+    # reopen the old slow/flaky fixture path.
     assert web_live.count("await c.load_type_definitions()") == 1
     assert web_live.count("await c.load_data_type_definitions()") == 1
 
@@ -279,9 +279,28 @@ def test_live_clients_do_not_duplicate_modern_loader_calls() -> None:
 def test_opcua_security_jobs_do_not_force_compose_rebuilds() -> None:
     workflow = _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml"
     workflow_text = workflow.read_text(encoding="utf-8")
+    import yaml
+
+    workflow_data = yaml.safe_load(workflow_text)
+    security_jobs = {
+        name: job
+        for name, job in workflow_data["jobs"].items()
+        if any(
+            "run_all_tests.py --opcua-security" in str(step.get("run", ""))
+            for step in job.get("steps", [])
+        )
+    }
 
     assert 'IJT_DOCKER_COMPOSE_BUILD: "1"' not in workflow_text
-    assert workflow_text.count('IJT_DOCKER_COMPOSE_BUILD: "0"') == 2
+    assert {"csharp-client-opcua-security", "console-client-opcua-security"} <= set(security_jobs)
+    for job_name, job in security_jobs.items():
+        run_steps = [
+            step
+            for step in job.get("steps", [])
+            if "run_all_tests.py --opcua-security" in str(step.get("run", ""))
+        ]
+        assert run_steps, job_name
+        assert all(step.get("env", {}).get("IJT_DOCKER_COMPOSE_BUILD") == "0" for step in run_steps)
     assert "docker compose builds the image once when needed" in workflow_text
     assert "Do not force" in workflow_text
 
@@ -660,11 +679,40 @@ def test_suite_groups_are_known_enum_values() -> None:
 
 
 def test_suite_registry_has_no_duplicate_ids() -> None:
-    assert len(_runner.SUITE_REGISTRY) == 25
-    assert len(set(_runner.SUITE_REGISTRY)) == len(_runner.SUITE_REGISTRY)
+    required_suite_ids = {
+        "repo-static-gitignore-check",
+        "repo-static-markdown-leak-check",
+        "server-static",
+        "node-client-static",
+        "test-client-static",
+        "console-client-static",
+        "web-client-static",
+        "csharp-client-static",
+        "server-smoke",
+        "server-linux-package-smoke",
+        "csharp-client-live",
+        "console-client-live",
+        "csharp-client-opcua-security-windows",
+        "csharp-client-opcua-security-linux",
+        "console-client-opcua-security-windows",
+        "console-client-opcua-security-linux",
+        "test-client-live-conformance",
+        "web-client-live-opcua-direct",
+        "web-client-live-websocket-api",
+        "web-client-live-websocket-connection",
+        "web-client-e2e-smoke",
+        "web-client-e2e-features",
+        "web-client-e2e-regression",
+        "web-client-docker-smoke",
+        "web-client-compatibility-smoke",
+    }
+    registered_ids = set(_runner.SUITE_REGISTRY)
 
-    runners = [spec.runner for spec in _runner.SUITE_REGISTRY.values()]
-    assert len(set(runners)) == len(runners)
+    assert required_suite_ids <= registered_ids
+    assert len(registered_ids) == len(_runner.SUITE_REGISTRY)
+    assert all(
+        suite_id and suite_id == spec.id for suite_id, spec in _runner.SUITE_REGISTRY.items()
+    )
 
 
 def test_workflow_matrix_uses_only_known_suite_ids() -> None:

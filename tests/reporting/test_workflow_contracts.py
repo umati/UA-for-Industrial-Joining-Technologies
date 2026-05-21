@@ -6,7 +6,20 @@ from pathlib import Path
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DORNY_ACTION = "dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2"
+DORNY_ACTION = "dorny/test-reporter"
+DOCKER_BUILD_PUSH_ACTION = "docker/build-push-action"
+
+# These workflow contracts should assert stable policy, not Renovate-managed
+# action revisions. If a workflow action is intentionally digest/SHA-pinned,
+# match the action name plus the 40-character commit SHA shape.
+_SHA_PINNED_ACTION_RE = re.compile(r"(?P<action>[^@\s]+/[^@\s]+)@[0-9a-f]{40}")
+
+
+def _is_sha_pinned_action(uses: str | None, action: str) -> bool:
+    if not uses:
+        return False
+    match = _SHA_PINNED_ACTION_RE.fullmatch(uses)
+    return bool(match and match.group("action") == action)
 
 
 def _workflow(name: str):
@@ -101,7 +114,7 @@ def test_ci_dorny_actions_keep_check_runs_but_suppress_step_summaries() -> None:
         step
         for job in workflow["jobs"].values()
         for step in job.get("steps", [])
-        if step.get("uses") == DORNY_ACTION
+        if _is_sha_pinned_action(step.get("uses"), DORNY_ACTION)
     ]
 
     assert [step["with"]["name"] for step in dorny_steps] == expected_names
@@ -133,7 +146,7 @@ def test_ci_docker_smoke_suppresses_docker_build_summary_noise() -> None:
     build_steps = [
         step
         for step in docker_smoke["steps"]
-        if step.get("uses") == "docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f"
+        if _is_sha_pinned_action(step.get("uses"), DOCKER_BUILD_PUSH_ACTION)
     ]
 
     assert build_steps and len(build_steps) == 1
@@ -220,7 +233,9 @@ def test_integration_dorny_actions_keep_check_runs_but_suppress_step_summaries()
     ]
 
     dorny_steps = [
-        step for step in workflow["jobs"]["report"]["steps"] if step.get("uses") == DORNY_ACTION
+        step
+        for step in workflow["jobs"]["report"]["steps"]
+        if _is_sha_pinned_action(step.get("uses"), DORNY_ACTION)
     ]
 
     assert [step["with"]["name"] for step in dorny_steps] == expected_names
@@ -246,10 +261,13 @@ def test_integration_security_reporters_only_run_when_security_matrices_run() ->
 
 def test_integration_docker_jobs_suppress_build_summary_noise() -> None:
     workflow = _workflow("integration.yml")
-    build_action = "docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f"
     for job_name in ("server-smoke-docker", "webclient-docker"):
         job = workflow["jobs"][job_name]
-        build_steps = [step for step in job["steps"] if step.get("uses") == build_action]
+        build_steps = [
+            step
+            for step in job["steps"]
+            if _is_sha_pinned_action(step.get("uses"), DOCKER_BUILD_PUSH_ACTION)
+        ]
 
         assert build_steps and len(build_steps) == 2
         assert job["env"]["DOCKER_BUILD_SUMMARY"] == "false"
