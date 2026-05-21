@@ -51,6 +51,10 @@ _RUR_MIN_DURATION = ua.Variant(0.0, ua.VariantType.Double)
 # ---------------------------------------------------------------------------
 
 
+def _delete_nodes_parameters(delete_item: ua.DeleteNodesItem) -> ua.DeleteNodesParameters:
+    return ua.DeleteNodesParameters(NodesToDelete=[delete_item])
+
+
 async def _rediscover_result_management(client, ns_mr):
     """Re-discover ResultManagement on a function-scoped connection."""
     js = await find_joining_system(client)
@@ -1065,18 +1069,19 @@ async def test_result_management_results_folder_delete_is_rejected(opcua_client,
     )
     try:
         results = await asyncio.wait_for(
-            opcua_client.uaclient.delete_nodes([delete_item]),
+            opcua_client.uaclient.delete_nodes(_delete_nodes_parameters(delete_item)),
             timeout=10.0,
         )
-        assert results[0].is_bad(), (
-            "DeleteNodes on a result node must be rejected — "
-            "result lifecycle is server-managed and clients must not delete result Variables"
-        )
-        logger.info("DeleteNodes on Results folder/variable correctly rejected: %s", results[0])
-    except (ua.UaError, Exception) as exc:
-        # Any error (ua.UaError, transport Exception, serialization error) means the
-        # asyncua client could not issue the DeleteNodes service — skip gracefully.
+    except (ua.UaError, asyncio.TimeoutError, OSError) as exc:
         skip_environment(
             f"asyncua DeleteNodes service call unavailable ({exc}); server-side rejection "
             "must be verified manually or with OPC UA CTT"
         )
+        return
+
+    assert results, "DeleteNodes must return one per-operation status for the requested node"
+    assert results[0].is_bad(), (
+        "DeleteNodes on a result node must be rejected — "
+        "result lifecycle is server-managed and clients must not delete result Variables"
+    )
+    logger.info("DeleteNodes on Results folder/variable correctly rejected: %s", results[0])

@@ -142,6 +142,9 @@ exclude = ["(?:^|.*[/\\\\])tmp[/\\\\]", "pytest-cache-files-.*"]
 cache_dir = "tmp/mypy-cache"
 
 [tool.pyright]
+# Reporting tests import the CLI shim and renderer from scripts/ the same way
+# `python scripts/make_conformance_summary.py` runs them at runtime.
+extraPaths = ["scripts"]
 # asyncua 1.2b2 uses class-based OPC UA primitive types (Int32, UInt32, etc.)
 # that inherit from int/str/bytes. Plain int literals are not directly assignable
 # to these types in pyright's type system, but are equivalent at runtime. Remove

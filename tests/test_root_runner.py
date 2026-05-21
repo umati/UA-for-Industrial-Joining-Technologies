@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -157,6 +158,26 @@ def test_python_requirement_installs_use_constraints_file() -> None:
         "Python dependency install surfaces must use repo-wide constraints.txt. "
         "Add -c <repo>/constraints.txt or _pip_constraint_args() at: " + ", ".join(missing)
     )
+
+
+def test_test_client_pyright_resolves_reporting_scripts() -> None:
+    pyproject = tomllib.loads(
+        (_runner.TEST_CLIENT_DIR / "pyproject.toml").read_text(encoding="utf-8")
+    )
+
+    assert "scripts" in pyproject["tool"]["pyright"]["extraPaths"]
+
+
+def test_negative_service_tests_use_request_helpers() -> None:
+    add_nodes_tests = (
+        _runner.TEST_CLIENT_DIR / "conformance" / "test_joining_system_base.py"
+    ).read_text(encoding="utf-8")
+    delete_nodes_tests = (
+        _runner.TEST_CLIENT_DIR / "conformance" / "test_result_management.py"
+    ).read_text(encoding="utf-8")
+
+    assert "ua.ExpandedNodeId(ua.NodeId(" not in add_nodes_tests
+    assert "uaclient.delete_nodes([" not in delete_nodes_tests
 
 
 def test_local_ci_mode_uses_isolated_python_client_venvs() -> None:

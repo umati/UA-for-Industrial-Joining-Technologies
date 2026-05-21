@@ -48,6 +48,30 @@ logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
 
 
+def _expanded_nodeid(nodeid: ua.NodeId) -> ua.ExpandedNodeId:
+    return ua.ExpandedNodeId(
+        nodeid.Identifier,
+        nodeid.NamespaceIndex,
+        nodeid.NodeIdType,
+    )
+
+
+async def _cleanup_added_node(client, added_nodeid: ua.NodeId) -> None:
+    delete_item = ua.DeleteNodesItem(
+        NodeId=added_nodeid,
+        DeleteTargetReferences=True,
+    )
+    try:
+        await client.uaclient.delete_nodes(ua.DeleteNodesParameters(NodesToDelete=[delete_item]))
+    except Exception as exc:
+        # Cleanup is best-effort; the assertion below remains the failure signal.
+        logger.warning(
+            "Could not clean up unexpectedly added node %s: %s",
+            added_nodeid,
+            exc,
+        )
+
+
 # ─── joining_system_base ─────────────────────────────────────────────────────
 
 
@@ -1166,11 +1190,12 @@ async def test_machinery_building_blocks_add_nodes_is_rejected(opcua_client, ns_
     if mbb is None:
         pytest.skip("MachineryBuildingBlocks not present on this instance — cannot run AddNodes test")
 
+    results: list[ua.AddNodesResult] = []
     try:
         item = ua.AddNodesItem(
-            ParentNodeId=ua.ExpandedNodeId(mbb.nodeid),
+            ParentNodeId=_expanded_nodeid(mbb.nodeid),
             ReferenceTypeId=ua.NodeId(RefTypes.HAS_COMPONENT, 0, ua.NodeIdType.Numeric),
-            RequestedNewNodeId=ua.ExpandedNodeId(ua.NodeId(0, 0, ua.NodeIdType.Numeric)),
+            RequestedNewNodeId=ua.ExpandedNodeId(0, 0, ua.NodeIdType.Numeric),
             BrowseName=ua.QualifiedName("ConformanceTestProbe", ns_ijt),
             NodeClass=ua.NodeClass.Object,
             NodeAttributes=ua.ObjectAttributes(
@@ -1178,22 +1203,28 @@ async def test_machinery_building_blocks_add_nodes_is_rejected(opcua_client, ns_
                 WriteMask=0,
                 UserWriteMask=0,
             ),
-            TypeDefinition=ua.ExpandedNodeId(ua.NodeId(58, 0, ua.NodeIdType.Numeric)),
+            TypeDefinition=ua.ExpandedNodeId(58, 0, ua.NodeIdType.Numeric),
         )
         results = await asyncio.wait_for(
             opcua_client.uaclient.add_nodes([item]),
             timeout=10.0,
         )
-        assert results[0].StatusCode.is_bad(), (
-            "AddNodes to MachineryBuildingBlocks folder must be rejected — "
-            "address space structure must not be modified by external clients"
-        )
-        logger.info("AddNodes correctly rejected: %s", results[0].StatusCode)
-    except (ua.UaError, Exception) as exc:
+    except (ua.UaError, asyncio.TimeoutError, OSError) as exc:
         skip_environment(
             f"asyncua AddNodes service call unavailable ({exc}); server-side rejection "
             "must be verified manually or with OPC UA CTT"
         )
+        return
+
+    assert results, "AddNodes must return one per-operation result for the requested node"
+    if results[0].StatusCode.is_good():
+        await _cleanup_added_node(opcua_client, results[0].AddedNodeId)
+
+    assert results[0].StatusCode.is_bad(), (
+        "AddNodes to MachineryBuildingBlocks folder must be rejected — "
+        "address space structure must not be modified by external clients"
+    )
+    logger.info("AddNodes correctly rejected: %s", results[0].StatusCode)
 
 
 # ─── asset_management — type and structure checks ─────────────────────────────
@@ -1460,11 +1491,12 @@ async def test_asset_management_add_nodes_to_controllers_folder_is_rejected(opcu
     if controllers is None:
         pytest.skip("Controllers folder not found under Assets")
 
+    results: list[ua.AddNodesResult] = []
     try:
         item = ua.AddNodesItem(
-            ParentNodeId=ua.ExpandedNodeId(controllers.nodeid),
+            ParentNodeId=_expanded_nodeid(controllers.nodeid),
             ReferenceTypeId=ua.NodeId(RefTypes.HAS_COMPONENT, 0, ua.NodeIdType.Numeric),
-            RequestedNewNodeId=ua.ExpandedNodeId(ua.NodeId(0, 0, ua.NodeIdType.Numeric)),
+            RequestedNewNodeId=ua.ExpandedNodeId(0, 0, ua.NodeIdType.Numeric),
             BrowseName=ua.QualifiedName("ConformanceTestProbe", ns_ijt),
             NodeClass=ua.NodeClass.Object,
             NodeAttributes=ua.ObjectAttributes(
@@ -1472,19 +1504,25 @@ async def test_asset_management_add_nodes_to_controllers_folder_is_rejected(opcu
                 WriteMask=0,
                 UserWriteMask=0,
             ),
-            TypeDefinition=ua.ExpandedNodeId(ua.NodeId(58, 0, ua.NodeIdType.Numeric)),
+            TypeDefinition=ua.ExpandedNodeId(58, 0, ua.NodeIdType.Numeric),
         )
         results = await asyncio.wait_for(
             opcua_client.uaclient.add_nodes([item]),
             timeout=10.0,
         )
-        assert results[0].StatusCode.is_bad(), (
-            "AddNodes to Controllers folder must be rejected — "
-            "asset topology is server-managed and must not be alterable by clients"
-        )
-        logger.info("AddNodes to Controllers correctly rejected: %s", results[0].StatusCode)
-    except (ua.UaError, Exception) as exc:
+    except (ua.UaError, asyncio.TimeoutError, OSError) as exc:
         skip_environment(
             f"asyncua AddNodes service call unavailable ({exc}); server-side rejection "
             "must be verified manually or with OPC UA CTT"
         )
+        return
+
+    assert results, "AddNodes must return one per-operation result for the requested node"
+    if results[0].StatusCode.is_good():
+        await _cleanup_added_node(opcua_client, results[0].AddedNodeId)
+
+    assert results[0].StatusCode.is_bad(), (
+        "AddNodes to Controllers folder must be rejected — "
+        "asset topology is server-managed and must not be alterable by clients"
+    )
+    logger.info("AddNodes to Controllers correctly rejected: %s", results[0].StatusCode)
